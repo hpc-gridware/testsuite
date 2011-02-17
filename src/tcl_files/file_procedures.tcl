@@ -2255,26 +2255,35 @@ if {[info exists cached_binary_path_array]} {
    unset cached_binary_path_array
 }
 proc get_binary_path {nodename binary {raise_error 1}} {
+   global get_binary_path_recursive_call
    global ts_host_config 
    global ts_config
    global CHECK_USER
    global cached_binary_path_array
+
+   if {[info exists get_binary_path_recursive_call] && $get_binary_path_recursive_call} {
+      return $binary
+   }
+   set get_binary_path_recursive_call 1
 
    # get node name of host
    set hostname [node_get_host $nodename]
 
    # Check if there is an entry for the binary in the host config
    if {[info exists ts_host_config($hostname,$binary)]} {
+      set get_binary_path_recursive_call 0
       return $ts_host_config($hostname,$binary)
    }
 
    # Check if we already have cached entry from the CHECK_USER user path settings
    if {[info exists cached_binary_path_array($hostname,$binary,$CHECK_USER)]} {
+      set get_binary_path_recursive_call 0
       return $cached_binary_path_array($hostname,$binary,$CHECK_USER)
    }
 
    # Check if we already have a cached entry from the root user path settings
    if {[info exists cached_binary_path_array($hostname,$binary,root)]} {
+      set get_binary_path_recursive_call 0
       return $cached_binary_path_array($hostname,$binary,root)
    }
 
@@ -2289,9 +2298,11 @@ proc get_binary_path {nodename binary {raise_error 1}} {
          ts_log_info $config_text
          # Now add the binary path to the cache
          set cached_binary_path_array($hostname,$binary,$CHECK_USER) $binary_path
+         set get_binary_path_recursive_call 0
          return $binary_path 
       }
       ts_log_warning "Cannot find path to binary \"$binary\" on host \"$hostname\"" $raise_error
+      set get_binary_path_recursive_call 0
       return $binary
    }
 
@@ -2299,6 +2310,7 @@ proc get_binary_path {nodename binary {raise_error 1}} {
    if {$binary == "sh"} {
       set binary_path "/bin/sh"
       set cached_binary_path_array($hostname,$binary,$CHECK_USER) $binary_path
+      set get_binary_path_recursive_call 0
       return $binary_path 
    }
    
@@ -2316,6 +2328,7 @@ proc get_binary_path {nodename binary {raise_error 1}} {
 
       # Now add the binary path to the cache
       set cached_binary_path_array($hostname,$binary,$CHECK_USER) $binary_path
+      set get_binary_path_recursive_call 0
       return $binary_path
    } else {
       # If we have a root password we also try to get it from root's path environment
@@ -2330,11 +2343,13 @@ proc get_binary_path {nodename binary {raise_error 1}} {
             ts_log_info $config_text
             # Now add the binary path to the cache
             set cached_binary_path_array($hostname,$binary,root) $binary_path
+            set get_binary_path_recursive_call 0
             return $binary_path
          }
       }
    }
    ts_log_warning "Cannot find path to binary \"$binary\" on host \"$hostname\"" $raise_error
+   set get_binary_path_recursive_call 0
    return $binary
 }
 
