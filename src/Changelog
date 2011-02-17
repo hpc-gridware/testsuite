@@ -7,6 +7,9 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+DG-2011-02-17-0: Enhancem.:  Added test for project spooling bug (core bind.)
+                 Review:     EB
+
 JG-2011-02-17-0: Bugfix:     fixed recursion in get_binary_path()
                              fixed permissions of scripts
                  Review:     EB
