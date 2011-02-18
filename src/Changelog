@@ -7,6 +7,10 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+JG-2011-02-18-0: Enhancem.:  Added negative tests (invalid data) for setting
+                             complex_values on host level.
+                 Review:     SH
+
 DG-2011-02-17-0: Enhancem.:  Added test for project spooling bug (core bind.)
                  Review:     EB
 
