@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this code are Copyright 2011 Univa Inc.
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -228,6 +230,8 @@ proc general_ssos_test {} {
       ssos_test_unsuspend_on_manual_suspend $host "job_list"
       ssos_test_sequence_number_obeyance $host
 
+      issue_GE_3233 $host
+
       unset job_list
    }
 }
@@ -405,13 +409,6 @@ proc ssos_test_unsuspend_on_manual_suspend {host djob_list} {
    }
 
 
-   if {$error_text != ""} {
-      ts_log_severe "Scenario 2:\n$error_text"
-      return
-   } else {
-      ts_log_fine "Scenario 2 successfully completed!"
-   }
-   set error_text ""
 }
 
 proc ssos_test_sequence_number_obeyance {host} {
@@ -504,4 +501,83 @@ proc ssos_test_sequence_number_obeyance {host} {
       ts_log_fine "Scenario 3 successfully completed"
    }
    set error_text ""
+   
+   delete_all_jobs
+   wait_for_end_of_all_jobs
 }
+
+
+proc issue_GE_3233 { host } {
+   global my_fix_settings
+   global ts_config
+   set error_text ""
+
+   ts_log_fine ""
+   ts_log_fine "Testing for Bug 3233 (leaving one job suspended)"
+
+   # submit 4 120 second jobs in C.q 
+   set arguments "$my_fix_settings -q C.q@$host $ts_config(product_root)/examples/jobs/sleeper.sh 180"
+   set c_queue_job_1 [submit_job $arguments]
+   set c_queue_job_2 [submit_job $arguments]
+   set c_queue_job_3 [submit_job $arguments]
+   set c_queue_job_4 [submit_job $arguments]
+  
+   lappend job_list1 $c_queue_job_1
+   lappend job_list1 $c_queue_job_2
+   lappend job_list1 $c_queue_job_3
+   lappend job_list1 $c_queue_job_4
+
+   foreach job $job_list1 {
+      wait_for_jobstart $job "test" 60 1 1
+   }
+      
+   # submit 6 20 second jobs in A.q 
+   set arguments "$my_fix_settings -q A.q@$host $ts_config(product_root)/examples/jobs/sleeper.sh 5"
+   set c_queue_job_1 [submit_job $arguments]
+   set c_queue_job_2 [submit_job $arguments]
+   set c_queue_job_3 [submit_job $arguments]
+   set c_queue_job_4 [submit_job $arguments]
+   set c_queue_job_5 [submit_job $arguments]
+   set c_queue_job_6 [submit_job $arguments]
+   
+   lappend job_list2 $c_queue_job_1
+   lappend job_list2 $c_queue_job_2
+   lappend job_list2 $c_queue_job_3
+   lappend job_list2 $c_queue_job_4
+   lappend job_list2 $c_queue_job_5
+   lappend job_list2 $c_queue_job_6
+   
+   foreach job $job_list2 {
+      wait_for_jobstart $job "test" 60 0 1
+   }
+   
+   # A.q jobs must suspend all jobs in C.q 
+
+   # after all A.q jobs are finished all C.q jobs must be in running state
+   foreach job $job_list2 {
+      wait_for_job_end $job 60
+   }
+
+   # wait for system reacting
+   sleep 2 
+
+   # bug is present when one job remains in in S state 
+   foreach job $job_list1 {
+      get_job_state $job 0 task_info
+      if {$task_info(0,state) != "r"} {
+         append error_text "Job $job (C.q job) not in running state! State is \"$task_info(0,state)\"\n"
+      }
+   }
+
+   if {$error_text != ""} {
+      ts_log_severe "Bug GE-3233 detected!!!!\n$error_text"
+      return
+   } else {
+      ts_log_fine "Bug GE-3233 not found!"
+   }
+   set error_text ""
+   
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
