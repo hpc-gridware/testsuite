@@ -3854,31 +3854,36 @@ proc mhattr { attribute entry host_name { add_error 1 } } {
   global CHECK_USER
   get_current_cluster_config_array ts_config
 
-  puts "Trying to change attribute $attribute for host $host_name to $entry."
+  ts_log_fine "Trying to change attribute $attribute for host $host_name to $entry."
 
   set help "$attribute \"$entry\""   ;# create e.g. slots "5" as string
   set result [start_sge_bin "qconf" "-rattr exechost $help $host_name"]
-  if { $prg_exit_state != 0 } {
-     if { $add_error == 1} {
-         ts_log_severe "qconf -rattr exechost $help $host_name failed:\n$result"
+  if {$prg_exit_state != 0} {
+     if {$add_error == 1} {
+        ts_log_severe "qconf -rattr exechost $help $host_name failed:\n$result"
+     } else {
+        ts_log_fine "Could not modify host $host_name:\n$result"
      }
      return -1
   }
 
   # split each line as listelement
   set return_value 0
- 
    
   set MODIFIED [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS] $CHECK_USER "*" "*" "*"]
-  if { [ string match "*$MODIFIED*" $result ] != 1 } {
-     ts_log_fine "Could not modify host $host_name."
+  if {[string match "*$MODIFIED*" $result] != 1} {
+     if {$add_error == 1} {
+        ts_log_severe "qconf -rattr exechost $help $host_name failed:\n$result"
+     } else {
+        ts_log_fine "Could not modify host $host_name:\n$result"
+     }
      set return_value -1
   } else {
-     puts "Modified host $host_name successfully."
+     ts_log_fine "Modified host $host_name successfully."
   }
 
-  if { $return_value != 0 } {
-     if { $add_error == 1} {
+  if {$return_value != 0} {
+     if {$add_error == 1} {
        ts_log_severe "could not modify host \"$host_name\""
      }
   }

@@ -12,6 +12,20 @@ EB-2011-02-27-0: Bugfix:     - fixed TS issues for darwin-x64
                              - replaced incorrect email address stored in sge_ar
                  Review:     TBD
 
+DG-2011-02-24-0: Enhancem.:  New test for GE-3233
+                 Issue:      TS-326
+                 Review:     SH (TS-1)
+
+DG-2011-02-23-0: Bugfix:     Fixed jsv_ge_add test.
+                 Review:     TBD
+
+JG-2011-02-18-0: Enhancem.:  Added negative tests (invalid data) for setting
+                             complex_values on host level.
+                 Review:     SH
+
+DG-2011-02-17-0: Enhancem.:  Added test for project spooling bug (core bind.)
+                 Review:     EB
+
 JG-2011-02-17-0: Bugfix:     fixed recursion in get_binary_path()
                              fixed permissions of scripts
                  Review:     EB

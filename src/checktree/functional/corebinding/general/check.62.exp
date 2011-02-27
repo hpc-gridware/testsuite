@@ -162,7 +162,7 @@ proc core_binding_basic {} {
    set runs 0 
 
    foreach host $hostlist {
-      
+
       ts_log_fine "-----------------------------"
       ts_log_fine "----> do stress testing <----"
       ts_log_fine "-----------------------------"
@@ -180,6 +180,14 @@ proc core_binding_basic {} {
       ts_log_fine "-----------------------------"
       
       core_binding_basic_set $host 
+      
+      if { $runs == 0 } {
+         # just test it one time
+         ts_log_fine "-----------------------------"
+         ts_log_fine "--> project spooling bug  <--" 
+         ts_log_fine "-----------------------------"
+         project_spooling_bug $host
+      }
 
       incr runs
 
@@ -217,7 +225,9 @@ proc get_test_host_list {} {
    foreach host $exec_hosts {
       ts_log_fine "checking host $host..."
       if { [is_known_host $host] == 1 } {
-         lappend host_list $host
+         if { [get_amount_of_cores $host] > 1 } { 
+            lappend host_list $host
+         }
       }
    }
 
@@ -281,6 +291,10 @@ proc test_oversubscription { lhost } {
    # -------------------------------
    # check striding oversubscription
    # -------------------------------
+
+   if { $aoc < 2 } {
+      return
+   }
 
    for {set amount 0} {$amount < $max_amount} { } {
       # increase the submitted job counter
@@ -1031,7 +1045,7 @@ proc check_binding { host jobid { amount 1 } { threads_per_core 1 } { stepsize 0
 
    # wait till pid file is written 
    set waited 0
-   while { [get_pid_from_file $host "[get_execd_spool_dir $host]/$host/active_jobs/$jobid.1/pid"] == 0 && $waited < 200} {
+   while { [get_pid_from_file $host "[get_execd_spool_dir $host]/$host/active_jobs/$jobid.1/pid" ] == 0 && $waited < 200} {
       after 100
       incr waited
    }
@@ -1249,6 +1263,117 @@ proc check_sge_binding_env { host jobid } {
 
    # return the amount of processor ids 
    return $found 
+}
+
+#                                                             max. column:     |
+#****** check.62/project_spooling_bug() ******
+# 
+#  NAME
+#     project_spooling_bug -- Check for the project spooling bug 
+#
+#  SYNOPSIS
+#     project_spooling_bug { host } 
+#
+#  FUNCTION
+#     This test is for the community reported bug, which appears
+#     when using core binding is used in conjunction with 
+#     a sharetree (including projects). When restarting qmaster
+#     parsing errors of project spooling appear in logfile, 
+#     which leads to a corrupted project. This bug also appears
+#     when upgrading the qmaster after the first restart. 
+#
+#  INPUTS
+#     host - host for submission 
+#
+proc project_spooling_bug { host } {
+   global ts_config
+   global CHECK_USER
+
+   # delete existing stree 
+   ts_log_fine "deleting sharetree..."
+   del_sharetree
+   
+   ts_log_fine "creating projects..."
+   # first create 2 projects
+   add_project project1 project 0 ;
+   add_project project2 project 0 ; 
+
+   ts_log_fine "createing sharetree..."
+   # create a sharetree (see also qconf test)
+   stree_buffer_init stree
+   stree_buffer_add_node stree "/project1" 20
+   stree_buffer_add_node stree "/project1/default" 30
+   stree_buffer_add_node stree "/project2" 20
+
+   stree_buffer_commit stree
+
+   # then submit a cb job into one of the projects
+   set submit_string "-b y -q bq -P project1 -binding linear:1 -l h=$host sleep 3600"
+
+   set jobid [submit_job $submit_string]
+   wait_for_jobstart $jobid "sleep" 600 1 1
+
+   # waiting for load reports
+   ts_log_fine "waiting for job load reports..."
+   sleep 30
+
+   set nr_shadowds [llength $ts_config(shadowd_hosts)]
+   ts_log_fine "Amount of shadowdaemons $nr_shadowds"
+
+   # then shutdown qmaster
+   shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
+
+   # shutdown shadowd if neccessary
+   for { set i 0 } { $i < $nr_shadowds } { incr i } {
+      shutdown_system_daemon [lindex $ts_config(shadowd_hosts) $i] "shadowd"
+   }
+
+   # then restart qmaster and look if there are any problems
+   startup_qmaster
+
+   # startup shadow_daemons
+   for { set i 0} { $i < $nr_shadowds } { incr i } {
+      startup_shadowd [lindex $ts_config(shadowd_hosts) $i]
+   }
+
+   # check if project was restored without any problems
+   set plist [start_remote_prog $host $CHECK_USER "qconf" "-sprjl" prg_exit_state 60]
+
+   ts_log_fine "project_list : $plist"
+   
+   set pos1 [string first "project1" $plist]
+   set pos2 [string first "project2" $plist]
+  
+   if { $pos1 == -1 || $pos2 == -1 } {
+      ts_log_severe "Project list does not contain project1 and project2! Bug found!"
+   } else {
+      ts_log_fine "Both projects could be restored"
+   }
+
+   # check for parsing error in the messages file
+   set messages [get_qmaster_messages_file]
+   get_file_content $ts_config(master_host) $CHECK_USER $messages 
+   set parsing_error 0
+   for {set i 1} {$i <= $file_array(0)} {incr i} {
+      if {[string match "*error parsing double value from string*" $file_array($i)] != 0} {
+         incr parsing_error 1
+      } 
+   }
+   
+   if { $parsing_error != 0 } {
+      ts_log_severe "Got $parsing_error parsing error(s)! binding_inuse spooling bug is present!"
+   } else {
+      ts_log_fine "Good! Could not find parsing error!"
+   }
+
+   # delete sharetree
+   ts_log_fine "deleting sharetree..."
+   del_sharetree
+
+   # delete projects
+   ts_log_fine "deleting projects..."
+   del_project project1
+   del_project project2
 }
 
 

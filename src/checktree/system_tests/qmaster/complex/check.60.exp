@@ -43,7 +43,7 @@
 #        - adding complexes of all data types
 #        - deleting the complexes again
 #        - setting complex values from a load sensor
-#        - setting complex values in global host, exec host and queue 
+#        - setting complex values in global host, exec host and queue
 #          by long and by short name
 #        - requesting complexes of all types, by long and by short name
 #
@@ -70,6 +70,8 @@
 #        - us of complexes as soft request
 #     urgency
 #        - modify complex, consumables with urgency
+#     invalid_host_requests
+#        - negative tests on setting complex_values
 #
 #  NOTES
 #
@@ -121,6 +123,7 @@ lappend check_functions "complex_host"
 lappend check_functions "complex_queue"
 lappend check_functions "issue_1847"
 lappend check_functions "complex_default_request"
+lappend check_functions "invalid_host_requests"
 
 global complex_host
 global complex_old_config
@@ -1049,3 +1052,56 @@ proc issue_1847 {} {
       }
    }
 }
+
+proc invalid_host_requests {} {
+   global complex_host
+
+   # we have complex variables of all available types,
+   # use both long names and shortcuts
+   set variables {test_integer test_double test_time test_memory test_bool test_string test_cstring test_restring test_hostname}
+   set shortcuts {ti td tt tm tb ts tc tr th}
+
+   # set values of all types, as well as an empty string and a huge value
+   set values {{} 1 1.23 "0:10:20" "1.2G" "true" "foo" "FoO" "bar*" "host.domain"}
+   set huge_value ""
+   for {set i 0} {$i < 10000} {incr i} {
+      append huge_value "x"
+   }
+
+   # try to set all different values in all variables
+   # part of them must fail, but may not crash qmaster
+   set error 0
+   foreach variable "$variables $shortcuts" {
+      foreach value $values {
+         mhattr "complex_values" "$variable=$value" $complex_host 0
+         # check if qmaster is still alive
+         if {[get_scheduler_status dummy "" "" 0] != 0} {
+            ts_log_severe "qmaster is unresponsive after setting complex_values $variable = $value"
+            set error 1
+            break
+         }
+      }
+
+      if {$error} {
+         break
+      }
+
+      mhattr "complex_values" "$variable=$huge_value" $complex_host 0
+      # check if qmaster is still alive
+      if {[get_scheduler_status dummy "" "" 0] != 0} {
+         ts_log_severe "qmaster is unresponsive after setting huge value into variable $variable"
+         set error 1
+         break
+      }
+   }
+
+   # try to clean up in case qmaster crashed
+   if {$error} {
+      shutdown_and_restart_qmaster
+   }
+
+   # cleanup
+   set config(complex_values) "NONE"
+   set_exechost config $complex_host
+}
+
