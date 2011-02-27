@@ -746,7 +746,8 @@ proc host_get_suspended_states {host} {
       }
       "darwin" -
       "darwin-ppc" -
-      "darwin-x86" {
+      "darwin-x86" - 
+      "darwin-x64" {
          set states ST
       }
       default {
@@ -788,7 +789,8 @@ proc host_get_running_states {host} {
       }
       "darwin" -
       "darwin-ppc" -
-      "darwin-x86" {
+      "darwin-x86" -
+      "darwin-x64" {
          set states R
       }
       default {

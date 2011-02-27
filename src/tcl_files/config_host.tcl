@@ -2192,6 +2192,9 @@ proc get_jvm_lib_path_for_host { host {java_version "1.5+"} } {
       "darwin-x86" {
          set jvm_lib_path $java_home/../Libraries/libjvm.dylib
       }
+      "darwin-x64" {
+         set jvm_lib_path $java_home/../Libraries/libjvm.dylib
+      }
       "lx*-ia64" {
          set jvm_lib_path $java_home/jre/lib/ia64/server/libjvm.so
       }
@@ -2663,6 +2666,7 @@ proc host_conf_61_arch {arch} {
       "sx" -
       "darwin-ppc" -
       "darwin-x86" -
+      "darwin-x64" -
       "win32-*" {
          return $arch
       }
@@ -2948,6 +2952,7 @@ proc host_get_id_a_command {host} {
       "darwin" -
       "darwin-ppc" -
       "darwin-x86" -
+      "darwin-x64" -
       "hp11" -
       "hp11-64" -
       "nbsd-i386" -

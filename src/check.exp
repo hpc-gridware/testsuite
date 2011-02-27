@@ -8533,6 +8533,7 @@ proc get_shared_lib_path_variable_name { arch } {
       }
       darwin -
       darwin-x86 -
+      darwin-x64 -
       darwin-ppc {
          set name DYLD_LIBRARY_PATH
       }

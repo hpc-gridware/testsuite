@@ -1251,6 +1251,7 @@ proc perform_simple_l10n_test { } {
 #*******************************************************************************
 proc qrsh_output_contains { output expected_output } {
    set expected_output [string trim $expected_output]
+   set output [string trim $output]
 
    foreach line [split $output "\n"] {
       set line [string trim $line]

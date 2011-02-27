@@ -452,7 +452,7 @@ proc test_parse_qrstat_check {} {
    append args "-l 'h_rt=200,arch=sol*' "
    append args "-m ab "
    append args "-masterq all.q "
-   append args "-M sgetest1@sun.com,@deadlineusers "
+   append args "-M root@localhost,@deadlineusers "
    append args "-N test_ar_name "
    append args "-w e "
    append args "-pe mytestpe 3 "
@@ -480,7 +480,7 @@ proc test_parse_qrstat_check {} {
    set val(granted_parallel_environment)   "mytestpe slots 3"
    set val(checkpoint_name)                "test_ar_ckpt"
    set val(mail_options)                   "ab"
-   set val(mail_list)                      "sgetest1@sun.com,deadlineusers@NONE"
+   set val(mail_list)                      "root@localhost,deadlineusers@NONE"
    set val(acl_list)                       "sgetest2"
    set val(xacl_list)                      "sgetest1,root"
 
