@@ -6,6 +6,9 @@
           1         2         3         4         5         6         7
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
+
+JG-2011-02-28-0: Enhancem.:  Add test_sge_string module test.
+
 EB-2011-02-27-0: Bugfix:     - fixed TS issues for darwin-x64
                              - fixed framework issues that caused qrsh to fail
                              - added gitignore file
