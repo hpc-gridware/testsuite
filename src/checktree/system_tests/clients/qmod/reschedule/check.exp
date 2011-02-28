@@ -130,12 +130,7 @@ proc reschedule_setup {} {
    # we'll do qrsh without command, and qsh
    # these are known not to work on some architectures
    # select only working platforms
-   if {$ts_config(gridengine_version) >= 6.2} {
-      # from SGE 6.2 on, this test should work on all platforms
-      set hosts [host_conf_get_suited_hosts 2]
-   } else {
-      set hosts [host_conf_get_suited_hosts 2 {} {} {hp11 hp11-64 win32-x86}]
-   }
+   set hosts [host_conf_get_suited_hosts 2]
    if {[llength $hosts] < 2} {
       ts_log_severe "Not enough suited hosts to perform this test!"
    }
@@ -821,11 +816,6 @@ proc reschedule_qsh_qlogin_qrsh_qrlogin {} {
 proc reschedule_pe_jobs {} {
    global ts_config
    global rerun_queue rerun_queue2 no_rerun_queue rerun_host no_rerun_host pe_names
-
-   if {$ts_config(gridengine_version) == 53} {
-      ts_log_config "test would fail in 5.3 systems, as queue names are truncated in qstat output\nWould have to call qstat -f to figure out master and slave queues"
-      return
-   }
 
    foreach pe $pe_names {
        ts_log_fine "submitting job to pe $pe ..."

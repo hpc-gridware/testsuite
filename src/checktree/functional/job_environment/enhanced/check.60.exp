@@ -357,29 +357,12 @@ proc test_job_environment_enhanced_lib_path {error_var execd_params expected_lib
       }
    }
 
-   if {$ts_config(gridengine_version) > 60} {
-      if {$expected_lib_path != $job_env($job_environment_enhanced_libvar)} {
-         # problem
-         append errors "\nShared library path is incorrectly set to \"$job_env($job_environment_enhanced_libvar)\", with $new_config(execd_params)"
-         append errors "\n   Should be set to \"$expected_lib_path\""
-      }
-   } else {
-      if {[string first $expected_lib_path $job_env($job_environment_enhanced_libvar)] == -1} {
-         # problem: since the sgeexecd script is not updated and an existing shared lib path is set
-         # we have to check if the exepected path is contained in the lib path 
-         append errors "\nShared library path is incorrectly set to \"$job_env($job_environment_enhanced_libvar)\", with $new_config(execd_params)"
-         append errors "\n   Should be set to \"$expected_lib_path\""  
-         return
-      } else {
-         if {$expected_lib_path != $job_env($job_environment_enhanced_libvar)} {
-            set warning ""
-            append warning "\nShared library path is incorrectly set to \"$job_env($job_environment_enhanced_libvar)\", with $new_config(execd_params)"
-            append warning "\n   Should be set to \"$expected_lib_path\". The expected lib path is only a substring of the real found path!"
-            ts_log_config $warning 
-         }
-      }
+   if {$expected_lib_path != $job_env($job_environment_enhanced_libvar)} {
+      # problem
+      append errors "\nShared library path is incorrectly set to \"$job_env($job_environment_enhanced_libvar)\", with $new_config(execd_params)"
+      append errors "\n   Should be set to \"$expected_lib_path\""
    }
-   
+
    ts_log_frame
    ts_log_fine "libpath ($job_environment_enhanced_libvar) correctly set set to \"$expected_lib_path\""
    ts_log_fine "for execd_params set to \"$execd_params\""

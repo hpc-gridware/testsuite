@@ -107,11 +107,6 @@ proc current_version_upgrade_setup {} {
 
    get_current_cluster_config_array ts_config
 
-   if {$ts_config(gridengine_version) < 62} {
-      ts_log_config "Test does not support GE < 62"
-      return 99
-   }
-
    # The following unsupported modes are only because of missing backup functionality
    # TODO: remove the limitations when the enhancements TODOs are implemented
 

@@ -915,11 +915,7 @@ proc run_throughput_test {} {
    # start qmaster/scheduler process monitor (on master host, first testsuite user)
    set expect_bin [get_binary_path $ts_config(master_host) "expect"]
    set qmaster_pid [get_qmaster_pid]
-   if {$ts_config(gridengine_version) < 62} { 
-      set schedd_pid  [get_schedd_pid]
-   } else {
-      set schedd_pid  0 
-   }
+   set schedd_pid  0
    ts_log_fine "starting process monitor"
    set id [open_remote_spawn_process $ts_config(master_host) $CHECK_FIRST_FOREIGN_SYSTEM_USER "$expect_bin" "-f $ts_config(testsuite_root_dir)/scripts/process_info.tcl $ts_config(product_root)"]
    set spawn_id [lindex $id 1]
@@ -1052,12 +1048,8 @@ proc run_throughput_test {} {
                }
                "PROCESS INFO PROCESS qmaster OK" {
                   ts_log_fine "initialize schedd monitoring"
-                  if {$ts_config(gridengine_version) < 62} { 
-                     ts_send $spawn_id "PROCESS $schedd_pid schedd\n"
-                  } else {
-                     ts_log_fine "starting process monitoring (without scheduler process)"
-                     ts_send $spawn_id "START\n"
-                  }
+                  ts_log_fine "starting process monitoring (without scheduler process)"
+                  ts_send $spawn_id "START\n"
                }
                "PROCESS INFO PROCESS schedd OK" {
                   ts_log_fine "starting process monitoring"
@@ -2317,10 +2309,6 @@ proc compare_dump_data_file { file1 file2 } {
    clear_xy_rows_show xy_rows $throughput_num_data_sets
    set_xy_rows_show xy_rows 12
    set_xy_rows_show xy_rows 12 $throughput_num_data_sets
-   if {$ts_config(gridengine_version) < 62} {
-      set_xy_rows_show xy_rows 14
-      set_xy_rows_show xy_rows 14 $throughput_num_data_sets
-   }
    create_gnuplot_xy_gif plot_data xy_rows
 
    set plot_data(title) "Throughput test results - CPU load of daemons"
@@ -2331,10 +2319,6 @@ proc compare_dump_data_file { file1 file2 } {
    clear_xy_rows_show xy_rows $throughput_num_data_sets
    set_xy_rows_show xy_rows 13
    set_xy_rows_show xy_rows 13 $throughput_num_data_sets
-   if {$ts_config(gridengine_version) < 62} {
-      set_xy_rows_show xy_rows 15
-      set_xy_rows_show xy_rows 15 $throughput_num_data_sets
-   }
    create_gnuplot_xy_gif plot_data xy_rows
 
    if { $qstat1(count) > 0 && $qstat2(count) > 0 } {
@@ -2890,9 +2874,6 @@ proc analyse_dump_data_file { file { force 0 } } {
    set plot_data(ylabel) "size \[kB\]"
    clear_xy_rows_show xy_rows
    set_xy_rows_show xy_rows 12
-   if {$ts_config(gridengine_version) < 62} {
-      set_xy_rows_show xy_rows 14
-   }
    create_gnuplot_xy_gif plot_data xy_rows
 
    set plot_data(title) "Throughput test results - CPU load of daemons"
@@ -2901,9 +2882,6 @@ proc analyse_dump_data_file { file { force 0 } } {
    set plot_data(ylabel) "cpu load \[%\]"
    clear_xy_rows_show xy_rows
    set_xy_rows_show xy_rows 13
-   if {$ts_config(gridengine_version) < 62} {
-      set_xy_rows_show xy_rows 15
-   }
    create_gnuplot_xy_gif plot_data xy_rows
 
    if { $event_data(count) > 0 } {

@@ -149,12 +149,6 @@ proc auto_reschedule_setup {} {
       return 99
    }
 
-   if {($CHECK_ACT_LEVEL == 3 || $CHECK_ACT_LEVEL == 2) && $ts_config(gridengine_version) < 62 } {
-      ts_log_config "Runlevel $CHECK_ACT_LEVEL needs Grid Engine version >= 62"
-      return 99
-   }
-
-
    # This test only works if auto_reschedule_host2 is not the testsuite host
    set hosts [host_conf_get_suited_hosts 2]
    if {[lindex $hosts 0] != $ts_config(master_host)} {

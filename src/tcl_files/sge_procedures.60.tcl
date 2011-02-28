@@ -172,9 +172,7 @@ proc set_complex {change_array {raise_error 1} {fast_add 1} {do_reset 0} } {
       add_message_to_container messages 1 [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS $CHECK_USER "*" "*" "*"]
       add_message_to_container messages -1 [translate_macro MSG_CENTRYREFINQUEUE_SS "*" "*"]
       add_message_to_container messages -2 [translate_macro MSG_CENTRYREFINHOST_SS "*" "*"]
-      if {$ts_config(gridengine_version) >= 61} {
-         add_message_to_container messages -6 [translate_macro MSG_CENTRY_NULL_URGENCY "*" "*"]
-      }
+      add_message_to_container messages -6 [translate_macro MSG_CENTRY_NULL_URGENCY "*" "*"]
       set result [handle_sge_errors "set_complex" "qconf -Mc" $result messages $raise_error]
       if {$result < 0 && $prg_exit_state == 0} {
          ts_log_severe "prg_exit_state was 0 but qconf returned an error" $raise_error
@@ -210,13 +208,9 @@ proc set_complex {change_array {raise_error 1} {fast_add 1} {do_reset 0} } {
       set STILLREF [translate_macro MSG_CENTRYREFINQUEUE_SS "*" "*"]
       set NOT_MODIFIED [translate_macro MSG_CENTRY_NOTCHANGED]
 
-      if {$ts_config(gridengine_version) >= 61} {
-         set NULL_URGENCY [translate_macro MSG_CENTRY_NULL_URGENCY]
-      } else {
-         set NULL_URGENCY "NULL_URGENCY fix only available in SGE 6.1 or higher"
-      }
-    
-      set master_arch [resolve_arch $ts_config(master_host)] 
+      set NULL_URGENCY [translate_macro MSG_CENTRY_NULL_URGENCY]
+
+      set master_arch [resolve_arch $ts_config(master_host)]
 
       set result [handle_vi_edit "$ts_config(product_root)/bin/$master_arch/qconf" "-mc" $vi_commands $MODIFIED $REMOVED $ADDED $NOT_MODIFIED $STILLREF $NULL_URGENCY "___ABCDEFG___" $raise_error]
       if {$result != 0 && $result != -2 && $result != -3 && $result != -4} {

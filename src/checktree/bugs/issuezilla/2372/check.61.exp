@@ -138,14 +138,6 @@ proc issue_2372_cleanup {} {
    global ts_config
    global issue_2372_backup
 
-   if {$ts_config(gridengine_version) < 62 || [is_61AR]} {
-      if {[is_scheduler_alive $ts_config(master_host) [get_qmaster_spool_dir]]} {
-         ts_log_fine "scheduler still alive - good"
-         shutdown_system_daemon $ts_config(master_host) sched
-      } else {
-         ts_log_severe "scheduler died!"
-      }
-   }
    shutdown_system_daemon $ts_config(master_host) qmaster
 
    # restore config

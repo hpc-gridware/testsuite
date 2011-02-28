@@ -266,15 +266,8 @@ proc qmod_issue_1131 {} {
    set output [start_sge_bin "qmod" "-d $queue_name"]
    
    # negative test: qmod -d @HOST should report exit state != 0
-   if {$ts_config(gridengine_version) >= 61} {
-      if {$prg_exit_state == 0} {
-         ts_log_severe "exit state of \"qmod -e $queue_name\" is 0\noutput:\n$output"
-      }
-   } else {
-      # this exit state are only fixed for versions >= 61
-      if {$prg_exit_state == 0} {
-         ts_log_info "exit state of \"qmod -e $queue_name\" is 0\noutput:\n$output"
-      }
+   if {$prg_exit_state == 0} {
+      ts_log_severe "exit state of \"qmod -e $queue_name\" is 0\noutput:\n$output"
    }
 
    set INVALID_QUEUE_NAME [translate_macro MSG_QUEUE_INVALIDQ_S $queue_name]
@@ -307,11 +300,6 @@ proc qmod_issue_1131 {} {
 #*************************************
 proc qmod_issue_3071 {} {
    global ts_config
-
-   if {$ts_config(gridengine_version) < 62} {
-      ts_log_info "The issue 3071 is not fixed for versions < 6.2, skipping the test."
-      return
-   }
 
    # submit sleeper job
    set job_id [submit_job "$ts_config(product_root)/examples/jobs/sleeper.sh 3600" 1 60]  

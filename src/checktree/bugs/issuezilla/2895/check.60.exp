@@ -218,16 +218,8 @@ proc issue_2895_run {} {
    }
 
    if {$error_text == ""} {
-      if {$ts_config(gridengine_version) >= 62} {
-         set possible_error_text_2 [translate_macro MSG_COM_CANTREGISTER_SS "*" "*"]
-         set possible_error_text_3 [translate_macro MSG_SHADOWD_CONTROLLEDSHUTDOWN_SU "*" "*"]
-      } elseif {$ts_config(gridengine_version) <= 60} {
-         set possible_error_text_2 [translate_macro MSG_COM_CANTREGISTER_S "*"]
-         set possible_error_text_3 [translate_macro MSG_SHADOWD_CONTROLLEDSHUTDOWN_SSSU "*" "*" "*" "*"]
-      } else {
-         set possible_error_text_2 [translate_macro MSG_COM_CANTREGISTER_S "*"]
-         set possible_error_text_3 [translate_macro MSG_SHADOWD_CONTROLLEDSHUTDOWN_SU "*" "*"]
-      }
+      set possible_error_text_2 [translate_macro MSG_COM_CANTREGISTER_SS "*" "*"]
+      set possible_error_text_3 [translate_macro MSG_SHADOWD_CONTROLLEDSHUTDOWN_SU "*" "*"]
       set reconnect_message_text [translate_macro MSG_EXECD_REGISTERED_AT_QMASTER_S "*"]
 
       set master_spool_dir [get_qmaster_spool_dir]

@@ -181,11 +181,9 @@ proc issue_2136_test {} {
       {0 "rsh_daemon" "none"}
    }
 
-   if {$ts_config(gridengine_version) >= 62} {
-      lappend tests {1 "qlogin_daemon" "builtin"}
-      lappend tests {1 "rlogin_daemon" "builtin"}
-      lappend tests {1 "rsh_daemon" "builtin"}
-   }
+   lappend tests {1 "qlogin_daemon" "builtin"}
+   lappend tests {1 "rlogin_daemon" "builtin"}
+   lappend tests {1 "rsh_daemon" "builtin"}
 
    foreach host "global $issue_2136_hosts" {
       foreach test $tests {

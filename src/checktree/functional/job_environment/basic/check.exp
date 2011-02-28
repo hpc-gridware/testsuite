@@ -529,15 +529,9 @@ proc job_environment_basic_var_test {missing {extra ""}} {
    lappend known_variables "USER"
    lappend known_variables "RESTARTED"
 
-   if {$ts_config(gridengine_version) == 53} {
-      lappend known_variables "COMMD_PORT"
-      lappend known_variables "FIRST_HOST"
-      lappend known_variables "LAST_HOST"
-   } else {
-      lappend known_variables "SGE_STDIN_PATH"
-      lappend known_variables "SGE_QMASTER_PORT"
-      lappend known_variables "SGE_EXECD_PORT"
-   }
+   lappend known_variables "SGE_STDIN_PATH"
+   lappend known_variables "SGE_QMASTER_PORT"
+   lappend known_variables "SGE_EXECD_PORT"
 
    # Build list of allowed_variables
    set allowed_variables "TZ"
@@ -624,15 +618,7 @@ proc job_environment_basic_check_env_value {env_name should_be is_name} {
       }
       ts_log_fine " ($env_name=$is)"
       if {$had_error == 1} {
-         if {$ts_config(gridengine_version) == 53 && [string compare $env_name "JOB_NAME"] == 0} {
-            set message "environment variable \"$env_name\" is set to \"$is\", should be \"$should_be\"\n\n"
-            append message "This bug is not fixed for GE version 53 and JOB_NAME environment variable!\n"
-            append message "Workaround: Use \"REQNAME\" or \"REQUEST\" instead of \"$env_name\"\n"
-            append message "in your job scripts!!!\n"
-            ts_log_info $message
-         } else {
-            ts_log_severe "environment variable \"$env_name\" is set to \"$is\", should be \"$should_be\""
-         } 
+         ts_log_severe "environment variable \"$env_name\" is set to \"$is\", should be \"$should_be\""
       }
    }
 }

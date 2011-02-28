@@ -60,19 +60,8 @@ proc set_pe_defaults {change_array} {
    set chgar(allocation_rule)   "\$pe_slots"
    set chgar(control_slaves)    "FALSE"
    set chgar(job_is_first_task) "TRUE"
-   
-   # SGE version dependent defaults
-   if {$ts_config(gridengine_version) == 53} {
-      set chgar(queue_list) "all"
-   }
-
-   if {$ts_config(gridengine_version) >= 60} {
-      set chgar(urgency_slots) "min"
-   }
-
-   if {$ts_config(gridengine_version) >= 62 && ![is_61AR]} {
-      set chgar(accounting_summary) "FALSE"
-   }
+   set chgar(urgency_slots) "min"
+   set chgar(accounting_summary) "FALSE"
 }
 
 #****** sge_pe/add_pe() ********************************************************
@@ -110,8 +99,8 @@ proc add_pe { pe_name {change_array ""} {fast_add 1} {on_host ""} {as_user ""} {
    upvar $change_array chgar
    set chgar(pe_name) $pe_name
 
-   if { $ts_config(gridengine_version) >= 60 && [info exists chgar(queue_list) ]} {
-      if { [ info exists chgar(queue_list) ] } {
+   if {[info exists chgar(queue_list)]} {
+      if {[info exists chgar(queue_list)]} {
          ts_log_fine "this qconf version doesn't support queue_list for pe objects"
          ts_log_config "this qconf version doesn't support queue_list for pe objects,\nuse assign_queues_with_pe_object() after adding pe\nobjects and don't use queue_list parameter.\nyou can call get_pe_ckpt_version() to test pe version"
          unset chgar(queue_list)
@@ -356,11 +345,7 @@ proc get_pe_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
 
    switch -exact $action {
       "add" {
-         if {$ts_config(gridengine_version) == 53} {
-            set USET_NOT_EXISTS [translate_macro MSG_SGETEXT_UNKNOWNUSERSET_SSSS "*" "*" "*" "*" ]
-         } else {
-            set USET_NOT_EXISTS [translate_macro MSG_CQUEUE_UNKNOWNUSERSET_S "*"]
-         }
+         set USET_NOT_EXISTS [translate_macro MSG_CQUEUE_UNKNOWNUSERSET_S "*"]
          add_message_to_container messages -3 $USET_NOT_EXISTS
          add_message_to_container messages -4 "error: [translate_macro MSG_ULONG_INCORRECTSTRING "*"]"
          add_message_to_container messages -5 [translate_macro MSG_GDI_APATH_S "*"]
@@ -372,11 +357,7 @@ proc get_pe_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
       "mod" {
          add_message_to_container messages -6 [translate_macro MSG_CQUEUE_UNKNOWNUSERSET_S "*"]
          add_message_to_container messages -7 "error: [translate_macro MSG_ULONG_INCORRECTSTRING "*"]"
-         if {$ts_config(gridengine_version) >= 62} {
-            set REJECTED_DUE_TO_AR_PE_SLOTS_U [translate_macro MSG_PARSE_MOD_REJECTED_DUE_TO_AR_PE_SLOTS_U "*"]
-         } else {
-            set REJECTED_DUE_TO_AR_PE_SLOTS_U "MSG_PARSE_MOD_REJECTED_DUE_TO_AR_PE_SLOTS_U message only in 6.2 or higher"
-         }
+         set REJECTED_DUE_TO_AR_PE_SLOTS_U [translate_macro MSG_PARSE_MOD_REJECTED_DUE_TO_AR_PE_SLOTS_U "*"]
          add_message_to_container messages -8 $REJECTED_DUE_TO_AR_PE_SLOTS_U
          add_message_to_container messages -9 [translate_macro MSG_GDI_APATH_S "*"]
       }
@@ -385,5 +366,5 @@ proc get_pe_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
       }
       "list" {
       }
-   } 
+   }
 }

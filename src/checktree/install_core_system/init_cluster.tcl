@@ -70,7 +70,7 @@ proc make_user_cert {} {
       }
 
       # support jmx ssl testsuite keystore and certificate creation
-      if {$ts_config(gridengine_version) >=62 && $ts_config(jmx_ssl) == "true" && $ts_config(jmx_port) != 0} {
+      if {$ts_config(jmx_ssl) == "true" && $ts_config(jmx_port) != 0} {
          ts_log_fine "creating certificates and keystore files for jgdi jmx ssl access ..."
          set file [get_tmp_file_name]
          set script [ open $file "w" ]
@@ -463,15 +463,8 @@ proc setup_conf {} {
   set params(token_extend_time) "none"
   set params(shepherd_cmd) "none"
   set params(qmaster_params) "none"
-  if { $ts_config(gridengine_version) == 53 } {
-     set params(schedd_params) "none"
-  } else {
-     set params(reporting_params) "accounting=true reporting=false flush_time=00:00:05 joblog=true sharelog=00:10:00"
-  }
+  set params(reporting_params) "accounting=true reporting=false flush_time=00:00:05 joblog=true sharelog=00:10:00"
   set params(execd_params) "none"
-  if { $ts_config(gridengine_version) < 62 } {
-     set params(qlogin_command) "telnet"
-  }
   set params(max_aj_instances) "2000"
   set params(max_aj_tasks) "75000"
 
@@ -613,15 +606,9 @@ proc setup_execd_conf {} {
       set removed ""
       set have_exec_spool_dir [get_local_spool_dir $host execd 0]
       set spool_dir 0
-      if {$CHECK_INTERACTIVE_TRANSPORT == "default" ||
-          ($CHECK_INTERACTIVE_TRANSPORT == "rtools" && $ts_config(gridengine_version) < 62)} {
-         if {$ts_config(gridengine_version) < 62} {
-            # default or rtools/ssh for GE versions 53, 60, 61
-            set expected_entries 4
-         } else {
-            # default for GE versions >= 62 (no rtools)
-            set expected_entries 2
-         }
+      if {$CHECK_INTERACTIVE_TRANSPORT == "default"} {
+         # default for GE versions >= 62 (no rtools)
+         set expected_entries 2
       } else {
          # rtools (rlogin, telnetd, rsh) >= 6.2 or ssh
          set expected_entries 8
@@ -658,16 +645,7 @@ proc setup_execd_conf {} {
                if {$CHECK_INTERACTIVE_TRANSPORT == "default"} {
                   # in 6.2, we don't have these entries in local config
                   # in earlier releases, we only have qlogin_daemon and rlogin_daemon
-                  if {$ts_config(gridengine_version) >= 62} {
-                     lappend removed $elem
-                  } elseif {$elem != "qlogin_daemon" && $elem != "rlogin_daemon"} {
-                     lappend removed $elem
-                  }
-               } elseif {$CHECK_INTERACTIVE_TRANSPORT == "rtools"} {
-                  # in SGE < 6.2, this is default, in >= 6.2, we need all entries
-                  if {$ts_config(gridengine_version) < 62 && $elem != "qlogin_daemon" && $elem != "rlogin_daemon"} {
-                     lappend removed $elem
-                  }
+                  lappend removed $elem
                }
             }
             "xterm" {
@@ -746,9 +724,7 @@ proc setup_execd_conf {} {
       # handle interactive job transport
       if {$CHECK_INTERACTIVE_TRANSPORT == "rtools"} {
          # for SGE < 62, this is default
-         if {$ts_config(gridengine_version) >= 62} {
-            setup_execd_conf_rtools tmp_config $host
-         }
+         setup_execd_conf_rtools tmp_config $host
       } elseif {$CHECK_INTERACTIVE_TRANSPORT == "ssh"} {
          # this needs to be configured for all SGE versions
          setup_execd_conf_ssh tmp_config $host
@@ -967,34 +943,10 @@ proc setup_schedconf {} {
    global env CHECK_USER
 
    global ts_config
-   
-   if { $ts_config(gridengine_version) < 60 } {
-      # Only SGE 5.3 had the qconf -scl switch 
-      # always create global complex list if not existing
-      set result [start_sge_bin "qconf" "-scl"]
-
-      ts_log_fine "result: $result"
-
-      if { [string first "Usage" $result] >= 0 } {
-        ts_log_fine "No complex setup to do for this version !!!"
-      } else {
-        if { [string first "global" $result] >= 0 } {
-           ts_log_fine "complex list global already exists"
-        } else {
-           if { [get_complex_version] == 0 } {
-              ts_log_fine "creating global complex list"
-              set host_complex(complex1) "c1 DOUBLE 55.55 <= yes yes 0"
-              set_complex host_complex global 1
-              set host_complex(complex1) ""
-              set_complex host_complex global
-           }
-        }
-      } 
-   }
 
   # reset_schedd_config has global error reporting
   get_schedd_config old_config
-  reset_schedd_config 
+  reset_schedd_config
   get_schedd_config new_config
 
   set arrays_old [ array names old_config ]
@@ -1006,11 +958,7 @@ proc setup_schedconf {} {
        set new  $new_config($param)
 
        if { [ string compare $old $new ] != 0 } {
-          if { $ts_config(gridengine_version) == 53 } {
-             if { [ string compare $param "sgeee_schedule_interval" ] == 0 } { continue }
-          } else {
-             if { [ string compare $param "reprioritize_interval" ] == 0 } { continue }
-          }             
+          if { [ string compare $param "reprioritize_interval" ] == 0 } { continue }
           if { [ string compare $param "weight_tickets_deadline" ] == 0 } { continue }
           if { [ string compare $param "job_load_adjustments" ] == 0 } { continue }
           if { [ string compare $param "schedule_interval" ] == 0 } { continue }
@@ -1094,18 +1042,6 @@ proc setup_check_messages_files {} {
 
    if {$check_use_installed_system} {
       return
-   }
-
-   if {$ts_config(gridengine_version) < 62} {
-      ts_log_fine "scheduler ..."
-      set messages [get_schedd_messages_file]
-      get_file_content $ts_config(master_host) $CHECK_USER $messages 
-      if {$file_array(0) < 1} {
-         ts_log_severe "no scheduler messages file:\n$messages"
-      }
-      for {set i 1} {$i <= $file_array(0)} {incr i} {
-         setup_check_message_file_line $file_array($i)
-      }
    }
 
    ts_log_fine "qmaster ..."

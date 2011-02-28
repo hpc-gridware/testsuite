@@ -145,14 +145,6 @@ proc qconf_setup {} {
 
    get_complex qconf_setup_complex_backup
 
-   #Check we are running at least 6.2 for JGDI
-   if {$CHECK_JGDI_ENABLED} {
-      if {$ts_config(gridengine_version) < 62} {
-         ts_log_config "jgdi shell not supported for GE < 62"
-         return 99
-      }
-   }
-
    set queue_names ""
    set MAX 1000
    if {$CHECK_JGDI_ENABLED} {
@@ -163,22 +155,20 @@ proc qconf_setup {} {
    }
  
    # host group setup for GE >= 6.0
-   if {$ts_config(gridengine_version) >= 60} {
-      # we'll create additional host groups later on - remember the list of hostgroups
-      # for cleanup
-      set output [start_sge_bin qconf -shgrpl]
-      set output [string trim $output]
-      set qconf_original_host_groups {}
-      foreach hg $output {
-         ts_log_fine "saving known hostgroup \"$hg\" for cleanup procedure"
-         lappend qconf_original_host_groups $hg
-      }
-
-      # create a test hostgroup
-      set qconf_hgrp_setup(group_name) "@qconf_test"
-      set qconf_hgrp_setup(hostlist)   "$ts_config(execd_nodes)"
-      add_hostgroup "@qconf_test" qconf_hgrp_setup
+   # we'll create additional host groups later on - remember the list of hostgroups
+   # for cleanup
+   set output [start_sge_bin qconf -shgrpl]
+   set output [string trim $output]
+   set qconf_original_host_groups {}
+   foreach hg $output {
+      ts_log_fine "saving known hostgroup \"$hg\" for cleanup procedure"
+      lappend qconf_original_host_groups $hg
    }
+
+   # create a test hostgroup
+   set qconf_hgrp_setup(group_name) "@qconf_test"
+   set qconf_hgrp_setup(hostlist)   "$ts_config(execd_nodes)"
+   add_hostgroup "@qconf_test" qconf_hgrp_setup
 
    get_userset_list output
    set output [string trim $output]
@@ -212,15 +202,13 @@ proc qconf_cleanup {} {
    ts_log_fine "cleanup ..."
 
    # in GE >= 6.0: cleanup hostgroups
-   if {$ts_config(gridengine_version) >= 60} {
-      set output [start_sge_bin qconf -shgrpl]
-      set output [string trim $output]
-      foreach hg $output {
-         ts_log_fine "testing hostgroup \"$hg\" ..."
-         if {[lsearch -exact $qconf_original_host_groups $hg] < 0} {
-            ts_log_fine "deleting unexpected hostgroup \"$hg\" ..."
-            del_hostgroup $hg
-         }
+   set output [start_sge_bin qconf -shgrpl]
+   set output [string trim $output]
+   foreach hg $output {
+      ts_log_fine "testing hostgroup \"$hg\" ..."
+      if {[lsearch -exact $qconf_original_host_groups $hg] < 0} {
+         ts_log_fine "deleting unexpected hostgroup \"$hg\" ..."
+         del_hostgroup $hg
       }
    }
 
@@ -272,12 +260,10 @@ proc qconf_cleanup {} {
    set result [mod_schedd_config qconf_sched_config]
 
    # Re-set resource quota sets
-   if {$ts_config(gridengine_version) >= 61} {
-      if {[get_rqs_list rqs_names "" "" 0] == 0} {
-         foreach elem $rqs_names {
-            ts_log_fine "Removing resource quota sets $elem ...\n"
-            del_rqs $elem
-         }
+   if {[get_rqs_list rqs_names "" "" 0] == 0} {
+      foreach elem $rqs_names {
+         ts_log_fine "Removing resource quota sets $elem ...\n"
+         del_rqs $elem
       }
    }
 
@@ -838,11 +824,7 @@ proc qconf_se {} {
    set non_cluster_host [host_conf_get_unused_host]
 
    # fields delivered by qconf -se
-   if {$ts_config(gridengine_version) == 53} {
-      set qconf_se_fields "hostname load_scaling complex_list complex_values load_values processors user_lists xuser_lists projects xprojects usage_scaling resource_capability_factor"
-   } else {
-      set qconf_se_fields "hostname load_scaling complex_values load_values processors user_lists xuser_lists projects xprojects usage_scaling report_variables"
-   }
+   set qconf_se_fields "hostname load_scaling complex_values load_values processors user_lists xuser_lists projects xprojects usage_scaling report_variables"
 
    # positive check
    # check qconf -se <an exec host>, check completeness of result
@@ -1347,12 +1329,10 @@ proc qconf_add_delete_manager {} {
 
    # Now delete manager "qconf_user" again
    # Don't run it with 6.0, here qconf will exit 0
-   if {$ts_config(gridengine_version) >= 61} {
-      ts_log_fine "Negative test for qconf -dm ..."
-      set result [del_manager "qconf_user" "" "" 0]
-      if {$result == 0} {
-         ts_log_severe "qconf -dm succeeded, but should have failed"
-      }
+   ts_log_fine "Negative test for qconf -dm ..."
+   set result [del_manager "qconf_user" "" "" 0]
+   if {$result == 0} {
+      ts_log_severe "qconf -dm succeeded, but should have failed"
    }
 }
 
@@ -1488,9 +1468,7 @@ proc qconf_add_show_mod_del_queue {} {
    if {$result == -1} {
       ts_log_fine "OK"
    } else {
-      if {$ts_config(gridengine_version) >= 61} {
-         ts_log_severe "clear_queue with non existing queue name should have failed, but exit code (from handle_sge_errors) was $result"
-      }
+      ts_log_severe "clear_queue with non existing queue name should have failed, but exit code (from handle_sge_errors) was $result"
    }
 
    # Now delete queue "qconf_queue.q"
@@ -2419,25 +2397,23 @@ proc qconf_modify_userlist {} {
 
    # Now modify slow with wrong attribute
    # this verification is only implemented for 6.1u4 and higher
-   if {$ts_config(gridengine_version) >= 61} {
-      set userlist "qconf_userlist"
-      set attribute "oticket"
-      set value -1
-      set current_ul($attribute) $value
-      ts_log_fine "3) Modify attribute $attribute wrong slow"
-      set result [mod_userlist $userlist current_ul 0 $host $CHECK_USER 0]
+   set userlist "qconf_userlist"
+   set attribute "oticket"
+   set value -1
+   set current_ul($attribute) $value
+   ts_log_fine "3) Modify attribute $attribute wrong slow"
+   set result [mod_userlist $userlist current_ul 0 $host $CHECK_USER 0]
 
-      if {$result != -12} {
-         ts_log_severe "qconf -mu didn't fail as expected"
-      }
+   if {$result != -12} {
+      ts_log_severe "qconf -mu didn't fail as expected"
+   }
 
-      # Now modify fast with wrong value
-      ts_log_fine "4) Modify userlist $userlist wrong fast ..."
-      set result [mod_userlist $userlist current_ul 1 $host $CHECK_USER 0]
+   # Now modify fast with wrong value
+   ts_log_fine "4) Modify userlist $userlist wrong fast ..."
+   set result [mod_userlist $userlist current_ul 1 $host $CHECK_USER 0]
 
-      if {$result != -12} {
-         ts_log_severe "qconf -Mu didn't fail as expected"
-      }
+   if {$result != -12} {
+      ts_log_severe "qconf -Mu didn't fail as expected"
    }
 
    #test if setting wrong value in userset type throws error

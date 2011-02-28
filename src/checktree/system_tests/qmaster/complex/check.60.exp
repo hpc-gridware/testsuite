@@ -112,7 +112,6 @@ set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function complex_setup
-set check_setup_level_function complex_setup_level
 set check_cleanup_function complex_cleanup
 
 # define test's procedure order
@@ -142,20 +141,6 @@ proc complex_init_level {} {
 }
 
 # -------- local test procedures -----------------------------------------------
-
-proc complex_setup_level {} {
-   global ts_config
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "1" {
-         if {$ts_config(gridengine_version) < 61} {
-            ts_log_config "Need GE >= 61 for runlevel 1"
-            return 99
-         } 
-      }
-   }
-}
 
 proc complex_setup {} {
    global ts_config CHECK_USER
@@ -245,12 +230,10 @@ proc complex_cleanup {} {
    enable_queue $queue_list
 
    # Delete resource quota sets
-   if {$ts_config(gridengine_version) >= 61} {
-      if {[get_rqs_list rqs_names "" "" 0] == 0} {
-         foreach elem $rqs_names {
-            ts_log_fine "Removing resource quota sets $elem ...\n"
-            del_rqs $elem
-         }
+   if {[get_rqs_list rqs_names "" "" 0] == 0} {
+      foreach elem $rqs_names {
+         ts_log_fine "Removing resource quota sets $elem ...\n"
+         del_rqs $elem
       }
    }
 
@@ -278,11 +261,7 @@ proc complex_loadsensor_test {} {
       wait_for_remote_file $complex_host $CHECK_USER $filename 
 
       # install loadsensor
-      if {$ts_config(gridengine_version) <= 60 || [is_61AR]} {
-         set new_config(load_sensor) "$ts_config(testsuite_root_dir)/scripts/loadsensor.sh"
-      } else {
-         set new_config(load_sensor) "$ts_config(testsuite_root_dir)/scripts/loadsensor_multihost.sh"
-      }
+      set new_config(load_sensor) "$ts_config(testsuite_root_dir)/scripts/loadsensor_multihost.sh"
       set_config_and_propagate new_config $complex_host
 
       # wait for loadsensor to have effect
@@ -1037,19 +1016,16 @@ proc issue_1847 {} {
    global ts_config CHECK_ACT_LEVEL
    global complex_host
 
-   # this fix has not yet been merged to V60s2_BRANCH
-   if {$ts_config(gridengine_version) >= 61} {
-      if {$CHECK_ACT_LEVEL == 0} {
-         complex_test_rattr "tt=x"
-         complex_test_rattr "ti=x"
-         complex_test_rattr "td=x"
-         complex_test_rattr "tb=x"
-         complex_test_rattr "tb=null"
+   if {$CHECK_ACT_LEVEL == 0} {
+      complex_test_rattr "tt=x"
+      complex_test_rattr "ti=x"
+      complex_test_rattr "td=x"
+      complex_test_rattr "tb=x"
+      complex_test_rattr "tb=null"
 
-         # cleanup
-         mqattr "complex_values" "NONE" [get_queue_instance "complex" $complex_host]
-         mhattr "complex_values" "NONE" $complex_host
-      }
+      # cleanup
+      mqattr "complex_values" "NONE" [get_queue_instance "complex" $complex_host]
+      mhattr "complex_values" "NONE" $complex_host
    }
 }
 

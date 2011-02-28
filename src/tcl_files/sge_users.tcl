@@ -53,10 +53,7 @@ proc set_user_defaults {change_array} {
    set chgar(oticket)           "0"
    set chgar(fshare)            "0"
    set chgar(default_project)   "NONE"
-   if {$ts_config(gridengine_version) != 53} {
-      set chgar(delete_time)    "0"
-   }
-
+   set chgar(delete_time)    "0"
 }
 
 #****** sge_users/add_user() ***************************************************

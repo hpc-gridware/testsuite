@@ -240,9 +240,7 @@ proc issue_2222_test {} {
 
    # verify that jobs of both users are running in the Batch queue
    set qstat_options "-q Batch -s r"
-   if {$ts_config(gridengine_version) >= 61} {
-      append qstat_options " -u '*'"
-   }
+   append qstat_options " -u '*'"
    set qstat_output [start_sge_bin "qstat" $qstat_options]
    parse_qstat qstat_output qstat_data
 

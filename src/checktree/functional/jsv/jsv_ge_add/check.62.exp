@@ -131,11 +131,6 @@ proc jsv_ge_add_setup {} {
    global jsv_hjob_id
    global jsv_has_binding
 
-   if {$ts_config(gridengine_version) < 62} {
-      ts_log_config "test not working for GE < 62"
-      return 99
-   }
-
    # check if jsv is available
    if {$jsv_enabled == ""} {
       set jsv_enabled [ge_has_feature "job-submission-verify"]

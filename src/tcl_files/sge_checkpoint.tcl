@@ -335,15 +335,11 @@ proc get_ckpt_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
 
    switch -exact $action {
       "add" {
-   if { $ts_config(gridengine_version) == 53 } {
-      set REFERENCED_IN_QUEUE_LIST_OF_CHECKPOINT [translate_macro MSG_SGETEXT_UNKNOWNQUEUE_SSSS "*" "*" "*" "*"] 
-            add_message_to_container messages -3 $REFERENCED_IN_QUEUE_LIST_OF_CHECKPOINT
-   }
-}
+      }
       "get" {
          set NOT_EXISTS [translate_macro MSG_PARALLEL_XNOTAPARALLELEVIRONMENT_S "$obj_name"]
          add_message_to_container messages -1 $NOT_EXISTS
-     }
+      }
       "mod" {
          add_message_to_container messages -3 [translate_macro MSG_CKPT_XISNOTCHKPINTERFACEDEF_S "$obj_name"]
       }

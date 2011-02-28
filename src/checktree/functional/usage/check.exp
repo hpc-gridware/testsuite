@@ -138,12 +138,6 @@ proc usage_setup_level {} {
    switch -- $CHECK_ACT_LEVEL {
       2 -
       102 {
-         if {$ts_config(gridengine_version) >= 62 && ![is_61AR]} {
-            ts_log_fine "running test"
-         } else {
-            ts_log_config "test not working for this configuration"
-            return 99
-         }
       }
    }
 
@@ -176,9 +170,7 @@ proc usage_setup_level {} {
    if {$usage_accounting_summary} {
       set pe(accounting_summary) "TRUE"
    } else {
-      if {$ts_config(gridengine_version) >= 62 && ![is_61AR]} {
-         set pe(accounting_summary) "FALSE"
-      }
+      set pe(accounting_summary) "FALSE"
    }
    mod_pe "tight" pe
 
@@ -435,11 +427,9 @@ proc usage_check {jobid qstat_j_info slots acct_slots expected_wallclock} {
    if {[expr abs($acct_mem - $expected_mem)] > [expr $expected_mem / 20]} {
       lappend result "accounting memory usage ($acct_mem) differs more than 5% from expected usage ($expected_mem) on host $qacct_info(hostname)"
    }
-   if {$ts_config(gridengine_version) >= 62} {
-      # online maxvmem
-      if {[expr abs($acct_maxvmem - $online_maxvmem)] > [expr $acct_maxvmem / 10]} {
-         lappend result "accounting maxvmem usage ($acct_maxvmem) differs from online maxvmen usage ($online_maxvmem) on host $qacct_info(hostname)"
-      }
+   # online maxvmem
+   if {[expr abs($acct_maxvmem - $online_maxvmem)] > [expr $acct_maxvmem / 10]} {
+      lappend result "accounting maxvmem usage ($acct_maxvmem) differs from online maxvmen usage ($online_maxvmem) on host $qacct_info(hostname)"
    }
 
    # number of accounting records
@@ -485,10 +475,8 @@ proc usage_monitor_check {id test_name slots acct_slots wallclock} {
       set job_finished [usage_job_finished $job_state]
       if {$started > 0 && $job_finished == 0 && $jobid != 0} {
          if {$do_qstat == 1} {
-            if {$ts_config(gridengine_version) >= 62} {
-               set foutput [start_sge_bin "qstat" "-f -u \"*\" -g t"]
-               ts_log_fine "qstat -f output:\n$foutput"
-            }
+            set foutput [start_sge_bin "qstat" "-f -u \"*\" -g t"]
+            ts_log_fine "qstat -f output:\n$foutput"
             set do_qstat 0
          }
          set my_timeout 1
@@ -610,10 +598,8 @@ proc usage_tight {} {
    set task_runtime 120
    set sleep_after 0
    if {$CHECK_ACT_LEVEL == 2 || $CHECK_ACT_LEVEL == 102} {
-      if {$ts_config(gridengine_version) >= 62} {
-         set task_runtime 100
-         set sleep_after 20
-      }
+      set task_runtime 100
+      set sleep_after 20
    }
   
    wait_for_end_of_all_jobs

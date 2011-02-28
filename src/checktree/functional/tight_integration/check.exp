@@ -115,13 +115,6 @@ proc tight_integration_setup {} {
    global tight_masterq tight_master_node
    global tight_global_config
 
-   # tight integration with csp is not working in SGE(EE) 5.3
-   if {$ts_config(gridengine_version) == 53 && $ts_config(product_feature) == "csp"} {
-      ts_log_config "Test is not working for GE 53 in CSP mode"
-      return 99
-   }
-
-
    # we have to set a short load report time
    # to workaround CR 6728379
    get_config tight_global_config
@@ -163,19 +156,6 @@ proc tight_integration_setup_level {} {
    global CHECK_ACT_LEVEL
    global submit_command tight_integration_accounting_summary
 
-
-   switch -- $CHECK_ACT_LEVEL {
-      2 {
-         if {$ts_config(gridengine_version) >= 62 && ![is_61AR]} {
-            ts_log_fine "running test"
-         } else {
-            ts_log_config "test does not work with this version"
-            return 99
-         }
-      }
-   }
-
-
    set tight_integration_accounting_summary 0
 
    switch -- $CHECK_ACT_LEVEL {
@@ -190,14 +170,12 @@ proc tight_integration_setup_level {} {
          set tight_integration_accounting_summary 1
       }
    }
-   
+
    # in level 2, we test with pe setting accounting_summary true
    if {$tight_integration_accounting_summary} {
       set pe(accounting_summary) "TRUE"
    } else {
-      if {$ts_config(gridengine_version) >= 62 && ![is_61AR]} {
-         set pe(accounting_summary) "FALSE"
-      }
+      set pe(accounting_summary) "FALSE"
    }
 
    mod_pe "tight" pe
@@ -528,11 +506,6 @@ proc tight_integration_iz_1916 {} {
       return
    }
 
-   if {$ts_config(gridengine_version) == 53} {
-      ts_log_info "iz 1916 does not run in 5.3 systems"
-      return
-   }
-
    set TIGHT_INTEGRATION_FUNCTIONAL_SLOTS "4"
    
    # set global config to speed up the test
@@ -641,11 +614,6 @@ proc tight_integration_iz_575 {} {
    tight_integration_init_messages_check
 
    ts_log_fine "tight_integration: iz 575 task wallclock limit"
-
-   if {$ts_config(gridengine_version) == 53} {
-      ts_log_config "iz 575 does not run in 5.3 systems"
-      return
-   }
 
    # set wallclock limit on all slave queues
    if {[llength $ts_config(execd_nodes)] < 2} {
@@ -1021,21 +989,18 @@ proc tight_integration_acct {job_id num_tasks} {
       }
    }
 
-   # in 6.0u13 and higher, the submission time of tasks is specified; in older version it was 0.
    # check that all submission times are in an interval of 5 minutes
-   if {$ts_config(gridengine_version) >= 60 && ![is_61AR]} {
-      set min [clock scan "tomorrow"]; set max 0
-      foreach time $qacct_info(qsub_time) {
-         if {$time < $min} {
-            set min $time
-         }
-         if {$time > $max} {
-            set max $time
-         }
+   set min [clock scan "tomorrow"]; set max 0
+   foreach time $qacct_info(qsub_time) {
+      if {$time < $min} {
+         set min $time
       }
-      if {[expr $max - $min] > 300} {
-         ts_log_severe "job $job_id: tightly integrated job and tasks were not started within 5 minutes, or tasks accounting records do not contain correct submission time:\n$qacct_info(qsub_time)"
+      if {$time > $max} {
+         set max $time
       }
+   }
+   if {[expr $max - $min] > 300} {
+      ts_log_severe "job $job_id: tightly integrated job and tasks were not started within 5 minutes, or tasks accounting records do not contain correct submission time:\n$qacct_info(qsub_time)"
    }
 }
 
@@ -1192,11 +1157,6 @@ proc tight_integration_notify {} {
    global ts_config
    global tight_master_node
 
-   if {$ts_config(gridengine_version) < 61} {
-      ts_log_fine "CR 6802351 / IZ 2986 has only be fixed in 6.1u7 and 6.2u3 - skipping this test"
-      return
-   }
-
    # test notification on job delete
    tight_integration_notify_doit "delete job" "SIGUSR2" "" "delete"
    tight_integration_notify_doit "suspend job" "SIGUSR1" "" "suspend"
@@ -1210,11 +1170,7 @@ proc tight_integration_notify {} {
    # for s_rt we expect to get SIGUSR1 (even when the job is submitted without -notify),
    # but in 6.2 we need to use -notify and get SIGUSR2!
    # needs additional analysis - both 6.1 and 6.2 seem to show incorrect behaviour
-   if {$ts_config(gridengine_version) == 61} {
-      tight_integration_notify_doit "s_rt" "SIGUSR1" "-l s_rt=15" "" 0
-   } else {
-      tight_integration_notify_doit "s_rt" "SIGUSR2" "-l s_rt=15" "" 0
-   }
+   tight_integration_notify_doit "s_rt" "SIGUSR2" "-l s_rt=15" "" 0
 
    # now set a different kill signal, and expect it to work as before
    get_config config_backup $tight_master_node

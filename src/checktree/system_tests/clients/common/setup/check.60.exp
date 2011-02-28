@@ -130,10 +130,8 @@ proc client_setup_do_test {scenario expected_error_list {error_info_message_arra
    set commands(qstat,args) ""
    set commands(qsub,args)  "-o /dev/null -e /dev/null $ts_config(product_root)/examples/jobs/sleeper.sh"
 
-   if {$ts_config(gridengine_version) >= 61} {
-      lappend commands(index) qquota
-      set commands(qquota,args) ""
-   }
+   lappend commands(index) qquota
+   set commands(qquota,args) ""
 
    set error_text ""
    set info_text ""

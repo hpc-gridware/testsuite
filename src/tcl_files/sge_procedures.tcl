@@ -382,28 +382,21 @@ proc ge_has_feature {feature {quiet 0}} {
    get_current_cluster_config_array ts_config
    switch -exact $feature {
       "new-interactive-job-support" {
-         if {$ts_config(gridengine_version) < 62 ||
-             [is_61AR]                           ||
-             $CHECK_INTERACTIVE_TRANSPORT == "rtools" } {
+         if {$CHECK_INTERACTIVE_TRANSPORT == "rtools"} {
             set result false
          } else {
             set result true
          }
       }
       "jmx-thread" {
-         if {$ts_config(gridengine_version) >= 62 && $ts_config(jmx_port) > 0 } {
+         if {$ts_config(jmx_port) > 0} {
             set result true
          } else {
             set result false
          }
       }
       "scheduler-thread" {
-         if {$ts_config(gridengine_version) < 62 ||
-             [is_61AR]                           } {
-            set result false
-         } else {
-            set result true
-         }
+         set result true
       }
       "core-binding" {
          get_complex complex_array
@@ -430,18 +423,10 @@ proc ge_has_feature {feature {quiet 0}} {
          }
       }
       "job-consumable" {
-         if {$ts_config(gridengine_version) < 62} {
-            set result false
-         } else {
-            set result true
-         }
+         set result true
       }
       "exclusive-host-usage" {
-         if {$ts_config(gridengine_version) < 62} {
-            set result false
-         } else {
-            set result true
-         }
+         set result true
       }
       "additional-jvm-arguments" {
          # since 6.2u3
@@ -644,15 +629,6 @@ proc check_messages_files {} {
       append full_info $status
    }
 
-   if {$ts_config(gridengine_version) < 62 || [is_61AR]} {
-      set status [check_schedd_messages 1] 
-      append full_info "\n=========================================\n"
-      append full_info "schedd: $ts_config(master_host)\n"
-      append full_info "file  : [check_schedd_messages 2]\n"
-      append full_info "=========================================\n"
-      append full_info $status
-   }
-
    set status [check_qmaster_messages 1] 
    append full_info "\n=========================================\n"
    append full_info "qmaster: $ts_config(master_host)\n"
@@ -781,12 +757,8 @@ proc check_schedd_messages { { show_mode 0 } } {
    get_current_cluster_config_array ts_config
 
    set spool_dir [get_qmaster_spool_dir]
-   if {$ts_config(gridengine_version) < 62 || [is_61AR]} {
-      set messages_file "$spool_dir/schedd/messages"
-   } else {
-      # schedd messages are part of the master messages file
-      set messages_file "$spool_dir/messages"
-   }
+   # schedd messages are part of the master messages file
+   set messages_file "$spool_dir/messages"
 
    if { $show_mode == 2 } {
       return $messages_file
@@ -1177,7 +1149,7 @@ proc start_source_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {t
 #     For version specific messages, a function get_sge_error_generic_vdep
 #     is called.
 #     get_sge_error_generic_vdep is implemented in the version specific 
-#     sge_procedures files (sge_procedures.53.tcl, sge_procedures.60.tcl, ...).
+#     sge_procedures files (sge_procedures.80.tcl, sge_procedures.81.tcl, ...).
 #
 #  INPUTS
 #     messages_var - TCL array containing error message description, see
@@ -3416,11 +3388,7 @@ proc soft_execd_shutdown {host_list {timeout 60}} {
 
    # check loads
    foreach host $host_list {
-      if {$ts_config(gridengine_version) >= 60 } {
-         set queue "*@$host"
-      } else {
-         set queue "${host}.q"
-      }
+      set queue "*@$host"
       set load [wait_for_unknown_load $timeout $queue 0]
       if {$load == 0} {
          ts_log_finer "execd on host $host reports 99.99 load value"
@@ -3530,25 +3498,20 @@ proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
 
          # check if load of an host is set > 99 (no exed report)
          set failed 0
-	 
-	 if {$ts_config(gridengine_version) < 60} {
-            set q_r $queue_array
-         } else {
-            set q_r ""
-            foreach queue $queue_array {
-               lappend q_r [array names load_values "$queue"]
-	    }
-         }
-	 ts_log_finest "queue_list=$q_r"
-         
-	 foreach queue $q_r {
+         set q_r ""
+         foreach queue $queue_array {
+            lappend q_r [array names load_values "$queue"]
+	      }
+	      ts_log_finest "queue_list=$q_r"
+
+	      foreach queue $q_r {
             if {[info exists load_values($queue)] == 1} {
                if {$load_values($queue) < 99} {
                    incr failed 1
                    if {[string compare $load_values($queue) "-NA-"] == 0} {
                       incr failed -1
                    }
-               } 
+               }
             }
          }
 
@@ -3992,11 +3955,7 @@ proc mod_attr_file_error {result object attribute tmpfile target raise_error} {
    # recognize certain error messages and return special return code
    set messages(index) "-1 -2"
    set messages(-1) [translate_macro MSG_UNKNOWNATTRIBUTENAME_S $attribute ]
-   if {$ts_config(gridengine_version) < 61} {
-      set messages(-2) [translate_macro MSG_FILE_ERRORREADINGINFILE ]
-   } else {
-      set messages(-2) "*[translate_macro MSG_FLATFILE_ERROR_READINGFILE_S "*"]*"
-   }
+   set messages(-2) "*[translate_macro MSG_FLATFILE_ERROR_READINGFILE_S "*"]*"
 
    set ret 0
    # now evaluate return code and raise errors
@@ -4407,14 +4366,12 @@ proc replace_attr_file_error {result object attribute tmpfile target raise_error
    set messages(index) -1
    set messages(-1) "error: [translate_macro MSG_UNKNOWNATTRIBUTENAME_S $attribute ]"
 
-   if {$ts_config(gridengine_version) >= 62} {
-      lappend messages(index) -2
-      set messages(-2) [translate_macro MSG_PARSE_MOD_REJECTED_DUE_TO_AR_SSU "*" "*" "*"]
-      lappend messages(index) -3
-      set messages(-3) [translate_macro MSG_PARSE_MOD3_REJECTED_DUE_TO_AR_SU "*" "*"]
-      lappend messages(index) -4
-      set messages(-4) [translate_macro MSG_QINSTANCE_SLOTSRESERVED_USS "*" "*" "*"]
-   }
+   lappend messages(index) -2
+   set messages(-2) [translate_macro MSG_PARSE_MOD_REJECTED_DUE_TO_AR_SSU "*" "*" "*"]
+   lappend messages(index) -3
+   set messages(-3) [translate_macro MSG_PARSE_MOD3_REJECTED_DUE_TO_AR_SU "*" "*"]
+   lappend messages(index) -4
+   set messages(-4) [translate_macro MSG_QINSTANCE_SLOTSRESERVED_USS "*" "*" "*"]
 
    set ret 0
    # now evaluate return code and raise errors
@@ -4670,29 +4627,13 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1}} {
 
    ts_log_fine "deleting job $jobid"
 
-   if {$ts_config(gridengine_version) >= 60} {
-      set ALREADYDELETED [translate_macro MSG_JOB_ALREADYDELETED_U "*"]
-   } else {
-      set ALREADYDELETED "no MSG_JOB_ALREADYDELETED_U in 5.3"
-   }
+   set ALREADYDELETED [translate_macro MSG_JOB_ALREADYDELETED_U "*"]
    set REGISTERED1 [translate_macro MSG_JOB_REGDELTASK_SUU "*" "*" "*"]
-   if { $ts_config(gridengine_version) >= 62 } {
-      set REGISTERED2 [translate_macro MSG_JOB_REGDELX_SSU "*" "job" "*" ]
-   } else {
-      set REGISTERED2 [translate_macro MSG_JOB_REGDELJOB_SU "*" "*" ]
-   }
+   set REGISTERED2 [translate_macro MSG_JOB_REGDELX_SSU "*" "job" "*" ]
    set DELETED1  [translate_macro MSG_JOB_DELETETASK_SUU "*" "*" "*"]
-   if {$ts_config(gridengine_version) >= 62} {
-      set DELETED2  [translate_macro MSG_JOB_DELETEX_SSU "*" "job" "*" ]
-   } else {
-      set DELETED2  [translate_macro MSG_JOB_DELETEJOB_SU "*" "*" ]
-   }
+   set DELETED2  [translate_macro MSG_JOB_DELETEX_SSU "*" "job" "*" ]
 
-   if {$ts_config(gridengine_version) == 53} {
-      set UNABLETOSYNC "asldfja?sldkfj?ajf?ajf"
-   } else {
-      set UNABLETOSYNC [translate_macro MSG_COM_NOSYNCEXECD_SU $CHECK_USER $jobid]
-   }
+   set UNABLETOSYNC [translate_macro MSG_COM_NOSYNCEXECD_SU $CHECK_USER $jobid]
 
    set result -100
    if { [is_job_id $jobid] } {
@@ -4702,10 +4643,8 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1}} {
       # beginning with SGE 6.0 we need to specify if we want to delete jobs from
       # other users (as admin user)
       set args ""
-      if { $ts_config(gridengine_version) != 53 } {
-         if { $all_users } {
-            set args "-u '*'"
-         }
+      if { $all_users } {
+         set args "-u '*'"
       }
       set id [open_remote_spawn_process $ts_config(master_host) $CHECK_USER "$program" "$args $jobid"]
       set sp_id [ lindex $id 1 ]
@@ -4877,55 +4816,24 @@ proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {c
    append messages(index) " 0 1 2"
 
    # success messages:
-   if { $ts_config(gridengine_version) == 53 } {
-      set messages(0)      "*[translate_macro MSG_JOB_SUBMITJOB_USS "*" "*" "*"]*"
-      set messages(1)      "*[translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_U "*"]*"
-      set messages(2)      "*[translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUSS "*" "*" "*" "*" "*" "*" ]*"
-   } else {
-      # 6.0 and higher
-      set messages(0)      "*[translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]*"
-      set messages(1)      "*[translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_S "*"]*"
-      set messages(2)      "*[translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUS "*" "*" "*" "*" "*"]*"
-   }
+   set messages(0)      "*[translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]*"
+   set messages(1)      "*[translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_S "*"]*"
+   set messages(2)      "*[translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUS "*" "*" "*" "*" "*"]*"
 
    # failure messages:
-   if {$ts_config(gridengine_version) == 53} {
-      set messages(-14)    "*[translate_macro MSG_JOB_MOD_JOBNETPREDECESSAMBIGUOUS_SUU "*" "*" "*"]*"
-      set messages(-15)    "*[translate_macro MSG_JOB_MOD_JOBNAMEVIOLATESJOBNET_SSUU "*" "*" "*" "*"]*"
-      set messages(-24)    "blah blah blah no NAMETOOLONG in GE 5.3"
-      set messages(-25)    "*[translate_macro MSG_JOB_JOBALREADYEXISTS_U "*"]*"
-      set messages(-26)    "blah blah blah no INVALID_JOB_REQUEST in GE 5.3"
-      set messages(-28)    "*[translate_macro MSG_JOB_QUNKNOWN_S "*"]*"
-      set messages(-29)    "blah blah blah no POSITIVE_PRIO in GE 5.3"
-      set messages(-35)    "blah blah blah no MSG_JOB_HRTLIMITTOOLONG_U in GE 5.3"
-    } else {
-      # 6.0 and higher
-      set messages(-14)   "TODO: jobnet handling changed, old message NON_AMBIGUOUS"
-      set messages(-15)   "TODO: jobnet handling changed, old message UNAMBIGUOUSNESS"
-      set messages(-24)   "*[translate_macro MSG_JOB_NAMETOOLONG_I "*"]*"
-      set messages(-25)   "*[translate_macro MSG_JOB_JOBALREADYEXISTS_S "*"]*"
-      set messages(-26)   "*[translate_macro MSG_INVALIDJOB_REQUEST_S "*"]*"
-      set messages(-28)   "*[translate_macro MSG_QREF_QUNKNOWN_S "*"]*"
+   set messages(-14)   "TODO: jobnet handling changed, old message NON_AMBIGUOUS"
+   set messages(-15)   "TODO: jobnet handling changed, old message UNAMBIGUOUSNESS"
+   set messages(-24)   "*[translate_macro MSG_JOB_NAMETOOLONG_I "*"]*"
+   set messages(-25)   "*[translate_macro MSG_JOB_JOBALREADYEXISTS_S "*"]*"
+   set messages(-26)   "*[translate_macro MSG_INVALIDJOB_REQUEST_S "*"]*"
+   set messages(-28)   "*[translate_macro MSG_QREF_QUNKNOWN_S "*"]*"
 
-      if {$ts_config(gridengine_version) < 61 || [is_61AR]} {
-         set messages(-29)    "blah blah blah no MSG_JOB_NONADMINPRIO in GE < 6.1"
-         set messages(-36)    "blah blah blah no MSG_JOB_SAMEPATHSFORINPUTANDOUTPUT_SSS in GE < 6.1"
-         set messages(-37)    "blah blah blah no MSG_EVAL_EXPRESSION_LONG_EXPRESSION in GE < 6.1"
-      } else {
-         # 6.1 and higher
-         set messages(-29)    "*[translate_macro MSG_JOB_NONADMINPRIO]*"
-         set messages(-37)    "*[translate_macro MSG_EVAL_EXPRESSION_LONG_EXPRESSION "*"]*"
-         set messages(-36)   "*[translate_macro MSG_JOB_SAMEPATHSFORINPUTANDOUTPUT_SSS "*" "*" "*"]"
-      }
+   set messages(-29)    "*[translate_macro MSG_JOB_NONADMINPRIO]*"
+   set messages(-37)    "*[translate_macro MSG_EVAL_EXPRESSION_LONG_EXPRESSION "*"]*"
+   set messages(-36)   "*[translate_macro MSG_JOB_SAMEPATHSFORINPUTANDOUTPUT_SSS "*" "*" "*"]"
 
-      if {$ts_config(gridengine_version) < 62} {
-         set messages(-35)    "blah blah blah no MSG_JOB_HRTLIMITTOOLONG_U in GE < 62"
-      } else {
-         # 6.2 and higher
-         set messages(-35)    "*[translate_macro MSG_JOB_HRTLIMITTOOLONG_U "*"]*"
-      }
-   }
-   
+   set messages(-35)    "*[translate_macro MSG_JOB_HRTLIMITTOOLONG_U "*"]*"
+
    set messages(-3)     "*[translate_macro MSG_GDI_USAGE_USAGESTRING] qsub*"
    set messages(-6)     "*[translate_macro MSG_QSUB_YOURQSUBREQUESTCOULDNOTBESCHEDULEDDTRYLATER]*"
    set messages(-7)     "*[translate_macro MSG_JOB_MORETASKSTHAN_U "*"]*"
@@ -5155,28 +5063,16 @@ proc submit_job_parse_job_id {output_var type message} {
    # we need to determine the position of the job id in the output message
    switch -exact -- $type {
       0 {
-         if { $ts_config(gridengine_version) == 53 } {
-            set JOB_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOB_USS "__JOB_ID__" "__JOB_NAME__" "__JOB_ARG__"]
-         } else {
-            set JOB_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOB_US "__JOB_ID__" "__JOB_NAME__"]
-         }
+         set JOB_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOB_US "__JOB_ID__" "__JOB_NAME__"]
          set pos [lsearch -exact $JOB_SUBMITTED_DUMMY "__JOB_ID__"]
       }
       1 {
-         if {$ts_config(gridengine_version) == 53} {
-            set JOB_IMMEDIATE_DUMMY [translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_U "__JOB_ID__"]
-         } else {
-            # 6.0 and higher
-            set JOB_IMMEDIATE_DUMMY [translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_S "__JOB_ID__"]
-         }
+         # 6.0 and higher
+         set JOB_IMMEDIATE_DUMMY [translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_S "__JOB_ID__"]
          set pos [lsearch -exact $JOB_IMMEDIATE_DUMMY "__JOB_ID__"]
       }
       2 {
-         if { $ts_config(gridengine_version) == 53 } {
-            set JOB_ARRAY_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUSS "__JOB_ID__" "" "" "" "__JOB_NAME__" "__JOB_ARG__"]
-         } else {
-            set JOB_ARRAY_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUS "__JOB_ID__" "" "" "" "__JOB_NAME__"]
-         }
+         set JOB_ARRAY_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUS "__JOB_ID__" "" "" "" "__JOB_NAME__"]
          set pos [lsearch -exact $JOB_ARRAY_SUBMITTED_DUMMY "__JOB_ID__.-:"]
       }
    }
@@ -5476,14 +5372,7 @@ proc get_standard_job_info {jobid {add_empty 0} {get_all 0}} {
 
    # some tests need this done via catch/exec because there is no additional user
    # who can run this in an open connetion.
-   if {$ts_config(gridengine_version) == 53} {
-      set result [start_sge_bin "qstat" ""]
-   } elseif {$ts_config(gridengine_version) == 60} {
-      set result [start_sge_bin "qstat" "-g t"]
-   } else {
-      # ts_config gridengine_version 61
-      set result [start_sge_bin "qstat" "-u \"*\" -g t"]
-   }
+   set result [start_sge_bin "qstat" "-u \"*\" -g t"]
 
    if {$prg_exit_state != 0} {
       ts_log_severe "qstat failed:\n$result"
@@ -5597,14 +5486,10 @@ proc get_extended_job_info {jobid {variable job_info} {do_replace_NA 1} {do_grou
    if {[info exists jobinfo]} {
       unset jobinfo
    }
-   if {$ts_config(gridengine_version) >= 61} {
-      set qstat_options "-u '*'"
-   } else {
-      set qstat_options ""
-   }
+   set qstat_options "-u '*'"
 
    set group_options ""
-   if {$ts_config(gridengine_version) >= 60 && $do_group} {
+   if {$do_group} {
       set group_options "-g t"
    }
 
@@ -5849,11 +5734,9 @@ proc get_qacct {job_id {my_variable "qacct_info"} {on_host ""} {as_user ""} {rai
    
    # beginning with SGE 6.0, writing the accounting file may be buffered
    # accept getting errors for some seconds
-   if {$ts_config(gridengine_version) >= 60} {
-      if {$atimeout_value == 0} {
-         set timeout_value 30
-         ts_log_finer "get_qacct(): will repeat getting accounting info up to 30 seconds for GE versions >= 60!"
-      }
+   if {$atimeout_value == 0} {
+      set timeout_value 30
+      ts_log_finer "get_qacct(): will repeat getting accounting info up to 30 seconds for GE versions >= 60!"
    }
 
    # if qacct host is not master host we have also to add some NFS timeout
@@ -5962,11 +5845,7 @@ proc is_job_running {jobid jobname} {
       set check_job_name 1
    }
 
-   if {$ts_config(gridengine_version) >= 61} {
-      set result [start_sge_bin "qstat" "-u '*' -f" "" "" catch_state ]
-   } else {
-      set result [start_sge_bin "qstat" "-f" "" "" catch_state ]
-   } 
+   set result [start_sge_bin "qstat" "-u '*' -f" "" "" catch_state ]
 
    set mytime [timestamp]
    while {$mytime == $check_timestamp} { 
@@ -6063,13 +5942,7 @@ proc get_job_state {jobid {not_all_equal 0} {taskid task_id}} {
    while {$my_timeout > [timestamp] && $states_all_equal == 0} {
       set states_all_equal 1
 
-      if {$ts_config(gridengine_version) == 53} {
-         set result [start_sge_bin "qstat" "-f" "" $CHECK_USER]
-      } elseif {$ts_config(gridengine_version) == 60} {
-         set result [start_sge_bin "qstat" "-f -g t" "" $CHECK_USER]
-      } else {
-         set result [start_sge_bin "qstat" "-f -g t -u '*'" "" $CHECK_USER]
-      }
+      set result [start_sge_bin "qstat" "-f -g t -u '*'" "" $CHECK_USER]
       if {$prg_exit_state != 0} {
          return -1
       }
@@ -6657,11 +6530,7 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
       set startup_user $CHECK_USER
    } 
 
-   if {($ts_config(gridengine_version) < 62 || [is_61AR]) && $and_scheduler} {
-      set schedd_message "and scheduler"
-   } else {
-      set schedd_message ""
-   }
+   set schedd_message ""
    
    if {$ts_config(jmx_port) > 0} {
       # For the JMX MBean Server we need java 1.5+
@@ -6690,43 +6559,8 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
       return
    }
 
-   if {$ts_config(gridengine_version) < 62 || [is_61AR]} {
-      if {$and_scheduler} {
-         set old_schedd_pid [get_scheduler_pid $start_host [get_qmaster_spool_dir]]
-         ts_log_finest "old scheduler pid is \"$old_schedd_pid\""
-
-         ts_log_fine "starting up scheduler ..."
-         if {$schedd_debug != 0} {
-            set xterm_path [get_binary_path $start_host "xterm"]
-            ts_log_finest "using DISPLAY=${CHECK_DISPLAY_OUTPUT}"
-            ts_log_finest "starting schedd as $startup_user" 
-            start_remote_prog "$start_host" "$startup_user" $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e $ts_config(testsuite_root_dir)/scripts/debug_starter.sh /tmp/out.$CHECK_USER.schedd.$start_host \"$CHECK_SGE_DEBUG_LEVEL\" $ts_config(product_root)/bin/${arch}/sge_schedd &" prg_exit_state 60 2 "" envlist
-         } else {
-            ts_log_finest "starting schedd as $startup_user" 
-            set result [start_remote_prog "$start_host" "$startup_user" "$ts_config(product_root)/bin/${arch}/sge_schedd" "" prg_exit_state 60 0 "" envlist]
-            ts_log_finest $result
-         }
-
-         # wait for scheduler pid to be updated
-         set nr_of_checks 20
-         ts_log_finer "waiting for pidfile containing a new scheduler pid ..."
-         set current_schedd_pid [get_scheduler_pid $start_host [get_qmaster_spool_dir]]
-         ts_log_finest "old pid: $old_schedd_pid, current pid: $current_schedd_pid"
-         while {$current_schedd_pid == $old_schedd_pid} {
-            incr nr_of_checks -1
-            if {$nr_of_checks <= 0} {
-               ts_log_severe "new scheduler pid not written: old pid: $old_schedd_pid, current pid: $current_schedd_pid"
-               break
-            }
-            after 1000
-            set current_schedd_pid [get_scheduler_pid $start_host [get_qmaster_spool_dir]]
-            ts_log_finest "old pid: $old_schedd_pid, current pid: $current_schedd_pid"
-         }
-      }
-   }
- 
    # now wait until qmaster is availabe
-   set my_timeout [timestamp]  
+   set my_timeout [timestamp]
    incr my_timeout 60
    set is_reachable 0
    while {[timestamp] < $my_timeout} {
@@ -6979,26 +6813,10 @@ proc are_master_and_scheduler_running { hostname qmaster_spool_dir } {
       set qmaster_pid -1
    }
 
-   if {$ts_config(gridengine_version) < 62 || [is_61AR]} {
-      set scheduler_pid [start_remote_prog "$hostname" "$CHECK_USER" "cat" "$qmaster_spool_dir/schedd/schedd.pid"]
-      set scheduler_pid [ string trim $scheduler_pid ]
-      if { $prg_exit_state != 0 } {
-         set scheduler_pid -1
-      }
-   }
-
    get_ps_info $qmaster_pid $hostname
 
    if { ($ps_info($qmaster_pid,error) == 0) && ( [ string first "qmaster" $ps_info($qmaster_pid,string)] >= 0 )  } {
       incr running 2
-   }
-
-   if {$ts_config(gridengine_version) < 62 || [is_61AR]} {
-      get_ps_info $scheduler_pid $hostname
-
-      if { ($ps_info($scheduler_pid,error) == 0) && ( [ string first "schedd" $ps_info($scheduler_pid,string)] >= 0  ) } {
-         incr running 1
-      }
    }
 
    return $running
@@ -8116,11 +7934,7 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
       shutdown_all_shadowd $sh_host
    }
 
-   if {$ts_config(gridengine_version) <= 61} {
-      set qconf_option "-ks -ke all"
-   } else {
-      set qconf_option "-ke all"
-   }
+   set qconf_option "-ke all"
    ts_log_fine "do qconf $qconf_option ..."
    set result [start_sge_bin "qconf" $qconf_option]
    ts_log_finest "qconf $qconf_option returned $prg_exit_state"
@@ -8146,44 +7960,7 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
       shutdown_system_daemon $ts_config(master_host) "qmaster"
    }
 
-   if {$ts_config(gridengine_version) == 53} {
-      ts_log_fine "killing all commds in the cluster ..." 
-     
-      set do_it_as_root 0
-      foreach elem $ts_config(execd_nodes) { 
-          ts_log_finest "killing commd on host $elem"
-          if {$do_it_as_root == 0} { 
-             set result [start_sge_bin "sgecommdcntl" "-U -k -host $elem" $ts_config(master_host) $CHECK_USER]
-          } else {
-             set result [start_sge_bin "sgecommdcntl" "-k -host $elem" $ts_config(master_host) "root"]
-          } 
-          ts_log_finest $result
-          if {$prg_exit_state == 0} {
-          } else {
-             if {$prg_exit_state == 255} {
-                ts_log_finest "\"sgecommdcntl -k\" must be started by root user (to get reserved port)!"
-                ts_log_finest "try again as root user ..." 
-                if {[have_root_passwd] == -1} {
-                   set_root_passwd 
-                }
-                if {$CHECK_ADMIN_USER_SYSTEM != 1} {
-                   set result [start_sge_bin "sgecommdcntl" "-k -host $elem" $ts_config(master_host) "root"]
-                }
-             }
-             if {$prg_exit_state == 0} {
-                set do_it_as_root 1 
-                ts_log_finest $result
-                ts_log_finest "sgecommdcntl -k -host $elem - success"
-             } else {
-                ts_log_fine "shutdown_core_system - commdcntl failed:\n$result"
-             }
-          }
-      }
-   } elseif {$ts_config(gridengine_version) < 62} {
-      shutdown_system_daemon $ts_config(master_host) "sched execd qmaster"
-   } else {
-      shutdown_system_daemon $ts_config(master_host) "execd qmaster"
-   }
+   shutdown_system_daemon $ts_config(master_host) "execd qmaster"
 
    # check for processes on
    # - master host
@@ -8201,24 +7978,14 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
       }
    }
 
-   if {$ts_config(gridengine_version) < 62} {
-      set proccess_names "sched"
-      set real_proccess_names "sge_schedd"
-   } else {
-      set proccess_names ""
-      set real_proccess_names ""
-   }
+   set proccess_names ""
+   set real_proccess_names ""
    lappend proccess_names "execd"
    lappend real_proccess_names "sge_execd"
    lappend proccess_names "qmaster"
    lappend real_proccess_names "sge_qmaster"
    lappend proccess_names "shadowd"
    lappend real_proccess_names "sge_shadowd"
-   if {$ts_config(gridengine_version) == 53} {
-      lappend proccess_names "commd"
-      lappend real_proccess_names "sge_commd"
-   }
-
 
    # now check that all daemons are gone
    foreach host $hosts_to_check {
@@ -9231,10 +8998,8 @@ proc sge_client_messages {msg_var action obj_type obj_name {on_host ""} {as_user
          set ALREADY_EXISTS [translate_macro MSG_SGETEXT_ALREADYEXISTS_SS "$obj_type" "$obj_name"]
          add_message_to_container messages -2 $ALREADY_EXISTS
 
-         if {$ts_config(gridengine_version) >= 60} {
-            set NOT_MODIFIED [translate_macro MSG_FILE_NOTCHANGED ]
-            add_message_to_container messages -3 $NOT_MODIFIED
-         }
+         set NOT_MODIFIED [translate_macro MSG_FILE_NOTCHANGED ]
+         add_message_to_container messages -3 $NOT_MODIFIED
       }
       "get" {
          # expect: does not exist [ object type, object name ]
@@ -9263,16 +9028,14 @@ proc sge_client_messages {msg_var action obj_type obj_name {on_host ""} {as_user
          set ALREADY_EXISTS [translate_macro MSG_SGETEXT_ALREADYEXISTS_SS "$obj_type" "$obj_name"]
          add_message_to_container messages -2 $ALREADY_EXISTS
 
-         if {$ts_config(gridengine_version) >= 60} {
-            set NOT_MODIFIED [translate_macro MSG_FILE_NOTCHANGED ]
-            add_message_to_container messages -3 $NOT_MODIFIED
+         set NOT_MODIFIED [translate_macro MSG_FILE_NOTCHANGED ]
+         add_message_to_container messages -3 $NOT_MODIFIED
 
-            set NO_ULONG [translate_macro MSG_OBJECT_VALUENOTULONG_S "*"]
-            add_message_to_container messages -4 $NO_ULONG
+         set NO_ULONG [translate_macro MSG_OBJECT_VALUENOTULONG_S "*"]
+         add_message_to_container messages -4 $NO_ULONG
 
-            set NO_ATTR "error: [translate_macro MSG_UNKNOWNATTRIBUTENAME_S \"*\" ]"
-            add_message_to_container messages -5 $NO_ATTR     
-         }
+         set NO_ATTR "error: [translate_macro MSG_UNKNOWNATTRIBUTENAME_S \"*\" ]"
+         add_message_to_container messages -5 $NO_ATTR
 
          set NOT_EXISTS [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "$obj_type" "$obj_name"]
          add_message_to_container messages -1 $NOT_EXISTS

@@ -58,9 +58,5 @@ proc vdep_set_sched_conf_defaults { change_array } {
    set chgar(weight_urgency)                  "0.100000"
    set chgar(weight_priority)                  "1.000000"
    set chgar(max_reservation)                  "0"
-   if {$ts_config(gridengine_version) >= 62} {
-      set chgar(default_duration)                 "INFINITY"
-   } else {
-      set chgar(default_duration)                 "0:10:0"
-   }
+   set chgar(default_duration)                 "INFINITY"
 }

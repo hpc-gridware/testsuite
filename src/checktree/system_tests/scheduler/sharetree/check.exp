@@ -570,10 +570,6 @@ proc issue_751 {} {
    # do only raise a warning for ealier versions
    set error_level SEVERE
    set additional_message ""
-   if {$ts_config(gridengine_version) <= 60} {
-      set error_level INFO
-      set additional_message "\nhas been fixed only for 6.1 and higher"
-   }
 
   set output [start_sge_bin "qconf" "-sstnode /" $host $CHECK_USER exit_state 30]
   ts_log_fine $output

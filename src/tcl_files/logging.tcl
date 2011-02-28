@@ -1243,7 +1243,6 @@ proc ts_private_log_do_logging {level message raise_error function} {
 #     Testsuite configuration (ts_config):
 #     ====================================
 #     Testsuite configuration setup:                                               "1.14"
-#     Gridengine Version, e.g. 53 for SGE(EE) 5.3, or 60 for N1GE 6.0:             "61"
 #     ...
 #*******************************************************************************
 global ts_private_do_log_recursive

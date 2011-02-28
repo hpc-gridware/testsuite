@@ -93,26 +93,14 @@ proc set_queue_defaults { change_array } {
    set chgar(h_rss)                "INFINITY"
    set chgar(s_vmem)               "INFINITY"
    set chgar(h_vmem)               "INFINITY"
-  
-   # SGE version dependent defaults
-   if { $ts_config(gridengine_version) == 53 } {
-      set chgar(hostlist)             "unknown"
-      set chgar(qtype)                "BATCH INTERACTIVE PARALLEL"
-      set chgar(shell_start_mode)     "NONE"
-      set chgar(complex_list)         "NONE"
-      if { $ts_config(product_type) == "sgeee" } {
-         set chgar(fshare)            "0"
-         set chgar(oticket)           "0"
-      }
-   } elseif { $ts_config(gridengine_version) >= 60 } {
-      set chgar(hostlist)             "NONE"
-      set chgar(qtype)                "BATCH INTERACTIVE"
-      set chgar(ckpt_list)            "NONE"
-      set chgar(pe_list)              "make"
-      set chgar(shell_start_mode)     "posix_compliant"
-   }
-   
-   if { $ts_config(product_type) == "sgeee" } {
+
+   set chgar(hostlist)             "NONE"
+   set chgar(qtype)                "BATCH INTERACTIVE"
+   set chgar(ckpt_list)            "NONE"
+   set chgar(pe_list)              "make"
+   set chgar(shell_start_mode)     "posix_compliant"
+
+   if {$ts_config(product_type) == "sgeee"} {
       set chgar(projects)           "NONE"
       set chgar(xprojects)          "NONE"
    }
@@ -205,24 +193,12 @@ proc add_queue {qname hostlist {change_array ""} {fast_add 1} {on_host ""} {as_u
 
    upvar $change_array chgar
 
-   if { $ts_config(gridengine_version) == 53 } {
-      # non cluster queue: set queue and hostnames
-      if { $hostlist == "@allhosts" || $hostlist == "" || $hostlist == "NONE" } {
-         set hostlist $ts_config(execd_nodes)
-         foreach host $hostlist {
-            set cqueue [get_queue_instance ${qname} ${host}]
-            set ret [add_queue $cqueue $host chgar $fast_add $on_host $as_user $raise_error]
-         }
-         return $ret
-      }
-   }
-
    set chgar(qname)     "$qname"
    set chgar(hostlist) $hostlist
    validate_queue chgar
 
    get_queue_messages messages "add" "$qname" $on_host $as_user
-   
+
    if { $fast_add } {
       ts_log_fine "Add queue $chgar(qname) for hostlist $chgar(hostlist) from file ..."
       set option "-Aq"
@@ -278,18 +254,6 @@ proc mod_queue { qname hostlist change_array {fast_add 1} {on_host ""} {as_user 
    get_current_cluster_config_array ts_config
 
    upvar $change_array chgar
-
-   if { $ts_config(gridengine_version) == 53 && ![string match "*@*" $qname] } {
-      if { $hostlist == "@allhosts" || $hostlist == "" || $hostlist == "NONE" } {
-         set hostlist $ts_config(execd_nodes)
-         foreach host $hostlist {
-            set cqueue [get_queue_instance ${qname} ${host}]
-            set ret [mod_queue $cqueue $host chgar $fast_add $on_host $as_user $raise_error]
-         }
-         # aja: TODO: what to return?
-         return $ret
-      }
-   }
 
    set chgar(qname) "$qname"
    validate_queue chgar
@@ -434,11 +398,7 @@ proc suspend_queue { qname } {
   global CHECK_USER
   get_current_cluster_config_array ts_config
   log_user 0 
-   if { $ts_config(gridengine_version) == 53 } {
-      set WAS_SUSPENDED [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_QUEUE_SUSPENDQ_SSS] "*" "*" "*" ]
-   } else {
-      set WAS_SUSPENDED [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_QINSTANCE_SUSPENDED]]
-   }
+   set WAS_SUSPENDED [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_QINSTANCE_SUSPENDED]]
 
   
   # spawn process
@@ -514,11 +474,7 @@ proc unsuspend_queue { queue } {
   set timeout 30
   log_user 0 
    
-   if { $ts_config(gridengine_version) == 53 } {
-      set UNSUSP_QUEUE [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_QUEUE_UNSUSPENDQ_SSS] "*" "*" "*" ]
-   } else {
-      set UNSUSP_QUEUE [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_QINSTANCE_NSUSPENDED]]
-   }
+   set UNSUSP_QUEUE [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_QINSTANCE_NSUSPENDED]]
 
   # spawn process
   set master_arch [resolve_arch $ts_config(master_host)]
@@ -903,12 +859,8 @@ proc get_queue_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
       unset messages
    }
 
-   if {$ts_config(gridengine_version) == 53} {
-      set QUEUE [translate_macro MSG_OBJ_QUEUE]
-   } else {
-      # CD: why don't we have "cluster queue" in $SGE_OBJ_CQUEUE ?
-      set QUEUE "cluster [translate_macro MSG_OBJ_QUEUE]"
-   }
+   # CD: why don't we have "cluster queue" in $SGE_OBJ_CQUEUE ?
+   set QUEUE "cluster [translate_macro MSG_OBJ_QUEUE]"
      
    # set the expected client messages
    sge_client_messages messages $action $QUEUE $obj_name $on_host $as_user

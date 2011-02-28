@@ -89,10 +89,6 @@ proc issue_2459_setup {} {
          set check_jmx_port 0
       }
       1 {
-         if { $ts_config(gridengine_version) <= 61 } {
-            ts_log_config "test does not work with GE <= 61"
-            return 99
-         }
          set check_jmx_port 1
       }
    }
@@ -120,7 +116,7 @@ proc issue_2459_parse_autoinstall {} {
    set my_timeout 500
    set exit_val 0
 
-   if {$ts_config(gridengine_version) >= 62 && $check_jmx_port > 0} {
+   if {$check_jmx_port > 0} {
       set inst_sge_options "-m -x -jmx -csp -auto $ts_config(product_root)/autoinst_config_$ts_config(cell).conf"
    } else {
       set inst_sge_options "-m -x -csp -auto $ts_config(product_root)/autoinst_config_$ts_config(cell).conf"
@@ -318,27 +314,25 @@ proc issue_2459_write_autoinst_config {filename host {do_cleanup 1}} {
    puts $fdo "SGE_ROOT=\"\""
    puts $fdo "SGE_QMASTER_PORT=\"huhu\""
    puts $fdo "SGE_EXECD_PORT=\"wrong\""
-   if {$ts_config(gridengine_version) > 61} {
-      puts $fdo "SGE_ENABLE_SMF=\"fale\""
-      puts $fdo "SGE_CLUSTER_NAME=\"1234\""
-      if {$check_jmx_port > 0} {
-         puts $fdo "SGE_JMX_PORT=\"no number\""
-         puts $fdo "SGE_JMX_SSL=\"tue\""
-         puts $fdo "SGE_JMX_SSL_CLIENT=\"tue\""
-         puts $fdo "SGE_JMX_SSL_KEYSTORE=\"Please enter absolute path of server keystore file\""
-         puts $fdo "SGE_JMX_SSL_KEYSTORE_PW=\"Please enter the server keystore password\""
-         puts $fdo "SGE_JVM_LIB_PATH=\"/\""
-         puts $fdo "SGE_ADDITIONAL_JVM_ARGS=\"\""
-      } else {
-         puts $fdo "SGE_JMX_PORT=\"Please enter port\""
-         puts $fdo "SGE_JMX_SSL=\"false\""
-         puts $fdo "SGE_JMX_SSL_CLIENT=\"false\""
-         puts $fdo "SGE_JMX_SSL_KEYSTORE=\"Please enter absolute path of server keystore file\""
-         puts $fdo "SGE_JMX_SSL_KEYSTORE_PW=\"Please enter the server keystore password\""
-         puts $fdo "SGE_JVM_LIB_PATH=\"\""
-         puts $fdo "SGE_ADDITIONAL_JVM_ARGS=\"\""
-      }
-   } 
+   puts $fdo "SGE_ENABLE_SMF=\"fale\""
+   puts $fdo "SGE_CLUSTER_NAME=\"1234\""
+   if {$check_jmx_port > 0} {
+      puts $fdo "SGE_JMX_PORT=\"no number\""
+      puts $fdo "SGE_JMX_SSL=\"tue\""
+      puts $fdo "SGE_JMX_SSL_CLIENT=\"tue\""
+      puts $fdo "SGE_JMX_SSL_KEYSTORE=\"Please enter absolute path of server keystore file\""
+      puts $fdo "SGE_JMX_SSL_KEYSTORE_PW=\"Please enter the server keystore password\""
+      puts $fdo "SGE_JVM_LIB_PATH=\"/\""
+      puts $fdo "SGE_ADDITIONAL_JVM_ARGS=\"\""
+   } else {
+      puts $fdo "SGE_JMX_PORT=\"Please enter port\""
+      puts $fdo "SGE_JMX_SSL=\"false\""
+      puts $fdo "SGE_JMX_SSL_CLIENT=\"false\""
+      puts $fdo "SGE_JMX_SSL_KEYSTORE=\"Please enter absolute path of server keystore file\""
+      puts $fdo "SGE_JMX_SSL_KEYSTORE_PW=\"Please enter the server keystore password\""
+      puts $fdo "SGE_JVM_LIB_PATH=\"\""
+      puts $fdo "SGE_ADDITIONAL_JVM_ARGS=\"\""
+   }
    puts $fdo "CELL_NAME=\"\""
    puts $fdo "ADMIN_USER=\"$CHECK_USER\""
    puts $fdo "QMASTER_SPOOL_DIR=\"nopath\""
@@ -365,9 +359,7 @@ proc issue_2459_write_autoinst_config {filename host {do_cleanup 1}} {
    puts $fdo "SHADOW_HOST=\"\""
    puts $fdo "PAR_EXECD_INST_COUNT=\"nonumber\""
    puts $fdo "WINDOWS_SUPPORT=\"fase\""
-   if {$ts_config(gridengine_version) > 61} {
-      puts $fdo "SERVICE_TAGS=\"ele\""
-   }
+   puts $fdo "SERVICE_TAGS=\"ele\""
    puts $fdo "CSP_COPY_CERTS=\"fae\""
    puts $fdo "CSP_RECREATE=\"fae\""
    puts $fdo "CSP_COUNTRY_CODE=\"DUE\""
@@ -450,35 +442,29 @@ proc init_found_install_entries {} {
    set found_install_entries(CSP_RECREATE) 0  
    set found_install_entries(CSP_COPY_CERTS) 0  
    set found_install_entries(CSP_COUNTRY_CODE) 0
-   if {$ts_config(gridengine_version) > 61} {  
-      set found_install_entries(SERVICE_TAGS) 0  
-      if {[is_smf_host $ts_config(master_host)]} {
-         set found_install_entries(SGE_ENABLE_SMF) 0
-      } else {
-         set found_install_entries(SGE_ENABLE_SMF) 1
-      }
-      set found_install_entries(SGE_CLUSTER_NAME) 0
-      if {$check_jmx_port > 0} {
-         set found_install_entries(SGE_JMX_PORT) 0
-         set found_install_entries(SGE_JMX_SSL) 0  
-         set found_install_entries(SGE_JMX_SSL_CLIENT) 0  
-         set found_install_entries(SGE_JMX_SSL_KEYSTORE) 1 ;# not checked  
-         set found_install_entries(SGE_JMX_SSL_KEYSTORE_PW) 1 ;# not checked 
-         set found_install_entries(SGE_JVM_LIB_PATH) 0
-         set found_install_entries(SGE_ADDITIONAL_JVM_ARGS) 1 ;# not checked
-      } else {
-         set found_install_entries(SGE_JMX_PORT) 1
-         set found_install_entries(SGE_JMX_SSL) 1  
-         set found_install_entries(SGE_JMX_SSL_CLIENT) 1  
-         set found_install_entries(SGE_JMX_SSL_KEYSTORE) 1  
-         set found_install_entries(SGE_JMX_SSL_KEYSTORE_PW) 1  
-         set found_install_entries(SGE_JVM_LIB_PATH) 1
-         set found_install_entries(SGE_ADDITIONAL_JVM_ARGS) 1
-      }
+   set found_install_entries(SERVICE_TAGS) 0  
+   if {[is_smf_host $ts_config(master_host)]} {
+      set found_install_entries(SGE_ENABLE_SMF) 0
    } else {
-      set found_install_entries(SERVICE_TAGS) 1  
-      set found_install_entries(SGE_ENABLE_SMF) 1  
-      set found_install_entries(SGE_CLUSTER_NAME) 1  
+      set found_install_entries(SGE_ENABLE_SMF) 1
+   }
+   set found_install_entries(SGE_CLUSTER_NAME) 0
+   if {$check_jmx_port > 0} {
+      set found_install_entries(SGE_JMX_PORT) 0
+      set found_install_entries(SGE_JMX_SSL) 0  
+      set found_install_entries(SGE_JMX_SSL_CLIENT) 0  
+      set found_install_entries(SGE_JMX_SSL_KEYSTORE) 1 ;# not checked  
+      set found_install_entries(SGE_JMX_SSL_KEYSTORE_PW) 1 ;# not checked 
+      set found_install_entries(SGE_JVM_LIB_PATH) 0
+      set found_install_entries(SGE_ADDITIONAL_JVM_ARGS) 1 ;# not checked
+   } else {
+      set found_install_entries(SGE_JMX_PORT) 1
+      set found_install_entries(SGE_JMX_SSL) 1  
+      set found_install_entries(SGE_JMX_SSL_CLIENT) 1  
+      set found_install_entries(SGE_JMX_SSL_KEYSTORE) 1  
+      set found_install_entries(SGE_JMX_SSL_KEYSTORE_PW) 1  
+      set found_install_entries(SGE_JVM_LIB_PATH) 1
+      set found_install_entries(SGE_ADDITIONAL_JVM_ARGS) 1
    }
 }
 

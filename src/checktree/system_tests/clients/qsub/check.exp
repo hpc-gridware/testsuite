@@ -179,17 +179,11 @@ proc qsub_setup {} {
    get_config stored_configuration
   
    # set config for fast scheduling / fast writing of accounting record
-   if {$ts_config(gridengine_version) == 53} {
-      set my_config(schedd_params) "$stored_configuration(schedd_params),FLUSH_SUBMIT_SEC=0"
-   } else {
-      set my_config(reporting_params) "accounting=true reporting=false flush_time=00:00:01 joblog=true sharelog=00:10:00"
-   }
+   set my_config(reporting_params) "accounting=true reporting=false flush_time=00:00:01 joblog=true sharelog=00:10:00"
    set_config my_config
 
-   if {$ts_config(gridengine_version) >= 60} {
-      set my_schedd_conf(flush_submit_sec) "1"
-      set_schedd_config my_schedd_conf 
-   }
+   set my_schedd_conf(flush_submit_sec) "1"
+   set_schedd_config my_schedd_conf
 }
 
 proc qsub_cleanup {} {
@@ -212,9 +206,7 @@ proc qsub_cleanup {} {
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   if {$ts_config(gridengine_version) >= 60} {
-      reset_schedd_config
-   }
+   reset_schedd_config
    reset_config stored_configuration
 
    # unset our test global variables
@@ -1243,11 +1235,9 @@ proc check_option_hold_jid {} {
    qsub_submit_check $jobargs 0
 
    # test with job names
-   if {$ts_config(gridengine_version) >= 60} {
-      set option "-hold_jid foo,bar"
-      set jobargs "$option $default_args"
-      qsub_submit_check $jobargs 0
-   }
+   set option "-hold_jid foo,bar"
+   set jobargs "$option $default_args"
+   qsub_submit_check $jobargs 0
 }
 
 #                                                             max. column:     |
@@ -1829,11 +1819,7 @@ proc check_option_p {} {
    # Up to version 6.0, a positive priority from non operators will be silently 
    # set to 0 by qmaster.
    # Beginning with version 6.1, we will reject such jobs.
-   if {$ts_config(gridengine_version) <= 60} {
-      qsub_submit_check "-p 1 $default_args" 0 $CHECK_FIRST_FOREIGN_SYSTEM_USER
-   } else {
-      qsub_submit_check "-p 1 $default_args" 1 $CHECK_FIRST_FOREIGN_SYSTEM_USER
-   }
+   qsub_submit_check "-p 1 $default_args" 1 $CHECK_FIRST_FOREIGN_SYSTEM_USER
 }
 
 #                                                             max. column:     |
@@ -1931,10 +1917,8 @@ proc check_option_q {} {
    #  - to a cluster queue
    #  - to all queue instances on a host
    #  - to all qinstances of a hostgroup
-   if {$ts_config(gridengine_version) >= 60} {
-      qsub_submit_check "-q *@${test_host} $default_args" 0
-      qsub_submit_check "-q *@@allhosts $default_args" 0
-   }
+   qsub_submit_check "-q *@${test_host} $default_args" 0
+   qsub_submit_check "-q *@@allhosts $default_args" 0
 }
 
 #                                                             max. column:     |

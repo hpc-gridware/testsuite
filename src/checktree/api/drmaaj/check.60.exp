@@ -52,17 +52,8 @@ set check_name            "drmaa-j"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_highest_level   303
 set check_description(0)    "short test: only one host; verify highest DRMAA-J library with highest DRMAA-C library" 
-set check_description(100)  "One host (< SGE 6.2); Lowest Java-version: tests to verify DRMAA-J 0.5 library with DRMAA-C 0.95 library"
-set check_description(101)  "One host (< SGE 6.2); Lowest Java-version: tests to verify DRMAA-J 0.5 library with DRMAA-C 1.0 library"
-set check_description(102)  "One host (<= SGE 6.1); Lowest Java-version: tests to verify DRMAA-J 1.0 library with DRMAA-C 0.95 library"
 set check_description(103)  "One host (>= SGE 6.1); Lowest Java-version: tests to verify DRMAA-J 1.0 library with DRMAA-C 1.0 library"
-set check_description(200)  "One host (< SGE 6.2); Different Java-versions: tests to verify DRMAA-J 0.5 library with DRMAA-C 0.95 library"
-set check_description(201)  "One host (< SGE 6.2); Different Java-versions: tests to verify DRMAA-J 0.5 library with DRMAA-C 1.0 library"
-set check_description(202)  "One host (<= SGE 6.1); Different Java-versions: tests to verify DRMAA-J 1.0 library with DRMAA-C 0.95 library"
 set check_description(203)  "One host (>= SGE 6.1); Different Java-versions: tests to verify DRMAA-J 1.0 library with DRMAA-C 1.0 library"
-set check_description(300)  "Different hosts (< SGE 6.2); Different Java-versions: tests to verify DRMAA-J 0.5 library with DRMAA-C 0.95 library"
-set check_description(301)  "Different hosts (< SGE 6.2); Different Java-versions: tests to verify DRMAA-J 0.5 library with DRMAA-C 1.0 library"
-set check_description(302)  "Different hosts (<= SGE 6.1); Different Java-versions: tests to verify DRMAA-J 1.0 library with DRMAA-C 0.95 library"
 set check_description(303)  "Different hosts (>= SGE 6.1); Different Java-versions: tests to verify DRMAA-J 1.0 library with DRMAA-C 1.0 library"
 
 # define test's dependencies
@@ -102,44 +93,17 @@ proc drmaaj_init_level {} {
    switch -- $CHECK_ACT_LEVEL {
      "0"   {
             return 0
-     } 
-     "100" { 
-            return 0
-     } 
-     "101" {
-            return -1   ;# testing DRMAA-J 0.5 with DRMAA-C 1.0 not enabled (not compatible)
-     } 
-     "102" {
-            return -1   ;# testing DRMAA-J 1.0 with DRMAA-C 0.95 not enabled (not compatible)
      }
      "103" {
             return 0
      }
-     "200" { 
-            return 0
-     }
-     "201" {
-            return -1   ;# testing DRMAA-J 0.5 with DRMAA-C 1.0 not enabled (not compatible)
-     } 
-     "202" {
-            return -1   ;# testing DRMAA-J 1.0 with DRMAA-C 0.95 not enabled (not compatible)
-     }  
      "203" {
             return 0
      }
-     "300" { 
-            return 0
-     } 
-     "301" {
-            return -1   ;# testing DRMAA-J 0.5 with DRMAA-C 1.0 not enabled (not compatible)
-     } 
-     "302" {
-            return -1   ;# testing DRMAA-J 1.0 with DRMAA-C 0.95 not enabled (not compatible)
-     }  
      "303" {
             return 0
       }
-   } 
+   }
    return -1  ;# no other level else
 }
 
@@ -177,60 +141,19 @@ proc set_hosts_for_runlevel {} {
    switch -- $CHECK_ACT_LEVEL {
      "0"   {
           set hosts_in_runlevel_local [host_conf_get_suited_hosts 1 {} {} "win32-x86"]
-      }
-     "100"   {
-          set hosts_in_runlevel_local [host_conf_get_suited_hosts 1 {} {} "win32-x86"]
-      }
-     "101"   {
-          set hosts_in_runlevel_local [host_conf_get_suited_hosts 1 {} {} "win32-x86"]
-      }
-     "102"   {
-          set hosts_in_runlevel_local [host_conf_get_suited_hosts 1 {} {} "win32-x86"]
-      }
+     }
      "103"   {
           set hosts_in_runlevel_local [host_conf_get_suited_hosts 1 {} {} "win32-x86"]
-      }
-     "200"   {
-          set hosts_in_runlevel_local [host_conf_get_suited_hosts 1 {} {} "win32-x86"]
-      }
-     "201"   {
-          set hosts_in_runlevel_local [host_conf_get_suited_hosts 1 {} {} "win32-x86"]
-      }
-     "202"   {
-          set hosts_in_runlevel_local [host_conf_get_suited_hosts 1 {} {} "win32-x86"]
-      }
+     }
      "203"   {
           set hosts_in_runlevel_local [host_conf_get_suited_hosts 1 {} {} "win32-x86"]
-      }
-     "300" {
-         foreach host $ts_config(unique_arch_nodes) {
-               ts_log_fine "test to add $host"
-            if {[resolve_arch $host] != "win32-x86"} {
-               lappend hosts_in_runlevel_local $host 
-            }
-         }
      }
-     "301" {
-         foreach host $ts_config(unique_arch_nodes) {
-            if {[resolve_arch $host] != "win32-x86"} {
-               lappend hosts_in_runlevel_local $host 
-            }
-         }
-     }
-     "302" {
-         foreach host $ts_config(unique_arch_nodes) {
-               ts_log_fine "test to add $host"
-            if {[resolve_arch $host] != "win32-x86"} {
-               lappend hosts_in_runlevel_local $host 
-            }
-         }
-      }
      "303" {
-         ts_log_fine "$ts_config(unique_arch_nodes)" 
+         ts_log_fine "$ts_config(unique_arch_nodes)"
          foreach host $ts_config(unique_arch_nodes) {
                ts_log_fine "test to add $host"
             if {[resolve_arch $host]  != "win32-x86"} {
-               lappend hosts_in_runlevel_local $host 
+               lappend hosts_in_runlevel_local $host
             }
          }
      }
@@ -394,40 +317,13 @@ proc set_java_list_according_to_runlevel { host } {
    switch -- $CHECK_ACT_LEVEL {
      "0"   {
          return [get_lowest_java_version $host]
-      }
-     "100"   {
-         return [get_lowest_java_version $host] 
-      }
-     "101"   {
-         return [get_lowest_java_version $host]
-      }
-     "102"   {
-         return [get_lowest_java_version $host]
-      }
+     }
      "103"   {
          return [get_lowest_java_version $host]
-      }
-     "200"   {
-         return [get_all_java_versions $host]
-      }
-     "201"   {
-         return [get_all_java_versions $host]
-      }
-     "202"   {
-         return [get_all_java_versions $host]
-      }
+     }
      "203"   {
          return [get_all_java_versions $host]
-      }
-     "300" {
-         return [get_all_java_versions $host]
      }
-     "301" {
-         return [get_all_java_versions $host]
-     }
-     "302" {
-         return [get_all_java_versions $host]
-      }
      "303" {
          return [get_all_java_versions $host]
      }
@@ -464,18 +360,6 @@ proc do_drmaa_redirection_according_to_runlevel { host } {
       return
    }
  
-   # three runlevel should work with the old DRMAA C library (0.95)
-   if { $CHECK_ACT_LEVEL == "100" 
-      || $CHECK_ACT_LEVEL == "102"
-      || $CHECK_ACT_LEVEL == "200" 
-      || $CHECK_ACT_LEVEL == "202" 
-      || $CHECK_ACT_LEVEL == "300"
-      || $CHECK_ACT_LEVEL == "302" } {
-         ts_log_fine "DRMAA library: set symlink to version 0.95" 
-         # set symlink 
-         drmaa_redirect_lib "0.95" $host
-         return 
-   }
    # the others have use the DRMAA C library 1.0 
    drmaa_redirect_lib "1.0" $host 
 }
@@ -506,33 +390,19 @@ proc set_java_classpath_according_to_runlevel {} {
    global CHECK_ACT_LEVEL 
    global ts_config 
 
-   # x00/x01 means jdrmaa 0.5 test
    # x02/x03 means jdrmaa 1.0 test
-   if {  $CHECK_ACT_LEVEL == "100" || 
-         $CHECK_ACT_LEVEL == "101" || 
-         $CHECK_ACT_LEVEL == "200" || 
-         $CHECK_ACT_LEVEL == "201" || 
-         $CHECK_ACT_LEVEL == "300" || 
-         $CHECK_ACT_LEVEL == "301" } {
-      set jdrmaa_test_05 true
-   } else {
-      set jdrmaa_test_05 false
-   }
+   set jdrmaa_test_05 false
 
 
    # add to Java classpath the Java DRMAA library
    set classpath ""
    if {$jdrmaa_test_05 == true} {
-      if {$ts_config(gridengine_version) <= 60} {
-            set classpath "$ts_config(product_root)/lib/drmaa-0.5.jar"
+      if {[file exists "$ts_config(product_root)/lib/drmaa-0.5.jar"]} {
+         # if there is a drmaa 0.5 lib in produect root, use it
+         set classpath "$ts_config(product_root)/lib/drmaa-0.5.jar"
       } else {
-         if {[file exists "$ts_config(product_root)/lib/drmaa-0.5.jar"]} {
-            # if there is a drmaa 0.5 lib in produect root, use it
-            set classpath "$ts_config(product_root)/lib/drmaa-0.5.jar"
-         } else {
-            # use modified testsuite drmaa-0.5 jar for GE versions if no jdramaa 05 is existing
-            set classpath "$ts_config(testsuite_root_dir)/lib/drmaa-0.5.jar"
-         }
+         # use modified testsuite drmaa-0.5 jar for GE versions if no jdramaa 05 is existing
+         set classpath "$ts_config(testsuite_root_dir)/lib/drmaa-0.5.jar"
       }
    } else {
       set classpath "$ts_config(product_root)/lib/drmaa.jar"
@@ -540,12 +410,8 @@ proc set_java_classpath_according_to_runlevel {} {
 
    # add the drmaa-test.jar 
    if {$jdrmaa_test_05 == true} {
-      if {$ts_config(gridengine_version) <= 60} {
-         set classpath "$classpath:[get_drmaa_test_jar]" 
-      } else {
-         # use modified testsuite drmaa-0.5 test jar, it contains fixes for GE >= 61
-         set classpath "$classpath:$ts_config(testsuite_root_dir)/lib/drmaa-0.5-test.jar"
-      }
+      # use modified testsuite drmaa-0.5 test jar, it contains fixes for GE >= 61
+      set classpath "$classpath:$ts_config(testsuite_root_dir)/lib/drmaa-0.5-test.jar"
    } else {
      set classpath "$classpath:[get_drmaa_test_jar]"
    }
@@ -1056,144 +922,6 @@ proc drmaaj_setup_level {} {
    }
 
    set drmaaj_test_errors ""
-
-   # returning -1 causes disabling a certain runlevel
-   # here per run level settings can be prepared
-   switch -- $CHECK_ACT_LEVEL {
-     "100" { 
-         if {$ts_config(gridengine_version) < 62} {
-               # long runlevel: check DRMAA-J 0.5 library with DRMAA-C 0.95 library 
-               # - check lowest Java version (starting with: 1.4)
-               # - check only one host  
-               ts_log_fine "running test"
-         } else {
-               ts_log_config "Need GE < 62 for this test"
-               return 99
-         }
-     } 
-     "101" {
-           if {$ts_config(gridengine_version) < 62} {
-               # long runlevel: check DRMAA-J 0.5 library with DRMAA-C 1.0 library
-               # - check lowest Java version (starting: 1.4)
-               # - check only one host  
-               ts_log_fine "running test"
-           } else {
-               ts_log_config "Need GE < 62 for this test"
-               return 99
-           }
-     } 
-     "102" {
-           if {$ts_config(gridengine_version) <= 61} { 
-               # long runlevel: check DRMAA-J 1.0 library with DRMAA-C 0.95 library 
-               # - check lowest Java version (starting: 1.4)
-               # - check only one host  
-              ts_log_fine "running test"
-           } else {
-              ts_log_config "Need GE <= 61 for this test"
-               return 99
-           }
-     }  
-     "103" {
-           if {$ts_config(gridengine_version) >= 61} {
-               # long runlevel: check DRMAA-J 1.0 library with DRMAA-C 1.0 library
-               # - check lowest Java version (starting: 1.4)
-               # - check only one host  
-               ts_log_fine "running test"
-            } else {
-               ts_log_config "Need GE >= 61 for this test"
-               return 99
-            }
-     }
-     "200" { 
-         if {$ts_config(gridengine_version) < 62} {
-               # long runlevel: check DRMAA-J 0.5 library with DRMAA-C 0.95 library 
-               # - check all Java versions available 
-               # - check only one host  
-               ts_log_fine "running test"
-         } else {
-               ts_log_config "Need GE < 62 for this test"
-               return 99
-         }
-     }
-     "201" {
-           if {$ts_config(gridengine_version) < 62} {
-               # long runlevel: check DRMAA-J 0.5 library with DRMAA-C 1.0 library
-               # - check all Java versions available 
-               # - check only one host  
-               ts_log_fine "running test"
-           } else {
-               ts_log_config "Need GE < 62 for this test"
-               return 99
-           }
-     } 
-     "202" {
-           if {$ts_config(gridengine_version) <= 61} { 
-               # long runlevel: check DRMAA-J 1.0 library with DRMAA-C 0.95 library 
-               # - check all Java versions available 
-               # - check only one host  
-              ts_log_fine "running test"
-           } else {
-              ts_log_config "Need GE <= 61 for this test"
-               return 99
-           }
-     }  
-     "203" {
-           if {$ts_config(gridengine_version) >= 61} {
-               # long runlevel: check DRMAA-J 1.0 library with DRMAA-C 1.0 library
-               # - check all Java versions available 
-               # - check only one host  
-               ts_log_fine "running test"
-            } else {
-               ts_log_config "Need GE >= 61 for this test"
-               return 99
-            }
-     }
-     "300" { 
-         if {$ts_config(gridengine_version) < 62} {
-               # long runlevel: check DRMAA-J 0.5 library with DRMAA-C 0.95 library 
-               # - check all Java versions available 
-               # - check one host of each architecture 
-               ts_log_fine "running test"
-         } else {
-               ts_log_config "Need GE < 62 for this test"
-               return 99
-         }
-     } 
-     "301" {
-           if {$ts_config(gridengine_version) < 62} {
-               # long runlevel: check DRMAA-J 0.5 library with DRMAA-C 1.0 library
-               # - check all Java versions available 
-               # - check one host of each architecture 
-               ts_log_fine "running test"
-           } else {
-               ts_log_config "Need GE < 62 for this test"
-               return 99
-           }
-     } 
-     "302" {
-           if {$ts_config(gridengine_version) <= 61} { 
-              # long runlevel: check DRMAA-J 1.0 library with DRMAA-C 0.95 library 
-              # - check all Java versions available 
-              # - check one host of each architecture 
-              ts_log_fine "running test"
-           } else {
-              ts_log_config "Need GE <= 61 for this test"
-              return 99
-           }
-     }  
-     "303" {
-           if {$ts_config(gridengine_version) >= 61} {
-              # long runlevel: check DRMAA-J 1.0 library with DRMAA-C 1.0 library
-              # - check all available Java versions
-              # - check all Java versions available 
-              # - check one host of each architecture
-              ts_log_fine "running test"
-            } else {
-              ts_log_config "Need GE >= 61 for this test" 
-              return 99
-            }  
-      }
-   } 
 
    # get host list depending from run level
    set hosts_in_runlevel [set_hosts_for_runlevel]

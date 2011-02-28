@@ -122,12 +122,6 @@ proc jsv_script_setup {} {
    global jsv_enter2_list
    global jsv_enabled
 
-   # Check test setup
-   if {$ts_config(gridengine_version) < 62} {
-      ts_log_config "test not working for GE < 62"
-      return 99
-   }
-   
    # check if jsv is available
    if {$jsv_enabled == ""} {
       set jsv_enabled [ge_has_feature "job-submission-verify"]

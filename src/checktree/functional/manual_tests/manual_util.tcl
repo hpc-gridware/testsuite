@@ -215,10 +215,6 @@ proc sge_check_version {report_var} {
    global ts_config CHECK_USER
    upvar $report_var report
 
-   if { $ts_config(gridengine_version) < 61 } {
-      ts_log_finest "sge_check_version test not supported."
-      return true
-   }
    set expected_version [ge_get_gridengine_version]
 
    set id [register_test check_version report curr_task_nr]
@@ -984,15 +980,6 @@ proc sge_qrsh {report_var} {
    set host [get_test_host report $curr_task_nr]
 
    ts_log_fine "Test qrsh"
-   if { $ts_config(gridengine_version) <= 61} {
-      switch -glob [resolve_arch $host] {
-         hp11* -
-         win* {
-            test_report report $curr_task_nr $id result [get_result_skipped]
-            return true
-         }
-      }
-   }
    set job_id [submit_wait_type_job qrsh $host $CHECK_USER]
    if {$job_id > 0} {
       test_report report $curr_task_nr $id result [get_result_ok]
@@ -1031,16 +1018,6 @@ proc sge_qrsh_hostname {report_var} {
    ts_log_fine "Test qrsh hostname"
 
    set host_arch [resolve_arch $host]
-   if {$ts_config(gridengine_version) < 61 && $host_arch == "hp11-64" } {
-      set sge_conf(execd_params) "INHERIT_ENV=0"
-      set_config sge_conf
-      unset sge_conf
-   }
-
-   if {$ts_config(gridengine_version) <= 61 && $host_arch == "win32-x86" } {
-      test_report report $curr_task_nr $id result [get_result_skipped]
-      return true
-   }
 
    set result [start_sge_bin qrsh hostname $host $CHECK_USER]
    set result [string trim $result]
@@ -1091,14 +1068,6 @@ proc sge_qlogin {report_var} {
    set user $CHECK_USER
 
    ts_log_fine "Test qlogin"
-   if { $ts_config(gridengine_version) <= 61} {
-      switch -glob [resolve_arch $host] {
-         hp11* {
-            test_report report $curr_task_nr $id result [get_result_skipped]
-            return true
-         }
-      }
-   }
    set job_id [submit_wait_type_job qlogin $host $user]
    if {$job_id > 0} {
       test_report report $curr_task_nr $id result [get_result_ok]
@@ -1194,14 +1163,6 @@ proc sge_online_usage {report_var} {
                      set basic_status [get_result_ok]
                      break
                   }
-                  hp11* -
-                  darwin* {
-                     if {$ts_config(gridengine_version) < 62} {
-                        set usage "No usage expected.\n$usage"
-                        set basic_status [get_result_ok]
-                        break
-                     }
-                  }
                }
                if {"$mem_value" != "0.00000 GBs"} {
                   # cpu should be reported
@@ -1270,11 +1231,6 @@ proc sge_online_usage {report_var} {
 proc sge_drmaa {report_var} {
    global ts_config CHECK_USER
    upvar $report_var report
-
-   if { $ts_config(gridengine_version) < 61 } {
-      ts_log_finest "basic_drmaa test not supported."
-      return
-   }
 
    if {$ts_config(source_dir) == "none"} {
       ts_log_config "source directory is set to \"none\" - cannot run test"
@@ -1756,11 +1712,7 @@ proc sge_check_win_gui {report_var} {
       }
    }
 
-   if {$ts_config(gridengine_version) >= 61} {
-      set args "-l display_win_gui=true"
-   } else {
-      set args "-v SGE_GUI_MODE=TRUE -l a=$arch"
-   }
+   set args "-l display_win_gui=true"
    append args " -b yes -shell no $notepad"
    set job_id [submit_job $args 1 60 $host]
 
@@ -1912,12 +1864,6 @@ proc manual_arch32_mapping {arch} {
       }
       "sol-amd64" {
          set arch_32 "sol-x86"
-      }
-      "sol-sparc64" {
-         # sol-sparc not supported for versions 6.2 and higher
-         if {$ts_config(gridengine_version) < 62} {
-            set arch_32 "sol-sparc"
-         }
       }
    }
    return $arch_32

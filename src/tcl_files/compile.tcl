@@ -151,9 +151,7 @@ proc compile_host_list {} {
    # For SGE 6.0 we build the drmaa.jar on the java build host.
    # Beginning with SGE 6.1 we build java code on all platforms.
    # Add the java build host to the host list.
-   if {$ts_config(gridengine_version) >= 60} {
-      lappend host_list [host_conf_get_java_compile_host]
-   }
+   lappend host_list [host_conf_get_java_compile_host]
 
    # remove duplicates from host_list
    set host_list [compile_unify_host_list $host_list]
@@ -180,14 +178,12 @@ proc compile_host_list {} {
    # The java compile host may not duplicate the build host for it's architecture, 
    # it must be also a c build host,
    # so it must be contained in the build host list.
-   if {$ts_config(gridengine_version) >= 60} {
-      set jc_host [host_conf_get_java_compile_host]
-      set jc_arch [host_conf_get_arch $jc_host]
+   set jc_host [host_conf_get_java_compile_host]
+   set jc_arch [host_conf_get_arch $jc_host]
 
-      if {$compile_host($jc_arch) != $jc_host} {
-         ts_log_severe "the java compile host ($jc_host) has architecture $jc_arch\nbut compile host for architecture $jc_arch is $compile_host($jc_arch).\nJava and C compile must be done on the same host"
-         return {}
-      }
+   if {$compile_host($jc_arch) != $jc_host} {
+      ts_log_severe "the java compile host ($jc_host) has architecture $jc_arch\nbut compile host for architecture $jc_arch is $compile_host($jc_arch).\nJava and C compile must be done on the same host"
+      return {}
    }
 
    return [lsort -dictionary $compile_host(list)]
@@ -1100,12 +1096,6 @@ proc compile_with_aimk {host_list a_report task_name { aimk_options "" }} {
          set par2 "$my_compile_options"
       }
 
-      # For SGE 6.0, we want to build the drmaa.jar.
-      # We do so by using the -java aimk option on the java build host
-      if {$ts_config(gridengine_version) == 60 && $host == $java_compile_host} {
-         set par2 "-java $par2"
-      }
-   
       ts_log_fine "$prog $par1 '$par2'"
       set open_spawn [open_remote_spawn_process $host $CHECK_USER $prog "$par1 '$par2'" 0 "" "" 0 15 0]
       set spawn_id [lindex $open_spawn 1]
@@ -1420,23 +1410,21 @@ proc compile_create_java_properties { compile_hosts } {
       return 
    }
 
-   if {$ts_config(gridengine_version) >= 61} {
-      set properties_file "$ts_config(source_dir)/build_testsuite.properties"
-      ts_log_fine "deleting $properties_file"
-      foreach host $compile_hosts {
-         delete_remote_file $host $CHECK_USER $properties_file
-      }
+   set properties_file "$ts_config(source_dir)/build_testsuite.properties"
+   ts_log_fine "deleting $properties_file"
+   foreach host $compile_hosts {
+      delete_remote_file $host $CHECK_USER $properties_file
+   }
 
-      # store long resolved host name in properties file ...
-      ts_log_fine "creating $properties_file"
-      set f [open $properties_file "w"]
-      puts $f "java.buildhost=[host_conf_get_java_compile_host 1 1]"
-      close $f
- 
-      foreach host $compile_hosts {
-         ts_log_fine "waiting for $properties_file on host $host ..."
-         wait_for_remote_file $host $CHECK_USER $properties_file
-      }
+   # store long resolved host name in properties file ...
+   ts_log_fine "creating $properties_file"
+   set f [open $properties_file "w"]
+   puts $f "java.buildhost=[host_conf_get_java_compile_host 1 1]"
+   close $f
+
+   foreach host $compile_hosts {
+      ts_log_fine "waiting for $properties_file on host $host ..."
+      wait_for_remote_file $host $CHECK_USER $properties_file
    }
 }
 
@@ -1462,11 +1450,9 @@ proc compile_delete_java_properties {} {
       return 
    }
 
-   if {$ts_config(gridengine_version) >= 61} {
-      set properties_file "$ts_config(source_dir)/build_testsuite.properties"
-      if {[file isfile $properties_file]} {
-         ts_log_fine "deleting $properties_file"
-         file delete $properties_file
-      }
+   set properties_file "$ts_config(source_dir)/build_testsuite.properties"
+   if {[file isfile $properties_file]} {
+      ts_log_fine "deleting $properties_file"
+      file delete $properties_file
    }
 }

@@ -52,9 +52,7 @@ set check_name            "drmaa"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_highest_level   201
 set check_description(0)    "tests available DMRAA lib on one arbitrary host" 
-set check_description(100)  "SGE < 6.2: tests to verify DRMAA 0.95 library on one host"
 set check_description(101)  "tests to verify DRMAA 1.0 library on one host"
-set check_description(200)  "SGE < 6.2: tests to verify DRMAA 0.95 library on one host of each architecture available"
 set check_description(201)  "tests to verify DRMAA 1.0 library on one host of each architecture available"
 
 # define test's dependencies
@@ -84,21 +82,15 @@ proc drmaa_init_level {} {
   # here per run level settings can be prepared
   switch -- $CHECK_ACT_LEVEL {
      "0" {
-         return 0 
-      }
-      "100" {
          return 0
       }
       "101" {
          return 0
       }
-      "200" {
-         return 0
-      }
       "201" {
          return 0
       }
-  } 
+  }
   return -1  ;# no other level else
 }
 
@@ -181,26 +173,6 @@ proc drmaa_setup_level {} {
    # save the current drmaa lib mode 
    global current_drmaa_mode 
 
-   switch -- $CHECK_ACT_LEVEL {
-      "100" {
-        if {$ts_config(gridengine_version) < 62} {
-           ts_log_fine "running test ..."
-        } else {
-           ts_log_config "need GE < 62 for this test"
-           return 99
-        }
-      }
-      "200" {
-        if {$ts_config(gridengine_version) < 62} {
-           ts_log_fine "running test ..."
-        } else {
-           ts_log_config "need GE < 62 for this test"
-           return 99
-        }
-      }
-  } 
-
-
    ts_log_fine "setup level $CHECK_ACT_LEVEL: $check_description($CHECK_ACT_LEVEL)"
 
    set drmaa_test_scenario_settings(level) $CHECK_ACT_LEVEL
@@ -214,43 +186,25 @@ proc drmaa_setup_level {} {
       set current_drmaa_mode($host) [get_current_drmaa_mode $host]
    }
 
-   # redirect DRMAA mode 
+   # redirect DRMAA mode
    switch -- $CHECK_ACT_LEVEL {
       "0" {
-         if {$ts_config(gridengine_version) < 62} {
-            drmaa_redirect_lib "0.95" $host
-            set drmaa_binary_name "test_drmaa.0.95"
-         } else {
-            drmaa_redirect_lib "1.0" $host 
-            set drmaa_binary_name "test_drmaa.1.0"     
-         }
-      }
-      "100" {
-         foreach host $level_host_list {
-            drmaa_redirect_lib "0.95" $host
-            set drmaa_binary_name "test_drmaa.0.95"
-         }
+         drmaa_redirect_lib "1.0" $host
+         set drmaa_binary_name "test_drmaa.1.0"
       }
       "101" {
          foreach host $level_host_list {
-            drmaa_redirect_lib "1.0" $host 
-            set drmaa_binary_name "test_drmaa.1.0"        
-         } 
-      }
-      "200" {
-         foreach host $level_host_list {
-            drmaa_redirect_lib "0.95" $host
-            set drmaa_binary_name "test_drmaa.0.95"
+            drmaa_redirect_lib "1.0" $host
+            set drmaa_binary_name "test_drmaa.1.0"
          }
       }
       "201" {
          foreach host $level_host_list {
-            drmaa_redirect_lib "1.0" $host 
-            set drmaa_binary_name "test_drmaa.1.0"        
-         } 
+            drmaa_redirect_lib "1.0" $host
+            set drmaa_binary_name "test_drmaa.1.0"
+         }
       }
    }
-
 }
 
 
@@ -329,21 +283,13 @@ proc set_hosts_for_runlevel {} {
       "0" {
         lappend hosts_in_runlevel [host_conf_get_suited_hosts]
       }
-      "100" {
-        lappend hosts_in_runlevel [host_conf_get_suited_hosts] 
-      }
       "101" {
         lappend hosts_in_runlevel [host_conf_get_suited_hosts]
       }
-      "200" {
-        foreach host $ts_config(unique_arch_nodes) {
-            lappend hosts_in_runlevel $host 
-        } 
-      }
       "201" {
         foreach host $ts_config(unique_arch_nodes) {
-            lappend hosts_in_runlevel $host 
-        } 
+            lappend hosts_in_runlevel $host
+        }
       }
    }
 
@@ -943,17 +889,7 @@ proc drmaa_resolve_preamble { host } {
 
    set compile_arch_mt [resolve_build_arch_installed_libs $host]
 
-   if {$CHECK_ACT_LEVEL == 200 || $CHECK_ACT_LEVEL == 100} {
-      # On architectures that don't support SONAME, the test_drmaa.0.95
-      # binary will store a reference to libdrmaa95.so instead of
-      # libdrmaa.so.0.95.  Because libdrmaa95 only exists in the source
-      # directory, we have to add the source dir to the end of shared lib
-      # path.
-      set libpath [resolve_lib_path_name $host]
-      set drmaa_preamble "$libpath=\${$libpath}:$ts_config(source_dir)/$compile_arch_mt\nexport $libpath\n"
-   } else {
-      set drmaa_preamble ""
-   }
+   set drmaa_preamble ""
 
    return $drmaa_preamble
 }

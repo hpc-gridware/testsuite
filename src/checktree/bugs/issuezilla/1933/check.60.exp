@@ -128,12 +128,7 @@ proc issue_1933_test {} {
       ts_log_severe "qstat didn't print QERROR"
    } else {
       if {[string first "QERROR" $output] != [string last "QERROR" $output]} {
-         set message "issue 1933 present: qstat printed QERROR for one queue instance multiple times"
-         if {$ts_config(gridengine_version) == 60} {
-            ts_log_config "$message\nnot fixed for 6.0"
-         } else {
-            ts_log_severe $message
-         }
+         ts_log_severe "issue 1933 present: qstat printed QERROR for one queue instance multiple times"
       }
    }
 }

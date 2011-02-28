@@ -739,11 +739,7 @@ proc qconf_backslash_comma_output_check {} {
    set snames [lreplace $snames 3 end]
 
    # localize messages
-   if { $ts_config(gridengine_version) == 62 } {
-      set ADDED [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS "*" "*" "*" "*" ]
-   } else {
-      set ADDED [translate_macro MSG_EXEC_HOSTENTRYOFXCHANGEDINEXECLIST_S "global"]
-   }
+   set ADDED [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS "*" "*" "*" "*" ]
 
    # For each relevant permutation of the names list
    for {set mindex 0} {$mindex < 4} {incr mindex} {

@@ -4716,13 +4716,6 @@ proc run_test_level {path runcompleted level {do_save 1} {warnings 0}} {
          # qmaster not alive
          append runlevel_error_text "qmaster on host \"$ts_config(master_host)\" on port $ts_config(commd_port) is not alive!\n"
       } else {
-         if {$ts_config(gridengine_version) < 62} {
-            ts_log_fine "checking scheduler process ..."
-            if {[is_scheduler_alive $ts_config(master_host) [get_qmaster_spool_dir]] != 1} {
-               append runlevel_error_text "Scheduler process is not alive on host \"$ts_config(master_host)\"!\n"
-            }
-         }
-
          if {$runlevel_error_text == ""} {
             ts_log_fine "checking connected scheduler event client ..."
             if {[wait_for_connected_scheduler 90 0] != 0} {
@@ -5322,10 +5315,6 @@ proc run_test {path runcompleted {run_single_test "all"} { send_mail_report 1 } 
    }
 
 
-   #Disable JGDI for SGE < 6.2
-   if { $ts_config(gridengine_version) < 62 } {
-      set CHECK_JGDI_ENABLED 0
-   }
    #We skip tests in JGDI  that do not have JGDI category set
    if {$CHECK_JGDI_ENABLED} {
       if { ![string match "*JGDI*" $check_category] } {
@@ -6054,9 +6043,6 @@ proc set_command_line_options {} {
            set nu_flag "on"
         }
 
-        if { $ts_config(gridengine_version) < 62 } {
-           set CHECK_JGDI_ENABLED 0
-        }
         if { $CHECK_JGDI_ENABLED == 1 } {
            set jgdi_mode_flag "no_jgdi \[only_jgdi]"
         } else {
@@ -6140,13 +6126,7 @@ proc set_command_line_options {} {
               if { $CHECK_JGDI_ENABLED == 1 } {
                  set CHECK_JGDI_ENABLED 0
               } else {
-                 if { $ts_config(gridengine_version) >= 62 } {
-                    set CHECK_JGDI_ENABLED 1
-                 } else {
-                    set CHECK_JGDI_ENABLED 0
-                    puts "JGDI cannot by enabled for SGE < 6.2"
-                    wait_for_enter
-                 }
+                 set CHECK_JGDI_ENABLED 1
               }
            }
         }
@@ -7452,12 +7432,6 @@ proc build_distribution { arch_list } {
       append args " -version $ts_config(source_cvs_release)"   ;# for package names
       append args " -basedir $ts_config(package_directory)"    ;# destination dir
       append args " -bin -common"                              ;# which packages
-
-      if { $ts_config(gridengine_version) == 53 } {
-         if { $ts_config(product_type) == "sgeee" } {
-            append args " -sgeee"
-         }
-      }
 
       if { ! [file isdirectory $ts_config(package_directory)] } {
          file mkdir $ts_config(package_directory)
@@ -9835,12 +9809,6 @@ set mail_body "$mail_body testsuite root directory is \"$ts_config(testsuite_roo
 set mail_body "$mail_body check is running on host \"$local_host\" architecture is \"$local_arch\"\n"
 set mail_body "$mail_body product root directory is \"$ts_config(product_root)\"\n-------\n"
 set mail_body "$mail_body SGE CELL is  \"$ts_config(cell)\"\n-------\n"
-
-# in V61AR_BRANCH, we do not have the new interactive job support
-if {$ts_config(gridengine_version) == 62 && [is_61AR]} {
-   ts_log_fine "using rtools for interactive job transport"
-   set CHECK_INTERACTIVE_TRANSPORT "rtools"
-}
 
 if { $no_action == 1 } {
   puts "CHECK_GROUP=$CHECK_GROUP"

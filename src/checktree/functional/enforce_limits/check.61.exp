@@ -118,15 +118,6 @@ proc enforce_limits_setup {} {
    global el_base_path
    global org_global_conf
 
-   
-   if {$ts_config(gridengine_version) >= 62 || [is_61AR]} {
-      ts_log_fine "running test"
-   } else {
-      ts_log_config "test needs GE >= 62 or 61AR"
-      return 99
-   }
-
-
    set el_base_path $ts_config(testsuite_root_dir)/checktree/functional/enforce_limits
 
    # for the functional test we want to schedule one task to each host

@@ -708,13 +708,8 @@ proc qrsh_accounting {} {
    global CHECK_USER
    global qrsh_hostlist qrsh_submithost
 
-   if {$ts_config(gridengine_version) == 53} {
-      set INTERACTIVE_JOB [translate_macro MSG_QSH_INTERACTIVEJOBHASBEENSCHEDULED_D "*"]
-      set INTERACTIVE_JOB_DUMMY [translate_macro MSG_QSH_INTERACTIVEJOBHASBEENSCHEDULED_D "__JOBID__"]
-   } else {
-      set INTERACTIVE_JOB [translate_macro MSG_QSH_INTERACTIVEJOBHASBEENSCHEDULED_S "*"]
-      set INTERACTIVE_JOB_DUMMY [translate_macro MSG_QSH_INTERACTIVEJOBHASBEENSCHEDULED_S "__JOBID__"]
-   }
+   set INTERACTIVE_JOB [translate_macro MSG_QSH_INTERACTIVEJOBHASBEENSCHEDULED_S "*"]
+   set INTERACTIVE_JOB_DUMMY [translate_macro MSG_QSH_INTERACTIVEJOBHASBEENSCHEDULED_S "__JOBID__"]
    set job_id_start [string first "__JOBID__" $INTERACTIVE_JOB_DUMMY]
 
    set arch [resolve_arch $qrsh_submithost]
@@ -1263,13 +1258,8 @@ proc qrsh_qsub_gid {} {
       return
    }
 
-   if {$ts_config(gridengine_version) == 53 } {
-      set USING_FOR     [translate_macro MSG_GDI_USING_SS "*USE_QSUB_GID=true*" "*"]
-      set FINISHED_JOBS [translate_macro MSG_GDI_USING_SS "*finished_jobs*" "*"]
-   } else {
-      set USING_FOR     [translate_macro MSG_CONF_USING_SS "*USE_QSUB_GID=true*" "*"]
-      set FINISHED_JOBS [translate_macro MSG_CONF_USING_SS "*finished_jobs*" "*"]
-   }
+   set USING_FOR     [translate_macro MSG_CONF_USING_SS "*USE_QSUB_GID=true*" "*"]
+   set FINISHED_JOBS [translate_macro MSG_CONF_USING_SS "*finished_jobs*" "*"]
 
    set submit_host_arch [resolve_arch $qrsh_submithost]
 
@@ -1359,11 +1349,7 @@ proc qrsh_batch {} {
 
    ts_log_fine "check qrsh in immediate and batch mode (-now yes / no)"
    set COULD_NOT_BE_SCHEDULED [translate_macro MSG_QSH_REQUESTCANTBESCHEDULEDTRYLATER_S "*" ]
-   if { $ts_config(gridengine_version) == 53 } {
-      set HAS_BEEN_SUBMITTED  [translate_macro MSG_JOB_SUBMITJOB_USS "*" "*" "*" ]
-   } else {
-      set HAS_BEEN_SUBMITTED  [translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]
-   }
+   set HAS_BEEN_SUBMITTED  [translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]
    set arch [resolve_arch $qrsh_submithost]
    foreach host $qrsh_hostlist {
       set queue [get_queue_instance "all.q" $host]

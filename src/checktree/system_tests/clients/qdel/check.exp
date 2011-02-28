@@ -153,11 +153,7 @@ proc qdel_translate_message {msg {p1 ""} {p2 ""} {p3 ""}} {
          set ret [translate_macro MSG_JOB_REGDELTASK_SUU $p1 $p2 $p3]
       }
       REGISTERED_JOB {
-         if {$ts_config(gridengine_version) >= 62} {
-            set ret [translate_macro MSG_JOB_REGDELX_SSU $p1 "job" $p2]
-         } else {
-            set ret [translate_macro MSG_JOB_REGDELJOB_SU $p1 $p2]
-         }
+         set ret [translate_macro MSG_JOB_REGDELX_SSU $p1 "job" $p2]
       }
       DELETED_TASK {
          set ret [translate_macro MSG_JOB_DELETETASK_SUU $p1 $p2 $p3]
@@ -166,11 +162,7 @@ proc qdel_translate_message {msg {p1 ""} {p2 ""} {p3 ""}} {
          set ret [translate_macro MSG_JOB_DELETETASKS_SSU $p1 $p2 $p3]
       }
       DELETED_JOB {
-         if {$ts_config(gridengine_version) >= 62} {
-            set ret [translate_macro MSG_JOB_DELETEX_SSU $p1 "job" $p2]
-         } else {
-            set ret [translate_macro MSG_JOB_DELETEJOB_SU $p1 $p2]
-         }
+         set ret [translate_macro MSG_JOB_DELETEX_SSU $p1 "job" $p2]
       }
       DOESNOTEXIST_JOB {
          set ret [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "job" $p1]
@@ -996,12 +988,8 @@ proc qdel_delete_unknown_jobid {} {
 
    # add a unknown jobid
    set unknown_jobid [expr [lindex $job_list [expr [llength $job_list] - 1]] + 1]
-   lappend job_list $unknown_jobid 
-   if {$ts_config(gridengine_version) == 53} {
-      set default_output [translate_macro MSG_SGETEXT_DOESNOTEXIST_SU "job" $unknown_jobid ]  
-   } else {
-      set default_output [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "job" $unknown_jobid]  
-   }
+   lappend job_list $unknown_jobid
+   set default_output [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "job" $unknown_jobid]
 
    qdel_delete_unknown_jobid_proc $job_list $default_output
 
@@ -1012,11 +1000,7 @@ proc qdel_delete_unknown_jobid {} {
    set last_jobid "[lindex $job_list end]"
    set unknown_taskid 5
    set job_list [lreplace $job_list end end "$last_jobid.$unknown_taskid"]
-   if {$ts_config(gridengine_version) == 53} {
-      set default_output [translate_macro MSG_SGETEXT_DOESNOTEXISTTASK_UU $last_jobid $unknown_taskid] 
-   } else {
-      set default_output [translate_macro MSG_SGETEXT_DOESNOTEXISTTASK_SU $last_jobid $unknown_taskid] 
-   }
+   set default_output [translate_macro MSG_SGETEXT_DOESNOTEXISTTASK_SU $last_jobid $unknown_taskid]
    qdel_delete_unknown_jobid_proc $job_list $default_output
    delete_job $last_jobid
 
@@ -1027,11 +1011,7 @@ proc qdel_delete_unknown_jobid {} {
    set last_jobid [lindex $job_list end]
    set empty_taskrange "5-10:2"
    set job_list [lreplace $job_list end end "$last_jobid.$empty_taskrange"]
-   if {$ts_config(gridengine_version) == 53} {
-      set default_output [translate_macro MSG_SGETEXT_DOESNOTEXISTTASKRANGE_UUUU $last_jobid "5" "10" "2"]
-   } else {
-      set default_output [translate_macro MSG_SGETEXT_DOESNOTEXISTTASKRANGE_SUUU $last_jobid "5" "9" "2"]
-   }
+   set default_output [translate_macro MSG_SGETEXT_DOESNOTEXISTTASKRANGE_SUUU $last_jobid "5" "9" "2"]
    qdel_delete_unknown_jobid_proc $job_list $default_output
    delete_job $last_jobid 1
 }
@@ -1166,11 +1146,7 @@ proc qdel_all {} {
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   if {$ts_config(gridengine_version) == 53} {
-      set all_args "all"
-   } else {
-      set all_args "'*'"
-   }
+   set all_args "'*'"
 
    # submit jobs to delete
    set job_list_user1 [submit_testjobs] 
@@ -1321,11 +1297,7 @@ proc qdel_uall {} {
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   if {$ts_config(gridengine_version) == 53} {
-      set uall_args "-uall"
-   } else {
-      set uall_args "-u '*'"
-   }
+   set uall_args "-u '*'"
 
    # submit jobs to delete
    set job_list_user1 [submit_testjobs]

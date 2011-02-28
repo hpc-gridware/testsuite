@@ -49,8 +49,6 @@ set check_init_level_procedure "resource_reservation_init_level"
 set check_name            "resource_reservation"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_highest_level   5
-set check_description(0)  "check resource reservation (drmaa version 0.95)"
-set check_description(1)  "check resource reservation with resource quota sets (drmaa version 0.95)"
 set check_description(2)  "check resource reservation (drmaa version 1.0)"
 set check_description(3)  "check resource reservation with resource quota sets (drmaa version 1.0)"
 set check_description(4)  "check resource reservation with calendar disabled queue (drmaa version 1.0)"
@@ -209,26 +207,6 @@ proc resource_reservation_level_setup {} {
    set drmaa_version "please specify test binary"
 
    switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         # Tests resource_reservation
-         set drmaa_version "test_drmaa.0.95"
-         if {$ts_config(gridengine_version) < 62} {
-            ts_log_fine "DRMAA version: $drmaa_version"
-         } else {
-            ts_log_config "Need GE < 62 for this test in runlevel $CHECK_ACT_LEVEL"
-            return 99
-         }
-      }
-      "1" {
-         # Tests resource_reservation with resource quota sets
-         set drmaa_version "test_drmaa.0.95"
-         if {$ts_config(gridengine_version) == 61} {
-            ts_log_fine "DRMAA version: $drmaa_version"
-         } else {
-            ts_log_config "Need GE 61 for this test in runlevel $CHECK_ACT_LEVEL"
-            return 99
-         }
-      }
       "2" {
          # Tests resource_reservation
          set drmaa_version "test_drmaa.1.0"
@@ -237,12 +215,6 @@ proc resource_reservation_level_setup {} {
       "3" {
          # Tests resource_reservation with resource quota sets
          set drmaa_version "test_drmaa.1.0"
-         if {$ts_config(gridengine_version) >= 61} {
-            ts_log_fine "DRMAA version: $drmaa_version"
-         } else {
-            ts_log_config "Need GE >= 61 for this test in runlevel $CHECK_ACT_LEVEL"
-            return 99
-         }
       }
       "4" {
          # Tests resource_reservation
@@ -256,16 +228,10 @@ proc resource_reservation_level_setup {} {
       "5" {
          set drmaa_version "test_drmaa.1.0"
          # Tests resource_reservation with resource quota sets
-         if {$ts_config(gridengine_version) >= 62} {
-            ts_log_fine "DRMAA version: $drmaa_version"
-         } else {
-            ts_log_config "Need GE >= 62 for this test in runlevel $CHECK_ACT_LEVEL"
-            return 99
-         }
       }
    }
 
-   if {$CHECK_ACT_LEVEL == 0 || $CHECK_ACT_LEVEL == 2 || $CHECK_ACT_LEVEL == 4} {
+   if {$CHECK_ACT_LEVEL == 2 || $CHECK_ACT_LEVEL == 4} {
       # setup needed pe
       set pe(slots)             "10"
       set pe(allocation_rule)   "\$round_robin"
@@ -453,12 +419,10 @@ proc resource_reservation_level_cleanup {} {
    del_pe        "pe_slots"
 
    # Delete resource quota sets
-   if {$ts_config(gridengine_version) >= 61} {
-      if {[get_rqs_list rqs_names "" "" 0] == 0} {
-         foreach elem $rqs_names {
-            ts_log_fine "Removing resource quota sets $elem ...\n"
-            del_rqs $elem
-         }
+   if {[get_rqs_list rqs_names "" "" 0] == 0} {
+      foreach elem $rqs_names {
+         ts_log_fine "Removing resource quota sets $elem ...\n"
+         del_rqs $elem
       }
    }
 }

@@ -74,17 +74,13 @@ proc backup_restore_setup {} {
    global test_ar
 
    # create a rqs
-   if {$ts_config(gridengine_version) >= 61} {
-      set rules ""
-      lappend rules "to slots=10"
-      set rqs(test,limit) $rules
-      add_rqs rqs
-   }
+   set rules ""
+   lappend rules "to slots=10"
+   set rqs(test,limit) $rules
+   add_rqs rqs
 
    # create an advance reservation
-   if {$ts_config(gridengine_version) >= 62} {
-      set test_ar [submit_ar "-N TEST_AR -d 3600"]
-   }
+   set test_ar [submit_ar "-N TEST_AR -d 3600"]
 }
 
 proc backup_restore_do_backup_restore {} {
@@ -322,20 +318,16 @@ proc backup_restore_check_cluster {} {
       get_qacct $job_id
    }
 
-   # >= 6.1: check if rqs exists
-   if {$ts_config(gridengine_version) >= 61} {
-      get_rqs_list
-      if {[lsearch $result "test"] < 0} {
-         ts_log_severe "resource quota set \"test\" has not been restored"
-      }
+   # check if rqs exists
+   get_rqs_list
+   if {[lsearch $result "test"] < 0} {
+      ts_log_severe "resource quota set \"test\" has not been restored"
    }
 
-   # >= 6.2: check if ar exists
-   if {$ts_config(gridengine_version) >= 62} {
-      parse_qrstat $test_ar
-      if {![info exists qrstat_info(name)] || $qrstat_info(name) != "TEST_AR"} {
-         ts_log_severe "advance reservation $test_ar has not been properly restored"
-      }
+   # check if ar exists
+   parse_qrstat $test_ar
+   if {![info exists qrstat_info(name)] || $qrstat_info(name) != "TEST_AR"} {
+      ts_log_severe "advance reservation $test_ar has not been properly restored"
    }
 }
 
@@ -389,12 +381,7 @@ proc backup_restore_cleanup {} {
    }
 
    # cleanup our test objects
-   if {$ts_config(gridengine_version) >= 61} {
-      del_rqs test
-   }
-
-   if {$ts_config(gridengine_version) >= 62} {
-      delete_ar $test_ar
-   }
+   del_rqs test
+   delete_ar $test_ar
 }
 
