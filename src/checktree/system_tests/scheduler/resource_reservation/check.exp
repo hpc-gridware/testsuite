@@ -80,12 +80,6 @@ proc resource_reservation_init_level {} {
    global CHECK_ACT_LEVEL
 
    switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0;   # Tests resource_reservation
-      }
-      "1" {
-         return 0;   # Tests resource_reservation with resource quota sets
-      }
       "2" {
          return 0;   # Tests resource_reservation
       }

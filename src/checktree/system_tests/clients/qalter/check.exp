@@ -87,6 +87,15 @@ lappend check_functions "qalter_w"
 lappend check_functions "qalter_a"
 lappend check_functions "qalter_IZ_2972"
 
+lappend check_functions "qalter_h"
+lappend check_functions "qalter_t"
+
+lappend check_functions "qalter_wd"         ;# test the -wd <dir>/-cwd options
+lappend check_functions "qalter_iz_2575"
+lappend check_functions "qalter_help"
+lappend check_functions "qhold_help"
+lappend check_functions "qrls_help"
+
 global submitresult
 global normal_job_id
 global hold_job_A
@@ -1821,3 +1830,361 @@ proc qalter_IZ_2972 {} {
       ts_log_severe "qalter $option failed:\n$qalteroutput"
    }
 }
+
+#                                                             max. column:     |
+#****** qalter/qalter_h() ******
+#
+#  NAME
+#     qalter_h -- test -h option for altering jobs' hold states
+#
+#  SYNOPSIS
+#     qalter_h { }
+#
+#  FUNCTION
+#     ???
+#
+#  INPUTS
+#
+#  RESULT
+#     ???
+#
+#  EXAMPLE
+#     ???
+#
+#  NOTES
+#     ???
+#
+#  BUGS
+#     1434
+#
+#  SEE ALSO
+#     ???/???
+#*******************************
+proc qalter_h {} {
+   global ts_config submitresult
+   global hold_job_D hold_job_U
+   global CHECK_ACTUAL_TEST_PATH CHECK_USER
+   global nonadmin_user nonadmin_hold_job
+
+   set option "-h n"
+   set qalteroutput [start_sge_bin "qalter" "$option $hold_job_D $hold_job_U.1-4"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qalter $option failed:\n$qalteroutput"
+      return
+   }
+
+   #
+   # Set a user hold as nonadmin user
+   #
+   set option       "-h u"
+   ts_log_fine "set user hold as non admin user $nonadmin_user for job $nonadmin_hold_job"
+   set qalterresult [start_sge_bin "qhold" "$option $nonadmin_hold_job" $ts_config(master_host) $nonadmin_user]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qhold $option as non admin user failed:\n$qalterresult"
+      return
+   }
+
+   #
+   # Remove a user hold as nonadmin user
+   #
+   set option       "-h u"
+   ts_log_fine "release user hold as non admin user $nonadmin_user for job $nonadmin_hold_job"
+   set qalterresult [start_sge_bin "qrls" "$option $nonadmin_hold_job" $ts_config(master_host) $nonadmin_user]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qrls $option as non admin user failed:\n$qalterresult"
+      return
+   }
+
+   #
+   # Negativ test
+   # Set an operator hold as nonadmin user
+   #
+   set option       "-h o"
+   ts_log_fine "set operator hold as user $nonadmin_user for job $nonadmin_hold_job"
+   set qalterresult [start_sge_bin "qhold" "$option $nonadmin_hold_job" $ts_config(master_host) $nonadmin_user]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "illegal set of operator hold as non admin user succeeded (qhold $option):\n$qalterresult"
+      return
+   }
+
+   #
+   # Negativ test
+   # Set an system hold as nonadmin user
+   #
+   set option       "-h s"
+   ts_log_fine "set system hold as non admin user $nonadmin_user for job $nonadmin_hold_job"
+   set qalterresult [start_sge_bin "qhold" "$option $nonadmin_hold_job" $ts_config(master_host) $nonadmin_user]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "illegal set of system hold as non admin user succeeded (qhold $option):\n$qalterresult"
+      return
+   }
+
+   #
+   # Set an system hold as admin user
+   #
+   set option       "-h s"
+   ts_log_fine "set system hold as admin user $CHECK_USER for job $nonadmin_hold_job"
+   set qalteroutput [start_sge_bin "qhold" "$option $nonadmin_hold_job"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "system hold as admin user failed (qhold $option):\n$qalteroutput"
+      return
+   }
+
+   #
+   # Negativ test
+   # Remove an system hold as nonadmin user
+   #
+   set option       "-h s"
+   ts_log_fine "release system hold as non admin user $nonadmin_user for job $nonadmin_hold_job"
+   set qalterresult [ start_sge_bin "qrls" "$option $nonadmin_hold_job" $ts_config(master_host) $nonadmin_user]
+   if { $prg_exit_state == 0 } {
+      ts_log_severe "illegal remove of system hold as non admin user succeeded (qhold $option)"
+      return
+   }
+
+   #
+   # Set an operator hold as admin user
+   #
+   set option       "-h o"
+   ts_log_fine "set operator hold as admin user $CHECK_USER for job $nonadmin_hold_job"
+   set qalteroutput [start_sge_bin "qhold" "$option $nonadmin_hold_job"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "system hold as admin user failed (qhold $option):\n$qalteroutput"
+      return
+   }
+
+   #
+   # Negativ test
+   # Remove an operator hold as nonadmin user
+   #
+   set option       "-h o"
+   ts_log_fine "release operator hold as non admin user $nonadmin_user for job $nonadmin_hold_job"
+   set qalterresult [start_sge_bin "qrls" "$option $nonadmin_hold_job" $ts_config(master_host) $nonadmin_user]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "illegal remove of operator hold as non admin user succeeded (qhold $option):\n$qalterresult"
+      return
+   }
+}
+
+
+#                                                             max. column:     |
+#****** qalter/qalter_t() ******
+#
+#  NAME
+#     qalter_w -- test -t option for altering array jobs
+#
+#  SYNOPSIS
+#     qalter_w { }
+#
+#  FUNCTION
+#     ???
+#
+#  INPUTS
+#
+#  RESULT
+#     ???
+#
+#  EXAMPLE
+#     ???
+#
+#  NOTES
+#     ???
+#
+#  BUGS
+#     ???
+#
+#  SEE ALSO
+#     ???/???
+#*******************************
+proc qalter_t {} {
+   global ts_config
+   global submitresult
+   global hold_job_T
+   global CHECK_ACTUAL_TEST_PATH CHECK_USER
+
+   set option "-h n"
+   set qalteroutput [start_sge_bin "qalter" "$option $hold_job_T -t 1-4"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qalter $option failed:\n$qalteroutput"
+      return
+   }
+
+   # Test invalid uses
+   set qalteroutput [start_sge_bin "qalter" "$option $hold_job_T -t 1-4 -t 1-4"]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "qalter $option - allowed invalid -t switch:\n$qalteroutput"
+      return
+   }
+
+   set qalteroutput [start_sge_bin "qalter" "$option -t 1-4 $hold_job_T -t 1-4"]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "qalter $option - allowed invalid -t switch\n$qalteroutput"
+      return
+   }
+}
+
+#****** qalter/qalter_wd() ******
+#
+#  NAME
+#     qalter_wd -- test if -wd/-cwd work
+#
+#  SYNOPSIS
+#     qalter_wd { }
+#
+#*******************************
+proc qalter_wd {} {
+   global ts_config
+
+   ts_log_fine "check if -wd/-cwd is set correctly"
+
+   # Set a directory
+   set wdir "/tmp"
+   set cwdir [pwd]
+
+   # Test1 qsub -cwd -h $SGE_ROOT/examples/jobs/sleeper.sh
+   set jobargs "-cwd -h -o /dev/null -j y $ts_config(product_root)/examples/jobs/sleeper.sh"
+   set hold_job1 [submit_job $jobargs 1 60 "" "" $cwdir 1]
+   get_qstat_j_info $hold_job1
+   if {[string compare "$qstat_j_info(cwd)" "$cwdir"] != 0} {
+      set error_text "qsub did not set the correct working dir: $cwdir != $qstat_j_info(cwd)"
+      ts_log_severe $error_text
+   }
+   set result1 [start_sge_bin qalter "-wd $wdir $hold_job1"]
+   get_qstat_j_info $hold_job1
+   if {[string compare "$qstat_j_info(cwd)" "$wdir"] != 0} {
+      set error_text "qalter did not set the correct working dir: $wdir != $qstat_j_info(cwd)"
+      ts_log_severe $error_text
+   }
+   delete_job $hold_job1 1
+}
+
+#****** qalter/qalter_iz_2575() ******
+#
+#  NAME
+#     qalter_iz_2575 -- test if iz 2575 is present
+#
+#  SYNOPSIS
+#     qalter_iz_2575 { }
+#
+#  FUNCTION
+#     Calls qalter -q "" <job_id>.
+#     Check for correct output, may not contain invalid queue name"
+#*******************************
+proc qalter_iz_2575 {} {
+   global ts_config
+   set job_id [submit_job "-h -q all.q $ts_config(product_root)/examples/jobs/sleeper.sh"]
+   if {$job_id <= 0} {
+      # error has been raised already in submit_job
+      return
+   }
+
+   # this is the message we expect
+   set expected [translate_macro MSG_PARSE_WRONGDESTIDLISTFORMATXSPECTOXOPTION_SS "XXXXX" "-q"]
+   set pos [string first "XXXXX" $expected]
+   set expected [string trim [string replace $expected $pos [expr $pos + 4]]]
+
+   set output [start_sge_bin "qalter" "-q '' $job_id"]
+   set output [string trim $output]
+
+   if {[string first $expected $output] < 0} {
+      ts_log_severe "qalter -q '' didn't show expected output, expected\n$expected\nbut got\n$output"
+   }
+
+   delete_job $job_id
+}
+
+#                                                             max. column:     |
+#****** qalter/qalter_help() ******
+#
+#  NAME
+#     qalter_help -- test -help option for qalter
+#
+#  SYNOPSIS
+#     qalter_help { }
+#
+#  FUNCTION
+#     Checks if the help text is presented if no option is given.
+#     Checks the return codes of qalter -help and qalter with no option.
+#
+#  INPUTS
+#
+#  RESULT
+#     ???
+#
+#  EXAMPLE
+#     ???
+#
+#  NOTES
+#     ???
+#
+#  SEE ALSO
+#     ???/???
+#*******************************
+proc qalter_help {} {
+   test_help_and_usage "qalter"
+}
+
+#                                                             max. column:     |
+#****** qalter/qhold_help() ******
+#
+#  NAME
+#     qhold_help -- test -help option for qhold
+#
+#  SYNOPSIS
+#     qhold_help { }
+#
+#  FUNCTION
+#     Checks if the help text is presented if no option is given.
+#     Checks the return codes of qhold -help and qhold with no option.
+#
+#  INPUTS
+#
+#  RESULT
+#     ???
+#
+#  EXAMPLE
+#     ???
+#
+#  NOTES
+#     ???
+#
+#  SEE ALSO
+#     ???/???
+#*******************************
+
+proc qhold_help {} {
+   test_help_and_usage "qhold"
+}
+
+#                                                             max. column:     |
+#****** qalter/qrls_help() ******
+#
+#  NAME
+#     qrls_help -- test -help option for qrls
+#
+#  SYNOPSIS
+#     qrls_help { }
+#
+#  FUNCTION
+#     Checks if the help text is presented if no option is given.
+#     Checks the return codes of qrls -help and qrls with no option.
+#
+#  INPUTS
+#
+#  RESULT
+#     ???
+#
+#  EXAMPLE
+#     ???
+#
+#  NOTES
+#     ???
+#
+#  SEE ALSO
+#     ???/???
+#*******************************
+proc qrls_help {} {
+   test_help_and_usage "qrls"
+}
+
+

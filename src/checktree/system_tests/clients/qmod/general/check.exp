@@ -58,7 +58,7 @@ lappend check_functions    "qmod_unsuspend"
 lappend check_functions    "qmod_clearerrorstate"
 lappend check_functions    "qmod_clearqueue"
 lappend check_functions    "qmod_forceaction"
-# ---- Wildchart test ------------------------------
+# ---- Wildcard test ------------------------------
 lappend check_functions    "qmod_wildcard_disable"
 lappend check_functions    "qmod_wildcard_enable"
 lappend check_functions    "qmod_issue_1131"
@@ -69,6 +69,9 @@ set qmod_test_queues {}
 lappend qmod_test_queues "qmod0"
 lappend qmod_test_queues "qmod1"
 lappend qmod_test_queues "qmod2"
+
+global qmod_num_help_lines
+set qmod_num_help_lines 30
 
 proc qmod_general_init_level {} {
    global CHECK_ACT_LEVEL
