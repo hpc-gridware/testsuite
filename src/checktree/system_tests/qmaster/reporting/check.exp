@@ -1,0 +1,1043 @@
+#!/vol2/TCL_TK/glinux/bin/expect
+#___INFO__MARK_BEGIN__
+##########################################################################
+#
+#  The Contents of this file are made available subject to the terms of
+#  the Sun Industry Standards Source License Version 1.2
+#
+#  Sun Microsystems Inc., March, 2001
+#
+#
+#  Sun Industry Standards Source License Version 1.2
+#  =================================================
+#  The contents of this file are subject to the Sun Industry Standards
+#  Source License Version 1.2 (the "License"); You may not use this file
+#  except in compliance with the License. You may obtain a copy of the
+#  License at http://gridengine.sunsource.net/Gridengine_SISSL_license.html
+#
+#  Software provided under this License is provided on an "AS IS" basis,
+#  WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING,
+#  WITHOUT LIMITATION, WARRANTIES THAT THE SOFTWARE IS FREE OF DEFECTS,
+#  MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE, OR NON-INFRINGING.
+#  See the License for the specific provisions governing your rights and
+#  obligations concerning the Software.
+#
+#  The Initial Developer of the Original Code is: Sun Microsystems, Inc.
+#
+#  Copyright: 2001 by Sun Microsystems, Inc.
+#
+#  All Rights Reserved.
+#
+##########################################################################
+#___INFO__MARK_END__
+
+#****** checks/reporting *******************************************************
+#  NAME
+#     reporting -- check reporting functionality
+#
+#  FUNCTION
+#     The purpose of this testsuite check is to test the qmaster reporting file
+#     generation.
+#
+#     It tests the following features:
+#        - account_flush_time reporting param
+#        - queue state reporting
+#        - reporting of consumables when their definition changes
+#        - reporting of consumables when running jobs, controlled by the
+#          log_consumables reporting_param
+#
+#     It should test the following features:
+#        - all reporting params
+#        - accounting file contents
+#        - reporting file contents
+#        - reporting of events
+#        - reporting of sharelog data
+#*******************************************************************************
+#
+# define global variable in this namespace
+global check_name 
+global check_category
+global check_description 
+global check_needs
+global check_functions 
+global check_highest_level
+global check_init_level_procedure
+global check_root_access_needs
+global env
+
+set check_root_access_needs "yes"
+
+# define a level initialization procedure:
+set check_init_level_procedure "reporting_init_level"
+
+# define test's name and run level descriptions
+set check_name            "reporting"
+set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
+set check_highest_level   0
+set check_description(0)  "Test reporting parameters and qmaster reporting"
+
+# define test's dependencies
+set check_needs           "init_core_system" 
+
+
+# setup and cleanup functions
+set check_setup_function reporting_setup
+set check_cleanup_function reporting_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "reporting_periodic_accounting_test"
+lappend check_functions "reporting_immediate_accounting_test"
+lappend check_functions "reporting_reporting_accounting_test"
+lappend check_functions "reporting_queue_state_test"
+lappend check_functions "reporting_complex_change_test"
+lappend check_functions "reporting_consumables_test"
+
+lappend check_functions "reporting_ar_error_state_test"
+lappend check_functions "reporting_ar_warning_state_test"
+
+global reporting_old_config reporting_acct_file
+
+proc reporting_init_level {} {
+   global CHECK_ACT_LEVEL
+
+   switch -- $CHECK_ACT_LEVEL {
+      "0" {
+         return 0
+      }
+   }
+
+   return -1  ;# no other level else
+}
+
+# -------- local test procedures -----------------------------------------------
+
+
+proc reporting_setup  {} {
+   global ts_config CHECK_USER
+   global reporting_old_config reporting_old_exechost
+   global reporting_file reporting_acct_file reporting_test_host
+   global reporting_old_config_test_host
+   global reporting_complex_backup
+
+   # delete any jobs that might be in the system
+   delete_all_jobs
+
+   # this is our test host
+   set reporting_test_host [host_conf_get_suited_hosts]
+
+   # archive old config
+   get_config reporting_old_config
+   get_exechost reporting_old_exechost $reporting_test_host
+   get_config reporting_old_config_test_host $reporting_test_host
+   get_complex reporting_complex_backup
+
+   # enable immediate scheduling
+   set schedd_conf(flush_submit_sec) 1
+   set schedd_conf(flush_finish_sec) 1
+   set_schedd_config schedd_conf
+
+   # create consumables for consumable reporting test
+   set complex(F001) "F001 INT <= YES YES 0 0"
+   set complex(F002) "F002 INT <= YES YES 0 0"
+   set complex(F003) "F003 INT <= YES YES 0 0"
+   set_complex complex
+
+   # create 2 queues with one slot each, subordinate mechanism
+   # and we attach a consumable to the reporting queue
+   set queue_conf(load_thresholds) NONE
+   set queue_conf(slots) 1
+   set queue_conf(complex_values) "F003=2"
+   add_queue "reporting" $reporting_test_host queue_conf
+   set queue_conf(complex_values) "NONE"
+   set queue_conf(subordinate_list) "reporting"
+   add_queue "reporting_super" $reporting_test_host queue_conf
+
+   # create an additional calendar for queue state test
+   set cal(calendar_name) "reporting"
+   set cal(year)          "01.01.2000=00:00-01:00=off"
+   set cal(week)          "NONE"
+   add_calendar "reporting" cal
+
+   # create an additional hostgroup for queue state test
+   set hgrp(group_name) "@reporting"
+   set hgrp(hostlist)   $reporting_test_host
+   add_hostgroup "@reporting" hgrp
+
+   # find accounting file
+   set reporting_file "$ts_config(product_root)/$ts_config(cell)/common/reporting"
+   set reporting_acct_file "$ts_config(product_root)/$ts_config(cell)/common/accounting"
+
+   # touch reporting file
+   start_remote_prog $ts_config(master_host) $CHECK_USER "touch" "$reporting_file"
+}
+
+proc reporting_cleanup {} {
+   global reporting_old_config reporting_old_exechost
+   global reporting_file reporting_acct_file reporting_test_host 
+   global reporting_old_config_test_host
+   global reporting_complex_backup
+
+   # restore old config
+   reset_config reporting_old_config
+   reset_config_and_propagate reporting_old_config_test_host $reporting_test_host
+   set_exechost reporting_old_exechost $reporting_test_host
+   reset_schedd_config
+
+   # remove test queues
+   del_queue "reporting_super" $reporting_test_host 0 1
+   del_queue "reporting" $reporting_test_host 0 1
+
+   # remove calendar and hostgroup of queue state test
+   del_calendar "reporting"
+   del_hostgroup "@reporting"
+
+   # delete consumable
+   reset_complex reporting_complex_backup
+   unset reporting_complex_backup
+
+   # delete the reporting file
+   file delete -force $reporting_file
+
+   # unset our test's global variables
+   foreach var "reporting_old_config reporting_old_exechost reporting_file reporting_acct_file reporting_test_host" {
+      if {[info exists $var]} {
+         unset $var
+      }
+   }
+}
+
+#****** system_tests/qmaster/reporting/reporting_get_timestamp() ***************
+#
+#  NAME
+#     reporting_get_timestamp -- get the timestamp
+#
+#  SYNOPSIS
+#     reporting_get_timestamp {{filename ""}}
+#
+#  FUNCTION
+#     If the filename is specified it returns a timestamp when the file was last
+#     modified. This must run on a master host (a host where the file was modified),
+#     since the file could be located on nfs and the timestamp could be seen
+#     with a delay (~10s) on a different host.
+#     Otherwise it returns the current timestamp.
+#
+#  INPUTS
+#     {filename ""} ... the name of file
+#  RESULT
+#     timestamp
+#
+#  SEE ALSO
+#     built-in command file mtime <filename>
+#     built-in command clock seconds
+#*******************************************************************************
+proc reporting_get_timestamp {{filename ""}} {
+   global ts_config CHECK_USER
+
+   set expect_bin [get_binary_path $ts_config(master_host) expect]
+   if {$filename == ""} {
+      set tmstamp [start_remote_prog $ts_config(master_host) $CHECK_USER $expect_bin "-c \"puts \[clock seconds\]\""]
+   } else {
+      set tmstamp [start_remote_prog $ts_config(master_host) $CHECK_USER $expect_bin "-c \"puts \[file mtime $filename\]\""]
+   }
+   return $tmstamp
+}
+
+proc reporting_do_accounting_test {scenario} {
+   global ts_config CHECK_USER
+   global reporting_acct_file
+
+   # Check accounting file size
+   # we might be the first test after installation - in this case no accounting file exists
+   if {![file exists $reporting_acct_file]} {
+      set f [open $reporting_acct_file w]
+      puts $f "# new accounting file"
+      close $f
+   }
+   set mtime [reporting_get_timestamp $reporting_acct_file]
+   # Submit job
+   # we submit an array job of short running sleepers 
+   # to a queue with one slot
+   set script "$ts_config(product_root)/examples/jobs/sleeper.sh"
+   set job_id [submit_job "-t 1-100 -o /dev/null -j y -q reporting $script 1"]
+   if {$job_id <= 0} {
+      # error message has been generated by submit_job
+      return
+   }
+
+   # Watch accounting file for updates.
+   # Wait for the first accounting file update
+   set done 0
+   while {!$done} {
+      set new_mtime [reporting_get_timestamp $reporting_acct_file]
+      if {$mtime != $new_mtime} {
+         set done 1
+      }
+   }
+
+   set failed 0
+
+   # Watch the accounting file for one flush interval
+   # The accounting file should not change between flush intervals
+   while {[reporting_get_timestamp] < [expr $new_mtime + 14]} {
+      after 1000
+
+      set current_time [reporting_get_timestamp $reporting_acct_file]
+      if {$new_mtime != $current_time} {
+         ts_log_severe "$scenario: accounting file was flushed before flush interval\nexpected: $new_mtime \ngot: $current_time"
+         set failed 1
+         break
+      }
+   }
+
+   if {$failed != 1} {
+      # The accounting file should change at flush intervals
+      after 1000
+      if {$new_mtime == [reporting_get_timestamp $reporting_acct_file]} {
+         ts_log_severe "$scenario: accounting file was not flushed at flush interval"
+      }
+   }
+
+   # Delete any jobs that might be in the system
+   delete_all_jobs
+}
+
+proc reporting_periodic_accounting_test {} {
+   # Set accounting_flush_time to 00:00:15
+   set new_config(reporting_params) "accounting=true reporting=false flush_time=00:00:15 joblog=false sharelog=00:00:00 accounting_flush_time=00:00:15"
+   set_config new_config
+
+   reporting_do_accounting_test reporting_periodic_accounting_test
+}
+
+proc reporting_reporting_accounting_test {} {
+   # Do not set accounting_flush_time.  Set flush_time to 00:00:15
+   set new_config(reporting_params) "accounting=true reporting=false flush_time=00:00:15 joblog=false sharelog=00:00:00"
+   set_config new_config
+
+   reporting_do_accounting_test reporting_reporting_accounting_test
+}
+
+proc reporting_immediate_accounting_test {} {
+   global ts_config CHECK_USER
+   global reporting_acct_file
+
+   # Set accounting_flush_time to 00:00:00
+   set new_config(reporting_params) "accounting=true reporting=false flush_time=00:00:15 joblog=false sharelog=00:00:00 accounting_flush_time=00:00:00"
+   set_config new_config
+
+   # Check accounting file size
+   set mtime [file mtime $reporting_acct_file]
+
+   # Submit job
+   set options "-o /dev/null -j y -sync yes -q reporting"
+   set script "$ts_config(product_root)/examples/jobs/sleeper.sh 10"
+   set job_id [submit_job "$options $script"]
+
+   if {$job_id <= 0} {
+      # error message has been generated in submit_job
+      return
+   }
+
+   # Check accounting file mtime
+   set new_mtime [file mtime $reporting_acct_file]
+   if {$mtime == $new_mtime} {
+       ts_log_severe "accounting file was not flushed before job finish event"
+       return
+   }
+
+   # Do it again to be sure
+   # Submit job
+   set job_id [submit_job "$options $script"]
+
+   if {$job_id <= 0} {
+      # error message has been generated in submit_job
+      return
+   }
+
+   # Check accounting file mtime
+   if {$new_mtime == [file mtime $reporting_acct_file]} {
+       ts_log_severe "accounting file was not flushed before job finish event"
+       return
+   }
+}
+
+proc reporting_wait_for_queue_state {state {timeout 10} {qi_error 0} {only_qstat 0} } {
+   global ts_config reporting_test_host
+
+   # make sure the queue actually is in the requested state
+   set queue_state [get_queue_state [get_queue_instance "reporting" $reporting_test_host]]
+   ts_log_fine "queue is in state \"$queue_state\""
+   if {$state != $queue_state} {
+      ts_log_severe "queue is not in expected state \"$state\", but in state \"$queue_state\""
+   }
+
+   set queue_state [get_queue_state [get_queue_instance "all.q" $reporting_test_host]]
+   ts_log_fine "all.q@$reporting_test_host queue is in state \"$queue_state\""
+   if {$qi_error == 0} {
+      # it's a queue instance error. all.q on test host should not be affected
+      if {"" != $queue_state} {
+         ts_log_severe "all.q queue is not in expected state \"\", but in state \"$queue_state\""
+      }
+   } else {
+      # it's a queue error. all.q on test host must be in the same state
+      if {[string match $queue_state "*$state*"] == 1} {
+         ts_log_severe "all.q queue is not in expected state \"$state\", but in state \"$queue_state\""
+      }
+   }
+
+   if {$only_qstat == 0} {
+      # now read from reporting file and check for queue records and the expected state
+      ts_log_fine "waiting for queue state \"$state\" in reporting file"
+
+      set pattern ":queue:reporting:"
+      set output [logfile_wait $pattern $timeout 0]
+      if {$logfile_wait_error == 0} {
+         set queue_state_found 0
+         foreach line $output {
+            if {[string first $pattern $line] >= 0} {
+               set queue_state_found 1
+               set split_line [split $line ":"]
+               set reported_state [lindex $split_line 5]
+               if {$state != $reported_state} {
+                  ts_log_severe "reporting: expected queue state \"$state\" but got \"$reported_state\""
+               }
+            }
+         }
+
+         # There was no queue record at all? That's bad ...
+         if {!$queue_state_found} {
+            ts_log_severe "there were no queue records in the reporting file, got only\n$output"
+         }
+      }
+   }
+}
+
+proc reporting_queue_state_test {} {
+   global ts_config reporting_old_config CHECK_USER
+   global reporting_file reporting_test_host
+
+   # activate reporting and set short reporting flush time
+   set new_config(reporting_params) "reporting=true flush_time=00:00:1"
+   set_config new_config
+
+   # tail -f reporting file
+   init_logfile_wait $ts_config(master_host) $reporting_file
+
+   ########################
+   # test queue alarm state
+   ########################
+   replace_attr "queue" "load_thresholds" "np_load_avg=-1" "reporting"
+   # queue alarms are not in reporting file, but qstat must show the state
+   reporting_wait_for_queue_state "a" 10 0 1
+   replace_attr "queue" "load_thresholds" "NONE" "reporting"
+
+   ################################
+   # test queue suspend alarm state
+   ################################
+   replace_attr "queue" "suspend_thresholds" "np_load_avg=-1" "reporting"
+   # queue alarms are not in reporting file, but qstat must show the state
+   reporting_wait_for_queue_state "A" 10 0 1
+   replace_attr "queue" "suspend_thresholds" "NONE" "reporting"
+
+   ###########################
+   # test queue disabled state
+   ###########################
+   disable_queue "reporting"
+   reporting_wait_for_queue_state "d"
+   enable_queue "reporting"
+   reporting_wait_for_queue_state ""
+
+   ############################
+   # test queue suspended state
+   ############################
+   suspend_queue "reporting"
+   reporting_wait_for_queue_state "s"
+   unsuspend_queue "reporting"
+   reporting_wait_for_queue_state ""
+
+   ##########################
+   # test queue unknown state
+   ##########################
+   start_sge_bin "qconf" "-ke $reporting_test_host"
+   reporting_wait_for_queue_state "u" 10 1
+   startup_execd $reporting_test_host
+   wait_for_load_from_all_queues 60
+   reporting_wait_for_queue_state ""
+
+   ########################
+   # test queue error state
+   ########################
+   # wrong prolog
+   replace_attr "queue" "prolog" "non_existing_prolog" "reporting"
+   set job_id [submit_job "-o /dev/null -j y -q reporting -b y echo test"]
+   trigger_scheduling
+   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "E" 60
+   reporting_wait_for_queue_state "E"
+   delete_job $job_id
+   replace_attr "queue" "prolog" "NONE" "reporting"
+   start_sge_bin "qmod" "-c reporting"
+   reporting_wait_for_queue_state ""
+
+   # wrong epilog
+   replace_attr "queue" "epilog" "non_existing_epilog" "reporting"
+   set job_id [submit_job "-o /dev/null -j y -q reporting -b y echo test"]
+   trigger_scheduling
+   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "E" 60
+   reporting_wait_for_queue_state "E"
+   delete_job $job_id
+   replace_attr "queue" "epilog" "NONE" "reporting"
+   start_sge_bin "qmod" "-c reporting"
+   reporting_wait_for_queue_state ""
+
+   # wrong mailer (no error state)
+   set new_config(mailer) "/bin/bla"
+   set_config_and_propagate new_config $reporting_test_host
+   set job_id [submit_job "-m b -o /dev/null -j y -q reporting -b y echo test"]
+   trigger_scheduling
+   wait_for_job_end $job_id
+   reporting_wait_for_queue_state "" 10 1 1
+   set new_config(mailer) "$reporting_old_config(mailer)"
+   set_config_and_propagate new_config $reporting_test_host
+   unset new_config
+   start_sge_bin "qmod" "-c \*"
+
+   # wrong execd spool directory permissions
+   set execd_spool_dir [get_execd_spool_dir $reporting_test_host]
+   start_remote_prog $reporting_test_host $CHECK_USER chmod "000 $execd_spool_dir/$reporting_test_host"
+   set job_id [submit_job "-o /dev/null -j y -q reporting -b y echo test"]
+   trigger_scheduling
+   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "E" 60
+   reporting_wait_for_queue_state "E"
+   delete_job $job_id
+   start_remote_prog $reporting_test_host $CHECK_USER chmod "755 $execd_spool_dir/$reporting_test_host"
+   start_sge_bin "qmod" "-c reporting"
+   reporting_wait_for_queue_state ""
+
+   ###########################################
+   # test queue suspended on subordinate state
+   ###########################################
+   set job_id [submit_job "-o /dev/null -j y -q reporting_super -b y sleep 60"]
+   trigger_scheduling
+   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "S" 60
+   reporting_wait_for_queue_state "S"
+   delete_job $job_id 1
+   reporting_wait_for_queue_state ""
+
+   ####################################
+   # test queue calender disabled state 
+   ####################################
+   #
+   # after adding the calendar "always disabled"
+   replace_attr "queue" "calendar" "always_disabled" "reporting"
+   reporting_wait_for_queue_state "D"
+   # test queue default state (after adding the calendar disabling in one minute)
+   set time1 [expr [timestamp] + 120]
+   set time2 [expr $time1 + 600];# test will probably fail when running over midnight
+   set cal(calendar_name) "reporting"
+   set cal(year) "[clock format $time1 -format "%d.%m.%Y"]"
+   append cal(year) "=[clock format $time1 -format "%H:%M"]"
+   append cal(year) "-[clock format $time2 -format "%H:%M"]"
+   append cal(year) "=off"
+   mod_calendar "reporting" cal
+   replace_attr "queue" "calendar" "reporting" "reporting"
+   reporting_wait_for_queue_state ""
+   # test queue calender disabled state (when calendar time reached)
+   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "D" 180
+   reporting_wait_for_queue_state "D"
+   # test queue default state (after removing the calendar)
+   replace_attr "queue" "calendar" "NONE" "reporting"
+   reporting_wait_for_queue_state ""
+
+   #####################################
+   # test queue calender suspended state
+   #####################################
+   #
+   # after adding the calendar "always suspended"
+   replace_attr "queue" "calendar" "always_suspend" "reporting"
+   reporting_wait_for_queue_state "C"
+   # test queue default state (after adding the calendar suspending in one minute)
+   set time1 [expr [timestamp] + 120]
+   set time2 [expr $time1 + 600];# test will probably fail when running over midnight
+   set cal(calendar_name) "reporting"
+   set cal(year) "[clock format $time1 -format "%d.%m.%Y"]"
+   append cal(year) "=[clock format $time1 -format "%H:%M"]"
+   append cal(year) "-[clock format $time2 -format "%H:%M"]"
+   append cal(year) "=suspended"
+   mod_calendar "reporting" cal
+   replace_attr "queue" "calendar" "reporting" "reporting"
+   reporting_wait_for_queue_state ""
+   # test queue calender suspended state (when calendar time reached)
+   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "C" 180
+   reporting_wait_for_queue_state "C"
+   # test queue default state (after removing the calendar)
+   replace_attr "queue" "calendar" "NONE" "reporting"
+   reporting_wait_for_queue_state ""
+
+   ###########################
+   # test queue ambigous state
+   ###########################
+   replace_attr "queue" "load_thresholds" "NONE,\[@allhosts=load_avg=10\],\[@reporting=load_avg=20\]" "reporting"
+   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "c" 60
+   reporting_wait_for_queue_state "c"
+   purge_queue "reporting@@reporting" "load_thresholds"
+   reporting_wait_for_queue_state ""
+
+   ###########################
+   # test queue orphaned state
+   ###########################
+   set job_id [submit_job "-o /dev/null -j y -q reporting -b y sleep 60"]
+   trigger_scheduling
+   wait_for_jobstart $job_id "" 60
+   replace_attr "queue" "hostlist" "NONE" "reporting"
+   reporting_wait_for_queue_state "o"
+   delete_job $job_id 1
+   replace_attr "queue" "hostlist" "$reporting_test_host" "reporting"
+   #reporting_wait_for_queue_state ""
+
+   # shutdown tail -f
+   close_logfile_wait
+}
+
+proc reporting_complex_change_test {} {
+   global ts_config
+   global reporting_file reporting_test_host
+
+   # assign consumable to our test host
+   set exechost(complex_values) "F001=2,F002=2"
+   set_exechost exechost $reporting_test_host
+
+   # activate reporting and set short reporting flush time
+   set new_config(reporting_params) "reporting=true flush_time=00:00:1"
+
+   # in 6.2, the default changed to log_consumables=false
+   # make sure we start with the correct settings
+   append new_config(reporting_params) " log_consumables=true"
+   set_config new_config
+
+   # tail -f reporting file
+   init_logfile_wait $ts_config(master_host) $reporting_file
+
+   # ======================================================================
+   ts_log_fine "Scenario 1: Old behavior, all consumables must be reported"
+   # ======================================================================
+
+   # modify the complex variable F002
+   set complex(F002) "F002 INT <= YES YES 1 0"
+   set_complex complex
+
+   # expect all consumables to be reported
+   set output [reporting_read_consumable_records ":host_consumable:"]
+   reporting_check_consumable_records $output "queue_consumable:reporting:" {"F003=0.000000=2.000000" "slots=0.000000=1.000000"}
+   reporting_check_consumable_records $output "host_consumable" {"F001=0.000000=2.000000" "F002=0.000000=2.000000"}
+
+   # =======================================================================
+   ts_log_fine "Scenario 2: New behavior, no variables configured to report"
+   # =======================================================================
+
+   # now log only consumables that are mentioned in the reporting_variables
+   set new_config(reporting_params) "reporting=true flush_time=00:00:1 log_consumables=false"
+   set_config new_config
+
+   # modify the complex variable F002
+   set complex(F002) "F002 INT <= YES YES 2 0"
+   set_complex complex
+
+   # expect no host or queue consumables to be reported
+   reporting_read_consumable_records "_consumable:" 0
+
+   # ============================================================================
+   ts_log_fine "Scenario 3: New behavior, only configured variables are reported"
+   # ============================================================================
+   # add F002 to the reporting variables
+   set exechost(report_variables) "F002"
+   set_exechost exechost $reporting_test_host
+
+   # modify the complex variable F002
+   set complex(F002) "F002 INT <= YES YES 0 0"
+   set_complex complex
+
+   # expect only F002 being reported as host value
+   # expect no queue values being reported
+   set output [reporting_read_consumable_records ":host_consumable:"]
+   reporting_check_consumable_records $output "host_consumable" {"F002=0.000000=2.000000"}
+   reporting_check_consumable_records $output "host_consumable" {"F001="} 0
+   reporting_check_consumable_records $output "queue_consumable:reporting:" {"F003=" "slots="} 0 0
+   # shutdown tail -f
+   close_logfile_wait
+
+   # reset report_variables and complex_values
+   set exechost(report_variables) "NONE"
+   set exechost(complex_values)  "NONE"
+   set_exechost exechost $reporting_test_host
+}
+
+proc reporting_read_consumable_records {pattern {expect_records 1}} {
+   # read data from reporting file, wait for queue_consumable record
+   # logfile_wait shall not raise errors - we do our own check
+   set output [logfile_wait $pattern 10 0 0]
+
+   # check for the expected behavior
+   # pattern must be contained in the output, or not
+   set pos [string first $pattern $output]
+   if {$expect_records} {
+      if {$pos == -1} {
+         ts_log_severe "expected $pattern to be reported, but got:\n$output"
+         set output ""
+      }
+   } else {
+      if {$pos >= 0} {
+         ts_log_severe "expected $pattern not to be reported, but got:\n$output"
+         set output ""
+      }
+   }
+   return [string trim $output]
+}
+
+proc reporting_check_consumable_records {output pattern consumables {expect_consumable 1} {expect_pattern 1}} {
+   # if we got the expected data in the reporting file
+   if {$output != ""} {
+      set found_pattern 0
+      foreach line [split $output "\n"] {
+         # search for host or queue consumable line
+         if {[string first $pattern $line] >= 0} {
+            set found_pattern 1
+            # make sure all the expected consumables are / are not contained
+            foreach consumable $consumables {
+               if {[string first $consumable $line] == -1} {
+                  if {$expect_consumable} {
+                     ts_log_severe "didn't find $consumable in $pattern:\n$line"
+                  }
+               } else {
+                  if {!$expect_consumable} {
+                     ts_log_severe "found $consumable in $pattern, which shouldn't be there:\n$line"
+                  }
+               }
+            }
+         }
+      }
+      if {$expect_pattern && !$found_pattern} {
+         ts_log_severe "didn't find pattern $pattern in reporting output:\n$output"
+      }
+   }
+}
+
+proc reporting_consumables_test {} {
+   global ts_config
+   global reporting_file reporting_test_host
+
+   # set the complex variable F002 - it might not have been properly reset
+   # by previous check_function
+   set complex(F002) "F002 INT <= YES YES 0 0"
+   set_complex complex
+
+   # assign consumable to our test host
+   set exechost(complex_values) "F001=2,F002=2"
+   set_exechost exechost $reporting_test_host
+
+   # activate reporting and set short reporting flush time
+   set new_config(reporting_params) "reporting=true flush_time=00:00:1 joblog=true"
+   # in 6.2, the default changed to log_consumables=false
+   # make sure we start with the correct settings
+   append new_config(reporting_params) " log_consumables=true"
+   set_config new_config
+
+   # tail -f reporting file
+   init_logfile_wait $ts_config(master_host) $reporting_file
+
+   # this is our test job, going into the reporting queue
+   # and requesting the consumable F001
+   set job_args "-o /dev/null -j y -q reporting -l F001=1"
+   set job_script "$ts_config(product_root)/examples/jobs/sleeper.sh 20"
+
+   # ======================================================================
+   ts_log_fine "Scenario 1: Old behavior, all consumables must be reported"
+   # ======================================================================
+
+   # Submit the test job
+   set job_id [submit_job "$job_args $job_script"]
+   wait_for_jobstart $job_id "" 10 1 1
+   # expect all host and queue consumables to be reported
+   set output [reporting_read_consumable_records ":queue_consumable:"]
+   reporting_check_consumable_records $output "host_consumable" {"F001=1.000000=2.000000" "F002=0.000000=2.000000"}
+   reporting_check_consumable_records $output "queue_consumable" {"F003=0.000000=2.000000" "slots=1.000000=1.000000"}
+   wait_for_jobend $job_id "" 25
+   # expect all host and queue consumables to be reported
+   set output [reporting_read_consumable_records ":queue_consumable:"]
+   reporting_check_consumable_records $output "host_consumable" {"F001=0.000000=2.000000" "F002=0.000000=2.000000"}
+   reporting_check_consumable_records $output "queue_consumable" {"F003=0.000000=2.000000" "slots=0.000000=1.000000"}
+
+   # =======================================================================
+   ts_log_fine "Scenario 2: New behavior, no variables configured to report"
+   # =======================================================================
+
+   # now log only consumables that are mentioned in the reporting_variables
+   set new_config(reporting_params) "reporting=true flush_time=00:00:1 joblog=true log_consumables=false"
+   set_config new_config
+
+   # Submit the test job
+   set job_id [submit_job "$job_args $job_script"]
+   wait_for_jobstart $job_id "" 10 1 1
+   # expect no host or queue consumables to be reported
+   reporting_read_consumable_records "_consumable:" 0
+   wait_for_jobend $job_id "" 25
+   # expect no host or queue consumables to be reported
+   reporting_read_consumable_records "_consumable:" 0
+
+   # =============================================================================
+   ts_log_fine "Scenario 3: New behavior, we expect F001 and slots to be reported"
+   # =============================================================================
+
+   # ------------------------------------------------------
+   ts_log_fine "Scenario 3a: report_variables in exec host"
+   # ------------------------------------------------------
+   # add F001, F002, and slots to the reporting variables
+   set exechost(report_variables) "F001,F002,slots"
+   set_exechost exechost $reporting_test_host
+
+   # Submit the test job
+   set job_id [submit_job "$job_args $job_script"]
+   wait_for_jobstart $job_id "" 10 1 1
+   # expect F001 to be reported as host consumable, F002 not being reported
+   # expect slots to be reported as queue consumable
+   set output [reporting_read_consumable_records ":queue_consumable:"]
+   reporting_check_consumable_records $output "host_consumable" {"F001=1.000000=2.000000"}
+   reporting_check_consumable_records $output "host_consumable" {"F002="} 0
+   reporting_check_consumable_records $output "queue_consumable" {"slots=1.000000=1.000000"}
+   reporting_check_consumable_records $output "queue_consumable" {"F003="} 0
+   wait_for_jobend $job_id "" 25
+   # expect F001 to be reported as host consumable, F002 not being reported
+   # expect slots to be reported as queue consumable
+   set output [reporting_read_consumable_records ":queue_consumable:"]
+   reporting_check_consumable_records $output "host_consumable" {"F001=0.000000=2.000000"}
+   reporting_check_consumable_records $output "host_consumable" {"F002="} 0
+   reporting_check_consumable_records $output "queue_consumable" {"slots=0.000000=1.000000"}
+   reporting_check_consumable_records $output "queue_consumable" {"F003="} 0
+
+   # reset reporting_variables
+   set exechost(report_variables) "NONE"
+   set exechost(complex_values)  "NONE"
+   set_exechost exechost $reporting_test_host
+
+   # --------------------------------------------------------
+   ts_log_fine "Scenario 3b: report_variables in global host"
+   # Test for CR 6710542, IZ 2615
+   # --------------------------------------------------------
+   # add F001, F002, and slots to the reporting variables
+   set exechost(report_variables) "F001,F002,slots"
+   set exechost(complex_values)  "F001=2,F002=2"
+   set_exechost exechost
+
+   # Submit the test job
+   set job_id [submit_job "$job_args $job_script"]
+   wait_for_jobstart $job_id "" 10 1 1
+   # expect F001 to be reported as host consumable, F002 not being reported
+   # expect slots to be reported as queue consumable
+   set output [reporting_read_consumable_records ":queue_consumable:"]
+   reporting_check_consumable_records $output "host_consumable" {"F001=1.000000=2.000000"}
+   reporting_check_consumable_records $output "host_consumable" {"F002="} 0
+   reporting_check_consumable_records $output "queue_consumable" {"slots=1.000000=1.000000"}
+   reporting_check_consumable_records $output "queue_consumable" {"F003="} 0
+   wait_for_jobend $job_id "" 25
+   # expect F001 to be reported as host consumable, F002 not being reported
+   # expect slots to be reported as queue consumable
+   set output [reporting_read_consumable_records ":queue_consumable:"]
+   reporting_check_consumable_records $output "host_consumable" {"F001=0.000000=2.000000"}
+   reporting_check_consumable_records $output "host_consumable" {"F002="} 0
+   reporting_check_consumable_records $output "queue_consumable" {"slots=0.000000=1.000000"}
+   reporting_check_consumable_records $output "queue_consumable" {"F003="} 0
+
+   # reset reporting_variables
+   set exechost(report_variables) "NONE"
+   set exechost(complex_values)  "NONE"
+   set_exechost exechost
+
+   # shutdown tail -f
+   close_logfile_wait
+}
+
+proc reporting_wait_for_pattern {pattern {timeout 10}} {
+   set output [logfile_wait $pattern $timeout 0]
+   if {$logfile_wait_error != 0} {
+      ts_log_severe "there were no pattern '$pattern' in the reporting file, got only\n$output"
+   }
+}
+
+proc reporting_ar_error_state_test {} {
+   global ts_config CHECK_USER
+   global reporting_file reporting_test_host
+
+   delete_all_ars
+
+   # activate reporting and set short reporting flush time
+   set new_config(reporting_params) "reporting=true flush_time=00:00:1"
+   set_config new_config
+
+   # tail -f reporting file
+   init_logfile_wait $ts_config(master_host) $reporting_file
+
+   ################
+   # test AR submit
+   ################
+   set ar_id [submit_ar "-q reporting -d 3600"]
+   if {$ar_id <= 0} {
+      ts_log_severe "AR submit failed"
+      close_logfile_wait
+      return
+   }
+   set pattern ":new_ar:*:${ar_id}:$CHECK_USER"
+   reporting_wait_for_pattern $pattern
+   set pattern ":ar_attr:*:${ar_id}::sge:*:*::NONE"
+   reporting_wait_for_pattern $pattern
+
+   ###############
+   # test AR start
+   ###############
+   set pattern ":ar_log:*:${ar_id}:r:START TIME REACHED:start time of AR reached"
+   reporting_wait_for_pattern $pattern
+
+   ######################################
+   # test AR error state on queue disable
+   ######################################
+   disable_queue "reporting"
+   set pattern ":ar_log:*:${ar_id}:E:RESOURCES UNSATISFIED:AR resources unsatisfied"
+   reporting_wait_for_pattern $pattern
+   enable_queue "reporting"
+   set pattern ":ar_log:*:${ar_id}:r:RESOURCES SATISFIED:AR resources satisfied"
+   reporting_wait_for_pattern $pattern
+
+   ######################################
+   # test AR error state on queue suspend
+   ######################################
+   suspend_queue "reporting"
+   set pattern ":ar_log:*:${ar_id}:E:RESOURCES UNSATISFIED:AR resources unsatisfied"
+   reporting_wait_for_pattern $pattern
+   unsuspend_queue "reporting"
+   set pattern ":ar_log:*:${ar_id}:r:RESOURCES SATISFIED:AR resources satisfied"
+   reporting_wait_for_pattern $pattern
+
+   ######################################
+   # test AR error state on queue unknown
+   ######################################
+   start_sge_bin "qconf" "-ke $reporting_test_host"
+   set pattern ":ar_log:*:${ar_id}:E:RESOURCES UNSATISFIED:AR resources unsatisfied"
+   reporting_wait_for_pattern $pattern
+   startup_execd $reporting_test_host
+   wait_for_load_from_all_queues 60
+   set pattern ":ar_log:*:${ar_id}:r:RESOURCES SATISFIED:AR resources satisfied"
+   reporting_wait_for_pattern $pattern
+
+   ####################################
+   # test AR error state on queue error
+   ####################################
+   replace_attr "queue" "prolog" "non_existing_prolog" "reporting"
+   set job_id [submit_job "-ar $ar_id -o /dev/null -j y -q reporting -b y echo test"]
+   trigger_scheduling
+   set pattern ":ar_log:*:${ar_id}:E:RESOURCES UNSATISFIED:AR resources unsatisfied"
+   reporting_wait_for_pattern $pattern
+   delete_job $job_id
+   replace_attr "queue" "prolog" "NONE" "reporting"
+   start_sge_bin "qmod" "-c reporting"
+   set pattern ":ar_log:*:${ar_id}:r:RESOURCES SATISFIED:AR resources satisfied"
+   reporting_wait_for_pattern $pattern
+
+   delete_ar $ar_id
+
+   set pattern "*:ar_log:*:${ar_id}:d:DELETED:AR deleted"
+   reporting_wait_for_pattern $pattern
+
+   set pattern "*:ar_acct:*:${ar_id}:reporting:$reporting_test_host:1"
+   reporting_wait_for_pattern $pattern
+
+   # shutdown tail -f
+   close_logfile_wait
+}
+
+proc reporting_ar_warning_state_test {} {
+   global ts_config CHECK_USER
+   global reporting_file reporting_test_host
+
+   delete_all_ars
+
+   # activate reporting and set short reporting flush time
+   set new_config(reporting_params) "reporting=true flush_time=00:00:1"
+   set_config new_config
+
+   # compute start time
+   set now [clock seconds]
+   set then [expr $now + 86400]; # next day
+   set start [clock format $then -format "%Y%m%d%H%M.%S"]
+
+   # tail -f reporting file
+   init_logfile_wait $ts_config(master_host) $reporting_file
+
+   ################
+   # test AR submit
+   ################
+   set ar_id [submit_ar "-a $start -q reporting -d 3600"]
+   if {$ar_id <= 0} {
+      ts_log_severe "AR submit failed"
+      close_logfile_wait
+      return
+   }
+   set pattern ":new_ar:*:${ar_id}:$CHECK_USER"
+   reporting_wait_for_pattern $pattern
+   set pattern ":ar_attr:*:${ar_id}::sge:*:*::NONE"
+   reporting_wait_for_pattern $pattern
+
+   ########################################
+   # test AR warning state on queue disable
+   ########################################
+   disable_queue "reporting"
+   set pattern ":ar_log:*:${ar_id}:W:RESOURCES UNSATISFIED:AR resources unsatisfied"
+   reporting_wait_for_pattern $pattern
+   enable_queue "reporting"
+   set pattern ":ar_log:*:${ar_id}:w:RESOURCES SATISFIED:AR resources satisfied"
+   reporting_wait_for_pattern $pattern
+
+   ########################################
+   # test AR warning state on queue suspend
+   ########################################
+   suspend_queue "reporting"
+   set pattern ":ar_log:*:${ar_id}:W:RESOURCES UNSATISFIED:AR resources unsatisfied"
+   reporting_wait_for_pattern $pattern
+   unsuspend_queue "reporting"
+   set pattern ":ar_log:*:${ar_id}:w:RESOURCES SATISFIED:AR resources satisfied"
+   reporting_wait_for_pattern $pattern
+
+   ########################################
+   # test AR warning state on queue unknown
+   ########################################
+   start_sge_bin "qconf" "-ke $reporting_test_host"
+   set pattern ":ar_log:*:${ar_id}:W:RESOURCES UNSATISFIED:AR resources unsatisfied"
+   reporting_wait_for_pattern $pattern
+   startup_execd $reporting_test_host
+   wait_for_load_from_all_queues 60
+   set pattern ":ar_log:*:${ar_id}:w:RESOURCES SATISFIED:AR resources satisfied"
+   reporting_wait_for_pattern $pattern
+
+   ######################################
+   # test AR warning state on queue error
+   ######################################
+   replace_attr "queue" "prolog" "non_existing_prolog" "reporting"
+   set job_id [submit_job "-l h_rt=10 -o /dev/null -j y -q reporting -b y echo test"]
+   trigger_scheduling
+   set pattern ":ar_log:*:${ar_id}:W:RESOURCES UNSATISFIED:AR resources unsatisfied"
+   reporting_wait_for_pattern $pattern
+   delete_job $job_id
+   replace_attr "queue" "prolog" "NONE" "reporting"
+   start_sge_bin "qmod" "-c reporting"
+   set pattern ":ar_log:*:${ar_id}:w:RESOURCES SATISFIED:AR resources satisfied"
+   reporting_wait_for_pattern $pattern
+
+   delete_ar $ar_id
+
+   set pattern "*:ar_log:*:${ar_id}:d:DELETED:AR deleted"
+   reporting_wait_for_pattern $pattern
+
+   set pattern "*:ar_acct:*:${ar_id}:reporting:$reporting_test_host:1"
+   reporting_wait_for_pattern $pattern
+
+   # shutdown tail -f
+   close_logfile_wait
+}

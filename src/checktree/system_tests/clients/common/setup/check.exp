@@ -1,0 +1,218 @@
+#!/vol2/TCL_TK/glinux/bin/expect
+#___INFO__MARK_BEGIN__
+##########################################################################
+#
+#  The Contents of this file are made available subject to the terms of
+#  the Sun Industry Standards Source License Version 1.2
+#
+#  Sun Microsystems Inc., March, 2001
+#
+#
+#  Sun Industry Standards Source License Version 1.2
+#  =================================================
+#  The contents of this file are subject to the Sun Industry Standards
+#  Source License Version 1.2 (the "License"); You may not use this file
+#  except in compliance with the License. You may obtain a copy of the
+#  License at http://gridengine.sunsource.net/Gridengine_SISSL_license.html
+#
+#  Software provided under this License is provided on an "AS IS" basis,
+#  WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING,
+#  WITHOUT LIMITATION, WARRANTIES THAT THE SOFTWARE IS FREE OF DEFECTS,
+#  MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE, OR NON-INFRINGING.
+#  See the License for the specific provisions governing your rights and
+#  obligations concerning the Software.
+#
+#  The Initial Developer of the Original Code is: Sun Microsystems, Inc.
+#
+#  Copyright: 2001 by Sun Microsystems, Inc.
+#
+#  All Rights Reserved.
+#
+##########################################################################
+#___INFO__MARK_END__
+
+# define global variable in this namespace
+global check_name 
+global check_category 
+global check_description 
+global check_needs
+global check_functions 
+global check_highest_level
+global check_init_level_procedure
+global check_root_access_needs
+global env
+
+set check_root_access_needs "yes"
+
+# define a level initialization procedure:
+set check_init_level_procedure "client_setup_init_level"
+
+# define test's name and run level descriptions
+set check_name            "client_setup"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_highest_level   0
+set check_description(0)  "test setup (startup) of clients in certain error situations"
+
+# define test's dependencies
+set check_needs           "init_core_system display_test" 
+
+# setup and cleanup functions
+set check_setup_function client_setup_setup
+set check_cleanup_function client_setup_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "client_setup_test_bootstrap"
+lappend check_functions "client_setup_test_act_qmaster"
+lappend check_functions "client_setup_test_qmaster_down"
+
+proc client_setup_init_level {} {
+   global CHECK_ACT_LEVEL
+
+   switch -- $CHECK_ACT_LEVEL {
+      "0" { 
+         return 0
+      }
+   }
+
+   return -1  ;# no other level
+}
+
+
+# -------- local test procedures: initialization------------------------------
+
+
+proc client_setup_setup {} {
+   global ts_config
+   global did_shutdown
+
+   set did_shutdown 0
+}
+
+proc client_setup_cleanup {} {
+   global ts_config
+   global did_shutdown
+
+   if {$did_shutdown} {
+      startup_qmaster 0
+   }
+}
+
+proc client_setup_do_test {scenario expected_error_list {error_info_message_array ""}} {
+   global ts_config
+
+   if {$error_info_message_array != ""} {
+      upvar $error_info_message_array error_info_logging
+   } else {
+      set error_info_logging(dummy) "dummy info reporting"
+   }
+
+   # client list:
+   # all clients, except
+   # qacct - it doesn't depend on these files or a running qmaster
+   # qmake - it is not linked against SGE code, but calls qrsh
+   # qping - it does not rely on the tested mechanisms
+   # qtcsh - is a shell - would need shell runtime checks
+   # sgepasswd - doesn't rely on act_qmaster
+   set commands(index)      "qalter qconf qdel qhold qhost qlogin qmod qresub qrls qrsh qselect qsh qstat qsub"
+   set commands(qalter,args) "-o /dev/null 1"
+   set commands(qconf,args) "-sel"
+   set commands(qdel,args) "1"
+   set commands(qhold,args) "-h u 1"
+   set commands(qhost,args) ""
+   set commands(qlogin,args) ""
+   set commands(qmod,args) "-s 1"
+   set commands(qresub,args) "1"
+   set commands(qrls,args) "-h u 1"
+   set commands(qrsh,args) ""
+   set commands(qselect,args) ""
+   set commands(qsh,args) ""
+   set commands(qstat,args) ""
+   set commands(qsub,args)  "-o /dev/null -e /dev/null $ts_config(product_root)/examples/jobs/sleeper.sh"
+
+   lappend commands(index) qquota
+   set commands(qquota,args) ""
+
+   set error_text ""
+   set info_text ""
+   foreach command $commands(index) {
+      set output [start_sge_bin $command $commands($command,args)]
+      set messages(index) ""
+      set ret [handle_sge_errors "client_setup_do_test" "$command $commands($command,args)" $output messages 0 $prg_exit_state]
+
+      if {[info exists error_info_logging($ret)]} {
+         append info_text "$error_info_logging($ret)\nOutput of \"$command $commands($command,args)\" was:\n$output\n"
+      }
+
+
+      set is_expected_error_code 0
+      foreach expected_error $expected_error_list {
+         if {$ret == $expected_error} {
+            set is_expected_error_code 1
+            break
+         }
+      }
+      if {$is_expected_error_code == 0} {
+         append error_text "scenario \"$scenario\", ran $command $commands($command,args)\nexpected error codes $expected_error_list, but got $ret. Output from client was:\n$output\n\n"
+      }
+   }
+   if {$error_text != ""} {
+      ts_log_severe $error_text
+   }
+   if {$info_text != ""} {
+      ts_log_config $info_text
+   }
+}
+
+proc client_setup_test_bootstrap {} {
+   global ts_config
+   global CHECK_USER
+
+   # test clients with non existing bootstrap file
+   set config_file "$ts_config(product_root)/$ts_config(cell)/common/bootstrap"
+   file rename $config_file "$config_file.bak"
+   # wait for NFS ...
+   foreach host $ts_config(execd_nodes) {
+      wait_for_remote_file $host $CHECK_USER $config_file 60 1 1
+   }
+   client_setup_do_test "no bootstrap file" -300
+   file rename "$config_file.bak" $config_file
+
+   # wait for NFS ...
+   foreach host $ts_config(execd_nodes) {
+      wait_for_remote_file $host $CHECK_USER $config_file 60 1 0
+   }
+}
+
+proc client_setup_test_act_qmaster {} {
+   global ts_config
+   global CHECK_USER
+   
+   # test clients with non existing act_qmaster file
+   set config_file_2 "$ts_config(product_root)/$ts_config(cell)/common/act_qmaster"
+   file rename $config_file_2 "$config_file_2.bak"
+
+   foreach host $ts_config(execd_nodes) {
+      wait_for_remote_file $host $CHECK_USER $config_file_2 60 1 1
+   }
+   client_setup_do_test "no act_qmaster file" -301
+   file rename "$config_file_2.bak" $config_file_2
+    
+   # wait for NFS ...
+   foreach host $ts_config(execd_nodes) {
+      wait_for_remote_file $host $CHECK_USER $config_file_2 60 1 0
+   }
+}
+
+proc client_setup_test_qmaster_down {} {
+   global ts_config
+   global did_shutdown
+   global CHECK_USER
+
+   # test clients with qmaster down
+   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
+   set did_shutdown 1
+   set info_text(-121) "This is caused by not fixed issue #2786"
+   client_setup_do_test "qmaster down" "-120 -121" info_text
+}
+

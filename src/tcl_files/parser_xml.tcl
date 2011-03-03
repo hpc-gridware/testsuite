@@ -1989,21 +1989,17 @@ proc qstat_j_xml_par { output job_id xmloutput} {
       set path [$elem getElementsByTagName PN_path]
       set pnHost [$elem getElementsByTagName PN_host]
       set fileHost [$elem getElementsByTagName PN_file_host]
-      if {$ts_config(gridengine_version) < 62} {
-         set xml(stderr_path_list) [[$path firstChild] nodeValue]
+      if {[$pnHost hasChildNodes] == 0} {
+         set pnHost "NONE"
       } else {
-         if {[$pnHost hasChildNodes] == 0} {
-            set pnHost "NONE"
-         } else {
-            set pnHost [[$pnHost firstChild] nodeValue]
-         }
-         if {[$fileHost hasChildNodes] == 0} {
-            set fileHost "NONE"
-         } else {
-            set fileHost [[$fileHost firstChild] nodeValue]
-         }
-         set xml(stderr_path_list) "$pnHost:$fileHost:[[$path firstChild] nodeValue]"
+         set pnHost [[$pnHost firstChild] nodeValue]
       }
+      if {[$fileHost hasChildNodes] == 0} {
+         set fileHost "NONE"
+      } else {
+         set fileHost [[$fileHost firstChild] nodeValue]
+      }
+      set xml(stderr_path_list) "$pnHost:$fileHost:[[$path firstChild] nodeValue]"
    }
    # JB_stdout_path_list
    set stdoutPath [$root getElementsByTagName JB_stdout_path_list]
@@ -2011,21 +2007,17 @@ proc qstat_j_xml_par { output job_id xmloutput} {
       set path [$elem getElementsByTagName PN_path]
       set pnHost [$elem getElementsByTagName PN_host]
       set fileHost [$elem getElementsByTagName PN_file_host]
-      if {$ts_config(gridengine_version) < 62} {
-         set xml(stdout_path_list) [[$path firstChild] nodeValue]
+      if {[$pnHost hasChildNodes] == 0} {
+         set pnHost "NONE"
       } else {
-         if {[$pnHost hasChildNodes] == 0} {
-            set pnHost "NONE"
-         } else {
-            set pnHost [[$pnHost firstChild] nodeValue]
-         }
-         if {[$fileHost hasChildNodes] == 0} {
-            set fileHost "NONE"
-         } else {
-            set fileHost [[$fileHost firstChild] nodeValue]
-         }
-         set xml(stdout_path_list) "$pnHost:$fileHost:[[$path firstChild] nodeValue]"
-      }      
+         set pnHost [[$pnHost firstChild] nodeValue]
+      }
+      if {[$fileHost hasChildNodes] == 0} {
+         set fileHost "NONE"
+      } else {
+         set fileHost [[$fileHost firstChild] nodeValue]
+      }
+      set xml(stdout_path_list) "$pnHost:$fileHost:[[$path firstChild] nodeValue]"
    }
    # JB_mail_list
    set mailList [$root getElementsByTagName JB_mail_list]
@@ -2039,16 +2031,12 @@ proc qstat_j_xml_par { output job_id xmloutput} {
    foreach elem $shellList {
       set path [$elem getElementsByTagName PN_path]
       set pnHost [$elem getElementsByTagName PN_host]
-      if {$ts_config(gridengine_version) < 62} {
-         set xml(shell_list) [[$path firstChild] nodeValue]
+      if {[$pnHost hasChildNodes] == 0} {
+         set pnHost "NONE"
       } else {
-         if {[$pnHost hasChildNodes] == 0} {
-            set pnHost "NONE"
-         } else {
-            set pnHost [[$pnHost firstChild] nodeValue]
-         }
-         set xml(shell_list) "$pnHost:[[$path firstChild] nodeValue]"
-      }      
+         set pnHost [[$pnHost firstChild] nodeValue]
+      }
+      set xml(shell_list) "$pnHost:[[$path firstChild] nodeValue]"
    }
    # JB_job_args
    set jobArgs [$root getElementsByTagName JB_job_args]

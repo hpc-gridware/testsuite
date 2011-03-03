@@ -422,18 +422,6 @@ proc issue_1914_test {} {
       #here starts the real test conditions
       #error = 1 means that wrong configuration is tested - host in error expected 
       set error 1
-      if {$ts_config(gridengine_version) < 61} {
-         #testing daemon set to "none" value
-         set path "none"
-         set test($daemon) $path
-         set_config_and_propagate test $test_host
-         if {[issue_1914_test_submit $job $test_host $path $error] == 0} {
-            ts_log_severe "Testing job $job with $daemon = \"$path\" failed,
-            issue 1914 fix didn't work for corrupted $daemon configuration - none daemon"
-         } else {
-            ts_log_fine "Test 1 for \"$job\" passed"
-         }
-      }
 
       #testing daemon set to path that has no execution permissions
       set path "/tmp/daemon_$act_time"
@@ -449,19 +437,6 @@ proc issue_1914_test {} {
       }
       #clean up file after test
       start_remote_prog $test_host $CHECK_USER "rm" "-f $path"
-      
-      if {$ts_config(gridengine_version) < 61} {
-         #testing daemon set to relative path value (not absolute path)
-         set path "tmp/daemon_$act_time"
-         set test($daemon) $path
-         set_config_and_propagate test $test_host
-         if {[issue_1914_test_submit $job $test_host $path $error] == 0} {
-            ts_log_severe "Testing job $job with $daemon = \"$path\" failed,
-            issue 1914 fix didn't work for corrupted $daemon configuration - relative path daemon"
-         } else {
-            ts_log_fine "Test 3 for \"$job\" passed"
-         }
-      }
 
       #testing daemon set to path that doesn't exist 
       set path "/tmp/daemon_$act_time"

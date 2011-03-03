@@ -104,12 +104,12 @@ proc install_qmaster {} {
       append feature_install_options "-csp"
    }
 
-   if {$ts_config(gridengine_version) >= 62 && $ts_config(jmx_port) > 0} {
+   if {$ts_config(jmx_port) > 0} {
       # For the JMX MBean Server we need java 1.5+
       set java_home [get_java_home_for_host $ts_config(master_host) "1.5+"]
       if {$java_home == ""} {
          ts_log_severe "Cannot install qmaster with JMX MBean Server on host $ts_config(master_host). java15 is not defined in host configuration"
-         return                                       
+         return
       }
       set env_list(JAVA_HOME) $java_home
       append feature_install_options " -jmx"
@@ -212,34 +212,32 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
    append auto_config_content "SGE_EXECD_PORT=\"$execd_port\"\n"
 
    # some GE 6.2 specific parameters
-   if {$ts_config(gridengine_version) >= 62} {
-      append auto_config_content "SGE_ENABLE_SMF=\"false\"\n"
-      append auto_config_content "SGE_CLUSTER_NAME=\"$ts_config(cluster_name)\"\n"
-   
-      if {$ts_config(jmx_port) > 0} {
-         if {$shadowd} {
-            set jvm_lib_path [get_jvm_lib_path_for_host $host]
-         } else {
-            set jvm_lib_path [get_jvm_lib_path_for_host $ts_config(master_host)]
-         }
-         append auto_config_content "SGE_JVM_LIB_PATH=\"$jvm_lib_path\"\n"
-         append auto_config_content "SGE_ADDITIONAL_JVM_ARGS=\"\"\n"
-         append auto_config_content "SGE_JMX_PORT=\"$ts_config(jmx_port)\"\n"
-         append auto_config_content "SGE_JMX_SSL=\"$ts_config(jmx_ssl)\"\n"
-         append auto_config_content "SGE_JMX_SSL_CLIENT=\"$ts_config(jmx_ssl_client)\"\n"
-         append auto_config_content "SGE_JMX_SSL_KEYSTORE=\"/var/sgeCA/port${ts_config(commd_port)}/$ts_config(cell)/private/keystore\"\n"
-         append auto_config_content "SGE_JMX_SSL_KEYSTORE_PW=\"$ts_config(jmx_ssl_keystore_pw)\"\n"
+   append auto_config_content "SGE_ENABLE_SMF=\"false\"\n"
+   append auto_config_content "SGE_CLUSTER_NAME=\"$ts_config(cluster_name)\"\n"
+
+   if {$ts_config(jmx_port) > 0} {
+      if {$shadowd} {
+         set jvm_lib_path [get_jvm_lib_path_for_host $host]
       } else {
-         append auto_config_content "SGE_JVM_LIB_PATH=\"none\"\n"
-         append auto_config_content "SGE_ADDITIONAL_JVM_ARGS=\"\"\n"
-         append auto_config_content "SGE_JMX_PORT=\"0\"\n"
-         append auto_config_content "SGE_JMX_SSL=\"false\"\n"
-         append auto_config_content "SGE_JMX_SSL_CLIENT=\"false\"\n"
-         append auto_config_content "SGE_JMX_SSL_KEYSTORE=\"\"\n"
-         append auto_config_content "SGE_JMX_SSL_KEYSTORE_PW=\"\"\n"
+         set jvm_lib_path [get_jvm_lib_path_for_host $ts_config(master_host)]
       }
-      append auto_config_content "SERVICE_TAGS=\"enable\"\n"
+      append auto_config_content "SGE_JVM_LIB_PATH=\"$jvm_lib_path\"\n"
+      append auto_config_content "SGE_ADDITIONAL_JVM_ARGS=\"\"\n"
+      append auto_config_content "SGE_JMX_PORT=\"$ts_config(jmx_port)\"\n"
+      append auto_config_content "SGE_JMX_SSL=\"$ts_config(jmx_ssl)\"\n"
+      append auto_config_content "SGE_JMX_SSL_CLIENT=\"$ts_config(jmx_ssl_client)\"\n"
+      append auto_config_content "SGE_JMX_SSL_KEYSTORE=\"/var/sgeCA/port${ts_config(commd_port)}/$ts_config(cell)/private/keystore\"\n"
+      append auto_config_content "SGE_JMX_SSL_KEYSTORE_PW=\"$ts_config(jmx_ssl_keystore_pw)\"\n"
+   } else {
+      append auto_config_content "SGE_JVM_LIB_PATH=\"none\"\n"
+      append auto_config_content "SGE_ADDITIONAL_JVM_ARGS=\"\"\n"
+      append auto_config_content "SGE_JMX_PORT=\"0\"\n"
+      append auto_config_content "SGE_JMX_SSL=\"false\"\n"
+      append auto_config_content "SGE_JMX_SSL_CLIENT=\"false\"\n"
+      append auto_config_content "SGE_JMX_SSL_KEYSTORE=\"\"\n"
+      append auto_config_content "SGE_JMX_SSL_KEYSTORE_PW=\"\"\n"
    }
+   append auto_config_content "SERVICE_TAGS=\"enable\"\n"
    append auto_config_content "CELL_NAME=\"$ts_config(cell)\"\n"
    append auto_config_content "ADMIN_USER=\"$CHECK_USER\"\n"
    

@@ -1,0 +1,632 @@
+#!/vol2/TCL_TK/glinux/bin/expect
+#___INFO__MARK_BEGIN__
+##########################################################################
+#
+#  The Contents of this file are made available subject to the terms of
+#  the Sun Industry Standards Source License Version 1.2
+#
+#  Sun Microsystems Inc., March, 2001
+#
+#
+#  Sun Industry Standards Source License Version 1.2
+#  =================================================
+#  The contents of this file are subject to the Sun Industry Standards
+#  Source License Version 1.2 (the "License"); You may not use this file
+#  except in compliance with the License. You may obtain a copy of the
+#  License at http://gridengine.sunsource.net/Gridengine_SISSL_license.html
+#
+#  Software provided under this License is provided on an "AS IS" basis,
+#  WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING,
+#  WITHOUT LIMITATION, WARRANTIES THAT THE SOFTWARE IS FREE OF DEFECTS,
+#  MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE, OR NON-INFRINGING.
+#  See the License for the specific provisions governing your rights and
+#  obligations concerning the Software.
+#
+#  The Initial Developer of the Original Code is: Sun Microsystems, Inc.
+#
+#  Copyright: 2001 by Sun Microsystems, Inc.
+#
+#  All Rights Reserved.
+#
+##########################################################################
+#___INFO__MARK_END__
+
+# define global variable in this namespace
+global check_name
+global check_category 
+global check_description 
+global check_needs
+global check_functions 
+global check_highest_level
+global check_init_level_procedure
+global check_root_access_needs
+global env
+
+set check_root_access_needs "no"
+
+# define a level initialization procedure:
+set check_init_level_procedure "qhost_init_level"
+
+# define test's name and run level descriptions
+set check_name            "qhost"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_highest_level   0
+set check_description(0)  "test qhost functionality"
+
+# define test's dependencies
+set check_needs           "init_core_system" 
+
+# setup and cleanup functions
+set check_setup_function qhost_setup
+set check_cleanup_function qhost_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "qhost_issue1306"
+lappend check_functions "test_issue132"
+lappend check_functions "test_issue132_h"
+lappend check_functions "test_issue132_j"
+lappend check_functions "test_issue132_u"
+lappend check_functions "test_issue132_l"
+lappend check_functions "test_issue132_F"
+
+lappend check_functions "test_issue245"
+lappend check_functions "qhost_l_with_multiple_attributes"
+
+proc qhost_init_level {} {
+   global CHECK_ACT_LEVEL
+
+   switch -- $CHECK_ACT_LEVEL {
+      "0" {
+         return 0
+      }
+   }
+
+   return -1  ;# no other level
+}
+
+# -------- local test procedures: initialization------------------------------
+
+proc qhost_setup {} {
+   global my_qhost_config_saved_value
+   get_config my_qhost_config_saved_value
+   set my_qhost_config(load_report_time) "00:02:00"
+   set my_qhost_config(max_unheard)      "00:08:00"
+   set_config_and_propagate my_qhost_config
+}
+
+proc qhost_cleanup {} {
+   global my_qhost_config_saved_value
+   reset_config_and_propagate my_qhost_config_saved_value
+}
+
+proc qhost_issue1306 {} {
+   set output [start_sge_bin "qhost" "-l bla"]
+   set expected_output [translate_macro MSG_SGETEXT_UNKNOWN_RESOURCE_S "bla"]
+
+   if {[string match "*$expected_output" [string trim $output]] == 0} {
+      ts_log_severe "qhost does not recognize unknown complex:\n$output"
+   }
+}
+
+proc test_issue132 {} {
+   global CHECK_USER CHECK_HAVE_TDOM
+   
+   # verify if we can perform the qstat -xml tests
+   if {$CHECK_HAVE_TDOM == 0} {
+      ts_log_config "The tDOM TCL package is not installed!\nWe cannot run the this test"
+      return
+   }
+
+   # qhost -q
+   set result [qhost_q_xml_parse xml]
+   set result [qhost_q_parse plain job]
+
+   # for each host test that the xml and plain outpus are the same
+   for {set ind 0} {$ind < $job} {incr ind 1} {
+      if {[string compare [string trim $xml(host$ind,name)] [string trim $plain(host$ind,name)]] != 0} {
+         ts_log_info "outputs do not match from plain and xml for \"name\":\nxml: [string trim $xml(host$ind,name)]\nplain: [string trim $plain(host$ind,name)]\nThis is issue #2948"
+         # We continue here
+      }
+
+
+      foreach attrib "arch_string num_proc load_avg mem_total mem_used swap_total swap_used" {
+         if {[string compare [string trim $xml(host$ind,$attrib)] [string trim $plain(host$ind,$attrib)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for $attrib:\nxml: [string trim $xml(host$ind,$attrib)]\nplain: [string trim $plain(host$ind,$attrib)]"
+            return
+         }
+      }
+
+      if {$ind > 0} {
+         if {[string compare [string trim $xml(host$ind,qtype_string)] [string trim $plain(host$ind,qtype_string)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for qtype_string."      
+            return
+         }      
+         # reserved/used/total  for GE > 62    OR only used/total for GE <= 61
+         if {[info exists xml(host$ind,slots_resv)]} {
+            set xml_slots_used_value [string trim "$xml(host$ind,slots_resv)/$xml(host$ind,slots_used)/$xml(host$ind,slots)"]
+         } else {
+            set xml_slots_used_value [string trim "$xml(host$ind,slots_used)/$xml(host$ind,slots)"]
+         }
+         set plain_slots_used_value [string trim $plain(host$ind,slots_used)]
+         if {[string compare $xml_slots_used_value $plain_slots_used_value] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for slots:\n\"$xml_slots_used_value\" != \"$plain_slots_used_value\"\n"
+            return
+         }      
+         if {[string compare [string trim $xml(host$ind,state_string)] [string trim $plain(host$ind,state_string)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for state_string."      
+            return
+         }      
+      }
+   }
+}
+
+proc test_issue132_h {} {
+   global CHECK_USER CHECK_HAVE_TDOM
+
+   # verify if we can perform the qstat -xml tests
+   if {$CHECK_HAVE_TDOM == 0} {
+      ts_log_config "The tDOM TCL package is not installed!\nWe cannot run the this test"
+      return
+   }
+
+   # qhost -h hostlist
+
+   #get arbitrary hostname
+   set host [host_conf_get_suited_hosts]
+   ts_log_fine "host $host selected for test"
+
+   set params "-h $host"
+   set result [qhost_xml_parse xml $params ]
+   set result [qhost_parse plain job $params ]
+
+   # for each host test that the xml and plain outpus are the same
+   for {set ind 0} {$ind < 2} {incr ind 1} {
+      if {[string compare [string trim $xml(host$ind,name)] [string trim $plain(host$ind,name)]] != 0} {
+         ts_log_info "outputs do not match from plain and xml for name.\nThis is issue #2948"      
+      }
+      if {[string compare [string trim $xml(host$ind,arch_string)] [string trim $plain(host$ind,arch_string)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for arch_string."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,num_proc)] [string trim $plain(host$ind,num_proc)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for num_proc."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,load_avg)] [string trim $plain(host$ind,load_avg)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for load_avg."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,mem_total)] [string trim $plain(host$ind,mem_total)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for mem_total."      
+         return
+      }      
+      if {[string compare [string trim $xml(host$ind,mem_used)] [string trim $plain(host$ind,mem_used)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for mem_used."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,swap_total)] [string trim $plain(host$ind,swap_total)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for swap_total."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,swap_used)] [string trim $plain(host$ind,swap_used)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for swap_used."      
+         return
+      }      
+   }
+}
+
+proc test_issue132_j {} {
+   global CHECK_USER CHECK_HAVE_TDOM
+   get_current_cluster_config_array ts_config
+
+   # verify if we can perform the qstat -xml tests
+   if {$CHECK_HAVE_TDOM == 0} {
+      ts_log_config "The tDOM TCL package is not installed!\nWe cannot run the this test"
+      return
+   }
+
+   set host [host_conf_get_suited_hosts]
+   ts_log_fine "host $host selected for test"
+
+   # qhost -j
+   # submit job
+   set jobid [submit_job "-l h=$host $ts_config(product_root)/examples/jobs/sleeper.sh"]
+   wait_for_jobstart $jobid "leeper" 60 1 1
+
+
+   set result1 [qhost_u_xml_parse xml "-j"]
+   set result1 [qhost_u_parse plain "-j"]  
+
+   # for each host test that the xml and plain outpus are the same
+   if {[string compare [string trim $xml(job,jobid)] [string trim $plain(job,jobid)]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for  jobid."      
+      return
+   }
+   if {[string compare [string range [string trimleft $xml(job,priority) "'"] 0 6] [string range $plain(job,priority) 0 6]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for priority."      
+      return
+   }
+   if {[string compare [string trim $xml(job,job_name)] [string trim $plain(job,job_name)]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for job_name."      
+      return
+   }
+   if {[string compare [string trim $xml(job,job_owner)] [string trim $plain(job,job_owner)]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for job_owner."      
+      return
+   }
+   if {[string compare [string trim $xml(job,job_state)] [string trim $plain(job,job_state)]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for job_state."      
+      return
+   }      
+   if {[string compare [string range $xml(job,queue_name) 0 9] [string range $plain(job,queue_name) 0 9]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for queue_name."      
+      return
+   }
+   if {[string compare [string trim $xml(job,pe_master)] [string trim $plain(job,pe_master)]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for pe_master."      
+      return
+   }      
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+proc test_issue132_u {} {
+   global CHECK_USER CHECK_HAVE_TDOM
+   get_current_cluster_config_array ts_config
+
+   # verify if we can perform the qstat -xml tests
+   if {$CHECK_HAVE_TDOM == 0} {
+      ts_log_config "The tDOM TCL package is not installed!\nWe cannot run the this test"
+      return
+   }
+
+   set host [host_conf_get_suited_hosts]
+   ts_log_fine "host $host selected for test"
+
+
+   # submit job
+   set jobid [submit_job "-l h=$host -u $CHECK_USER $ts_config(product_root)/examples/jobs/sleeper.sh"]
+   wait_for_jobstart $jobid "leeper" 60 1 1
+   
+   set params "-u $CHECK_USER"
+   set result1 [qhost_u_xml_parse xml $params]
+   set result1 [qhost_u_parse plain $params]      
+
+   # for each host test that the xml and plain outpus are the same
+   if {[string compare [string trim $xml(job,jobid)] [string trim $plain(job,jobid)]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for  jobid."      
+      return
+   }
+   if {[string compare [string range [string trimleft $xml(job,priority) "'"] 0 6] [string range $plain(job,priority) 0 6]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for priority."      
+      return
+   }
+   if {[string compare [string trim $xml(job,job_name)] [string trim $plain(job,job_name)]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for job_name."      
+      return
+   }
+   if {[string compare [string trim $xml(job,job_owner)] [string trim $plain(job,job_owner)]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for job_owner."      
+      return
+   }
+   if {[string compare [string trim $xml(job,job_state)] [string trim $plain(job,job_state)]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for job_state."      
+      return
+   }      
+   if {[string compare [string range $xml(job,queue_name) 0 9] [string range $plain(job,queue_name) 0 9]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for queue_name."      
+      return
+   }
+   if {[string compare [string trim $xml(job,pe_master)] [string trim $plain(job,pe_master)]] != 0} {
+      ts_log_severe "outputs do not match from plain and xml for pe_master."      
+      return
+   }      
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+proc test_issue132_l {} {
+   global CHECK_USER CHECK_HAVE_TDOM
+
+   # verify if we can perform the qstat -xml tests
+   if {$CHECK_HAVE_TDOM == 0} {
+      ts_log_config "The tDOM TCL package is not installed!\nWe cannot run the this test"
+      return
+   }
+
+   # qhost -l attr=value
+
+   #get arbitrary hostname
+   set host [host_conf_get_suited_hosts]
+   set arch [resolve_arch $host]
+
+   ts_log_fine "host $host selected for test"
+
+   set args "-l arch=$arch"
+   set results1 [qhost_xml_parse xml $args]
+   
+   set results1 [qhost_parse plain job $args]
+   
+   # for each host test that the xml and plain outpus are the same
+   for {set ind 0} {$ind < $job} {incr ind 1} {
+      if {[string compare [string trim $xml(host$ind,name)] [string trim $plain(host$ind,name)]] != 0} {
+         ts_log_info "outputs do not match from plain and xml for name.\nThis is issue #2948"      
+      }
+      if {[string compare [string trim $xml(host$ind,arch_string)] [string trim $plain(host$ind,arch_string)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for arch_string."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,num_proc)] [string trim $plain(host$ind,num_proc)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for num_proc."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,load_avg)] [string trim $plain(host$ind,load_avg)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for load_avg."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,mem_total)] [string trim $plain(host$ind,mem_total)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for mem_total."      
+         return
+      }      
+      if {[string compare [string trim $xml(host$ind,mem_used)] [string trim $plain(host$ind,mem_used)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for mem_used."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,swap_total)] [string trim $plain(host$ind,swap_total)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for swap_total."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,swap_used)] [string trim $plain(host$ind,swap_used)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for swap_used."      
+         return
+      }      
+   }
+}
+
+proc test_issue132_F {} {
+   global CHECK_USER CHECK_HAVE_TDOM
+
+   # verify if we can perform the qstat -xml tests
+   if {$CHECK_HAVE_TDOM == 0} {
+      ts_log_config "The tDOM TCL package is not installed!\nWe cannot run the this test"
+      return
+   }
+
+   set params "-F"
+   set result [qhost_xml_parse xml $params ]
+   set result [qhost_F_parse plain job $params ]
+
+   # for each host test that the xml and plain outpus are the same
+   for {set ind 0} {$ind < $job} {incr ind 1} {
+      if {[string compare [string trim $xml(host$ind,load_avg)] [string trim $plain(host$ind,load_avg)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for load_avg."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,arch_string)] [string trim $plain(host$ind,arch_string)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for arch_string."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,num_proc)] [string trim $plain(host$ind,num_proc)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for num_proc."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,mem_total)] [string trim $plain(host$ind,mem_total)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for mem_total."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,mem_used)] [string trim $plain(host$ind,mem_used)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for mem_used."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,swap_total)] [string trim $plain(host$ind,swap_total)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for swap_total."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,swap_used)] [string trim $plain(host$ind,swap_used)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for swap_used."      
+         return
+      }
+      if {$ind > 0} {
+         if {[string compare [string trim $xml(host$ind,arch)] [string trim $plain(host$ind,arch)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for arch."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,virtual_total)] [string trim $plain(host$ind,virtual_total)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for swap_used."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,load_avg)] [string trim $plain(host$ind,load_avg)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for swap_used."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,load_short)] [string trim $plain(host$ind,load_short)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for load_short."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,load_medium)] [string trim $plain(host$ind,load_medium)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for load_medium."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,load_long)] [string trim $plain(host$ind,load_long)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for load_long."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,mem_free)] [string trim $plain(host$ind,mem_free)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for mem_free."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,swap_free)] [string trim $plain(host$ind,swap_free)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for swap_free."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,virtual_free)] [string trim $plain(host$ind,virtual_free)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for virtual_free."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,mem_used)] [string trim $plain(host$ind,mem_used)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for mem_used."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,swap_used)] [string trim $plain(host$ind,swap_used)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for swap_used."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,virtual_used)] [string trim $plain(host$ind,virtual_used)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for virtual_used."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,cpu)] [string trim $plain(host$ind,cpu)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for cpu."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,np_load_avg)] [string trim $plain(host$ind,np_load_avg)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for np_load_avg."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,np_load_short)] [string trim $plain(host$ind,np_load_short)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for np_load_short."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,np_load_medium)] [string trim $plain(host$ind,np_load_medium)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for np_load_medium."      
+            return
+         }
+         if {[string compare [string trim $xml(host$ind,np_load_long)] [string trim $plain(host$ind,np_load_long)]] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for np_load_long."      
+            return
+         }
+      }
+   }
+}
+
+
+proc test_issue245 {} {
+   # qhost -l h=<hostname>
+
+   #get arbitrary hostname
+   set host [host_conf_get_suited_hosts]
+
+   ts_log_fine "host $host selected for test"
+
+   set args "-l h=$host"
+   set results1 [qhost_parse plain job $args]
+
+   if {[string first $host $plain(host0,name)] < 0} {
+      ts_log_severe "qhost -l h=<hostname> test failed, wrong or no hostname returned!"
+      return
+   }
+
+   if {[info exists plain(host1,name)]} {
+      ts_log_severe "qhost -l h=<hostname> test failed, more than one hostname returned!"
+      return
+   }
+
+   ts_log_fine "qhost -l h=hostname test ok!"
+}
+
+
+#****** display_test/qhost_l_with_multiple_attributes() ******
+# 
+#  NAME
+#     qhost_l_with_multiple_attributes 
+#
+#  SYNOPSIS
+#    This function will randomly choose 1 host names and one architecture
+#    from the list of exection hosts and run qhost -l h=host arch=host_arch
+#
+#  FUNCTION
+#     The function of this procedure is to test whether using the qhost -l with 
+#     h=host can still be used with other attribute/value pairs afterwards.
+#
+#  EXAMPLE
+#     qhost -l h=oin -l arch=sol-sparc64
+#*******************************
+proc qhost_l_with_multiple_attributes {} {
+   get_current_cluster_config_array ts_config
+
+   # get a list of all exection hosts
+   set exec_hosts $ts_config(execd_nodes)
+
+   # randomly choose a host name
+   set host [host_conf_get_suited_hosts]
+   set host_arch [resolve_arch $host]
+
+   # randomly choose an arch for a host other than our chosen host
+   set diff_arch ""
+   foreach exec $exec_hosts {
+      if {$host != $exec && [resolve_arch $exec] != $host_arch } {
+         set diff_arch [resolve_arch $exec]
+         break
+      }       
+   }
+
+   # set our qhost arguments and submit the request
+   set args "-l h=$host,arch=$host_arch"
+   ts_log_fine "submitting qhost $args"
+   set results [qhost_parse plain job $args]
+
+   # loop through the output from qhost and make sure that both the host and arch
+   # we selected above are listed in the output
+   set foundHost 0
+   set foundArch 0
+   for {set ind 0} {$ind < $job} {incr ind 1} {
+      if {[string compare [string trim $plain(host$ind,name)] $host] == 0} {
+         incr foundHost 1
+      }
+
+      if {[string compare [string trim $plain(host$ind,arch_string)] $host_arch] == 0} {
+         incr foundArch 1
+      }
+   }
+
+   # if not found give error as to why
+   if {$foundHost == 0} {
+      ts_log_severe "Expected to see host $host is qhost output, but it did not appear"
+      return
+   }
+
+   if {$foundArch == 0} {
+      ts_log_severe "Expected to see a host with arch $host_arch is qhost output, but it did not appear"     
+      return
+   }
+
+   if {$foundHost > 1} {
+      ts_log_severe "Expected to see only one line with host $host in qhost output"
+      return
+   }
+
+   if {$foundArch > 1} {
+      ts_log_severe "Expected to see only one line with arch $host_arch is qhost output"     
+      return
+   }
+
+   ts_log_fine "qhost -l h=hostname arch=$host_arch test ok!"
+
+
+   if {$diff_arch != ""} {
+      ts_log_fine "we found another host with different arch \"$diff_arch\" - check that no request is matching.."
+      # set our qhost arguments and submit the request
+      set args "-l h=$host,arch=$diff_arch"
+      ts_log_fine "submitting qhost $args"
+      set results [qhost_parse plain job $args]
+
+      # loop through the output from qhost and make sure that both the host and arch
+      # we selected above are listed in the output
+      set foundHost 0
+      set foundArch 0
+      for {set ind 0} {$ind < $job} {incr ind 1} {
+         if {[string compare [string trim $plain(host$ind,name)] $host] == 0} {
+            incr foundHost 1
+         }
+
+         if {[string compare [string trim $plain(host$ind,arch_string)] $diff_arch] == 0} {
+            incr foundArch 1
+         }
+      }
+      if {$foundHost != 0 || $foundArch != 0} {
+         ts_log_severe "Expected to see no qhost output for \"qhost $args\" !"     
+         return
+      }
+   }
+}

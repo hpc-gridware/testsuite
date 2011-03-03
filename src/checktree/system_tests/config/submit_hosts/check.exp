@@ -175,11 +175,7 @@ proc submit_hosts_permission_check {scenario host prg_exit_state output} {
       }
       "qconf" {
          set expected $NO_ADMIN_HOST
-         if {$ts_config(gridengine_version) <= 60} {
-            set check_exit_state 0
-         } else {
-            set check_exit_state 1
-         }
+         set check_exit_state 1
       }
    }
 

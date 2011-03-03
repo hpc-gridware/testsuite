@@ -213,11 +213,7 @@ proc shadowd_migrate_test {} {
       ts_log_fine "------------------------------------------------------------"
 
       if {$CHECK_ACT_LEVEL == 1} {
-         if {$ts_config(gridengine_version) <= 60} {
-            set CONTROLED_SHUTDOWN [translate_macro MSG_SHADOWD_CONTROLLEDSHUTDOWN_SSSU "*" "*" "*" "100"]
-         } else {
-            set CONTROLED_SHUTDOWN [translate_macro MSG_SHADOWD_CONTROLLEDSHUTDOWN_SU "*" "100"]
-         }
+         set CONTROLED_SHUTDOWN [translate_macro MSG_SHADOWD_CONTROLLEDSHUTDOWN_SU "*" "100"]
 
          ts_log_fine "restarting qmaster and shadowds with SGE_TEST_HEARTBEAT_TIMEOUT=600"
          shutdown_system_daemon $ts_config(master_host) "qmaster"

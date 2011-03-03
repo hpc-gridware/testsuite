@@ -62,6 +62,10 @@ set check_needs           "init_core_system"
 set check_setup_function "qdel_setup"
 set check_cleanup_function "qdel_cleanup"
 
+# number of lines in qdel help
+global qdel_help_lines
+set qdel_help_lines 11
+
 # define test's procedure order
 set check_functions ""
 lappend check_functions "qdel_help"                   ;# print this help
@@ -74,12 +78,22 @@ lappend check_functions "qdel_all"                   ;# delete all jobs of curre
 lappend check_functions "qdel_uall"                  ;# delete all jobs of all users
 lappend check_functions "qdel_user_list"             ;# delete all jobs of users specified in list
 lappend check_functions "qdel_force"                 ;# force action
-lappend check_functions "qdel_iz_125_case_2"         ;# implement Case 2) of iz 125 
-lappend check_functions "qdel_iz_125_case_3"         ;# implement Case 3) of iz 125 
-lappend check_functions "qdel_iz_125_case_4"         ;# implement Case 4) of iz 125 
-lappend check_functions "qdel_iz_125_case_5"         ;# implement Case 5) of iz 125 
+lappend check_functions "qdel_iz_125_case_2"         ;# implement Case 2) of iz 125
+lappend check_functions "qdel_iz_125_case_3"         ;# implement Case 3) of iz 125
+lappend check_functions "qdel_iz_125_case_4"         ;# implement Case 4) of iz 125
+lappend check_functions "qdel_iz_125_case_5"         ;# implement Case 5) of iz 125
 lappend check_functions "qdel_delete_task_range"     ;# implement task range deletion
 lappend check_functions "qdel_delete_large_array"    ;# implement large array deletion
+
+lappend check_functions "qdel_delete_by_job_name"
+lappend check_functions "qdel_delete_by_job_wildcard1"
+lappend check_functions "qdel_delete_by_job_wildcard2"
+lappend check_functions "qdel_delete_by_job_wildcard3"
+lappend check_functions "qdel_delete_by_job_wildcard4"
+lappend check_functions "qdel_delete_by_job_wildcard5"
+lappend check_functions "qdel_delete_by_job_wildcard6"
+
+lappend check_functions "qdel_wc_job_range_list"
 
 proc qdel_init_level {} {
   global CHECK_ACT_LEVEL
@@ -153,11 +167,7 @@ proc qdel_translate_message {msg {p1 ""} {p2 ""} {p3 ""}} {
          set ret [translate_macro MSG_JOB_REGDELTASK_SUU $p1 $p2 $p3]
       }
       REGISTERED_JOB {
-         if {$ts_config(gridengine_version) >= 62} {
-            set ret [translate_macro MSG_JOB_REGDELX_SSU $p1 "job" $p2]
-         } else {
-            set ret [translate_macro MSG_JOB_REGDELJOB_SU $p1 $p2]
-         }
+         set ret [translate_macro MSG_JOB_REGDELX_SSU $p1 "job" $p2]
       }
       DELETED_TASK {
          set ret [translate_macro MSG_JOB_DELETETASK_SUU $p1 $p2 $p3]
@@ -166,11 +176,7 @@ proc qdel_translate_message {msg {p1 ""} {p2 ""} {p3 ""}} {
          set ret [translate_macro MSG_JOB_DELETETASKS_SSU $p1 $p2 $p3]
       }
       DELETED_JOB {
-         if {$ts_config(gridengine_version) >= 62} {
-            set ret [translate_macro MSG_JOB_DELETEX_SSU $p1 "job" $p2]
-         } else {
-            set ret [translate_macro MSG_JOB_DELETEJOB_SU $p1 $p2]
-         }
+         set ret [translate_macro MSG_JOB_DELETEX_SSU $p1 "job" $p2]
       }
       DOESNOTEXIST_JOB {
          set ret [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "job" $p1]
@@ -996,12 +1002,8 @@ proc qdel_delete_unknown_jobid {} {
 
    # add a unknown jobid
    set unknown_jobid [expr [lindex $job_list [expr [llength $job_list] - 1]] + 1]
-   lappend job_list $unknown_jobid 
-   if {$ts_config(gridengine_version) == 53} {
-      set default_output [translate_macro MSG_SGETEXT_DOESNOTEXIST_SU "job" $unknown_jobid ]  
-   } else {
-      set default_output [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "job" $unknown_jobid]  
-   }
+   lappend job_list $unknown_jobid
+   set default_output [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "job" $unknown_jobid]
 
    qdel_delete_unknown_jobid_proc $job_list $default_output
 
@@ -1012,11 +1014,7 @@ proc qdel_delete_unknown_jobid {} {
    set last_jobid "[lindex $job_list end]"
    set unknown_taskid 5
    set job_list [lreplace $job_list end end "$last_jobid.$unknown_taskid"]
-   if {$ts_config(gridengine_version) == 53} {
-      set default_output [translate_macro MSG_SGETEXT_DOESNOTEXISTTASK_UU $last_jobid $unknown_taskid] 
-   } else {
-      set default_output [translate_macro MSG_SGETEXT_DOESNOTEXISTTASK_SU $last_jobid $unknown_taskid] 
-   }
+   set default_output [translate_macro MSG_SGETEXT_DOESNOTEXISTTASK_SU $last_jobid $unknown_taskid]
    qdel_delete_unknown_jobid_proc $job_list $default_output
    delete_job $last_jobid
 
@@ -1027,11 +1025,7 @@ proc qdel_delete_unknown_jobid {} {
    set last_jobid [lindex $job_list end]
    set empty_taskrange "5-10:2"
    set job_list [lreplace $job_list end end "$last_jobid.$empty_taskrange"]
-   if {$ts_config(gridengine_version) == 53} {
-      set default_output [translate_macro MSG_SGETEXT_DOESNOTEXISTTASKRANGE_UUUU $last_jobid "5" "10" "2"]
-   } else {
-      set default_output [translate_macro MSG_SGETEXT_DOESNOTEXISTTASKRANGE_SUUU $last_jobid "5" "9" "2"]
-   }
+   set default_output [translate_macro MSG_SGETEXT_DOESNOTEXISTTASKRANGE_SUUU $last_jobid "5" "9" "2"]
    qdel_delete_unknown_jobid_proc $job_list $default_output
    delete_job $last_jobid 1
 }
@@ -1166,11 +1160,7 @@ proc qdel_all {} {
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   if {$ts_config(gridengine_version) == 53} {
-      set all_args "all"
-   } else {
-      set all_args "'*'"
-   }
+   set all_args "'*'"
 
    # submit jobs to delete
    set job_list_user1 [submit_testjobs] 
@@ -1321,11 +1311,7 @@ proc qdel_uall {} {
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   if {$ts_config(gridengine_version) == 53} {
-      set uall_args "-uall"
-   } else {
-      set uall_args "-u '*'"
-   }
+   set uall_args "-u '*'"
 
    # submit jobs to delete
    set job_list_user1 [submit_testjobs]
@@ -1754,3 +1740,119 @@ proc qdel_delete_large_array {} {
 
 # ------------------------------------------
 
+#****** check.60/delete_by_job_name() ******************************************
+#  NAME
+#     delete_by_job_name() -- test helper function for qdel test
+#
+#  SYNOPSIS
+#     delete_by_job_name { submit_name delete_name } 
+#
+#  FUNCTION
+#     1) submit jobs with -N $submit_name
+#     2) submit jobs with name -N "no_delete"
+#     3) do qdel $delete_name
+#     4) check that -N "no_delete" jobs still available
+#     5) check that -N $submit_name jobs are done
+#
+#  INPUTS
+#     submit_name - name of jobs to submit (which are deleted by qdel $delete_name)
+#     delete_name - argument of qdel command
+#
+#*******************************************************************************
+proc delete_by_job_name {submit_name delete_name} {
+   global ts_config
+
+   set testjob_count 2  ;# 2*2*2 = 8 Jobs
+   set not_del_name "no_delete"
+
+   set job_del_list {}
+   set job_alive_list {}
+   for {set i 0} {$i < $testjob_count} {incr i} {
+      # submit jobs with name "test_job" 
+      set job_list [submit_testjobs "" "" 2 "" 1 $submit_name]
+      foreach job $job_list {
+         lappend job_del_list $job
+      }
+      # submit jobs with name "no_delete"
+      set job_list [submit_testjobs "" "" 2 "" 1 $not_del_name]
+      foreach job $job_list {
+         lappend job_alive_list $job
+      }
+   }
+
+   # Now delete the jobs with name "$delete_name"
+   set output [start_sge_bin "qdel" "\"$delete_name\""]
+   ts_log_fine "qdel \"$delete_name\""
+   ts_log_fine $output
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qdel $delete_name failed:\n$output"
+   }
+
+   # Wait for deletion of correct jobs
+   foreach job $job_del_list {
+      wait_for_jobend $job $submit_name 60 0 1
+   }
+ 
+   # Other jobs must still be here
+   get_extended_job_info ""
+   foreach job $job_alive_list {
+      if {[info exists job_info($job,state)]} {
+         ts_log_fine "job $job (name=\"$job_info($job,name)\") has state \"$job_info($job,state)\""
+      } else {
+         ts_log_severe "job $job not found after deleting!"
+      }
+   }
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+
+proc qdel_delete_by_job_name {} {
+   delete_by_job_name "test_job" "test_job"
+}
+proc qdel_delete_by_job_wildcard1 {} {
+   delete_by_job_name "test_job" "t*_job"
+}
+proc qdel_delete_by_job_wildcard2 {} {
+   delete_by_job_name "test_job" "*j*"
+}
+proc qdel_delete_by_job_wildcard3 {} {
+   delete_by_job_name "test_job" "*job"
+}
+proc qdel_delete_by_job_wildcard4 {} {
+   delete_by_job_name "test_job" "test_*"
+}
+proc qdel_delete_by_job_wildcard5 {} {
+   delete_by_job_name "test_job" "tes?_job"
+}
+proc qdel_delete_by_job_wildcard6 {} {
+   delete_by_job_name "test_job" "????????"
+}
+
+proc qdel_wc_job_range_list {} {
+   global ts_config CHECK_USER CHECK_ACT_LEVEL
+
+   if {$CHECK_ACT_LEVEL == 0} {
+      set arguments "-N job1 -o /dev/null -j y"
+      set job_id1 [submit_job "$arguments $ts_config(product_root)/examples/jobs/sleeper.sh 100"]
+      set arguments "-N job2 -o /dev/null -j y"
+      set job_id2 [submit_job "$arguments $ts_config(product_root)/examples/jobs/sleeper.sh 100"]
+      set arguments "-N job3 -o /dev/null -j y"
+      set job_id3 [submit_job "$arguments $ts_config(product_root)/examples/jobs/sleeper.sh 100"]
+      set arguments "-N job4 -o /dev/null -j y"
+      set job_id4 [submit_job "$arguments $ts_config(product_root)/examples/jobs/sleeper.sh 100"]
+      wait_for_jobstart $job_id4 "job4" 60 1 1
+
+      # Now delete them using wc_job_range_list: job_id1,job2,job3 job_id4
+      set output [start_sge_bin "qdel" "$job_id1,job2,job3 $job_id4"]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "qdel failed:\n$output"
+         return
+      }
+
+      # Now wait 10 seconds for all jobs to finish.
+      # If they were not deleted correctly, they would run for 100 seconds.
+      # Errors (jobs still running) are generated in wait_for_end_of_all_jobs.
+      wait_for_end_of_all_jobs 10
+   }
+}

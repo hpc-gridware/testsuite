@@ -7,6 +7,12 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+JG-2011-03-03-0: Cleanup:    remove testsuite code for outdated versions, join
+                             version dependent files into one version
+                             independent file
+                 Issue:      TS-332
+                 Review:     DG (TS-3)
+
 JG-2011-02-28-0: Enhancem.:  Add test_sge_string module test.
 
 EB-2011-02-27-0: Bugfix:     - fixed TS issues for darwin-x64

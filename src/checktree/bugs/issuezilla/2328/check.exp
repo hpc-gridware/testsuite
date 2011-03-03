@@ -1,0 +1,288 @@
+#!/vol2/TCL_TK/glinux/bin/expect
+#___INFO__MARK_BEGIN__
+##########################################################################
+#
+#  The Contents of this file are made available subject to the terms of
+#  the Sun Industry Standards Source License Version 1.2
+#
+#  Sun Microsystems Inc., March, 2001
+#
+#
+#  Sun Industry Standards Source License Version 1.2
+#  =================================================
+#  The contents of this file are subject to the Sun Industry Standards
+#  Source License Version 1.2 (the "License"); You may not use this file
+#  except in compliance with the License. You may obtain a copy of the
+#  License at http://gridengine.sunsource.net/Gridengine_SISSL_license.html
+#
+#  Software provided under this License is provided on an "AS IS" basis,
+#  WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING,
+#  WITHOUT LIMITATION, WARRANTIES THAT THE SOFTWARE IS FREE OF DEFECTS,
+#  MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE, OR NON-INFRINGING.
+#  See the License for the specific provisions governing your rights and
+#  obligations concerning the Software.
+#
+#  The Initial Developer of the Original Code is: Sun Microsystems, Inc.
+#
+#  Copyright: 2001 by Sun Microsystems, Inc.
+#
+#  All Rights Reserved.
+#
+##########################################################################
+#___INFO__MARK_END__
+
+# define global variable in this namespace
+global check_name 
+global check_category 
+global check_description 
+global check_needs
+global check_functions 
+global check_highest_level
+global check_init_level_procedure
+global check_root_access_needs
+
+set check_root_access_needs "yes"
+
+# define a level initialization procedure:
+set check_init_level_procedure "issue_2328_init_level"
+
+# define test's name and run level descriptions
+set check_name            "issue_2328"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_highest_level   0
+set check_description(0)  "Check test for IZ 2328"
+
+# define test's dependencies
+set check_needs           "init_core_system" 
+
+# setup and cleanup functions
+set check_setup_function issue_2328_setup
+set check_cleanup_function issue_2328_cleanup
+
+# define test's procedure order
+set check_functions ""
+lappend check_functions "issue_2328"
+
+proc issue_2328_init_level {} {
+   global CHECK_ACT_LEVEL
+
+   switch -- $CHECK_ACT_LEVEL {
+      "0" {
+         return 0
+      }
+   }
+
+   return -1  ;# no other level
+}
+
+proc issue_2328_setup {} {
+   global ts_config max_queue_count 
+   global issue_2328_complex_backup
+
+   get_complex issue_2328_complex_backup
+   # 1. Setup the complex FOO1-F0010
+   set tmp_complex(F001) "F001 INT  <= YES YES 0 0"
+   set tmp_complex(F002) "F002 INT  <= YES YES 0 0"
+   set tmp_complex(F003) "F003 INT  <= YES YES 0 0"
+   set tmp_complex(F004) "F004 INT  <= YES YES 0 0"
+   set tmp_complex(F005) "F005 INT  <= YES YES 0 0"
+   set tmp_complex(F006) "F006 INT  <= YES YES 0 0"
+   set tmp_complex(F007) "F007 INT  <= YES YES 0 0"
+   set tmp_complex(F008) "F008 INT  <= YES YES 0 0"
+   set tmp_complex(F009) "F009 INT  <= YES YES 0 0"
+   set tmp_complex(F0010) "F0010 INT  <= YES YES 0 0"
+   set_complex tmp_complex
+   
+   # Modify the scheduler configuration.
+   # increase the scheduler interval to be able to monitor
+   # a specific scheduling run (the *first* one after enabling queues),
+   # without using qconf -tsm (which has a too high performance overhead
+   # by writing to schedd_runlog).
+   set mysched_config(params) "PROFILE=true"
+   set mysched_config(max_reservation) "1000"
+   set mysched_config(schedule_interval) "0:0:30"
+   mod_schedd_config mysched_config
+
+   # Modify the global cluster 
+   set my_cluster_conf(complex_values) "F001=100,F002=100,F003=100,F004=100,F005=100,\
+                                        F006=100,F007=100,F008=100,F009=100,F0010=100"
+   set_exechost my_cluster_conf "global"
+
+   # Set up 80 queues for 5 hosts - 400 queues
+   # We do it here so as not to affect the rest of qsub tests.
+   set max_queue_count "80"
+   for {set queue_counter 1} {$queue_counter <= $max_queue_count} {incr queue_counter} {
+      set queue_name "qsub_ts$queue_counter.q"
+      set queue_conf(slots) 10
+      set result [add_queue $queue_name "@allhosts" queue_conf 1]
+      if {$result < 0} {
+         ts_log_severe "add qsub_ts_$queue_counter.q failed:\n$result"
+      }
+   }
+   
+   # Check that we created $max_queue_count queues....
+   # We subtract 1 for all.q, which we don't want to count
+   set queues_made [llength [start_sge_bin "qconf" "-sql"]]
+   set number_queues_made [expr $queues_made - 1]
+   ts_log_fine "we created $number_queues_made queues and we wanted $max_queue_count queues \n"
+   if {$number_queues_made != $max_queue_count} {
+      ts_log_severe "we did not make all the required queues"
+   }
+   
+   # Create 5 projects
+   for {set prj_counter 1} {$prj_counter <= 5} {incr prj_counter} {
+      add_project "Project$prj_counter"
+   }
+
+   # 4. Add rqs a_new_rqs
+   set rqs_name              "perf_rqs"
+   set rules                  ""
+   lappend rules              "projects {*} to F001=1,F002=1,F003=1,F004=1,F005=1, \
+                              F006=1,F007=1,F008=1,F009=1,F0010=1"             
+   set rqs_charray($rqs_name,limit)   "$rules"
+   set rqs_charray($rqs_name,enabled) "true"
+   set rqs_charray($rqs_name,description) "global"
+   add_rqs rqs_charray
+}
+
+proc issue_2328_cleanup {} {
+   global ts_config max_queue_count
+   global issue_2328_complex_backup
+
+   delete_all_jobs 0
+   wait_for_end_of_all_jobs
+
+   del_rqs "perf_rqs" 
+
+   # Delete all the new queues we created earlier
+   for {set queue_counter 1} {$queue_counter <= $max_queue_count} {incr queue_counter} {
+      del_queue "qsub_ts$queue_counter.q" "" 1 1
+   }
+
+   # Delete the 5 projects
+   for {set prj_counter 1} {$prj_counter <= 5} {incr prj_counter} {
+      del_project "Project$prj_counter"
+   }
+
+   # Clear global cluster of F** complexes
+   set my_cluster_conf(complex_values) "NONE"
+   set_exechost my_cluster_conf "global"
+   
+   # reset the complex variables
+   reset_complex issue_2328_complex_backup
+   unset issue_2328_complex_backup
+
+   # Reset the scheduler configuration
+   reset_schedd_config
+}
+
+#************************************************************
+#  NAME
+#     issue_2328() -- Testcase for  IZ 2328.
+#
+#  SYNOPSIS
+#
+#   0. Setup, cleanup in check_qsub_setup check_qsub_cleanup
+#  
+#   1. qmod -d "*"
+#
+#   2. Submit 1000 jobs like this
+# 
+#    for i=1-10
+#      for j=1-5
+#         for k=1-20
+#            qsub -R y -P Project{j} -l F00{i}=1 -b y /bin/sleep 5
+#
+#   3. qmod -e "*"
+#
+#   4. Watch the "job dispatching took" lines in sge_schedd(8) messages file
+#
+#  FUNCTION
+#     Check if IZ 2328 has been fixed.
+#  INPUTS
+#
+#*******************************************************************************
+proc issue_2328 {} {
+   global ts_config
+
+   # For this test we need at least 5 hosts
+   set number_of_execds [llength $ts_config(execd_nodes)]
+   if {$number_of_execds < 5} {
+      ts_log_config "Need at least 5 hosts for this test. We only have $number_of_execds"
+      return
+   }
+
+   set host $ts_config(master_host)
+   set sched_messg_file "[get_qmaster_spool_dir]/messages"
+
+   # Disable all queues first
+   ts_log_fine "disable queues ..."
+   set qmod_result [start_sge_bin "qmod" "-d '*'"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "disabling all queues failed:\n$qmod_result"
+      return
+   }
+
+   set i_max 10
+   set j_max 5
+   set k_max 20
+
+   # Submit the jobs now:
+   #    i to 10 (F001..F010),
+   #    j to 5 (Project1..Project5), 
+   #    k to 20 (20 similar jobs each)
+   # do submission on the master host and hope it is fastest there
+   ts_log_fine "submitting [expr $i_max * $j_max * $k_max] jobs"
+   set common_args "-R y -o /dev/null -j y -b y /bin/sleep 5"
+   for {set i 1} { $i <= $i_max} {incr i} {
+      for {set j 1} { $j <= $j_max} {incr j} {
+         for {set k 1} { $k <= $k_max} {incr k} {
+            if {![quick_submit_job "-P Project$j -l F00$i=1 $common_args" $ts_config(master_host)]} {
+               # error has been raised in quick_submit_job
+               # no point in continuing with not all jobs submitted
+               return
+            }
+         }
+      }
+   }
+
+   # tail -f schedd messages file
+   set pattern_scheduled_in "scheduled in"
+   set pattern_schedd_run_took "schedd run took"
+   init_logfile_wait $ts_config(master_host) $sched_messg_file
+
+   # wait for the end of a scheduling run,
+   # then we have 30 seconds time to enable the queues
+   # until the next schedd run starts
+   set result [logfile_wait $pattern_schedd_run_took 60 0]
+
+   # Enable all queues now
+   ts_log_fine "enable queues now ..."
+   set qmod_result [start_sge_bin "qmod" "-e '*'"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "enabling all queues failed:\n$qmod_result"
+      return
+   }
+
+   # wait for the next scheduling run and for the scheduling time
+   set result [logfile_wait $pattern_scheduled_in 230 0]
+
+   # shutdown tail -f
+   close_logfile_wait
+
+   # find dispatching time in output
+   set dispatching_time -1
+   foreach line [split $result "\n"] {
+      if {[string first $pattern_scheduled_in $line] >= 0} {
+         set dispatching_time [lindex $line 4]
+         break
+      }
+   }
+
+   # output and error handling
+   if {$dispatching_time == -1} {
+      ts_log_severe "didn't find dispatching time in scheduler messages file:\n$result"
+   } else {
+      ts_log_fine "job dispatching took $dispatching_time s"
+   }
+}

@@ -86,30 +86,57 @@
 proc reset_schedd_config {} {
    get_current_cluster_config_array ts_config
 
-   set default_array(algorithm)                  "default"
-   set default_array(schedule_interval)          "0:0:10"
-   set default_array(maxujobs)                   "0"
-   set default_array(job_load_adjustments)       "np_load_avg=0.15"
-   set default_array(load_adjustment_decay_time) "0:7:30"
-   set default_array(load_formula)               "np_load_avg"
-   if {$ts_config(gridengine_version) >= 62} {
-      set default_array(schedd_job_info)            "false"
-   } else {
-      set default_array(schedd_job_info)            "true"
-   }
+   set default_array(algorithm)                       "default"
+   set default_array(schedule_interval)               "0:0:10"
+   set default_array(maxujobs)                        "0"
+   set default_array(job_load_adjustments)            "np_load_avg=0.15"
+   set default_array(load_adjustment_decay_time)      "0:7:30"
+   set default_array(load_formula)                    "np_load_avg"
+   set default_array(schedd_job_info)                 "false"
 
-# this is sgeee
-   if { [string compare $ts_config(product_type) "sgeee"] == 0 } {
-      set default_array(halftime)                   "168"
-      set default_array(usage_weight_list)          "cpu=1,mem=0,io=0"
-      set default_array(compensation_factor)        "5"
-      set default_array(weight_tickets_functional)  "0"
-      set default_array(weight_tickets_share)       "0"
-   }
+   set default_array(flush_submit_sec)                "0"
+   set default_array(flush_finish_sec)                "0"
+   set default_array(params)                          "none"
+   set default_array(reprioritize_interval)           "00:00:40"
+
+   set default_array(halftime)                        "168"
+   set default_array(usage_weight_list)               "cpu=1,mem=0,io=0"
+   set default_array(compensation_factor)             "5"
+   set default_array(weight_user)                     "0.25"
+   set default_array(weight_project)                  "0.25"
+   set default_array(weight_department)               "0.25"
+   set default_array(weight_job)                      "0.25"
+   set default_array(weight_tickets_functional)       "0"
+   set default_array(weight_tickets_share)            "0"
+   set default_array(share_override_tickets)          "true"
+   set default_array(share_functional_shares)         "true"
+   set default_array(max_functional_jobs_to_schedule) "200"
+   set default_array(report_pjob_tickets)             "true"
+   set default_array(max_pending_tasks_per_job)       "50"
+   set default_array(halflife_decay_list)             "none"
+   set default_array(policy_hierarchy)                "OFS"
+
+   set default_array(weight_ticket)                   "0.010000"
+   set default_array(weight_waiting_time)             "0.000000"
+   set default_array(weight_deadline)                 "3600000"
+   set default_array(weight_urgency)                  "0.100000"
+   set default_array(weight_priority)                 "1.000000"
+   set default_array(max_reservation)                 "0"
+   set default_array(default_duration)                "INFINITY"
 
    vdep_set_sched_conf_defaults default_array
 
    return [set_schedd_config default_array]
+}
+
+# STUB for versiono dependent scheduler config settings
+# put it into sge_sched_conf.<version>.tcl
+proc vdep_set_sched_conf_defaults {change_array} {
+#   get_current_cluster_config_array ts_config
+#   upvar $change_array chgar
+
+#   set chgar(flush_submit_sec)        "0"
+#   set chgar(flush_finish_sec)        "0"
 }
 
 #                                                             max. column:     |
@@ -190,11 +217,6 @@ proc set_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {ra
 
   upvar $change_array chgar
 
-   # Grid Engine 5.3 doesn't have qconf -Msconf
-   if {$ts_config(gridengine_version) == 53} {
-      set fast_add 0
-   }
-
   # Modify sched from file?
    if {$fast_add} {
       get_schedd_config old_config $on_host $as_user
@@ -215,15 +237,11 @@ proc set_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {ra
 
       set vi_commands [build_vi_command chgar]
       set CHANGED_SCHEDD_CONFIG [translate_macro MSG_SCHEDD_CHANGEDSCHEDULERCONFIGURATION ]
-      if {$ts_config(gridengine_version) == 53} {
-         set NOTULONG "blah blah 53 does not have MSG_OBJECT_VALUENOTULONG_S"
+      set NOTULONG [translate_macro MSG_OBJECT_VALUENOTULONG_S "*" ]
+      if {[is_61AR]} {
+         set ADDNOTULONG "61AR branch does not have MSG_MUST_BE_POSITIVE_VALUE_S"
       } else {
-         set NOTULONG [translate_macro MSG_OBJECT_VALUENOTULONG_S "*" ]
-         if {[is_61AR]} {
-            set ADDNOTULONG "61AR branch does not have MSG_MUST_BE_POSITIVE_VALUE_S"
-         } else {
-            set ADDNOTULONG [translate_macro MSG_MUST_BE_POSITIVE_VALUE_S "*"]
-         }
+         set ADDNOTULONG [translate_macro MSG_MUST_BE_POSITIVE_VALUE_S "*"]
       }
       set master_arch [resolve_arch $ts_config(master_host)]
       set result [handle_vi_edit "$ts_config(product_root)/bin/$master_arch/qconf" "-msconf" $vi_commands $CHANGED_SCHEDD_CONFIG $NOTULONG $ADDNOTULONG]
@@ -275,10 +293,8 @@ proc set_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {ra
 proc set_schedd_config_error {result tmpfile raise_error} {
    get_current_cluster_config_array ts_config
    # build up needed vars
-   if {$ts_config(gridengine_version) > 53} {
-      set messages(index) "-1"
-      set messages(-1)  [translate_macro MSG_OBJECT_VALUENOTULONG_S "*" ]
-   }
+   set messages(index) "-1"
+   set messages(-1)  [translate_macro MSG_OBJECT_VALUENOTULONG_S "*" ]
 
    set ret 0
    # now evaluate return code and raise errors

@@ -95,13 +95,7 @@ proc bigdecimal_setup {} {
    set Prj_Name2 "hedeby"
    set Queue_Name1 "et.q"
    set Queue_Name2 "sust.q"
-   if { $ts_config(gridengine_version) > 61 || [is_61AR] } {
-      set AR_Name "sge_ar"
-   } else {
-      if {[info exists AR_Name]} {
-         unset AR_Name
-      }
-   }
+   set AR_Name "sge_ar"
    get_user_list user_list
    if { [lsearch -exact $user_list $CHECK_FIRST_FOREIGN_SYSTEM_USER] == -1 } {
       add_user $CHECK_FIRST_FOREIGN_SYSTEM_USER

@@ -110,11 +110,7 @@ proc issue_140_check {} {
 
    ts_log_fine "check if master and scheduler are running ..."
    set back [are_master_and_scheduler_running $ts_config(master_host) [get_qmaster_spool_dir]]
-   if {$ts_config(gridengine_version) < 62} {
-      set expected_back 3
-   } else {
-      set expected_back 2
-   }
+   set expected_back 2
    if {$back != $expected_back} {
       ts_log_severe "are_master_and_scheduler_running returns $back"
    }   

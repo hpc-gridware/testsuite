@@ -343,10 +343,8 @@ proc get_calendar_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
          add_message_to_container messages -6 $DISABLED_YEAR
          set DISABLED_WEEK [translate_macro MSG_PARSE_ERRORINDISABLEDWEEKOFCALENDAR_SS "$obj_name" "*"]
          add_message_to_container messages -7 $DISABLED_WEEK
-         if {$ts_config(gridengine_version) >= 62} {
-            set AR_REJECTED [translate_macro MSG_PARSE_MOD2_REJECTED_DUE_TO_AR_SSU "*" "*" "*"]
-            add_message_to_container messages -8 $AR_REJECTED
-         }
+         set AR_REJECTED [translate_macro MSG_PARSE_MOD2_REJECTED_DUE_TO_AR_SSU "*" "*" "*"]
+         add_message_to_container messages -8 $AR_REJECTED
       }
       "del" {
          # references: queue

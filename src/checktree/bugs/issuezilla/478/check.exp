@@ -89,13 +89,8 @@ proc issue_478_check {} {
    set master_arch [resolve_arch $ts_config(master_host)]
    set qstat_command "$ts_config(product_root)/bin/$master_arch/qstat"
 
-   if {$ts_config(gridengine_version) == 53} {
-      set grep_pattern "Predecessor Jobs:"
-      set formatstring "       Predecessor Jobs: %d, %s"
-   } else {
-      set grep_pattern "Predecessor Jobs (request):"
-      set formatstring "       Predecessor Jobs (request): %d, %s"
-   }
+   set grep_pattern "Predecessor Jobs (request):"
+   set formatstring "       Predecessor Jobs (request): %d, %s"
 
    # qsub -h $SGE_ROOT/examples/jobs/sleeper.sh 120
    set qsub_arguments "$h_option $job_script"

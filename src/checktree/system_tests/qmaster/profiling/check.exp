@@ -1,0 +1,315 @@
+#!/vol2/TCL_TK/glinux/bin/expect
+#___INFO__MARK_BEGIN__
+##########################################################################
+#
+#  The Contents of this file are made available subject to the terms of
+#  the Sun Industry Standards Source License Version 1.2
+#
+#  Sun Microsystems Inc., March, 2001
+#
+#
+#  Sun Industry Standards Source License Version 1.2
+#  =================================================
+#  The contents of this file are subject to the Sun Industry Standards
+#  Source License Version 1.2 (the "License"); You may not use this file
+#  except in compliance with the License. You may obtain a copy of the
+#  License at http://gridengine.sunsource.net/Gridengine_SISSL_license.html
+#
+#  Software provided under this License is provided on an "AS IS" basis,
+#  WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING,
+#  WITHOUT LIMITATION, WARRANTIES THAT THE SOFTWARE IS FREE OF DEFECTS,
+#  MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE, OR NON-INFRINGING.
+#  See the License for the specific provisions governing your rights and
+#  obligations concerning the Software.
+#
+#  The Initial Developer of the Original Code is: Sun Microsystems, Inc.
+#
+#  Copyright: 2001 by Sun Microsystems, Inc.
+#
+#  All Rights Reserved.
+#
+##########################################################################
+#___INFO__MARK_END__
+
+# define global variable in this namespace
+global check_name 
+global check_category 
+global check_description 
+global check_needs
+global check_functions 
+global check_highest_level
+global check_init_level_procedure
+global check_root_access_needs
+global env
+
+set check_root_access_needs "yes"
+
+# define a level initialization procedure:
+set check_init_level_procedure "qmaster_profiling_init_level"
+
+# define test's name and run level descriptions
+set check_name            "qmaster_profiling"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_highest_level   0
+set check_description(0)  "check qmaster profiling"
+
+# define test's dependencies
+set check_needs           "init_core_system" 
+
+# setup and cleanup functions
+set check_setup_function qmaster_profiling_setup
+set check_cleanup_function qmaster_profiling_cleanup
+
+# define test's procedure order
+set check_functions ""
+lappend check_functions "qmaster_profiling_dynamic"
+lappend check_functions "qmaster_profiling_restart"
+
+proc qmaster_profiling_init_level {} {
+   global CHECK_ACT_LEVEL
+
+   switch -- $CHECK_ACT_LEVEL {
+      "0" { 
+         return 0
+      } 
+   } 
+
+   return -1  ;# no other level 
+}
+
+# -------- local test procedures: initialization------------------------------
+
+proc qmaster_profiling_setup  {} {
+   global ts_config
+   global global_config
+
+   # backup global config - we'll change it
+   ts_log_fine "backup global config"
+   get_config global_config
+}
+
+proc qmaster_profiling_cleanup  {} {
+   global ts_config
+   global global_config
+
+   ts_log_fine "reset global config"
+   reset_config global_config
+}
+
+proc qmaster_profiling_monitor {info_text id expected_prof {tail_timeout 70}} {
+   global ts_config
+
+   # some information output
+   switch -exact $expected_prof {
+      NONE {
+         ts_log_fine "expecting that no profiling message shows up the next $tail_timeout s"
+      }
+      CONSUME {
+         ts_log_fine "consuming messages for $tail_timeout s"
+      }
+      default {
+         ts_log_fine "expecting $expected_prof messages showing up within the next $tail_timeout s"
+      }
+   }
+
+   # initialize counters for profiling messages
+   set prof(PROF_SIGNAL) 0
+   set prof(PROF_LISTENER) 0
+   set prof(PROF_DELIVER) 0
+   set prof(PROF_TEVENT) 0
+
+   # this is the spawn id of our tail to qmaster messages file
+   set sp_id [lindex $id 1]
+
+   # the time period we wait for messages
+   set now [clock seconds]
+   set end [expr $now + $tail_timeout]
+
+   # wait until timeout
+   while {$now < $end} {
+      set timeout 1
+      expect_user {
+         -i $sp_id timeout {
+            # output how long we'll still wait
+            ts_log_fine "[expr $end -$now]\r"
+         }
+         -i $sp_id full_buffer {
+            ts_log_severe "buffer overflow, please increase CHECK_EXPECT_MATCH_MAX_BUFFER"
+         }
+         -i $sp_id eof {
+            ts_log_severe "unexpected eof"
+         }
+         -i $sp_id "?*\n" {
+            # parse new lines in messages file
+            #ts_log_fine "received new line in messages file"
+            foreach line [ string trim [split $expect_out(0,string) "\n"]] {
+               set line [string trim $line]
+               if {[string length $line] > 0} {
+                  #ts_log_fine "processing line: $line"
+                  set split_line [split $line "|"]
+                  set message [lindex $split_line 4]
+                  switch -glob -- $message {
+                     "PROF*profiling summary:" {
+                        # for profiling messages, store per thread info
+                        ts_log_fine "$message"
+                        set thread [lindex $message 1]
+                        #ts_log_fine $thread
+                        switch -exact $thread {
+                           signal {
+                              incr prof(PROF_SIGNAL)
+                           }
+                           event {
+                              incr prof(PROF_DELIVER)
+                           }
+                           message {
+                              incr prof(PROF_MESSAGE)
+                           }
+                           listener {
+                              incr prof(PROF_LISTENER)
+                           }
+                           timed {
+                              incr prof(PROF_TEVENT)
+                           }
+                           default {
+                              ts_log_fine "unknown thread name $thread"
+                           }
+                        }
+                     }
+
+                     default {
+                        ts_log_fine "ignoring: [string range $message 0 50] ..."
+                     }
+                  } ;# switch
+               } ;# valid line
+            } ;# foreach line  
+         } ;# data
+      } ;# switch
+
+      set now [clock seconds]
+   } ;# while
+
+   # some informational output
+   ts_log_fine "PROF_SIGNAL:  $prof(PROF_SIGNAL)"
+   ts_log_fine "PROF_LISTENER: $prof(PROF_LISTENER)"
+   ts_log_fine "PROF_DELIVER: $prof(PROF_DELIVER)"
+   ts_log_fine "PROF_TEVENT:  $prof(PROF_TEVENT)"
+
+   # now check for the expected result
+   ts_log_fine "verifying results"
+   set error_text ""
+   switch -exact $expected_prof {
+      NONE {
+         # here we may not have received any profiling messages
+         set message "expected no profiling message to show up, but got"
+         set prof_strings "PROF_SIGNAL PROF_LISTENER PROF_DELIVER PROF_TEVENT"
+         foreach thread $prof_strings {
+            if {$prof($thread) > 0} {
+               append error_text "$prof($thread) $thread profiling messages\n"
+            }
+         }
+
+      }
+      CONSUME {
+         # no check here
+      }
+      default {
+         # here we shall have expected n messages for the requested thread, 
+         # 0 messages for the other ones
+         set message "expected $expected_prof profiling messages to show up, but got"
+         set prof_strings "PROF_SIGNAL PROF_LISTENER PROF_DELIVER PROF_TEVENT"
+         foreach thread $prof_strings {
+            if {$thread == $expected_prof} {
+               if {$prof($thread) == 0} {
+                  append error_text "$prof($thread) $thread profiling messages\n"
+               }
+            } else {
+               if {$prof($thread) > 0} {
+                  append error_text "$prof($thread) $thread profiling messages\n"
+               }
+            }
+         }
+      }
+   }
+
+   if {$error_text != ""} {
+      append error_text "Test information text: \"$info_text\"\n"
+      append error_text "Parameter: id: \"$id\"\nexpected_prof: \"$expected_prof\"\ntail_timeout: \"$tail_timeout\"\n"
+      ts_log_severe $error_text
+   }
+}
+
+proc qmaster_profiling_dynamic {} {
+   global ts_config
+
+   # tail -f to qmaster messages file
+   ts_log_fine "tail -f to qmaster messages file"
+   set spooldir [get_qmaster_spool_dir]
+   set id [init_logfile_wait $ts_config(master_host) "$spooldir/messages"]
+
+   # wait for PROF messages - no such messages may show up
+   qmaster_profiling_monitor "call 1" $id NONE
+
+   # for all threads (PROF_SIGNAL, [PROF_MESSAGE | PROF_LISTENER], PROF_DELIVER, PROF_TEVENT)
+   # the signal thread will never output PROF messages - skip PROF_SIGNAL
+   set prof_strings "PROF_LISTENER PROF_DELIVER PROF_TEVENT"
+   foreach prof $prof_strings {
+      ts_log_fine "testing profiling $prof"
+   
+      # switch on profiling
+      set global_conf(qmaster_params) "$prof=true"
+      set_config global_conf
+
+      # wait for PROF messages for this thread
+      qmaster_profiling_monitor "$prof call 2" $id $prof
+
+      # switch off profiling
+      set global_conf(qmaster_params) "$prof=false"
+      set_config_and_propagate global_conf
+      # consume PROF messages that may have shown up while we switched profiling off
+      qmaster_profiling_monitor "$prof call 3" $id CONSUME 5
+
+      # no further message may appear
+      qmaster_profiling_monitor "$prof call 4" $id NONE
+   }
+
+   # stop the tail -f
+   close_spawn_process $id
+}
+
+proc qmaster_profiling_restart {} {
+   global ts_config
+
+   # tail -f to qmaster messages file
+   ts_log_fine "tail -f to qmaster messages file"
+   set spooldir [get_qmaster_spool_dir]
+   set id [init_logfile_wait $ts_config(master_host) "$spooldir/messages"]
+
+   # enable some profiling level
+   set global_conf(qmaster_params) "PROF_LISTENER=true"
+   set_config global_conf
+
+   # wait for PROF messages to show up
+   qmaster_profiling_monitor "call 5" $id PROF_LISTENER
+
+   # shutdown qmaster
+   shutdown_qmaster $ts_config(master_host) $spooldir
+
+   # restart qmaster
+   startup_qmaster 0
+
+   # wait for PROF messages
+   qmaster_profiling_monitor "call 7" $id PROF_LISTENER
+
+   # switch off profiling
+   set global_conf(qmaster_params) "PROF_LISTENER=false"
+   set_config_and_propagate global_conf
+   # consume PROF messages that may have shown up while we switched profiling off
+   qmaster_profiling_monitor "call 9" $id CONSUME 5
+
+   # no further message may appear
+   qmaster_profiling_monitor "call 10" $id NONE
+
+   # stop the tail -f
+   close_spawn_process $id
+}
+

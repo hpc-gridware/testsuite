@@ -109,12 +109,6 @@ proc qmake_setup_level {} {
    global CHECK_ACT_LEVEL
    global qmake_options pe_options qmake_host
 
-   if {$CHECK_ACT_LEVEL == 2 && $ts_config(gridengine_version) == 53} {
-      # dynamic allocation mode is not supported in SGE 5.3
-      ts_log_config "need gridengine version 53 for this test in runlevel 2"
-      return 99
-   }
-
    # choose a test host
    set qmake_host [host_conf_get_suited_hosts]
 

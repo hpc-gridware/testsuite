@@ -202,11 +202,7 @@ proc arcorun_exec {args output {timeout 60}} {
    
    set swc_host $arco_config(swc_host)
    set arco_run_cmd "$ts_config(product_root)/$ts_config(cell)/arco/reporting/arcorun"
-   if {$ts_config(gridengine_version) < 62} {
-      set my_env(JAVA_HOME) [get_java_home_for_host $swc_host "1.4"]  
-   } else {
-      set my_env(JAVA_HOME) [get_java_home_for_host $swc_host "1.5"]
-   }
+   set my_env(JAVA_HOME) [get_java_home_for_host $swc_host "1.5"]
    set my_env(SGE_ROOT) "$ts_config(product_root)"
    set my_env(SGE_CELL) "$ts_config(cell)"
    ts_log_fine "---> executing on $swc_host as $CHECK_USER:"

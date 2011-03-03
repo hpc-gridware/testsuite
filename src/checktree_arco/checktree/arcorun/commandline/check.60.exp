@@ -175,10 +175,8 @@ proc arcorun_commandline_check {} {
    lappend testcase  { "-o html -f $test_file" "ArcoRun.invalidOutputForHTML" }
    lappend testcase  { "__blubber__"           "ArcoRun.queryNotFound" }
    lappend testcase  { "Job Log"               "ArcoRun.missingLatebinding" }
-   if {$ts_config(gridengine_version) >= 62} {
-      lappend testcase  { "-cl"                   "ArcoRun.missingClusterName }
-   }
-   
+   lappend testcase  { "-cl"                   "ArcoRun.missingClusterName" }
+
    foreach testcase $testcases {
       set args [lindex $testcase 0]
       set msg  [lindex $testcase 1]

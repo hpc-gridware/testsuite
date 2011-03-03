@@ -1,0 +1,974 @@
+#!/vol2/TCL_TK/glinux/bin/expect
+#___INFO__MARK_BEGIN__
+##########################################################################
+#
+#  The Contents of this file are made available subject to the terms of
+#  the Sun Industry Standards Source License Version 1.2
+#
+#  Sun Microsystems Inc., March, 2001
+#
+#
+#  Sun Industry Standards Source License Version 1.2
+#  =================================================
+#  The contents of this file are subject to the Sun Industry Standards
+#  Source License Version 1.2 (the "License"); You may not use this file
+#  except in compliance with the License. You may obtain a copy of the
+#  License at http://gridengine.sunsource.net/Gridengine_SISSL_license.html
+#
+#  Software provided under this License is provided on an "AS IS" basis,
+#  WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING,
+#  WITHOUT LIMITATION, WARRANTIES THAT THE SOFTWARE IS FREE OF DEFECTS,
+#  MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE, OR NON-INFRINGING.
+#  See the License for the specific provisions governing your rights and
+#  obligations concerning the Software.
+#
+#  The Initial Developer of the Original Code is: Sun Microsystems, Inc.
+#
+#  Copyright: 2001 by Sun Microsystems, Inc.
+#
+#  All Rights Reserved.
+#
+##########################################################################
+#___INFO__MARK_END__
+
+# define global variable in this namespace
+global check_name 
+global check_category
+global check_description 
+global check_needs
+global check_functions 
+global check_highest_level
+global check_init_level_procedure
+global check_root_access_needs
+global env
+
+set check_root_access_needs "yes"
+
+# define a level initialization procedure:
+set check_init_level_procedure "drmaaj_init_level"
+
+# define test's name and run level descriptions
+set check_name            "drmaa-j"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_highest_level   303
+set check_description(0)    "short test: only one host; verify highest DRMAA-J library with highest DRMAA-C library" 
+set check_description(103)  "One host (>= SGE 6.1); Lowest Java-version: tests to verify DRMAA-J 1.0 library with DRMAA-C 1.0 library"
+set check_description(203)  "One host (>= SGE 6.1); Different Java-versions: tests to verify DRMAA-J 1.0 library with DRMAA-C 1.0 library"
+set check_description(303)  "Different hosts (>= SGE 6.1); Different Java-versions: tests to verify DRMAA-J 1.0 library with DRMAA-C 1.0 library"
+
+# define test's dependencies
+set check_needs           "init_core_system" 
+
+# setup and cleanup functions
+set check_setup_function "drmaaj_setup"
+set check_cleanup_function "drmaaj_cleanup"
+set check_setup_level_function "drmaaj_setup_level"
+set check_cleanup_level_function "drmaaj_cleanup_level"
+
+# define test's procedure order
+set check_functions ""
+lappend check_functions "drmaaj_check"
+
+#****** check.60.exp/drmaaj_init_level() *******************************************
+#  NAME
+#     drmaaj_init_level() -- ??? 
+#
+#  SYNOPSIS
+#     drmaaj_init_level { } 
+#
+#  FUNCTION
+#     this function is called each time before
+#     a new run level is started
+#
+#  INPUTS
+#
+#  RESULT
+#     1 if runlevel is supported otherwise 0 
+#
+#  SEE ALSO
+#     ???/???
+#*******************************************************************************
+proc drmaaj_init_level {} {
+   global CHECK_ACT_LEVEL
+   switch -- $CHECK_ACT_LEVEL {
+     "0"   {
+            return 0
+     }
+     "103" {
+            return 0
+     }
+     "203" {
+            return 0
+     }
+     "303" {
+            return 0
+      }
+   }
+   return -1  ;# no other level else
+}
+
+# -------- local test procedures -----------------------------------------------
+
+#****** check.60.exp/set_hosts_for_runlevel() **************************************
+#  NAME
+#     set_hosts_for_runlevel() -- ??? 
+#
+#  SYNOPSIS
+#     set_hosts_for_runlevel { } 
+#
+#  FUNCTION
+#     Sets a list of hosts in order to test drmaaj on them. 
+#
+#  INPUTS
+#
+#  RESULT
+#    Returns a list of hosts. 
+#
+#  EXAMPLE
+#      
+#
+#  NOTES
+#     The host list depends on the runlevel.
+#
+#  SEE ALSO
+#     ???/???
+#*******************************************************************************
+proc set_hosts_for_runlevel {} {
+   global CHECK_ACT_LEVEL ts_config
+   set hosts_in_runlevel_local {} 
+
+   # sets the hosts array according to the runlevel
+   switch -- $CHECK_ACT_LEVEL {
+     "0"   {
+          set hosts_in_runlevel_local [host_conf_get_suited_hosts 1 {} {} "win32-x86"]
+     }
+     "103"   {
+          set hosts_in_runlevel_local [host_conf_get_suited_hosts 1 {} {} "win32-x86"]
+     }
+     "203"   {
+          set hosts_in_runlevel_local [host_conf_get_suited_hosts 1 {} {} "win32-x86"]
+     }
+     "303" {
+         ts_log_fine "$ts_config(unique_arch_nodes)"
+         foreach host $ts_config(unique_arch_nodes) {
+               ts_log_fine "test to add $host"
+            if {[resolve_arch $host]  != "win32-x86"} {
+               lappend hosts_in_runlevel_local $host
+            }
+         }
+     }
+    }
+
+    # log the hosts 
+    ts_log_fine "The following hosts are used in runlevel $CHECK_ACT_LEVEL : " 
+    foreach hst $hosts_in_runlevel_local {
+       ts_log_fine "-> host: $hst " 
+    }
+
+    return $hosts_in_runlevel_local
+}
+
+#****** check.60.exp/get_lowest_java_version() *************************************
+#  NAME
+#     get_lowest_java_version() -- ??? 
+#
+#  SYNOPSIS
+#     get_lowest_java_version { host } 
+#
+#  FUNCTION
+#     Returns the lowest java version available 
+#
+#  INPUTS
+#     host - Name of host 
+#
+#  RESULT
+#     List of Java binary paths with exactly one element. 
+#
+#  EXAMPLE
+#     ??? 
+#
+#  BUGS
+#     ??? 
+#
+#  SEE ALSO
+#     ???/???
+#*******************************************************************************
+proc get_lowest_java_version { host } {
+   set java {}
+   # try to use java 1.4, 
+   # if not configured, java 1.5
+   # if not configured, give it a try with the java in PATH
+   set JAVA [get_binary_path $host "java14" 0]
+   if {$JAVA == "java14"} {
+      # java variable didn't change... 
+      set JAVA [get_binary_path $host "java15" 0]
+      if {$JAVA == "java15"} {
+         # java variable didn't change 
+         set JAVA [get_binary_path $host "java16" 0]
+         if {$JAVA == "java16"} {
+            # java variable didn't change 
+            # try to use java in standard path
+            ts_log_warning "No Java versions found on host $host!"
+            set JAVA ""
+         }          
+      }
+   } 
+   if {$JAVA != ""} {
+      lappend java $JAVA   
+   }
+   return $java 
+}
+
+
+#****** check.60.exp/get_all_java_versions() ***************************************
+#  NAME
+#     get_all_java_versions() -- ??? 
+#
+#  SYNOPSIS
+#     get_all_java_versions { host } 
+#
+#  FUNCTION
+#     Returns a list with one or more paths to a possible JVM 
+#
+#  INPUTS
+#     host - Host on which to list all installed Java versions. 
+#
+#  RESULT
+#     List with paths to all Java binaries installed. 
+#
+#  EXAMPLE
+#     ??? 
+#
+#  SEE ALSO
+#     ???/???
+#*******************************************************************************
+proc get_all_java_versions { host } {
+   # array with all paths to JVMs on this host
+   set java_versions {}
+
+   # check which JVMs are available 
+   set JAVA_TEST [get_binary_path $host "java14" 0]
+   if {$JAVA_TEST != "java14" && $JAVA_TEST != ""} {
+      # we have a binary path for java 1.4
+      lappend java_versions $JAVA_TEST
+   }
+   set JAVA_TEST [get_binary_path $host "java15" 0]
+   if {$JAVA_TEST != "java15" && $JAVA_TEST != ""} {
+      # we have a binary path for java 1.5
+      lappend java_versions $JAVA_TEST
+   }
+   set JAVA_TEST [get_binary_path $host "java16" 0]
+   if {$JAVA_TEST != "java16" && $JAVA_TEST != ""} {
+      # we have a binary path for java 1.6
+      lappend java_versions $JAVA_TEST
+   }
+
+   # check if no java versions found 
+   if {[llength $java_versions] == 0} {
+      ts_log_fine "WARNING: No Java versions found!"
+      ts_log_config "No Java configured on host: $host !"
+      lappend java_versions ""
+   }
+
+   ts_log_fine "Using theses Java VMs: "
+   foreach javapath $java_versions {
+      ts_log_fine " -> $javapath"
+   }
+
+   # return all java versions
+   return $java_versions
+}
+
+
+
+#****** check.60.exp/set_java_list_according_to_runlevel() *************************
+#  NAME
+#     set_java_list_according_to_runlevel() -- ??? 
+#
+#  SYNOPSIS
+#     set_java_list_according_to_runlevel { host } 
+#
+#  FUNCTION
+#     Returns a list with all java binary paths to check 
+#     in this runlevel.  
+#
+#  INPUTS
+#     host - Name of host 
+#
+#  RESULT
+#     List of java binary paths. 
+#
+#  EXAMPLE
+#     ??? 
+#
+#  BUGS
+#     ??? 
+#
+#  SEE ALSO
+#     ???/???
+#*******************************************************************************
+proc set_java_list_according_to_runlevel { host } {
+   global CHECK_ACT_LEVEL
+
+    # set java list according to the runlevel
+    # each entry contains an absolute path 
+    # to an Java Virtual Machine 
+
+   switch -- $CHECK_ACT_LEVEL {
+     "0"   {
+         return [get_lowest_java_version $host]
+     }
+     "103"   {
+         return [get_lowest_java_version $host]
+     }
+     "203"   {
+         return [get_all_java_versions $host]
+     }
+     "303" {
+         return [get_all_java_versions $host]
+     }
+   }
+}
+
+      
+#****** check.60.exp/do_drmaa_redirection_according_to_runlevel() ******************
+#  NAME
+#     do_drmaa_redirection_according_to_runlevel() -- ??? 
+#
+#  SYNOPSIS
+#     do_drmaa_redirection_according_to_runlevel { host } 
+#
+#  FUNCTION
+#    Creates a soft link to the drmaa library used in this runlevel. 
+#
+#  INPUTS
+#     host - Name of host on which the softlink has to be created. 
+#
+#  EXAMPLE
+#     ??? 
+#
+#  SEE ALSO
+#     ???/???
+#*******************************************************************************
+proc do_drmaa_redirection_according_to_runlevel { host } {
+   global CHECK_ACT_LEVEL  
+  
+   # DG: TODO check if version library is available 
+
+   # in runlevel 0 do no redirect: use the standard link "libdrmaa.so"
+   if { $CHECK_ACT_LEVEL == "0" } {
+      return
+   }
+ 
+   # the others have use the DRMAA C library 1.0 
+   drmaa_redirect_lib "1.0" $host 
+}
+
+
+#****** check.60.exp/set_java_classpath_according_to_runlevel() ********************
+#  NAME
+#     set_java_classpath_according_to_runlevel() -- ??? 
+#
+#  SYNOPSIS
+#     set_java_classpath_according_to_runlevel { } 
+#
+#  FUNCTION
+#     Returns Java classpath string with the libraries needed in this runlevel. 
+#
+#  INPUTS
+#
+#  RESULT
+#    Java classpath as string. 
+#
+#  EXAMPLE
+#     ??? 
+#
+#  SEE ALSO
+#     ???/???
+#*******************************************************************************
+proc set_java_classpath_according_to_runlevel {} {
+   global CHECK_ACT_LEVEL 
+   global ts_config 
+
+   # x02/x03 means jdrmaa 1.0 test
+   set jdrmaa_test_05 false
+
+
+   # add to Java classpath the Java DRMAA library
+   set classpath ""
+   if {$jdrmaa_test_05 == true} {
+      if {[file exists "$ts_config(product_root)/lib/drmaa-0.5.jar"]} {
+         # if there is a drmaa 0.5 lib in produect root, use it
+         set classpath "$ts_config(product_root)/lib/drmaa-0.5.jar"
+      } else {
+         # use modified testsuite drmaa-0.5 jar for GE versions if no jdramaa 05 is existing
+         set classpath "$ts_config(testsuite_root_dir)/lib/drmaa-0.5.jar"
+      }
+   } else {
+      set classpath "$ts_config(product_root)/lib/drmaa.jar"
+   }
+
+   # add the drmaa-test.jar 
+   if {$jdrmaa_test_05 == true} {
+      # use modified testsuite drmaa-0.5 test jar, it contains fixes for GE >= 61
+      set classpath "$classpath:$ts_config(testsuite_root_dir)/lib/drmaa-0.5-test.jar"
+   } else {
+     set classpath "$classpath:[get_drmaa_test_jar]"
+   }
+   # add junit.jar: for every version the same path  
+   set classpath "$classpath:$ts_config(testsuite_root_dir)/lib/junit.jar"
+   ts_log_fine "Added the following Java classpath: $classpath"
+
+   return $classpath 
+}
+
+
+#****** check.60.exp/drmaaj_check() ************************************************
+#  NAME
+#     drmaaj_check() -- ??? 
+#
+#  SYNOPSIS
+#     drmaaj_check { } 
+#
+#  FUNCTION
+#     Here the actual test is done. 
+#
+#  INPUTS
+#
+#  RESULT
+#     ??? 
+#
+#  EXAMPLE
+#     ??? 
+#
+#  NOTES
+#     ??? 
+#
+#  BUGS
+#     ??? 
+#
+#  SEE ALSO
+#     ???/???
+#*******************************************************************************
+proc drmaaj_check { } {
+   global ts_config env
+   global CHECK_ACTUAL_TEST_PATH
+   global CHECK_USER CHECK_ACT_LEVEL
+   global hosts_in_runlevel
+   global drmaaj_global_errors
+   global check_description
+
+   # test the 32 bit lib on 64 bit virtual machine 
+   set do_an_additional_32_bit_test true
+
+   # make sure that we have a drmaa.jar, drmaa-test.jar and
+   # suspendable_sleeper.sh
+   set needed_files ""
+   lappend needed_files $ts_config(product_root)/lib/drmaa.jar
+   lappend needed_files [get_drmaa_test_jar]
+   lappend needed_files $ts_config(testsuite_root_dir)/scripts/suspendable_sleeper.sh
+   set missing_files ""
+
+   foreach file $needed_files {
+      if {[file exists $file] == 0} {
+         append missing_files " $file"
+      }
+   }
+
+   if {$missing_files != ""} {
+      ts_log_severe "The following necessary files are missing: [string trim $missing_files]"
+      return
+   }
+
+   ts_log_fine "go through hosts.."
+
+   # test all hosts in host list - according to runlevel
+   foreach host $hosts_in_runlevel {
+      ts_log_fine "-> using host $host"
+      set binary_arch [resolve_arch $host]
+
+      # redirect library: symlink the correct version 
+      do_drmaa_redirection_according_to_runlevel $host 
+
+      # set classpath according to runlevel: this is static for each rl 
+      ts_log_fine "set classpath..."
+      set classpath [set_java_classpath_according_to_runlevel]
+      
+      set compile_arch_mt "[resolve_build_arch $host]"
+      ts_log_fine "host is $host has arch $compile_arch_mt with classpath $classpath"
+      set options [build_java_env_list $host $binary_arch]
+      set options "-cp $classpath $options"
+
+      # include the library path because environment variables 
+      # are different on different architectures
+      # set options "-Djava.library.path=$ts_config(product_root)/lib/$binary_arch $options" 
+      set java_lib_path "-Djava.library.path=$ts_config(product_root)/lib/$binary_arch" 
+
+      # go through all Java versions:
+      # get java path list depending from run level
+      set java_vms_in_runlevel [set_java_list_according_to_runlevel $host]
+
+      foreach java $java_vms_in_runlevel {
+         # empty java string: no Java version identified!  
+         if {$java == ""} {
+            continue 
+         }
+         ts_log_fine "Java binary to check is: $java"
+         
+         # check if the current JVM has 32 bit and 64 bit capabilities  
+         # -----------------------------------------------------------
+         set test_32bit_libs_on_64bit_jvm [has_JVM_d32_d64_flag $host $java]
+         if {$test_32bit_libs_on_64bit_jvm == true} {
+
+            # check if we have to check 32 bit libs in case of 64 JVM
+            if {$do_an_additional_32_bit_test == "yes"} {
+               ts_log_fine "Test 32 bit library with -d32 option!"
+
+               # set the 32 bit library path explicitly 
+               set java_lib_path_to_32_bit [get_java_library_path $host $binary_arch]
+               if {$java_lib_path_to_32_bit == ""} {
+                  ts_log_fine "Aborting 32 bit library test it seems that there is no library installed or there is no valid mapping in test.tcl"
+               } else {
+                  # check the 32 bit lib 
+                  set options_for_32_bit_test_on_64_bit "-d32 $java_lib_path_to_32_bit $options" 
+            
+                  # do an additional test -> 32 bit lib on 64 bit jvm 
+                  ts_log_fine "Perform: $host $java $options_for_32_bit_test_on_64_bit junit.textui.TestRunner DrmaaSuite"
+                  set test_output [start_remote_prog $host $CHECK_USER $java "$options_for_32_bit_test_on_64_bit junit.textui.TestRunner DrmaaSuite" prg_exit_state 600 0 "" "" 1 0 1]
+
+                  if {$prg_exit_state != 0} {
+                     ts_log_fine $test_output
+                     append drmaaj_global_errors "---ERROR----------------------------------------------------\n"
+                     append drmaaj_global_errors "$check_description($CHECK_ACT_LEVEL)\n"
+                     append drmaaj_global_errors "Performed DrmaaSuite run as user $CHECK_USER on host $host (Run level: $CHECK_ACT_LEVEL)\n"
+                     append drmaaj_global_errors "command: \"$java $options_for_32_bit_test_on_64_bit junit.textui.TestRunner DrmaaSuite\"\n"
+                     append drmaaj_global_errors "DRMAA-J jUnit test for 32 bit lib on 64 bit host failed:\n$test_output\n\n"
+                  }
+               }
+            }
+            # maybe we have a 32bit lib in path now
+            if {[string first "sol-x86" $java_lib_path] != -1 || 
+                [string first "lx24-x86" $java_lib_path] != -1 || 
+                [string first "ulx24-x86" $java_lib_path] != -1 || 
+                [string first "usol-x86" $java_lib_path] != -1 } {
+               # this is a 32 bit architecture! 
+               ts_log_fine "Set for architecture $binary_arch not JVM -d64 parameter."
+               set java_options " $options $java_lib_path " 
+            } else { 
+               # set 64 bit options: check the 64 bit lib 
+               ts_log_fine "Set for architecture $binary_arch JVM -d64 parameter."
+               set java_options " $options -d64 $java_lib_path "
+            }
+         } else {
+            set java_options " $options $java_lib_path " 
+         } 
+
+         # special case: 64 bit OS --> 32 bit JVM --> it is loading 64 bit native lib!
+         # try to use 32 bit lib
+         # ---------------------------------------------------------------------------
+         if {[is_64_bit_OS $binary_arch] == true && [is_32_bit_jvm $host $java] == true} {
+            ts_log_fine "SPECIAL TEST BECAUSE 64 BIT OS AND 32 BIT JVM"
+
+            # try to find the path to the 32 bit lib 
+            # set the 32 bit library path explicitly 
+            set java_lib_path [get_java_library_path $host $binary_arch]
+
+            if {$java_lib_path == "" } { 
+                ts_log_fine "no native 32 bit lib found for the 32 bit JVM on a 64 bit arch" 
+                if {$test_32bit_libs_on_64bit_jvm == false} {
+                   ts_log_fine "cannot test host $host - no matching 32/64 bit combination of jvm and drmaa binaries found"
+                }
+            } else {
+                # check the 32 bit lib 
+                set options_for_32_bit_test "$java_lib_path $options" 
+            
+                # do an additional test -> 32 bit lib on 32 bit jvm 
+                ts_log_fine "Perform: $host $java $options_for_32_bit_test junit.textui.TestRunner DrmaaSuite" 
+                set test_output [start_remote_prog $host $CHECK_USER $java "$options_for_32_bit_test junit.textui.TestRunner DrmaaSuite" prg_exit_state 600 0 "" "" 1 0 1]
+
+                if {$prg_exit_state != 0} {
+                   ts_log_fine $test_output
+                   append drmaaj_global_errors "---ERROR----------------------------------------------------\n"
+                   append drmaaj_global_errors "$check_description($CHECK_ACT_LEVEL)\n"
+                   append drmaaj_global_errors "Performed DrmaaSuite run as user $CHECK_USER on host $host (Run level: $CHECK_ACT_LEVEL)\n"
+                   append drmaaj_global_errors "command: \"$java $options_for_32_bit_test junit.textui.TestRunner DrmaaSuite\"\n"
+                   append drmaaj_global_errors "DRMAA-J jUnit test for 32 bit lib on 32 bit JVM and 64 bit host failed:\n$test_output\n\n"
+                }
+            }
+            continue 
+         }
+
+         # start JUnit DRMAA test
+         # ----------------------
+         ts_log_fine "Perform as $CHECK_USER on $host: $java $java_options junit.textui.TestRunner DrmaaSuite"
+         
+
+         set test_output [start_remote_prog $host $CHECK_USER $java "$java_options junit.textui.TestRunner DrmaaSuite" prg_exit_state 600 0 "" "" 1 0 1]
+
+         if {$prg_exit_state != 0} {
+            ts_log_fine $test_output
+            append drmaaj_global_errors "---ERROR----------------------------------------------------\n"
+            append drmaaj_global_errors "$check_description($CHECK_ACT_LEVEL)\n"
+            append drmaaj_global_errors "Performed DrmaaSuite run as user $CHECK_USER on host $host (Run level: $CHECK_ACT_LEVEL)\n"
+            append drmaaj_global_errors "command: \"$java $java_options junit.textui.TestRunner DrmaaSuite\"\n"
+            append drmaaj_global_errors "DRMAA-J jUnit test suite failed:\n$test_output\n\n"
+         }
+      }
+      # go through all Java versions
+   } 
+   # repeat: check all hosts from hostlist 
+}
+
+proc get_drmaa_test_jar {} {
+   global ts_config
+   global CHECK_USER
+
+   set return_path ""
+   set path $ts_config(source_dir)/CLASSES/drmaa-test.jar
+   if {[is_remote_file $ts_config(master_host) $CHECK_USER $path]} {
+      set return_path $path
+   } else {
+      set path $ts_config(source_dir)/CLASSES/jdrmaa/drmaa-test.jar
+      if {[is_remote_file $ts_config(master_host) $CHECK_USER $path]} {
+         set return_path $path
+      }
+   }
+   if {$return_path == ""} {
+      ts_log_severe "cannot find path to drmaa-test.jar"
+   }
+   ts_log_fine "using trmaa-test.jar file $return_path"
+   return $return_path
+}
+
+
+#****** check.60/is_32_bit_jvm() ***********************************************
+#  NAME
+#     is_32_bit_jvm() -- ??? 
+#
+#  SYNOPSIS
+#     is_32_bit_jvm { host jvm } 
+#
+#  FUNCTION
+#     Checks if the given JVM is a 64 bit JVM or not. 
+#
+#  INPUTS
+#     host - Name of host with the JVM  
+#     jvm  - Path to the JVM on the host. 
+#
+#  RESULT
+#     "true" if the JVM is a 64 bit JVM; "false" if not 
+#
+#  EXAMPLE
+#     ??? 
+#
+#  NOTES
+#     ??? 
+#
+#  BUGS
+#     ??? 
+#
+#  SEE ALSO
+#     ???/???
+#*******************************************************************************
+proc is_32_bit_jvm {host jvm} {
+   global CHECK_USER
+
+   # pre process the special case: java 1.4 on 64bit host
+   set test_output [start_remote_prog $host $CHECK_USER $jvm "-version" prg_exit_state 60 0 "" "" 1 0 1]  
+
+   ts_log_fine $test_output
+
+   if {[string first "1.4" $test_output] != -1} {
+      # java -version output contains 1.4
+      if {[string first "64" $test_output] != -1} {
+         return false
+      }
+   }
+
+   # procduces errors on with jdk14
+   if {[has_JVM_d32_d64_flag $host $jvm] == true} {
+      # it is likely a 64 bit JVM
+      ts_log_fine "contains d32 d64 flag" 
+      return false
+   } else {
+      # it seems to be a 32 bit JVM 
+      ts_log_fine "doesn't containt d32 d64 flag"
+      return true
+   }
+}
+
+
+#****** check.60/is_64_bit_OS() ************************************************
+#  NAME
+#     is_64_bit_OS() -- ??? 
+#
+#  SYNOPSIS
+#     is_64_bit_OS { binary_arch } 
+#
+#  FUNCTION
+#     Checks an arch string if it represents a 64 bit architecture or not.  
+#
+#  INPUTS
+#     binary_arch - Arch string to check. 
+#
+#  RESULT
+#     "true" if the given arch string represents a 64 bit os otherwise false. 
+#
+#  NOTES
+#     ??? 
+#
+#  BUGS
+#     ??? 
+#
+#  SEE ALSO
+#     ???/???
+#*******************************************************************************
+proc is_64_bit_OS {binary_arch} {
+   
+   # check if it is a 64 bit OS
+   switch -- $binary_arch {
+      "sol-amd64" {
+         return true
+      }
+      "lx26-amd64" {
+         return true
+      }
+      "sol-sparc64" {
+         return true
+      } 
+      "lx24-amd64" {
+         return true
+      }
+      "lx24-ia64" {
+         return true
+      }
+      "hp11-64" {
+         return true
+      }
+   }
+      
+   # is not a 64 bit OS
+   return false
+}
+
+
+
+#****** check.60.exp/get_java_library_path() ************************************************
+#  NAME
+#     get_java_library_path() -- ??? 
+#
+#  SYNOPSIS
+#     { } 
+#
+#  FUNCTION
+#     Create the -Djava.library.path for accessing the native 32 bit library. 
+#
+#  INPUTS
+#
+#  RESULT
+#     The java.library.path or "" if it does not exist. 
+#
+#  BUGS
+#     ??? 
+#
+#  SEE ALSO
+#     ???/???
+#*******************************
+proc get_java_library_path {host binary_arch} {
+   global ts_config env
+   # figure out where the 32 bit library resides 
+   set arch_dir ""
+
+   # get lib extension
+   set lib_ext [get_current_drmaa_lib_extension $host]
+
+   # set architecture string 
+   switch -- $binary_arch {
+      "sol-amd64" {
+         set arch_dir "sol-x86"
+      }
+      "lx26-amd64" {
+         set arch_dir "lx26-x86"
+      }
+      "sol-sparc64" {
+         set arch_dir "sol-sparc"
+      } 
+      "lx24-amd64" {
+         set arch_dir "lx24-x86"
+      }
+      "lx24-ia64" {
+         set arch_dir "lx24-x86"
+      }
+      "hp11-64" {
+         set arch_dir "hp11"
+      }
+      default {
+         set arch_dir ""
+      }
+   }   
+   # check if an valid directory was set
+   if {$arch_dir == ""} {
+         ts_log_fine "FAILURE! Not possible to test 32 bit library on $host because there is no mapping from architecture to directory where the lib resides."
+         return "" 
+   }  
+
+   set path "$ts_config(product_root)/lib/$arch_dir" 
+   
+   # create the path to the library if the library exists 
+   if {[file exists "$path/libdrmaa.$lib_ext"]} {
+      return "-Djava.library.path=$path"
+   } else {
+      ts_log_config "CONFIGURATION PROBLEM! Lib directory \"$path/libdrmaa.$lib_ext\" not found for host $host!"
+      return ""
+   }
+}
+
+#****** check.60.exp/has_JVM_d32_d64_flag() ******
+#  NAME
+#     has_JVM_d32_d64_flag() --  
+#
+#  SYNOPSIS 
+#     has_JVM_d32_d64_flag {host java_bin_path} 
+#
+#  FUNCTION
+#     Checks if the given JVM is a 64 bit with 32 bit 
+#     capabilities or not (in order to set the -d32 -d64 flags)  
+#
+#  INPUTS
+#     host                       - The host on which the JVM resides 
+#     java_bin_path              - The path to the JVM 
+#*******************************
+proc has_JVM_d32_d64_flag {host java_bin_path} {
+  global CHECK_USER
+
+  set test_output [start_remote_prog $host $CHECK_USER $java_bin_path "-help" prg_exit_state 600 0 "" "" 1 0 1]  
+
+  # search if standard output from Java has a "-d32" switch inside 
+  set java_switch "d32"
+  if {[string first $java_switch $test_output] == -1} {
+      # output doesn't contain d32
+      ts_log_finer "no d32 found!" 
+      return false 
+  }  
+
+  set java_switch_2 "d64"
+  if {[string first $java_switch_2 $test_output] == -1} {
+      # output doesn't contain d64 
+      ts_log_finer "no d64 found!" 
+      return false
+  }  
+
+   # contains a -d32 switch 
+   # some new Java versions 1.5 or JDK 6 
+   # may have a -d32 -d64 flag but -d64 is not supported 
+
+   # check if it is supported 
+   set test_output [start_remote_prog $host $CHECK_USER $java_bin_path "-d64" prg_exit_state 60 0 "" "" 1 0 1]  
+
+   # Output can be "Running a 64-bit JVM is not supported on this platform."
+   set is_not_supported_string "not supported"
+  
+   if {[string first $is_not_supported_string $test_output] == -1} {
+      # this Java version has a flag -d64 and it seems to be supported
+      ts_log_finer "jvm does support -d64"
+      return true
+   } else {   
+      ts_log_finer "jvm does not support -d64"
+      return false
+   }
+}
+
+proc drmaaj_setup {} {
+   global drmaaj_global_errors
+   set drmaaj_global_errors ""
+}
+
+proc drmaaj_cleanup {} {
+   global drmaaj_global_errors
+
+   if {$drmaaj_global_errors != ""} {
+      ts_log_severe $drmaaj_global_errors
+   }
+   unset drmaaj_global_errors
+}
+
+
+#****** check.60.exp/drmaaj_setup_level() ************************************************
+#  NAME
+#     drmaaj_setup_level() -- ??? 
+#
+#  SYNOPSIS
+#     drmaaj_setup_level { } 
+#
+#  FUNCTION
+#     Setup of test environment. 
+#
+#  INPUTS
+#
+#  RESULT
+#     ??? 
+#
+#  SEE ALSO
+#     ???/???
+#*******************************************************************************
+proc drmaaj_setup_level {} {
+   global drmaaj_config current_drmaa_mode ts_config 
+   global hosts_in_runlevel CHECK_ACT_LEVEL
+   global drmaaj_test_errors
+   
+   if {$ts_config(source_dir) == "none"} {
+      ts_log_config "source directory is set to \"none\" - cannot run test"
+      return 99
+   }
+
+   set drmaaj_test_errors ""
+
+   # get host list depending from run level
+   set hosts_in_runlevel [set_hosts_for_runlevel]
+
+   # must forbit reschedule on job exiting with 99 
+   # must forbit job error upon job exiting with 100
+   # otherwise drmaa_test ST_EXIT_STATUS never finishes
+
+   # backup old settings
+   get_config drmaaj_config
+
+   # set new value
+   set new_config(qmaster_params) "FORBID_RESCHEDULE=TRUE,FORBID_APPERROR=TRUE"
+   set new_config(delegated_file_staging) true
+   set_config new_config
+
+   # setup file staging scripts
+   ts_log_fine "hosts in list [llength hosts_in_runlevel]"
+   foreach host $hosts_in_runlevel {
+      ts_log_fine "host --> $host"
+      set current_drmaa_mode($host) [get_current_drmaa_mode $host]
+   }
+}
+
+#****** check.60.exp/drmaaj_cleanup_level() ******
+#  NAME
+#     drmaa_test_st_input_becomes_output() -- Test to ensure 
+#      input/output is treated correctly by DRMAA
+#
+#  SYNOPSIS
+#     drmaaj_cleanup_level {}
+#
+#  FUNCTION
+#     Undo changes since drmaaj_setup_level
+#
+#*******************************
+proc drmaaj_cleanup_level {} {
+   global backup_qmaster_params drmaaj_config ts_config current_drmaa_mode hosts_in_runlevel
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   # undo configuration changes that were made for this test
+   reset_config drmaaj_config
+
+   # restore DRMAA library version
+   foreach host $hosts_in_runlevel {
+      drmaa_redirect_lib $current_drmaa_mode($host) $host
+   }
+}

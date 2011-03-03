@@ -158,51 +158,43 @@ proc setup_qping_dump { log_array  } {
    set qping_arguments "-dump $master_host $ts_config(commd_port) qmaster 1"
    set qping_env(SGE_QPING_OUTPUT_FORMAT) "s:1 s:2 s:3 s:4 s:5 s:6 s:7 s:8 s:9 s:10 s:11 s:12 s:13 s:14 s:15"
 
-   if { $ts_config(gridengine_version) >= 60 } {
-      ts_log_fine "starting remote qping process ..."
-      set sid [open_remote_spawn_process $master_host "root" $qping_binary $qping_arguments 0 "" qping_env]
-      ts_log_fine "remote qping process started!"
-      set sp_id [lindex $sid 1]
-   } else {
-      set sid   "unsupported version < 60"
-      set sp_id "unsupported version < 60"
-   }
+   ts_log_fine "starting remote qping process ..."
+   set sid [open_remote_spawn_process $master_host "root" $qping_binary $qping_arguments 0 "" qping_env]
+   ts_log_fine "remote qping process started!"
+   set sp_id [lindex $sid 1]
 
    set used_log_array(spawn_sid)    $sid
    set used_log_array(spawn_id)     $sp_id
    set used_log_array(actual_line)  0
    set used_log_array(in_block)     0
 
-   
-   if { $ts_config(gridengine_version) >= 60 } {
-      set timeout 15
-      while { 1 } {
-         expect {
-            -i $used_log_array(spawn_id) -- full_buffer {
-               ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
-               break
-            }
-            -i $used_log_array(spawn_id) eof {
-               ts_log_severe "unexpected eof getting qping -dump connection to qmaster"
-               break
-            }
-            -i $used_log_array(spawn_id) timeout {
-               ts_log_severe "timeout for getting qping -dump connection to qmaster"
-               break
-            }
-            -i $used_log_array(spawn_id) -- "*debug_client*crm*\n" {
-               ts_log_fine "qping is now connected to qmaster!"
-               break
-            }
-            -i $used_log_array(spawn_id) -- "_exit_status_*\n" {
-               ts_log_fine "qping doesn't support -dump switch in this version"
-               break
-            }
-            -i $used_log_array(spawn_id) -- "*\n" {
-               ts_log_finest $expect_out(buffer)
-            }
-         }     
-      }
+   set timeout 15
+   while {1} {
+      expect {
+         -i $used_log_array(spawn_id) -- full_buffer {
+            ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
+            break
+         }
+         -i $used_log_array(spawn_id) eof {
+            ts_log_severe "unexpected eof getting qping -dump connection to qmaster"
+            break
+         }
+         -i $used_log_array(spawn_id) timeout {
+            ts_log_severe "timeout for getting qping -dump connection to qmaster"
+            break
+         }
+         -i $used_log_array(spawn_id) -- "*debug_client*crm*\n" {
+            ts_log_fine "qping is now connected to qmaster!"
+            break
+         }
+         -i $used_log_array(spawn_id) -- "_exit_status_*\n" {
+            ts_log_fine "qping doesn't support -dump switch in this version"
+            break
+         }
+         -i $used_log_array(spawn_id) -- "*\n" {
+            ts_log_finest $expect_out(buffer)
+         }
+      }     
    }
 }
 
@@ -354,72 +346,70 @@ proc get_qping_dump_output { log_array } {
    set return_value 0
 
 
-   if { $ts_config(gridengine_version) >= 60 } {
-      set timeout 1
-      log_user 0
-      expect {
-         -i $used_log_array(spawn_id) -- full_buffer {
-            ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
-         }
-         -i $used_log_array(spawn_id) eof {
-            ts_log_severe "got eof"
-         }
-         -i $used_log_array(spawn_id) timeout {
-            set return_value 1
-         }
-         -i $used_log_array(spawn_id) -- "*\n" {
-            set output $expect_out(buffer)
-            set output [ split $output "\n" ]
-            foreach line $output {
-               set line [string trim $line]
-   
-               if {[string length $line] == 0} {
-                  continue
+   set timeout 1
+   log_user 0
+   expect {
+      -i $used_log_array(spawn_id) -- full_buffer {
+         ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
+      }
+      -i $used_log_array(spawn_id) eof {
+         ts_log_severe "got eof"
+      }
+      -i $used_log_array(spawn_id) timeout {
+         set return_value 1
+      }
+      -i $used_log_array(spawn_id) -- "*\n" {
+         set output $expect_out(buffer)
+         set output [ split $output "\n" ]
+         foreach line $output {
+            set line [string trim $line]
+
+            if {[string length $line] == 0} {
+               continue
+            }
+            if {[string match "*_exit_status_*" $line] != 0} {
+               continue
+            }
+# we got a qping output line
+            
+            if { [string match "??:??:??*" $line] != 0 } {
+               set qping_line [split $line "|"]
+               set used_log_array(line,$used_log_array(actual_line)) $line
+               set row 1
+               foreach column $qping_line {
+                  set used_log_array(line,$row,$used_log_array(actual_line)) $column
+                  incr row 1
                }
-               if {[string match "*_exit_status_*" $line] != 0} {
-                  continue
+
+               while { $row < 15 } {
+                  set used_log_array(line,$row,$used_log_array(actual_line)) "not available"
+                  incr row 1
                }
-   # we got a qping output line
-               
-               if { [string match "??:??:??*" $line] != 0 } {
-                  set qping_line [split $line "|"]
-                  set used_log_array(line,$used_log_array(actual_line)) $line
-                  set row 1
-                  foreach column $qping_line {
-                     set used_log_array(line,$row,$used_log_array(actual_line)) $column
-                     incr row 1
-                  }
-   
-                  while { $row < 15 } {
-                     set used_log_array(line,$row,$used_log_array(actual_line)) "not available"
-                     incr row 1
-                  }
-                  set used_log_array(block,$used_log_array(actual_line)) "not available"
-                  incr used_log_array(actual_line) 1
-                  continue
-               }
-               
-   # here we try to log addition data for the last line
-               if { [string match "*block start*" $line ] != 0 } {
-                  set used_log_array(in_block) 1
-                  set line_block $used_log_array(actual_line)
-                  incr line_block -1
-                  set used_log_array(block,$line_block) ""
-               }
-   
-               if { $used_log_array(in_block) == 1 } {
-                  set line_block $used_log_array(actual_line)
-                  incr line_block -1
-                  append used_log_array(block,$line_block) "$line\n"
-               }
-               if { [string match "*block end*" $line ] != 0 } {
-                  set used_log_array(in_block) 0
-               }
+               set used_log_array(block,$used_log_array(actual_line)) "not available"
+               incr used_log_array(actual_line) 1
+               continue
+            }
+            
+# here we try to log addition data for the last line
+            if { [string match "*block start*" $line ] != 0 } {
+               set used_log_array(in_block) 1
+               set line_block $used_log_array(actual_line)
+               incr line_block -1
+               set used_log_array(block,$line_block) ""
+            }
+
+            if { $used_log_array(in_block) == 1 } {
+               set line_block $used_log_array(actual_line)
+               incr line_block -1
+               append used_log_array(block,$line_block) "$line\n"
+            }
+            if { [string match "*block end*" $line ] != 0 } {
+               set used_log_array(in_block) 0
             }
          }
       }
-      log_user 1
-   
+   }
+   log_user 1
    # qping for 60u4 and higher
    #   01 yes    time     time of debug output creation
    #   02 yes    local    endpoint service name where debug client is connected
@@ -434,26 +424,6 @@ proc get_qping_dump_output { log_array } {
    #   11 yes    msg time time when message was sent/received
    #   12  no    xml dump commlib xml protocol output
    #   13  no    info     additional information
-   
-   # qping for 60u2 - 60u3
-   #
-   #   01 time     time of debug output creation
-   #   02 local    endpoint service name where debug client is connected
-   #   03 d.       message direction
-   #   04 remote   name of participating communication endpoint
-   #   05 format   message data format
-   #   06 ack type message acknowledge type
-   #   07 msg tag  message tag information
-   #   08 msg id   message id
-   #   09 msg rid  message response id
-   #   10 msg len  message length
-   #   11 msg time time when message was sent/received
-   #   12 xml dump commlib xml protocol output
-   #   13 info     additional information
-   } else {
-      ts_log_fine "qping not supported !"
-      set return_value 1
-   }
    return $return_value
 }
 
@@ -479,9 +449,7 @@ proc cleanup_qping_dump_output { log_array } {
    upvar $log_array used_log_array
    get_current_cluster_config_array ts_config
 
-   if { $ts_config(gridengine_version) >= 60 } {
-      close_spawn_process $used_log_array(spawn_sid)
-   }
+   close_spawn_process $used_log_array(spawn_sid)
 }
 
 

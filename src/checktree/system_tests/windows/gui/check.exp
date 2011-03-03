@@ -1,0 +1,641 @@
+#!/vol2/TCL_TK/glinux/bin/expect
+#___INFO__MARK_BEGIN__
+##########################################################################
+#
+#  The Contents of this file are made available subject to the terms of
+#  the Sun Industry Standards Source License Version 1.2
+#
+#  Sun Microsystems Inc., March, 2001
+#
+#
+#  Sun Industry Standards Source License Version 1.2
+#  =================================================
+#  The contents of this file are subject to the Sun Industry Standards
+#  Source License Version 1.2 (the "License"); You may not use this file
+#  except in compliance with the License. You may obtain a copy of the
+#  License at http://gridengine.sunsource.net/Gridengine_SISSL_license.html
+#
+#  Software provided under this License is provided on an "AS IS" basis,
+#  WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING,
+#  WITHOUT LIMITATION, WARRANTIES THAT THE SOFTWARE IS FREE OF DEFECTS,
+#  MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE, OR NON-INFRINGING.
+#  See the License for the specific provisions governing your rights and
+#  obligations concerning the Software.
+#
+#  The Initial Developer of the Original Code is: Sun Microsystems, Inc.
+#
+#  Copyright: 2001 by Sun Microsystems, Inc.
+#
+#  All Rights Reserved.
+#
+##########################################################################
+#___INFO__MARK_END__
+
+# Tests for SGE_Helper_Service.exe
+
+# define global variable in this namespace
+global check_name
+global check_category 
+global check_description 
+global check_needs
+global check_functions 
+global check_highest_level
+global check_init_level_procedure
+global check_root_access_needs
+global SGE_Helper_Service_was_running
+global host
+
+set check_root_access_needs "yes"
+
+# define a level initialization procedure:
+set check_init_level_procedure "SGE_Helper_Service_init_level"
+
+# define test's name and run level descriptions
+set check_name            "SGE_Helper_Service"
+set check_category        "SYSTEM VERIFIED"
+set check_highest_level   0
+set check_description(0)  "test SGE_Helper_Service functionality"
+
+# define test's dependencies
+set check_needs "init_core_system qsub qacct" 
+
+# setup and cleanup functions
+set check_setup_function   SGE_Helper_Service_setup
+set check_cleanup_function SGE_Helper_Service_cleanup
+
+# define test's procedure order
+set check_functions ""
+lappend check_functions "service_error_handling"
+lappend check_functions "display_win_gui"
+
+
+proc SGE_Helper_Service_init_level {} {
+   global CHECK_ACT_LEVEL
+   switch -- $CHECK_ACT_LEVEL {
+      "0" { 
+         return 0
+      }
+   }
+   return -1  # no other level 
+}
+
+
+# -------- local test procedures: initialization------------------------------
+proc SGE_Helper_Service_setup {} {
+   global ts_config
+   global qacct_reporting_backup
+   global SGE_Helper_Service_was_running
+   global host
+
+   set host [host_conf_get_windows_exec_host]
+
+   if {$host == ""} {
+      # no windows execution host in cluster, test not possible
+      ts_log_config "no windows execution host"
+      return 99
+   }
+
+   ts_log_fine "using $host as test host"
+
+   # set the accounting_flush_time to 0 to speedup writing of accounting info
+   get_config qacct_reporting_backup
+   set new_config(reporting_params) "accounting_flush_time=00:00:00"
+   set_config new_config
+
+   # start or stop SGE_Helper_Service
+   set SGE_Helper_Service_was_running [is_SGE_Helper_Service_running $host]
+}
+
+proc SGE_Helper_Service_cleanup  {} {
+   global ts_config
+   global qacct_reporting_backup
+   global SGE_Helper_Service_was_running
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   reset_config qacct_reporting_backup
+
+   if {$SGE_Helper_Service_was_running == 0} {
+      # stop "N1 Grid Engine Helper Service" again on the exec host.
+      if {[stop_SGE_Helper_Service] != 0} {
+         ts_log_severe "error stopping N1 Grid Engine Helper Service"
+      }
+   } else {
+      # start "N1 Grid Engine Helper Service" again on the exec host
+      if {[start_SGE_Helper_Service] != 0} {
+         ts_log_severe "error starting N1 Grid Engine Helper Service"
+      }
+   }
+}
+
+# Tools for testing SGE_Helper_Service
+
+#****** start_SGE_Helper_Service() *********************************************
+#  NAME
+#     start_SGE_Helper_Service() -- starts the SGE_Helper_Service on the
+#                                   Windows host
+#
+#  SYNOPSIS
+#     start_SGE_Helper_Service { }
+#
+#  FUNCTION
+#     Starts the SGE_Helper_Service on the Windows host
+#
+#  RESULT
+#     0 if the SGE_Helper_Service was started,
+#     1 if it there is no Windows execution host,
+#     2 if the SGE_Helper_Service was not started.
+#
+#  SEE ALSO
+#*******************************************************************************
+proc start_SGE_Helper_Service {} {
+   ts_log_newline
+   ts_log_fine "starting N1 Grid Engine Helper Service"
+   
+   set ret [control_SGE_Helper_Service 1]
+   if {$ret == 0} {
+      ts_log_fine "N1 Grid Engine Helper Service is running"
+   } else {
+      ts_log_fine "N1 Grid Engine Helper Service is not running! Test failed!"
+   }
+   return $ret
+}
+
+#****** stop_SGE_Helper_Service() **********************************************
+#  NAME
+#     stop_SGE_Helper_Service() -- stops the SGE_Helper_Service on the
+#                                  Windows host
+#
+#  SYNOPSIS
+#     stops_SGE_Helper_Service { }
+#
+#  FUNCTION
+#     Stops the SGE_Helper_Service on the Windows host
+#
+#  RESULT
+#     0 if the SGE_Helper_Service was stopped,
+#     1 if it there is no Windows execution host,
+#     2 if the SGE_Helper_Service was not stopped.
+#
+#  SEE ALSO
+#*******************************************************************************
+proc stop_SGE_Helper_Service {} {
+   ts_log_newline
+   ts_log_fine "stopping N1 Grid Engine Helper Service"
+   set ret [control_SGE_Helper_Service 0]
+   if {$ret == 0} {
+      ts_log_fine "N1 Grid Engine Helper Service is stopped"
+   } else {
+      ts_log_fine "N1 Grid Engine Helper Service is not stopped! \
+                          Test failed!"
+   }
+   return $ret
+}
+
+#****** control_SGE_Helper_Service() *******************************************
+#  NAME
+#     control_SGE_Helper_Service() -- starts or stops the SGE_Helper_Service.exe
+#                                     on the Windows execution host
+#
+#  SYNOPSIS
+#     control_SGE_Helper_Service {start}
+#
+#  FUNCTION
+#     Starts the SGE_Helper_Service on the Windows execution host
+#
+#  INPUTS
+#     start - set to 1 if service should be started, 
+#             set to 0 if service should be stopped.
+#
+#  RESULT
+#     0 if the SGE_Helper_Service was started/stopped,
+#     1 if it there is no Windows execution host,
+#     2 if the SGE_Helper_Service was not started/stopped.
+#
+#  SEE ALSO
+#     is_SGE_Helper_Service_running()
+#     config_host/host_conf_get_windows_exec_host()
+#*******************************************************************************
+proc control_SGE_Helper_Service {start} {
+   global host
+
+   if {$host == ""} {
+      return 1
+   }
+
+   if {[is_SGE_Helper_Service_running $host] == $start} {
+      return 0 
+   }
+
+   if {$start == 1} {
+      set cmd "start"
+   } else {
+      set cmd "stop"
+   }
+
+   start_remote_prog $host "root"\
+      /dev/fs/C/WINDOWS/system32/net.exe\
+      "$cmd \"N1 Grid Engine Helper Service\""
+
+   set count 0
+   while {[is_SGE_Helper_Service_running $host] != $start
+          && $count < 10} {
+      after 5000
+      incr count
+   }
+
+   set ret 0
+   if {$count == 10} {
+      set ret 2
+   }
+   return $ret
+}
+
+#****** submit_job_expect_failure() ********************************************
+#  NAME
+#     submit_job_expect_failure() -- starts a job that is expected to fail and
+#                                    waits until it fails.
+#
+#  SYNOPSIS
+#     submit_job_expect_failure { submit_command expected_failure }
+#
+#  FUNCTION
+#     Starts a job that is expected to fail and waits until it fails.
+#
+#  INPUTS
+#     submit_command   - the command line for qsub, without qsub
+#     expected_failure - "queue_error" or "job_error"
+#
+#  RESULT
+#     0 if the job was started successfully and the expected error occured
+#    -1 else
+#
+#  SEE ALSO
+#*******************************************************************************
+proc submit_job_expect_failure {submit_command expected_failure} {
+   global host
+   set    queue "all.q"
+
+   # submit job
+   ts_log_newline
+   set job_id [submit_job $submit_command]
+
+   if {$job_id < 0} {
+      ts_log_severe "error submitting job" 
+      return -1
+   }
+
+   # job is submitted, wait for job start
+   if {[wait_for_jobstart $job_id "" 30 0 1] != 0} {
+      ts_log_severe "job was not scheduled to exec host"
+      return -1
+   }
+
+   # wait for expected failure
+   if {[string compare $expected_failure "queue_error"] == 0} {
+      # check if queue is in error state
+      set seconds 120
+      set time [timestamp]
+      while {1} {
+         # look if queue instance is in error state
+         set queue_state [get_queue_state "$queue@$host"]
+         if {[ string compare $queue_state "E" ] == 0} {
+            ts_log_fine "Queue was set in error state, test was successful."
+            break
+         }
+
+         set runtime [expr [timestamp] - $time]
+         if {$runtime >= $seconds} {
+            ts_log_severe "timeout waiting for queue \"$queue@$host\" going to error state due to job \"$job_id\""
+            return -1
+         }
+         after 1000
+      }
+   } elseif {[string compare $expected_failure "job_error"] == 0} {
+      # check if job is in error state
+      ts_log_fine "Waiting for failure of job $job_id"
+      set seconds 60
+      set time [timestamp]
+      while {1} {
+         # look if job is in error state
+         set job_state [get_job_state $job_id]
+         if {[string compare $job_state "Eqw"] == 0} {
+            ts_log_fine "Job $job_id failed. Test was successful."
+            break
+         }
+
+         set runtime [expr [timestamp] - $time]
+         if {$runtime >= $seconds} {
+            ts_log_severe "timeout waiting for job \"$job_id\" going to error state"
+            return -1
+         }
+         after 1000
+      }
+   } else {
+      ts_log_severe "invalid value for parameter expected_failure"
+   }
+
+   # delete job
+   delete_job $job_id
+
+   # clear error state from queue
+   ts_log_fine "do a qmod -c \"*\" ..."
+   set output [start_sge_bin "qmod" "-c \"*\""]
+   ts_log_fine $output
+
+   return 0
+}
+
+#****** display_win_gui() *****************************************************
+#
+#  NAME
+#     display_win_gui() -- tests usage of complex variable display_win_gui
+#
+#  SYNOPSIS
+#     display_win_gui { }
+#
+#  FUNCTION
+#     Tests the usage of the complex variable display_win_gui.
+#     Also tests CR 6428621: add a reserved complex value to control
+#                            displaying Windows GUIs
+#
+#  RESULT
+#     int 0 - test succeeded
+#        -1 - test failed
+#
+#  SEE ALSO
+#******************************************************************************
+proc display_win_gui {} {
+   global ts_config CHECK_OUTPUT
+   global CHECK_USER
+   global host
+
+   if {$ts_config(source_dir) == "none"} {
+      ts_log_config "source directory is set to \"none\" - cannot run test"
+      return
+   }
+
+   set requests "dwg=true display_win_gui=true dwg=false\
+                 display_win_gui=false a=win32-x86\
+                 dwg=true display_win_gui=true dwg=false\
+                 display_win_gui=false a=win32-x86"
+
+   set expected {57 57 x x 0 x x 0 0 0}
+
+   #        \Service| running     stopped
+   # request \__ __ |
+   #   dwg         \|
+   # ------------------------------------------
+   #   true         |   57        not scheduled
+   #   false        |not sched    0 
+   #   none         |   0         0 
+   #   
+   #     ^
+   #     |
+   #    Request in short (dwg) and long (display_win_gui) form
+   #
+   # This table is the exit_status matrix of GUI_test.exe, showing the expected
+   # exit stati depending on the requested values for "display_win_gui" complex
+   # variable and depending on if the "N1 Grid Engine Helper Service" is running
+   # or stopped on the exec host.
+   # The variables "requests" and "expected" express this matrix, too.
+   # "expected" is first the left column (true and false each requested in
+   # short (dwg) and long (display_win_gui) form), then the right column.
+   # "x" means "don't expect any exit status, this job will never be scheduled"
+   #
+   # The exit status 57 of GUI_test.exe means that it was able to display it's
+   # GUI on the visible desktop. 0 means that it wasn't able to display it.
+
+   set SGE_Helper_Servcie_was_running [is_SGE_Helper_Service_running $host]
+
+   # make sure that the "N1 Grid Engine Helper Service" runs on the exec host.
+   if {[start_SGE_Helper_Service] != 0} {
+      ts_log_severe "error starting N1 Grid Engine Helper Service"
+   }
+   
+   # do all submits according to the table above and check "failed" and
+   # "exit_status" from qacct.
+   set i 0
+
+   foreach request $requests {
+      if {$i == 5} {
+         # stop the "N1 Grid Engine Helper Service" for the second half
+         # of the submits.
+
+         if {[stop_SGE_Helper_Service] != 0} {
+            ts_log_severe "error stopping N1 Grid Engine Helper Service"
+         }
+      }
+
+      # submit job
+      ts_log_newline
+      set job_id [submit_job "-l $request -l h=$host -b y -shell no $ts_config(source_dir)/WIN32_X86/GUI_test.exe"]
+
+      if {$job_id < 0} {
+         ts_log_severe "error submitting job" 
+      }
+
+      # wait for job end - now accounting should be written
+      set ret [wait_for_jobstart $job_id "" 30 0 1]
+      if {$ret == -1} {
+         if {[lindex $expected $i] == "x"} {
+            # in this case, it's expected that the job is not scheduled
+            ts_log_fine "expected that this job doesn't get scheduled, and it\
+                  wasn't scheduled. deleting it."
+            delete_all_jobs
+            wait_for_job_end 60
+         } else {
+            ts_log_severe "job was not scheduled to exec host"
+         }
+      }
+
+      # if job ought be scheduled, wait for jobend and analyze accounting data.
+      if {[lindex $expected $i] != "x"} {
+         if {[wait_for_jobend $job_id "" 30 1] != 0} {
+            ts_log_severe "job didn't end within timeout"
+         }
+
+         # get accounting
+         if {[get_qacct $job_id] == 0} {
+            # check if job failed
+            if {[string index $qacct_info(failed) 0] != "0" } {
+               ts_log_severe "job failed, $qacct_info(failed)"
+            }
+
+            # read job exit_status from accounting record
+            if {$qacct_info(exit_status) != [lindex $expected $i]} {
+               ts_log_severe "incorrect job exit status, expected [lindex $expected $i], but got $qacct_info(exit_status)"
+            }
+            ts_log_fine "exit_status expected: [lindex $expected $i], exit_status\
+                  read from qacct: $qacct_info(exit_status)"
+         } else {
+            ts_log_severe "field exit_status is missing in qacct output"
+         }
+      }
+      incr i
+   }
+   if {$SGE_Helper_Servcie_was_running == 1} {
+      # start "N1 Grid Engine Helper Service" again on the exec host.
+      if {[start_SGE_Helper_Service] != 0} {
+         ts_log_severe "error starting N1 Grid Engine Helper Service"
+      }
+   }
+}
+
+#****** service_error_handling() **********************************************
+#
+#  NAME
+#     service_error_handling() -- tests correct error handling of 
+#                                 SGE_Helper_Service
+#
+#  SYNOPSIS
+#     service_error_handling { } 
+#
+#  FUNCTION
+#     Tests correct handling of errors for jobs with display_win_gui=true
+#     requirement in SGE_Helper_Service and in sge_shepherd.
+#     Also tests CR 6464927: Failed Windows GUI jobs are reported as 
+#     finished successfully.
+#
+#     This is the test for Grid Engine version 6.1 and higher, there is another
+#     version for Grid Engine version 6.0.
+#
+#  RESULT
+#     int 0 - test succeeded
+#        -1 - test failed
+#
+#  SEE ALSO
+#******************************************************************************
+proc service_error_handling {} {
+   global CHECK_OUTPUT
+   global ts_config
+   global host
+   set queue "all.q"
+
+   # Submit jobs that should display their GUI on the Windows execution host.
+   # 1. If the SGE_Helper_Service.exe is not running, the job mustn't
+   #    be scheduled.
+   # 2. The job must be set into error state when
+   #    a) the job binary doesn't exist
+   #    b) the job binary is not executable
+
+   # 1. If the SGE_Helper_Service.exe is not running, the job mustn't
+   #    be scheduled.
+
+   # make sure that the "N1 Grid Engine Helper Service" doesn't run
+   # on the exec host.
+   if {[stop_SGE_Helper_Service] != 0} {
+      ts_log_severe "error stopping N1 Grid Engine Helper Service"
+   }
+
+   set submit_command [get_display_win_gui_parameter]
+   set submit_command "$submit_command -q $queue -l h=$host -b y -shell no /dev/fs/C/WINDOWS/notepad.exe"
+
+   # submit job
+   ts_log_newline
+   set job_id [submit_job $submit_command]
+
+   if {$job_id < 0} {
+      ts_log_severe "error submitting job"
+   }
+
+   # wait for job to be scheduled, expect timeout
+   if {[wait_for_jobstart $job_id "" 30 0 1] == 0} {
+      ts_log_severe "job was scheduled, but was expected to get not scheduled."
+      return -1
+   }
+
+   # delete job
+   delete_job $job_id
+
+   # 2) the job must be set into error state when
+   #    a) the job binary doesn't exist
+
+   # make sure that the "N1 Grid Engine Helper Service" runs
+   # on the exec host.
+   if {[start_SGE_Helper_Service] != 0} {
+      ts_log_severe "error starting N1 Grid Engine Helper Service"
+   }
+
+   set submit_command [get_display_win_gui_parameter]
+   set submit_command "$submit_command -q $queue -l h=$host -b y\
+                       -shell no /dev/fs/C/WINDOWS/troet.bla"
+
+   set ret [submit_job_expect_failure $submit_command "job_error"]
+   if {$ret != 0} {
+      return $ret
+   }
+
+
+   # 2) the job must be set into error state when
+   #    b) the job binary is not executable
+
+   set submit_command [get_display_win_gui_parameter]
+   set submit_command "$submit_command -q $queue -l h=$host -b y -shell no \
+                       $ts_config(product_root)/examples/jobs/sleeper.sh 10"
+
+   set ret [submit_job_expect_failure $submit_command "job_error"]
+   return $ret
+}
+
+#****** get_display_win_gui_parameter() ****************************************
+#  NAME
+#     get_display_win_gui_parameter() -- returns the qsub parameter to start
+#                                        Windows jobs that display their GUI on
+#                                        the visible screen.
+#
+#  SYNOPSIS
+#     get_display_win_gui_parameter { }
+#
+#  FUNCTION
+#     Returns the qsub parameter to start Windows jobs that display their GUI
+#     on the visible screen.
+#
+#  RESULT
+#     string - the qsub parameter
+#
+#  SEE ALSO
+#*******************************************************************************
+proc get_display_win_gui_parameter {} {
+   return "-l display_win_gui=true"
+}
+
+#****** is_SGE_Helper_Service_running() ****************************************
+#  NAME
+#     is_SGE_Helper_Service_running() -- check if SGE_Helper_Service.exe is
+#                                        running on the execution host
+#
+#  SYNOPSIS
+#     is_SGE_Helper_Service_running {host}
+#
+#  FUNCTION
+#     Checks if the SGE_Helper_Service is running on the execution host.
+#
+#  INPUTS
+#     host             - execution host that is to check
+#
+#  RESULT
+#     0 if the SGE_Helper_Service is not running,
+#     1 if it is running.
+#
+#  SEE ALSO
+#     config/get_exechost()
+#*******************************************************************************
+proc is_SGE_Helper_Service_running {host} {
+   set ret 0
+   if {[get_exechost exec_host $host] == 0} {
+      set load $exec_host(load_values)
+      set lines [split $load ","]
+      foreach line $lines {
+         set words [split $line "="]
+         if {[lindex $words 0] == "display_win_gui"} {
+            if {[lindex $words 1] == 1} {
+               set ret 1
+            }
+         }
+      }
+   }
+   return $ret
+}
+

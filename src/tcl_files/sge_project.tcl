@@ -362,9 +362,6 @@ proc get_project_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
    switch -exact $action {
       "add" {
          # VD: SGE 5.3 doesn't output anything on success
-         if {$ts_config(gridengine_version) == 53} {
-            add_message_to_container messages 0 ""
-         }
          # when acl,xacl parameters set incorrectly
          add_message_to_container messages -4 [translate_macro MSG_CQUEUE_UNKNOWNUSERSET_S "*"]
          # when oticket,fshare parameters set incorrectly

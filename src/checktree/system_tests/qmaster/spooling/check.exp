@@ -89,17 +89,13 @@ proc qmaster_spooling_setup {} {
 proc qmaster_spooling_cleanup {} {
    global ts_config
 
-   if {$ts_config(gridengine_version) >= 61} {
-      if {[get_rqs_list rqs_names "" "" 0] == 0} {
-         foreach elem $rqs_names {
-            ts_log_fine "Removing resource quota sets $elem ...\n"
-            del_rqs $elem
-         }
+   if {[get_rqs_list rqs_names "" "" 0] == 0} {
+      foreach elem $rqs_names {
+         ts_log_fine "Removing resource quota sets $elem ...\n"
+         del_rqs $elem
       }
    }
-   if {$ts_config(gridengine_version) >= 62} {
-      delete_all_ars
-   }
+   delete_all_ars
 }
 
 proc cmp_config { conf_a conf_b fields check} {
@@ -157,30 +153,28 @@ proc qmaster_spooling_prj_restart {} {
 proc qmaster_spooling_rqs_restart {} {
    global ts_config
 
-   if {$ts_config(gridengine_version) >= 61} {
-      set rqs_name "test_spooling"
+   set rqs_name "test_spooling"
 
-      set rules ""
-      lappend rules "users {*} to slots=10"
-      lappend rules "hosts {*} to slots=10"
-      lappend rules "queues {!*} to slots=10"
-      lappend rules "hosts !* to slots=10,arch=sol-sparc64"
-      lappend rules "pes pe1,pe2,pe3 to slots=10,arch=sol-sparc64"
-      lappend rules "hosts {*} to slots=\$num_proc*2+\$num_proc*1"
-      set rqs_charray($rqs_name,limit)   "$rules"
-      set rqs_charray($rqs_name,enabled) "TRUE"
-      set rqs_charray($rqs_name,description) "test description for spooling \?+-:"
-      add_rqs rqs_charray
+   set rules ""
+   lappend rules "users {*} to slots=10"
+   lappend rules "hosts {*} to slots=10"
+   lappend rules "queues {!*} to slots=10"
+   lappend rules "hosts !* to slots=10,arch=sol-sparc64"
+   lappend rules "pes pe1,pe2,pe3 to slots=10,arch=sol-sparc64"
+   lappend rules "hosts {*} to slots=\$num_proc*2+\$num_proc*1"
+   set rqs_charray($rqs_name,limit)   "$rules"
+   set rqs_charray($rqs_name,enabled) "TRUE"
+   set rqs_charray($rqs_name,description) "test description for spooling \?+-:"
+   add_rqs rqs_charray
 
-      shutdown_and_restart_qmaster
+   shutdown_and_restart_qmaster
 
-      get_rqs new_charray "$rqs_name"
+   get_rqs new_charray "$rqs_name"
 
-      set check_fields [array names rqs_charray]
-      cmp_config rqs_charray new_charray $check_fields "qmaster_spooling_rqs_restart"
+   set check_fields [array names rqs_charray]
+   cmp_config rqs_charray new_charray $check_fields "qmaster_spooling_rqs_restart"
 
-      del_rqs "$rqs_name"
-   }
+   del_rqs "$rqs_name"
 }
 
 proc qmaster_spooling_ar_restart {} {
@@ -191,78 +185,76 @@ proc qmaster_spooling_ar_restart {} {
    global CHECK_FIRST_FOREIGN_SYSTEM_USER
    global CHECK_SECOND_FOREIGN_SYSTEM_USER
 
-   if {$ts_config(gridengine_version) >= 62} {
-      set rqs_name "test_spooling"
-      set actual_host [host_conf_get_suited_hosts]
-      set qinstance [get_queue_instance "all.q" $actual_host]
+   set rqs_name "test_spooling"
+   set actual_host [host_conf_get_suited_hosts]
+   set qinstance [get_queue_instance "all.q" $actual_host]
 
-      set now [clock seconds]
-      set start  [clock format [expr $now + 20000] -format "%Y%m%d%H%M.%S"]
-      set starto [clock format [expr $now + 20000] -format "%m/%d/%Y %H:%M:%S"]
-      set end    [clock format [expr $now + 23661] -format "%Y%m%d%H%M.%S"]
-      set endo   [clock format [expr $now + 23661] -format "%m/%d/%Y %H:%M:%S"]
-
-
-      #  To be sure, no conflict exists
-      delete_all_ars   
-
-      set    args "-a $start "
-      append args "-e $end "
-      append args "-A test_ar_account "
-      append args "-ckpt testcheckpointobject "
-      append args "-he yes "
-      append args "-l 'h_rt=200, h=${actual_host}' "
-      append args "-m abe "
-      append args "-masterq all.q "
-      append args "-M $CHECK_FIRST_FOREIGN_SYSTEM_USER@sun.com,$CHECK_SECOND_FOREIGN_SYSTEM_USER@sun.com "
-      append args "-N test_ar_name "
-      append args "-w e "
-      append args "-pe mytestpe 1- "
-      append args "-q $qinstance "
-      append args "-u '!$CHECK_FIRST_FOREIGN_SYSTEM_USER,$CHECK_SECOND_FOREIGN_SYSTEM_USER,!root' "
-
-      ts_log_fine "qrsub $args\n"
-      set ar_id [submit_ar "$args"]
-      if {$ar_id < 0} {
-       return
-      }
-
-      set check_values(id)                             "$ar_id"
-      set check_values(name)                           "test_ar_name"
-      set check_values(owner)                          "$CHECK_USER"  
-      set check_values(checkpoint_name)                "testcheckpointobject"
-      set check_values(start_time)                     "$starto"
-      set check_values(end_time)                       "$endo"
-      set check_values(duration)                       "01:01:01"
-      # disabled because does not work on all architectures, sometimes it's wheel sometimes staff
-      # set check_values(group)                          "staff"
-      set check_values(account)                        "test_ar_account"
-      set check_values(resource_list)                  "h_rt=200, hostname=${actual_host}"
-      set check_values(error_handling)                 "true"
-      set check_values(granted_slots_list)             "$qinstance=5"
-      set check_values(granted_parallel_environment)   "mytestpe slots 1-9999999"
-      set check_values(mail_options)                   "abe"
-      set check_values(mail_list)                      "$CHECK_FIRST_FOREIGN_SYSTEM_USER@sun.com,$CHECK_SECOND_FOREIGN_SYSTEM_USER@sun.com"
-      set check_values(acl_list)                       "$CHECK_SECOND_FOREIGN_SYSTEM_USER"
-      set check_values(xacl_list)                      "$CHECK_FIRST_FOREIGN_SYSTEM_USER,root"
+   set now [clock seconds]
+   set start  [clock format [expr $now + 20000] -format "%Y%m%d%H%M.%S"]
+   set starto [clock format [expr $now + 20000] -format "%m/%d/%Y %H:%M:%S"]
+   set end    [clock format [expr $now + 23661] -format "%Y%m%d%H%M.%S"]
+   set endo   [clock format [expr $now + 23661] -format "%m/%d/%Y %H:%M:%S"]
 
 
-      ts_log_fine "qrstat -ar $ar_id\n"
-      set ret [parse_qrstat_check $ar_id check_values]
-      if {$ret != 0 } {
-       return
-      }
+   #  To be sure, no conflict exists
+   delete_all_ars   
 
-      shutdown_and_restart_qmaster
+   set    args "-a $start "
+   append args "-e $end "
+   append args "-A test_ar_account "
+   append args "-ckpt testcheckpointobject "
+   append args "-he yes "
+   append args "-l 'h_rt=200, h=${actual_host}' "
+   append args "-m abe "
+   append args "-masterq all.q "
+   append args "-M $CHECK_FIRST_FOREIGN_SYSTEM_USER@sun.com,$CHECK_SECOND_FOREIGN_SYSTEM_USER@sun.com "
+   append args "-N test_ar_name "
+   append args "-w e "
+   append args "-pe mytestpe 1- "
+   append args "-q $qinstance "
+   append args "-u '!$CHECK_FIRST_FOREIGN_SYSTEM_USER,$CHECK_SECOND_FOREIGN_SYSTEM_USER,!root' "
 
-      ts_log_fine "check output of qrstat -ar $ar_id after spooling\n"
-      set ret [parse_qrstat_check $ar_id check_values]
-      if {$ret != 0 } {
-       return
-      }
-
-      ts_log_fine "test qmaster_spooling_ar_restart OK"
+   ts_log_fine "qrsub $args\n"
+   set ar_id [submit_ar "$args"]
+   if {$ar_id < 0} {
+    return
    }
+
+   set check_values(id)                             "$ar_id"
+   set check_values(name)                           "test_ar_name"
+   set check_values(owner)                          "$CHECK_USER"  
+   set check_values(checkpoint_name)                "testcheckpointobject"
+   set check_values(start_time)                     "$starto"
+   set check_values(end_time)                       "$endo"
+   set check_values(duration)                       "01:01:01"
+   # disabled because does not work on all architectures, sometimes it's wheel sometimes staff
+   # set check_values(group)                          "staff"
+   set check_values(account)                        "test_ar_account"
+   set check_values(resource_list)                  "h_rt=200, hostname=${actual_host}"
+   set check_values(error_handling)                 "true"
+   set check_values(granted_slots_list)             "$qinstance=5"
+   set check_values(granted_parallel_environment)   "mytestpe slots 1-9999999"
+   set check_values(mail_options)                   "abe"
+   set check_values(mail_list)                      "$CHECK_FIRST_FOREIGN_SYSTEM_USER@sun.com,$CHECK_SECOND_FOREIGN_SYSTEM_USER@sun.com"
+   set check_values(acl_list)                       "$CHECK_SECOND_FOREIGN_SYSTEM_USER"
+   set check_values(xacl_list)                      "$CHECK_FIRST_FOREIGN_SYSTEM_USER,root"
+
+
+   ts_log_fine "qrstat -ar $ar_id\n"
+   set ret [parse_qrstat_check $ar_id check_values]
+   if {$ret != 0 } {
+    return
+   }
+
+   shutdown_and_restart_qmaster
+
+   ts_log_fine "check output of qrstat -ar $ar_id after spooling\n"
+   set ret [parse_qrstat_check $ar_id check_values]
+   if {$ret != 0 } {
+    return
+   }
+
+   ts_log_fine "test qmaster_spooling_ar_restart OK"
 }
 
 # test the issue 2442: incomplete error loging in case of classic spooling failures
@@ -303,11 +295,7 @@ proc qmaster_spooling_issue2442 {} {
          set sub_dirs [get_dir_names "$qmaster_spool_dir/$object"]
          if {[string compare $sub_dirs ""] == 0} {
             # messages are version dependend
-            if { $ts_config(gridengine_version) >= 62 } {
-               set msg "[translate_macro MSG_FLATFILE_ERROR_READINGFILE_S "$qmaster_spool_dir/$object/wrong_$object$unq_num"]"
-            } else {
-               set msg "[translate_macro MSG_CONFIG_READINGFILE_SS "$object" "wrong_$object$unq_num"]"
-            }
+            set msg "[translate_macro MSG_FLATFILE_ERROR_READINGFILE_S "$qmaster_spool_dir/$object/wrong_$object$unq_num"]"
             # look for the error message for the given object
             set result [start_remote_prog $ts_config(master_host) $CHECK_USER "cat" "$qmaster_spool_dir/messages | grep \\\"$msg\\\""]
             # remove the wrong configuration file
@@ -315,11 +303,7 @@ proc qmaster_spooling_issue2442 {} {
          } else {
             foreach sub_dir $sub_dirs {
                # messages are version dependend
-               if { $ts_config(gridengine_version) >= 62 } {
-                  set msg "[translate_macro MSG_FLATFILE_ERROR_READINGFILE_S "$qmaster_spool_dir/$object/$sub_dir/wrong_$object$unq_num"]"
-               } else {
-                  set msg "[translate_macro MSG_CONFIG_READINGFILE_SS "$object/$sub_dir" "wrong_$object$unq_num"]"
-               }
+               set msg "[translate_macro MSG_FLATFILE_ERROR_READINGFILE_S "$qmaster_spool_dir/$object/$sub_dir/wrong_$object$unq_num"]"
                # look for the error message for the given object
                set result [start_remote_prog $ts_config(master_host) $CHECK_USER "cat" "$qmaster_spool_dir/messages | grep \\\"$msg\\\""]
                # remove the wrong configuration file

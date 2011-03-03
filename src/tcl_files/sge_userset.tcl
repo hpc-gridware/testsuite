@@ -553,9 +553,7 @@ proc get_userset_messages {msg_var action obj_attr {on_host ""} {as_user ""}} {
          add_message_to_container messages -6 [translate_macro MSG_QMASTER_ACLNOSHARE]
          add_message_to_container messages -7 [translate_macro MSG_QMASTER_ACLNOTICKET]
          add_message_to_container messages -11 [translate_macro MSG_GDI_READCONFIGFILEEMPTYSPEC_S "*"]
-         if {$ts_config(gridengine_version) >= 61 && ![is_61AR]} {
-            add_message_to_container messages -12 [translate_macro MSG_MUST_BE_POSITIVE_VALUE_S "*"]
-         }
+         add_message_to_container messages -12 [translate_macro MSG_MUST_BE_POSITIVE_VALUE_S "*"]
       }
       "get" {
          set NOT_EXISTS [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "access list" "$obj_attr"]
@@ -581,9 +579,7 @@ proc get_userset_messages {msg_var action obj_attr {on_host ""} {as_user ""}} {
          add_message_to_container messages -8 [translate_macro MSG_QMASTER_ACLNOSHARE]
          add_message_to_container messages -9 [translate_macro MSG_QMASTER_ACLNOTICKET]
          add_message_to_container messages -11 [translate_macro MSG_GDI_READCONFIGFILEEMPTYSPEC_S "*"]
-         if {$ts_config(gridengine_version) >= 61} {
-            add_message_to_container messages -12 [translate_macro MSG_MUST_BE_POSITIVE_VALUE_S "*"]
-         }
+         add_message_to_container messages -12 [translate_macro MSG_MUST_BE_POSITIVE_VALUE_S "*"]
       }
       "add_user" {
          # aja: TODO: foreach user, foreach userset, build the expected. message
@@ -595,9 +591,7 @@ proc get_userset_messages {msg_var action obj_attr {on_host ""} {as_user ""}} {
          add_message_to_container messages 0 [translate_macro MSG_GDI_DELFROMACL_SS "*" "*"]
          add_message_to_container messages -1 [translate_macro MSG_GDI_USERNOTINACL_SS "*" "*"]
          #add_message_to_container messages -2 [translate_macro MSG_GDI_DELFROMACL_SS "*" "*"]
-         if {$ts_config(gridengine_version) >= 62} {
-            add_message_to_container messages -3 [translate_macro MSG_PARSE_MOD3_REJECTED_DUE_TO_AR_SU "*" "*"]
-         }
+         add_message_to_container messages -3 [translate_macro MSG_PARSE_MOD3_REJECTED_DUE_TO_AR_SU "*" "*"]
          add_message_to_container messages -4 [translate_macro MSG_GDI_ACLDOESNOTEXIST_S "*"] 
       }
    } 

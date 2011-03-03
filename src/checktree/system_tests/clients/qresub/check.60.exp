@@ -325,10 +325,8 @@ proc qresub_minus_help_option { } {
    
    # check return code
    set output [start_sge_bin "qresub" "-help" $ts_config(master_host) $nonadmin_user]
-   if {$ts_config(gridengine_version) >= "61"} {
-      if { $prg_exit_state != 0 } {
-         ts_log_severe "The return code of qresub -help was not 0 ($prg_exit_state)!"
-      }
+   if { $prg_exit_state != 0 } {
+      ts_log_severe "The return code of qresub -help was not 0 ($prg_exit_state)!"
    }
    
    # check return code

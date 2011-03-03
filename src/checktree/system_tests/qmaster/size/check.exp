@@ -253,11 +253,7 @@ proc qmaster_size_setup {} {
       ts_log_fine "waiting for startup of qmaster (and scheduler if version < 62) ..."
       after 5000
       set running [ are_master_and_scheduler_running $ts_config(master_host) $qmaster_spool_dir]
-      if {$ts_config(gridengine_version) < 62 || [is_61AR]} {
-         set expected_ret_val 3
-      } else {
-         set expected_ret_val 2
-      }
+      set expected_ret_val 2
       if { $running == $expected_ret_val } {
          break;
       }
@@ -283,16 +279,7 @@ proc get_size {who} {
       }
       ts_log_finer "qmaster pid: $pid"
    } elseif {$who == "schedd"} {
-      if {$ts_config(gridengine_version) < 62 || [is_61AR]} {
-         set pid [get_schedd_pid]
-         if { $pid == -1 } {
-            ts_log_severe "could not evaluate pid of schedd"
-            return -1
-         }
-         ts_log_fine "schedd  pid: $pid"
-      } else {
-         return 0
-      }
+      return 0
    } else {
       return 0
    }
@@ -641,13 +628,8 @@ proc check_size_config {} {
 
    upvar SCHEDULE_INTERVAL        schedule_interval
 
-   if { $ts_config(gridengine_version) == 53 } {
-      set new_config(schedd_params) "flush_submit_sec=0,flush_finish_sec=0"
-      set_config new_config
-   } else {
-      set schedd_conf(flush_submit_sec) 1
-      set schedd_conf(flush_finish_sec) 1
-   }
+   set schedd_conf(flush_submit_sec) 1
+   set schedd_conf(flush_finish_sec) 1
 
    set schedd_conf(schedule_interval)   $schedule_interval
    set_schedd_config schedd_conf

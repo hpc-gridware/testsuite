@@ -383,14 +383,12 @@ proc get_cluster_configuration {} {
    lappend sge_info_list "SGE root directory: $ts_config(product_root)"
    lappend sge_info_list "SGE cell: $ts_config(cell)"
    lappend sge_info_list "Cluster name: $ts_config(cluster_name)"
-   if {$ts_config(gridengine_version) >= 62} {
-      if {$ts_config(jmx_port) > 0} {
-         set jmx_enabled true
-      } else {
-         set jmx_enabled false
-      }
-      lappend sge_info_list "JMX enabled: $jmx_enabled"
+   if {$ts_config(jmx_port) > 0} {
+      set jmx_enabled true
+   } else {
+      set jmx_enabled false
    }
+   lappend sge_info_list "JMX enabled: $jmx_enabled"
    lappend sge_info_list "Qmaster port: $ts_config(commd_port)"
    lappend sge_info_list  "Execd port: [expr $ts_config(commd_port) + 1]"
 }

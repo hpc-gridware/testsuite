@@ -3288,10 +3288,6 @@ proc config_product_type { only_check name config_array } {
       sgeee "Grid Engine Enterprise Edition"
    }
 
-   if {$config(gridengine_version) < 60} {
-      set sge_types(sge) "Grid Engine"
-      }
-
    set value [config_generic $only_check $name config "" "choice" 0 1 sge_types]
 
    set CHECK_PRODUCT_TYPE $value
@@ -4113,7 +4109,6 @@ proc config_testsuite_gridengine_version { only_check name config_array } {
    upvar $config_array config
 
    array set version_list {
-      53 "SGE(EE) 5.3 systems (e.g. V53_beta2_BRANCH)"
       60 "N1GE 6.0 systems (e.g. V60s2_BRANCH)"
       61 "N1GE 6.1 systems (e.g. V61_BRANCH)"
       62 "N1GE 6.2 systems (e.g. maintrunk)"
