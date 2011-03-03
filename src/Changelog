@@ -7,6 +7,9 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+JG-2011-03-03-2: Bugfix:     installation was broken by JG-2011-03-03-1 when
+                             gridengine_version 80 is used
+
 JG-2011-03-03-1: Enhancem.:  introduce gridengine_version 80, update version
                              parsing
                  Issue:      TS-342
