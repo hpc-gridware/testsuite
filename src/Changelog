@@ -7,6 +7,11 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+JG-2011-03-03-1: Enhancem.:  introduce gridengine_version 80, update version
+                             parsing
+                 Issue:      TS-342
+                 Review:     EB (TS-4)
+
 JG-2011-03-03-0: Cleanup:    remove testsuite code for outdated versions, join
                              version dependent files into one version
                              independent file
