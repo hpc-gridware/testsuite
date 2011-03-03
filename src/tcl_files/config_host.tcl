@@ -32,7 +32,7 @@
 
 global ts_host_config               ;# new testsuite host configuration array
 global actual_ts_host_config_version      ;# actual host config version number
-set    actual_ts_host_config_version "1.11"
+set    actual_ts_host_config_version "1.12"
 
 if {![info exists ts_host_config]} {
    # ts_host_config defaults
@@ -314,18 +314,12 @@ proc host_config_get_host_parameters { } {
    lappend params loadsensor
    lappend params processors
    lappend params spooldir
-   lappend params arch,53
-   lappend params arch,60
-   lappend params arch,61
    lappend params arch,62
-   lappend params compile,53
-   lappend params compile,60
-   lappend params compile,61
+   lappend params arch,80
    lappend params compile,62
-   lappend params java_compile,53
-   lappend params java_compile,60
-   lappend params java_compile,61
+   lappend params compile,80
    lappend params java_compile,62
+   lappend params java_compile,80
    lappend params compile_time
    lappend params response_time
    lappend params fr_locale
@@ -335,14 +329,14 @@ proc host_config_get_host_parameters { } {
    lappend params send_speed
 
    return $params
-      }
+}
 
-#****** config_host/host_config_dislpay_host_params() **************************
+#****** config_host/host_config_display_host_params() **************************
 #  NAME
-#     host_config_dislpay_host_params() -- display the host configuration
+#     host_config_display_host_params() -- display the host configuration
 #
 #  SYNOPSIS
-#     host_config_dislpay_host_params { host config_array } 
+#     host_config_display_host_params { host config_array } 
 #
 #  FUNCTION
 #     display the list of host parameters and it's values
@@ -352,7 +346,7 @@ proc host_config_get_host_parameters { } {
 #     config_array - ts_host_config
 #
 #*******************************************************************************
-proc host_config_dislpay_host_params { host config_array } {
+proc host_config_display_host_params { host config_array } {
    global ts_config
 
    upvar $config_array config
@@ -783,7 +777,7 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
          continue
       }
 
-      host_config_dislpay_host_params $host config
+      host_config_display_host_params $host config
 
       puts -nonewline "\n\nEnter category to edit or hit return to exit > "
       set input [wait_for_enter 1]
@@ -1016,7 +1010,7 @@ proc host_config_hostlist_delete_host { array_name } {
          continue
       }
 
-      host_config_dislpay_host_params $host config
+      host_config_display_host_params $host config
       
       puts -nonewline "Delete this host? (y/n): "
       set input [wait_for_enter 1]
@@ -1534,13 +1528,13 @@ wait_for_enter
    if { [string compare $ts_host_config(version)  "1.10"] == 0 } {
       puts "\ntestsuite host configuration update from 1.10 to 1.11 ..."
 
-      # we have to update all version dependent settings from 65 to 61
+      # change the one java setting to java14, java15, java16
       foreach host $ts_host_config(hostlist) {
          puts "$host"
          #Remove java from host_config
          puts "---removing java for host $host"
          unset ts_host_config($host,java)
-	 #Add java 1.4
+         #Add java 1.4
          set ts_host_config($host,java14) [autodetect_java $host "1.4"]
          #Check if java1.5 is valid
          set java15_bin $ts_host_config($host,java15)
@@ -1555,7 +1549,40 @@ wait_for_enter
       }
 
       set ts_host_config(version) "1.11"
-     
+
+      show_config ts_host_config
+      wait_for_enter
+      if {[save_host_configuration $filename] != 0} {
+         puts "Could not save host configuration"
+         wait_for_enter
+         return
+      }
+   }
+
+   if {[string compare $ts_host_config(version)  "1.11"] == 0} {
+      puts "\ntestsuite host configuration update from 1.11 to 1.12 ..."
+
+      # introduce new version 80, remove obsolete versions 53, 60, 61
+      foreach host $ts_host_config(hostlist) {
+         puts "$host"
+         set ts_host_config($host,arch,80) $ts_host_config($host,arch,62)
+         unset ts_host_config($host,arch,53)
+         unset ts_host_config($host,arch,60)
+         unset ts_host_config($host,arch,61)
+
+         set ts_host_config($host,compile,80) $ts_host_config($host,compile,62)
+         unset ts_host_config($host,compile,53)
+         unset ts_host_config($host,compile,60)
+         unset ts_host_config($host,compile,61)
+
+         set ts_host_config($host,java_compile,80) $ts_host_config($host,java_compile,62)
+         unset ts_host_config($host,java_compile,53)
+         unset ts_host_config($host,java_compile,60)
+         unset ts_host_config($host,java_compile,61)
+      }
+
+      set ts_host_config(version) "1.12"
+
       show_config ts_host_config
       wait_for_enter
       if {[save_host_configuration $filename] != 0} {
@@ -2348,7 +2375,7 @@ proc host_conf_is_java_compile_host {host {config_var ""}} {
 #     host configuration.
 #     The architecture string may be Grid Engine version dependent, that
 #     means, the function may return different architecture strings for
-#     different Grid Engine version (53, 60, 61, ...).
+#     different Grid Engine version (62, 80, ...).
 #     If a host is not supported platform for a certain Grid Engine version,
 #     "unsupported" is returned as archictecture name.
 #
