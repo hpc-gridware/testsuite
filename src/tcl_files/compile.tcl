@@ -1081,16 +1081,15 @@ proc compile_with_aimk {host_list a_report task_name { aimk_options "" }} {
    set java_compile_host [host_conf_get_java_compile_host]
    set spawn_list {}
    foreach host $host_list {
-      # we have to make sure that the build number is compiled into 
-      # the object code (therefore delete the appropriate object module).
-      delete_build_number_object $host $build_number
-
       # start build jobs
       ts_log_fine "-> starting $task_name on host $host ..."
 
       set prog "$ts_config(testsuite_root_dir)/scripts/remotecompile.sh"
       set par1 "$ts_config(source_dir)"
       if {$define_daily_build_nr} {
+         # we have to make sure that the build number is compiled into
+         # the object code (therefore delete the appropriate object module).
+         delete_build_number_object $host $build_number
          set par2 "-DDAILY_BUILD_NUMBER=$build_number $my_compile_options"
       } else {
          set par2 "$my_compile_options"

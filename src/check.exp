@@ -214,7 +214,7 @@ global do_wait_on_error
 set do_wait_on_error 0
 
 global define_daily_build_nr
-set define_daily_build_nr "true"
+set define_daily_build_nr 1
 
 global create_csv_file
 set create_csv_file "false"
@@ -9250,7 +9250,7 @@ for {set i 0} {$i < $argc} {incr i} {
    }
 
    if {([string compare [lindex $argv $i] "--no_daily_build_nr"] == 0) || ([string compare [lindex $argv $i] "no_daily_build_nr"] == 0) } {
-      set define_daily_build_nr "false"
+      set define_daily_build_nr 0
       continue
    }
 
