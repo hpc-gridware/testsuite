@@ -2741,7 +2741,7 @@ proc config_ge_packages_uri { only_check name config_array } {
                    "have following meaning:"
                    "Release |CVS tag name |Description|enabled for testing| URI"
                    "Example:"
-                   "6:1:6   |V61u6_TAG    |SGE 6.1u6  |true               |file://foo/adir"
+                   "6:2:5   |V62u5_TAG    |SGE 6.2u5  |true               |file://foo/adir"
                  }
    
    set value [config_generic $only_check $name config $help_text "uri" 0]
@@ -4109,13 +4109,12 @@ proc config_testsuite_gridengine_version { only_check name config_array } {
    upvar $config_array config
 
    array set version_list {
-      60 "N1GE 6.0 systems (e.g. V60s2_BRANCH)"
-      61 "N1GE 6.1 systems (e.g. V61_BRANCH)"
-      62 "N1GE 6.2 systems (e.g. maintrunk)"
+      62 "SGE 6.2 systems"
+      80 "UGE 8.0.* systems (git master branch)"
    }
 
    return [config_generic $only_check $name config "" "choice" 0 1 version_list]
-      }
+}
 
 #****** config/config_testsuite_spooling_method() ******************************
 #  NAME
