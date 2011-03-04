@@ -7,6 +7,10 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+SH-2011-03-04-0: Bugfix:     Added UGE-Extension support to the TS
+                 Issue:      TS-350
+                 Review:     EB,HP (TS-6)
+
 JG-2011-03-03-2: Bugfix:     installation was broken by JG-2011-03-03-1 when
                              gridengine_version 80 is used
 

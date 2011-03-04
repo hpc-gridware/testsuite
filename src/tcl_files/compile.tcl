@@ -385,6 +385,29 @@ proc compile_depend { compile_hosts a_report do_clean } {
       return -1
    }
    
+   # clean dependency files (zerodepend) for Univa extensions
+
+   if {$ts_config(uge_ext_dir) != "none"} {
+   
+      set task_nr [report_create_task report "zerodepend_uge_extensions" $depend_host_name]
+
+      report_task_add_message report $task_nr "------------------------------------------"
+      report_task_add_message report $task_nr "-> starting scripts/zerodepend on host $depend_host_name for Univa extensions..."
+      set output [start_remote_prog $depend_host_name $CHECK_USER "scripts/zerodepend" "" prg_exit_state 60 0 $ts_config(uge_ext_dir) "" 1 0]
+      report_task_add_message report $task_nr "------------------------------------------"
+      report_task_add_message report $task_nr "return state: $prg_exit_state"
+      report_task_add_message report $task_nr "------------------------------------------"
+      report_task_add_message report $task_nr "output:\n$output"
+      report_task_add_message report $task_nr "------------------------------------------"
+      
+      report_finish_task report $task_nr $prg_exit_state
+      if { $prg_exit_state != 0 } {
+         report_add_message report "------------------------------------------"
+         report_add_message report "Error: scripts/zerodepend for Univa extensions (exit code $prg_exit_state)"
+         report_add_message report "------------------------------------------"
+         return -1
+      }
+   }
 
    if { $do_clean } {
       set task_nr [report_create_task report "only_depend_clean" $depend_host_name]

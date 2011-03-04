@@ -2465,6 +2465,65 @@ proc config_source_dir { only_check name config_array } {
    return $value
 }
 
+#****** config/config_uge_ext_dir() *********************************************
+#  NAME
+#     config_uge_ext_dir() -- source directory setup for Univa Extensions
+#
+#  SYNOPSIS
+#     config_uge_ext_dir { only_check name config_array } 
+#
+#  FUNCTION
+#     Testsuite configuration setup - called from verify_config()
+#
+#  INPUTS
+#     only_check   - 0: expect user input
+#                    1: just verify user input
+#     name         - option name (in ts_config array)
+#     config_array - config array name (ts_config)
+#
+#  SEE ALSO
+#     check/setup2()
+#     check/verify_config()
+#*******************************************************************************
+proc config_uge_ext_dir { only_check name config_array } {
+   global fast_setup
+
+   upvar $config_array config
+
+   set help_text { "Enter the full pathname of the Univa extensions source directory, or"
+                   "press >RETURN< to use the default value."
+                   "The testsuite needs this directory to call aimk with the -uge-ext flag"
+                   " (to compile source code)." 
+                   "If you do not want to configure the Univa extenstions use \"none\"." }
+ 
+   if { $config($name,default) == "" } {
+      set pos [string first "/testsuite" $config(testsuite_root_dir)]
+      set config($name,default) "[string range $config(testsuite_root_dir) 0 $pos]source"
+   }
+   set old_value $config($name)
+
+   set value [config_generic $only_check $name config $help_text "directory" 1]
+
+   if { $value == -1 } { return -1 }
+
+   if {$value == "none"} {
+      ts_log_fine "no Univa extensions dir specified - running without the extensions"
+   } else {
+      if {!$fast_setup} {
+         if { [ file isfile $value/Changelog ] != 1 } {
+            puts "File \"$value/Changelog\" not found"
+            return -1
+         }
+      }
+   }
+ 
+   if { $old_value != $value } {
+      set config($name) $value
+   }
+
+   return $value
+}
+
 #****** config/config_source_cvs_hostname() ************************************
 #  NAME
 #     config_source_cvs_hostname() -- cvs hostname setup
@@ -5334,12 +5393,41 @@ proc config_build_ts_config_1_19 {} {
    # now we have a configuration version 1.19
    set ts_config(version) "1.19"
 }
+
+proc config_build_ts_config_1_20 {} {
+   global ts_config CHECK_CURRENT_WORKING_DIR
+
+   # we add a new parameter: uge_ext_dir 
+   # after source_dir 
+   set insert_pos $ts_config(source_dir,pos)
+   incr insert_pos 1
+
+   # move positions of following parameters
+   set names [array names ts_config "*,pos"]
+   foreach name $names {
+      if {$ts_config($name) >= $insert_pos} {
+         set ts_config($name) [expr $ts_config($name) + 1]
+      }
+   }
+
+   set parameter "uge_ext_dir"
+   set ts_config($parameter)            ""
+   set ts_config($parameter,desc)       "Path to Univa extensions source directory"
+   set ts_config($parameter,default)    "none"   ;# depend on testsuite root dir
+   set ts_config($parameter,setup_func) "config_$parameter"
+   set ts_config($parameter,onchange)   "compile"
+   set ts_config($parameter,pos)        $insert_pos
+
+   # now we have a configuration version 1.20
+   set ts_config(version) "1.20"
+}
+
 ################################################################################
 #  MAIN                                                                        #
 ################################################################################
 
 global actual_ts_config_version      ;# actual config version number
-set actual_ts_config_version "1.19"
+set actual_ts_config_version "1.20"
 
 # first source of config.tcl: create ts_config
 if {![info exists ts_config]} {
@@ -5364,4 +5452,5 @@ if {![info exists ts_config]} {
    config_build_ts_config_1_17
    config_build_ts_config_1_18
    config_build_ts_config_1_19
+   config_build_ts_config_1_20
 }
