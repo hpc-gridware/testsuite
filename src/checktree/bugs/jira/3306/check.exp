@@ -1,0 +1,169 @@
+#!/vol2/TCL_TK/glinux/bin/expect
+#___INFO__MARK_BEGIN__
+##########################################################################
+#
+#  The Contents of this file are made available subject to the terms of
+#  the Sun Industry Standards Source License Version 1.2
+#
+#  Sun Microsystems Inc., March, 2001
+#
+#
+#  Sun Industry Standards Source License Version 1.2
+#  =================================================
+#  The contents of this file are subject to the Sun Industry Standards
+#  Source License Version 1.2 (the "License"); You may not use this file
+#  except in compliance with the License. You may obtain a copy of the
+#  License at http://gridengine.sunsource.net/Gridengine_SISSL_license.html
+#
+#  Software provided under this License is provided on an "AS IS" basis,
+#  WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING,
+#  WITHOUT LIMITATION, WARRANTIES THAT THE SOFTWARE IS FREE OF DEFECTS,
+#  MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE, OR NON-INFRINGING.
+#  See the License for the specific provisions governing your rights and
+#  obligations concerning the Software.
+#
+#  The Initial Developer of the Original Code is: Sun Microsystems, Inc.
+#
+#  Copyright: 2001 by Sun Microsystems, Inc.
+#
+#  All Rights Reserved.
+#
+##########################################################################
+#___INFO__MARK_END__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_highest_level
+global check_init_level_procedure
+global check_root_access_needs
+global check_need_running_system
+
+#set check_root_access_needs "yes"
+#set check_need_running_system "no"
+
+# define a level initialization procedure:
+set check_init_level_procedure "ge_3306_init_level"
+
+# define test's name and run level descriptions
+set check_name            "ge_3306"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED SCHEDULER"
+set check_highest_level   0
+set check_description(0)  "jobs get scheduled but are not started after global host changed"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function ge_3306_setup
+set check_cleanup_function ge_3306_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "ge_3306_test"
+
+proc ge_3306_init_level {} {
+   global CHECK_ACT_LEVEL
+
+   switch -- $CHECK_ACT_LEVEL {
+      0 {
+         return 0
+      }
+   }
+
+   return -1  ;# no other level
+}
+
+# -------- local test procedures: initialization------------------------------
+
+proc ge_3306_setup {} {
+   global ts_config
+   global ge_3306_complex_backup ge_3306_global_host_backup
+
+   # we add a consumable - backup the complex definition
+   get_complex ge_3306_complex_backup
+
+   # we modify the global host - do a backup
+   get_exechost ge_3306_global_host_backup
+
+   # create test consumable
+   set test_complex(C1) "C1 INT <= YES YES 0 0"
+   set_complex test_complex
+
+   # set a high scheduling interval - we trigger it manually
+   set schedd_config(schedule_interval) "0:10:0"
+   set_schedd_config schedd_config
+
+   # restart qmaster (scheduler) instrumented with delay before scheduling
+   shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
+   set myenv(SGE_TEST_DELAY_SCHEDULING) 5
+   startup_qmaster 1 myenv
+}
+
+proc ge_3306_cleanup {} {
+   global ts_config
+   global ge_3306_complex_backup ge_3306_global_host_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # restore the global host
+   set_exechost ge_3306_global_host_backup
+
+   # reset the complex
+   reset_complex ge_3306_complex_backup
+
+   # reset the scheduler config
+   reset_schedd_config
+
+   # restart qmaster (scheduler) to get rid of instrumentation
+   shutdown_and_restart_qmaster
+
+   # unset our test's global variables
+   foreach var "ge_3306_complex_backup ge_3306_global_host_backup" {
+      unset -nocomplain $var
+   }
+}
+
+
+proc ge_3306_test {} {
+   global ts_config
+
+   # set a start value for our consumable
+   mod_attr exechost complex_values "C1=1" global
+
+   # submit a job requesting our resource
+   set job_args "-l C1=1 -b y -o /dev/null -j y"
+   set job_script "sleep 1000"
+   set job_id [submit_job "$job_args $job_script"]
+   if {$job_id <= 0} {
+      return
+   }
+
+   # trigger a scheduling run
+   trigger_scheduling
+
+   # modify the consumable value
+   mod_attr exechost complex_values "C1=2" global
+
+   # if the job does not start, bug is presend
+   set error 0
+   if {[wait_for_jobstart $job_id "" 20 0] != 0} {
+      ts_log_severe "job did not start - GE-3306 is present"
+      set error 1
+   }
+
+   if {!$error} {
+      # TODO do some further testing
+      # a job requesting 2 C1 must fail now and we expect an appropriate error message
+      # in the messages file
+   }
+
+   # cleanup - need to trigger scheduling after job ended to make it leave qmaster
+   delete_job $job_id
+   wait_for_jobend $job_id "" 60 0
+   trigger_scheduling
+}
