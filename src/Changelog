@@ -7,6 +7,10 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+JG-2011-03-15-0: Enhancem.:  testsuite shall build the man pages
+                 Issue:      TS-355
+                 Review:     DG
+
 SH-2011-03-04-0: Bugfix:     Added UGE-Extension support to the TS
                  Issue:      TS-350
                  Review:     EB,HP (TS-6)
