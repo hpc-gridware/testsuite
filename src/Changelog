@@ -7,6 +7,10 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+EB-2010-03-16-0: Enhancem.:  Added test scenario to jsv_issues test
+                 Issue:      GE-3311
+                 Review:     JG
+
 DG-2011-03-16-0: Cleanup:    Fixed qhost test in order to support new output
                              (GE-3370).
                  Review:     TBD
