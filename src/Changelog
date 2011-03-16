@@ -7,6 +7,11 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+JG-2011-03-16-0: Enhancem.:   adapt parsing of arch strings to new Linux arch
+                              strings (lx24-* and lx26-* changed to lx-*)
+                 Issue:       GE-3362
+                 Review:      TBD
+
 JG-2011-03-15-0: Enhancem.:  testsuite shall build the man pages
                  Issue:      TS-355
                  Review:     DG

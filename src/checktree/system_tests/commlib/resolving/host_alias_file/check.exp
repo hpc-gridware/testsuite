@@ -80,7 +80,7 @@ proc host_aliases_file_setup {} {
       unset orig_aliases_file
    }
 
-   set host_aliases_test_host [host_conf_get_suited_hosts 1 "lx24-amd64 lx26-amd64 lx24-x86 lx26-x86 lx24-ia64 lx26-ia64"]
+   set host_aliases_test_host [host_conf_get_suited_hosts 1 "lx-amd64 lx-x86 lx-ia64 lx24-amd64 lx26-amd64 lx24-x86 lx26-x86 lx24-ia64 lx26-ia64"]
 
    set output [start_sge_bin "gethostname" "-all" $host_aliases_test_host "" prg_exit_state 60 "" "utilbin"]
    set lines [split $output "\n"]

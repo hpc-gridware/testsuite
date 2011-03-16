@@ -82,20 +82,26 @@ proc get_ps_cmd {pid} {
          set cmd "/usr/bin/ps -p $pid -o vsz,time | tail -1"
       }
       "alinux" -
+      "lx-alpha" -
       "lx24-alpha" {
          set cmd "/bin/ps lhp $pid | awk '{print \$7 \$11}'"
       }
+      "lx-x86" -
       "lx24-x86" -
       "lx26-x86" -
+      "lx-ia64" -
       "lx24-ia64" -
       "lx26-ia64" -
+      "lx-amd64" -
       "lx24-amd64" -
-      "lx26-amd64" - 
+      "lx26-amd64" -
+      "ulx-x86" -
       "ulx24-x86" -
+      "ulx-amd64" -
       "ulx24-amd64" {
          set cmd "/bin/ps -p $pid --no-heading -o vsz,time"
       }
-      "hp10" - 
+      "hp10" -
       "hp11" -
       "hp11-64" {
          set cmd "/usr/bin/ps -p $pid -l | tail -1 | awk '{print \$10 \$13}'"
