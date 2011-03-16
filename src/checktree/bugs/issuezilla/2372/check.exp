@@ -170,7 +170,7 @@ proc issue_2372 {} {
    global issue_2372_gdi_retries
 
    if {$CHECK_ACT_LEVEL == 0 || $CHECK_ACT_LEVEL == 1} {
-      set host [host_conf_get_suited_hosts 1 {lx24-x86 lx24-amd64 lx24-ia64 lx26-amd64 lx26-x86}]
+      set host [host_conf_get_suited_hosts 1 {lx-x86 lx-amd64 lx-ia64 lx24-x86 lx24-amd64 lx24-ia64 lx26-amd64 lx26-x86}]
       set user $CHECK_USER
       set arch [resolve_arch $host]
       set binary "$ts_config(product_root)/bin/$arch/qsub"
@@ -241,7 +241,7 @@ proc issue_2372 {} {
 
 
    if {$CHECK_ACT_LEVEL == 2 || $CHECK_ACT_LEVEL == 3} {
-      set host [host_conf_get_suited_hosts 1 {lx24-x86 lx24-amd64 lx24-ia64 lx26-amd64 lx26-x86}]
+      set host [host_conf_get_suited_hosts 1 {lx-x86 lx-amd64 lx-ia64 lx24-x86 lx24-amd64 lx24-ia64 lx26-amd64 lx26-x86}]
       set user $CHECK_USER
       set arch [resolve_arch $host]
       set binary "$ts_config(product_root)/bin/$arch/qsub"

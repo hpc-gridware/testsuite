@@ -68,8 +68,8 @@ proc issue_1715_run {} {
 
    # cannot run this check on linux kernel 2.4
    set qmaster_arch [resolve_arch $ts_config(master_host)]
-   if {[string match $qmaster_arch "*lx24*"] == 1} {
-      ts_log_config "test cannot kill qmaster on lx24 because of defect threading library - testsuite will block and never quit"
+   if {[string match $qmaster_arch "lx24-*"] || [string match $qmaster_arch "ulx-*"]} {
+      ts_log_config "test cannot kill qmaster on lx24 / old GLIBC because of defect threading library - testsuite will block and never quit"
       return
    }
 

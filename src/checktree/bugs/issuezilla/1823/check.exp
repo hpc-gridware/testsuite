@@ -99,7 +99,7 @@ proc LSB_lockfile_test {} {
       ts_log_fine "testing host $exec_host ..."
 
       switch -glob -- $test_arch {
-         lx2* {
+         lx* {
                 set output [start_remote_prog $exec_host $CHECK_USER "ls" "-la /var/lock | grep subsys" "exit_val" $my_timeout ]
                 if {$output != ""} {
                    set execd_found [is_daemon_running $exec_host "sge_execd" 1]
