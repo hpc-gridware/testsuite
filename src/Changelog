@@ -7,6 +7,10 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+DG-2011-03-16-0: Cleanup:    Fixed qhost test in order to support new output
+                             (GE-3370).
+                 Review:     TBD
+
 SH-2011-03-04-0: Bugfix:     Added UGE-Extension support to the TS
                  Issue:      TS-350
                  Review:     EB,HP (TS-6)

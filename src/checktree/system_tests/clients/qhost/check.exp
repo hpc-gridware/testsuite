@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this code are Copyright 2011 Univa Inc.
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -119,6 +121,7 @@ proc test_issue132 {} {
    }
 
    # qhost -q
+   # TODO must be in the exact time
    set result [qhost_q_xml_parse xml]
    set result [qhost_q_parse plain job]
 
@@ -408,6 +411,18 @@ proc test_issue132_F {} {
          return
       }
       if {[string compare [string trim $xml(host$ind,num_proc)] [string trim $plain(host$ind,num_proc)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for num_proc."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,m_socket)] [string trim $plain(host$ind,m_socket)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for num_proc."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,m_core)] [string trim $plain(host$ind,m_core)]] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for num_proc."      
+         return
+      }
+      if {[string compare [string trim $xml(host$ind,m_thread)] [string trim $plain(host$ind,m_thread)]] != 0} {
          ts_log_severe "outputs do not match from plain and xml for num_proc."      
          return
       }
