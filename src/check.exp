@@ -7526,10 +7526,11 @@ proc install_binaries {arch_list a_report} {
 
    set inst_env(SGE_ROOT) $ts_config(product_root)
 
-   if {[string compare "none" $ts_config(dist_install_options)] == 0} {
-      set dist_inst_options ""
-   } else {
-      set dist_inst_options $ts_config(dist_install_options)
+   # pass path to man pages to distinst
+   set dist_inst_options "-mansrc uge"
+
+   if {[string compare "none" $ts_config(dist_install_options)] != 0} {
+      append dist_inst_options " $ts_config(dist_install_options)"
    }
 
    set open_spawn [open_remote_spawn_process $install_host $CHECK_USER "./scripts/distinst" "-local -noexit $dist_inst_options $arch_list" 0 $ts_config(source_dir) inst_env]

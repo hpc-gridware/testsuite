@@ -3254,6 +3254,81 @@ proc parse_properties_file {output_var filename {overwrite 0}} {
    return 0
 }
 
+#****** parser/qhost_add_plain() ******
+#
+#  NAME
+#     qhost_add_plain -- Add to plain all standard qhost elements
+#
+#  SYNOPSIS
+#     qhost_add_plain { plain elem job}
+#                     -- Return assoc array with elements from qhost
+#
+#      plain  -  output variable which contains the standard qhost output elements.
+#      elem   -  input: output of the specific qhost command
+#      job    -  input: job number in order to store variables with attached job number
+#
+#  FUNCTION
+#     return parsed output
+#
+#  OUTPUTS
+#     plain - output variable into which will be stored the parsed array
+#
+#  INPUTS
+#     elem - output ot the specific qhost command, which is parsed
+#     job  - number of job, which is attached to the plain output variable
+#  NOTES
+#     
+#
+#*******************************
+proc qhost_add_plain { plain elem job } {
+   upvar $plain tplain
+   set elem_split [ split $elem " +" ]
+   set inner 1
+
+   foreach elemin $elem_split {
+      # we are only interested in none empty strings
+      # create a similar array for each job id
+      if {[string length $elemin] > 0} {
+         switch -- $inner {
+            "1" {
+                set tplain(host$job,name) $elemin
+             }
+            "2" {
+                set tplain(host$job,arch_string) $elemin
+            }
+            "3" {
+               set tplain(host$job,num_proc) $elemin
+            }
+            "4" {
+               set tplain(host$job,m_socket) $elemin
+            }
+            "5" {
+               set tplain(host$job,m_core) $elemin
+            }
+            "6" {
+               set tplain(host$job,m_thread) $elemin
+            }
+            "7" {
+               set tplain(host$job,load_avg) $elemin
+            }
+            "8" {
+               set tplain(host$job,mem_total) $elemin
+            }
+            "9" {
+               set tplain(host$job,mem_used) $elemin
+            }
+            "10" {
+               set tplain(host$job,swap_total) $elemin
+            }
+            "11" {
+               set tplain(host$job,swap_used) $elemin
+            }
+         }
+         incr inner 1
+      }
+   }
+}
+
 #****** parser/qhost_parse() ******
 #
 #  NAME
@@ -3298,42 +3373,7 @@ proc qhost_parse { output_var jobCount {params "" } } {
      if {$count > 2} {          
          switch -- $line {
             "1" {
-               set elem_split [ split $elem " +" ]
-               set inner 1
-               
-               foreach elemin $elem_split {
-                  # we are only interested in none empty strings
-                  # create a similar array for each job id
-                  if {[string length $elemin] > 0} {
-                     switch -- $inner {
-                        "1" {
-                           set plain(host$job,name) $elemin
-                        }
-                        "2" {
-                           set plain(host$job,arch_string) $elemin
-                        }
-                        "3" {
-                           set plain(host$job,num_proc) $elemin
-                        }
-                        "4" {
-                           set plain(host$job,load_avg) $elemin
-                        }
-                        "5" {
-                           set plain(host$job,mem_total) $elemin
-                        }
-                        "6" {
-                           set plain(host$job,mem_used) $elemin
-                        }
-                        "7" {
-                           set plain(host$job,swap_total) $elemin
-                        }
-                        "8" {
-                           set plain(host$job,swap_used) $elemin
-                        }
-                     }
-                     incr inner 1
-                  }
-               }
+               qhost_add_plain plain $elem $job
             }
          }
          # every fifth line is a new job, increment counter
@@ -3490,42 +3530,7 @@ proc qhost_q_parse { output_var jobCount } {
      if {$count > 2} {          
          switch -- $line {
             "1" {
-               set elem_split [ split $elem " +" ]
-               set inner 1
-               
-               foreach elemin $elem_split {
-                  # we are only interested in none empty strings
-                  # create a similar array for each job id
-                  if {[string length $elemin] > 0} {
-                     switch -- $inner {
-                        "1" {
-                           set plain(host$job,name) $elemin
-                        }
-                        "2" {
-                           set plain(host$job,arch_string) $elemin
-                        }
-                        "3" {
-                           set plain(host$job,num_proc) $elemin
-                        }
-                        "4" {
-                           set plain(host$job,load_avg) $elemin
-                        }
-                        "5" {
-                           set plain(host$job,mem_total) $elemin
-                        }
-                        "6" {
-                           set plain(host$job,mem_used) $elemin
-                        }
-                        "7" {
-                           set plain(host$job,swap_total) $elemin
-                        }
-                        "8" {
-                           set plain(host$job,swap_used) $elemin
-                        }
-                     }
-                     incr inner 1
-                  }
-               }
+               qhost_add_plain plain $elem $job
             }
             "2" {
                set elem_split [ split $elem " +" ]
@@ -3606,7 +3611,8 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
    
    # split plain output on each new line
    set plain_split [ split $plainoutput "\n" ] 
-   set has_binding [ge_has_feature "core-binding"]
+   #set has_binding [ge_has_feature "core-binding"]
+   set has_binding true
 
    set inc 0
    set job 0
@@ -3616,42 +3622,7 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
      if {$count > 2} {          
          switch -- $line {
             "1" {
-               set elem_split [ split $elem " +" ]
-               set inner 1
-               
-               foreach elemin $elem_split {
-                  # we are only interested in none empty strings
-                  # create a similar array for each job id
-                  if {[string length $elemin] > 0} {
-                     switch -- $inner {
-                        "1" {
-                           set plain(host$job,name) $elemin
-                        }
-                        "2" {
-                           set plain(host$job,arch_string) $elemin
-                        }
-                        "3" {
-                           set plain(host$job,num_proc) $elemin
-                        }
-                        "4" {
-                           set plain(host$job,load_avg) $elemin
-                        }
-                        "5" {
-                           set plain(host$job,mem_total) $elemin
-                        }
-                        "6" {
-                           set plain(host$job,mem_used) $elemin
-                        }
-                        "7" {
-                           set plain(host$job,swap_total) $elemin
-                        }
-                        "8" {
-                           set plain(host$job,swap_used) $elemin
-                        }
-                     }
-                     incr inner 1
-                  }
-               }
+               qhost_add_plain plain $elem $job
             }
             2 - 3 - 4 - 5 - 6 - 7 - 8 - 9 - 10 - 11 - 12 - 13 - 14 - 15 - 16 - 17 - 18 - 19 - 20 - 21 {
                set attr [ split $elem "="]
@@ -3662,9 +3633,9 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
             }
          }
          if {$has_binding == true} {
-            # if core binding is present then there are more lines for m_topology, m_core, m_socket, m_topology_inuse
+            # if core binding is present then there are more lines for m_topology, m_core, m_socket, m_thread,m m_topology_inuse
             switch -- $line {
-               22 - 23 - 24 - 25 {
+               22 - 23 - 24 - 25 - 26 {
                   set attr [ split $elem "="]
                   lassign $attr heading value
                   set val [ split $heading ":"]
@@ -3674,7 +3645,7 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
                }
             }
             # switch to next job, increment counter
-            if { $line == 25} {   
+            if { $line == 26} {   
                   incr job 1  
                   set line 0         
             }
