@@ -29,6 +29,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this code are Copyright 2011 Univa Inc.
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -1251,6 +1253,9 @@ proc get_passwd {user {raise_error 1}} {
 #     test if root password was typed in
 #
 #  INPUTS
+#    even_if_ssh_is_configured : if set to 1 it checks the root password in any case
+#
+#  INPUTS
 #     0  : root password should be ok
 #     -1 : no root access
 #  RESULT
@@ -1260,10 +1265,10 @@ proc get_passwd {user {raise_error 1}} {
 #     check/set_root_passwd
 #     check/get_root_passwd
 #*******************************
-proc have_root_passwd {} {
+proc have_root_passwd { {even_if_ssh_is_configured 0} } {
   global stored_passwd
 
-  if {[have_ssh_access] == 1} {
+  if {$even_if_ssh_is_configured == 0 && [have_ssh_access] == 1} {
      return 0
   }
 
