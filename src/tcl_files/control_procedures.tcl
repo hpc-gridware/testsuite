@@ -1528,7 +1528,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
    # NOTE: On some archs the last column is not truncated, on some archs it is, so please be patient !
 
    switch -glob -- $host_arch {
-      "sol*" - 
+      "sol*" -
       "usol-*" {
          set myenvironment(COLUMNS) "500"
          set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-e -o \"pid=_____pid\" -o \"pgid=_____pgid\" -o \"ppid=_____ppid\" -o \"uid=_____uid\" -o \"s=_____s\" -o \"stime=_____stime\" -o \"vsz=_____vsz\" -o \"time=_____time\" -o \"nice=_____nice\" -o \"args=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
@@ -1675,13 +1675,15 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
          set stime_pos   5
          set vsz_pos     6
          set time_pos    7
-         set command_pos 9 
+         set command_pos 9
          set nice_pos    8
       }
-     
+
       "glinux" -
-      "lx2?-*" - 
-      "ulx24-*" {
+      "lx2?-*" -
+      "ulx24-*" -
+      "lx-*" -
+      "ulx-*" {
          set myenvironment(COLUMNS) "500"
          set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-weo \"pid pgid ppid uid=BIGGERUID s stime vsz time nice args=COMMANDCOMMANDCOMMANDCOMMANDCOMMAND\"" prg_exit_state 60 0 "" myenvironment 1 0]
          set index_names "  PID  PGID  PPID BIGGERUID S STIME   VSZ     TIME NI COMMANDCOMMANDCOMMANDCOMMANDCOMMAND"
@@ -1704,7 +1706,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
             # this is the first ps without any size position
             set myenvironment(COLUMNS) "500"
             set result [start_remote_prog "$host" "$CHECK_USER" "ps" "xajw" prg_exit_state 60 0 "" myenvironment 1 0]
-            #                   0     1    2      3   4    5      6   7     8     9  
+            #                   0     1    2      3   4    5      6   7     8     9
             set index_names " PPID   PID  PGID   SID TTY TPGID  STAT  UID   TIME COMMAND"
             set pid_pos     1
             set gid_pos     2
@@ -2146,7 +2148,7 @@ proc gethostname { { do_debug_puts 1} {source_dir_path ""} } {
 #     This is for example required when building new binaries:
 #     The installed arch script might return a different architecture than
 #     the source arch script, for example when a cluster was installed from
-#     our Grid Engine packages, where we deliver lx-24-* packages also for
+#     Grid Engine packages <= 6.2u5, where we deliver lx-24-* packages also for
 #     Linux kernel 2.6 machines (lx26-*), or hp11 packages for hp11-64.
 #
 #  INPUTS

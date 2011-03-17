@@ -1862,6 +1862,10 @@ proc manual_arch32_mapping {arch} {
       "lx26-amd64" {
          set arch_32 "lx26-x86"
       }
+      "lx-amd64" -
+      "lx-ia64" {
+         set arch_32 "lx-x86"
+      }
       "sol-amd64" {
          set arch_32 "sol-x86"
       }

@@ -29,6 +29,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this code are Copyright 2011 Univa Inc.
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -53,6 +55,7 @@ set check_setup_function "qstat_setup"
 set check_cleanup_function "qstat_cleanup"
 
 set check_functions      {}
+lappend check_functions  "qstat_profile"
 lappend check_functions  "check_core_queues"     ;# functions to call (in order)
 lappend check_functions  "qstat_help"
 lappend check_functions  "qstat_option_l"
@@ -3936,8 +3939,10 @@ proc qstat_profile {} {
    set sge_local_qstat_profile "$home/.sge_qstat"
    set my_local_stat_file(0) 1
    set my_local_stat_file(1) "-u $CHECK_USER"
-   write_remote_file $ts_config(master_host) $CHECK_USER $sge_local_qstat_profile my_local_stat_file
+   # TODO expects that home directory is shared via nfs...
+   # write_remote_file $ts_config(master_host) $CHECK_USER $sge_local_qstat_profile my_local_stat_file
    foreach host [get_all_hosts] {
+      write_remote_file $host $CHECK_USER $sge_local_qstat_profile my_local_stat_file
       wait_for_remote_file $host $CHECK_USER $sge_local_qstat_profile
    }
 
@@ -3996,7 +4001,9 @@ proc qstat_profile {} {
    wait_for_end_of_all_jobs
 
    delete_remote_file $ts_config(master_host) $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/sge_qstat"
-   delete_remote_file $ts_config(master_host) $CHECK_USER "$home/.sge_qstat"
+   foreach host [get_all_hosts] {
+      delete_remote_file $host $CHECK_USER "$home/.sge_qstat"
+   }
 
    foreach host [get_all_hosts] {
       wait_for_remote_file $ts_config(master_host) $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/sge_qstat" 60 1 1
@@ -4131,7 +4138,10 @@ proc test_qstat_j_xml {} {
          ts_log_fine "skip usage elem \"$elem\""
          continue
       }
-
+      if {[string match "*binding*" $elem]} {
+         ts_log_fine "skip binding elem \"$elem\""
+         continue
+      }
       if {$elem == "sge_o_log_name"} {
          set plain_elem_string [string trim $plain($elem)]
          ts_log_fine "repair wrong parsing name for \"sge_o_log_name\" to \"sge_o_logname\""

@@ -4,3 +4,5 @@ src/results/*
 config
 results
 src/tags
+defaults.sav*
+pkg/*

@@ -7526,10 +7526,11 @@ proc install_binaries {arch_list a_report} {
 
    set inst_env(SGE_ROOT) $ts_config(product_root)
 
-   if {[string compare "none" $ts_config(dist_install_options)] == 0} {
-      set dist_inst_options ""
-   } else {
-      set dist_inst_options $ts_config(dist_install_options)
+   # pass path to man pages to distinst
+   set dist_inst_options "-mansrc uge"
+
+   if {[string compare "none" $ts_config(dist_install_options)] != 0} {
+      append dist_inst_options " $ts_config(dist_install_options)"
    }
 
    set open_spawn [open_remote_spawn_process $install_host $CHECK_USER "./scripts/distinst" "-local -noexit $dist_inst_options $arch_list" 0 $ts_config(source_dir) inst_env]
@@ -7594,13 +7595,15 @@ proc install_binaries {arch_list a_report} {
         report_task_add_message report $task_nr $result
    }
 
-   # copy source/dist/util/arch to $SGE_ROOT/util.
+   # For SGE <= 6.2u5: copy source/dist/util/arch to $SGE_ROOT/util.
    # When we compiled our own binaries (including non distributed architectures like
    # lx26-x86 or hp11-64, source/dist/util/arch will give us the correct arch strings.
-   set arch_script_src "$ts_config(source_dir)/dist/util/arch"
-   set arch_script_dst "$ts_config(product_root)/util/arch"
-   report_task_add_message report $task_nr "installing $arch_script_src ..."
-   start_remote_prog $install_host $CHECK_USER "cp" "$arch_script_src $arch_script_dst"
+   if {$ts_config(gridengine_version) <= 62} {
+      set arch_script_src "$ts_config(source_dir)/dist/util/arch"
+      set arch_script_dst "$ts_config(product_root)/util/arch"
+      report_task_add_message report $task_nr "installing $arch_script_src ..."
+      start_remote_prog $install_host $CHECK_USER "cp" "$arch_script_src $arch_script_dst"
+   }
 
    # done - final error handling
    if {$was_error} {
