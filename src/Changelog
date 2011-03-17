@@ -7,6 +7,10 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+DG-2011-03-17-1: Bugfix:      - Fixed authuser test for ssh
+                              - Fixed ge_has_feature
+                 Review:      JG
+
 DG-2011-03-17-0: Enhancem.:   Fixed qstat test in order to support new output.
                  Issue:       GE-3371
                  Review:      TBD

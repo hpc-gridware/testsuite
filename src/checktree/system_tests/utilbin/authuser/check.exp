@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this code are Copyright 2011 Univa Inc.
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -77,12 +79,19 @@ proc authuser_init_level {} {
 proc test_authuser {} {
    global ts_config CHECK_USER
 
+   # check if root password is available
+   if {[have_root_passwd 1] == -1} {
+      # root password must be set (expects on all hosts to be the same)
+      set_passwd root $ts_config(master_host) [host_conf_get_windows_host]
+   }
+
    foreach host $ts_config(execd_nodes) {
       set arch [resolve_arch $host]
       set authuser "$ts_config(product_root)/utilbin/$arch/authuser"
 
       set ONLYSUUSER [translate_macro MSG_AUTHUSER_ONLY_ROOT_S "*"]
 
+      ts_log_fine "Connect as $CHECK_USER at $host"
       set sid [open_remote_spawn_process $host $CHECK_USER $authuser "system"]
       set sp_id [lindex $sid 1]
 
