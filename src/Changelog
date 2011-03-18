@@ -7,6 +7,10 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+EB-2010-03-18-0: Enhancem.:   Added new scenario for iss GE-3310
+                 Issues:      GE-3310
+                 Review:      TBD
+
 JG-2011-03-16-1: Enhancem.:   adapt parsing of arch strings to new Linux arch
                               strings (lx24-* and lx26-* changed to lx-*)
                  Issue:       GE-3362

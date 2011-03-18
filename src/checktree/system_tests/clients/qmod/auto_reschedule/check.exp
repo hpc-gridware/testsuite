@@ -51,11 +51,12 @@ set check_init_level_procedure "qmod_auto_reschedule_init_level"
 # define test's name and run level descriptions
 set check_name            "qmod_auto_reschedule"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   3 
+set check_highest_level   4 
 set check_description(0)  "checking auto_reschedule with global reschedule_unknown 00:01:00"
 set check_description(1)  "checking auto_reschedule with global reschedule_unknown 00:00:00"
 set check_description(2)  "checking auto_reschedule with global reschedule_unknown 00:01:00 and ENABLE_RESCHEDULE_KILL"
 set check_description(3)  "checking auto_reschedule with global reschedule_unknown 00:01:00, ENABLE_RESCHEDULE_KILL and ENABLE_RESCHEDULE_SLAVE"
+set check_description(4)  "checking auto_reschedule with global reschedule_unknown 00:01:00, ENABLE_RESCHEDULE_SLAVE"
 
 # define test's dependencies
 set check_needs           "init_core_system" 
@@ -68,6 +69,7 @@ set check_cleanup_level_function "auto_reschedule_cleanup"
 set check_functions ""
 lappend check_functions "auto_reschedule_unknown_check"
 lappend check_functions "auto_reschedule_unknown_check_master"
+lappend check_functions "auto_reschedule_GE-3331"
 
 # CHECK description
 # =================
@@ -128,7 +130,8 @@ proc qmod_auto_reschedule_init_level {} {
          return 0
       }
       2 -
-      3 {
+      3 -
+      4 {
          return 0
       }
    }
@@ -139,10 +142,9 @@ proc qmod_auto_reschedule_init_level {} {
 proc auto_reschedule_setup {} {
    global ts_config CHECK_ACT_LEVEL
    global CHECK_USER
-   global queue1 queue2 auto_reschedule_host1 auto_reschedule_host2
+   global queue1 queue2 queue3 queue4 auto_reschedule_host1 auto_reschedule_host2
    global stored_configuration
-   global stored_auto_reschedule_host1_config global_resch reschedule_kill reschedule_slave
-  
+   global stored_auto_reschedule_host1_config global_resch reschedule_kill reschedule_slave   
    
    if {[llength $ts_config(execd_nodes)] < 2} {
       ts_log_config "Need at least 2 execd nodes for this test"
@@ -180,6 +182,11 @@ proc auto_reschedule_setup {} {
          set reschedule_kill 1
          set reschedule_slave 1
       }
+      4 {
+         set global_resch 1
+         set reschedule_kill 0
+         set reschedule_slave 1
+      }
    }
 
    # create parallel environment
@@ -200,6 +207,20 @@ proc auto_reschedule_setup {} {
  
    add_queue "queue2" $auto_reschedule_host2 new_queue 
    set queue2 [get_queue_instance "queue2" $auto_reschedule_host2]
+
+   switch -- $CHECK_ACT_LEVEL {
+      4 {
+         set new_queue_b(qtype)    "BATCH INTERACTIVE"
+         set new_queue_b(load_thresholds) "np_load_avg=8.00"
+         set new_queue_b(slots)    "100"
+
+         add_queue "queue3" $auto_reschedule_host1 new_queue_b
+         set queue3 [get_queue_instance "queue3" $auto_reschedule_host1]
+       
+         add_queue "queue4" $auto_reschedule_host2 new_queue_b
+         set queue4 [get_queue_instance "queue4" $auto_reschedule_host2]
+      }
+   }
 
    set schedd_config(schedule_interval) "00:00:04"
    set_schedd_config schedd_config
@@ -230,6 +251,12 @@ proc auto_reschedule_setup {} {
          set myconfig(qmaster_params) "ENABLE_RESCHEDULE_KILL=true,ENABLE_RESCHEDULE_SLAVE=true"
       } else {
          set myconfig(qmaster_params) "ENABLE_RESCHEDULE_KILL=true"
+      }
+   } else {
+      if {$reschedule_slave != 0} {
+         set myconfig(qmaster_params) "ENABLE_RESCHEDULE_SLAVE=true"
+      } else {
+         set myconfig(qmaster_params) "NONE"
       }
    }
    set_config myconfig
@@ -271,6 +298,7 @@ proc auto_reschedule_cleanup {} {
    global stored_configuration
    global stored_auto_reschedule_host1_config
    global CHECK_USER
+   global CHECK_ACT_LEVEL
 
    delete_all_jobs
    wait_for_end_of_all_jobs
@@ -292,6 +320,13 @@ proc auto_reschedule_cleanup {} {
    ts_log_fine "removing queues ..."
    del_queue queue1 $auto_reschedule_host1 0 1
    del_queue queue2 $auto_reschedule_host2 0 1
+
+   switch -- $CHECK_ACT_LEVEL {
+      4 {
+         del_queue queue3 $auto_reschedule_host1 0 1
+         del_queue queue4 $auto_reschedule_host2 0 1
+      }
+   }
 
    ts_log_fine "removing pe ..."
    del_pe "tight"
@@ -321,10 +356,15 @@ proc auto_reschedule_cleanup {} {
 }
 
 proc auto_reschedule_unknown_check_master {} {
-   global ts_config
+   global ts_config CHECK_ACT_LEVEL
    global queue1 queue2 auto_reschedule_host1 auto_reschedule_host2
    global global_resch reschedule_kill reschedule_slave
 
+   if {$CHECK_ACT_LEVEL == 4 } {
+      ts_log_fine "skipping test for runlevel $CHECK_ACT_LEVEL ..."
+      return
+   }
+   
    set my_outputs "-o /dev/null -e /dev/null"
 
    ts_log_fine "submitting job to queue $queue1 ..."
@@ -539,5 +579,72 @@ proc auto_reschedule_unknown_check {} {
    
    wait_for_jobend $job_id1 "Sleeper" 200 0
    wait_for_jobend $job_id2 "Sleeper" 200 0
+}
+
+proc auto_reschedule_GE-3331 {} {
+   global ts_config
+   global queue1 queue2 queue3 queue4 auto_reschedule_host1 auto_reschedule_host2
+   global global_resch CHECK_ACT_LEVEL
+   global auto_reschedule_host1 auto_reschedule_host2
+
+   if {$CHECK_ACT_LEVEL != 4 } {
+      ts_log_fine "skipping test for runlevel $CHECK_ACT_LEVEL ..."
+      return
+   }
+
+   # sumbit first pe job with masterq queue2
+   set job_args "-o /dev/null -e /dev/null "
+   append job_args "-pe tight 2 -q $queue1 -masterq $queue2 -r y "
+   append job_args "$ts_config(product_root)/examples/jobs/sleeper.sh 10000"
+   set job_id1 [submit_job $job_args]
+
+   # submit second pe job with masterq queue1
+   set job_args "-o /dev/null -e /dev/null "
+   append job_args "-pe tight 2 -p $queue2 -masterq $queue1 -r y "
+   append job_args "$ts_config(product_root)/examples/jobs/sleeper.sh 10000"
+   set job_id2 [submit_job $job_args]
+
+   # submit one non-pe job to each queue
+   set job_args "-o /dev/null -e /dev/null "
+   append job_args "-q $queue1 -r y "
+   append job_args "$ts_config(product_root)/examples/jobs/sleeper.sh 10000"
+   set job_id3 [submit_job $job_args]
+   set job_args "-o /dev/null -e /dev/null "
+   append job_args "-q $queue2 -r y "
+   append job_args "$ts_config(product_root)/examples/jobs/sleeper.sh 10000"
+   set job_id4 [submit_job $job_args]
+   set job_args "-o /dev/null -e /dev/null "
+   append job_args "-q $queue3 -r y "
+   append job_args "$ts_config(product_root)/examples/jobs/sleeper.sh 10000"
+   set job_id5 [submit_job $job_args]
+   set job_args "-o /dev/null -e /dev/null "
+   append job_args "-q $queue4 -r y "
+   append job_args "$ts_config(product_root)/examples/jobs/sleeper.sh 10000"
+   set job_id6 [submit_job $job_args]
+
+   # wait till all jobs are running
+   wait_for_end_of_transfer $job_id1 100
+   wait_for_end_of_transfer $job_id2 100
+   wait_for_end_of_transfer $job_id3 100
+   wait_for_end_of_transfer $job_id4 100
+   wait_for_end_of_transfer $job_id5 100
+   wait_for_end_of_transfer $job_id6 100
+
+   shutdown_system_daemon $auto_reschedule_host1 "execd"
+
+   # both pe jobs and the batch jobs running on the host that
+   # has been shut down have to be rescheduled other jobs should be running
+   wait_for_jobpending $job_id1  "Sleeper" 80
+   wait_for_jobpending $job_id2  "Sleeper" 80
+   wait_for_jobpending $job_id3  "Sleeper" 80
+   wait_for_jobpending $job_id5  "Sleeper" 80
+   set is_running4 [is_job_running $job_id4 "Sleeper"]
+   set is_running6 [is_job_running $job_id6 "Sleeper"]
+   
+   if {$is_running4 != 1 || $is_running6 != 1 } {
+      ts_log_severe "Jobs were rescheduled that should remain running"
+   }
+   
+   startup_execd $auto_reschedule_host1
 }
 
