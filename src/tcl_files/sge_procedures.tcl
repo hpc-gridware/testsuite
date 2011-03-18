@@ -29,6 +29,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this code are Copyright 2011 Univa Inc.
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -431,7 +433,9 @@ proc ge_has_feature {feature {quiet 0}} {
       "additional-jvm-arguments" {
          # since 6.2u3
          get_version_info vers_info
-         if {$vers_info(major_release) >= 6 && $vers_info(minor_release) >= 2 && $vers_info(update_release) >= 3 } {
+         if {$vers_info(major_release) > 6 ||
+            ($vers_info(major_release) == 6 && $vers_info(minor_release) > 2) ||
+            ($vers_info(major_release) == 6 && $vers_info(minor_release) == 2 && $vers_info(update_release) >= 3)} {
             set result true
          } else {
             set result false

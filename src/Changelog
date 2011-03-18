@@ -9,6 +9,13 @@
 
 EB-2010-03-18-0: Enhancem.:   Added new scenario for iss GE-3310
                  Issues:      GE-3310
+
+DG-2011-03-17-1: Bugfix:      - Fixed authuser test for ssh
+                              - Fixed ge_has_feature
+                 Review:      JG
+
+DG-2011-03-17-0: Enhancem.:   Fixed qstat test in order to support new output.
+                 Issue:       GE-3371
                  Review:      TBD
 
 JG-2011-03-16-1: Enhancem.:   adapt parsing of arch strings to new Linux arch

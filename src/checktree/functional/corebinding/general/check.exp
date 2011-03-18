@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this code are Copyright 2011 Univa Inc.
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -924,7 +926,7 @@ proc check_qstat_reporting { host jobid { strategy "linear" } { amount 1 } { thr
    
    # checks qstat -j X -cb 
 
-   get_qstat_j_info $jobid qstat_j_cb_info "-cb"
+   get_qstat_j_info $jobid qstat_j_cb_info
 
    # "binding " -> reports the topology string
    # "binding"  -> reports the requested binding
