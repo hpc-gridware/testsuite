@@ -7,6 +7,11 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+EB-2010-03-21-0: Bugfix:      Perl JSV script does not allow comma in CMDNAME 
+                              and CMDARGS 
+                 Issues:      GE-3399
+                 Review:      DG 
+
 EB-2010-03-18-0: Enhancem.:   Added new scenario for iss GE-3310
                  Issues:      GE-3310
 

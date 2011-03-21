@@ -301,7 +301,10 @@ proc jsv_ge_add_param_set {islist name value xml_value xml_node_name add_qsub_sw
    set tag_list_string ""
    set qstat_args "-xml"
    if {$jsv_has_binding == true} {
-      set qstat_args "$qstat_args -cb"
+      set qstat_args "$qstat_args"
+      if {$ts_config(gridengine_version) < 80} {
+      	append qstat_args "-cb"
+      }	
    }
    set xml_out [start_sge_bin qstat "$qstat_args -j $job_id"]
    foreach tag $xml_node_name {
