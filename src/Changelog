@@ -7,6 +7,10 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+DG-2010-03-22-0: Bugfix:      Adapted testsuite installer to work with enabled
+                              core binding on Linux execd.
+                 Review:      TBD
+
 EB-2010-03-21-0: Bugfix:      Perl JSV script does not allow comma in CMDNAME 
                               and CMDARGS 
                  Issues:      GE-3399
