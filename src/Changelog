@@ -7,8 +7,8 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
-EB-2011-03-23-0: Cleanup:    Removed authuser test
-                 Issue:      GE-3345
+EB-2011-03-23-0: Cleanup:    Removed authuser test and hedeby checktree
+                 Issue:      GE-3345 TS-343
 
 DG-2010-03-22-0: Bugfix:      Adapted testsuite installer to work with enabled
                               core binding on Linux execd.
