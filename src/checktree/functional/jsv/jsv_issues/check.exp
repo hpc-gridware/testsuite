@@ -69,6 +69,8 @@ lappend check_functions "jsv_issues_q_hard_selection"
 lappend check_functions "jsv_issues_cmdargs"
 lappend check_functions "jsv_issues_iz3088"
 lappend check_functions "jsv_A_comma_list"
+lappend check_functions "jsv_issues_GE-3311"
+
 
 # global variables for this test. all of them are initiaized in the setup procedure
 global jsv_org_global_conf
@@ -514,4 +516,31 @@ proc jsv_A_comma_list {} {
    }
 
    delete_all_jobs
+}
+
+proc jsv_issues_GE-3311 {} {
+   global CHECK_USER
+   global ts_config
+   global jsv_base_path
+
+   # submit a job request a boolean complex without a value and then check 
+   # the result in qstat -j output after a JSV changed a different attribute. 
+   set qsub_flag "TRUE"
+   set qsub_args "-l display_win_gui -jsv ${jsv_base_path}/jsv_GE-3311.sh $ts_config(product_root)/examples/jobs/sleeper.sh 301"
+   set qsub_host $ts_config(master_host)
+   set qsub_exit_state 0
+   set qsub_out [start_sge_bin qsub $qsub_args $qsub_host $CHECK_USER]
+   set job_id [lindex $qsub_out 2]
+
+   # store qstat -j output
+   set qstat_out [start_sge_bin qstat "-j $job_id"]
+
+   # read the flag from qstat output
+   set qstat_flag 0
+   regexp "display_win_gui=(\[a-zA-Z0-9()\\\.\]*)" $qstat_out match qstat_flag 
+
+   # test
+   if {$qstat_flag != $qsub_flag} {
+      ts_log_severe "Job parameter \"display_win_gui\" was not reported to JSV correctly. Got \"$qstat_flag\" but expected \"$qsub_flag\""
+   }
 }

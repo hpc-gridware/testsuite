@@ -2527,11 +2527,11 @@ proc host_conf_53_arch {arch} {
       "sol-sparc" { return "solaris" }
       "sol-sparc64" { return "solaris64" }
       "sol-x86" { return "solaris86" }
-      "lx??-x86" { return "glinux" }
-      "lx??-alpha" { return "alinux" }
-      "lx??-sparc" { return "slinux" }
-      "lx??-ia64" { return "ia64linux" }
-      "lx??-amd64" { return "lx24-amd64" }
+      "lx*-x86" { return "glinux" }
+      "lx*-alpha" { return "alinux" }
+      "lx*-sparc" { return "slinux" }
+      "lx*-ia64" { return "ia64linux" }
+      "lx*-amd64" { return "lx24-amd64" }
       "irix65" { return "irix6" }
 
       "osf4" -
@@ -3049,10 +3049,10 @@ proc host_get_id_a_command {host} {
 #     host_conf_get_suited_hosts 1 {} {sol-amd64 sol-sparc64} {sol-amd64}
 #        error: selected and excluded architecture may not overlap
 #
-#     host_conf_get_suited_hosts 4 {} {} {lx24-ia64}
+#     host_conf_get_suited_hosts 4 {} {} {lx-ia64}
 #        return 4 hosts of any architecture, but not on Linux on Itanic.
 #
-#     host_conf_get_suited_hosts 4 {sol-sparc64} {} {lx24-ia64}
+#     host_conf_get_suited_hosts 4 {sol-sparc64} {} {lx-ia64}
 #        return 4 hosts of any architecture, we prefer to get sol-sparc64 hosts,
 #        but cannot use Linux on Itanic.
 #*******************************************************************************

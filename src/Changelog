@@ -10,6 +10,35 @@
 EB-2011-03-23-0: Cleanup:    Removed authuser test
                  Issue:      GE-3345
 
+DG-2010-03-22-0: Bugfix:      Adapted testsuite installer to work with enabled
+                              core binding on Linux execd.
+                 Review:      TBD
+
+EB-2010-03-21-0: Bugfix:      Perl JSV script does not allow comma in CMDNAME 
+                              and CMDARGS 
+                 Issues:      GE-3399
+                 Review:      DG 
+
+EB-2010-03-18-0: Enhancem.:   Added new scenario for iss GE-3310
+                 Issues:      GE-3310
+
+DG-2011-03-17-1: Bugfix:      - Fixed authuser test for ssh
+                              - Fixed ge_has_feature
+                 Review:      JG
+
+DG-2011-03-17-0: Enhancem.:   Fixed qstat test in order to support new output.
+                 Issue:       GE-3371
+                 Review:      TBD
+
+JG-2011-03-16-1: Enhancem.:   adapt parsing of arch strings to new Linux arch
+                              strings (lx24-* and lx26-* changed to lx-*)
+                 Issue:       GE-3362
+                 Review:      TBD
+
+EB-2010-03-16-0: Enhancem.:  Added test scenario to jsv_issues test
+                 Issue:      GE-3311
+                 Review:     JG
+
 DG-2011-03-16-0: Cleanup:    Fixed qhost test in order to support new output
                              (GE-3370).
                  Review:     TBD

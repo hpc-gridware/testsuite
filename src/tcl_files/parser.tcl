@@ -3765,8 +3765,8 @@ proc plain_gdr_parse { output_var } {
                }
             }
          }
-         # every fifth line is a new job, increment counter
-         if { $line == 5} {
+         # every sixth line is a new job, increment counter
+         if { $line == 6} {
                incr job 1  
                set line 0
          

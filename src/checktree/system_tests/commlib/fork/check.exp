@@ -109,8 +109,8 @@ proc fork_posix_behaviour_run {} {
       # here we use the arch script from the source code
       set arch [resolve_arch $host 1]
       ts_log_fine "host $host has arch $arch"
-      if {[string match "*lx24*" $arch]} {
-         ts_log_fine "skip host $host, it's lx24 arch which has \"process threads\""
+      if {[string match "*lx24*" $arch] || [string match "ulx*" $arch]} {
+         ts_log_fine "skip host $host, it's lx24 arch or old glibc which has \"process threads\""
          continue
       }
       lappend host_list $host

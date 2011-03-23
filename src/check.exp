@@ -29,6 +29,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this code are Copyright 2011 Univa Inc.
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -1251,6 +1253,9 @@ proc get_passwd {user {raise_error 1}} {
 #     test if root password was typed in
 #
 #  INPUTS
+#    even_if_ssh_is_configured : if set to 1 it checks the root password in any case
+#
+#  INPUTS
 #     0  : root password should be ok
 #     -1 : no root access
 #  RESULT
@@ -1260,10 +1265,10 @@ proc get_passwd {user {raise_error 1}} {
 #     check/set_root_passwd
 #     check/get_root_passwd
 #*******************************
-proc have_root_passwd {} {
+proc have_root_passwd { {even_if_ssh_is_configured 0} } {
   global stored_passwd
 
-  if {[have_ssh_access] == 1} {
+  if {$even_if_ssh_is_configured == 0 && [have_ssh_access] == 1} {
      return 0
   }
 
@@ -7595,13 +7600,15 @@ proc install_binaries {arch_list a_report} {
         report_task_add_message report $task_nr $result
    }
 
-   # copy source/dist/util/arch to $SGE_ROOT/util.
+   # For SGE <= 6.2u5: copy source/dist/util/arch to $SGE_ROOT/util.
    # When we compiled our own binaries (including non distributed architectures like
    # lx26-x86 or hp11-64, source/dist/util/arch will give us the correct arch strings.
-   set arch_script_src "$ts_config(source_dir)/dist/util/arch"
-   set arch_script_dst "$ts_config(product_root)/util/arch"
-   report_task_add_message report $task_nr "installing $arch_script_src ..."
-   start_remote_prog $install_host $CHECK_USER "cp" "$arch_script_src $arch_script_dst"
+   if {$ts_config(gridengine_version) <= 62} {
+      set arch_script_src "$ts_config(source_dir)/dist/util/arch"
+      set arch_script_dst "$ts_config(product_root)/util/arch"
+      report_task_add_message report $task_nr "installing $arch_script_src ..."
+      start_remote_prog $install_host $CHECK_USER "cp" "$arch_script_src $arch_script_dst"
+   }
 
    # done - final error handling
    if {$was_error} {

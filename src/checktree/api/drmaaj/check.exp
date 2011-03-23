@@ -547,9 +547,11 @@ proc drmaaj_check { } {
                }
             }
             # maybe we have a 32bit lib in path now
-            if {[string first "sol-x86" $java_lib_path] != -1 || 
-                [string first "lx24-x86" $java_lib_path] != -1 || 
-                [string first "ulx24-x86" $java_lib_path] != -1 || 
+            if {[string first "sol-x86" $java_lib_path] != -1 ||
+                [string first "lx-x86" $java_lib_path] != -1 ||
+                [string first "lx24-x86" $java_lib_path] != -1 ||
+                [string first "ulx-x86" $java_lib_path] != -1 ||
+                [string first "ulx24-x86" $java_lib_path] != -1 ||
                 [string first "usol-x86" $java_lib_path] != -1 } {
                # this is a 32 bit architecture! 
                ts_log_fine "Set for architecture $binary_arch not JVM -d64 parameter."
@@ -724,29 +726,20 @@ proc is_32_bit_jvm {host jvm} {
 #     ???/???
 #*******************************************************************************
 proc is_64_bit_OS {binary_arch} {
-   
    # check if it is a 64 bit OS
    switch -- $binary_arch {
-      "sol-amd64" {
-         return true
-      }
-      "lx26-amd64" {
-         return true
-      }
+      "hp11-64" -
+      "lx-amd64" -
+      "lx24-amd64" -
+      "lx26-amd64" -
+      "lx-ia64" -
+      "lx24-ia64" -
+      "sol-amd64" -
       "sol-sparc64" {
-         return true
-      } 
-      "lx24-amd64" {
-         return true
-      }
-      "lx24-ia64" {
-         return true
-      }
-      "hp11-64" {
          return true
       }
    }
-      
+
    # is not a 64 bit OS
    return false
 }
@@ -782,30 +775,36 @@ proc get_java_library_path {host binary_arch} {
    # get lib extension
    set lib_ext [get_current_drmaa_lib_extension $host]
 
-   # set architecture string 
+   # set architecture string
    switch -- $binary_arch {
-      "sol-amd64" {
-         set arch_dir "sol-x86"
+      "hp11-64" {
+         set arch_dir "hp11"
+      }
+      "lx-amd64" {
+         set arch_dir "lx-x86"
+      }
+      "lx24-amd64" {
+         set arch_dir "lx24-x86"
       }
       "lx26-amd64" {
          set arch_dir "lx26-x86"
       }
-      "sol-sparc64" {
-         set arch_dir "sol-sparc"
-      } 
-      "lx24-amd64" {
-         set arch_dir "lx24-x86"
+      "lx-ia64" {
+         set arch_dir "lx-x86"
       }
       "lx24-ia64" {
          set arch_dir "lx24-x86"
       }
-      "hp11-64" {
-         set arch_dir "hp11"
+      "sol-amd64" {
+         set arch_dir "sol-x86"
+      }
+      "sol-sparc64" {
+         set arch_dir "sol-sparc"
       }
       default {
          set arch_dir ""
       }
-   }   
+   }
    # check if an valid directory was set
    if {$arch_dir == ""} {
          ts_log_fine "FAILURE! Not possible to test 32 bit library on $host because there is no mapping from architecture to directory where the lib resides."
