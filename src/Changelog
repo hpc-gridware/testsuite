@@ -36,7 +36,7 @@ DG-2011-03-17-0: Enhancem.:   Fixed qstat test in order to support new output.
 JG-2011-03-16-1: Enhancem.:   adapt parsing of arch strings to new Linux arch
                               strings (lx24-* and lx26-* changed to lx-*)
                  Issue:       GE-3362
-                 Review:      TBD
+                 Review:      EB
 
 EB-2010-03-16-0: Enhancem.:  Added test scenario to jsv_issues test
                  Issue:      GE-3311
