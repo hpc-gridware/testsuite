@@ -105,17 +105,19 @@ proc core_binding_basic_setup {} {
    # create queue
    add_queue "bq" $hostlist
 
-   # set execd parameter ENABLE_BINDING=true 
-   set my_execd_params "ENABLE_BINDING=true"
+   # if gridengine_version < 8.0.0 we must enable it
+   if {$ts_config(gridengine_version) < 80} {
+      set execd parameter ENABLE_BINDING=true 
+      set my_execd_params "ENABLE_BINDING=true"
 
-   get_config act_configuration
-   if {[string compare "none" $act_configuration(execd_params)] != 0} {
-      append my_execd_params ",$act_configuration(execd_params)"
+      get_config act_configuration
+      if {[string compare "none" $act_configuration(execd_params)] != 0} {
+         append my_execd_params ",$act_configuration(execd_params)"
+      }
+
+      set myconfig(execd_params) "$my_execd_params"
+      ts_log_fine "setting execd_param to \"$my_execd_params\" ..."
    }
-
-   set myconfig(execd_params) "$my_execd_params"
-   
-   ts_log_fine "setting execd_param to \"$my_execd_params\" ..."
 
    # change it 
    set_config_and_propagate myconfig
@@ -134,7 +136,7 @@ proc core_binding_basic_cleanup {} {
    ts_log_fine "delete queue ..."
    del_queue "bq" $hostlist 0 1
 
-   # disable corebinding 
+   # reset configuration 
    reset_config_and_propagate corebinding_general_backup
 
    unset hostlist
@@ -848,10 +850,11 @@ proc get_cores_per_socket { host } {
 
 proc submit_linear { host {amount 1} {type "set"} {starting_point "no"} } {
    global ts_config
+   global CHECK_USER
 
    set submit_string "-b y -q bq -binding $type linear:$amount -l h=$host sleep 3600"
 
-   set jobid [submit_job $submit_string]
+   set jobid [submit_job $submit_string 1 60 "" $CHECK_USER]
 
    wait_for_jobstart $jobid "sleep" 60 1 1
 
@@ -860,10 +863,11 @@ proc submit_linear { host {amount 1} {type "set"} {starting_point "no"} } {
 
 proc submit_linear_short { host {amount 1} {type "set"} {starting_point "no"} } {
    global ts_config
+   global CHECK_USER
 
    set submit_string "-b y -q bq -binding $type linear:$amount -l h=$host sleep 30"
 
-   set jobid [submit_job $submit_string]
+   set jobid [submit_job $submit_string 1 60 "" $CHECK_USER]
 
    #wait_for_jobstart $jobid "sleep" 60 1 1
 
@@ -872,10 +876,11 @@ proc submit_linear_short { host {amount 1} {type "set"} {starting_point "no"} } 
 
 proc submit_striding { host {amount 1} {stepsize 1} {type "set"} {starting_point "no"} } {
    global ts_config
+   global CHECK_USER
 
    set submit_string "-q bq -binding $type striding:$amount:$stepsize -l h=$host $ts_config(product_root)/examples/jobs/sleeper.sh 3600"
 
-   set jobid [submit_job $submit_string]
+   set jobid [submit_job $submit_string 1 60 "" $CHECK_USER]
 
    wait_for_jobstart $jobid "leeper" 60 1 1
 
@@ -884,10 +889,11 @@ proc submit_striding { host {amount 1} {stepsize 1} {type "set"} {starting_point
 
 proc submit_explicit { host {socketcorelist "0,0:0,1"} {type "set"} } {
    global ts_config
+   global CHECK_USER
   
    set submit_string "-q bq -binding $type explicit:$socketcorelist -l h=$host $ts_config(product_root)/examples/jobs/sleeper.sh 3600"
 
-   set jobid [submit_job $submit_string]
+   set jobid [submit_job $submit_string 1 60 "" $CHECK_USER]
 
    wait_for_jobstart $jobid "leeper" 60 1 1
 
@@ -1218,8 +1224,9 @@ proc check_sge_binding_env { host jobid } {
  
    # on linux via ps eww <pid>
    if { [ get_architecture $host ] == "linux" } { 
-      # get environment variable vi ps eww
-      set output [start_remote_prog $host $CHECK_USER  "ps" "eww $pid"]
+      # get environment variable vi ps eww 
+      # does not work on OpenSuse 11.4 (must be called as root)
+      set output [start_remote_prog $host "root" "ps" "eww $pid"]
    } elseif { [ get_architecture $host ] == "solaris" } {
       set output [start_remote_prog $host "root" "pargs" "-e $pid"]
    } else {
