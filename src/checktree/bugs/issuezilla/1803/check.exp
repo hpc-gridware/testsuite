@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this code are Copyright 2011 Univa Corp.
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -100,6 +102,7 @@ proc issue_1803_init_level {} {
 
 proc issue_1803_setup {} {
    global ts_config  issue_1803_stored_configuration 
+   global testhost host_backup
    ts_log_fine "\n--- Setup ---"
 
    ts_log_fine "saving current configuration ..."   
@@ -114,16 +117,17 @@ proc issue_1803_setup {} {
    set my_conf(epilog) "/bin/true epilog" 
    mod_queue all.q  "" my_conf
 
+   set testhost [lindex $ts_config(execd_nodes) 0]
+   get_config host_backup $testhost
+
+   ts_log_fine "Set execd_params to KEEP_ACTIVE=true on host $testhost"
+   set config(execd_params) "KEEP_ACTIVE=true"
+   set_config config $testhost 0 0
+
    # set KEEP_ACTIVE and short load_report_time in execd params
    get_config curr_configuration
    # Setting execd_params to KEEP_ACTIVE=true
-   set my_execd_params "KEEP_ACTIVE=true"
-   if { [string compare -nocase "none" $curr_configuration(execd_params)] != 0 } {
-      append my_execd_params ",$curr_configuration(execd_params)"
-   }
-   set myconfig(execd_params) "$my_execd_params"
    set myconfig(load_report_time) "00:00:01"
-   ts_log_fine "setting execd_params to \"$my_execd_params\" ..."
 
    # This procedure waits till all execd gets global config
    set_config_and_propagate myconfig
@@ -131,6 +135,7 @@ proc issue_1803_setup {} {
 
 proc issue_1803_cleanup {} {
    global ts_config issue_1803_stored_configuration
+   global testhost host_backup
 
    ts_log_fine "--- Cleanup ---"
    delete_all_jobs
@@ -139,6 +144,8 @@ proc issue_1803_cleanup {} {
    ts_log_fine "restoring original configuration ..."
    reset_schedd_config
    reset_config_and_propagate issue_1803_stored_configuration
+   
+   reset_config host_backup $testhost
 
    set my_conf(prolog) "none"
    set my_conf(epilog) "none"
@@ -152,6 +159,7 @@ proc issue_1803_test {} {
    global check_description CHECK_USER ts_user_config
    global ts_config CHECK_ACT_LEVEL
    global CHECK_DISPLAY_OUTPUT
+   global testhost
    ts_log_fine $check_description($CHECK_ACT_LEVEL)
 
    set starter_method_list {}
@@ -168,7 +176,7 @@ proc issue_1803_test {} {
       
       # init_logfile_wait instead of sleep
 
-      set host [lindex $ts_config(execd_nodes) 0]
+      set host $testhost
 
       set spool_dir [get_spool_dir $host execd]
 
