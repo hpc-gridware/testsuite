@@ -82,6 +82,7 @@ lappend check_functions "qrsh_notify"                ;# check signal handling
 lappend check_functions "qrsh_wd"                    ;# test the -wd <dir>/-cwd options
 lappend check_functions "qrsh_w_v_test"
 lappend check_functions "qrsh_pty_yes_redirect"
+lappend check_functions "qrsh_pty_yes_line_breaks"   ;# test if NL gets converted to CR NL
 
 proc qrsh_init_level {} {
    global CHECK_ACT_LEVEL
@@ -107,9 +108,11 @@ proc qrsh_setup {} {
    set qrsh_submithost $ts_config(master_host)
    switch -exact $CHECK_ACT_LEVEL {
       0 {
+         # get one suited host for testing
          set qrsh_hostlist [host_conf_get_suited_hosts]
       }
       200 {
+         # get one suited host from each architecture for testing
          set qrsh_hostlist $ts_config(unique_arch_nodes)
       }
    }
@@ -1914,6 +1917,85 @@ proc qrsh_w_v_test {} {
    }
 
    wait_for_end_of_all_jobs
+}
+
+#****** qrsh/qrsh_pty_yes_line_breaks() ***
+#
+#  NAME
+#     qrsh_pty_yes_line_breaks
+#
+#  SYNOPSIS
+#     proc qrsh_pty_yes_line_breaks { }
+#
+#  FUNCTION
+#     Tests if "qrsh -pty yes cat testfile.txt > out.txt" retains the line
+#     breaks from testfile, i.e. doesn't change UNIX style line breaks
+#     (NL) to DOS style line breaks (CR NL), or vice versa.
+#     There are two files in the test directory, one with UNIX line
+#     breaks, one wih DOS line breaks, both are printed by qrsh
+#     and the output is compared to the original files.
+#
+#     This test tests the fix for GE-3382
+#
+#*******************************
+proc qrsh_pty_yes_line_breaks {} {
+   global CHECK_USER CHECK_ACTUAL_TEST_PATH
+   global ts_config qrsh_hostlist
+
+   set in_file_UNIX  $CHECK_ACTUAL_TEST_PATH/"UNIX_line_breaks.txt"
+   set in_file_DOS   $CHECK_ACTUAL_TEST_PATH/"DOS_line_breaks.txt"
+   set out_file_UNIX [get_tmp_file_name]
+   set out_file_DOS  [get_tmp_file_name]
+
+   # In runlevel 0, $qrsh_hostlist contains only one host, in higher runlevels more hosts
+   foreach submit_host $qrsh_hostlist {
+      foreach host $qrsh_hostlist {
+         set arch [resolve_arch $submit_host]
+         set tmpfile [get_tmp_file_name $submit_host]
+
+         # Start "qrsh -pty yes UNIX_line_breaks.txt > UNIX_out"
+         ts_log_fine "executing $ts_config(product_root)/bin/$arch/qrsh -l h=$host \
+                      -pty yes cat $in_file_UNIX > $out_file_UNIX on host $submit_host as $CHECK_USER"
+         set unix_id [open_remote_spawn_process $submit_host $CHECK_USER \
+                      $ts_config(product_root)/bin/$arch/qrsh \
+                      "-l h=$host -pty yes cat $in_file_UNIX > $out_file_UNIX"]
+
+         # Start "qrsh -pty yes DOS_line_breaks.txt > DOS_out"
+         ts_log_fine "executing $ts_config(product_root)/bin/$arch/qrsh -l h=$host \
+                      -pty yes cat $in_file_DOS > $out_file_DOS on host $submit_host as $CHECK_USER"
+         set dos_id [open_remote_spawn_process $submit_host $CHECK_USER \
+                     $ts_config(product_root)/bin/$arch/qrsh \
+                     "-l h=$host -pty yes cat $in_file_DOS > $out_file_DOS"]
+
+         # Clean up
+         wait_for_end_of_all_jobs
+         close_spawn_process $unix_id
+         close_spawn_process $dos_id
+
+         # Diff the created files to the original ones
+         set result_UNIX [start_remote_prog $submit_host "$CHECK_USER" "diff" "$in_file_UNIX $out_file_UNIX"]
+         set result_DOS  [start_remote_prog $submit_host "$CHECK_USER" "diff" "$in_file_DOS $out_file_DOS"]
+
+         # Determine the lenght of the diff output
+         set length_UNIX [string length $result_UNIX]
+         set length_DOS  [string length $result_DOS]
+
+         # If the files are identical, the diff output is empty, its length is 0
+         if {$length_UNIX == 0 && $length_DOS == 0} {
+             ts_log_fine "All line breaks were preserved! Excellent!"
+         } else {
+            # At least one diff produced an output, we have found an error 
+            set error_string ""
+            if {$length_UNIX > 0} {
+               set error_string "UNIX line breaks were not preserved!"
+            }
+            if {$length_DOS > 0} {
+               set error_string "$error_string\nDOS line breaks were not preserved!"
+            }
+            ts_log_severe $error_string
+         }
+      }
+   }
 }
 
 #****** qrsh/qrsh_pty_yes_redirect() ******
