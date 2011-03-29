@@ -1714,7 +1714,7 @@ proc config_check_all_usages { check_list config_array type } {
          set main_list "source_cvs_hostname master_host shadowd_hosts execd_hosts 
                         submit_only_hosts bdb_server"
          set hedeby_list "hedeby_master_host hedeby_host_resources"
-         set arco_list "dbwriter_host swc_host"
+         set arco_list "dbwriter_host"
       }
       "port" {
          set main_list "commd_port jmx_port reserved_port"

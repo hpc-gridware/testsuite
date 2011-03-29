@@ -45,13 +45,12 @@ set check_name                 "arco_junit"
 set check_category             "COMPATIBILITY SYSTEM L10N VERIFIED"
 set check_description(0)       "executes the ARCo junit tests"
 set check_needs                "arco_database_install"         ;# dependencies of this check (name of other check)
-set check_needs                ""                         ;# dependencies of this check (name of other check)
 set check_init_level_procedure "arco_junit_init_level"
+
+set check_setup_function "arco_junit_setup"
+set check_cleanup_function "arco_junit_cleanup"
+
 set check_functions            ""                                     ;# functions to call (in order)
-
-set check_setup_level_function "arco_junit_setup_level"
-set check_cleanup_level_function "arco_junit_cleanup_level"
-
 lappend check_functions "arco_junit_check"
 
 
@@ -59,31 +58,34 @@ proc arco_junit_init_level {} {
   global CHECK_ACT_LEVEL
 
    switch -- $CHECK_ACT_LEVEL {
-      "0" {
+      0 {
          return 0
       }
    }
    return -1  ;# no other level else
 }
 
-proc arco_junit_setup_level {} {
+proc arco_junit_setup {} {
    # clean the arco database (drop all objects)
    ts_log_fine "cleaning up database ..."
+   shutdown_dbwriter
    arco_clean_database 1
    ts_log_fine "cleaning up database ...done"
 }
 
-proc arco_junit_cleanup_level {} {
+proc arco_junit_cleanup {} {
    #nothing to do, dbwriter is started up imediately after it is installed
+   # TODO: need to re-install the arco database
+   #startup_dbwriter
 }
 
 proc arco_junit_check {} {
    global CHECK_USER
    global CHECK_PROTOCOL_DIR arco_config ts_config
-   
-   array set report {}   
+
+   array set report {}
    report_create "ARCO_junit_tests" report 1 0
-   
+
    #  Write the configuration file for the tests
    #  Use the template from arco_source dir
    set cmd "sed"
