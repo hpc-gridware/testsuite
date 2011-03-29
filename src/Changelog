@@ -7,9 +7,19 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+DG-2011-03-29-0: Cleanup:    Changed amount of expected entries during install
+                 Review:     EB 
+
 HP-2011-03-28-0: Enhancem.:  Added test that checks if DOS and UNIX line
                              breaks are preserved in qrsh -pty yes output
-					  Issue:      GE-3382 TS-353
+                 Issue:      GE-3382 TS-353
+					  Review:     EB
+
+DG-2011-03-27-0: Cleanup:    Fixed test 1803.
+                 Review:     EB
+
+DG-2011-03-25-0: Cleanup:    Fixed core binding test.
+                 Review:     HP
 
 EB-2011-03-23-0: Cleanup:    Removed authuser test and hedeby checktree
                  Issue:      GE-3345 TS-343
