@@ -51,7 +51,7 @@ set ts_checktree($arco_checktree_nr,setup_hooks_0_init_func)    arco_init_config
 set ts_checktree($arco_checktree_nr,setup_hooks_0_verify_func)  arco_verify_config
 set ts_checktree($arco_checktree_nr,setup_hooks_0_save_func)    arco_save_configuration
 set ts_checktree($arco_checktree_nr,setup_hooks_0_filename)     [ get_additional_config_file_path "arco" ]
-set ts_checktree($arco_checktree_nr,setup_hooks_0_version)      "1.5"
+set ts_checktree($arco_checktree_nr,setup_hooks_0_version)      "1.6"
 
 set ts_checktree($arco_checktree_nr,checktree_clean_hooks_0)  "arco_clean"
 
@@ -229,7 +229,7 @@ proc arco_build { compile_hosts target a_report { ant_options "" } { arco_build_
    report_task_add_message report $task_nr "-> starting arco build.sh $target on host $build_host ..."
   
    # setup environment
-      set env(JAVA_HOME) [get_java_home_for_host $build_host "1.5"]
+   set env(JAVA_HOME) [get_java_home_for_host $build_host "1.6"]
    if { $env(JAVA_HOME) == "" } {
       ts_log_config "Java 1.5. not found on $build_host!"
       return -1
@@ -314,8 +314,7 @@ proc arco_get_required_hosts {} {
    global arco_config
    set res {}
    lappend res $arco_config(dbwriter_host)
-   lappend res $arco_config(swc_host)
-   
+
    ts_log_fine "Required hosts for arco: $res"
    return $res
 }
@@ -374,24 +373,6 @@ proc arco_install_binaries { arch_list a_report } {
    }
    report_finish_task report $task_nr 0
 
-   set task_nr [ report_create_task report "install_reporting_binaries" $ts_config(master_host) ]
-   
-   set tar_args "xzf $arco_config(arco_source_dir)/reporting/reporting.tar.gz -C $ts_config(product_root)"
-   
-   report_task_add_message report $task_nr "------------------------------------------"
-   report_task_add_message report $task_nr "-> $tar $tar_args"
-   set output [start_remote_prog $ts_config(master_host) $CHECK_USER "$tar" "$tar_args" prg_exit_state]
-   if { $prg_exit_state != 0 } {
-      report_task_add_message report $task_nr "------------------------------------------"
-      report_task_add_message report $task_nr "return state: $prg_exit_state"
-      report_task_add_message report $task_nr "------------------------------------------"
-      report_task_add_message report $task_nr "output:\n$output"
-      report_task_add_message report $task_nr "------------------------------------------"
-      report_finish_task report $task_nr -1
-      return -1
-   }
-   
-   report_finish_task report $task_nr 0
    return 0
 }
 
@@ -560,16 +541,16 @@ proc get_dbwriter_status { { raise_error 1 } { hostname "--" } } {
 #*******************************************************************************
 proc shutdown_dbwriter { { hostname "--" } } {
    global ts_config arco_config CHECK_USER
-   
-   if { $hostname == "--" } {
+
+   if {$hostname == "--"} {
       set hostname $arco_config(dbwriter_host)
    }
-      
+
    set prog "$ts_config(product_root)/$ts_config(cell)/common/sgedbwriter"
-   
-   if { [ file exists $prog ] } {
+
+   if {[file exists $prog]} {
       start_remote_prog "$hostname" "$CHECK_USER" "$prog" "stop"
-      
+
       switch -- $prg_exit_state {
          "0" {
             ts_log_fine "dbwriter has been stopped"
@@ -591,32 +572,30 @@ proc shutdown_dbwriter { { hostname "--" } } {
 }
 
 proc arco_clean {} {
-   
-   if { [arco_clean_database] != 0 } {
+   if {[arco_clean_database] != 0} {
       return -1
    }
-   
+
    return 0
 }
 
-proc arco_clean_database { { drop 0 } } {
+proc arco_clean_database {{drop 0}} {
    global arco_config
-   
-   if { [get_database_type] == "oracle" } {
+
+   if {[get_database_type] == "oracle"} {
       return [arco_clean_oracle_database $drop]
-   } elseif { [get_database_type] == "postgres" } {
-      return [arco_clean_postgres_database $drop ]
-   } elseif { [get_database_type] == "mysql" } {
-      return [arco_clean_mysql_database $drop ]
+   } elseif {[get_database_type] == "postgres"} {
+      return [arco_clean_postgres_database $drop]
+   } elseif {[get_database_type] == "mysql"} {
+      return [arco_clean_mysql_database $drop]
    }
-} 
+}
 
 proc clean_table { table_name } {
-
-   if { [string compare [string tolower $table_name] "sge_version"] == 0 } {
+   if {[string compare [string tolower $table_name] "sge_version"] == 0} {
       return 0
    }
-   if { [string compare [string tolower $table_name] "sge_checkpoint"] == 0 } {
+   if {[string compare [string tolower $table_name] "sge_checkpoint"] == 0} {
       return 0
    }
 
@@ -770,22 +749,21 @@ proc arco_clean_oracle_database { { drop 0 } } {
 
 proc arco_clean_postgres_database { { drop 0 } } {
    global ARCO_TABLES ARCO_VIEWS
-   
+
    set id [sqlutil_create]
-   if { $id == "-1" } {
+   if {$id == "-1"} {
       ts_log_severe "Can not create sqlutil"
       return -1
-   }   
+   }
    set sp_id [ lindex $id 1 ]
-   
-   
+
    # first of all connect to the admin db and check wether the database exists
    if { [ sqlutil_connect $sp_id 1 ] != 0 } {
       ts_log_severe "Can not connect to admin database"
       close_spawn_process $id;
       return -2
    }
-   
+
    # Ensure that the test database is available
    set db_name [get_database_name]
    set sql "select datname from pg_database where datname = '$db_name'"
@@ -804,14 +782,14 @@ proc arco_clean_postgres_database { { drop 0 } } {
       close_spawn_process $id;
       return -2
    }
-   
+
    set result 0
-   
+
    if { $drop } {
       # drop views
       foreach view $ARCO_VIEWS {
          set view [string tolower $view]
-         
+
          set sql "select viewname from pg_views where viewname = '$view'";
          set res [sqlutil_query $sp_id $sql result_array column_names]
          if { $res == 0 } {
@@ -822,7 +800,7 @@ proc arco_clean_postgres_database { { drop 0 } } {
             close_spawn_process $id;
             return -1
          }
-         
+
          set sql "DROP VIEW $view"
          ts_log_fine "drop view $view"
          set res [sqlutil_exec $sp_id $sql]
@@ -832,7 +810,7 @@ proc arco_clean_postgres_database { { drop 0 } } {
             return -1
          }
       }
-   }   
+   }
    foreach table $ARCO_TABLES {
       set table [string tolower $table]
       set sql "select tablename, schemaname, tableowner from pg_tables where tablename = '$table'"
@@ -847,7 +825,7 @@ proc arco_clean_postgres_database { { drop 0 } } {
          close_spawn_process $id
          return -1
       }
-      
+
       if { $drop } {
          set sql "DROP TABLE $table CASCADE"
          ts_log_fine "drop table $table"
@@ -865,8 +843,8 @@ proc arco_clean_postgres_database { { drop 0 } } {
                ts_log_severe "Error: Can not delete table $table"
                set result -1
                break;
-            } 
-         } 
+            }
+         }
       }
       set sql "COMMIT"
       set res [sqlutil_exec $sp_id $sql]
@@ -876,7 +854,7 @@ proc arco_clean_postgres_database { { drop 0 } } {
          break;
       }
    }
-   
+
    close_spawn_process $id;
    return $result
 }
@@ -993,168 +971,6 @@ global ARCO_TABLES ARCO_VIEWS
    close_spawn_process $id;
    return $result
 
-}
-
-#****** checktree/get_java_web_console_status() ********************************
-#  NAME
-#    get_java_web_console_status() -- get the status of the java web console
-#
-#  SYNOPSIS
-#    get_java_web_console_status { { swc_host "" } } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#    swc_host --  the host where the java web console is installed. If this
-#                 is an empty string the value from arco_config(swc_host) is taken
-# 
-#  RESULT
-#     0     --  Java Web Console is not running
-#     1     --  Java Web Console is running
-#     else  --  The Java Web Console is not installed on this host, or it is
-#               not accessable by the CHECK_USER
-#
-#  EXAMPLE
-#
-#   set res [get_java_web_console_status]
-#   if { $res == 0 } {
-#      puts "Java Web Console is not running"
-#   } elseif { $res == 1 } {
-#      puts "Java Web Console is running
-#   } else {
-#      puts "Can not determine status of the Java Web Console"
-#   }
-#
-#*******************************************************************************
-proc get_java_web_console_status { { swc_host "" } } {
-   global arco_config CHECK_USER stored_passwd
-   
-   if { $swc_host == "" } {
-      set swc_host $arco_config(swc_host)
-   }
-
-   if { [info exists stored_passwd(root)] } {
-      if { [string compare $stored_passwd(root) ""] == 0 } {
-         set_root_passwd
-      }
-   } else {
-      set_root_passwd
-   }
-
-   set webserver_binary [get_binary_path $swc_host "smcwebserver"]
-   set output [start_remote_prog $swc_host root $webserver_binary "status" ]
-   
-   if { $prg_exit_state != 0 } {
-
-    #  if {[string compare "You must be the system's root user to manage the server." "$output"] == 0 } {
-    #     return 0
-    #  }
-       puts "------------------------------------------------------------------"
-       puts "Command '$webserver_binary status' on host $swc_host failed"
-       puts "------------------------------------------------------------------"
-       puts $output
-       puts "------------------------------------------------------------------"
-       ts_log_severe "Can not get status Java Web Console on host $swc_host"
-       return -1
-   }
-   
-   if { [string first "is not running" $output] > 0 } {
-      return 0
-   } elseif { [string first "is running" $output] > 0 } {
-      return 1
-   } else {
-      puts "Unexpected output of command '$webserver_binary status' on host $swc_host:"
-      puts $output
-      return -1
-   }
-}
-
-#****** checktree/get_java_web_console_version() *******************************
-#  NAME
-#    get_java_web_console_version() -- get the version of the java web console
-#
-#  SYNOPSIS
-#    get_java_web_console_version { version_array { swc_host "" } } 
-#
-#  FUNCTION
-#     get the version of the java web console
-#     if the parameter swc_host is "", the swc_host is taken from the globa
-#     variable arco_config(swc_host)
-#
-#  INPUTS
-#    version_array -- The array with the major minor and mirco version is stored
-#    swc_host      -- name of the host where the java web console is installed
-#
-#  RESULT
-#     0     --   The version has been stored in version_array
-#     else  --   Can not determine the version of the java webconsole on the host
-#
-#  EXAMPLE
-#
-#     array set version_array {}
-#     if { [ get_java_web_console_version ] != 0 } {
-#        puts "Can not determin the version of the java web console"
-#     } else {
-#        puts "Found version ${version_array(major)}. ${version_array(minor)}.${version_array(micro)}"
-#     }
-#
-#*******************************************************************************
-proc get_java_web_console_version { version_array { swc_host "" } } {
-   global arco_config CHECK_USER stored_passwd
-   upvar $version_array va
-   
-   if { $swc_host == "" } {
-      set swc_host $arco_config(swc_host)
-   }
-
-   if { [info exists stored_passwd(root)] } {
-      if { [string compare $stored_passwd(root) ""] == 0 } {
-         set_root_passwd
-      }
-   } else {
-      set_root_passwd
-   }
-   set webserver_binary [get_binary_path $swc_host "smcwebserver"]
-
-   set output [start_remote_prog $swc_host root  "$webserver_binary" "-V"]
-
-   if { $prg_exit_state != 0 } {
-      puts "------------------------------------------------------------------"
-      puts "'$webserver_binary -V' on host $swc_host failed"
-      puts "------------------------------------------------------------------"
-      puts $output
-      puts "------------------------------------------------------------------"
-      ts_log_severe "Can not get the version of Java Web Console on host $swc_host"
-      return -1
-   }
-   
-   set list [split $output " "]
-   if { [llength $list] != 2 || [lindex $list 0] != "Version" } {
-       ts_log_severe "Got invalid version string $output from '$webserver_binary -V' on host $swc_host"
-       return -1
-   }
-   set output [lindex $list 1]
-   set list [split $output "."]
-   
-   switch -- [llength $list] {
-      2 {
-        set va(major) [lindex $list 0]
-        set va(minor) [lindex $list 1]
-        set va(micro) 0
-        return 0
-      }
-      3 {
-        set va(major) [lindex $list 0]
-        set va(minor) [lindex $list 1]
-        set va(micro) [lindex $list 2]
-        return 0
-      }
-      default {
-         ts_log_severe "Got invalid version string $output from '$webserver_binary -V' on host $swc_host"
-         return -1
-      }
-   }
 }
 
 #****** checktree/check_dbwriter_log() *****************************************

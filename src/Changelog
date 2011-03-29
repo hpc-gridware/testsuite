@@ -6,9 +6,14 @@
           1         2         3         4         5         6         7
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
+JG-2011-03-29-0: Bugfix:      checktree_arco:
+                              - removed reporting (Web Console) specific code
+                              - fixed build, install and tests except for the
+                                junit test
+                 Issue:       TS-362
 
 DG-2011-03-29-0: Cleanup:     Changed amount of expected entries during install
-                 Review:      EB 
+                 Review:      EB
 
 DG-2011-03-27-0: Cleanup:     Fixed test 1803.
                  Review:      EB

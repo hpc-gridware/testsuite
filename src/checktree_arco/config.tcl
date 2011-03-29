@@ -260,6 +260,7 @@ proc arco_init_config { config_array } {
    arco_config_upgrade_1_3 config
    arco_config_upgrade_1_4 config
    arco_config_upgrade_1_5 config
+   arco_config_upgrade_1_6 config
 }
 
 proc arco_config_upgrade_1_1 { config_array } {
@@ -496,6 +497,39 @@ proc arco_config_upgrade_1_5 { config_array } {
 
       # now we have a configuration version 1.5
       set config(version) "1.5"
+   }
+}
+
+proc arco_config_upgrade_1_6 {config_array} {
+   upvar $config_array config
+
+   if {$config(version) == "1.5"} {
+
+      ts_log_fine "Upgrade to version 1.6"
+
+      # using global database configuration
+      # delete unnecessary parameters
+      set param_list ""
+      lappend param_list "swc_host"
+
+      foreach param $param_list {
+         set pos $config($param,pos)
+         array unset config "$param"
+         array unset config "$param,desc"
+         array unset config "$param,default"
+         array unset config "$param,setup_func"
+         array unset config "$param,onchange"
+         array unset config "$param,pos"
+         set names [array names config "*,pos"]
+         foreach name $names {
+            if { $config($name) >= $pos } {
+               set config($name) [ expr ( $config($name) - 1 ) ]
+            }
+         }
+      }
+
+      # now we have a configuration version 1.6
+      set config(version) "1.6"
    }
 }
 
