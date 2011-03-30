@@ -6,6 +6,10 @@
           1         2         3         4         5         6         7
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
+DG-2011-03-30-0: Cleanup:    added -jmx as default parameter, because
+                             otherwise a JMX installation would not be
+                             possible anymore (this has to be changed later)
+
 JG-2011-03-29-0: Bugfix:     checktree_arco:
                              - removed reporting (Web Console) specific code
                              - fixed build, install and tests except for the
