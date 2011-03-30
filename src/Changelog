@@ -6,6 +6,13 @@
           1         2         3         4         5         6         7
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
+
+HP-2011-03-30-0: Bugfix:     issue_1760 test used "tail +2" which isn't
+                             available on all Linux versions
+                             -> changed to "tail -n +2", which seems to work
+                             everywhere
+                 Issue:      No issue for this minor bug
+
 DG-2011-03-30-0: Cleanup:    added -jmx as default parameter, because
                              otherwise a JMX installation would not be
                              possible anymore (this has to be changed later)
@@ -22,7 +29,7 @@ DG-2011-03-29-0: Cleanup:    Changed amount of expected entries during install
 HP-2011-03-28-0: Enhancem.:  Added test that checks if DOS and UNIX line
                              breaks are preserved in qrsh -pty yes output
                  Issue:      GE-3382 TS-353
-					  Review:     EB
+                 Review:     EB
 
 DG-2011-03-27-0: Cleanup:    Fixed test 1803.
                  Review:     EB

@@ -104,7 +104,7 @@ proc issue_1760_check {} {
    startup_qmaster 0 envlist
 
    # Add config for fake host
-   set output [start_remote_prog $ts_config(master_host) $CHECK_USER $qconf "-sconf $ts_config(master_host) | tail +2 > /tmp/$issue_1760_fake_host" result]
+   set output [start_remote_prog $ts_config(master_host) $CHECK_USER $qconf "-sconf $ts_config(master_host) | tail -n +2 > /tmp/$issue_1760_fake_host" result]
 
    if {$result != 0} {
       ts_log_severe "Unable to show configuration for $ts_config(master_host): $output"
