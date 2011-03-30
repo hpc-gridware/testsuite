@@ -165,7 +165,7 @@ proc install_shadowd {} {
          set user $CHECK_USER
          ts_log_fine "--> install as user $CHECK_USER <--" 
       }
-      set id [open_remote_spawn_process $shadow_host $user "./inst_sge" "-sm" 0 $ts_config(product_root) "" 1 15 0 1 1]
+      set id [open_remote_spawn_process $shadow_host $user "./inst_sge" "-sm -jmx" 0 $ts_config(product_root) "" 1 15 0 1 1]
       set sp_id [ lindex $id 1 ] 
      
       set do_stop 0
