@@ -1035,7 +1035,7 @@ proc save_file {filename array_name} {
 
 #****** file_procedures/read_file() ********************************************
 #  NAME
-#     read_file() -- read fill into array (line by line)
+#     read_file() -- read file into array (line by line)
 #
 #  SYNOPSIS
 #     read_file {filename array_name {wait_timeout 0}} 

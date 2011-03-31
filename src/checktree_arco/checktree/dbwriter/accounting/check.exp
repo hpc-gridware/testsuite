@@ -52,7 +52,6 @@ set check_name            "accounting"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_highest_level   0
 set check_description(0)  "Comparing the output of qacct with the content of the ARCo database"
-set check_description(1)  ""
 
 # define test's dependencies
 set check_needs           "init_core_system arco_database_install arco_dbwriter_install"

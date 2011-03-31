@@ -1714,7 +1714,7 @@ proc config_check_all_usages { check_list config_array type } {
          set main_list "source_cvs_hostname master_host shadowd_hosts execd_hosts 
                         submit_only_hosts bdb_server"
          set hedeby_list "hedeby_master_host hedeby_host_resources"
-         set arco_list "dbwriter_host swc_host"
+         set arco_list "dbwriter_host"
       }
       "port" {
          set main_list "commd_port jmx_port reserved_port"
@@ -3478,6 +3478,13 @@ proc config_qmaster_install_options { only_check name config_array } {
    set value [config_generic $only_check $name config $help_text "string" 1 0]
 
    if { $value == -1 } { return -1 }
+
+   # -jmx must be set since 8.0.0 in order to activate the JMX dialog
+   if { $value == "none" } {
+      set value "-jmx"
+   } else {
+      append value "-jmx"
+   }
 
    # set global values
    set CHECK_QMASTER_INSTALL_OPTIONS  $value

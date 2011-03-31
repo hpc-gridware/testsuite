@@ -623,11 +623,6 @@ proc setup_execd_conf {} {
          }
       }
 
-      # since 8.0.0 on linux execd_param ENABLE_BINDING=true is default
-      if {[string match "lx*" [host_conf_get_arch $host]]} {
-         incr expected_entries 1
-      }
-
       if {$have_exec_spool_dir != "" && $is_execd_host} {
          ts_log_fine "host $host has spooldir in \"$have_exec_spool_dir\""
          set spool_dir 1
@@ -686,7 +681,9 @@ proc setup_execd_conf {} {
                   if {$tmp_config(execd_params) == "enable_windomacc=true"} {
                      set win_execd_params_found 1
                   }
-               } 
+               } else {
+                  lappend removed $elem
+               }
             }
             "execd_spool_dir" {
                if {[string compare $have_exec_spool_dir $tmp_config(execd_spool_dir)] == 0} {
