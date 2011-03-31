@@ -274,9 +274,5 @@ proc get_version_info {{version_information_array_name ""}} {
 
 # TODO (CR): We should remove this is_61AR function and make a ge_has_feature call out of it !!!
 proc is_61AR {} {
-   get_current_cluster_config_array ts_config
-   if {$ts_config(source_cvs_release) == "V61ARsnapshot3_BRANCH"} {
-      return 1
-   }
    return 0
 }
