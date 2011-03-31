@@ -1173,8 +1173,8 @@ proc qrsh_terminate {} {
                if {![info exists ps_info($job_pid,ppid)]} {
                   ts_log_severe "info about ppid of pid $job_pid not available on host $host"
                } else {
-                  if {$ps_info($job_pid,pgid) != $t_job_pid} {
-                     ts_log_severe "wrong job_pid passed to terminate method for job $job_id on host $host, should be $ps_info($job_pid,pgid) but is $t_job_pid"
+                  if {$ps_info($job_pid,ppid) != $t_job_pid} {
+                     ts_log_severe "wrong job_pid passed to terminate method for job $job_id on host $host, should be $ps_info($job_pid,ppid) but is $t_job_pid"
                   }
                }
             }
