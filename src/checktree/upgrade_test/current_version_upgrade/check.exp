@@ -608,7 +608,7 @@ proc current_version_upgrade_test {} {
                      lappend current_version_test_var(cloned_results) $clone_config_array(results_dir)
                   }
 
-                  set clone_config_array(source_cvs_release) $rel_info($i,tag)
+                  set clone_config_array(package_release) $rel_info($i,tag)
                   set clone_config_array(source_dir) "none"
                   set clone_config_array(additional_config) "none"
                   set clone_config_array(additional_checktree_dirs) "none"
@@ -940,7 +940,7 @@ proc current_version_upgrade_test {} {
                   # After the update we should have the new grid engine version. Perform all test actions
                   # in new (version upgraded) cloned config testsuite cluster
                   set clone_config_array(gridengine_version) $ts_config(gridengine_version)
-                  set clone_config_array(source_cvs_release) $ts_config(source_cvs_release)
+                  set clone_config_array(package_release) $ts_config(package_release)
                   set clone_config_array(source_dir) $ts_config(source_dir)
                   set clone_config_array(results_dir) $ts_config(results_dir)
                   set after_update_config_file [get_tmp_file_name $ts_config(master_host) $cur_version(detected_version) "clone"]
