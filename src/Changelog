@@ -7,6 +7,9 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+HP-2011-03-31-0: Bugfix:     fixed a race condition in core_binding_basic test
+                 Review:     DG
+
 HP-2011-03-30-0: Bugfix:     issue_1760 test used "tail +2" which isn't
                              available on all Linux versions
                              -> changed to "tail -n +2", which seems to work
