@@ -957,8 +957,6 @@ proc get_supported_config_parameter_list {} {
    lappend clone_argument_list "fs_config_file"
    lappend clone_argument_list "db_config_file"
    lappend clone_argument_list "additional_config"
-   lappend clone_argument_list "source_cvs_hostname"
-   lappend clone_argument_list "source_cvs_release"
    lappend clone_argument_list "master_host"
    lappend clone_argument_list "shadowd_hosts"
    lappend clone_argument_list "execd_hosts"
@@ -985,6 +983,7 @@ proc get_supported_config_parameter_list {} {
    lappend clone_argument_list "execd_install_options"
    lappend clone_argument_list "package_directory"
    lappend clone_argument_list "package_type"
+   lappend clone_argument_list "package_release"
    lappend clone_argument_list "dns_domain"
    lappend clone_argument_list "dns_for_install_script"
    lappend clone_argument_list "mail_application"
@@ -2485,6 +2484,14 @@ proc update_ts_config_version {} {
    if {[string compare $ts_config(version) "1.19"] == 0} {
       puts "\ntestsuite configuration update from 1.19 to 1.20 ..."
       config_build_ts_config_1_20
+      show_config ts_config
+      wait_for_enter
+      return 0
+   }
+
+   if {[string compare $ts_config(version) "1.20"] == 0} {
+      puts "\ntestsuite configuration update from 1.20 to 1.21 ..."
+      config_build_ts_config_1_21
       show_config ts_config
       wait_for_enter
       return 0
@@ -7441,7 +7448,7 @@ proc build_distribution { arch_list } {
       # figure out which commandline options to use
       set args ""
       append args "-vdir $ts_config(product_root)"             ;# find the distrib here
-      append args " -version $ts_config(source_cvs_release)"   ;# for package names
+      append args " -version $ts_config(package_release)"      ;# for package names
       append args " -basedir $ts_config(package_directory)"    ;# destination dir
       append args " -bin -common"                              ;# which packages
 
@@ -7619,190 +7626,6 @@ proc install_binaries {arch_list a_report} {
    return $was_error
 }
 
-#****** check/update_source() ******************************************************
-#  NAME
-#    update_source()
-#
-#  SYNOPSIS
-#    update_source { a_html_body }
-#
-#  FUNCTION
-#     Updates the sources at ts_config(source_dir)
-#     The cvs commands is executed at $ts_config(source_cvs_hostname)
-#     For the result a report is emailed
-#  INPUTS
-#    a_html_body   -- html body where error messages will be appended
-#    a_mail_body   -- mail body where error messages will be appended
-#  RESULT
-#     0  --  no update has been executed
-#     1  --  update has been executed
-#     <0 --  failure
-#  EXAMPLE
-#
-#
-#  NOTES
-#     calls exit if the sources of the testsuite are updated
-#
-#  BUGS
-#
-#  SEE ALSO
-#     check/compile_source
-#******
-proc update_source { a_report do_only_hooks } {
-   global do_not_update
-   global ts_config
-   global CHECK_USER
-   upvar $a_report report
-
-   if { $do_not_update == 0 } {
-      if { $do_only_hooks == 0 } {
-         set tries 1
-         set output ""
-         set update_ok 0
-         set prg_exit_state 0
-         set conflict_files {}
-
-         set task_nr [report_create_task report "cvs_update" $ts_config(source_cvs_hostname)]
-
-         if {$ts_config(source_dir) == "none"} {
-            report_task_add_message report $task_nr "source directory is set to \"none\" - cannot build distribution"
-            report_finish_task report $task_nr -1
-            return -1
-         }
-
-         ts_log_fine "updating sources (-q -z 9 update -dP) ..."
-
-         while { $tries <= 3 && $update_ok == 0 } {
-
-            report_task_add_message report $task_nr "------------------------------------------"
-            report_task_add_message report $task_nr "$tries. cvs update try ..."
-            report_task_add_message report $task_nr "updating gridengine directory $ts_config(source_dir)/.. on host $ts_config(source_cvs_hostname) ..."
-
-            set open_spawn [open_remote_spawn_process $ts_config(source_cvs_hostname) $CHECK_USER "cvs" "-q -z 9 update -dP" 0 "$ts_config(source_dir)/.."]
-            set spawn_list [lindex $open_spawn 1]
-
-            set frame_work_script_update 0
-            set testsuite_update 0
-            set cvs_change_log ""
-
-            set cvs_output [ open "$ts_config(source_dir)/cvs_update.log.[timestamp]" "w" ]
-
-            set use_output 0
-            set timeout 600
-
-            expect {
-               -i $spawn_list full_buffer {
-                  report_task_add_message report $task_nr "full_buffer error on cvs update"
-               }
-               -i $spawn_list timeout {
-                  report_task_add_message report $task_nr "got timeout on cvs update"
-               }
-               -i $spawn_list eof {
-                  report_task_add_message report $task_nr "got eof on cvs update"
-               }
-               -i $spawn_list "_exit_status_:(*)" {
-                  set use_output 0
-                  set prg_exit_state [get_string_value_between "_exit_status_:(" ")" $expect_out(0,string)]
-                  report_task_add_message report $task_nr "cvs update exited with status $prg_exit_state"
-                  if { $prg_exit_state != 0 } {
-                     set update_ok 0
-                  } else {
-                     set update_ok 1
-                  }
-               }
-               -i $spawn_list "_start_mark_:(0)" {
-                  set use_output 1
-                  report_task_add_message report $task_nr "cd $ts_config(source_dir)/.. ; cvs -q -z 9 update -dP"
-                  exp_continue
-               }
-               -i $spawn_list -re {^C .*?\n} { ;# conflict files
-                  if { $use_output == 1 } {
-                     set elem [string trimright $expect_out(buffer) "\n\r"]
-                     report_task_add_message report $task_nr "$elem"
-
-                     set len [string length $elem]
-                     set confict_file [string range $elem 2 $len]
-                     lappend conflict_files $confict_file
-                  }
-                  exp_continue
-               }
-               -i $spawn_list -re {^.*?\n} {
-                  if { $use_output } {
-                     set elem [string trimright $expect_out(buffer) "\n\r"]
-                     report_task_add_message report $task_nr "$elem"
-                     puts $cvs_output "$elem"
-
-                     if { ([string range $elem 0 2 ] != "cvs") && ([string range $elem 0 0] != "?") } {
-                        report_task_add_message report $task_nr "$elem"
-                        append cvs_change_log "$elem\n"
-                        if { [ string first "testsuite/check.exp" $elem ] >= 0 && [string range $elem 0 0] != "M" } {
-                           set frame_work_script_update 1
-                        }
-                        if { [ string first "testsuite/tcl_files" $elem ] >= 0 && [string range $elem 0 0] != "M" } {
-                           set testsuite_update 1
-                        }
-                     }
-                  }
-                  exp_continue
-               }
-            }
-
-            flush $cvs_output
-            close $cvs_output
-            close_spawn_process $open_spawn
-            incr tries 1
-            if { [ llength $conflict_files ] > 0 } {
-               # we have conflict do not continue
-               break
-            }
-            if { $update_ok == 0 } {
-               # Wait for NFS ???
-               after 60000
-            }
-         }
-
-         if { [llength $conflict_files] > 0 } {
-            report_add_message report "CVS Update Error: The following files contains conflicts:\n"
-            foreach elem $conflict_files {
-               report_add_message report "   $elem"
-            }
-            report_add_message report "\n Please resolve these conflicts!!!\n"
-            report_finish_task report $task_nr -1
-            return -1
-         }
-
-         if { $update_ok != 1 } {
-            report_add_message report "CVS Update Error: cvs update failed three times!!!\n"
-            report_finish_task report $task_nr -1
-            return -1
-         }
-
-         # if the testsuite itself has been update, require restart
-         if { $frame_work_script_update == 1 } {
-            report_add_message report "CVS Update: TESTSUITE FRAMEWORK SCRIPT was updated!!! Stop !!!\n"
-            report_finish_task report $task_nr 0
-            report_finish report 0
-            testsuite_shutdown 1
-         }
-         if { $testsuite_update == 1 } {
-            report_add_message report "CVS Update Warning: testsuite source procedures were updated!!!"
-            report_add_message report "                    Resourcing it !!!\n"
-         }
-         report_finish_task report $task_nr 0
-
-         # TODO: next task is update additional checktree sources (see issue#82 issue#141)
-         return 1
-      } else {
-         ts_log_fine "Skip GE cvs update , I am on do_only_hooks mode"
-
-         # TODO: only update additional checktree sources (see issue#82 issue#141)
-         return 1
-      }
-   } else {
-      return 0
-   }
-}
-
 #                                                             max. column:     |
 #****** check/run_all_at_starttime() ******
 #
@@ -7868,7 +7691,6 @@ proc run_all_at_starttime {} {
    }
    delete_tests $CHECK_ACT_PATH
    if { $should_we_compile == 1 } {
-#     remove_old_cvs_tree
       set back [ compile_source ]
       if { $back != 0 } {
          puts "error in compile source - stop"
