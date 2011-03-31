@@ -8,6 +8,7 @@
 -----------------+-----------+--------------------------------------------------
 
 HP-2011-03-31-0: Bugfix:     fixed a race condition in core_binding_basic test
+                 Issue:      TS-368
                  Review:     DG
 
 HP-2011-03-30-0: Bugfix:     issue_1760 test used "tail +2" which isn't
