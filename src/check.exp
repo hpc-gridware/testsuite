@@ -223,7 +223,6 @@ set create_csv_file "false"
 
 # if we know the config is ok, we don't want to check it,
 # e.g. we don't want to connect to all hosts during setup
-#      or check the CVS version at every testsuite startup
 global fast_setup
 set fast_setup 0
 

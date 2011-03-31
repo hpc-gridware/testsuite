@@ -2151,13 +2151,13 @@ proc config_additional_config { only_check name config_array } {
             }
 
             #  cell or independed cluster support?
-            #  o if cluster have the same cvs source directory AND the same SGE_ROOT the
+            #  o if cluster have the same source directory AND the same SGE_ROOT the
             #    compilation is done in the main cluster (ts with additional config)
             #
             #  o if SGE_ROOT is different the source has also to be different
             #    (complete independed additional cluster config). Then the compilation
             #    is done via operate_additional_clusters call. This means
-            #    gridengine version, and cvs release may be different
+            #    gridengine version, and release may be different
 
             set allow_master_as_execd 1
             if { $add_config(product_root) == $config(product_root) &&
@@ -3537,7 +3537,11 @@ proc config_package_type { only_check name config_array } {
 proc config_package_release {only_check name config_array} {
    upvar $config_array config
 
-   set value [config_generic $only_check $name config "" "string" 0 1]
+   set help_text { "Enter a version string here, e.g. 8.0.0"
+                   "it will be used to build package names, e.g."
+                   "ge-8.0.0-common.tar.gz or ge-8.0.0-bin-lx-amd64.txt" }
+
+   set value [config_generic $only_check $name config $help_text "string" 0 1]
 
    return $value
 }
