@@ -7,6 +7,9 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+DG-2011-04-01-0: Bugfix:     Fixed broken jsv_ge_add test.
+                 Review:     JG
+
 DG-2011-04-01-0: Cleanup:    Removed service tags test from testsuite since
                              service tags are not a part of GE anymore.
                  Review:     JG
