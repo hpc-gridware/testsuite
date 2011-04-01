@@ -7,7 +7,10 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
-DG-2011-04-01-0: Bugfix:     Fixed broken jsv_ge_add test.
+DG-2011-04-01-2: Cleanup:    Fixed race condition in 2254 test.
+                 Review:     EB
+
+DG-2011-04-01-1: Bugfix:     Fixed broken jsv_ge_add test.
                  Review:     JG
 
 DG-2011-04-01-0: Cleanup:    Removed service tags test from testsuite since
