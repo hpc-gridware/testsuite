@@ -7,6 +7,10 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+DG-2011-04-01-0: Cleanup:    Removed service tags test from testsuite since
+                             service tags are not a part of GE anymore.
+                 Review:     JG
+
 JG-2011-03-31-0: Enhancem.:  o remove cvs repository handling from testsuite
                              o add new config option package_release
                  Issue:      TS-341
