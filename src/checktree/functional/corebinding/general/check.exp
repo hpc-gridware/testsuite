@@ -161,32 +161,32 @@ proc core_binding_basic {} {
 
    ts_log_fine "test host list: $hostlist"
 
-   set runs 0 
+   set runs 0
 
    foreach host $hostlist {
 
-      ts_log_fine "-----------------------------"
-      ts_log_fine "----> do stress testing <----"
-      ts_log_fine "-----------------------------"
-      
-      do_stress_testing $host
+     ts_log_fine "-----------------------------"
+     ts_log_fine "----> do stress testing <----"
+     ts_log_fine "-----------------------------"
 
-      ts_log_fine "---------------------------------------"
-      ts_log_fine "----> do oversubscription testing <----"
-      ts_log_fine "---------------------------------------"
-      
-      test_oversubscription $host
+     do_stress_testing $host
 
-      ts_log_fine "-----------------------------"
-      ts_log_fine "---> do positive testing <---"
-      ts_log_fine "-----------------------------"
-      
-      core_binding_basic_set $host 
-      
+     ts_log_fine "---------------------------------------"
+     ts_log_fine "----> do oversubscription testing <----"
+     ts_log_fine "---------------------------------------"
+
+     test_oversubscription $host
+
+     ts_log_fine "-----------------------------"
+     ts_log_fine "---> do positive testing <---"
+     ts_log_fine "-----------------------------"
+
+      core_binding_basic_set $host
+
       if { $runs == 0 } {
          # just test it one time
          ts_log_fine "-----------------------------"
-         ts_log_fine "--> project spooling bug  <--" 
+         ts_log_fine "--> project spooling bug  <--"
          ts_log_fine "-----------------------------"
          project_spooling_bug $host
       }
@@ -1212,41 +1212,88 @@ proc check_binding_linux { host jobid { amount 1 } { threads_per_core 1 } { step
 
 proc check_sge_binding_env { host jobid } {
    global CHECK_USER
-   
+
    set pid [get_pid_from_file $host "[get_execd_spool_dir $host]/$host/active_jobs/$jobid.1/job_pid"]
    ts_log_fine "pid of job is $pid"
- 
-   # on linux via ps eww <pid>
-   if { [ get_architecture $host ] == "linux" } { 
-      # get environment variable vi ps eww
-      set output [start_remote_prog $host $CHECK_USER  "ps" "eww $pid"]
-   } elseif { [ get_architecture $host ] == "solaris" } {
-      set output [start_remote_prog $host "root" "pargs" "-e $pid"]
-   } else {
-      ts_log_info "Unknown architecuture of host $host"
-      return 0
+
+   # wait until the job itself is running. When it's still the child shepherd,
+   # possibly the SGE_BINDING variable was not yet set.
+   set pid_not_found 0
+   set loop_counter 0
+   set first_loop 1
+   set do_loop 1
+   set arch [get_architecture $host]
+
+   while {$do_loop == 1 && $pid_not_found < 12 && $loop_counter < 100} {
+      ts_log_finer "starting loop to search for job process in process table"
+      # make sure this loop runs slow - except for the first time
+      if {$first_loop == 1} {
+         set first_loop 0
+      } else {
+         after 250
+      }
+
+      # get ps output for job pid
+      if {$arch == "linux"} {
+         set output [start_remote_prog $host "root" "ps" "eww $pid"]
+      } elseif {$arch == "solaris"} {
+         set output [start_remote_prog $host "root" "pargs" "-e $pid"]
+      } else {
+         ts_log_info "Architecture $arch of host $host not supported in this test!"
+         return 0
+      }
+
+      # split ps/pargs output into lines and find the one with the job pid
+      set lines [split $output "\n"]
+      set line_with_job ""
+      foreach line $lines {
+         # search for the line that contains the pid and that is not
+         # the "pid not found" error message of pargs
+         if {[string first $pid $line] != -1 &&
+             [string first "cannot examine" $line] == -1} {
+            set line_with_job $line
+            break
+         }
+      }
+
+      # pid not found - loop again
+      if {$line_with_job == ""} {
+         ts_log_finer "pid not yet found in ps/pargs output"
+         incr pid_not_found
+      } else {
+         # pid found? Make sure it's the already the job, not still the child shepherd
+         ts_log_finer "pid found in ps output: $line_with_job"
+
+         if {[string first "shepherd" $line_with_job] != -1} {
+            # still the child shepherd - wait for job
+            ts_log_finer "job is still the child shepherd!"
+            incr loop_counter
+         } else {
+            # found job
+            ts_log_fine "found job in ps/pargs output!"
+            set do_loop 0
+         }
+      }
    }
 
-   #ts_log_fine "psargs -e shows : $output"      
-
-   # in the output the SGE_BINDING=1 2 3 must appear 
+   # in the output the SGE_BINDING=1 2 3 must appear
    set envlist [split $output]
 
    # loop over the particles (space separted) in order to find the right env var
    set found 0
    foreach i $envlist {
 
-      # ts_log_fine $i
+      ts_log_finest $i
       if { [string first "SGE_BINDING" $i] != -1 || $found > 0 } {
-         
+
          if { $found == 0 } {
             ts_log_fine "Found binding environment variable $i"
-            incr found 
+            incr found
          } else {
-      
+
             # the SGE_BINDING part was found before, now collect the numbers 
             if { [string is integer $i] == 1 && $i != "" && $i != " "} {
-               # processor id found 
+               # processor id found
                incr found
                ts_log_fine "next processor id in env var: $i"
             } else {
@@ -1257,14 +1304,14 @@ proc check_sge_binding_env { host jobid } {
 
       }
 
-   }     
-   
-   if { $found > 0 } {
-      ts_log_fine "Found processor ids in SGE_BINDING: $found" 
    }
 
-   # return the amount of processor ids 
-   return $found 
+   if { $found > 0 } {
+      ts_log_fine "Found processor ids in SGE_BINDING: $found"
+   }
+
+   # return the amount of processor ids
+   return $found
 }
 
 #                                                             max. column:     |
