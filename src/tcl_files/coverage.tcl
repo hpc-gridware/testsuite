@@ -717,7 +717,6 @@ proc tcov_compute_coverage {} {
    }
 
    set html_body [create_html_text "Code coverage"]
-   append html_body [create_html_text "$ts_config(source_cvs_release)"]
    append html_body [create_html_text [clock format [clock seconds]]]
 
    set html_table(1,BGCOLOR) "#3366FF"

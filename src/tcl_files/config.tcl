@@ -1711,8 +1711,7 @@ proc config_check_all_usages { check_list config_array type } {
 
    switch -- $type {
       "host" {
-         set main_list "source_cvs_hostname master_host shadowd_hosts execd_hosts 
-                        submit_only_hosts bdb_server"
+         set main_list "master_host shadowd_hosts execd_hosts submit_only_hosts bdb_server"
          set hedeby_list "hedeby_master_host hedeby_host_resources"
          set arco_list "dbwriter_host"
       }
@@ -2152,23 +2151,23 @@ proc config_additional_config { only_check name config_array } {
             }
 
             #  cell or independed cluster support?
-            #  o if cluster have the same cvs source directory AND the same SGE_ROOT the
+            #  o if cluster have the same source directory AND the same SGE_ROOT the
             #    compilation is done in the main cluster (ts with additional config)
             #
-            #  o if SGE_ROOT is different the cvs source has also to be different
+            #  o if SGE_ROOT is different the source has also to be different
             #    (complete independed additional cluster config). Then the compilation
             #    is done via operate_additional_clusters call. This means
-            #    gridengine version, and cvs release may be different
+            #    gridengine version, and release may be different
 
             set allow_master_as_execd 1
-            if { $add_config(product_root) == $config(product_root) && 
+            if { $add_config(product_root) == $config(product_root) &&
                  $add_config(source_dir)   == $config(source_dir) } {
                if { $only_check == 0 } {
                   puts -nonewline "   (cell cluster) ..."
                }
                # now make sure that the additional configurations can work together
                # the following parameters have to be the same for all configs
-               set same_params "gridengine_version source_dir source_cvs_release product_root product_feature aimk_compile_options dist_install_options qmaster_install_options execd_install_options package_directory package_type"
+               set same_params "gridengine_version source_dir product_root product_feature aimk_compile_options dist_install_options qmaster_install_options execd_install_options package_directory package_type"
                # the following parameters have to differ between all configs
                # TODO (Issue #139): remove master_host and execd_hosts from this list if issue #139 is fixed
                set diff_params "results_dir commd_port cell master_host execd_hosts"
@@ -2447,19 +2446,14 @@ proc config_source_dir { only_check name config_array } {
          }
          set local_arch [ resolve_arch "none" 1 $value]
          if { $local_arch == "unknown" } {
-            puts "Could not resolve local system architecture" 
+            puts "Could not resolve local system architecture"
             return -1
          }
       }
    }
- 
+
    if { $old_value != $value } {
       set config(source_dir) $value
-      # in case the source_cvs_release parameter was already set before (this is not a new configuration),
-      # change the source_cvs_release parameter according to the new source_dir
-      if { $config(source_cvs_release) != "" } {
-         set config(source_cvs_release) [$config(source_cvs_release,setup_func) $only_check source_cvs_release config]
-      }
    }
 
    return $value
@@ -2519,122 +2513,6 @@ proc config_uge_ext_dir { only_check name config_array } {
  
    if { $old_value != $value } {
       set config($name) $value
-   }
-
-   return $value
-}
-
-#****** config/config_source_cvs_hostname() ************************************
-#  NAME
-#     config_source_cvs_hostname() -- cvs hostname setup
-#
-#  SYNOPSIS
-#     config_source_cvs_hostname { only_check name config_array } 
-#
-#  FUNCTION
-#     Testsuite configuration setup - called from verify_config()
-#
-#  INPUTS
-#     only_check   - 0: expect user input
-#                    1: just verify user input
-#     name         - option name (in ts_config array)
-#     config_array - config array name (ts_config)
-#
-#  SEE ALSO
-#     check/setup2()
-#     check/verify_config()
-#*******************************************************************************
-proc config_source_cvs_hostname { only_check name config_array } {
-   global CHECK_USER fast_setup
-
-   upvar $config_array config
-
-   set local_host [gethostname]
-   if {$local_host == "unknown"} {
-      puts "Could not get local host name" 
-      return -1
-   }
-
-   if { $config($name,default) == "" } {
-      set config($name,default) $local_host
-      }
-
-   set value [config_generic $only_check $name config "" "host" 0]
-
-   if { $value == -1 } { return -1 }
-
-   if {!$fast_setup} {
-      set result [start_remote_prog $value $CHECK_USER "$config(testsuite_root_dir)/scripts/mywhich.sh" "cvs" prg_exit_state 60 0 "" "" 1 0]
-      if { $prg_exit_state != 0 } {
-         ts_log_finest $result
-         puts "cvs not found on host $value. Enhance your PATH envirnoment"
-         return -1
-      } else {
-         ts_log_finest $result
-         ts_log_finest "found cvs command"
-      }
-   }
-   return $value
-}
-
-#****** config/config_source_cvs_release() *************************************
-#  NAME
-#     config_source_cvs_release() -- cvs release setup
-#
-#  SYNOPSIS
-#     config_source_cvs_release { only_check name config_array } 
-#
-#  FUNCTION
-#     Testsuite configuration setup - called from verify_config()
-#
-#  INPUTS
-#     only_check   - 0: expect user input
-#                    1: just verify user input
-#     name         - option name (in ts_config array)
-#     config_array - config array name (ts_config)
-#
-#  SEE ALSO
-#     check/setup2()
-#     check/verify_config()
-#*******************************************************************************
-proc config_source_cvs_release {only_check name config_array} {
-   global CHECK_USER fast_setup 
-
-   upvar $config_array config
-
-   # fix "maintrunc" typo - it will be written the next time the config is modified
-   if {$config($name) == "maintrunc"} { set config($name) "maintrunk" }
-
-   array set tags {}
-   
-   if {$config(source_dir) != "none"} {
-      if {[file isdirectory $config(source_dir)]} {
-         set cvs_tag [start_remote_prog $config(source_cvs_hostname) $CHECK_USER "cat" "$config(source_dir)/CVS/Tag" prg_exit_state 60 0 "" "" 1 0]
-         set cvs_tag [string trim $cvs_tag]
-         set tag "maintrunk"
-         if {$prg_exit_state == 0} {
-            if {[string first "T" $cvs_tag] == 0 || [string first "N" $cvs_tag] == 0} {
-               set tag [string range $cvs_tag 1 end]
-            }
-         }
-         set config($name,default) $tag
-         set tags($tag) ""
-      }
-   } else {
-      set cvs_tag $config($name)
-      set config($name,default) $cvs_tag
-      set tags($cvs_tag) $cvs_tag
-   }
-
-   set help_text { "Enter cvs release tag (\"maintrunk\" specifies no tag)"
-                   "or press >RETURN< to use the default value." }
-
-   set value [config_generic $only_check $name config $help_text "choice" 0 1 tags]
-
-   if {$config(source_dir) != "none"} {
-      if {![file isdirectory $config(source_dir)]} {
-         puts "source directory $config(source_dir) doesn't exist!!!" 
-      }
    }
 
    return $value
@@ -3632,6 +3510,38 @@ proc config_package_type { only_check name config_array } {
    set value [config_generic $only_check $name config "" "choice" 0 1 pkg_types]
 
    if { $value != -1 } { set CHECK_PACKAGE_TYPE $value }
+
+   return $value
+}
+
+#****** config/config_package_release() *******************************************
+#  NAME
+#     config_package_release() -- product release setup
+#
+#  SYNOPSIS
+#     config_package_release { only_check name config_array }
+#
+#  FUNCTION
+#     Testsuite configuration setup - called from verify_config()
+#
+#  INPUTS
+#     only_check   - 0: expect user input
+#                    1: just verify user input
+#     name         - option name (in ts_config array)
+#     config_array - config array name (ts_config)
+#
+#  SEE ALSO
+#     check/setup2()
+#     check/verify_config()
+#*******************************************************************************
+proc config_package_release {only_check name config_array} {
+   upvar $config_array config
+
+   set help_text { "Enter a version string here, e.g. 8.0.0"
+                   "it will be used to build package names, e.g."
+                   "ge-8.0.0-common.tar.gz or ge-8.0.0-bin-lx-amd64.txt" }
+
+   set value [config_generic $only_check $name config $help_text "string" 0 1]
 
    return $value
 }
@@ -5404,8 +5314,8 @@ proc config_build_ts_config_1_19 {} {
 proc config_build_ts_config_1_20 {} {
    global ts_config CHECK_CURRENT_WORKING_DIR
 
-   # we add a new parameter: uge_ext_dir 
-   # after source_dir 
+   # we add a new parameter: uge_ext_dir
+   # after source_dir
    set insert_pos $ts_config(source_dir,pos)
    incr insert_pos 1
 
@@ -5429,12 +5339,64 @@ proc config_build_ts_config_1_20 {} {
    set ts_config(version) "1.20"
 }
 
+proc config_build_ts_config_1_21 {} {
+   global ts_config CHECK_CURRENT_WORKING_DIR
+
+   # we remove source_cvs_hostname and source_cvs_release
+   set remove_pos $ts_config(source_cvs_hostname,pos)
+   unset ts_config(source_cvs_hostname)
+   unset ts_config(source_cvs_hostname,desc)
+   unset ts_config(source_cvs_hostname,default)
+   unset ts_config(source_cvs_hostname,setup_func)
+   unset ts_config(source_cvs_hostname,onchange)
+   unset ts_config(source_cvs_hostname,pos)
+
+   unset ts_config(source_cvs_release)
+   unset ts_config(source_cvs_release,desc)
+   unset ts_config(source_cvs_release,default)
+   unset ts_config(source_cvs_release,setup_func)
+   unset ts_config(source_cvs_release,onchange)
+   unset ts_config(source_cvs_release,pos)
+
+   # move positions of following parameters up
+   set names [array names ts_config "*,pos"]
+   foreach name $names {
+      if {$ts_config($name) > $remove_pos} {
+         set ts_config($name) [expr $ts_config($name) - 2]
+      }
+   }
+
+   # we add a new parameter: package_release
+   # after package_type
+   set insert_pos $ts_config(package_type,pos)
+   incr insert_pos 1
+
+   # move positions of following parameters
+   set names [array names ts_config "*,pos"]
+   foreach name $names {
+      if {$ts_config($name) >= $insert_pos} {
+         set ts_config($name) [expr $ts_config($name) + 1]
+      }
+   }
+
+   set parameter "package_release"
+   set ts_config($parameter)            ""
+   set ts_config($parameter,desc)       "release id used in package names"
+   set ts_config($parameter,default)    "maintrunk"
+   set ts_config($parameter,setup_func) "config_$parameter"
+   set ts_config($parameter,onchange)   "compile"
+   set ts_config($parameter,pos)        $insert_pos
+
+   # now we have a configuration version 1.21
+   set ts_config(version) "1.21"
+}
+
 ################################################################################
 #  MAIN                                                                        #
 ################################################################################
 
 global actual_ts_config_version      ;# actual config version number
-set actual_ts_config_version "1.20"
+set actual_ts_config_version "1.21"
 
 # first source of config.tcl: create ts_config
 if {![info exists ts_config]} {
@@ -5460,4 +5422,5 @@ if {![info exists ts_config]} {
    config_build_ts_config_1_18
    config_build_ts_config_1_19
    config_build_ts_config_1_20
+   config_build_ts_config_1_21
 }

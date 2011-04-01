@@ -576,7 +576,6 @@ proc compile_source { { do_only_hooks 0} } {
    }
 
    set error_count 0
-   set cvs_change_log ""
 
    # for additional configurations, we might want to start remote operation, if hedeby is set up
    # (for independed clusters)
@@ -634,13 +633,6 @@ proc compile_source { { do_only_hooks 0} } {
    # check source directory
    if {[string compare $ts_config(source_dir) "unknown"] == 0 || [string compare $ts_config(source_dir) ""] == 0} {
       report_add_message report "source directory unknown - check defaults file"
-      report_finish report -1
-      return -1
-   }
-
-   # check compile host
-   if {[string compare $ts_config(source_cvs_hostname) "unknown"] == 0 || [string compare $ts_config(source_cvs_hostname) ""] == 0} {
-      report_add_message report "host for cvs checkout unknown - check defaults file"
       report_finish report -1
       return -1
    }
@@ -714,9 +706,6 @@ proc compile_source { { do_only_hooks 0} } {
 
    set compile_depend_done "false"
 
-   # update sources
-   set res [update_source report $do_only_hooks]
-
    set aimk_clean_done 0
 
    if {$check_do_clean_compile} {
@@ -724,7 +713,7 @@ proc compile_source { { do_only_hooks 0} } {
    } else {
       set do_aimk_depend_clean 0
    }
-   if {$res == 1 || $check_do_clean_compile} {
+   if {$check_do_clean_compile} {
       # make dependencies before compile clean
       if {$do_only_hooks == 0} {
          if {[compile_depend $compile_hosts report 1] != 0} {
@@ -798,8 +787,6 @@ proc compile_source { { do_only_hooks 0} } {
          file delete $macro_messages_file
       }
       update_macro_messages_list
-   } elseif {$res < 0} {
-      incr error_count 1
    }
 
    # do clean (if not already done)
@@ -978,11 +965,7 @@ proc compile_source { { do_only_hooks 0} } {
       set host_arch [ resolve_arch $elem ]
       report_add_message report "$elem ($host_arch)"
    }
-   if { [string compare $cvs_change_log "" ] != 0 } {
-      report_clear_messages report
-      report_add_message report "$mail_body \n\n Update output:\n$cvs_change_log\n\n"
-   }
-   
+
    report_finish report 0
 
    # if required, build distribution
