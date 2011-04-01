@@ -197,7 +197,9 @@ proc ge_get_gridengine_version {} {
    set version_script "$ts_config(testsuite_root_dir)/scripts/sge_version.sh"
 
    set output [start_remote_prog [gethostname] $CHECK_USER $version_script $ts_config(source_dir)]
-   return [string trim $output]
+   set output [string trim $output]
+   regsub -all " " $output "_" output
+   return $output
 }
 
 #****** sge_procedures/get_complex_version() ***********************************
