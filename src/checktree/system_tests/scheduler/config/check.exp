@@ -134,7 +134,9 @@ proc test_sched_conf_attributes {} {
    
    # wait one scheduling interval  
    ts_log_fine "Trigger scheduling!"
+
    trigger_scheduling
+   after 5000
 
    # check if two jobs of each user are in qw state 
    ts_log_fine "Check the job information!"

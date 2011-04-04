@@ -2989,8 +2989,8 @@ proc host_get_id_a_command {host} {
 #     host_conf_get_suited_hosts() -- get hosts suited for operation
 #
 #  SYNOPSIS
-#     host_conf_get_suited_hosts { {num_hosts 1} {selected_archs {}} 
-#     {excluded_archs {}} } 
+#     host_conf_get_suited_hosts { {num_hosts 1} {preferred_archs {}} {selected_archs {}} 
+#     {excluded_archs {}} {exclude_qmaster 0} {as_config_error 0}} 
 #
 #  FUNCTION
 #     Returns hosts from the exec node list, selected by certain criteria.
@@ -3023,6 +3023,7 @@ proc host_get_id_a_command {host} {
 #     { selected_archs  {} }  - select this architecture
 #     { excluded_archs  {} }  - do not select this architecture
 #     { exclude_qmaster 0  }  - if set to 1: exclude qmaster host
+#     { as_config_error 0  }  - if set to 1: report config error if no host found
 #
 #  RESULT
 #     A list of hosts matching the criteria.
@@ -3056,7 +3057,7 @@ proc host_get_id_a_command {host} {
 #        return 4 hosts of any architecture, we prefer to get sol-sparc64 hosts,
 #        but cannot use Linux on Itanic.
 #*******************************************************************************
-proc host_conf_get_suited_hosts {{num_hosts_param 1} {preferred_archs {}} {selected_archs {}} {excluded_archs {}} {exclude_qmaster 0}} {
+proc host_conf_get_suited_hosts {{num_hosts_param 1} {preferred_archs {}} {selected_archs {}} {excluded_archs {}} {exclude_qmaster 0} {as_config_error 0}} {
    global CHECK_PREFERRED_ARCHS
    get_current_cluster_config_array ts_config
 
@@ -3076,7 +3077,10 @@ proc host_conf_get_suited_hosts {{num_hosts_param 1} {preferred_archs {}} {selec
    host_conf_get_suited_hosts_rebuild_cache
 
    # build a list of candidates from parameters
-   host_conf_get_suited_hosts_candidates $preferred_archs $selected_archs $excluded_archs preferred_hosts remaining_hosts
+   set return_error [host_conf_get_suited_hosts_candidates $preferred_archs $selected_archs $excluded_archs preferred_hosts remaining_hosts $as_config_error]
+   if {$return_error == 1} {
+      return {} 
+   }
 
    if {[expr [llength $preferred_hosts] + [llength $remaining_hosts]] < $num_hosts} {
       ts_log_severe "host_selection doesn't return the required number of hosts ($num_hosts):\npreferred_archs:    $preferred_archs\nselected_archs:     $selected_archs\nexcluded_archs:     $excluded_archs\nresulting hostlist: $preferred_hosts $remaining_hosts"
@@ -3172,11 +3176,12 @@ proc host_conf_get_suited_hosts_rebuild_cache {} {
 #     Internal use only in host_conf_get_suited_hosts.
 #
 #  INPUTS
-#     preferred     - list of preferred architectures
-#     selected      - list of selected architectures
-#     excluded      - list of excluded architectures
-#     preferred_var - return preferred hosts here
-#     remaining_var - return all other possible hosts here
+#     preferred       - list of preferred architectures
+#     selected        - list of selected architectures
+#     excluded        - list of excluded architectures
+#     preferred_var   - return preferred hosts here
+#     remaining_var   - return all other possible hosts here
+#     as_config_error - if 1 then throw config error, if no host found
 #
 #  RESULT
 #     List of hosts for preferred use, and a list of other hosts that match the
@@ -3185,7 +3190,7 @@ proc host_conf_get_suited_hosts_rebuild_cache {} {
 #  SEE ALSO
 #     config_host/host_conf_get_suited_hosts()
 #*******************************************************************************
-proc host_conf_get_suited_hosts_candidates {preferred selected excluded preferred_var remaining_var} {
+proc host_conf_get_suited_hosts_candidates {preferred selected excluded preferred_var remaining_var {as_config_error 0}} {
    global suited_host_cache suited_arch_cache
    upvar $preferred_var preferred_hosts
    upvar $remaining_var remaining_hosts
@@ -3214,8 +3219,12 @@ proc host_conf_get_suited_hosts_candidates {preferred selected excluded preferre
    }
 
    if {$nr_of_matches == 0 && [llength $selected] > 0} {
-      ts_log_severe "none of the selected architectures is available in our cluster:\nselected:  $selected\navailable: $all_archs"
-      return
+      if { $as_config_error == 1 } {
+         ts_log_config "none of the selected architectures is available in our cluster:\nselected:  $selected\navailable: $all_archs"
+      } else {
+         ts_log_severe "none of the selected architectures is available in our cluster:\nselected:  $selected\navailable: $all_archs"
+      }
+      return 1
    }
 
    # if we have selected archs, use these

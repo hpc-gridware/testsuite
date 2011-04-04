@@ -90,7 +90,11 @@ proc issue_3172_setup {} {
    # we fetch all available archs 
    set issue_3172_archs [host_conf_get_archs $issue_3172_hosts]
 
-   set issue_3172_nfsdir [fs_config_get_filesystemlist_by_fstype nfs4]
+   set issue_3172_nfsdir [fs_config_get_filesystemlist_by_fstype nfs4 1]
+   if {$issue_3172_nfsdir == {}} {
+      # no nfs4 directory found
+      return 99
+   }
    set issue_3172_nfsdir [lindex $issue_3172_nfsdir 0]
 
    # we want to modify the global config - make a backup
