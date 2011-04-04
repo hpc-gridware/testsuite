@@ -29,7 +29,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this code are Copyright 2011 Univa Inc.
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -7431,6 +7431,7 @@ proc check_packages_directory { path { mode "check_both" } { get_files "no" } } 
 proc build_distribution { arch_list } {
    global CHECK_USER
    global ts_config
+   global ts_checktree
 
    if {$ts_config(source_dir) == "none"} {
       ts_log_severe "source directory is set to \"none\" - cannot build distribution"
@@ -7450,6 +7451,13 @@ proc build_distribution { arch_list } {
       append args " -version $ts_config(package_release)"      ;# for package names
       append args " -basedir $ts_config(package_directory)"    ;# destination dir
       append args " -bin -common"                              ;# which packages
+
+      # add mk_dist options specific to additional checktrees
+      for {set i 0} {$i < $ts_checktree(act_nr)} {incr i} {
+         if {[info exists ts_checktree($i,mk_dist_options)]} {
+            append args " $ts_checktree($i,mk_dist_options)"
+         }
+      }
 
       if { ! [file isdirectory $ts_config(package_directory)] } {
          file mkdir $ts_config(package_directory)

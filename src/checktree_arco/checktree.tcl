@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -58,6 +60,8 @@ set ts_checktree($arco_checktree_nr,checktree_clean_hooks_0)  "arco_clean"
 set ts_checktree($arco_checktree_nr,compile_hooks_0)        "arco_compile"
 set ts_checktree($arco_checktree_nr,compile_clean_hooks_0)  "arco_compile_clean"
 set ts_checktree($arco_checktree_nr,install_binary_hooks_0) "arco_install_binaries"
+set ts_checktree($arco_checktree_nr,mk_dist_options)        "-arco"
+
 set ts_checktree($arco_checktree_nr,shutdown_hooks_0)       "shutdown_dbwriter"
 set ts_checktree($arco_checktree_nr,startup_hooks_0)       "startup_dbwriter"
 
