@@ -249,7 +249,7 @@ proc get_macro_messages_file_name { } {
      file mkdir $CHECK_PROTOCOL_DIR
      ts_log_fine "creating directory: $CHECK_PROTOCOL_DIR"
   }
-  set release $ts_config(source_cvs_release)
+  set release $ts_config(package_release)
   set filename $CHECK_PROTOCOL_DIR/source_code_macros_${release}.dump
   return $filename
 }
@@ -535,7 +535,7 @@ proc update_macro_messages_list {} {
 
    if {$ts_config(source_dir) == "none"} {
       ts_log_fine "Testsuite config is has no source directory configured!"
-      ts_log_fine "Try to get macros for cvs version \"$ts_config(source_cvs_release)\" ..."
+      ts_log_fine "Try to get macros for version \"$ts_config(package_release)\" ..."
       if {![parse_testsuite_info_file $CHECK_USER $ts_config(ge_packages_uri) rel_info]} {
          ts_log_severe "Cannot get released packages information!"
          testsuite_shutdown 1
@@ -547,8 +547,8 @@ proc update_macro_messages_list {} {
          if { $rel_info($i,enabled) == true } {
             if {$rel_info($i,version) == $cur_version(detected_version)} {
                ts_log_fine "Found matching version: \"$rel_info($i,description)\""
-               if {$rel_info($i,tag) == $ts_config(source_cvs_release)} {
-                  ts_log_fine "Found matching cvs tag: \"$rel_info($i,tag)\""
+               if {$rel_info($i,tag) == $ts_config(package_release)} {
+                  ts_log_fine "Found matching package release: \"$rel_info($i,tag)\""
                   set messages_file $rel_info($i,macro_file_uri)
                   break
                }

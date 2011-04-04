@@ -3033,7 +3033,7 @@ proc test_parse_qstat {jobid opt} {
 
 #****** parser/parse_csv() *****************************************************
 #  NAME
-#     parse_csv() -- parse cvs like format
+#     parse_csv() -- parse csv like format
 #
 #  SYNOPSIS
 #     parse_csv { output_var input_var delimiter index } 

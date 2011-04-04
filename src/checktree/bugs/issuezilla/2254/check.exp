@@ -205,6 +205,9 @@ proc issue_2254 {} {
    wait_for_jobstart $jobid1 "MPI" 60
    wait_for_jobstart $jobid2 "PVM" 60
 
+   wait_for_end_of_transfer $jobid1 10
+   wait_for_end_of_transfer $jobid2 10
+
    # 6. check that the 2 pe jobs are running simultaneously
    qstat_plain_parse qstat_plain_output1
       
@@ -258,6 +261,8 @@ proc issue_2254 {} {
    wait_for_jobstart $jobid5 "Either" 60
    wait_for_jobstart $jobid6 "Either" 60
 
+   wait_for_end_of_transfer $jobid5 10
+   wait_for_end_of_transfer $jobid6 10
 
    # 8. check that the 2 pe jobs are running simultaneously
    qstat_plain_parse qstat_plain_output2
