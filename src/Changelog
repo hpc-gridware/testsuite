@@ -6,6 +6,22 @@
           1         2         3         4         5         6         7
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
+HP-2011-04-04-0: Enhancem.:  Added test for qrsh line breaks
+                 Issue:      TS-353, GE-3382
+					  Review:     SH
+
+DG-2011-04-04-0: Bugfix:     Fixed test 1780.
+                 Review:     SH
+
+DG-2011-04-01-2: Cleanup:    Fixed race condition in 2254 test.
+                 Review:     EB
+
+DG-2011-04-01-1: Bugfix:     Fixed broken jsv_ge_add test.
+                 Review:     JG
+
+DG-2011-04-01-0: Cleanup:    Removed service tags test from testsuite since
+                             service tags are not a part of GE anymore.
+                 Review:     JG
 
 JG-2011-03-31-0: Enhancem.:  o remove cvs repository handling from testsuite
                              o add new config option package_release

@@ -1951,48 +1951,78 @@ proc qrsh_pty_yes_line_breaks {} {
    foreach submit_host $qrsh_hostlist {
       foreach host $qrsh_hostlist {
          set arch [resolve_arch $submit_host]
-         set tmpfile [get_tmp_file_name $submit_host]
 
          # Start "qrsh -pty yes UNIX_line_breaks.txt > UNIX_out"
-         ts_log_fine "executing $ts_config(product_root)/bin/$arch/qrsh -l h=$host \
-                      -pty yes cat $in_file_UNIX > $out_file_UNIX on host $submit_host as $CHECK_USER"
-         set unix_id [open_remote_spawn_process $submit_host $CHECK_USER \
-                      $ts_config(product_root)/bin/$arch/qrsh \
-                      "-l h=$host -pty yes cat $in_file_UNIX > $out_file_UNIX"]
+         ts_log_fine "executing $ts_config(product_root)/bin/$arch/qrsh -l h=$host -pty yes \
+            cat $in_file_UNIX > $out_file_UNIX on host $submit_host as $CHECK_USER"
+         start_remote_prog $submit_host "$CHECK_USER" "$ts_config(product_root)/bin/$arch/qrsh" \
+            "-l h=$host -pty yes cat $in_file_UNIX > $out_file_UNIX"
 
          # Start "qrsh -pty yes DOS_line_breaks.txt > DOS_out"
-         ts_log_fine "executing $ts_config(product_root)/bin/$arch/qrsh -l h=$host \
-                      -pty yes cat $in_file_DOS > $out_file_DOS on host $submit_host as $CHECK_USER"
-         set dos_id [open_remote_spawn_process $submit_host $CHECK_USER \
-                     $ts_config(product_root)/bin/$arch/qrsh \
-                     "-l h=$host -pty yes cat $in_file_DOS > $out_file_DOS"]
+         ts_log_fine "executing $ts_config(product_root)/bin/$arch/qrsh -l h=$host -pty yes \
+            cat $in_file_DOS > $out_file_DOS on host $submit_host as $CHECK_USER"
+         start_remote_prog $submit_host "$CHECK_USER" "$ts_config(product_root)/bin/$arch/qrsh" \
+            "-l h=$host -pty yes cat $in_file_DOS > $out_file_DOS"
 
-         # Clean up
          wait_for_end_of_all_jobs
-         close_spawn_process $unix_id
-         close_spawn_process $dos_id
 
-         # Diff the created files to the original ones
-         set result_UNIX [start_remote_prog $submit_host "$CHECK_USER" "diff" "$in_file_UNIX $out_file_UNIX"]
-         set result_DOS  [start_remote_prog $submit_host "$CHECK_USER" "diff" "$in_file_DOS $out_file_DOS"]
+         # Read files
+         set in_file_UNIX_content  [start_remote_prog $submit_host "$CHECK_USER" \
+                                    "cat" "$in_file_UNIX"]
+         set out_file_UNIX_content [start_remote_prog $submit_host "$CHECK_USER" \
+                                    "cat" "$out_file_UNIX"]
+         set in_file_DOS_content   [start_remote_prog $submit_host "$CHECK_USER" \
+                                    "cat" "$in_file_DOS"]
+         set out_file_DOS_content  [start_remote_prog $submit_host "$CHECK_USER" \
+                                    "cat" "$out_file_DOS"]
 
-         # Determine the lenght of the diff output
-         set length_UNIX [string length $result_UNIX]
-         set length_DOS  [string length $result_DOS]
-
-         # If the files are identical, the diff output is empty, its length is 0
-         if {$length_UNIX == 0 && $length_DOS == 0} {
-             ts_log_fine "All line breaks were preserved! Excellent!"
+         # Compare files
+         set UNIX_files_differ 0
+         if {[string first "UNIX" $out_file_UNIX_content] == -1} {
+            # the word "UNIX" from the original file is missing, the out file is corrupted
+            set UNIX_files_differ 1
          } else {
-            # At least one diff produced an output, we have found an error 
-            set error_string ""
-            if {$length_UNIX > 0} {
-               set error_string "UNIX line breaks were not preserved!"
+            set diff_UNIX [start_remote_prog $submit_host "$CHECK_USER" "diff" \
+                           "$in_file_UNIX $out_file_UNIX"]
+            if {[string length $diff_UNIX] != 0} {
+               # the key word exists, but the files differ - probably line breaks were changed
+               set UNIX_files_differ 2
             }
-            if {$length_DOS > 0} {
-               set error_string "$error_string\nDOS line breaks were not preserved!"
+         }
+
+         set DOS_files_differ 0
+         if {[string first "DOS" $out_file_DOS_content] == -1} {
+            # the word "DOS" from the original file is missing, the out file is corrupted
+            set DOS_files_differ 1
+         } else {
+            set diff_DOS [start_remote_prog $submit_host "$CHECK_USER" "diff" \
+                          "$in_file_DOS $out_file_DOS"]
+            if {[string length $diff_DOS] != 0} {
+               # the key word exists, but the files differ - probably line breaks were changed
+               set DOS_files_differ 2
             }
+         }
+
+         # report errors
+         set error_string ""
+         if {$UNIX_files_differ == 1} {
+            set error_string "The UNIX out file seems to be corrupted. \
+                              The qrsh command must have failed!"
+         } elseif {$UNIX_files_differ == 2} {
+            set error_string "UNIX in and out files differ! Probably line breaks were not preserved!"
+         }
+         if {$DOS_files_differ == 1} {
+            set error_string "$error_string\nThe DOS out file seems to be corrupted. \
+                                             The qrsh command must have failed!"
+         } elseif {$DOS_files_differ == 2} {
+            set error_string "$error_string\nDOS in and out files differ!\
+                              Probably line breaks were not preserved!"
+         }
+         if {$UNIX_files_differ > 0 || $DOS_files_differ > 0} {
             ts_log_severe $error_string
+            return
+         } else {
+            ts_log_fine "All line breaks were preserved! Excellent!"
          }
       }
    }
