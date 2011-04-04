@@ -1981,18 +1981,26 @@ proc qrsh_pty_yes_line_breaks {} {
          if {[string first "UNIX" $out_file_UNIX_content] == -1} {
             # the word "UNIX" from the original file is missing, the out file is corrupted
             set UNIX_files_differ 1
-         } elseif {[string length $in_file_UNIX_content] != [string length $out_file_UNIX_content]} {
-            # the file seems to have the same content, but the size differs - line breaks were changed
-            set UNIX_files_differ 2
+         } else {
+            set diff_UNIX [start_remote_prog $submit_host "$CHECK_USER" "diff" \
+                           "$in_file_UNIX $out_file_UNIX"]
+            if {[string length $diff_UNIX] != 0} {
+               # the key word exists, but the files differ - probably line breaks were changed
+               set UNIX_files_differ 2
+            }
          }
 
          set DOS_files_differ 0
          if {[string first "DOS" $out_file_DOS_content] == -1} {
             # the word "DOS" from the original file is missing, the out file is corrupted
             set DOS_files_differ 1
-         } elseif {[string length $in_file_DOS_content] != [string length $out_file_DOS_content]} {
-            # the file seems to have the same content, but the size differs - line breaks were changed
-            set DOS_files_differ 2
+         } else {
+            set diff_DOS [start_remote_prog $submit_host "$CHECK_USER" "diff" \
+                          "$in_file_DOS $out_file_DOS"]
+            if {[string length $diff_DOS] != 0} {
+               # the key word exists, but the files differ - probably line breaks were changed
+               set DOS_files_differ 2
+            }
          }
 
          # report errors
@@ -2001,13 +2009,14 @@ proc qrsh_pty_yes_line_breaks {} {
             set error_string "The UNIX out file seems to be corrupted. \
                               The qrsh command must have failed!"
          } elseif {$UNIX_files_differ == 2} {
-            set error_string "UNIX line breaks were not preserved!"
+            set error_string "UNIX in and out files differ! Probably line breaks were not preserved!"
          }
          if {$DOS_files_differ == 1} {
             set error_string "$error_string\nThe DOS out file seems to be corrupted. \
                                              The qrsh command must have failed!"
          } elseif {$DOS_files_differ == 2} {
-            set error_string "$error_string\nDOS line breaks were not preserved!"
+            set error_string "$error_string\nDOS in and out files differ!\
+                              Probably line breaks were not preserved!"
          }
          if {$UNIX_files_differ > 0 || $DOS_files_differ > 0} {
             ts_log_severe $error_string
