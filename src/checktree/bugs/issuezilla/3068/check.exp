@@ -88,6 +88,18 @@ proc issue_3068_setup {} {
    global target_system
    global CHECK_OUTPUT
    global issue_3068_complex_backup
+   
+   #
+   # Select target system to run dummy job. Requirement is
+   # a Solaris box where we can get process limits fairly 
+   # easily.
+   #
+   set  target_system [host_conf_get_suited_hosts 1 {} {sol-amd64 sol-sparc64} {} 0 1]
+
+   if {$target_system == {} } {
+      ts_log_info "Do cleanup because no Solaris host was found!"
+      return 99 
+   }
 
    get_complex issue_3068_complex_backup
    #
@@ -104,13 +116,7 @@ proc issue_3068_setup {} {
    set this_q(slots) 1000
    set this_q(pe_list) $test_pe 
    add_queue $queue_name $ts_config(execd_hosts) this_q
-   #
-   # Select target system to run dummy job. Requirement is
-   # a Solaris box where we can get process limits fairly 
-   # easily.
-   #
-   set  target_system [ host_conf_get_suited_hosts 1 {} { sol-amd64 sol-sparc64 } ]
-   
+
    return 0
 }
 # -------- local test procedures -----------------------------------------------
