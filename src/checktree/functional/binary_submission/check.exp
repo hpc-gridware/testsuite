@@ -256,7 +256,9 @@ proc binary_submission_check {} {
       #
       set sge_aliases "$ts_config(product_root)/$ts_config(cell)/common/sge_aliases"
       if {[file isfile ${sge_aliases}] == 1} {
-         delete_file "$sge_aliases" 
+         delete_file "$sge_aliases"
+         wait_for_remote_file $submit_host $CHECK_USER $sge_aliases 60 1 1
+         wait_for_remote_file $ts_config(master_host) $CHECK_USER $sge_aliases 60 1 1
       }
       if {$p_alias == 1} {
          set data(src-path,0)    "/xxx/"
