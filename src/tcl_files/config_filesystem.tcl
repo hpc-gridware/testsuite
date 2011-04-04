@@ -1057,25 +1057,27 @@ proc fs_config_get_filesystem_server {filesystem_name {raise_error 1}} {
 #                                                 given type 
 #
 #  SYNOPSIS
-#     fs_config_get_filesystemlist_by_fstype {filesysstem_type} 
+#     fs_config_get_filesystemlist_by_fstype {filesysstem_type {as_config_error 0}} 
 #
 #  FUNCTION
 #     Gets list of filesystems with given filesystem_type 
 #
 #  INPUTS
 #     filesysstem_tpye - this is the type of the filesystem (e.g. nfs, nfs4,...)
+#     as_config_error  - when 1 just a config error is thrown when fs not found
 #
 #  RESULT
 #     returns :   a list of filesystems 
 #                                 
 #  ERROR
-#     throwing a ts_log_servere, if any entry is not found. Empty fields are not 
-#     possible, this is check from the configuration verification. Adding empty 
-#     fields is also not possilbe, this is also checked.
+#     throwing a ts_log_servere (or ts_log_config), if any entry is not found. 
+#     Empty fields are not possible, this is check from the configuration 
+#     verification. Adding empty fields is also not possilbe, this is also 
+#     checked.
 #
 #  SEE ALSO
 #*******************************************************************************
-proc fs_config_get_filesystemlist_by_fstype {filesystem_type} {
+proc fs_config_get_filesystemlist_by_fstype {filesystem_type {as_config_error 0}} {
 
    global ts_fs_config
 
@@ -1088,7 +1090,11 @@ proc fs_config_get_filesystemlist_by_fstype {filesystem_type} {
       }
    }
    if {$filesystem_type_found == 0} {
-      ts_log_severe "Filesystemtype $filesystem_type not found in filesystem configuration!!!"
+      if {$as_config_error == 0} {
+         ts_log_severe "Filesystem type $filesystem_type not found in filesystem configuration!!!"
+      } else {
+         ts_log_config "Filesystem type $filesystem_type not found in filesystem configuration!!!"
+      }
    }
    return [array names ret]
 }

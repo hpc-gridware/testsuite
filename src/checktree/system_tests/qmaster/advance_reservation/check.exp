@@ -439,19 +439,19 @@ proc test_userlist {} {
    }
 
    # Try to remove sgetest1 from userset1. Should be allowed for queue2 but not for queue1
-   set result [del_user_from_access_list sgetest1 $userset_name1 "" "" 0]
+   set result [del_user_from_access_list $CHECK_FIRST_FOREIGN_SYSTEM_USER $userset_name1 "" "" 0]
    if {$result != -3} {
-      ts_log_severe "removing user from userset used for advance reservation is not rejected"
+      ts_log_severe "removing user from userset used for advance reservation is not rejected (result $result)"
    }
 
-   set result [del_user_from_access_list sgetest1 $userset_name2]
+   set result [del_user_from_access_list $CHECK_FIRST_FOREIGN_SYSTEM_USER $userset_name2]
    if {$result != 0} {
       ts_log_severe "removing user from userset is wrongly rejected(1)"
    }
 
    # Now remove advance reservation and try it again
    start_sge_bin "qrdel" "$ar_name1"
-   set result [del_user_from_access_list sgetest1 $userset_name1]
+   set result [del_user_from_access_list $CHECK_FIRST_FOREIGN_SYSTEM_USER $userset_name1]
    if {$result != 0} {
       ts_log_severe "removing user from userset is wrongly rejected(2)"
    }

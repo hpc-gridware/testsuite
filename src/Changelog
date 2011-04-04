@@ -6,6 +6,27 @@
           1         2         3         4         5         6         7
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
+JG-2011-04-04-0: Enhancem.:  testsuite build shall also create an arco package
+                 Issue:      TS-373
+					  Review:     DG
+
+DG-2011-04-04-3: Bugfix:     fixed bug in advance reservation test
+                 Review:     SH 
+
+HP-2011-04-04-2: Bugfix:     Fixed race condition in binary_submission test
+                 Review:     EB
+
+DG-2011-04-04-2: Cleanup:    changed severe to config error when nfs4 is not 
+                             configured
+                 Review:     SH
+
+DG-2011-04-04-1: Cleanup:    test 3068 throws config error instead of severe, 
+                             when no Solaris host is in testsuite
+                 Review:     JG
+
+HP-2011-04-04-1: Bugfix:     Fixed race condition in scheduler test
+                 Review:     JG
+
 HP-2011-04-04-0: Enhancem.:  Added test for qrsh line breaks
                  Issue:      TS-353, GE-3382
 					  Review:     SH
