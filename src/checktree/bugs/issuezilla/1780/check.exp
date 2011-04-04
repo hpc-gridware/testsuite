@@ -64,7 +64,7 @@ proc issue_1780_init_level {} {
 }
 
 proc issue_1780_run  {} {
-   global ts_config CHECK_USER
+   global ts_config CHECK_USER ypcat_exists
 
    set tmp_file [get_tmp_file_name]
    set arch [resolve_arch $ts_config(master_host)]
@@ -74,8 +74,11 @@ proc issue_1780_run  {} {
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER [get_binary_path $ts_config(master_host) "ypcat"] "hosts" result]
    if {$result != 0} {
       ts_log_config "couldn't call ypcat - skipping this test:\n$output"
+      set ypcat_exists "false"
       return
    }
+   
+   set ypcat_exists "true"
 
    set hostlist [split $output "\n"]
    set max_count 3000
@@ -162,5 +165,12 @@ proc issue_1780_run  {} {
 }
 
 proc issue_1780_cleanup {} {
+   global ypcat_exists
+   
+   # in case of a config error the queue does not exist
+   if { $ypcat_exists == "false" } {
+      return 0
+   }
+
    del_queue 3000_hosts.q "" 0 1
 }
