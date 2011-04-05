@@ -6142,8 +6142,9 @@ proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
 #     seconds - timeout in seconds
 #
 #  RESULT
-#      0 - job is not in transferstate
+#      0 - job left transfer state, i.e. it is running or beyond
 #     -1 - timeout
+#      1 - jobid not found in qstat output, probably it finished already?
 #
 #  EXAMPLE
 #     see "sge_procedures/wait_for_jobstart"
@@ -6157,49 +6158,61 @@ proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
 #     sge_procedures/wait_for_jobend()
 #*******************************
 proc wait_for_end_of_transfer { jobid seconds } {
-  get_current_cluster_config_array ts_config
+   ts_log_fine "Waiting for job $jobid to finish transfer state"
 
-  ts_log_fine "Waiting for job $jobid to finish transfer state"
-  
-  set time [timestamp] 
-  while {1} {
-    set run_result [get_standard_job_info $jobid ]
-    set job_state ""
-    set had_error 0
-    foreach line $run_result {
-       set tmp_job_id [lindex $line 0]
-       set tmp_job_state [ lindex $line 4 ]
-       if { $tmp_job_id == $jobid } {
-          if { $job_state == "" } {
-             set job_state $tmp_job_state
-          } else {
-             if { $job_state != $tmp_job_state } {
-                ts_log_finer "job has different states ..."
-                set had_error 1
-                break
-             }
-          }
-       }
-    }
+   set result 0
+   set time [timestamp]
+   while {$result == 0} {
+      set qstat_result [get_standard_job_info $jobid ]
 
-    if { $had_error != 0 } {
-       after 1000
-       continue
-    }
+      # qstat_result contains the output of "qstat" without options.
+      # search the line of the job we are looking for in this list.
+      set tmp_jobid 0
+      set job_state ""
+      foreach line $qstat_result {
+         set tmp_jobid [lindex $line 0]
+         if {$tmp_jobid == $jobid} {
+            # we found the right line
+            set job_state [lindex $line 4]
+            # break out of foreach loop
+            break
+         }
+      }
 
-    if { [string first "t" $job_state ] < 0} {
-       ts_log_finer "job $jobid is running ($job_state)"
-       break
-    }
-    
-    set runtime [expr ( [timestamp] - $time) ]
-    if { $runtime >= $seconds } {
-       ts_log_severe "timeout waiting for job \"$jobid\""
-       return -1
-    }
-    after 1000
-  }
-  return 0
+      if {$job_state == ""} {
+         # the job is not in the list
+         ts_log_fine "Didn't find job $jobid in qstat output!"
+         set result 1
+         # break out of while loop
+         break
+      } else {
+         # analyze job state
+         if {[string first "qw" $job_state] >= 0} {
+            ts_log_fine "job $jobid is still queued ($job_state), checking again..."
+         } elseif {[string first "t" $job_state] >= 0} {
+            ts_log_fine "job $jobid is still being transferred ($job_state), checking again..."
+         } elseif {[string first "r" $job_state] >= 0} {
+            ts_log_fine "job $jobid is running ($job_state), fine!"
+            # break out of while loop
+            break
+         } else {
+            ts_log_fine "job $jobid is in an unhandled state ($job_state) which \
+                         is not the transfer state, so this function returns now."
+            # break out of while loop
+            break
+         }
+      }
+
+      set runtime [expr ([timestamp] - $time)]
+      if { $runtime >= $seconds } {
+         ts_log_severe "timeout waiting for job \"$jobid\""
+         set result -1
+         # break out of while loop
+         break
+      }
+      after 1000
+   }
+   return $result
 }
 
 # wait for job to be in pending state ($jobid,$jobname) ; timeout after $seconds
