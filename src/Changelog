@@ -34,6 +34,7 @@ HP-2011-04-04-2: Bugfix:     Fixed race condition in binary_submission test
 
 DG-2011-04-04-2: Cleanup:    changed severe to config error when nfs4 is not
                              configured
+					  Issue:      TS-383
                  Review:     SH
 
 DG-2011-04-04-1: Cleanup:    test 3068 throws config error instead of severe,
