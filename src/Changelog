@@ -6,12 +6,16 @@
           1         2         3         4         5         6         7
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
+HP-2011-04-05-0: Bugfix:     wait_for_end_of_transfer() function is broken
+                 Issue:      TS-379
+                 Review:     SH
+
 JG-2011-04-04-0: Enhancem.:  testsuite build shall also create an arco package
                  Issue:      TS-373
 					  Review:     DG
 
 DG-2011-04-04-3: Bugfix:     fixed bug in advance reservation test
-                 Review:     SH 
+                 Review:     SH
 
 HP-2011-04-04-2: Bugfix:     Fixed race condition in binary_submission test
                  Review:     EB

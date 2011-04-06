@@ -386,18 +386,28 @@ proc auto_reschedule_unknown_check_master {} {
    ts_log_fine "submitting pe job with master queue $queue1 ..."
    set arguments "$my_outputs -pe tight 4 -masterq $queue1 $ts_config(product_root)/examples/jobs/sleeper.sh 10000"
    set job_id5 [submit_job $arguments]
-   
-   wait_for_jobstart $job_id1 "Sleeper" 100
-   wait_for_jobstart $job_id2 "Sleeper" 100
-   wait_for_jobstart $job_id3 "Sleeper" 100
-   wait_for_jobstart $job_id4 "Sleeper" 100
-   wait_for_jobstart $job_id5 "Sleeper" 100
 
-   wait_for_end_of_transfer $job_id1 100
-   wait_for_end_of_transfer $job_id2 100
-   wait_for_end_of_transfer $job_id3 100
-   wait_for_end_of_transfer $job_id4 100
-   wait_for_end_of_transfer $job_id5 100
+   # make sure the jobs are running
+   set job_list {$job_id1 $job_id2 $job_id3 $job_id4 $job_id5}
+   set time_out 100
+
+   foreach job $job_list {
+      set ret [wait_for_jobstart $job "Sleeper" $time_out]
+      if {$ret == -1} {
+         ts_log_severe "Job $job wasn't scheduled within the timeout \
+                        of $time_out s!"
+         return
+      }
+   }
+
+   foreach job $job_list {
+      set ret [wait_for_end_of_transfer $job $time_out]
+      if {$ret == -1} {
+         ts_log_severe "Job $job didn't leave \"t\" state within the timeout \
+                        of $time_out s!"
+         return
+      }
+   }
 
    shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
 
