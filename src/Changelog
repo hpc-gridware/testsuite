@@ -10,21 +10,28 @@ EB-2011-04-06-0: Bugfix:     TS sometimes tries to start commands on hosts
                              not part of the cluster configuration
                  Issue:      TS-380	
 
+DG-2011-04-06-0: Cleanup:    fixed failing qmaster reporting test
+                 Review:     JG
+
+HP-2011-04-05-0: Bugfix:     wait_for_end_of_transfer() function is broken
+                 Issue:      TS-379
+                 Review:     SH
+
 JG-2011-04-04-0: Enhancem.:  testsuite build shall also create an arco package
                  Issue:      TS-373
 					  Review:     DG
 
 DG-2011-04-04-3: Bugfix:     fixed bug in advance reservation test
-                 Review:     SH 
+                 Review:     SH
 
 HP-2011-04-04-2: Bugfix:     Fixed race condition in binary_submission test
                  Review:     EB
 
-DG-2011-04-04-2: Cleanup:    changed severe to config error when nfs4 is not 
+DG-2011-04-04-2: Cleanup:    changed severe to config error when nfs4 is not
                              configured
                  Review:     SH
 
-DG-2011-04-04-1: Cleanup:    test 3068 throws config error instead of severe, 
+DG-2011-04-04-1: Cleanup:    test 3068 throws config error instead of severe,
                              when no Solaris host is in testsuite
                  Review:     JG
 

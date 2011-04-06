@@ -280,19 +280,18 @@ proc reporting_do_accounting_test {scenario} {
    # Watch the accounting file for one flush interval
    # The accounting file should not change between flush intervals
    while {[reporting_get_timestamp] < [expr $new_mtime + 14]} {
-      after 1000
-
       set current_time [reporting_get_timestamp $reporting_acct_file]
       if {$new_mtime != $current_time} {
          ts_log_severe "$scenario: accounting file was flushed before flush interval\nexpected: $new_mtime \ngot: $current_time"
          set failed 1
          break
       }
+      after 1000
    }
 
    if {$failed != 1} {
       # The accounting file should change at flush intervals
-      after 1000
+      after 2500
       if {$new_mtime == [reporting_get_timestamp $reporting_acct_file]} {
          ts_log_severe "$scenario: accounting file was not flushed at flush interval"
       }
