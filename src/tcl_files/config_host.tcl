@@ -2075,9 +2075,6 @@ proc host_conf_get_unused_host {{raise_error 1}} {
 
    # get a list of all available architectures
    set archs [host_conf_get_archs $cluster_hosts]
-   if {$ts_config(add_compile_archs) != "none"} {
-      append archs " $ts_config(add_compile_archs)"
-   }
    set archs [lsort -unique $archs]
 
    # now search a host having an installed architecture
