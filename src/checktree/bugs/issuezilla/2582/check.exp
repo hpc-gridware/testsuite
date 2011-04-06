@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -82,8 +84,14 @@ proc issue_2582_setup {} {
    global cluster_host non_cluster_host
 
    # test hosts
-   set cluster_host [host_conf_get_suited_hosts]
    set non_cluster_host [host_conf_get_unused_host]
+   if {$non_cluster_host == ""} {
+      # config error was already raised in host_conf_get_unused_host()
+      # return 1 - run cleanup and mark test as unsupported
+      return 99
+   }
+
+   set cluster_host [host_conf_get_suited_hosts]
 }
 
 proc issue_2582_cleanup {} {

@@ -6,6 +6,11 @@
           1         2         3         4         5         6         7
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
+HP-2011-04-06-0: Bugfix:     fixed several tests failing because of config
+                             errors - now they are unsupported, not failing
+                 Issue:      TS-374, TS-375, TS-376
+                 Review:     JG
+
 DG-2011-04-06-0: Cleanup:    fixed failing qmaster reporting test
                  Review:     JG
 
