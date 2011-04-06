@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -97,6 +99,15 @@ proc sge_share_mon_setup  {} {
    global ts_config
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
    global have_share_tree submitted_jobs
+   global non_cluster_host
+
+   # check if we have an unused host, otherwise the test will fail anyway
+   set non_cluster_host [host_conf_get_unused_host]
+   if {$non_cluster_host == ""} {
+      # we have no non_cluster_host - skip this test
+      # config error was already raised in host_conf_get_unused_host()
+      return 99
+   }
 
    # here we remember the job ids of submitted jobs to be able
    # to wait until they really left qmaster in the cleanup method
@@ -290,6 +301,7 @@ proc share_mon_permissions {} {
    global ts_config
    global CHECK_FIRST_FOREIGN_SYSTEM_USER
    global have_share_tree
+   global non_cluster_host
 
    if {$have_share_tree} {
       # sge_share_mon must also work as non admin user user
@@ -298,7 +310,6 @@ proc share_mon_permissions {} {
 
    # on a non admin/submit host, the request has to be rejected,
    # with and without sharetree
-   set non_cluster_host [host_conf_get_unused_host]
    set result [sge_share_mon sharetree $non_cluster_host "" 0]
    if {![check_for_non_cluster_host_error $result "any"]} {
       ts_log_severe "sge_share_mon request should have been rejected from non cluster host $non_cluster_host"
