@@ -8,7 +8,12 @@
 -----------------+-----------+--------------------------------------------------
 EB-2011-04-06-0: Bugfix:     TS sometimes tries to start commands on hosts
                              not part of the cluster configuration
-                 Issue:      TS-380	
+                 Issue:      TS-380
+
+HP-2011-04-06-0: Bugfix:     fixed several tests failing because of config
+                             errors - now they are unsupported, not failing
+                 Issue:      TS-374, TS-375, TS-376
+                 Review:     JG
 
 DG-2011-04-06-0: Cleanup:    fixed failing qmaster reporting test
                  Review:     JG

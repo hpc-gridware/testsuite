@@ -28,15 +28,17 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_highest_level
 global check_init_level_procedure
 global check_root_access_needs
@@ -55,7 +57,7 @@ set check_highest_level   0
 set check_description(0)  "automated reprioritization test"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function reprioritization_setup
@@ -95,7 +97,9 @@ proc reprioritization_setup {} {
       }
    }
    if {$found == 0} {
-      ts_log_severe "No host found with only 1 processor. Please re-configure the testsuite setup"
+      ts_log_config "No host found with only 1 processor. Please re-configure \
+                     the testsuite setup"
+      return 99
    }
 
    # we want to modify the global config - make a backup
