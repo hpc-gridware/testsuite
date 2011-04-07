@@ -6,6 +6,18 @@
           1         2         3         4         5         6         7
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
+EB-2011-04-06-0: Bugfix:     TS sometimes tries to start commands on hosts
+                             not part of the cluster configuration
+                 Issue:      TS-380
+
+HP-2011-04-06-0: Bugfix:     fixed several tests failing because of config
+                             errors - now they are unsupported, not failing
+                 Issue:      TS-374, TS-375, TS-376
+                 Review:     JG
+
+DG-2011-04-06-0: Cleanup:    fixed failing qmaster reporting test
+                 Review:     JG
+
 HP-2011-04-05-0: Bugfix:     wait_for_end_of_transfer() function is broken
                  Issue:      TS-379
                  Review:     SH
@@ -20,11 +32,12 @@ DG-2011-04-04-3: Bugfix:     fixed bug in advance reservation test
 HP-2011-04-04-2: Bugfix:     Fixed race condition in binary_submission test
                  Review:     EB
 
-DG-2011-04-04-2: Cleanup:    changed severe to config error when nfs4 is not 
+DG-2011-04-04-2: Cleanup:    changed severe to config error when nfs4 is not
                              configured
+					  Issue:      TS-383
                  Review:     SH
 
-DG-2011-04-04-1: Cleanup:    test 3068 throws config error instead of severe, 
+DG-2011-04-04-1: Cleanup:    test 3068 throws config error instead of severe,
                              when no Solaris host is in testsuite
                  Review:     JG
 
