@@ -388,7 +388,7 @@ proc auto_reschedule_unknown_check_master {} {
    set job_id5 [submit_job $arguments]
 
    # make sure the jobs are running
-   set job_list {$job_id1 $job_id2 $job_id3 $job_id4 $job_id5}
+   set job_list "$job_id1 $job_id2 $job_id3 $job_id4 $job_id5"
    set time_out 100
 
    foreach job $job_list {
