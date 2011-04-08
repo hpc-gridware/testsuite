@@ -6,6 +6,14 @@
           1         2         3         4         5         6         7
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
+HP-2011-04-07-0: Bugfix:     Fixed bug in qmod_auto_reschedule test that was
+                             introduced with HP-2011-04-05-0
+                 Belongs to: HP-2011-04-05-0
+
+HP-2011-04-06-1: Enhancem:   Added check if user home dirs are shared
+                 Issue:      TS-382
+                 Review:     SH
+
 EB-2011-04-06-0: Bugfix:     TS sometimes tries to start commands on hosts
                              not part of the cluster configuration
                  Issue:      TS-380
@@ -24,7 +32,7 @@ HP-2011-04-05-0: Bugfix:     wait_for_end_of_transfer() function is broken
 
 JG-2011-04-04-0: Enhancem.:  testsuite build shall also create an arco package
                  Issue:      TS-373
-					  Review:     DG
+                 Review:     DG
 
 DG-2011-04-04-3: Bugfix:     fixed bug in advance reservation test
                  Review:     SH
@@ -34,7 +42,7 @@ HP-2011-04-04-2: Bugfix:     Fixed race condition in binary_submission test
 
 DG-2011-04-04-2: Cleanup:    changed severe to config error when nfs4 is not
                              configured
-					  Issue:      TS-383
+                 Issue:      TS-383
                  Review:     SH
 
 DG-2011-04-04-1: Cleanup:    test 3068 throws config error instead of severe,
@@ -46,7 +54,7 @@ HP-2011-04-04-1: Bugfix:     Fixed race condition in scheduler test
 
 HP-2011-04-04-0: Enhancem.:  Added test for qrsh line breaks
                  Issue:      TS-353, GE-3382
-					  Review:     SH
+                 Review:     SH
 
 DG-2011-04-04-0: Bugfix:     Fixed test 1780.
                  Review:     SH
@@ -1907,7 +1915,7 @@ JG-2009-01-12-0: Bugfix:     Fixed installation with windows hosts.
 EB-2009-01-09-0: Bugfix:     - enabled enforce limit tests again
                              - added some jsv/qalter related tests
                              - changed the way how TS handles vi (caused
-									    problem with special vim plugins)
+                               problem with special vim plugins)
                  Review:     CR
 
 MP-2009-01-07-0: Enhancem.:  added check for IZ 2752. qconf -Aconf should not
@@ -2082,7 +2090,7 @@ RH-2008-12-02-0: Bugfix:     open_remote_spawn_process could not handle germany
                  Review:     CR
 
 JG-2008-12-02-0: Bugfix:     fixed 6.0 and 6.1 installation without jmx port set
-				     Review:     CR
+                 Review:     CR
 
 HP-2008-12-02-0: Bugfix:     Fixed error in "pwd" check in user_permissions test
                  Issue:      268
@@ -2097,15 +2105,15 @@ TB-2008-11-28-1: Bugfix:     o fixed Hedeby test slo/maxPendingJobs/withJobFilte
                  Review:     RH
 
 EB-2008-11-28-0: Bugfix:     - fixed bug which were caused by changes of perl
-										 script in maintrunc.
-									  - Added handling of ps output for free bsb
-									    architecture in TS
-									  - Fixed bug which made TS unusable if it was used
-									    in environments with ssh login on hosts without
-										 password
-									  - added additional TS scenarios to jsv_script and
-									  	 jsv_ge tests
-				     Review:     CR
+                               script in maintrunc.
+                             - Added handling of ps output for free bsb
+                               architecture in TS
+                             - Fixed bug which made TS unusable if it was used
+                               in environments with ssh login on hosts without
+                               password
+                             - added additional TS scenarios to jsv_script and
+                               jsv_ge tests
+                 Review:     CR
 
 TB-2008-11-28-0: Cleanup:    o cleanup of Hedeby test slo/min_resource
                  Review:     MG
