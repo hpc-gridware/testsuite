@@ -6,6 +6,10 @@
           1         2         3         4         5         6         7
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
+DG-2011-04-08-0: Cleanup:    added bash as allowed login_shell like in default
+                             UGE installation
+                 Review:     EB
+
 HP-2011-04-07-0: Bugfix:     Fixed bug in qmod_auto_reschedule test that was
                              introduced with HP-2011-04-05-0
                  Belongs to: HP-2011-04-05-0
