@@ -447,7 +447,7 @@ proc setup_conf {} {
   set params(prolog) "none"
   set params(epilog) "none"
   set params(shell_start_mode) "posix_compliant"
-  set params(login_shells) "sh,ksh,csh,tcsh"
+  set params(login_shells) "sh,bash,ksh,csh,tcsh"
   set params(min_uid) "0"
   set params(min_gid) "0"
   set params(user_lists) "none"

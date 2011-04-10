@@ -1,0 +1,98 @@
+#___INFO__MARK_BEGIN__
+###########################################################################
+#
+#  The contents of this file are made available subject to the terms of the
+#  Apache Software License 2.0 ('The License').
+#  You may not use this file except in compliance with The License.
+#  You may obtain a copy of The License at
+#  http://www.apache.org/licenses/LICENSE-2.0.html
+#
+#  Copyright (c) 2011 Univa Corporation.
+#
+###########################################################################
+#___INFO__MARK_END__
+
+set check_root_access_needs "no"
+
+# define a level initialization procedure:
+set check_init_level_procedure "home_dirs_init_level"
+
+# define test's name and run level descriptions
+set check_name            "home_dirs"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_highest_level   0
+set check_description(0)  "checks if the users home directories are shared"
+
+
+# define test's dependencies
+set check_needs           "" 
+
+# define test's procedure order
+set check_functions "home_dirs_test"
+
+proc home_dirs_init_level {} {
+   global CHECK_ACT_LEVEL
+   switch -- $CHECK_ACT_LEVEL {
+      "0" {
+         return 0
+      }
+   }
+   return -1 ;# no other level
+}
+
+#****** home_dirs_test() *******************************************************
+#  NAME
+#     home_dirs_test() -- tests if the home dirs are shared
+#
+#  SYNOPSIS
+#     home_dirs_test {}
+#
+#  FUNCTION
+#     Tests if the home directories of all testsuite users are shared among
+#     all test hosts. Several tests rely on this being set up correctly.
+#
+#*******************************************************************************
+proc home_dirs_test {} {
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
+   global ts_config
+
+   # get all test hosts (doesn't matter if some occur twice)
+   set hostlist      $ts_config(execd_hosts)
+   lappend hostlist  $ts_config(master_host)
+   lappend hostlist  $ts_config(submit_only_hosts)
+   lappend hostllist $ts_config(shadowd_hosts)
+
+   # get one host where the test file will be written
+   set write_host [host_conf_get_suited_hosts 1]
+
+   # loop over all testsuite users and check their home dirs
+   foreach user "$CHECK_USER $CHECK_FIRST_FOREIGN_SYSTEM_USER $CHECK_SECOND_FOREIGN_SYSTEM_USER" {
+      # write the test file to the users home directory
+      ts_log_fine "As user $user write file '~/testfile123' on host $write_host"
+      set result [start_remote_prog $write_host $user "touch" "~/testfile123"]
+      if {$result != ""} {
+         ts_log_severe "Touching 'testfile123' in user $user's home directory \
+                        failed. Output of touch: $result"
+         return
+      }
+
+      # check on all hosts if the file appears
+      foreach host $hostlist {
+         set result [wait_for_remote_file $host $user "~/testfile123"]
+         if {$result != 0} {
+            # error was already raised, just return
+            return
+         }
+      }
+
+      # delete the file from the users home directory
+      set result [start_remote_prog $write_host $user "rm" "~/testfile123"]
+      if {$result != ""} {
+         ts_log_severe "Deleting 'testfile123' in user $user's home directory \
+                        failed. Output of rm: $result"
+         return
+      }
+      ts_log_fine "Successfully deleted file '~/testfile123' in user $user's home directory."
+   }
+}
+
