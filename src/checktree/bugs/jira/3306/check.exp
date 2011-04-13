@@ -83,7 +83,6 @@ proc ge_3306_setup {} {
 
    # set a high scheduling interval - we trigger it manually
    set schedd_config(schedule_interval) "0:10:0"
-   set schedd_config(schedd_job_info) "true"
    set_schedd_config schedd_config
 
    # restart qmaster (scheduler) instrumented with delay before scheduling
@@ -134,6 +133,7 @@ proc ge_3306_delete_jobs {job_ids_var} {
    # all jobs gone
    set job_ids {}
 }
+
 proc ge_3306_do_test {params_var job_ids_var} {
    global ts_config CHECK_USER
 
@@ -180,7 +180,6 @@ proc ge_3306_do_test {params_var job_ids_var} {
                         [start_sge_bin "qstat" "-F $params(variable)"]\n\n\
                         tail -f <qmaster_spool_dir>/messages:\n\
                         [start_remote_prog $ts_config(master_host) $CHECK_USER tail "[get_qmaster_spool_dir]/messages"]"
-wait_for_enter
          lappend job_ids $job_id
          ge_3306_delete_jobs job_ids
          set ret 0
