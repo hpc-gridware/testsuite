@@ -110,6 +110,9 @@ lappend check_functions "check_option_terse"
 lappend check_functions "qsub_wd"         ;# test the -wd <dir>/-cwd options
 lappend check_functions "check_qsub_ts_iz_145" ; # Testcase for TS IZ 145
 lappend check_functions "check_sync_failover" ;# Testcase for TS IZ 3
+lappend check_functions "check_option_pty"
+lappend check_functions "check_option_pty_no"
+lappend check_functions "check_option_pty_io"
 
 #                                                             max. column:     |
 #****** qsub/qsub_init_level() ******
@@ -3629,4 +3632,143 @@ proc check_sync_failover {} {
    if {$error == 1} {
       ts_log_severe $error_text
    }
+}
+
+#****** qsub/check_option_pty() ************************************************
+#  NAME
+#     check_option_pty - Testcase for qsub -pty yes
+#
+#  SYNOPSIS
+#     1. Submit tty-binary as job with -pty yes
+#     2. Check if tty-binary exited with 0
+#     3. Scan the output file for /dev/pts/
+#
+#*******************************************************************************
+proc check_option_pty {} {
+   global ts_config
+   global CHECK_USER
+
+   set output_tmpfile [get_tmp_file_name]
+   set job_id [submit_job "-pty yes -N tty -o $output_tmpfile -e /dev/null -b y tty"]
+
+   if {$job_id < 1} {
+      ts_log_severe "Cannot submit qsub -pty yes job"
+   }
+
+   wait_for_jobend $job_id "tty" 60
+
+   if {[get_qacct $job_id] == 0} {
+      if {$qacct_info(exit_status) != 0} {
+         ts_log_severe "There was not PTY available!"
+      }
+   }
+
+   set result [start_remote_prog $ts_config(master_host) $CHECK_USER cat $output_tmpfile exit_code]
+
+   if {$exit_code != 0 || $result == ""} {
+      ts_log_severe "error reading from output file on host $host:\n$result"
+   } else {
+      if {[string first "/dev/pts/" $result] != -1} {
+         ts_log_info "Found PTY in job-output"
+      } else {
+         ts_log_severe "No PTY was found in job-output"
+      }
+   }
+
+   #clean up
+   file delete $output_tmpfile
+}
+
+#****** qsub/check_option_pty_no () ********************************************
+#  NAME
+#     check_option_pty_no - Testcase for qsub -pty no
+#
+#  SYNOPSIS
+#     1. Submit tty-binary as job with no pty
+#     2. Check if tty-binary exited with 1
+#     3. Scan the output file for /dev/pts/. Fail if available!
+#
+#*******************************************************************************
+proc check_option_pty_no {} {
+   global ts_config
+   global CHECK_USER
+
+   set output_tmpfile [get_tmp_file_name]
+   set job_id [submit_job "-N tty -o $output_tmpfile -e /dev/null -b y tty"]
+
+   if {$job_id < 1} {
+      ts_log_severe "Cannot submit qsub job"
+   }
+
+   wait_for_jobend $job_id "tty" 60
+
+   if {[get_qacct $job_id] == 0} {
+      if {$qacct_info(exit_status) != 1} {
+         ts_log_severe "There was a PTY available despite -pty no!"
+      }
+   }
+
+   set result [start_remote_prog $ts_config(master_host) $CHECK_USER cat $output_tmpfile exit_code]
+
+   if {$exit_code != 0 || $result == ""} {
+      ts_log_severe "error reading from output file on host $host:\n$result"
+   } else {
+      if {[string first "/dev/pts/" $result] != -1} {
+         ts_log_severe "PTY was found in job-output despite -pty no!"
+      } else {
+         ts_log_info "Found no PTY in job-output"
+      }
+   }
+
+   #clean up
+   file delete $output_tmpfile
+}
+
+#****** qsub/check_option_pty_io () ********************************************
+#  NAME
+#     check_option_pty_io - Testcase for qsub -pty yes and its IO-redirection
+#
+#  SYNOPSIS
+#     1. Generate a temporary input file with only "TESTINPUT" as content. 
+#     2. Submit job with pty -yes and the generated input-file.
+#     3. Scan the output file for the content of the input file and the
+#        additional ouput of the test-script.
+#
+#*******************************************************************************
+proc check_option_pty_io {} {
+   global ts_config
+   global CHECK_USER
+
+   set output_tmpfile [get_tmp_file_name]
+   set input_tmpfile [get_tmp_file_name]
+
+   start_remote_prog $ts_config(master_host) $CHECK_USER echo "TESTINPUT >> $input_tmpfile" exit_code
+
+   if {$exit_code != 0} {
+      ts_log_severe "Could not write input file"
+   }
+
+   set job_id [submit_job "-N pty_io -o $output_tmpfile -e /dev/null -i $input_tmpfile $ts_config(testsuite_root_dir)/scripts/stdin.sh"]
+
+   if {$job_id < 1} {
+      ts_log_severe "Cannot submit qsub job"
+   }
+
+   wait_for_jobend $job_id "pty_io" 60
+
+   set result [start_remote_prog $ts_config(master_host) $CHECK_USER cat $output_tmpfile exit_code]
+
+   if {$exit_code != 0 || $result == ""} {
+      ts_log_severe "error reading from output file on host $host:\n$result"
+   } else {
+      if {[string first "Output to stdout: TESTINPUT" $result] != -1} {
+         ts_log_info "Found expected output"
+      } else {
+         ts_log_severe "Input-file was not parsed correctly! Result was: $result"
+      }
+   }
+
+   #clean up
+   file delete $output_tmpfile
+   file delete $input_tmpfile
 }
