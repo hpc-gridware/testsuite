@@ -12,7 +12,9 @@
 ###########################################################################
 #___INFO__MARK_END__
 
-set check_root_access_needs "no"
+global check_root_access_needs
+
+set check_root_access_needs "yes"
 
 # define a level initialization procedure:
 set check_init_level_procedure "home_dirs_init_level"
@@ -59,8 +61,12 @@ proc home_dirs_test {} {
    # get all test hosts (doesn't matter if some occur twice)
    set hostlist      $ts_config(execd_hosts)
    lappend hostlist  $ts_config(master_host)
-   lappend hostlist  $ts_config(submit_only_hosts)
-   lappend hostllist $ts_config(shadowd_hosts)
+   if {[string compare $ts_config(shadowd_hosts) "none"] != 0} {
+      lappend hostlist  $ts_config(shadowd_hosts)
+   }
+   if {[string compare $ts_config(submit_only_hosts) "none"] != 0} {
+      lappend hostlist  $ts_config(submit_only_hosts)
+   }
 
    # get one host where the test file will be written
    set write_host [host_conf_get_suited_hosts 1]
