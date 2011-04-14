@@ -11,6 +11,8 @@ JG-2011-04-14-0: Enhancem.:  new test for issue GE-3306: jobs get scheduled but
                              are not started after global host changed
                              test still disabled until code is checked in
                  Review:     SH
+SH-2011-04-14-0: Enhancem:   Added check for qsub -pty feature
+                 Review:     JG
 
 DG-2011-04-13-0: Bugfix:     when trying to install (19) and a expect binary
                              is not available for a host an error message
