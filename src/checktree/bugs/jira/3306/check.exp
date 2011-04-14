@@ -31,7 +31,7 @@ set check_init_level_procedure "ge_3306_init_level"
 
 # define test's name and run level descriptions
 set check_name            "ge_3306"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED SCHEDULER"
+set check_category        "COMPATIBILITY SYSTEM SCHEDULER"
 set check_highest_level   0
 set check_description(0)  "jobs get scheduled but are not started after global host changed"
 
@@ -64,7 +64,7 @@ proc ge_3306_init_level {} {
 
 proc ge_3306_setup {} {
    global ts_config
-   global ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host
+   global ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host_backup ge_3306_host
 
    # we want to test global resources and on a specific host
    set ge_3306_host [host_conf_get_suited_hosts]
@@ -72,8 +72,9 @@ proc ge_3306_setup {} {
    # we add a consumable - backup the complex definition
    get_complex ge_3306_complex_backup
 
-   # we modify the global host - do a backup
+   # we modify the global and an exec host - do a backup
    get_exechost ge_3306_global_host_backup
+   get_exechost ge_3306_host_backup
 
    # create test consumable
    set test_complex(C1) "C1 INT <= YES YES 0 0"
@@ -92,13 +93,14 @@ proc ge_3306_setup {} {
 }
 
 proc ge_3306_cleanup {} {
-   global ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host
+   global ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host_backup ge_3306_host
 
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   # restore the global host
+   # restore the host backup
    set_exechost ge_3306_global_host_backup
+   set_exechost ge_3306_host_backup
 
    # reset the complex
    reset_complex ge_3306_complex_backup
@@ -110,7 +112,7 @@ proc ge_3306_cleanup {} {
    shutdown_and_restart_qmaster
 
    # unset our test's global variables
-   foreach var "ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host" {
+   foreach var "ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host_backup ge_3306_host" {
       unset -nocomplain $var
    }
 }
@@ -178,7 +180,7 @@ proc ge_3306_do_test {params_var job_ids_var} {
                         [start_sge_bin "qalter" "-w p $job_id"]\n\n\
                         qstat -F $params(variable):\
                         [start_sge_bin "qstat" "-F $params(variable)"]\n\n\
-                        tail -f <qmaster_spool_dir>/messages:\n\
+                        tail <qmaster_spool_dir>/messages:\n\
                         [start_remote_prog $ts_config(master_host) $CHECK_USER tail "[get_qmaster_spool_dir]/messages"]"
          lappend job_ids $job_id
          ge_3306_delete_jobs job_ids
