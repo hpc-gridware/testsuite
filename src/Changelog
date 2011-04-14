@@ -7,6 +7,11 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+JG-2011-04-14-1: Bugfix:     testsuite function translate doesn't handle
+                             float/double parameters
+                 Issue:      TS-385
+                 Review:     DG
+
 JG-2011-04-14-0: Enhancem.:  new test for issue GE-3306: jobs get scheduled but
                              are not started after global host changed
                              test still disabled until code is checked in
