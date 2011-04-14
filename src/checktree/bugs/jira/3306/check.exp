@@ -1,0 +1,359 @@
+#___INFO__MARK_BEGIN__
+###########################################################################
+#
+#  The contents of this file are made available subject to the terms of the
+#  Apache Software License 2.0 ('The License').
+#  You may not use this file except in compliance with The License.
+#  You may obtain a copy of The License at
+#  http://www.apache.org/licenses/LICENSE-2.0.html
+#
+#  Copyright (c) 2011 Univa Corporation.
+#
+###########################################################################
+#___INFO__MARK_END__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_highest_level
+global check_init_level_procedure
+global check_root_access_needs
+global check_need_running_system
+
+#set check_root_access_needs "yes"
+#set check_need_running_system "no"
+
+# define a level initialization procedure:
+set check_init_level_procedure "ge_3306_init_level"
+
+# define test's name and run level descriptions
+set check_name            "ge_3306"
+set check_category        "COMPATIBILITY SYSTEM SCHEDULER"
+set check_highest_level   0
+set check_description(0)  "jobs get scheduled but are not started after global host changed"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function ge_3306_setup
+set check_cleanup_function ge_3306_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "ge_3306_test"
+lappend check_functions "ge_3306_per_job"
+lappend check_functions "ge_3306_exclusive"
+
+proc ge_3306_init_level {} {
+   global CHECK_ACT_LEVEL
+
+   switch -- $CHECK_ACT_LEVEL {
+      0 {
+         return 0
+      }
+   }
+
+   return -1  ;# no other level
+}
+
+# -------- local test procedures: initialization------------------------------
+
+proc ge_3306_setup {} {
+   global ts_config
+   global ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host_backup ge_3306_host
+
+   # we want to test global resources and on a specific host
+   set ge_3306_host [host_conf_get_suited_hosts]
+
+   # we add a consumable - backup the complex definition
+   get_complex ge_3306_complex_backup
+
+   # we modify the global and an exec host - do a backup
+   get_exechost ge_3306_global_host_backup
+   get_exechost ge_3306_host_backup
+
+   # create test consumable
+   set test_complex(C1) "C1 INT <= YES YES 0 0"
+   set test_complex(CJ) "CJ INT <= YES JOB 0 0"
+   set test_complex(CX) "CX BOOL EXCL YES YES 0 0"
+   set_complex test_complex
+
+   # set a high scheduling interval - we trigger it manually
+   set schedd_config(schedule_interval) "0:10:0"
+   set_schedd_config schedd_config
+
+   # restart qmaster (scheduler) instrumented with delay before scheduling
+   shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
+   set myenv(SGE_TEST_DELAY_SCHEDULING) 5
+   startup_qmaster 1 myenv
+}
+
+proc ge_3306_cleanup {} {
+   global ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host_backup ge_3306_host
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # restore the host backup
+   set_exechost ge_3306_global_host_backup
+   set_exechost ge_3306_host_backup
+
+   # reset the complex
+   reset_complex ge_3306_complex_backup
+
+   # reset the scheduler config
+   reset_schedd_config
+
+   # restart qmaster (scheduler) to get rid of instrumentation
+   shutdown_and_restart_qmaster
+
+   # unset our test's global variables
+   foreach var "ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host_backup ge_3306_host" {
+      unset -nocomplain $var
+   }
+}
+
+proc ge_3306_delete_jobs {job_ids_var} {
+   upvar $job_ids_var job_ids
+
+   ts_log_fine "deleting jobs $job_ids"
+
+   # delete all jobs
+   foreach job_id $job_ids {
+      delete_job $job_id
+      wait_for_jobend $job_id "" 60 0
+   }
+
+   # trigger scheduling to make sure jobs leave qmaster
+   after 1000
+   trigger_scheduling
+
+   # all jobs gone
+   set job_ids {}
+}
+
+proc ge_3306_do_test {params_var job_ids_var} {
+   global ts_config CHECK_USER
+
+   upvar $params_var params
+   upvar 1 $job_ids_var job_ids
+
+   # set a start value for our consumable
+   mod_attr exechost complex_values "$params(variable)=$params(value_start)" $params(host)
+
+   # submit a job requesting our resource
+   set job_args "$params(qsub_options) -b y -o /dev/null -j y"
+   set job_script "sleep 1000"
+   set job_id [submit_job "$job_args $job_script"]
+   if {$job_id <= 0} {
+      return 0
+   }
+
+   # trigger a scheduling run
+   trigger_scheduling
+
+   # modify the consumable value
+   mod_attr exechost complex_values "$params(variable)=$params(value_change)" $params(host)
+
+   # check if the job is running
+   if {[wait_for_jobstart $job_id "" 20 0] == 0} {
+      # job is running
+      lappend job_ids $job_id
+      # if it shouldn't be running: error
+      if {!$params(job_running)} {
+         ts_log_severe "job ($params(qsub_options)) did start - consumable check at job delivery does not work"
+         ge_3306_delete_jobs job_ids
+         set ret 0
+      } else {
+         set ret 1
+      }
+   } else {
+      # job is not running
+      # if it should be running: error
+      if {$params(job_running)} {
+         ts_log_severe "job ($params(qsub_options)) did not start - GE-3306 is present\n\n\
+                        qalter -w p $job_id:\
+                        [start_sge_bin "qalter" "-w p $job_id"]\n\n\
+                        qstat -F $params(variable):\
+                        [start_sge_bin "qstat" "-F $params(variable)"]\n\n\
+                        tail <qmaster_spool_dir>/messages:\n\
+                        [start_remote_prog $ts_config(master_host) $CHECK_USER tail "[get_qmaster_spool_dir]/messages"]"
+         lappend job_ids $job_id
+         ge_3306_delete_jobs job_ids
+         set ret 0
+      } else {
+         set ret 1
+         # delete job to avoid it getting scheduled in further scenarios
+         delete_job $job_id
+      }
+   }
+
+   return $ret
+}
+
+proc ge_3306_test {} {
+   global ge_3306_host
+
+   set job_ids {}
+
+   # test global and per host consumable
+   foreach host "global $ge_3306_host" {
+      # make sure scheduler is idle
+      trigger_scheduling ; after 10000
+
+      # start a sequential job, must start
+      set params(host) $host
+      set params(qsub_options) "-l h=$ge_3306_host -l C1=1"
+      set params(variable) "C1"
+      set params(value_start) 1
+      set params(value_change) 2
+      set params(job_running) 1
+      if {![ge_3306_do_test params job_ids]} {
+         return
+      }
+      # start a second job, reduce consumable, must get rejected
+      set params(value_start) "2"
+      set params(value_change) "1"
+      set params(job_running) 0
+      if {![ge_3306_do_test params job_ids]} {
+         return
+      }
+      # start a pe job, expect it to run
+      set params(qsub_options) "-l C1=1 -pe mytestpe 2"
+      set params(value_start) 3
+      set params(value_change) 3
+      set params(job_running) 1
+      if {![ge_3306_do_test params job_ids]} {
+         return
+      }
+      # start a pe job, expect it to get rejected at start
+      set params(value_start) 5
+      set params(value_change) 4
+      set params(job_running) 0
+      if {![ge_3306_do_test params job_ids]} {
+         return
+      }
+
+      # cleanup
+      ge_3306_delete_jobs job_ids
+      del_attr exechost complex_values $params(variable) $params(host)
+   }
+}
+
+proc ge_3306_per_job {} {
+   global ge_3306_host
+
+   set job_ids {}
+
+   # test global and per host consumable
+   foreach host "global $ge_3306_host" {
+      # make sure scheduler is idle
+      trigger_scheduling ; after 10000
+
+      # start a sequential job, must start
+      set params(host) $host
+      set params(qsub_options) "-l h=$ge_3306_host -l CJ=1"
+      set params(variable) "CJ"
+      set params(value_start) 1
+      set params(value_change) 2
+      set params(job_running) 1
+      if {![ge_3306_do_test params job_ids]} {
+         return
+      }
+      # start a second job, reduce consumable, must get rejected
+      set params(value_start) "2"
+      set params(value_change) "1"
+      set params(job_running) 0
+      if {![ge_3306_do_test params job_ids]} {
+         return
+      }
+      # start a pe job, expect it to run
+      set params(qsub_options) "-l CJ=1 -pe mytestpe 2"
+      set params(value_start) 2
+      set params(value_change) 2
+      set params(job_running) 1
+      if {![ge_3306_do_test params job_ids]} {
+         return
+      }
+      # start a pe job, expect it to get rejected at start
+      set params(value_start) 3
+      set params(value_change) 2
+      set params(job_running) 0
+      if {![ge_3306_do_test params job_ids]} {
+         return
+      }
+
+      # cleanup
+      ge_3306_delete_jobs job_ids
+      del_attr exechost complex_values $params(variable) $params(host)
+   }
+}
+
+proc ge_3306_exclusive {} {
+   global ge_3306_host
+
+   set job_ids {}
+
+   # test global and per host consumable
+   foreach host "global $ge_3306_host" {
+      # make sure scheduler is idle
+      trigger_scheduling ; after 10000
+
+      # start a sequential job, must start
+      set params(host) $host
+      set params(qsub_options) "-l h=$ge_3306_host -l CX"
+      set params(variable) "CX"
+      set params(value_start) 1
+      set params(value_change) 1
+      set params(job_running) 1
+      if {![ge_3306_do_test params job_ids]} {
+         return
+      }
+      # cleanup - we can only start one exclusive job
+      ge_3306_delete_jobs job_ids
+
+      # make sure scheduler is idle
+      trigger_scheduling ; after 10000
+      # start a job, reduce consumable, must get rejected
+      set params(value_start) 1
+      set params(value_change) 0
+      set params(job_running) 0
+      if {![ge_3306_do_test params job_ids]} {
+         return
+      }
+
+      # cleanup - we can only start one exclusive job
+      ge_3306_delete_jobs job_ids
+
+      # implicit exclusive consumables
+      # a job which is not requesting an exclusive consumable
+      # but running on a host with exclusive consumable
+      # first job may start, second one must get rejected
+      mod_attr exechost complex_values "CX=1" $params(host)
+      # make sure scheduler is idle
+      trigger_scheduling ; after 10000
+      # test with consumable C1, make sure there is enough available
+      set params(qsub_options) "-l h=$ge_3306_host -l C1"
+      set params(variable) "C1"
+      set params(value_start) 10
+      set params(value_change) 10
+      set params(job_running) 1
+      if {![ge_3306_do_test params job_ids]} {
+         return
+      }
+      set params(job_running) 0
+      if {![ge_3306_do_test params job_ids]} {
+         return
+      }
+      del_attr exechost complex_values "CX" $params(host)
+
+      # cleanup
+      ge_3306_delete_jobs job_ids
+      del_attr exechost complex_values $params(variable) $params(host)
+   }
+}
+

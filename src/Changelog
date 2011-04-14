@@ -9,6 +9,11 @@
 EB-2011-04-14-0: Bugfix:     Fixed failing home_dirs test
                  Review:     DG
 
+JG-2011-04-14-0: Enhancem.:  new test for issue GE-3306: jobs get scheduled but
+                             are not started after global host changed
+                             test still disabled until code is checked in
+                 Review:     SH
+
 SH-2011-04-14-0: Enhancem:   Added check for qsub -pty feature
                  Review:     JG
 
