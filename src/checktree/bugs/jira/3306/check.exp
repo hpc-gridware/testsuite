@@ -44,9 +44,9 @@ set check_cleanup_function ge_3306_cleanup
 
 # define test's procedure order
 set check_functions {}
-#lappend check_functions "ge_3306_test"
-#lappend check_functions "ge_3306_per_job"
-#lappend check_functions "ge_3306_exclusive"
+lappend check_functions "ge_3306_test"
+lappend check_functions "ge_3306_per_job"
+lappend check_functions "ge_3306_exclusive"
 lappend check_functions "ge_3306_pe_slots"
 
 proc ge_3306_init_level {} {
