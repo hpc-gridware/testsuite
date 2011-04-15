@@ -188,9 +188,9 @@ proc issue_2339_check { } {
    init_logfile_wait $ts_config(master_host) $schedule
 
    set jobid [submit_job "-pe two_per_host 2 $ts_config(product_root)/examples/jobs/sleeper.sh 180"]
-   set ret [issue_2339_wait_for_pattern "wait for master" "${jobid}:1:STARTING:*:*:Q:A@${second}:slots:1.0*"]
+   set ret [issue_2339_wait_for_pattern "wait for master" "${jobid}:1:STARTING:*:*:Q:A@${second}*:slots:1.0*"]
    if {$ret == 0} {
-      set ret [issue_2339_wait_for_pattern "wait for slave" "${jobid}:1:STARTING:*:*:Q:B@${second}:slots:1.0*"]
+      set ret [issue_2339_wait_for_pattern "wait for slave" "${jobid}:1:STARTING:*:*:Q:B@${second}*:slots:1.0*"]
    }
 
    close_logfile_wait

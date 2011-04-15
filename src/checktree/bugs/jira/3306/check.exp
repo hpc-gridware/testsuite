@@ -251,7 +251,7 @@ proc ge_3306_test {} {
       set params(value_start) "2"
       set params(value_change) "1"
       set params(job_running) 0
-      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" C1 host $host 1 "0.0*"]
+      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" C1 host ${host}* 1 "0.0*"]
       if {![ge_3306_do_test params job_ids]} {
          return
       }
@@ -267,7 +267,7 @@ proc ge_3306_test {} {
       set params(value_start) 5
       set params(value_change) 4
       set params(job_running) 0
-      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" C1 host $host 2 "1.0*"]
+      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" C1 host ${host}* 2 "1.0*"]
       if {![ge_3306_do_test params job_ids]} {
          return
       }
@@ -302,7 +302,7 @@ proc ge_3306_per_job {} {
       set params(value_start) "2"
       set params(value_change) "1"
       set params(job_running) 0
-      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" CJ host $host 1 "0.0*"]
+      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" CJ host ${host}* 1 "0.0*"]
       if {![ge_3306_do_test params job_ids]} {
          return
       }
@@ -318,7 +318,7 @@ proc ge_3306_per_job {} {
       set params(value_start) 3
       set params(value_change) 2
       set params(job_running) 0
-      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" CJ host $host 1 "0.0*"]
+      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" CJ host ${host}* 1 "0.0*"]
       if {![ge_3306_do_test params job_ids]} {
          return
       }
@@ -358,7 +358,7 @@ proc ge_3306_exclusive {} {
       set params(value_start) 1
       set params(value_change) 0
       set params(job_running) 0
-      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" CX host $host 1 "0.0*"]
+      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" CX host ${host}* 1 "0.0*"]
       if {![ge_3306_do_test params job_ids]} {
          return
       }
@@ -383,7 +383,7 @@ proc ge_3306_exclusive {} {
          return
       }
       set params(job_running) 0
-      set params(message) [translate_macro MSG_EXCLCAPACITYEXCEEDED_FSSSI "1.0*" CX host $host 1]
+      set params(message) [translate_macro MSG_EXCLCAPACITYEXCEEDED_FSSSI "1.0*" CX host ${host}* 1]
       if {![ge_3306_do_test params job_ids]} {
          return
       }
