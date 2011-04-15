@@ -3655,7 +3655,7 @@ proc check_option_pty {} {
       return
    }
 
-   wait_for_jobend $job_id "tty" 60
+   wait_for_end_of_all_jobs
 
    if {[get_qacct $job_id] == 0} {
       if {$qacct_info(exit_status) != 0} {
