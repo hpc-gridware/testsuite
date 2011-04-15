@@ -11,6 +11,9 @@ EB-2011-04-15-0: Bugfix:     fixed failing TS tests that failed due to long
                  Issue:      TS-384
                  Review:     SH
 
+JG-2011-04-15-0: Enhancem.:  Extended and activated bugs/jira/3306.
+                 Review:     SH
+
 JG-2011-04-14-1: Bugfix:     testsuite function translate doesn't handle
                              float/double parameters
                  Issue:      TS-385
