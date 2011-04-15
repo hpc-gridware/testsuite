@@ -4969,12 +4969,12 @@ proc qconf_Aconf {} {
    global ts_config
   
    # run qconf -Aconf with an already existing configuration
-   set result [start_sge_bin "qconf" "-Aconf $ts_config(master_host)"]
+   set result [string trim [start_sge_bin "qconf" "-Aconf $ts_config(master_host)"]]
 
    # check that we get the correct error message MSG_ANSWER_CONFIGXALREADYEXISTS_S
-   set expected_message [translate_macro MSG_ANSWER_CONFIGXALREADYEXISTS_S $ts_config(master_host)]
-   if {[string trim $result] != $expected_message} {
-      ts_log_severe "qconf_Aconf test failed.\nExpected qconf to fail, but got result:\n$result"
+   set expected_message "[translate_macro MSG_ANSWER_CONFIGXALREADYEXISTS_S "*"]"
+   if {![string match $expected_message $result]} {
+      ts_log_severe "qconf_Aconf test failed.\nExpected qconf to fail with \"$expected_message\", but got result:\n\"$result\""
    } else {
       ts_log_fine "qconf_Aconf test passed"
    }

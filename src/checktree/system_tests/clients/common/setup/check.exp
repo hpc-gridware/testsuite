@@ -170,13 +170,15 @@ proc client_setup_test_bootstrap {} {
 
    # test clients with non existing bootstrap file
    set config_file "$ts_config(product_root)/$ts_config(cell)/common/bootstrap"
-   file rename $config_file "$config_file.bak"
+   file copy $config_file ${config_file}.bak
+   file delete $config_file 
    # wait for NFS ...
    foreach host $ts_config(execd_nodes) {
-      wait_for_remote_file $host $CHECK_USER $config_file 60 1 1
+      wait_for_remote_file $host $CHECK_USER $config_file 90 1 1
    }
    client_setup_do_test "no bootstrap file" -300
-   file rename "$config_file.bak" $config_file
+   file copy "$config_file.bak" $config_file
+   file delete "$config_file.bak" 
 
    # wait for NFS ...
    foreach host $ts_config(execd_nodes) {
@@ -190,17 +192,19 @@ proc client_setup_test_act_qmaster {} {
    
    # test clients with non existing act_qmaster file
    set config_file_2 "$ts_config(product_root)/$ts_config(cell)/common/act_qmaster"
-   file rename $config_file_2 "$config_file_2.bak"
+   file copy $config_file_2 ${config_file_2}.bak
+   file delete $config_file_2
 
    foreach host $ts_config(execd_nodes) {
-      wait_for_remote_file $host $CHECK_USER $config_file_2 60 1 1
+      wait_for_remote_file $host $CHECK_USER $config_file_2 90 1 1
    }
    client_setup_do_test "no act_qmaster file" -301
-   file rename "$config_file_2.bak" $config_file_2
+   file copy "$config_file_2.bak" $config_file_2
+   file delete "$config_file_2.bak"
     
    # wait for NFS ...
    foreach host $ts_config(execd_nodes) {
-      wait_for_remote_file $host $CHECK_USER $config_file_2 60 1 0
+      wait_for_remote_file $host $CHECK_USER $config_file_2 90 1 0
    }
 }
 

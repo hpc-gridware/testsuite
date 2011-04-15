@@ -227,13 +227,13 @@ proc issue_2378_single_check { pe_name master {slave ""} {slave_request ""} {han
 
    set jobid [submit_job "-pe $pe_name 2 -masterq $master $slave_request $slave $ts_config(product_root)/examples/jobs/sleeper.sh 180"]
    if {$slave_request != "" && $handled_as_fillup == 0} {
-      set ret [issue_2378_wait_for_pattern "wait for master: $pe_name $master $slave" "${jobid}:1:STARTING:*:*:Q:${master}:slots:1.0*"]
+      set ret [issue_2378_wait_for_pattern "wait for master: $pe_name $master $slave" "${jobid}:1:STARTING:*:*:Q:${master}*:slots:1.0*"]
 
       if {$ret == 0} {
          set ret [issue_2378_wait_for_pattern "wait for slave: $pe_name $master $slave" "${jobid}:1:STARTING:*:*:Q:${slave}*:slots:1.0*"]
       }
    } else {
-      set ret [issue_2378_wait_for_pattern "wait for master and slave: $pe_name $master $slave" "${jobid}:1:STARTING:*:*:Q:${master}:slots:2.0*"]
+      set ret [issue_2378_wait_for_pattern "wait for master and slave: $pe_name $master $slave" "${jobid}:1:STARTING:*:*:Q:${master}*:slots:2.0*"]
    }
 
    ts_log_fine "got master queue (${master}) and slave queue (${slave}) as expected"

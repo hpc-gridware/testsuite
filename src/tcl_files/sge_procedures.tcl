@@ -9292,6 +9292,27 @@ proc is_bdb_server_running {hostname} {
    return false
 }
 
+#****** sge_procedures/get_short_hostname() ***************************************
+#  NAME
+#     get_short_hostname() -- short hostname
+#
+#  SYNOPSIS
+#     get_short_hostname {host}
+#
+#  FUNCTION
+#     Returns the first part of a qualified hostname.
+#
+#  INPUTS
+#     host - a long or short hostname
+#
+#  RESULT
+#     short hostname     
+#*******************************************************************************
+proc get_short_hostname {host} {
+   regexp {([0-9a-zA-Z_-]*).*} $host match shorthost
+   return $shorthost
+}
+
 #****** sge_procedures/get_pid_for_job() ***************************************
 #  NAME
 #     get_pid_for_job() -- returns the pid of a running job
@@ -9322,8 +9343,8 @@ proc get_pid_for_job {job_id} {
       return 0
    }
 
-   set host [lindex [split $job_info(queue) "@"] 1]
-
+   set host [get_short_hostname [lindex [split $job_info(queue) "@"] 1]]
+   
    set spool_dir [get_execd_spool_dir $host]
    
    # build name of pid file
