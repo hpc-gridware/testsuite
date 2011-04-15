@@ -6,6 +6,10 @@
           1         2         3         4         5         6         7
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
+
+JG-2011-04-15-0: Enhancem.:  Extended and activated bugs/jira/3306.
+                 Review:     SH
+
 JG-2011-04-14-1: Bugfix:     testsuite function translate doesn't handle
                              float/double parameters
                  Issue:      TS-385

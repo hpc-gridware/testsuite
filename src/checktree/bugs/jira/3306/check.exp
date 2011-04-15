@@ -31,7 +31,7 @@ set check_init_level_procedure "ge_3306_init_level"
 
 # define test's name and run level descriptions
 set check_name            "ge_3306"
-set check_category        "COMPATIBILITY SYSTEM SCHEDULER"
+set check_category        "VERIFIED COMPATIBILITY SYSTEM SCHEDULER"
 set check_highest_level   0
 set check_description(0)  "jobs get scheduled but are not started after global host changed"
 
@@ -44,9 +44,9 @@ set check_cleanup_function ge_3306_cleanup
 
 # define test's procedure order
 set check_functions {}
-#lappend check_functions "ge_3306_test"
-#lappend check_functions "ge_3306_per_job"
-#lappend check_functions "ge_3306_exclusive"
+lappend check_functions "ge_3306_test"
+lappend check_functions "ge_3306_per_job"
+lappend check_functions "ge_3306_exclusive"
 lappend check_functions "ge_3306_pe_slots"
 
 proc ge_3306_init_level {} {
