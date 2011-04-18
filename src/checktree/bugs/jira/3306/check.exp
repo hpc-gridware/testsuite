@@ -363,32 +363,6 @@ proc ge_3306_exclusive {} {
          return
       }
 
-      # cleanup - we can only start one exclusive job
-      ge_3306_delete_jobs job_ids
-
-      # implicit exclusive consumables
-      # a job which is not requesting an exclusive consumable
-      # but running on a host with exclusive consumable
-      # first job may start, second one must get rejected
-      mod_attr exechost complex_values "CX=1" $params(host)
-      # make sure scheduler is idle
-      trigger_scheduling ; after 10000
-      # test with consumable C1, make sure there is enough available
-      set params(qsub_options) "-l h=$ge_3306_host -l C1"
-      set params(variable) "C1"
-      set params(value_start) 10
-      set params(value_change) 10
-      set params(job_running) 1
-      if {![ge_3306_do_test params job_ids]} {
-         return
-      }
-      set params(job_running) 0
-      set params(message) [translate_macro MSG_EXCLCAPACITYEXCEEDED_FSSSI "1.0*" CX host ${host}* 1]
-      if {![ge_3306_do_test params job_ids]} {
-         return
-      }
-      del_attr exechost complex_values "CX" $params(host)
-
       # cleanup
       ge_3306_delete_jobs job_ids
       del_attr exechost complex_values $params(variable) $params(host)
