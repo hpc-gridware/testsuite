@@ -7,6 +7,11 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+JG-2011-04-18-1: Bugfix:     final distribution build must contain java html
+                             docs (about JJSV and JDRMAA)
+                 Issue:      TS-387
+                 Review:     DG
+
 JG-2011-04-18-0: Bugfix:     removed an invalid scenario in ge 3306 test
                  Belongs to: JG-2011-04-15-0
                  Review:     SH
