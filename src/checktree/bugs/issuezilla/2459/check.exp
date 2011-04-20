@@ -351,7 +351,7 @@ proc issue_2459_write_autoinst_config {filename host {do_cleanup 1}} {
    puts $fdo "SHELL_NAME=\"h\""
    puts $fdo "COPY_COMMAND=\"acp\""
    puts $fdo "DEFAULT_DOMAIN=\"\""
-   puts $fdo "ADMIN_MAIL=\"mailserver\""
+   puts $fdo "ADMIN_MAIL=\"@@@@@@@\""
    puts $fdo "ADD_TO_RC=\"fals\""
    puts $fdo "SET_FILE_PERMS=\"rue\""
    puts $fdo "RESCHEDULE_JOBS=\"ait\""

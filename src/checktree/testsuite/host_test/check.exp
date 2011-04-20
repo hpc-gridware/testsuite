@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -28,17 +27,17 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
-
-
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_highest_level
 global check_init_level_procedure
 global check_root_access_needs
@@ -57,7 +56,7 @@ set check_description(0)  "test testsuite host configuration setup"
 
 
 # define test's dependencies
-set check_needs           "" 
+set check_needs           "connection_test"
 
 # setup and cleanup functions
 set check_setup_level_function host_test_level_setup
@@ -71,18 +70,14 @@ set check_functions "host_test_test"
 proc host_test_init_level {} {
    global CHECK_ACT_LEVEL
    switch -- $CHECK_ACT_LEVEL {
-      "0" { 
+      0 {
          return 0
-      } 
-   } 
-   return -1  ;# no other level 
+      }
+   }
+   return -1  ;# no other level
 }
 
-
-
-
 # -------- local test procedures: initialization------------------------------
-
 
 proc host_test_level_setup {} {
    ts_log_fine "setup ..."
@@ -97,10 +92,10 @@ proc host_test_level_cleanup {} {
 #     host_test_test() -- test TS host configuration values
 #
 #  SYNOPSIS
-#     host_test_test { } 
+#     host_test_test { }
 #
 #  FUNCTION
-#     This procedure tests all used host for its configured ts_host_config
+#     This procedure tests all used hosts for their configured ts_host_config
 #     settings.
 #
 #  INPUTS
@@ -243,5 +238,4 @@ proc host_test_test {} {
       ts_log_severe $error_text
    }
 }
-
 

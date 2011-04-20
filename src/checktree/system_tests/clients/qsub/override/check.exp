@@ -105,13 +105,15 @@ proc client_override_test1 {} {
    global ts_config
 
    set hostname [host_conf_get_suited_hosts]
-   
-   set jobargs "-q all.q@$hostname $ts_config(product_root)/examples/jobs/sleeper.sh 30" 
+   set expected_queue "all.q@$hostname"   
+   set jobargs "-q $expected_queue $ts_config(product_root)/examples/jobs/sleeper.sh 30" 
    set job_id [submit_job $jobargs]
-   
    get_qstat_j_info $job_id
-   if {[string compare "$qstat_j_info(hard_queue_list)" "all.q@$hostname"] != 0} {
+   regexp {.*@(.*)} $qstat_j_info(hard_queue_list) match result_host
+   set result_host [get_short_hostname $result_host]
+   
+   if {[string compare "$result_host" "$hostname"] != 0} {
       set error_text "qsub did not set the correct queue: $hostname \n"
-      ts_log_severe " overriding of default script file failed"
+      ts_log_severe "overriding of default script file failed. Got $result_host expected $hostname"
    }
 }

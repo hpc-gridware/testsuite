@@ -945,7 +945,7 @@ proc reporting_ar_error_state_test {} {
    set pattern "*:ar_log:*:${ar_id}:d:DELETED:AR deleted"
    reporting_wait_for_pattern $pattern
 
-   set pattern "*:ar_acct:*:${ar_id}:reporting:$reporting_test_host:1"
+   set pattern "*:ar_acct:*:${ar_id}:reporting:${reporting_test_host}*:1"
    reporting_wait_for_pattern $pattern
 
    # shutdown tail -f
@@ -1034,7 +1034,7 @@ proc reporting_ar_warning_state_test {} {
    set pattern "*:ar_log:*:${ar_id}:d:DELETED:AR deleted"
    reporting_wait_for_pattern $pattern
 
-   set pattern "*:ar_acct:*:${ar_id}:reporting:$reporting_test_host:1"
+   set pattern "*:ar_acct:*:${ar_id}:reporting:${reporting_test_host}*:1"
    reporting_wait_for_pattern $pattern
 
    # shutdown tail -f

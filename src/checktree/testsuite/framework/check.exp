@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -28,15 +27,17 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
 # variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_highest_level
 global check_init_level_procedure
 global check_root_access_needs
@@ -53,7 +54,7 @@ set check_highest_level   0
 set check_description(0)  "check testsuite framework functions"
 
 # test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # define test's procedure order
 set check_functions {}
@@ -77,11 +78,9 @@ proc test_framework_set_config {} {
 
    set error_text ""
    ts_log_fine "testing set_config() from testsuite framework when used to restore configs ..."
-  
+
    set host $ts_config(master_host)
    get_config orig $host
-
-   
 
    set new_config(blub) "blab"
    set_config new_config $host
@@ -121,7 +120,7 @@ proc test_framework_set_config {} {
       set new_config(blub) ""
       set_config new_config $host
    }
- 
+
    foreach elem [array names orig] {
       ts_log_fine "examine parameter \"$elem\" ..."
       if {![info exists restored($elem)]} {
@@ -147,7 +146,7 @@ proc test_framework_new_line_characters {} {
 
    set error_text ""
    ts_log_fine "testing new line characters ..."
-  
+
    foreach host [get_all_hosts] {
       ts_log_fine "testing host $host ..."
 

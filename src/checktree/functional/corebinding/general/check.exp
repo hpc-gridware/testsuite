@@ -1042,8 +1042,8 @@ proc check_qstat_reporting { host jobid { strategy "linear" } { amount 1 } { thr
 
 }
 
-
 proc check_binding { host jobid { amount 1 } { threads_per_core 1 } { stepsize 0 } { startingpoint "no" } { type "set" } } {
+   set host [get_short_hostname $host]
 
    # wait till pid file is written 
    set waited 0

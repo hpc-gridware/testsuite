@@ -6,6 +6,53 @@
           1         2         3         4         5         6         7
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
+
+JG-2011-04-20-0: Bugfix:     small fix in home_dirs test, added dependencies
+                             to testsuite framework tests
+                 Review:     HP
+
+JG-2011-04-18-1: Bugfix:     final distribution build must contain java html
+                             docs (about JJSV and JDRMAA)
+                 Issue:      TS-387
+                 Review:     DG
+
+JG-2011-04-18-0: Bugfix:     removed an invalid scenario in ge 3306 test
+                 Belongs to: JG-2011-04-15-0
+                 Review:     SH
+
+EB-2011-04-15-1: Bugfix:     check_option_pty somtimes fails
+                 Issue:      TS-386
+                 Review:     SH
+
+EB-2011-04-15-0: Bugfix:     fixed failing TS tests that failed due to long
+                             long hostnames
+                 Issue:      TS-384
+                 Review:     SH
+
+JG-2011-04-15-0: Enhancem.:  Extended and activated bugs/jira/3306.
+                 Review:     SH
+
+JG-2011-04-14-1: Bugfix:     testsuite function translate doesn't handle
+                             float/double parameters
+                 Issue:      TS-385
+                 Review:     DG
+
+EB-2011-04-14-0: Bugfix:     Fixed failing home_dirs test
+                 Review:     DG
+
+JG-2011-04-14-0: Enhancem.:  new test for issue GE-3306: jobs get scheduled but
+                             are not started after global host changed
+                             test still disabled until code is checked in
+                 Review:     SH
+
+SH-2011-04-14-0: Enhancem:   Added check for qsub -pty feature
+                 Review:     JG
+
+DG-2011-04-13-0: Bugfix:     when trying to install (19) and a expect binary
+                             is not available for a host an error message
+                             is generated
+                 Review:     SH
+
 DG-2011-04-08-0: Cleanup:    added bash as allowed login_shell like in default
                              UGE installation
                  Review:     EB

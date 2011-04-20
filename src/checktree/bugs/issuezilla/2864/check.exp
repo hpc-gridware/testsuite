@@ -162,11 +162,11 @@ proc issue_2864_check { } {
    ts_log_fine "testing contradicting host preferences in queues A and B"
 
    # master task to go into A@first when submitted with -q A
-   if { [ issue_2864_single_check "-pe round_robin 1 -q A" "wait for master in A@$first" "1:STARTING:*:*:Q:A@$first:slots:1.0*"] != 0 } { return }
-   if { [ issue_2864_single_check "-pe fill_up 1 -q A"     "wait for master in A@$first" "1:STARTING:*:*:Q:A@$first:slots:1.0*"] != 0 } { return }
+   if { [ issue_2864_single_check "-pe round_robin 1 -q A" "wait for master in A@$first" "1:STARTING:*:*:Q:A@${first}*:slots:1.0*"] != 0 } { return }
+   if { [ issue_2864_single_check "-pe fill_up 1 -q A"     "wait for master in A@$first" "1:STARTING:*:*:Q:A@${first}*:slots:1.0*"] != 0 } { return }
    # master task to go into B@second when submitted with -q B 
-   if { [ issue_2864_single_check "-pe round_robin 1 -q B" "wait for master in B@$second" "1:STARTING:*:*:Q:B@$second:slots:1.0*"] != 0 } { return }
-   if { [ issue_2864_single_check "-pe fill_up 1 -q B"     "wait for master in B@$second" "1:STARTING:*:*:Q:B@$second:slots:1.0*"] != 0 } { return }
+   if { [ issue_2864_single_check "-pe round_robin 1 -q B" "wait for master in B@$second" "1:STARTING:*:*:Q:B@${second}*:slots:1.0*"] != 0 } { return }
+   if { [ issue_2864_single_check "-pe fill_up 1 -q B"     "wait for master in B@$second" "1:STARTING:*:*:Q:B@${second}*:slots:1.0*"] != 0 } { return }
 }
 
 proc issue_2864_single_check { submission diagnosis dispatching } {

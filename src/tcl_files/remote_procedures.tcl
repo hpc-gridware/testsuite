@@ -271,13 +271,20 @@ proc check_all_system_times {} {
       ts_log_fine "test remote system time on host $host ..."
       set time($host) [get_remote_time $host]
       ts_log_finest "$host: remote time: $time($host)"
-      # fix remote execution time difference
-      set time($host) [expr $time($host) - [expr [timestamp] - $test_start]] 
-      ts_log_finest "$host: corrected time because of execution time: $time($host)"
+      if {$time($host) != 0} {
+         # fix remote execution time difference
+         set time($host) [expr $time($host) - [expr [timestamp] - $test_start]]
+         ts_log_finest "$host: corrected time because of execution time: $time($host)"
+      }
    }
 
    set reference_time $time($ts_config(master_host))
    foreach host $host_list {
+      if {$time($host) == 0} {
+         ts_log_warning "skipping host $host"
+         set return_value 1
+         continue
+      }
       set diff [expr $reference_time - $time($host)]
       ts_log_fine "host $host has a time difference of $diff seconds compared to host $ts_config(master_host)"
 
@@ -305,7 +312,7 @@ proc check_all_system_times {} {
 #     host - host where timestamp should be returned
 #
 #  RESULT
-#     unix timestamp number
+#     unix timestamp number or 0 in case of an error
 #
 #  SEE ALSO
 #     remote_procedures/check_all_system_times()
@@ -314,6 +321,10 @@ proc get_remote_time { host } {
    global ts_config 
    global CHECK_USER
    set tcl_bin [get_binary_path $host "expect"]
+   if {$tcl_bin == ""} {
+      ts_log_severe "Host $host has no expect configured (expect: $tcl_bin)!"
+      return 0
+   }
    set time_script "$ts_config(testsuite_root_dir)/scripts/time.tcl"
    set result [string trim [start_remote_prog $host $CHECK_USER $tcl_bin $time_script]]
    set time [get_string_value_between "current time is" -1 $result]

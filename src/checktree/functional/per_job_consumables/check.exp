@@ -335,8 +335,8 @@ proc create_unique_list {list} {
 proc per_job_consumables_master_task {} {
    global job_consumables_hosts job_args
 
-   set first_host [lindex $job_consumables_hosts 0]
-   set master_host [lindex $job_consumables_hosts 2]
+   set first_host [get_short_hostname [lindex $job_consumables_hosts 0]]
+   set master_host [get_short_hostname [lindex $job_consumables_hosts 2]]
    ts_log_fine "first_host $first_host"
    ts_log_fine "master_host $master_host"
 
@@ -355,7 +355,7 @@ proc per_job_consumables_master_task {} {
       ts_log_severe "fill_up job was incorrect dispatched, expected to run on 2 qinstances, got $gdil_count"
    } else {
       foreach queue $queue_list {
-         set host_name [lindex [split $queue "@"] 1]
+         set host_name [get_short_hostname [lindex [split $queue "@"] 1]]
          if {$host_name != $master_host && $host_name != $first_host} {
             ts_log_severe "fill_up job was scheduled on the wrong host expected $first_host or $master_host, got $host_name"
             break
@@ -385,8 +385,8 @@ proc per_job_consumables_master_task {} {
 proc per_job_consumables_master_task_rqs {} {
    global job_consumables_hosts job_args
 
-   set first_host [lindex $job_consumables_hosts 0]
-   set master_host [lindex $job_consumables_hosts 2]
+   set first_host [get_short_hostname [lindex $job_consumables_hosts 0]]
+   set master_host [get_short_hostname [lindex $job_consumables_hosts 2]]
    ts_log_fine "first_host $first_host"
    ts_log_fine "master_host $master_host"
 
@@ -414,7 +414,7 @@ proc per_job_consumables_master_task_rqs {} {
       ts_log_severe "fill_up job was incorrect dispatched, expected to run on 2 qinstances, got $gdil_count"
    } else {
       foreach queue $queue_list {
-         set host_name [lindex [split $queue "@"] 1]
+         set host_name [get_short_hostname [lindex [split $queue "@"] 1]]
          if {$host_name != $master_host && $host_name != $first_host} {
             ts_log_severe "fill_up job was scheduled on the wrong host expected $first_host and $master_host, got $host_name"
             break

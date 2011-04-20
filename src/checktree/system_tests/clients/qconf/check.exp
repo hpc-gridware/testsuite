@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 # global variables ... (defined in main check routine, but you can use it)
 #___INFO__MARK_BEGIN__
 ##########################################################################
@@ -33,10 +32,10 @@
 #___INFO__MARK_END__
 
 # Define the global veriables to give them back
-global check_name 
-global check_description 
+global check_name
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_highest_level
 global check_init_level_procedure
 global check_root_access_needs
@@ -76,7 +75,7 @@ lappend check_functions "qconf_segfault"
 lappend check_functions "qconf_se"
 lappend check_functions "qconf_sel"
 
-# TODO: the aattr/rattr checks are broken or not fully 
+# TODO: the aattr/rattr checks are broken or not fully
 # ported to 6.0
 #lappend check_functions "qconf_aattr_check"
 #lappend check_functions "qconf_rattr_check"
@@ -91,14 +90,14 @@ lappend check_functions "qconf_sds_check"	;# List detached settings in the clust
 append_check_and_exclude_in_jgdi "qconf_secl_check" "No event clients that JGDI returns is an unknown error"	;# List event client list
 lappend check_functions "qconf_sep_check"	;# List processors
 lappend check_functions "qconf_sm_check"	;# List  managers
-lappend check_functions "qconf_so_check"	;# List operators 
+lappend check_functions "qconf_so_check"	;# List operators
 lappend check_functions "qconf_ss_check"	;# List submit hosts
 lappend check_functions "qconf_sss_check"	;# Show scheduler status
 lappend check_functions "qconf_sul_check"	;# Show user list
 lappend check_functions "qconf_sprjl_check"	;# Show project list
 
 # New options, non-show DONE
-append_check_and_exclude_in_jgdi "qconf_add_delete_manager" "Options *q do not handle queue instances"	;# Add and delete manager users 
+append_check_and_exclude_in_jgdi "qconf_add_delete_manager" "Options *q do not handle queue instances"	;# Add and delete manager users
 append_check_and_exclude_in_jgdi "qconf_add_show_mod_del_queue" "JGDI Shell can't handle queue instances (bug)" 	;# Add, show, modify and delete queue "qconf_queue.q"
 append_check_and_exclude_in_jgdi "qconf_add_show_delete_stnode" "Options *stnode not implemented" ;# Add, show and delete share tree nodes
 append_check_and_exclude_in_jgdi "qconf_create_modify_sharetree" "Options *stree not implemented" ;# create and modify a sharetree (qconf -Mstree)
@@ -106,7 +105,7 @@ append_check_and_exclude_in_jgdi "qconf_del_sharetree" "Options *stree not imple
 append_check_and_exclude_in_jgdi "qconf_event_client" "-kec fails for all"	;# Create, show and delete event clients
 lappend check_functions "qconf_add_delete_modify_calendar"	;# Add, delete and modify calendar
 append_check_and_exclude_in_jgdi "qconf_add_delete_modify_replace_attr" "Options -Mattr/-sobjl not implemented" ;# Add, delete and modify attributes
-lappend check_functions "qconf_modify_checkpoint" ;# Create, modify and delete checkpoint 
+lappend check_functions "qconf_modify_checkpoint" ;# Create, modify and delete checkpoint
 lappend check_functions "qconf_add_project"        ;# qconf -aprj / qconf -Aprj
 lappend check_functions "qconf_modify_exechost"	;# Modify exec host
 lappend check_functions "qconf_modify_project";# Modify project
@@ -140,7 +139,7 @@ append_check_and_exclude_in_jgdi "qconf_rqs_Xattr" "RQS file format not complete
 append_check_and_exclude_in_jgdi "qconf_rqs_rattr_qmaster_dump" "RQS file format not completetly handled yet"; # verify error handling
 append_check_and_exclude_in_jgdi "qconf_issue_2383" "-mc fails for maintrunk" ;# TS case for IZ 2383
 append_check_and_exclude_in_jgdi "qconf_issue_2445" "Test for IZ 2445" ; # TS case for IZ 2445
-append_check_and_exclude_in_jgdi "qconf_help" ; # TS case for qconf [-help] return values 
+append_check_and_exclude_in_jgdi "qconf_help" ; # TS case for qconf [-help] return values
 append_check_and_exclude_in_jgdi "qconf_Aconf" ; # TS case for qconf -Aconf with already existing configuration
 append_check_and_exclude_in_jgdi "qconf_delete_admin_user" ;# deleting manager or operator must fail for root and admin user
 append_check_and_exclude_in_jgdi "qconf_ke"	;# TS case for qconf -ke with already shutdown daemon
@@ -160,8 +159,8 @@ proc qconf_init_level {} {
 }
 
 proc qconf_setup {} {
-   global ts_config CHECK_USER 
-   global qconf_original_host_groups qconf_original_usersets qconf_orig_queues qconf_project qconf_sched_config qconf_userlist 
+   global ts_config CHECK_USER
+   global qconf_original_host_groups qconf_original_usersets qconf_orig_queues qconf_project qconf_sched_config qconf_userlist
    global backup_allhosts
    global queue_names CHECK_JGDI_ENABLED
    global qconf_setup_complex_backup
@@ -185,7 +184,7 @@ proc qconf_setup {} {
    for {set i 0} {$i < $MAX}  {incr i 1} {
       lappend queue_names "q.$i"
    }
- 
+
    # host group setup for GE >= 6.0
    # we'll create additional host groups later on - remember the list of hostgroups
    # for cleanup
@@ -223,7 +222,6 @@ proc qconf_setup {} {
    ts_log_fine "Save existing scheduler config ...\n"
    get_schedd_config qconf_sched_config
 }
-
 
 proc qconf_cleanup {} {
    global ts_config
@@ -264,7 +262,7 @@ proc qconf_cleanup {} {
 
    # Delete stuff I created
    del_manager "qconf_user" "" "" 0
-   
+
    # Get list of new queues. Those created during the
    # tests will be deleted here.
 
@@ -274,11 +272,10 @@ proc qconf_cleanup {} {
    foreach elem  $qconf_orig_queues {
       foreach new_elem $qconf_new_queues {
          if { $elem == $new_elem } {
-	    continue
+            continue
          } else {
 	         del_queue $new_elem ""
          }
-
       }
    }
 
@@ -301,6 +298,10 @@ proc qconf_cleanup {} {
 
    reset_complex qconf_setup_complex_backup
    unset qconf_setup_complex_backup
+
+   # sometimes exec hosts "stuff" and "universalNOTVALIDvalue" are left over
+   start_sge_bin "qconf" "-de stuff"
+   start_sge_bin "qconf" "-de universalNOTVALIDvalue"
 }
 
 proc qconf_auser {} {
@@ -4969,12 +4970,12 @@ proc qconf_Aconf {} {
    global ts_config
   
    # run qconf -Aconf with an already existing configuration
-   set result [start_sge_bin "qconf" "-Aconf $ts_config(master_host)"]
+   set result [string trim [start_sge_bin "qconf" "-Aconf $ts_config(master_host)"]]
 
    # check that we get the correct error message MSG_ANSWER_CONFIGXALREADYEXISTS_S
-   set expected_message [translate_macro MSG_ANSWER_CONFIGXALREADYEXISTS_S $ts_config(master_host)]
-   if {[string trim $result] != $expected_message} {
-      ts_log_severe "qconf_Aconf test failed.\nExpected qconf to fail, but got result:\n$result"
+   set expected_message "[translate_macro MSG_ANSWER_CONFIGXALREADYEXISTS_S "*"]"
+   if {![string match $expected_message $result]} {
+      ts_log_severe "qconf_Aconf test failed.\nExpected qconf to fail with \"$expected_message\", but got result:\n\"$result\""
    } else {
       ts_log_fine "qconf_Aconf test passed"
    }

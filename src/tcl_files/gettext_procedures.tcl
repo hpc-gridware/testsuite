@@ -1129,26 +1129,23 @@ proc translate { host remove_control_signs is_script no_input_parsing msg_txt { 
          set spec_end__string  [string first "s" $spec_start_string]
          set spec_end__decimal [string first "d" $spec_start_string]
          set spec_end__character [string first "c" $spec_start_string]
-         if { $spec_end__character >= 0 } {
-            if { $spec_end__character < $spec_end__decimal  } {
-               set spec_end__decimal $spec_end__character
-            }
+         set spec_end__float [string first "f" $spec_start_string]
+
+         # find the format specifier at the minimum position
+         set spec_end 99999
+         if {$spec_end__string >= 0} {
+            set spec_end [min $spec_end $spec_end__string]
+         }
+         if {$spec_end__decimal >= 0} {
+            set spec_end [min $spec_end $spec_end__decimal]
+         }
+         if {$spec_end__character >= 0} {
+            set spec_end [min $spec_end $spec_end__character]
+         }
+         if {$spec_end__float >= 0} {
+            set spec_end [min $spec_end $spec_end__float]
          }
 
-         if { $spec_end__string >= 0 && $spec_end__decimal >= 0 } {
-            if { $spec_end__string < $spec_end__decimal } {
-               set spec_end $spec_end__string
-            } else {
-               set spec_end $spec_end__decimal
-            }
-         } else {
-            if { $spec_end__string >= 0 } {
-               set spec_end $spec_end__string
-            }
-            if { $spec_end__decimal >= 0 } {
-               set spec_end $spec_end__decimal
-            }
-         }
          set spec_string [ string range $spec_start_string 0 $spec_end]
          incr spec_end 1
 

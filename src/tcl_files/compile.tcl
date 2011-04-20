@@ -1,6 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
-# expect script 
-# test SGE/SGEEE System
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -29,6 +26,8 @@
 #  Copyright: 2001 by Sun Microsystems, Inc.
 #
 #  All Rights Reserved.
+#
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -864,6 +863,13 @@ proc compile_source { { do_only_hooks 0} } {
             set man_build_host [host_conf_get_java_compile_host]
             if {[lsearch $compile_hosts $man_build_host] >= 0} {
                if {[compile_with_aimk $man_build_host report "man_pages" "-man -catman -univaman"] != 0} {
+                  incr error_count 1
+               }
+            }
+
+            set java_doc_build_host [host_conf_get_java_compile_host]
+            if {[lsearch $compile_hosts $java_doc_build_host] >= 0} {
+               if {[compile_with_aimk $java_doc_build_host report "java_doc" "-javadoc"] != 0} {
                   incr error_count 1
                }
             }
