@@ -28,17 +28,17 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
-
-
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_highest_level
 global check_init_level_procedure
 global check_root_access_needs
@@ -55,9 +55,8 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_highest_level   0
 set check_description(0)  "test correct testsuite display settings for all users"
 
-
 # define test's dependencies
-set check_needs           "" 
+set check_needs           "connection_test"
 
 # define test's procedure order
 set check_functions "display_test_test"
@@ -66,14 +65,12 @@ proc display_test_init_level {} {
    global CHECK_ACT_LEVEL
 
    switch -- $CHECK_ACT_LEVEL {
-      "0" { 
+      0 {
          return 0
-      } 
-   } 
-   return -1  ;# no other level 
+      }
+   }
+   return -1  ;# no other level
 }
-
-
 
 # -------- local test procedures: initialization------------------------------
 
@@ -101,14 +98,13 @@ proc display_test_test {} {
             set error_result($user,$host,out) $output
             set error_result($user,$host,cmd) "${host}(${user}): $xterm_path -bg darkolivegreen -fg navajowhite -sl 5000 -sb -j $display_opt -e sleep 0"
 
-             
             ts_log_fine "xterm returned exit state: $prg_exit_state\nOutput:\n$output"
          } else {
             set disp_result($user,$host) 1
             ts_log_fine "ok"
             # just for fun !!!
             #start_remote_prog $host $user $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e sleep 3" prg_exit_state 25 1
-         } 
+         }
       }
    }
    ts_log_fine [print_xy_array $users $hosts disp_result]

@@ -27,7 +27,7 @@ set check_description(0)  "checks if the users home directories are shared"
 
 
 # define test's dependencies
-set check_needs           "" 
+set check_needs           "connection_test"
 
 # define test's procedure order
 set check_functions "home_dirs_test"
@@ -35,7 +35,7 @@ set check_functions "home_dirs_test"
 proc home_dirs_init_level {} {
    global CHECK_ACT_LEVEL
    switch -- $CHECK_ACT_LEVEL {
-      "0" {
+      0 {
          return 0
       }
    }
@@ -62,10 +62,14 @@ proc home_dirs_test {} {
    set hostlist      $ts_config(execd_hosts)
    lappend hostlist  $ts_config(master_host)
    if {[string compare $ts_config(shadowd_hosts) "none"] != 0} {
-      lappend hostlist  $ts_config(shadowd_hosts)
+      foreach host $ts_config(shadowd_hosts) {
+         lappend hostlist $host
+      }
    }
    if {[string compare $ts_config(submit_only_hosts) "none"] != 0} {
-      lappend hostlist  $ts_config(submit_only_hosts)
+      foreach host $ts_config(submit_only_hosts) {
+         lappend hostlist $host
+      }
    }
 
    # get one host where the test file will be written
