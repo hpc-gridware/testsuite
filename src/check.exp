@@ -1431,9 +1431,9 @@ proc send_mail { address cc subject body } {
    write_remote_file $CHECK_MAILX_HOST $CHECK_USER $tmp_mailfile mail_file_array
  
    if { [string compare $cc "none"] != 0 } {
-      set mail_args "-s \"$new_subject\" -c \"$cc\" \"$address\" < \"$tmp_mailfile\""
+      set mail_args "-S encoding=8bit -s \"$new_subject\" -c \"$cc\" \"$address\" < \"$tmp_mailfile\""
    } else {
-      set mail_args "-s \"$new_subject\" \"$address\" < \"$tmp_mailfile\""
+      set mail_args "-S encoding=8bit -s \"$new_subject\" \"$address\" < \"$tmp_mailfile\""
    }
    set mail_output [start_remote_prog $CHECK_MAILX_HOST $CHECK_USER "mailx" "$mail_args" prg_exit_state 60 0 "" "" 1 0]
    if { $prg_exit_state != 0 } {
@@ -1443,9 +1443,9 @@ proc send_mail { address cc subject body } {
       incr CHECK_MAILS_SENT 1
       if { $CHECK_MAILS_SENT == $CHECK_MAX_ERROR_MAILS } {
          if { [string compare $cc "none"] != 0 } {
-            set mail_args "-s \"max mail count reached\" -c \"$cc\" \"$address\" < \"$tmp_mailfile\""
+            set mail_args "-S encoding=8bit -s \"max mail count reached\" -c \"$cc\" \"$address\" < \"$tmp_mailfile\""
          } else {
-            set mail_args "-s \"max mail count reached\" \"$address\" < \"$tmp_mailfile\""
+            set mail_args "-S encoding=8bit -s \"max mail count reached\" \"$address\" < \"$tmp_mailfile\""
          }
          start_remote_prog $CHECK_MAILX_HOST $CHECK_USER "mailx" "$mail_args" prg_exit_state 60 0 "" "" 1 0
          set CHECK_ENABLE_MAIL 0
