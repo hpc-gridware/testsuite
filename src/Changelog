@@ -7,6 +7,9 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+SH-2011-04-29-1: Bugfix:     increased timeout in qdel test
+                 Review:     DG
+
 SH-2011-04-29-0: Bugfix:     remove CR-characters from the message to avoid that
                              the message is send as attachment
                  Review:     EB

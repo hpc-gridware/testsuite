@@ -29,6 +29,7 @@
 #  All Rights Reserved.
 #
 ##########################################################################
+# Portions of this code are Copyright (c) 2011 Univa Corporation.
 #___INFO__MARK_END__
 
 # define global variable in this namespace
@@ -1850,9 +1851,9 @@ proc qdel_wc_job_range_list {} {
          return
       }
 
-      # Now wait 10 seconds for all jobs to finish.
+      # Now wait 30 seconds for all jobs to finish.
       # If they were not deleted correctly, they would run for 100 seconds.
       # Errors (jobs still running) are generated in wait_for_end_of_all_jobs.
-      wait_for_end_of_all_jobs 10
+      wait_for_end_of_all_jobs 30
    }
 }
