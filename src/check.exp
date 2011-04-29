@@ -1421,8 +1421,8 @@ proc send_mail { address cc subject body } {
       return
    }
 
-   # Remove CR from the body. Otherwise mailx will put the body in an attachment
-   set body [string map {"\x0D" ""} $body]
+   # Remove CR, BEL and ESC from the body. Otherwise mailx will put the body in an attachment
+   set body [string map {"\x0D" "" "\x1B" "" "\x07" ""} $body]
    set tmp_mailfile [get_tmp_file_name $CHECK_MAILX_HOST "mailx" "mail"]
    set act_line 0
    foreach line [split $body "\n"] {

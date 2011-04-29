@@ -7,6 +7,11 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+SH-2011-04-29-3: Bugfix:     remove ESC-character from the message to avoid that
+                             the message is send as attachment
+                 Belongs to: SH-2011-04-29-0
+                 Review:     HP
+
 SH-2011-04-29-1: Bugfix:     increased timeout in qdel test
                  Review:     DG
 
