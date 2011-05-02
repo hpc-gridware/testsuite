@@ -7,6 +7,9 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+JG-2011-05-02-0: Cleanup:    removed sge vs. sgeee code, minor cleanup.
+                 Review:     EB
+
 SH-2011-04-29-3: Bugfix:     remove ESC-character from the message to avoid that
                              the message is send as attachment
                  Belongs to: SH-2011-04-29-0

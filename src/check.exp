@@ -6982,25 +6982,14 @@ proc prepare_packages { } {
       ts_log_fine "done"
 
       # delete untared package files
-      ts_log_file "delete untared package files ..."
+      ts_log_fine "delete untared package files ..."
       foreach file $tar_files {
          set help [ string first ".gz" $file ]
          incr help -1
          set file_no_gz [string range $file 0 $help]
          delete_file $ts_config(product_root)/$file_no_gz
       }
-      ts_log_file "done"
-
-      # checking for correct system
-      set sys_info "unkown"
-      if { [ file isfile $ts_config(product_root)/inst_sge ] } {
-         set sys_info "sge"
-      }
-      if { [ file isfile $ts_config(product_root)/inst_sgeee ] } {
-         set sys_info "sgeee"
-      }
-
-      ts_log_fine "system       : $sys_info"
+      ts_log_fine "done"
 
       # checking for installed archs
       set sys_archs [get_dir_names $ts_config(product_root)/utilbin ]
@@ -7020,12 +7009,6 @@ proc prepare_packages { } {
       # check for testsuite host binaries
       if { $local_arch_ok != 1 } {
          ts_log_severe "host architecture for host $local_host not installed"
-         return -1
-      }
-
-      # check if settings file is correct for the system
-      if { $CHECK_PRODUCT_TYPE != $sys_info } {
-         ts_log_severe "setup entry for product_type is \"$CHECK_PRODUCT_TYPE\", but system is \"$sys_info\""
          return -1
       }
 
@@ -7263,17 +7246,6 @@ proc prepare_packages { } {
          }
       }
 
-      # checking for correct system
-      set sys_info "unkown"
-      if { [ file isfile $ts_config(product_root)/inst_sge ] } {
-         set sys_info "sge"
-      }
-      if { [ file isfile $ts_config(product_root)/inst_sgeee ] } {
-         set sys_info "sgeee"
-      }
-
-      puts "system       : $sys_info"
-
       # checking for installed archs
       set sys_archs [get_dir_names $ts_config(product_root)/utilbin ]
 
@@ -7292,12 +7264,6 @@ proc prepare_packages { } {
       # check for testsuite host binaries
       if { $local_arch_ok != 1 } {
          ts_log_severe "host architecture for host $local_host not installed"
-         return -1
-      }
-
-      # check if settings file is correct for the system
-      if { $CHECK_PRODUCT_TYPE != $sys_info } {
-         ts_log_severe "setup entry for product_type is \"$CHECK_PRODUCT_TYPE\", but system is \"$sys_info\""
          return -1
       }
 
@@ -7372,11 +7338,10 @@ proc check_packages_directory { path { mode "check_both" } { get_files "no" } } 
    set tar_complete 0
    set zip_complete 0
 
-   # we do not need a doc package, so accept 0 as well
-   if { $tar_bin_files  > 0 && $tar_common_files > 0 && $tar_doc_files >= 0 } {
+   if {$tar_bin_files  > 0 && $tar_common_files > 0} {
       set tar_complete 1
    }
-   if { $zip_bin_files  > 0 && $zip_common_files > 0 && $zip_doc_files >= 0 } {
+   if {$zip_bin_files  > 0 && $zip_common_files > 0} {
       set zip_complete 1
    }
 
