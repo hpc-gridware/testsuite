@@ -178,10 +178,10 @@ proc issue_1473_do_qconf {message filename} {
    modify_complex_from_file $filename time 1
    ts_log_fine "time required: $time s"
 
-   set max_time [scale_timeout 4.0]
+   set max_time [scale_timeout 4.0 0 1 0]
 
    if {$time > $max_time} {
-      ts_log_severe "$message may not take that long ($time s)"
+      ts_log_severe "$message may not take that long ($time s), should take max. $max_time s"
    }
 }
 

@@ -2836,7 +2836,7 @@ proc scale_timeout {timeout {does_computation 1} {does_spooling 1} {process_invo
 
          # spooling on NFS mounted filesystem, assume 50% slower spooling
          set fstype [fs_config_get_filesystem_type $spool_dir $ts_config(master_host) 0]
-         if {[string match "nfs*" $spool_dir]} {
+         if {[string match "nfs*" $fstype]} {
             set ret [expr $ret * 1.5]
          }
       }
