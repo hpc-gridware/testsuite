@@ -7,6 +7,9 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+JG-2011-05-03-0: Bugfix:     fixed depencency of issue_3068 test
+                 Review:     DG
+
 HP-2011-05-02-0: Bugfix:     scale_timeout() calculated wrong in case of
                              NFS spooling
                  Review:     SH
