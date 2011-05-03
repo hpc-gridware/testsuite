@@ -57,9 +57,7 @@ set check_highest_level   0
 set check_description(0)  "h_vmem setting as JOB consumable fails to set the virtual memory limit of a job"
 
 # define test's dependencies
-set check_needs "init_core_system" 
-set check_needs "" 
-
+set check_needs "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function "issue_3068_setup"
