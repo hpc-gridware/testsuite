@@ -1,5 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/tclsh
-# expect script 
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -28,6 +26,8 @@
 #  Copyright: 2001 by Sun Microsystems, Inc.
 #
 #  All Rights Reserved.
+#
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -1672,6 +1672,16 @@ proc open_remote_spawn_process { hostname
             return ""
          }
 
+         # switch off history recording
+         set catch_return [catch {
+            ts_send $spawn_id "unset HISTFILE\n"  ;# bash
+            ts_send $spawn_id "unset history\n"   ;# csh
+         } catch_error_message ]
+         if {$catch_return == 1} {
+            ts_log_warning "${error_info}\n$catch_error_message"  $raise_error
+            set connect_errors 1
+         }
+
          # now we should have a running shell
          # try to start a shell script doing some output we'll wait for
          set catch_return [catch {
@@ -1746,7 +1756,7 @@ proc open_remote_spawn_process { hostname
             ts_log_warning "${error_info}\n$catch_error_message"  $raise_error
             set connect_errors 1
          }
-             
+
          # did we have errors?
          if {$connect_errors} {
             catch {close_spawn_id $spawn_id}
