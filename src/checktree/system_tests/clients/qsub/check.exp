@@ -3663,7 +3663,8 @@ proc check_option_pty {} {
       }
    }
 
-   set result [start_remote_prog $ts_config(master_host) $CHECK_USER cat $output_tmpfile exit_code]
+   set host $ts_config(master_host)
+   set result [start_remote_prog $host $CHECK_USER cat $output_tmpfile exit_code]
 
    if {$exit_code != 0 || $result == ""} {
       ts_log_severe "error reading from output file on host $host:\n$result"
@@ -3708,7 +3709,8 @@ proc check_option_pty_no {} {
       }
    }
 
-   set result [start_remote_prog $ts_config(master_host) $CHECK_USER cat $output_tmpfile exit_code]
+   set host $ts_config(master_host)
+   set result [start_remote_prog $host $CHECK_USER cat $output_tmpfile exit_code]
 
    if {$exit_code != 0 || $result == ""} {
       ts_log_severe "error reading from output file on host $host:\n$result"
@@ -3742,7 +3744,8 @@ proc check_option_pty_io {} {
    set output_tmpfile [get_tmp_file_name]
    set input_tmpfile [get_tmp_file_name]
 
-   start_remote_prog $ts_config(master_host) $CHECK_USER echo "TESTINPUT >> $input_tmpfile" exit_code
+   set host $ts_config(master_host)
+   start_remote_prog $host $CHECK_USER echo "TESTINPUT >> $input_tmpfile" exit_code
 
    if {$exit_code != 0} {
       ts_log_severe "Could not write input file"
@@ -3756,7 +3759,7 @@ proc check_option_pty_io {} {
 
    wait_for_jobend $job_id "pty_io" 60
 
-   set result [start_remote_prog $ts_config(master_host) $CHECK_USER cat $output_tmpfile exit_code]
+   set result [start_remote_prog $host $CHECK_USER cat $output_tmpfile exit_code]
 
    if {$exit_code != 0 || $result == ""} {
       ts_log_severe "error reading from output file on host $host:\n$result"
