@@ -1,0 +1,176 @@
+#___INFO__MARK_BEGIN__
+###########################################################################
+#
+#  The contents of this file are made available subject to the terms of the
+#  Apache Software License 2.0 ('The License').
+#  You may not use this file except in compliance with The License.
+#  You may obtain a copy of The License at
+#  http://www.apache.org/licenses/LICENSE-2.0.html
+#
+#  Copyright (c) 2011 Univa Corporation.
+#
+###########################################################################
+#___INFO__MARK_END__
+
+#****** bugs/jira/3479 ******
+#  NAME
+#     ge_3479
+#
+#  FUNCTION
+#     - 2 hosts, test queue having mytestpe and these 2 hosts
+#     - load formula set to -slots
+#     - need to configure slots on host level!
+#     - submit a long running job consuming one slot on host 1
+#     - submit a sequence of short jobs (only one running at a time),
+#       they all have to go to host 2
+#     - bug was that this worked for sequential jobs, but not
+#       for parallel jobs
+#*******************************
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_highest_level
+global check_init_level_procedure
+global check_root_access_needs
+global check_need_running_system
+
+#set check_root_access_needs "yes"
+#set check_need_running_system "no"
+
+# define a level initialization procedure:
+set check_init_level_procedure "ge_3479_init_level"
+
+# define test's name and run level descriptions
+set check_name            "ge_3479"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED SCHEDULER"
+set check_highest_level   0
+set check_description(0)  "check if parallel job goes to least loaded host"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function ge_3479_setup
+set check_cleanup_function ge_3479_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "ge_3479_test"
+
+proc ge_3479_init_level {} {
+   global CHECK_ACT_LEVEL
+
+   switch -- $CHECK_ACT_LEVEL {
+      0 {
+         return 0
+      }
+   }
+
+   return -1  ;# no other level
+}
+
+# -------- local test procedures: initialization------------------------------
+
+proc ge_3479_setup {} {
+   global ts_config
+   global ge_3479_hosts
+
+   # let's assume we need 2 test hosts
+   set ge_3479_hosts [host_conf_get_suited_hosts 2]
+
+   # scheduler config: load_formula + speed up
+   set schedd_conf(load_formula) "-slots"
+   set schedd_conf(flush_submit_sec) 1
+   set_schedd_config schedd_conf
+
+   # test queue
+   set q(pe_list) "mytestpe"
+   add_queue "test" $ge_3479_hosts q
+
+   # slots at host level
+   foreach host $ge_3479_hosts {
+      mod_attr exechost complex_values "slots=10" $host
+   }
+}
+
+proc ge_3479_cleanup {} {
+   global ts_config
+   global ge_3479_hosts
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   reset_schedd_config
+
+   del_queue "test" "" 1 1
+
+   # remove slots at host level
+   foreach host $ge_3479_hosts {
+      del_attr exechost complex_values "slots" $host
+   }
+
+   # unset our test's global variables
+   foreach var "ge_3479_hosts" {
+      unset -nocomplain $var
+   }
+}
+
+proc ge_3479_test_scheduling {job_type expected_host} {
+   global CHECK_ACT_PATH
+
+   set job_script "$CHECK_ACT_PATH/job_host_name.sh"
+   set job_opts "-q test"
+   if {$job_type == "parallel"} {
+      append job_opts " -pe mytestpe 1"
+   }
+
+   ts_log_fine "testing $job_type jobs"
+   for {set i 0} {$i < 10} {incr i} {
+      set output [start_sge_bin "qrsh" "$job_opts $job_script"]
+
+      # job script outputs "<job_id>:<hostname>"
+      set split_output [split [string trim $output] ":"]
+      set qrsh_job_id [lindex $split_output 0]
+      set hostname [lindex $split_output 1]
+
+      # wait for the job to finish before we start the next job
+      wait_for_jobend $qrsh_job_id "" 10 0
+
+      # check if hostname was the expected one
+      ts_log_fine "  $hostname"
+      if {[string first $expected_host $hostname] < 0} {
+         ts_log_severe "job ran on host $hostname but should have run on $expected_host"
+         break
+      }
+   }
+}
+
+proc ge_3479_test {} {
+   global ts_config CHECK_USER
+   global ge_3479_hosts
+
+   set host1 [lindex $ge_3479_hosts 0]
+   set host2 [lindex $ge_3479_hosts 1]
+
+   # submit a long running job to our first queue
+   set job_args "sleep 1000"
+   set job_opts "-b y -o /dev/null -j y -q test -l h=$host1"
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0} {
+      # error has been raised in submit_job
+      return
+   }
+
+   # test sequential jobs
+   ge_3479_test_scheduling "sequential" $host2
+
+   # test parallel jobs
+   ge_3479_test_scheduling "parallel" $host2
+
+   # remove our job blocking the first host
+   delete_job $job_id
+}
