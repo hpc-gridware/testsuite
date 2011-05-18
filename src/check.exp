@@ -7535,7 +7535,12 @@ proc install_binaries {arch_list a_report} {
          -i $sp_id "overriding mode" {
              ts_send $sp_id "y\n"
          }
-         -i $sp_id "_exit_status_" {
+         -i $sp_id "_exit_status_:(*)" {
+            set remote_exit_state [get_string_value_between "(" ")" $expect_out(0,string)]
+            if {$remote_exit_state != 0} {
+               report_task_add_message report $task_nr "distinst exited with exit code $remote_exit_state: $expect_out(buffer)"
+               set was_error 1
+            }
             set done 1
          }
          -i $sp_id eof {
@@ -7551,44 +7556,48 @@ proc install_binaries {arch_list a_report} {
    ts_log_fine " done"
    ts_log_newline
 
-   # Wait until product root/bin directory is available on all used cluster hosts
-   resolve_arch_clear_cache
-   foreach tmp_host [get_all_hosts] {
-      set arch [resolve_arch $tmp_host]
-      set wait_path "$ts_config(product_root)/bin/$arch"
-      wait_for_remote_dir $tmp_host $CHECK_USER $wait_path
-   }
+   if {!$was_error} {
+      # Wait until product root/bin directory is available on all used cluster hosts
+      resolve_arch_clear_cache
+      foreach tmp_host [get_all_hosts] {
+         set arch [resolve_arch $tmp_host]
+         set wait_path "$ts_config(product_root)/bin/$arch"
+         wait_for_remote_dir $tmp_host $CHECK_USER $wait_path
+      }
 
-   foreach elem $ts_config(execd_hosts) {
-      set host_arch [resolve_arch $elem 1]
-      if {[string compare $host_arch ""] != 0 && [string compare $host_arch "unknown"] != 0} {
-         report_task_add_message report $task_nr " arch on host $elem is $host_arch - successfully installed binaries"
-      } else {
-         report_task_add_message report $task_nr " error installing binaries for host $elem"
-         set was_error 1
+      foreach elem $ts_config(execd_hosts) {
+         set host_arch [resolve_arch $elem 1]
+         if {[string compare $host_arch ""] != 0 && [string compare $host_arch "unknown"] != 0} {
+            report_task_add_message report $task_nr " arch on host $elem is $host_arch - successfully installed binaries"
+         } else {
+            report_task_add_message report $task_nr " error installing binaries for host $elem"
+            set was_error 1
+         }
       }
    }
 
-   remote_file_mkdir $install_host "$ts_config(product_root)/man"
-   remote_file_mkdir $install_host "$ts_config(product_root)/catman"
-   remote_file_mkdir $install_host "$ts_config(product_root)/$ts_config(cell)"
-   remote_file_mkdir $install_host "$ts_config(product_root)/$ts_config(cell)/common"
+   if {!$was_error} {
+      remote_file_mkdir $install_host "$ts_config(product_root)/man"
+      remote_file_mkdir $install_host "$ts_config(product_root)/catman"
+      remote_file_mkdir $install_host "$ts_config(product_root)/$ts_config(cell)"
+      remote_file_mkdir $install_host "$ts_config(product_root)/$ts_config(cell)/common"
 
-   # copy pos. host_aliases file to new product root /$SGE_CELL/common
-   if {[is_remote_file $install_host $CHECK_USER "$CHECK_JOB_OUTPUT_DIR/host_aliases"]} {
-        report_task_add_message report $task_nr "restoring host_aliases file ..."
-        set result [start_remote_prog $install_host $CHECK_USER "cp" "$CHECK_JOB_OUTPUT_DIR/host_aliases $ts_config(product_root)/$ts_config(cell)/common/host_aliases"]
-        report_task_add_message report $task_nr $result
-   }
+      # copy pos. host_aliases file to new product root /$SGE_CELL/common
+      if {[is_remote_file $install_host $CHECK_USER "$CHECK_JOB_OUTPUT_DIR/host_aliases"]} {
+           report_task_add_message report $task_nr "restoring host_aliases file ..."
+           set result [start_remote_prog $install_host $CHECK_USER "cp" "$CHECK_JOB_OUTPUT_DIR/host_aliases $ts_config(product_root)/$ts_config(cell)/common/host_aliases"]
+           report_task_add_message report $task_nr $result
+      }
 
-   # For SGE <= 6.2u5: copy source/dist/util/arch to $SGE_ROOT/util.
-   # When we compiled our own binaries (including non distributed architectures like
-   # lx26-x86 or hp11-64, source/dist/util/arch will give us the correct arch strings.
-   if {$ts_config(gridengine_version) <= 62} {
-      set arch_script_src "$ts_config(source_dir)/dist/util/arch"
-      set arch_script_dst "$ts_config(product_root)/util/arch"
-      report_task_add_message report $task_nr "installing $arch_script_src ..."
-      start_remote_prog $install_host $CHECK_USER "cp" "$arch_script_src $arch_script_dst"
+      # For SGE <= 6.2u5: copy source/dist/util/arch to $SGE_ROOT/util.
+      # When we compiled our own binaries (including non distributed architectures like
+      # lx26-x86 or hp11-64, source/dist/util/arch will give us the correct arch strings.
+      if {$ts_config(gridengine_version) <= 62} {
+         set arch_script_src "$ts_config(source_dir)/dist/util/arch"
+         set arch_script_dst "$ts_config(product_root)/util/arch"
+         report_task_add_message report $task_nr "installing $arch_script_src ..."
+         start_remote_prog $install_host $CHECK_USER "cp" "$arch_script_src $arch_script_dst"
+      }
    }
 
    # done - final error handling

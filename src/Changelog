@@ -7,6 +7,10 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+JG-2011-05-18-0: Bugfix:     testsuite doesn't report an error when distinst
+                             exits with exit code 1
+                 Review:     DG
+
 HP-2011-05-18-0: Bugfix:     "gui" test tried to stop and start "N1 Grid Engine
                              Helper Service", which was renamed to "Sun Grid
                              Engine Helper Service" - changed this in the test
