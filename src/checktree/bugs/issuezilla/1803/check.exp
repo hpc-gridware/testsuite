@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -99,50 +101,85 @@ proc issue_1803_init_level {} {
 
 
 proc issue_1803_setup {} {
-   global ts_config  issue_1803_stored_configuration 
+   global ts_config test_host
+   global issue_1803_global_conf issue_1803_host_conf issue_1803_allq_conf
+
    ts_log_fine "\n--- Setup ---"
 
-   ts_log_fine "saving current configuration ..."   
-   get_config issue_1803_stored_configuration
+   # we need just any test execd host for this test
+   set test_host [lindex $ts_config(execd_nodes) 0]
+
+   # we will change the global configuration, the scheduler configuration,
+   # the configuration of the queue "all.q" and possibly the one of the
+   # test execution host, but the scheduler configuration will be restored
+   # to default, so we save the three others here:
+   ts_log_fine "saving current configurations ..."
+   get_config issue_1803_global_conf "global"
+   get_config issue_1803_host_conf $test_host
+   get_queue "all.q" issue_1803_allq_conf
 
    # set short scheduling interval
-   set my_issue_1803_schedd_config(schedule_interval) "0:0:01"
-   set_schedd_config my_issue_1803_schedd_config 
+   set my_schedd_conf(schedule_interval) "0:0:01"
+   set_schedd_config my_schedd_conf
 
    # set prolog and epilog in all.q
-   set my_conf(prolog) "/bin/true prolog"
-   set my_conf(epilog) "/bin/true epilog" 
-   mod_queue all.q  "" my_conf
+   set my_queue_conf(prolog) "/bin/true prolog"
+   set my_queue_conf(epilog) "/bin/true epilog"
+   mod_queue all.q  "" my_queue_conf
 
    # set KEEP_ACTIVE and short load_report_time in execd params
-   get_config curr_configuration
+   # do this in the test exec host config, if there is a execd_params entry,
+   # if there is none, do it in the global config.
+   if {[info exists issue_1803_host_conf(execd_params)] == 1 &&
+       [string compare -nocase "none" $issue_1803_host_conf(execd_params)] != 0} {
+      # there is a host local execd_params list set
+      set local 1
+      set conf_execd_params $issue_1803_host_conf(execd_params)
+   } else {
+      set local 0
+      set conf_execd_params $issue_1803_global_conf(execd_params)
+   }
+
    # Setting execd_params to KEEP_ACTIVE=true
    set my_execd_params "KEEP_ACTIVE=true"
-   if { [string compare -nocase "none" $curr_configuration(execd_params)] != 0 } {
-      append my_execd_params ",$curr_configuration(execd_params)"
+   if {[string compare -nocase "none" $conf_execd_params] != 0} {
+      append my_execd_params ",$conf_execd_params"
    }
-   set myconfig(execd_params) "$my_execd_params"
-   set myconfig(load_report_time) "00:00:01"
+
+   if {$local == 1} {
+      # modify the test exec host config
+      set my_host_conf(execd_params) "$my_execd_params"
+      set_config my_host_conf $test_host
+   } else {
+      # modify the global config
+      set my_global_conf(execd_params) "$my_execd_params"
+   }
    ts_log_fine "setting execd_params to \"$my_execd_params\" ..."
+   set my_global_conf(load_report_time) "00:00:01"
 
    # This procedure waits till all execd gets global config
-   set_config_and_propagate myconfig
+   set_config_and_propagate my_global_conf
 }
 
 proc issue_1803_cleanup {} {
-   global ts_config issue_1803_stored_configuration
+   global test_host
+   global issue_1803_global_conf issue_1803_host_conf issue_1803_allq_conf
 
    ts_log_fine "--- Cleanup ---"
    delete_all_jobs
    wait_for_end_of_all_jobs 60
 
+   # delete the content of the "active_jobs" directory
+   clear_active_jobs_dir $test_host
+
    ts_log_fine "restoring original configuration ..."
    reset_schedd_config
-   reset_config_and_propagate issue_1803_stored_configuration
+   set_config issue_1803_host_conf $test_host
+   reset_config_and_propagate issue_1803_global_conf
 
-   set my_conf(prolog) "none"
-   set my_conf(epilog) "none"
-   mod_queue all.q "" my_conf
+   set my_queue_conf(prolog) $issue_1803_allq_conf(prolog)
+   set my_queue_conf(epilog) $issue_1803_allq_conf(epilog)
+   mod_queue all.q "" my_queue_conf
 
    switch_to_admin_user_system
 }
@@ -150,8 +187,8 @@ proc issue_1803_cleanup {} {
 
 proc issue_1803_test {} {
    global check_description CHECK_USER ts_user_config
-   global ts_config CHECK_ACT_LEVEL
-   global CHECK_DISPLAY_OUTPUT
+   global ts_config test_host
+   global CHECK_ACT_LEVEL CHECK_DISPLAY_OUTPUT
    ts_log_fine $check_description($CHECK_ACT_LEVEL)
 
    set starter_method_list {}
@@ -165,19 +202,17 @@ proc issue_1803_test {} {
       set myconfig(starter_method) "$starter_method"
       ts_log_fine "setting starter_method to \"$starter_method\" ..."
       mod_queue all.q "" myconfig
-      
+
       # init_logfile_wait instead of sleep
 
-      set host [lindex $ts_config(execd_nodes) 0]
-
-      set spool_dir [get_spool_dir $host execd]
+      set spool_dir [get_spool_dir $test_host execd]
 
       set qsub_arg_list {}
-      set csh_path [get_binary_path $host "csh"]
-      lappend qsub_arg_list "-l h=$host -o /dev/null -e /dev/null -S $csh_path"
-      lappend qsub_arg_list "-b y -l h=$host -o /dev/null -e /dev/null -S $csh_path"
-      lappend qsub_arg_list "-l h=$host -S $csh_path"
-      lappend qsub_arg_list "-b y -l h=$host -S $csh_path"
+      set csh_path [get_binary_path $test_host "csh"]
+      lappend qsub_arg_list "-l h=$test_host -o /dev/null -e /dev/null -S $csh_path"
+      lappend qsub_arg_list "-b y -l h=$test_host -o /dev/null -e /dev/null -S $csh_path"
+      lappend qsub_arg_list "-l h=$test_host -S $csh_path"
+      lappend qsub_arg_list "-b y -l h=$test_host -S $csh_path"
 
       foreach job_args $qsub_arg_list {
          set job_id [submit_job "$job_args $ts_config(product_root)/examples/jobs/sleeper.sh 1"]
@@ -189,10 +224,10 @@ proc issue_1803_test {} {
          set jobs_dir "$spool_dir/active_jobs/$job_id.1"
          set trace_file "$jobs_dir/trace"
          ts_log_fine "trace file:       $trace_file"
-         wait_for_remote_file $host $ts_user_config(second_foreign_user) $trace_file
+         wait_for_remote_file $test_host $ts_user_config(second_foreign_user) $trace_file
 
          ts_log_fine "reading $trace_file ..."
-         set trace_output [start_remote_prog $host $ts_user_config(second_foreign_user) cat $trace_file prg_exit_state 10]
+         set trace_output [start_remote_prog $test_host $ts_user_config(second_foreign_user) cat $trace_file prg_exit_state 10]
 #         ts_log_fine "---\n$trace_output\n---"
          set trace_output [split $trace_output "\r\n"]
 
@@ -212,44 +247,44 @@ proc issue_1803_test {} {
 
                   if {$counter == 0} {
                      # prolog
-                     set expected_binary  "/bin/true"
-                     set expected_argument1        "/bin/true"
-                     set expected_argument2        "prolog"
-                     set expected_argument3        ""
+                     set expected_binary    "/bin/true"
+                     set expected_argument1 "/bin/true"
+                     set expected_argument2 "prolog"
+                     set expected_argument3 ""
                   } elseif {$starter_method == "none" && $counter == 1 && [string first "-b y" $job_args] >= 0} {
                      # job
-                     set expected_binary  $csh_path
-                     set expected_argument1        "-csh"
-                     set expected_argument2        "-c"
-                     set expected_argument3        "$ts_config(product_root)/examples/jobs/sleeper.sh 1 "
+                     set expected_binary    $csh_path
+                     set expected_argument1 "-csh"
+                     set expected_argument2 "-c"
+                     set expected_argument3 "$ts_config(product_root)/examples/jobs/sleeper.sh 1 "
                   } elseif {$starter_method == "none" && $counter == 1} {
                      # job
-                     set expected_binary  $csh_path
-                     set expected_argument1        "-csh"
-                     set expected_argument2        "$spool_dir/job_scripts/$job_id"
-                     set expected_argument3        "1"
+                     set expected_binary    $csh_path
+                     set expected_argument1 "-csh"
+                     set expected_argument2 "$spool_dir/job_scripts/$job_id"
+                     set expected_argument3 "1"
                   } elseif {$starter_method != "none" && $counter == 1 && [string first "-b y" $job_args] >= 0} {
                      # job
-                     set expected_binary  "$starter_method"
-                     set expected_argument1        "-$starter_bin"
-                     set expected_argument2        "$ts_config(product_root)/examples/jobs/sleeper.sh"
-                     set expected_argument3        "1"
+                     set expected_binary    "$starter_method"
+                     set expected_argument1 "-$starter_bin"
+                     set expected_argument2 "$ts_config(product_root)/examples/jobs/sleeper.sh"
+                     set expected_argument3 "1"
                   } elseif {$starter_method != "none" && $counter == 1} {
                      # job
-                     set expected_binary  "$starter_method"
-                     set expected_argument1        "-$starter_bin"
-                     set expected_argument2        "$spool_dir/job_scripts/$job_id"
-                     set expected_argument3        "1"
+                     set expected_binary    "$starter_method"
+                     set expected_argument1 "-$starter_bin"
+                     set expected_argument2 "$spool_dir/job_scripts/$job_id"
+                     set expected_argument3 "1"
                   } elseif {$counter == 2} {
                      # epilog
-                     set expected_binary  "/bin/true"
-                     set expected_argument1        "/bin/true"
-                     set expected_argument2        "epilog"
-                     set expected_argument3        ""
+                     set expected_binary    "/bin/true"
+                     set expected_argument1 "/bin/true"
+                     set expected_argument2 "epilog"
+                     set expected_argument3 ""
                   } else {
                      ts_log_severe "shepherd forked more than 3 (epilog, job, prolog) times"
                   }
-               
+
                   ts_log_fine "binary:    \"$binary\""
                   ts_log_fine "argument1: \"$argument1\""
                   ts_log_fine "argument2: \"$argument2\""
@@ -268,7 +303,7 @@ proc issue_1803_test {} {
                      ts_log_severe "$add_error expected arg3 = $expected_argument3, but arg3 = $argument3"
                   }
                   incr counter
-               }   
+               }
             }
          }
       }
