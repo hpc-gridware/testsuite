@@ -28,8 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation.
 ##########################################################################
-# Portions of this software are Copyright (c) 2011 Univa Corporation.
 #___INFO__MARK_END__
 
 # Define the global veriables to give them back
@@ -3748,9 +3748,11 @@ proc check_option_pty_io {} {
    set users [list $CHECK_USER $CHECK_FIRST_FOREIGN_SYSTEM_USER $CHECK_SECOND_FOREIGN_SYSTEM_USER]
 
    foreach user $users {
-      set output_tmpfile "/home/$user/check_option_pty_io_out.tmp"
-      set input_tmpfile "/home/$user/check_option_pty_io_in.tmp"
       set host $ts_config(master_host)
+      set home_dir [get_home_dir_path $user $host]
+      set time [timestamp]
+      set output_tmpfile "$home_dir/check_option_pty_o$time.tmp"
+      set input_tmpfile "$home_dir/check_option_pty_i$time.tmp"
       set uid [get_uid $user $host]
 
       ts_log_info "Starting check_option_pty_io as user $user"
@@ -3761,6 +3763,7 @@ proc check_option_pty_io {} {
          return
       }
 
+      wait_for_file $input_tmpfile 10
       set job_id [submit_job "-N pty_io -o $output_tmpfile -e /dev/null -i $input_tmpfile $ts_config(testsuite_root_dir)/scripts/stdin.sh" 1 60 $host $user]
 
       if {$job_id < 1} {
@@ -3769,6 +3772,7 @@ proc check_option_pty_io {} {
       }
 
       wait_for_jobend $job_id "pty_io" 60
+      wait_for_file $output_tmpfile 10
 
       set result [start_remote_prog $host $user cat $output_tmpfile exit_code]
 
