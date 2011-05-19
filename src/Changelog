@@ -7,6 +7,11 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+SH-2011-05-19-0: Bugfix:     enhance qsub/check_option_pty() test to check if
+                             the output/error files are written by the job user
+                 Issue:      TS-397
+                 Review:     JG
+
 JG-2011-05-18-0: Bugfix:     testsuite doesn't report an error when distinst
                              exits with exit code 1
                  Review:     DG
