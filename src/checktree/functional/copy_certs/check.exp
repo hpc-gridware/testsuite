@@ -172,8 +172,13 @@ proc copy_certs_setup {} {
                continue
             }
             -i $sp_id $CSP_COPY_CMD {
-               ts_log_fine "\n -->testsuite: sending y (yes)"
-               set input "y\n"
+               if {$ts_config(connection_type) == "ssh"} {
+                  ts_log_fine "\n -->testsuite: sending n (no)"
+                  set input "n\n"
+               } else {
+                  ts_log_fine "\n -->testsuite: sending y (yes)"
+                  set input "y\n"
+               }
      
                if {$do_log_output == 1} {
                   ts_log_fine "-->testsuite: press RETURN (CSP_COPY_CMD)"

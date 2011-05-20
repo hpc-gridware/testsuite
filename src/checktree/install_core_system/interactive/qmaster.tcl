@@ -1065,7 +1065,11 @@ proc install_qmaster {{report_var report}} {
             continue
          }
          -i $sp_id $CSP_COPY_CMD {
-            install_send_answer $sp_id $ANSWER_YES "15"
+            if {$ts_config(connection_type) == "ssh"} {
+               install_send_answer $sp_id $ANSWER_NO "15"
+            } else {
+               install_send_answer $sp_id $ANSWER_YES "15"
+            }
             continue
          }
          -i $sp_id $CSP_COPY_FAILED {
