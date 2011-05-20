@@ -7,6 +7,10 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+SH-2011-05-20-0: Bugfix:     copy csp-certifactes with ssh when configured
+                             instead of rsh
+                 Review:     HP
+
 HP-2011-05-19-0: Bugfix:     fixed setup and cleanup of issue_1803 test
                  Issue:      TS-399
                  Review:     SH
