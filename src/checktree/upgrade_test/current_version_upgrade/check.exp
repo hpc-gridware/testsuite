@@ -1964,15 +1964,19 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
       }
 
       -i $sp_id -- $CSP_COPY_CMD {
-         if {$do_log_output == 1} {
-              puts "press RETURN"
-              set anykey [wait_for_enter 1]
-         }
          if {$ts_config(connection_type) == ssh} {
             ts_log_fine "\n -->testsuite: sending >$ANSWER_NO<"
+            if {$do_log_output == 1} {
+                 puts "press RETURN"
+                 set anykey [wait_for_enter 1]
+            }
             ts_send $sp_id "$ANSWER_NO\n"
          } else {
             ts_log_fine "\n -->testsuite: sending >$ANSWER_YES<"
+            if {$do_log_output == 1} {
+                 puts "press RETURN"
+                 set anykey [wait_for_enter 1]
+            }
             ts_send $sp_id "$ANSWER_YES\n"
          }
          append install_output $expect_out(buffer)
