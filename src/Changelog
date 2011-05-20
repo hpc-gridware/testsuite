@@ -7,6 +7,31 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+HP-2011-05-19-0: Bugfix:     fixed setup and cleanup of issue_1803 test
+                 Issue:      TS-399
+                 Review:     SH
+
+SH-2011-05-19-0: Bugfix:     enhance qsub/check_option_pty() test to check if
+                             the output/error files are written by the job user
+                 Issue:      TS-397
+                 Review:     JG
+
+JG-2011-05-18-0: Bugfix:     testsuite doesn't report an error when distinst
+                             exits with exit code 1
+                 Review:     DG
+
+HP-2011-05-18-0: Bugfix:     "gui" test tried to stop and start "N1 Grid Engine
+                             Helper Service", which was renamed to "Sun Grid
+                             Engine Helper Service" - changed this in the test
+                 Review:     DG
+
+JG-2011-05-16-0: Enhancem.:  new test bugs/jira/3479, some cleanup
+                 Review:     EB
+
+HP-2011-05-09-0: Bugfix:     error output of check_option_pty*() function used
+                             uninitialized $host variable
+                 Review:     SH
+
 JG-2011-05-05-0: Enhancem.   disable history in sessions started by testsuite
                  Issue:      TS-392
                  Review:     HP

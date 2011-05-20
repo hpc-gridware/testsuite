@@ -1959,7 +1959,7 @@ proc open_remote_spawn_process { hostname
    } ;# opening new connection
 
    # If we call the command for the first time, make sure it is available on the remote machine
-   # we wait for some time, as the it might take some time until the command is visible (NFS)
+   # we wait for some time, as it might take some time until the command is visible (NFS)
    if {$re_use_script == 0} {
       set catch_return [catch {
          ts_send $spawn_id "$testsuite_root_dir/scripts/file_check.sh $script_name\n" $hostname

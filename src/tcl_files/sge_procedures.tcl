@@ -3612,7 +3612,7 @@ proc wait_for_end_of_all_jobs {{seconds 60} {raise_error 1} {check_spool_dir 1}}
             }
             while {1} {
                # to be sure we also check that no job is spooled somewere
-               set spooled_jobs [get_spooled_jobs] 
+               set spooled_jobs [get_spooled_jobs]
                if {[llength $spooled_jobs] == 0} {
                   return 0
                } else {

@@ -117,14 +117,14 @@ proc SGE_Helper_Service_cleanup  {} {
    reset_config qacct_reporting_backup
 
    if {$SGE_Helper_Service_was_running == 0} {
-      # stop "N1 Grid Engine Helper Service" again on the exec host.
+      # stop "Sun Grid Engine Helper Service" again on the exec host.
       if {[stop_SGE_Helper_Service] != 0} {
-         ts_log_severe "error stopping N1 Grid Engine Helper Service"
+         ts_log_severe "error stopping Sun Grid Engine Helper Service"
       }
    } else {
-      # start "N1 Grid Engine Helper Service" again on the exec host
+      # start "Sun Grid Engine Helper Service" again on the exec host
       if {[start_SGE_Helper_Service] != 0} {
-         ts_log_severe "error starting N1 Grid Engine Helper Service"
+         ts_log_severe "error starting Sun Grid Engine Helper Service"
       }
    }
 }
@@ -151,13 +151,13 @@ proc SGE_Helper_Service_cleanup  {} {
 #*******************************************************************************
 proc start_SGE_Helper_Service {} {
    ts_log_newline
-   ts_log_fine "starting N1 Grid Engine Helper Service"
+   ts_log_fine "starting Sun Grid Engine Helper Service"
    
    set ret [control_SGE_Helper_Service 1]
    if {$ret == 0} {
-      ts_log_fine "N1 Grid Engine Helper Service is running"
+      ts_log_fine "Sun Grid Engine Helper Service is running"
    } else {
-      ts_log_fine "N1 Grid Engine Helper Service is not running! Test failed!"
+      ts_log_fine "Sun Grid Engine Helper Service is not running! Test failed!"
    }
    return $ret
 }
@@ -182,12 +182,12 @@ proc start_SGE_Helper_Service {} {
 #*******************************************************************************
 proc stop_SGE_Helper_Service {} {
    ts_log_newline
-   ts_log_fine "stopping N1 Grid Engine Helper Service"
+   ts_log_fine "stopping Sun Grid Engine Helper Service"
    set ret [control_SGE_Helper_Service 0]
    if {$ret == 0} {
-      ts_log_fine "N1 Grid Engine Helper Service is stopped"
+      ts_log_fine "Sun Grid Engine Helper Service is stopped"
    } else {
-      ts_log_fine "N1 Grid Engine Helper Service is not stopped! \
+      ts_log_fine "Sun Grid Engine Helper Service is not stopped! \
                           Test failed!"
    }
    return $ret
@@ -236,7 +236,7 @@ proc control_SGE_Helper_Service {start} {
 
    start_remote_prog $host "root"\
       /dev/fs/C/WINDOWS/system32/net.exe\
-      "$cmd \"N1 Grid Engine Helper Service\""
+      "$cmd \"Sun Grid Engine Helper Service\""
 
    set count 0
    while {[is_SGE_Helper_Service_running $host] != $start
@@ -397,7 +397,7 @@ proc display_win_gui {} {
    #
    # This table is the exit_status matrix of GUI_test.exe, showing the expected
    # exit stati depending on the requested values for "display_win_gui" complex
-   # variable and depending on if the "N1 Grid Engine Helper Service" is running
+   # variable and depending on if the "Sun Grid Engine Helper Service" is running
    # or stopped on the exec host.
    # The variables "requests" and "expected" express this matrix, too.
    # "expected" is first the left column (true and false each requested in
@@ -409,9 +409,9 @@ proc display_win_gui {} {
 
    set SGE_Helper_Servcie_was_running [is_SGE_Helper_Service_running $host]
 
-   # make sure that the "N1 Grid Engine Helper Service" runs on the exec host.
+   # make sure that the "Sun Grid Engine Helper Service" runs on the exec host.
    if {[start_SGE_Helper_Service] != 0} {
-      ts_log_severe "error starting N1 Grid Engine Helper Service"
+      ts_log_severe "error starting Sun Grid Engine Helper Service"
    }
    
    # do all submits according to the table above and check "failed" and
@@ -420,11 +420,11 @@ proc display_win_gui {} {
 
    foreach request $requests {
       if {$i == 5} {
-         # stop the "N1 Grid Engine Helper Service" for the second half
+         # stop the "Sun Grid Engine Helper Service" for the second half
          # of the submits.
 
          if {[stop_SGE_Helper_Service] != 0} {
-            ts_log_severe "error stopping N1 Grid Engine Helper Service"
+            ts_log_severe "error stopping Sun Grid Engine Helper Service"
          }
       }
 
@@ -444,7 +444,7 @@ proc display_win_gui {} {
             ts_log_fine "expected that this job doesn't get scheduled, and it\
                   wasn't scheduled. deleting it."
             delete_all_jobs
-            wait_for_job_end 60
+            wait_for_job_end $job_id 60
          } else {
             ts_log_severe "job was not scheduled to exec host"
          }
@@ -476,9 +476,9 @@ proc display_win_gui {} {
       incr i
    }
    if {$SGE_Helper_Servcie_was_running == 1} {
-      # start "N1 Grid Engine Helper Service" again on the exec host.
+      # start "Sun Grid Engine Helper Service" again on the exec host.
       if {[start_SGE_Helper_Service] != 0} {
-         ts_log_severe "error starting N1 Grid Engine Helper Service"
+         ts_log_severe "error starting Sun Grid Engine Helper Service"
       }
    }
 }
@@ -523,10 +523,10 @@ proc service_error_handling {} {
    # 1. If the SGE_Helper_Service.exe is not running, the job mustn't
    #    be scheduled.
 
-   # make sure that the "N1 Grid Engine Helper Service" doesn't run
+   # make sure that the "Sun Grid Engine Helper Service" doesn't run
    # on the exec host.
    if {[stop_SGE_Helper_Service] != 0} {
-      ts_log_severe "error stopping N1 Grid Engine Helper Service"
+      ts_log_severe "error stopping Sun Grid Engine Helper Service"
    }
 
    set submit_command [get_display_win_gui_parameter]
@@ -552,10 +552,10 @@ proc service_error_handling {} {
    # 2) the job must be set into error state when
    #    a) the job binary doesn't exist
 
-   # make sure that the "N1 Grid Engine Helper Service" runs
+   # make sure that the "Sun Grid Engine Helper Service" runs
    # on the exec host.
    if {[start_SGE_Helper_Service] != 0} {
-      ts_log_severe "error starting N1 Grid Engine Helper Service"
+      ts_log_severe "error starting Sun Grid Engine Helper Service"
    }
 
    set submit_command [get_display_win_gui_parameter]

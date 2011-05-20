@@ -28,6 +28,7 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation.
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -3663,7 +3664,8 @@ proc check_option_pty {} {
       }
    }
 
-   set result [start_remote_prog $ts_config(master_host) $CHECK_USER cat $output_tmpfile exit_code]
+   set host $ts_config(master_host)
+   set result [start_remote_prog $host $CHECK_USER cat $output_tmpfile exit_code]
 
    if {$exit_code != 0 || $result == ""} {
       ts_log_severe "error reading from output file on host $host:\n$result"
@@ -3708,7 +3710,8 @@ proc check_option_pty_no {} {
       }
    }
 
-   set result [start_remote_prog $ts_config(master_host) $CHECK_USER cat $output_tmpfile exit_code]
+   set host $ts_config(master_host)
+   set result [start_remote_prog $host $CHECK_USER cat $output_tmpfile exit_code]
 
    if {$exit_code != 0 || $result == ""} {
       ts_log_severe "error reading from output file on host $host:\n$result"
@@ -3733,42 +3736,68 @@ proc check_option_pty_no {} {
 #     2. Submit job with pty -yes and the generated input-file.
 #     3. Scan the output file for the content of the input file and the
 #        additional ouput of the test-script.
+#     4. Check if output file has the right owner
 #
 #*******************************************************************************
 proc check_option_pty_io {} {
    global ts_config
    global CHECK_USER
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global CHECK_SECOND_FOREIGN_SYSTEM_USER
 
-   set output_tmpfile [get_tmp_file_name]
-   set input_tmpfile [get_tmp_file_name]
+   set users [list $CHECK_USER $CHECK_FIRST_FOREIGN_SYSTEM_USER $CHECK_SECOND_FOREIGN_SYSTEM_USER]
 
-   start_remote_prog $ts_config(master_host) $CHECK_USER echo "TESTINPUT >> $input_tmpfile" exit_code
+   foreach user $users {
+      set host $ts_config(master_host)
+      set home_dir [get_home_dir_path $user $host]
+      set time [timestamp]
+      set output_tmpfile "$home_dir/check_option_pty_o$time.tmp"
+      set input_tmpfile "$home_dir/check_option_pty_i$time.tmp"
+      set uid [get_uid $user $host]
 
-   if {$exit_code != 0} {
-      ts_log_severe "Could not write input file"
-   }
+      ts_log_info "Starting check_option_pty_io as user $user"
+      start_remote_prog $host $user echo "TESTINPUT >> $input_tmpfile" exit_code
 
-   set job_id [submit_job "-N pty_io -o $output_tmpfile -e /dev/null -i $input_tmpfile $ts_config(testsuite_root_dir)/scripts/stdin.sh"]
-
-   if {$job_id < 1} {
-      return
-   }
-
-   wait_for_jobend $job_id "pty_io" 60
-
-   set result [start_remote_prog $ts_config(master_host) $CHECK_USER cat $output_tmpfile exit_code]
-
-   if {$exit_code != 0 || $result == ""} {
-      ts_log_severe "error reading from output file on host $host:\n$result"
-   } else {
-      if {[string first "Output to stdout: TESTINPUT" $result] != -1} {
-         ts_log_info "Found expected output"
-      } else {
-         ts_log_severe "Input-file was not parsed correctly! Result was: $result"
+      if {$exit_code != 0} {
+         ts_log_severe "Could not write input file"
+         return
       }
-   }
 
-   #clean up
-   file delete $output_tmpfile
-   file delete $input_tmpfile
+      wait_for_file $input_tmpfile 10
+      set job_id [submit_job "-N pty_io -o $output_tmpfile -e /dev/null -i $input_tmpfile $ts_config(testsuite_root_dir)/scripts/stdin.sh" 1 60 $host $user]
+
+      if {$job_id < 1} {
+         start_remote_prog $host $user rm $input_tmpfile
+         return
+      }
+
+      wait_for_jobend $job_id "pty_io" 60
+      wait_for_file $output_tmpfile 10
+
+      set result [start_remote_prog $host $user cat $output_tmpfile exit_code]
+
+      if {$exit_code != 0 || $result == ""} {
+         ts_log_severe "error reading from output file on host $host:\n$result"
+      } else {
+         if {[string first "Output to stdout: TESTINPUT" $result] != -1} {
+            ts_log_info "Found expected output"
+         } else {
+            ts_log_severe "Input-file was not parsed correctly! Result was: $result"
+         }
+      }
+
+      #check output-file if it has the right owner
+      if {[file exists $output_tmpfile] == 1} {
+         file stat $output_tmpfile file_stat
+         if {$uid != $file_stat(uid)} {
+            ts_log_severe "$output_tmpfile has the wrong owner! It is $uid but should be $file_stat(uid)"
+         }
+      } else {
+         ts_log_severe "Output-file is missing"
+      }
+
+      #clean up
+      start_remote_prog $host $user rm $output_tmpfile
+      start_remote_prog $host $user rm $input_tmpfile
+   }
 }

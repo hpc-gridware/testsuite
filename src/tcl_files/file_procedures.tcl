@@ -29,6 +29,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -5170,3 +5172,65 @@ proc get_release_packages { host user dest_path info_file nr} {
    ts_log_fine "unexpected error"
    return 0
 }
+
+#****** file_procedures/clear_active_jobs_dir() ********************************
+#  NAME
+#     clear_active_jobs_dir() -- deletes all subdirs in the active_jobs dir
+#
+#  SYNOPSIS
+#     clear_active_jobs_dir {host}
+#
+#  FUNCTION
+#     Deletes all subdirs in the active_jobs dir in the execution daemons spool
+#     directory. This is necessary when the execd_params KEEP_ACTIVE=TRUE was
+#     set and jobs were executed on the host.
+#     The directories are deleted from the given host.
+#
+#  INPUTS
+#     host - hostname where the spool_dir is available
+#
+#  RESULT
+#     0 on success, 1 on error
+#
+#*******************************************************************************
+proc clear_active_jobs_dir {host} {
+   global CHECK_USER
+
+   set ret 0
+   set prg_exit_state 0
+   set spool_dir [get_spool_dir $host execd]
+
+   # check if spool dir is configured
+   if {[string length $spool_dir] == 0} {
+      ts_log_severe "Couldn't determine spool directory of host $host"
+      set ret 1
+   }
+
+   # check if there are files and/or subdirectories in the active_jobs dir
+   # "ls $spool_dir/active_jobs" will return nothing if the directory is empty
+   set rm_output [start_remote_prog $host $CHECK_USER "ls" "$spool_dir/active_jobs"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "ls $spool_dir/active_jobs/* failed on host $host\noutput:\n$rm_output"
+      set ret 1
+   } elseif {[string length $rm_output] == 0} {
+      ts_log_finest "No files and subfolders in $spool_dir/active_jobs - have nothing to delete!"
+   } else {
+      if {[resolve_arch $host] == "win32-x86"} {
+         # "root" will get mapped to the local administrator by start_remote_prog
+         set rm_user "root"
+      } else {
+         # on Unix/Linux, the $CHECK_USER should have appropriate permissions to delete the files
+         set rm_user $CHECK_USER
+      }
+      # delete the files and/or subdirs in the active_jobs directory
+      set rm_output [start_remote_prog $host $rm_user "rm" "-rf $spool_dir/active_jobs/*" prg_exit_state]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "Couldn't delete $spool_dir/active_jobs/* on host $host\noutput:\n$rm_output"
+         set ret 1
+      } else {
+         ts_log_finer "Deleted all files and subfolders in $spool_dir/active_jobs"
+      }
+   }
+   return $ret
+}
+
