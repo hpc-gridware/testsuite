@@ -7,6 +7,9 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+HP-2011-05-25-0: Bugfix:     changed the way loadcheck is called on Windows
+                 Review:     SH
+
 SH-2011-05-20-0: Bugfix:     copy csp-certifactes with ssh when configured
                              instead of rsh
                  Review:     HP

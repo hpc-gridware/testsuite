@@ -64,41 +64,42 @@ proc loadcheck_init_level {} {
 
 #                                                             max. column:     |
 #****** loadcheck/get_numb_proc() ******
-# 
+#
 #  NAME
-#     get_numb_proc -- ??? 
+#     get_numb_proc -- detects the number of processors on the given host
 #
 #  SYNOPSIS
-#     get_numb_proc { hostname } 
+#     get_numb_proc { hostname }
 #
 #  FUNCTION
-#     ??? 
+#     Calls the loadcheck binary on the given host and returns the number of
+#     processors it reports.
 #
 #  INPUTS
-#     hostname - ??? 
+#     hostname - name of the host whose number of processors should be
+#                detected by the loadcheck binary
 #
 #  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
+#     0    - error
+#     1-n  - number of processors detected on the give host
 #*******************************
 proc get_numb_proc {hostname} {
    global ts_config CHECK_USER
 
-   set result ""
    set remote_arch [resolve_arch $hostname]
+   if {$remote_arch == "win32-x86"} {
+      set loadcheck_name "loadcheck.exe"
+   } else {
+      set loadcheck_name "loadcheck"
+   }
 
-   set result [start_remote_prog $hostname $CHECK_USER "$ts_config(product_root)/utilbin/$remote_arch/loadcheck" ""]
+   set loadcheck_path "$ts_config(product_root)/utilbin/$remote_arch/$loadcheck_name"
+   set result [start_remote_prog $hostname $CHECK_USER "$loadcheck_path" "" prg_exit_state]
+
+   if {$prg_exit_state != 0} {
+      ts_log_severe "error running $loadcheck_path binary:\n$result"
+      return 0
+   }
 
    # split each line as listelement
    set help [split $result "\n"]
@@ -113,7 +114,7 @@ proc get_numb_proc {hostname} {
       }
    }
 
-   return $numproc    
+   return $numproc
 }
 
 
