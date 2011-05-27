@@ -152,6 +152,7 @@ set module_name "sge_procedures.tcl"
 # get_event_client_list() -- get the event client list
 # trigger_scheduling() -- trigger a scheduler run
 # wait_for_job_end() -- waits for a job to leave qmaster
+# wait_for_online_usage() -- waits until a job reports online cpu usage
 #
 #****** sge_procedures/test() ******
 # 
@@ -3228,6 +3229,80 @@ proc wait_for_load_from_all_queues { seconds {raise_error 1} } {
    }
 }
 
+#                                                            max. column:     |
+#****** ge_3747/wait_for_online_usage() ******************************
+#
+#  NAME
+#     wait_for_online_usage() -- wait until a job reports online usage
+#
+#  SYNOPSIS
+#     proc wait_for_online_usage {job_id {mytimeout 60}}
+#
+#  FUNCTION
+#     Waits until a given job reports online CPU usage. Repeatedly calls
+#     "qstat -j <job_id>" and waits until the "usage    1" contains a
+#     CPU value that is neither "N/A" nor "00:00:00".
+#
+#  INPUTS
+#     job_id    - the job which should be observed
+#     mytimeout - the number of seconds this function should wait for
+#                 online usage to be reported
+#
+#  RESULT
+#     0 - No online usage was reported within timeout seconds
+#     1 - Online usage was reported
+#
+#***************************************************************************
+proc wait_for_online_usage {job_id {mytimeout 60}} {
+   # we can't use the index "usage    1" directly in TCL-arrays because of
+   # the spaces, have to use it in a variable
+   set usage_name "usage    1"
+   set ret        1
+   set time       [timestamp]
+
+   while {1} {
+      set usage ""
+      # get "qstat -j $job_id" output
+      if {[get_qstat_j_info $job_id] == 1} {
+         if {[info exists qstat_j_info($usage_name)] == 1} {
+            # if usage is already reported, save it in a variable.
+            # The code below is prepared for an empty string in $usage
+            set usage $qstat_j_info($usage_name)
+         }
+      }
+
+      # evaluate usage only if it already has been reported
+      if {[string length $usage] > 0} {
+         set cpu_index [string first "cpu=" $usage]
+         set cpu_usage [string range $usage $cpu_index+4 $cpu_index+11]
+         set remaining_time [expr $time + $mytimeout - [timestamp]]
+         ts_log_fine "cpu_usage is $cpu_usage, remaining time is $remaining_time s"
+
+         # transform format 00:01:17 in 77 seconds
+         set cpu_seconds [transform_cpu $cpu_usage]
+         if {[string equal $cpu_seconds "NA"] == 0} {
+            # the cpu usage string contains a value
+            if {$cpu_seconds == 0} {
+               # in principle cpu usage gets reported, but it is still 00:00:00
+               ts_log_finer "got no online usage value so far"
+            } else {
+               # something like 00:00:17 is reported!
+               ts_log_fine "got online usage, fine!"
+               break
+            }
+         }
+      }
+      # check if timeout time span is already reached
+      set runtime [expr [timestamp] - $time]
+      if {$runtime > 60} {
+         ts_log_fine "got no online usage after 60 s!"
+         set ret 0
+         break
+      }
+      after 2000
+   }
+   return $ret
+}
 
 #****** sge_procedures/wait_for_connected_scheduler() **************************
 #  NAME

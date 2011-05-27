@@ -1,0 +1,166 @@
+#___INFO__MARK_BEGIN__
+###########################################################################
+#
+#  The contents of this file are made available subject to the terms of the
+#  Apache Software License 2.0 ('The License').
+#  You may not use this file except in compliance with The License.
+#  You may obtain a copy of The License at
+#  http://www.apache.org/licenses/LICENSE-2.0.html
+#
+#  Copyright (c) 2011 Univa Corporation.
+#
+###########################################################################
+#___INFO__MARK_END__
+
+#****** bugs/jira/3474 ******
+#  NAME
+#    ge_3474
+#
+#  FUNCTION
+#    If the "execd_params" setting "PDC_INTERVAL" is set to "NEVER" in the
+#    global or host local configuration, the online usage of running jobs
+#    shouldn't be acquired and reported.
+#    This was ignored, even with "PDC_INTERVAL=NEVER", the online usage was
+#    reported.
+#    The test does first set "PDC_INTERVAL=5" which triggers reporting
+#    the online usage every 5 seconds and checks if jobs report online
+#    usage. If they do, the test sets "PDC_INTERVAL=NEVER" - now jobs
+#    should report no online usage anymore.
+#*******************************
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_highest_level
+global check_init_level_procedure
+global check_root_access_needs
+global check_need_running_system
+
+set check_root_access_needs "no"
+set check_need_running_system "yes"
+
+# define a level initialization procedure:
+set check_init_level_procedure "ge_3474_init_level"
+
+# define test's name and run level descriptions
+set check_name            "ge_3474"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED SCHEDULER"
+set check_highest_level   0
+set check_description(0)  "check if PDC_INTERVAL=NEVER disables online job usage"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function ge_3474_setup
+set check_cleanup_function ge_3474_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "ge_3474_test"
+
+proc ge_3474_init_level {} {
+   global CHECK_ACT_LEVEL
+
+   switch -- $CHECK_ACT_LEVEL {
+      0 {
+         return 0
+      }
+   }
+   return -1  ;# no other level
+}
+
+# -------- local test procedures: initialization------------------------------
+
+proc ge_3474_setup {} {
+   global ge_3474_host_conf
+   global ge_3474_host
+
+   # get a random test host
+   set ge_3474_host [host_conf_get_suited_hosts 1 {} {} {win32-x86}]
+
+   # backup the host local configuration of this host
+   get_config ge_3474_host_conf $ge_3474_host
+
+   # set short scheduling interval
+   set my_schedd_conf(schedule_interval) "0:0:01"
+   set_schedd_config my_schedd_conf
+}
+
+proc ge_3474_cleanup {} {
+   global ge_3474_host_conf
+   global ge_3474_host
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # restore scheduler configuration
+   reset_schedd_config
+
+   # restore test host local configuration
+   set_config_and_propagate ge_3474_host_conf $ge_3474_host 1
+}
+
+proc ge_3474_test {} {
+   global ts_config
+   global ge_3474_host ge_3474_host_conf
+
+   # set a short load report time and PDC_INTERVAL=5 for the test host
+   # in its local cluster configuration
+   set conf_execd_params ""
+   if {[info exists ge_3474_host_conf(execd_params)] == 1} {
+      set conf_execd_params $ge_3474_host_conf(execd_params)
+      append conf_execd_params ","
+   }
+   append conf_execd_params "PDC_INTERVAL=5"
+   set my_host_conf(execd_params) "$conf_execd_params"
+   set my_host_conf(load_report_time) "0:0:03"
+   set_config_and_propagate my_host_conf $ge_3474_host
+
+   # submit a job to this host
+   set job_args "-l h=$ge_3474_host $ts_config(product_root)/examples/jobs/worker.sh 3600"
+   set job_id [submit_job "$job_args"]
+
+   # check if it reports online usage
+   set ret [wait_for_online_usage $job_id]
+   if {$ret == 0} {
+      ts_log_severe "Didn't get a online usage within timeout! Stopping test!"
+   } else {
+      ts_log_fine "Got online usage! Fine!"
+   }
+
+   # delete job
+   delete_job $job_id
+   wait_for_end_of_all_jobs
+
+   if {$ret == 1} {
+      # set PDC_INTERVAL=NEVER in the execution host local configuration
+      set conf_execd_params ""
+      if {[info exists ge_3474_host_conf(execd_params)] == 1} {
+         set conf_execd_params $ge_3474_host_conf(execd_params)
+         append conf_execd_params ","
+      }
+      append conf_execd_params "PDC_INTERVAL=NEVER"
+      set my_host_conf(execd_params) "$conf_execd_params"
+      set_config_and_propagate my_host_conf $ge_3474_host
+
+      # submit a job to this host
+      set job_args "-l h=$ge_3474_host $ts_config(product_root)/examples/jobs/worker.sh 3600"
+      set job_id [submit_job "$job_args"]
+
+      # check if it doesn't report online usage
+      set ret [wait_for_online_usage $job_id]
+      if {$ret == 1} {
+         ts_log_severe "Got an online usage! Test failed!"
+      } else {
+         ts_log_fine "Got no online usage within timeout of 60 s! Fine!"
+      }
+
+      # delete job
+      delete_job $job_id
+      wait_for_end_of_all_jobs
+   }
+}
