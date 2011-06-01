@@ -408,22 +408,23 @@ proc compile_depend { compile_hosts a_report do_clean } {
       }
    }
 
-   if { $do_clean } {
+   if {$do_clean} {
       set task_nr [report_create_task report "only_depend_clean" $depend_host_name]
       # clean the depencency building program
       set my_compile_options [get_compile_options_string]
-      report_task_add_message report $task_nr "-> starting aimk -only-depend clean on host $depend_host_name ..."
+      set aimk_options "$my_compile_options -only-depend clean"
+      report_task_add_message report $task_nr "-> starting aimk $aimk_options on host $depend_host_name ..."
 
-      set output [start_remote_prog $depend_host_name $CHECK_USER "./aimk" "-only-depend clean" prg_exit_state 60 0 $ts_config(source_dir) "" 1 0 ]
+      set output [start_remote_prog $depend_host_name $CHECK_USER "./aimk" $aimk_options prg_exit_state 60 0 $ts_config(source_dir) "" 1 0]
       report_task_add_message report $task_nr "------------------------------------------"
       report_task_add_message report $task_nr "return state: $prg_exit_state"
       report_task_add_message report $task_nr "------------------------------------------"
       report_task_add_message report $task_nr "output:\n$output"
       report_task_add_message report $task_nr "------------------------------------------"
       report_finish_task report $task_nr $prg_exit_state
-      if { $prg_exit_state != 0 } {
+      if {$prg_exit_state != 0} {
          report_add_message report "------------------------------------------"
-         report_add_message report "Error: aimk -only-depend clean failed (exit code $prg_exit_state)"
+         report_add_message report "Error: aimk $aimk_options failed (exit code $prg_exit_state)"
          report_add_message report "------------------------------------------"
          return -1
       }
@@ -433,18 +434,19 @@ proc compile_depend { compile_hosts a_report do_clean } {
    set task_nr [report_create_task report "only_depend" $depend_host_name]
    # build the depencency building program
    set my_compile_options [get_compile_options_string]
-   report_task_add_message report $task_nr "-> starting aimk -only-depend on host $depend_host_name ..."
+   set aimk_options "$my_compile_options -only-depend"
+   report_task_add_message report $task_nr "-> starting aimk $aimk_options on host $depend_host_name ..."
 
-   set output [start_remote_prog $depend_host_name $CHECK_USER "./aimk" "-only-depend" prg_exit_state 60 0 $ts_config(source_dir) "" 1 0 ]
+   set output [start_remote_prog $depend_host_name $CHECK_USER "./aimk" $aimk_options prg_exit_state 60 0 $ts_config(source_dir) "" 1 0 ]
    report_task_add_message report $task_nr "------------------------------------------"
    report_task_add_message report $task_nr "return state: $prg_exit_state"
    report_task_add_message report $task_nr "------------------------------------------"
    report_task_add_message report $task_nr "output:\n$output"
    report_task_add_message report $task_nr "------------------------------------------"
    report_finish_task report $task_nr $prg_exit_state
-   if { $prg_exit_state != 0 } {
+   if {$prg_exit_state != 0} {
       report_add_message report "------------------------------------------"
-      report_add_message report "Error: aimk -only-depend failed (exit code $prg_exit_state)"
+      report_add_message report "Error: aimk $aimk_options failed (exit code $prg_exit_state)"
       report_add_message report "------------------------------------------"
       return -1
    }
