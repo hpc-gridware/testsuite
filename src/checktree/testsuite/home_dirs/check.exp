@@ -72,23 +72,28 @@ proc home_dirs_test {} {
       }
    }
 
+   # make the host list unique
+   set hostlist [lsort -unique $hostlist]
+
    # get one host where the test file will be written
    set write_host [host_conf_get_suited_hosts 1]
+
+   set test_file "\$HOME/testfile123"
 
    # loop over all testsuite users and check their home dirs
    foreach user "$CHECK_USER $CHECK_FIRST_FOREIGN_SYSTEM_USER $CHECK_SECOND_FOREIGN_SYSTEM_USER" {
       # write the test file to the users home directory
-      ts_log_fine "As user $user write file '~/testfile123' on host $write_host"
-      set result [start_remote_prog $write_host $user "touch" "~/testfile123"]
+      ts_log_fine "As user $user write file '$test_file' on host $write_host"
+      set result [start_remote_prog $write_host $user "touch" $test_file]
       if {$result != ""} {
-         ts_log_severe "Touching 'testfile123' in user $user's home directory \
+         ts_log_severe "Touching '$test_file' in user $user's home directory \
                         failed. Output of touch: $result"
          return
       }
 
       # check on all hosts if the file appears
       foreach host $hostlist {
-         set result [wait_for_remote_file $host $user "~/testfile123"]
+         set result [wait_for_remote_file $host $user $test_file]
          if {$result != 0} {
             # error was already raised, just return
             return
@@ -96,13 +101,13 @@ proc home_dirs_test {} {
       }
 
       # delete the file from the users home directory
-      set result [start_remote_prog $write_host $user "rm" "~/testfile123"]
+      set result [start_remote_prog $write_host $user "rm" $test_file]
       if {$result != ""} {
-         ts_log_severe "Deleting 'testfile123' in user $user's home directory \
+         ts_log_severe "Deleting '$test_file' in user $user's home directory \
                         failed. Output of rm: $result"
          return
       }
-      ts_log_fine "Successfully deleted file '~/testfile123' in user $user's home directory."
+      ts_log_fine "Successfully deleted file '$test_file' in user $user's home directory."
    }
 }
 
