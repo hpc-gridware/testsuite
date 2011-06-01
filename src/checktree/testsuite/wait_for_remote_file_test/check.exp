@@ -196,6 +196,7 @@ proc wait_for_remote_file_test_print_result { mode } {
 #
 #*******************************************************************************
 proc wait_for_remote_file_test_measure { method } {
+   global ts_config
    upvar #0 wait_for_remote_file_test_ctx this
    global CHECK_USER
 
@@ -205,7 +206,11 @@ proc wait_for_remote_file_test_measure { method } {
       set this($host,file) "$tmpdir/blubber"
       remote_file_mkdir $host $tmpdir
       wait_for_remote_dir $host $CHECK_USER $tmpdir
-      set this($host,fshost) [fs_config_get_filesystem_server $this($host,file)]
+      set fshost [fs_config_get_filesystem_server $this($host,file) 0]
+      if {$fshost == ""} {
+         set fshost $ts_config(master_host)
+      }
+      set this($host,fshost) $fshost
    }
 
    ts_log_heading "$method: Measure time for remote files to appear"

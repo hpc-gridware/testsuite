@@ -7,6 +7,11 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+JG-2011-06-01-0: Bugfix:     wait_for_remote_file_test fails if home is not
+                             configured in filesystem config
+                 Issue:      TS-395
+                 Review:     HP
+
 HP-2011-05-27-0: Enhancem.:  new test bugs/jira/3474
                  Review:     EB
 
