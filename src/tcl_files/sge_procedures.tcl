@@ -9965,7 +9965,10 @@ proc check_shadowd_settings { shadowd_host } {
       set sgemaster_file $ts_config(product_root)/$ts_config(cell)/common/sgemaster
 
       # read act qmaster file
-      wait_for_remote_file $ts_config(master_host) $CHECK_USER $act_qmaster_file
+      if {[wait_for_remote_file $ts_config(master_host) $CHECK_USER $act_qmaster_file] == -1} {
+         # act_qmaster_file didn't appear on the master host!
+         return "$act_qmaster_file not found on host $ts_config(master_host)"
+      }
       get_file_content $ts_config(master_host) $CHECK_USER $act_qmaster_file file_array
       set act_qmaster [string trim $file_array(1)]
       ts_log_fine "act_qmaster: \"$act_qmaster\""

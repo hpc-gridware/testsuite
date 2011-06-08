@@ -7,6 +7,13 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+HP-2011-06-08-0: Bugfix:     check_shadowd_settings() now returns an error if
+                             act_qmaster isn't readable
+                 Bugfix:     Issue GE-3479 test wrongly used the CHECK_ACT_PATH
+                             to start the job_host_name.sh script from the
+                             CHECK_ACTUAL_TEST_PATH
+                 Review:     DG
+
 JG-2011-06-08-0: Bugfix:     issue 1780 test fails if nis is configured but
                              doesn't provide enough hosts
                  Issue:      TS-404

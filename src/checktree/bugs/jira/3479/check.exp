@@ -120,9 +120,9 @@ proc ge_3479_cleanup {} {
 }
 
 proc ge_3479_test_scheduling {job_type expected_host} {
-   global CHECK_ACT_PATH
+   global CHECK_ACTUAL_TEST_PATH
 
-   set job_script "$CHECK_ACT_PATH/job_host_name.sh"
+   set job_script "$CHECK_ACTUAL_TEST_PATH/job_host_name.sh"
    set job_opts "-q test"
    if {$job_type == "parallel"} {
       append job_opts " -pe mytestpe 1"
