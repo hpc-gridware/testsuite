@@ -7,6 +7,11 @@
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
 -----------------+-----------+--------------------------------------------------
 
+JG-2011-06-08-0: Bugfix:     issue 1780 test fails if nis is configured but
+                             doesn't provide enough hosts
+                 Issue:      TS-404
+                 Review:     HP
+
 JG-2011-06-01-2: Bugfix:     testsuite/home_dirs test fails on Solaris
                  Issue:      TS-403
                  Review:     HP

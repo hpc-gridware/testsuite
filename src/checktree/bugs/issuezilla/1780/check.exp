@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -53,9 +55,9 @@ set check_highest_level       0
 proc issue_1780_init_level {} {
    global CHECK_ACT_LEVEL
 
-   # setup levels 
+   # setup levels
    switch -- $CHECK_ACT_LEVEL {
-      "0"  {
+      0  {
          return 0
       }
    }
@@ -74,11 +76,11 @@ proc issue_1780_run  {} {
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER [get_binary_path $ts_config(master_host) "ypcat"] "hosts" result]
    if {$result != 0} {
       ts_log_config "couldn't call ypcat - skipping this test:\n$output"
-      set ypcat_exists "false"
+      set ypcat_exists 0
       return
    }
-   
-   set ypcat_exists "true"
+
+   set ypcat_exists 1
 
    set hostlist [split $output "\n"]
    set max_count 3000
@@ -127,19 +129,19 @@ proc issue_1780_run  {} {
    # whether the modification works.  We're just looking for seg faults in
    # qconf.
    set result [start_remote_prog $ts_config(master_host) $CHECK_USER "$ts_config(product_root)/bin/$arch/qconf" "-sq all.q | grep -v slots | grep -v qname >> $tmp_file" exit_code]
-   
+
    # Time how long the addition of the queues takes.
    set start_time [timestamp]
-   
+
    set result [start_remote_prog $ts_config(master_host) $CHECK_USER "$ts_config(product_root)/bin/$arch/qconf" "-Aq $tmp_file" exit_code 610]
-   
+
    set total_time [expr [timestamp]- $start_time]
    ts_log_fine "the time qconf took to add 3000 hosts was $total_time seconds "
-   
+
    if {$exit_code != 0} {
       ts_log_severe "qconf -Aq with huge amout of host entries broken:\n$result"
    }
-   
+
    set qstat_timeout 10
    # Start now qstat with a qstat_timeout seconds timeout
    set qstat_result [start_sge_bin "qstat" "" "" $CHECK_USER "" $qstat_timeout]
@@ -148,17 +150,17 @@ proc issue_1780_run  {} {
    } else {
       ts_log_fine "qstat was OK"
    }
-      
+
    # Now submit a sleeper job, with "-q all.q" request,
    # and call wait_for_jobstart with a short timeout
    # and trigger scheduling
-   
+
    set job_args "-o /dev/null -e /dev/null -j y -q  all.q $ts_config(product_root)/examples/jobs/sleeper.sh 20"
-      
+
    set job_id [submit_job "$job_args"]
    set job_timeout 10
    wait_for_jobstart $job_id "leeper" $job_timeout 1 1
-   
+
    delete_all_jobs
    wait_for_end_of_all_jobs 20
 
@@ -166,11 +168,12 @@ proc issue_1780_run  {} {
 
 proc issue_1780_cleanup {} {
    global ypcat_exists
-   
+
    # in case of a config error the queue does not exist
-   if { $ypcat_exists == "false" } {
+   if {!$ypcat_exists} {
       return 0
    }
 
-   del_queue 3000_hosts.q "" 0 1
+   # delete the queue which might have got created during the test
+   del_queue 3000_hosts.q "" 0 1 "" "" 0
 }
