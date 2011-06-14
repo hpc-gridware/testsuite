@@ -706,7 +706,7 @@ proc modify_setup2 {} {
       set ts_config(master_host)  $old_master
       set ts_config(product_root) $old_root
       shutdown_core_system 0 1
-      delete_tests $ts_config(checktree_root_dir)/install_core_system
+      delete_tests $ts_config(checktree_root_dir)/install_core_system "all"
       set ts_config(execd_hosts)  $new_exed
       set ts_config(master_host)  $new_master
       set ts_config(product_root) $new_root
@@ -2276,9 +2276,8 @@ proc config_results_dir { only_check name config_array } {
    global CHECK_MAIN_RESULTS_DIR
    global CHECK_PROTOCOL_DIR
    global CHECK_JOB_OUTPUT_DIR
-   global CHECK_RESULT_DIR 
-   global CHECK_BAD_RESULT_DIR 
-   global CHECK_REPORT_FILE 
+   global CHECK_RESULT_DIRS
+   global CHECK_REPORT_FILE
    global fast_setup
 
    upvar $config_array config
@@ -2307,16 +2306,25 @@ proc config_results_dir { only_check name config_array } {
    set CHECK_PROTOCOL_DIR $CHECK_MAIN_RESULTS_DIR/protocols
    set CHECK_JOB_OUTPUT_DIR "$CHECK_MAIN_RESULTS_DIR/testsuite_job_outputs"
 
-   set CHECK_RESULT_DIR "$CHECK_MAIN_RESULTS_DIR/$local_host.completed"
-   set CHECK_BAD_RESULT_DIR "$CHECK_MAIN_RESULTS_DIR/$local_host.uncompleted"
+   set CHECK_RESULT_DIRS(uncompleted) "$CHECK_MAIN_RESULTS_DIR/$local_host.uncompleted"
+   set CHECK_RESULT_DIRS(completed)   "$CHECK_MAIN_RESULTS_DIR/$local_host.completed"
+   set CHECK_RESULT_DIRS(unsupported) "$CHECK_MAIN_RESULTS_DIR/$local_host.unsupported"
+   set CHECK_RESULT_DIRS(failed)      "$CHECK_MAIN_RESULTS_DIR/$local_host.failed"
+
    set CHECK_REPORT_FILE "$CHECK_MAIN_RESULTS_DIR/$local_host.report"
    set CHECK_TESTSUITE_LOCKFILE "$value/testsuite_lockfile"
- 
-   if {[file isdirectory "$CHECK_RESULT_DIR"] != 1} {
-        file mkdir "$CHECK_RESULT_DIR"
+
+   if {[file isdirectory "$CHECK_RESULT_DIRS(uncompleted)"] != 1} {
+        file mkdir "$CHECK_RESULT_DIRS(uncompleted)"
    }
-   if {[file isdirectory "$CHECK_BAD_RESULT_DIR"] != 1} {
-        file mkdir "$CHECK_BAD_RESULT_DIR"
+   if {[file isdirectory "$CHECK_RESULT_DIRS(completed)"] != 1} {
+        file mkdir "$CHECK_RESULT_DIRS(completed)"
+   }
+   if {[file isdirectory "$CHECK_RESULT_DIRS(unsupported)"] != 1} {
+        file mkdir "$CHECK_RESULT_DIRS(unsupported)"
+   }
+   if {[file isdirectory "$CHECK_RESULT_DIRS(failed)"] != 1} {
+        file mkdir "$CHECK_RESULT_DIRS(failed)"
    }
    if {[file isdirectory "$CHECK_JOB_OUTPUT_DIR"] != 1} {
         file mkdir "$CHECK_JOB_OUTPUT_DIR"

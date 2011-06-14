@@ -230,10 +230,6 @@ set CHECK_TESTSUITE_LOCKFILE "testsuite_lockfile"
 global CHECK_TESTSUITE_INSTALL_MODE
 set CHECK_TESTSUITE_INSTALL_MODE "manual" ;# sets the install mode. allowed are: automatic and manual
 
-# path/file variables
-global CHECK_RESULT_DIR            ;# check result directory
-global CHECK_BAD_RESULT_DIR        ;# check rusult directory for failed checkes
-
 # this is for new tests:
 global CHECK_PROTOCOL_DIR          ;# directory for test protocols, logs etc.
 global CHECK_JOB_OUTPUT_DIR        ;# directory for qsub job outputs
@@ -449,6 +445,8 @@ set CHECK_TESTS_RUNNING 0
 
 global CHECK_IS_INTERACTIVE
 set CHECK_IS_INTERACTIVE false
+
+global CHECK_DURATIONS
 
 proc check_is_interactive {} {
    global CHECK_IS_INTERACTIVE
@@ -2800,7 +2798,10 @@ proc enhanced_setup {} {
 
    puts "   checking testsuite results directories ..."
 
-   delete_tests "root" 1
+   # TODO HP: It seems this delete call is wrong now with the new result
+   #          directory structure with "unsupported" and "failed" added
+   #          to the old "uncompleted" and "completed" result directories.
+   # delete_tests "root" "all" 1
 
 
    puts "   checking all shell scripts to be executable ..."
@@ -3329,72 +3330,73 @@ proc get_checktree_dir_names { path { only_basename 0 } } {
       }
    }
    return $path_list
-
 }
-
-
-
 
 # check dependencies
 #                                                             max. column:     |
 #****** check/validate_needs() ******
 #
 #  NAME
-#     validate_needs -- ???
+#     validate_needs -- validates if the test dependencies are fulfilled
 #
 #  SYNOPSIS
 #     validate_needs { needs }
 #
 #  FUNCTION
-#     ???
+#     validate_needs() checks if all tests that are listed in "needs" were
+#     already run successfully, i.e. they are in state "completed" or
+#     "unsupported" (the testsuite always assumes an unsupported test would
+#     succeed if it were supported). A test counts as "completed" or
+#     "unsupported" if at least one runlevel of the test is in the state
+#     "completed" or "unsupported".
+#     validate_needs() is used to check if all tests that are listed in the
+#     "check_needs" variable of a test module were run and didn't fail, so
+#     the test itself can be started.
 #
 #  INPUTS
-#     needs - ???
+#     needs - list of tests whose state is to be checked
 #
 #  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
+#     0  - for all tests, at least one runlevel was run successfully or
+#          unsupported
+#     -1 - there is at least one test that was not yet run or is in "failed"
+#          state
 #
 #  SEE ALSO
 #     ???/???
 #*******************************
 proc validate_needs {needs} {
-  global CHECK_RESULT_DIR
+   global CHECK_RESULT_DIRS
+   set uncomplete 0
 
-  if {$needs == ""} {
-     return 0;
-  }
+   # if the list of needed tests is empty, we have nothing to do, all needs are fulfilled
+   if {$needs == ""} {
+      return 0
+   }
 
-  set uncomplete 0;
+   foreach elem $needs {
+      # check for all needed tests if at least one runlevel already was run successfully,
+      # i.e. that at least one result file is in the "completed" or "unsupported"
+      # results directory
+      set result_files ""
+      set result_files2 ""
+      catch {set result_files [glob "$CHECK_RESULT_DIRS(completed)/$elem.res.*"]}
+      catch {set result_files2 [glob "$CHECK_RESULT_DIRS(unsupported)/$elem.res.*"]}
 
-  foreach elem $needs {
+      if {[llength $result_files] == 0 && [llength $result_files2] == 0} {
+         # there is no result file of this test in the "completed" or "unsupported"
+         # directory, increase the counter of needs that are not fulfilled yet
+         incr uncomplete 1
+         # currently, we are not interested in the actual number of missing dependencies,
+         # we can break here out of the loop because one dependency is not fulfilled
+         break
+      }
+   }
 
-    set result_files ""
-    set core_result_files ""
-    catch { set result_files [glob "$CHECK_RESULT_DIR/$elem.res.*"] }
-
-    ts_log_finest $result_files
-
-    ts_log_finest " validate_needs: matching files in $CHECK_RESULT_DIR: $result_files"
-
-    if {![file isfile [lindex $result_files 0]]} {
-       ts_log_finest " validate_needs: need to run check $elem.";
-       incr uncomplete 1;
-    }
-  }
-
-  if {$uncomplete == 0} {
-    return 0;
-  }
-  return -1;
+   if {$uncomplete == 0} {
+      return 0
+   }
+   return -1
 }
 
 #                                                             max. column:     |
@@ -3430,7 +3432,7 @@ proc validate_needs {needs} {
 #     ???/???
 #*******************************
 proc delete_result {path runtime level} {
-   save_result $path $runtime $level 0
+   save_result $path $runtime $level "uncompleted"
 }
 
 #****** check/clear_all_check_errors() *****************************************
@@ -3572,11 +3574,14 @@ proc get_all_check_functions {} {
 #     path    - path of the check to save
 #     runtime - runtime of check
 #     level   - the runlevel
-#     save_finished - has the check finished, or not?
+#     state   - Must be one of "uncompleted", "completed", "unsupported" or
+#               "failed", which means the test was not yet run, completed
+#               successfully, can't be run in this cluster or testsuite config,
+#               or the test failed.
 #*******************************
-proc save_result {path runtime level {save_finished 1}} {
+proc save_result {path runtime level state} {
    global check_name check_description check_needs check_errno check_errstr
-   global CHECK_RESULT_DIR CHECK_BAD_RESULT_DIR
+   global CHECK_RESULT_DIRS
    global check_highest_level
 
    # only for supported levels
@@ -3591,21 +3596,23 @@ proc save_result {path runtime level {save_finished 1}} {
      return
    }
 
-   set good_dir $CHECK_RESULT_DIR
-   set bad_dir  $CHECK_BAD_RESULT_DIR
-
-   ts_log_finest "saving results for $check_name (level $level)..."
-   ts_log_finest $good_dir
-   ts_log_finest $bad_dir
-
-   # decide, which in which directory to store, in which to delete
-   if {$save_finished} {
-      set save_dir   $good_dir
-      set delete_dir $bad_dir
-   } else {
-      set save_dir   $bad_dir
-      set delete_dir $good_dir
+   # check if the state is valid
+   if {[info exists CHECK_RESULT_DIRS($state)] == 0} {
+      ts_log_severe "got invalid test state \"$state\"!"
+      return
    }
+
+   # determine the directory where the result file has to be deleted
+   set check_result_file "$check_name.res.$level"
+   set delete_dir ""
+   foreach index [array names CHECK_RESULT_DIRS] {
+      if {[file exists "$CHECK_RESULT_DIRS($index)/$check_result_file"] == 1} {
+         set delete_dir "$CHECK_RESULT_DIRS($index)"
+         break
+      }
+   }
+   set save_dir $CHECK_RESULT_DIRS($state)
+   ts_log_finest "saving results for $check_name (level $level), moving file from $delete_dir to $save_dir..."
 
    # build a test description
    set data {}
@@ -3640,13 +3647,14 @@ proc save_result {path runtime level {save_finished 1}} {
    lappend data $check_highest_level
 
    # dump test description to result file
-   set output [open "$save_dir/$check_name.res.$level" "w"]
+   set output [open "$save_dir/$check_result_file" "w"]
    puts $output "$data"
    close $output
 
-   # delete the other one
-   if {[file isfile "$delete_dir/$check_name.res.$level"] == 1} {
-      delete_file "$delete_dir/$check_name.res.$level"
+   # delete the other one - only if it's not the same file!
+   if {[file isfile "$delete_dir/$check_result_file"] == 1 &&
+       [string equal "$delete_dir/$check_result_file" "$save_dir/$check_result_file"] == 0} {
+      delete_file "$delete_dir/$check_result_file"
    }
 }
 
@@ -3762,7 +3770,10 @@ proc get_test_result {filename} {
       return {"file not readable"}
    }
    set input [open $filename "r"]
-   gets $input data
+   # read all lines of the file to buffer "data"
+   while {[gets $input tmpbuf] >= 0} {
+      append data $tmpbuf
+   }
    close $input
    return $data
 }
@@ -3772,36 +3783,31 @@ proc get_test_result {filename} {
 #****** check/create_report() ******
 #
 #  NAME
-#     create_report -- ???
+#     create_report -- write a report about tests in the give state to a file
 #
 #  SYNOPSIS
-#     create_report { file goodbad }
+#     create_report { file state }
 #
 #  FUNCTION
-#     ???
+#     Writes a report about the tests in the given state to a file.
 #
 #  INPUTS
-#     file    - ???
-#     goodbad - ???
+#     file   - The report file that is to be written
+#     state -  The report shall contain all tests in this state
 #
 #  RESULT
-#     ???
+#     none
 #
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
 #*******************************
-proc create_report {file goodbad} {
-  global CHECK_RESULT_DIR CHECK_BAD_RESULT_DIR
+proc create_report {file state} {
+  global CHECK_RESULT_DIRS
   global CHECK_PRODUCT_VERSION_NUMBER ts_config
+
+   # check if the state is valid
+   if {[info exists CHECK_RESULT_DIRS($state)] == 0} {
+      ts_log_severe "got invalid test state \"$state\"!"
+      return
+   }
 
   set output [open $file "WRONLY APPEND CREAT"]
   puts $output "\n checksystem report"
@@ -3809,12 +3815,9 @@ proc create_report {file goodbad} {
   puts $output " Date: [clock format [clock seconds]]\n\n"
   puts $output " Version: $CHECK_PRODUCT_VERSION_NUMBER"
   puts $output " Installed in: $ts_config(product_root)"
-  if {$goodbad == 0} {
-     set total [print_results $CHECK_RESULT_DIR $output]
-     puts $output "\nTotal number of test functions: $total"
-  } else {
-     print_results $CHECK_BAD_RESULT_DIR $output
-  }
+
+  set total [print_results $CHECK_RESULT_DIRS($state) $output]
+  puts $output "\nTotal number of test functions: $total"
 
   flush $output
   close $output
@@ -4068,8 +4071,48 @@ proc is_category_enabled { path } {
    return -1
 }
 
-proc delete_tests {path {only_if_not_there 0}} {
-   global check_errno check_errstr check_functions validate_needs check_name
+#                                                             max. column:     |
+#****** check/get_test_level_state ******
+#
+#  NAME
+#     get_test_level_state -- gets the state of a specific runlevel of a test
+#
+#  SYNOPSIS
+#     proc get_test_level_state {name level}
+#
+#  FUNCTION
+#     Returns the state of a specific runlevel of a test. The state can be one
+#     of "completed", "uncompleted", "failed" and "unsupported". If there is no
+#     result file of this runlevel of this test, "none" is returned.
+#     
+#  INPUTS
+#     name  - The name of the test as it is defined in the global check_name
+#             variable in the test module.
+#     level - The state of this particular runlevel shall be returned.
+#
+#  RESULT
+#     The state of the specified runlevel of the test. It is one of
+#     "completed", "uncompleted", "failed" and "unsupported" if there is a
+#     result file for this runlevel of this test, and "none" if there no
+#     such file.
+#*******************************
+proc get_test_level_state {name level} {
+   global CHECK_RESULT_DIRS
+   set local_test_state "none"
+
+   # search in all check result directories for this file to determine the test state
+   foreach state_dir [array names CHECK_RESULT_DIRS] {
+      if {[file exists "$CHECK_RESULT_DIRS($state_dir)/$name.res.$level"] == 1} {
+         # we found the check result file - the directory equals to the state
+         set local_test_state $state_dir
+         break
+      }
+   }
+   return $local_test_state
+}
+
+proc delete_tests {path state_to_delete {only_if_not_there 0}} {
+   global check_errno check_errstr check_functions check_name
    global check_highest_level check_name check_description check_category check_needs
    global check_root_access_needs
    global check_init_level_procedure CHECK_ACT_LEVEL
@@ -4077,6 +4120,14 @@ proc delete_tests {path {only_if_not_there 0}} {
    global check_setup_function check_cleanup_function
    global check_setup_level_function check_cleanup_level_function
    global DISABLE_ADD_PROC_ERROR
+   global CHECK_RESULT_DIRS
+
+   # check if the state_to_delete is valid
+   if {$state_to_delete != "all" &&
+       [info exists CHECK_RESULT_DIRS($state_to_delete)] == 0} {
+      ts_log_severe "got invalid test state \"$state_to_delete\"!"
+      return
+   }
 
    set old_check_name $check_name
    set selected_tests [get_tests_from_checktree $path]
@@ -4086,6 +4137,7 @@ proc delete_tests {path {only_if_not_there 0}} {
       set check_name ""
       set check_init_level_procedure "--"
 
+      # sourcing the test modules sets the global variables check_name and check_needs
       if {[ts_source $elem/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT]} {
          ts_log_finest "sourced \"$elem/$CHECK_INFORMATION_FILE.$CHECK_INFORMATION_EXT\""
 
@@ -4093,7 +4145,13 @@ proc delete_tests {path {only_if_not_there 0}} {
          clear_all_check_errors $check_name
 
          set do_delete 1
+         # TODO HP: Instead of doing this test, shouldn't the function be called at all?
+         #          It seems the function is abused to source all tests modules then, but
+         #          this should be moved to a separate function instead.
          if {$only_if_not_there == 1} {
+            # the next line checks if any runlevel of the test $check_name is already
+            # completed or unsupported. If there is not a single runlevel of the test
+            # completed or unsupported, "result" will be 0.
             set result [validate_needs $check_name]
             if {$result == 0} {
                set do_delete 0
@@ -4101,16 +4159,21 @@ proc delete_tests {path {only_if_not_there 0}} {
          }
 
          if {$do_delete == 1} {
+            # check for all runlevels of the current test...
             for {set i 0} {$i <= $check_highest_level} {incr i 1} {
-               if {[string compare $check_init_level_procedure "--"] != 0} {
-                  set CHECK_ACT_LEVEL $i
-                  set DISABLE_ADD_PROC_ERROR 1
-                  if {[$check_init_level_procedure] == 0} {
+               # ...if the runlevel of this test is in the state that is to be deleted
+               set test_level_state [get_test_level_state $check_name $i]
+               if {$state_to_delete == "all" || $test_level_state == $state_to_delete} {
+                  if {[string compare $check_init_level_procedure "--"] != 0} {
+                     set CHECK_ACT_LEVEL $i
+                     set DISABLE_ADD_PROC_ERROR 1
+                     if {[$check_init_level_procedure] == 0} {
+                        delete_result $elem 0 $i
+                     }
+                     set DISABLE_ADD_PROC_ERROR 0
+                  } else {
                      delete_result $elem 0 $i
                   }
-                  set DISABLE_ADD_PROC_ERROR 0
-               } else {
-                  delete_result $elem 0 $i
                }
             }
          }
@@ -4120,6 +4183,149 @@ proc delete_tests {path {only_if_not_there 0}} {
    set check_name $old_check_name
 }
 
+#                                                             max. column:     |
+#****** check/sort_tests_by_duration ******
+#
+#  NAME
+#     sort_tests_by_duration -- sorts a list of tests by their durations
+#
+#  SYNOPSIS
+#     proc sort_tests_by_duration {list}
+#
+#  FUNCTION
+#     Sorts a list of tests by their duration, shortest duration first.
+#     The durations are read from the "check_durations.txt" file from the
+#     testsuite root directory.
+#     The list is expected to contain the absolute pathes to the tests, e.g.
+#     "/gridengine/testsuite/src/checktree/functional/tight_integration".
+#     This list is generated by the build_checks_to_do_list() and accepted by
+#     the run_tests() functions. 
+#     
+#  INPUTS
+#     list  - upvar: The list of absolute pathes to tests that is to be sorted.
+#
+#  RESULT
+#     The sorted list in the "list" argument to this function.
+#
+#  NOTES
+#     This functions directly modifies the provided list!
+#
+#  SEE ALSO
+#     check/build_checks_to_do_list()
+#     check/run_tests()
+#*******************************
+proc sort_tests_by_duration {list} {
+   global CHECK_DURATIONS
+   global ts_config
+
+   upvar $list checks_to_do
+
+   # read known check durations from the spoolfile
+   read_check_durations_spoolfile CHECK_DURATIONS
+
+   # build array with one entry for all runlevels of a check function
+   foreach duration_key [array names CHECK_DURATIONS] {
+      set check_name [lindex [split $duration_key ","] 0]
+      set check_level [lindex [split $duration_key ","] 1]
+      set check_duration $CHECK_DURATIONS($check_name,$check_level)
+
+      # take into account currently selected runlevels only
+      if {[is_level_enabled $check_level]} {
+         if {[info exists uniq_check_name($check_name)] == 1} {
+            set uniq_check_name($check_name) [expr $uniq_check_name($check_name) + $check_duration]
+         } else {
+            set uniq_check_name($check_name) $check_duration
+         }
+      }
+   }
+
+   # convert this "unique" array to a list
+   set durations_list {}
+   foreach check_name [array names uniq_check_name] {
+      # each list element is {name duration}
+      lappend durations_list [list $check_name $uniq_check_name($check_name)]
+   }
+
+   # sort list by duration
+   set sorted_durations_list [lsort -real -index 1 $durations_list]
+
+   # now use this sorted list to sort the check_to_do list the same way
+   set sorted_checks_to_do {}
+   for {set i 0} {$i < [llength $sorted_durations_list]} {incr i} {
+      set check_key [lindex $sorted_durations_list $i]
+      set check_name [lindex [split $check_key " "] 0]
+      set index [lsearch $checks_to_do $check_name]
+      if {$index == -1} {
+         # not found? just append it to the front
+         linsert sorted_checks_to_do 0 $check_name
+      } else {
+         lappend sorted_checks_to_do $check_name
+      }
+      # remove check from checks_to_do list
+      set checks_to_do [lreplace $checks_to_do $index $index]
+   }
+   # append remaining checks_to_do to end of list
+   # these checks likely were never run, so they should be now
+   set sorted_checks_to_do [concat $sorted_checks_to_do $checks_to_do]
+
+   set checks_to_do $sorted_checks_to_do
+}
+
+#                                                             max. column:     |
+#****** check/build_checks_to_do_list ******
+#
+#  NAME
+#     build_checks_to_do_list -- build list with all checks that are to be run
+#
+#  SYNOPSIS
+#     build_checks_to_do_list {list path state}
+#
+#  FUNCTION
+#     Builds a list of all checks that are to be run according to the current
+#     directory in the checktree, configured categories and runlevels and the
+#     selected test state (uncompleted, completed, failed or unsupported).
+#     
+#  INPUTS
+#     list  - upvar; gets filled with all checks that are to be run
+#     path  - tests from this path and all its subdirectories in the
+#             given state are to be run
+#     state - tests in this state are to be run. Allowed values are
+#             "completed", "failed", "unsupported", "uncompleted"
+#             and "all".
+#
+#  RESULT
+#     none
+#*******************************
+proc build_checks_to_do_list {list path state} {
+   upvar $list checks_to_do
+   global CHECK_RESULT_DIRS
+   global CHECK_ENABLED_RUNLEVELS
+
+   set check_directories [get_tests_from_checktree $path]
+
+   # create list of checks to run
+   set checks_to_do {}
+   foreach elem $check_directories {
+      if {[is_category_enabled $elem] == 0} {
+         set test_name [get_check_name $elem]
+         set tests_runlevels [get_checktree_levels $elem]
+         foreach tests_runlevel $tests_runlevels {
+            if {[is_level_enabled $tests_runlevel] == -1} {
+               # skip all tests in the wrong runlevel
+               continue
+            }
+
+            if {$state == "all" ||
+                ([info exists CHECK_RESULT_DIRS($state)] &&
+                 [file isfile "$CHECK_RESULT_DIRS($state)/$test_name.res.$tests_runlevel"] == 1)} {
+               # only add existing result files to list
+               lappend checks_to_do $elem
+               break
+            }
+         }
+      }
+   }
+}
 
 #                                                             max. column:     |
 #****** check/run_tests() ******
@@ -4128,14 +4334,17 @@ proc delete_tests {path {only_if_not_there 0}} {
 #     run_tests -- ???
 #
 #  SYNOPSIS
-#     run_tests { path runcompleted }
+#     run_tests { path state_to_run }
 #
 #  FUNCTION
 #     ???
 #
 #  INPUTS
-#     path         - ???
-#     runcompleted - ???
+#     path  -        tests from this path and all its subdirectories in the
+#                    given state are to be run
+#     state_to_run - tests in this state are to be run. Allowed values are
+#                    "completed", "failed", "unsupported", "uncompleted"
+#                    and "all".
 #
 #  RESULT
 #     ???
@@ -4152,8 +4361,8 @@ proc delete_tests {path {only_if_not_there 0}} {
 #  SEE ALSO
 #     ???/???
 #*******************************
-proc run_tests {path runcompleted} {
-   global check_errstr CHECK_RESULT_DIR
+proc run_tests {path state_to_run} {
+   global check_errstr CHECK_RESULT_DIRS
    global CHECK_MAILS_SENT CHECK_ENABLE_MAIL CHECK_MAX_ERROR_MAILS
    global CHECK_ACT_PATH check_use_installed_system
    global check_reinit_on_tcl_error
@@ -4163,65 +4372,34 @@ proc run_tests {path runcompleted} {
    global CHECK_ENABLED_CATEGORIES
    global fast_setup custom_checktree CHECK_USE_HUDSON check_id
 
-   set CHECK_TESTS_RUNNING 1
-
    array unset exclude_array
 
-   set local_host [gethostname]
+   set CHECK_TESTS_RUNNING 1
    set CHECK_MAILS_SENT 0  ;# clear mail counter
+   set local_host [gethostname]
 
-   if {$CHECK_USE_HUDSON == 1 && [llength $custom_checktree] > 0} {
-      set CHECK_ACT_PATH $ts_config(checktree_root_dir)
-      set check_directories {}
-      set pos_ics [lsearch -exact $custom_checktree "install_core_system"]
-      if {$pos_ics == -1} {
-         set custom_checktree [concat {install_core_system} $custom_checktree]
-      }
-      foreach elem $custom_checktree {
-         set check_directories [concat $check_directories [get_tests_from_checktree $ts_config(checktree_root_dir)/$elem]]
-      }
-      ts_log_info "RUN_TESTS: dirs = $check_directories \n[llength $check_directories]"
-   } else {
-      set check_directories [get_tests_from_checktree $path]
-      if {$runcompleted == 1} {
-         delete_tests $path
-      }
+   # check if the state_to_run is valid
+   if {$state_to_run != "all" &&
+       [info exists CHECK_RESULT_DIRS($state_to_run)] == 0} {
+      ts_log_severe "got invalid test state \"$state_to_run\"!"
+      return
    }
 
-   # create list of checks to run
-   set checks_to_do {}
-   foreach elem $check_directories {
-      if {[is_category_enabled $elem] == 0} {
-         set test_name [get_check_name $elem]
-         set tests_runlevels [get_checktree_levels $elem]
-         foreach tests_runlevel $tests_runlevels {
-            if {$runcompleted == 0} {
-               if {[file isfile "$CHECK_RESULT_DIR/$test_name.res.$tests_runlevel"]} {
-                  continue
-               }
-            }
-            lappend checks_to_do $elem
-            break
-         }
-      }
-   }
-   set checks_to_do [lsort -dictionary $checks_to_do]
-   if {$CHECK_USE_HUDSON == 1 && [llength $custom_checktree] > 0} {
-      ts_log_info "CHECKS1: $checks_to_do \n[llength $checks_to_do]"
-      #Put the init_core_system as first
-      #TODO: not matching
-      set pos_ics [lsearch -glob $checks_to_do "*/install_core_system"]
-      if {$pos_ics != -1} {
-         set checks_to_do [concat "$ts_config(checktree_root_dir)/install_core_system" [lrange $checks_to_do 0 [expr $pos_ics - 1]] [lrange $checks_to_do [expr $pos_ics + 1] end]]
-      } else {
-         set checks_to_do [concat "$ts_config(checktree_root_dir)/install_core_system" $checks_to_do]
-      }
-      ts_log_info "CHECKS2: $checks_to_do \n[llength $checks_to_do]"
-   }
+   # build the list of all tests and runlevels that are to be run
+   build_checks_to_do_list checks_to_do $path $state_to_run
+
+   # don't we have any tests to run? return immediately!
    if {[llength $checks_to_do] == 0} {
       set CHECK_TESTS_RUNNING 0
       return 1
    }
+
+   # sort the list of all tests and runlevels by their duration
+   sort_tests_by_duration checks_to_do
+
+   # move the result files from the "completed", "unsupported" or "failed"
+   # directories to the "uncompleted" directory
+   delete_tests $path $state_to_run
 
    # check if root password is needed
    foreach elem $checks_to_do {
@@ -4231,7 +4409,7 @@ proc run_tests {path runcompleted} {
          set_root_passwd
       }
    }
-   
+
    # now run the checks
    set stop 0
    set pass_no 1
@@ -4267,7 +4445,7 @@ proc run_tests {path runcompleted} {
          }
 
          # run an individual check
-         set test_result [run_test $check $runcompleted]
+         set test_result [run_test $check $state_to_run]
 
          switch -- $test_result {
             0 {
@@ -4343,7 +4521,7 @@ proc run_tests {path runcompleted} {
                   set CHECK_ACT_PATH "$ts_config(checktree_root_dir)/install_core_system"
                   ts_log_fine "starting install_core_system with check_use_installed_system=$check_use_installed_system ..."
                   incr check_id ;# reinit will be displayed number separate check_id - we will see real oder of execution
-                  set init_ret [run_test $CHECK_ACT_PATH 1]
+                  set init_ret [run_test $CHECK_ACT_PATH "all"]
                   if {$init_ret != 0 && $init_ret != -3} {
                      ts_log_info "installing with re_use system failed, starting fresh installation ..."
                      ts_log_fine "starting install_core_system with check_use_installed_system=$check_use_installed_system ..."
@@ -4351,7 +4529,7 @@ proc run_tests {path runcompleted} {
                      # we start all checks with INSTALL category
                      set org_categories $CHECK_ENABLED_CATEGORIES
                      set CHECK_ENABLED_CATEGORIES "INSTALL"
-                     set init_ret2 [run_tests "root" 1]
+                     set init_ret2 [run_tests "root" "all"]
                      set CHECK_ENABLED_CATEGORIES $org_categories
                      ts_log_fine "installing cluster returned \"$init_ret2\"!"
                   }
@@ -4450,6 +4628,67 @@ proc run_tests {path runcompleted} {
    set CHECK_TESTS_RUNNING 0
 }
 
+#                                                             max. column:     |
+#****** check/read_check_durations_spoolfile ******
+#
+#  NAME
+#     read_check_durations_spoolfile -- read check_durations.txt file
+#
+#  SYNOPSIS
+#     read_check_durations_spoolfile {durations_param}
+#
+#  FUNCTION
+#     Reads the content of the check_durations.txt file and stores it in the
+#     "durations_param" array.
+#     
+#  INPUTS
+#     durations_param - upvar: the content of the check_durations.txt file is 
+#                       stored to this array
+#
+#  RESULT
+#     none
+#*******************************
+proc read_check_durations_spoolfile {durations_param} {
+   global ts_config
+   upvar $durations_param durations
+   
+   set check_durations_spoolfile "$ts_config(testsuite_root_dir)/check_durations.txt"
+
+   # read check durations from file
+   if {[file isfile $check_durations_spoolfile] == 1} {
+      read_array_from_file $check_durations_spoolfile "durations" durations
+   }
+}
+
+#                                                             max. column:     |
+#****** check/write_check_durations_spoolfile ******
+#
+#  NAME
+#     write_check_durations_spoolfile -- write check_durations.txt file
+#
+#  SYNOPSIS
+#     write_check_durations_spoolfile {durations_param}
+#
+#  FUNCTION
+#     Writes the content of the "durations_param" array to the 
+#     check_durations.txt file.
+#     
+#  INPUTS
+#     durations_param - upvar: the content of this array is stored to the
+#                       check_durations.txt file
+#
+#  RESULT
+#     none
+#*******************************
+proc write_check_durations_spoolfile {durations_param} {
+   global ts_config
+   upvar $durations_param durations
+
+   set check_durations_spoolfile "$ts_config(testsuite_root_dir)/check_durations.txt"
+
+   # write check durations to file
+   spool_array_to_file $check_durations_spoolfile "durations" durations
+}
 
 #                                                             max. column:     |
 #****** check/lock_testsuite() ******
@@ -4647,14 +4886,14 @@ proc unlock_testsuite {} {
 #     run_test_level -- ???
 #
 #  SYNOPSIS
-#     run_test_level { path runcompleted level {do_save 1} {warnings 0}} 
+#     run_test_level { path state_to_run level {do_save 1} {warnings 0}} 
 #
 #  FUNCTION
 #     ???
 #
 #  INPUTS
 #     path         - ??? 
-#     runcompleted - ??? 
+#     state_to_run - "completed", "uncompleted", "failed", "unsupported" or "all"
 #     level        - ??? 
 #     {do_save 1}  - ??? 
 #     {warnings 0}  - warnings count of setup function
@@ -4673,8 +4912,8 @@ proc unlock_testsuite {} {
 #
 #  SEE ALSO
 #*******************************
-proc run_test_level {path runcompleted level {do_save 1} {warnings 0}} {
-   global check_needs CHECK_RESULT_DIR check_name CHECK_ACTUAL_TEST_PATH
+proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
+   global check_needs CHECK_RESULT_DIRS check_name CHECK_ACTUAL_TEST_PATH
    global check_errstr check_description check_functions check_errno
    global CHECK_CUR_PROC_NAME
    global CHECK_CURRENT_WORKING_DIR check_init_level_procedure CHECK_ACT_LEVEL
@@ -4683,7 +4922,8 @@ proc run_test_level {path runcompleted level {do_save 1} {warnings 0}} {
    global CHECK_JGDI_ENABLED check_category
    global CHECK_INTERRUPT
    global CHECK_USE_HUDSON CHECK_HUDSON_OUTPUT CHECK_HUDSON_STACKTRACE
-   
+   global CHECK_DURATIONS
+
    #Reset HUDSON variables if using it
    if {$CHECK_USE_HUDSON == 1} {
       set CHECK_HUDSON_OUTPUT ""
@@ -4692,17 +4932,22 @@ proc run_test_level {path runcompleted level {do_save 1} {warnings 0}} {
 
    get_current_cluster_config_array ts_config
 
-   # do not run already completed tests
-   ts_log_finest "runcompleted is $runcompleted"
-   if {$runcompleted == 0} {
-      if {[file isfile "$CHECK_RESULT_DIR/$check_name.res.$level"]} {
-         return 1
-      }
+   # check if the state_to_run is valid
+   if {$state_to_run != "all" &&
+       [info exists CHECK_RESULT_DIRS($state_to_run)] == 0} {
+      ts_log_severe "got invalid test state \"$state_to_run\"!"
+      return 1
    }
-   
+
+   # do not run already completed tests
+   if {$state_to_run != "all" &&
+       [file isfile "$CHECK_RESULT_DIRS($state_to_run)/$check_name.res.$level"] == 0} {
+      return 1
+   }
+
    set start_time [clock seconds]
    set total_check_duration 0
-   
+
    # get lock
    delete_temp_script_files
    lock_testsuite
@@ -4911,19 +5156,24 @@ proc run_test_level {path runcompleted level {do_save 1} {warnings 0}} {
 
    set end_time [clock seconds]
    set duration [expr $end_time - $start_time - [expr $total_check_duration / 1000.0]]
-   
+
+   read_check_durations_spoolfile CHECK_DURATIONS
+   set CHECK_DURATIONS($path,$level) [expr $end_time - $start_time]
+   write_check_durations_spoolfile CHECK_DURATIONS
+
    # evaluate check status
-   set finished 1
+   set finished "completed"
    if {$catch_return != 0} {
       ts_log_info "T C L   E R R O R running test \"$check_name\" in run level $level !" 0 "" 1 1 0
-      set finished 0
+      set finished "failed"
       set ret -101
    } elseif {$was_error > 0} {
       ts_log_info "\ncheck \"$check_name\" F A I L E D  in run level $level !" 0 "" 1 1 0
-      set finished 0
+      set finished "failed"
       set ret -1
    } elseif {$was_unsupported > 0} {
       ts_log_info "U N S U P P O R T E D   test \"$check_name\" in run level $level !" 0 "" 1 1 0
+      set finished "unsupported"
       set ret -2
    } else {
       ts_log_info "S U C C E S S F U L L Y performed \"$check_name\" in run level $level !" 0 "" 1 1 0
@@ -5255,14 +5505,14 @@ proc execute_test_preparation_procedure {func_name type {warning_counter ""}} {
 #     run_test -- ???
 #
 #  SYNOPSIS
-#     run_test { path runcompleted {run_single_test "all"} }
+#     run_test { path state_to_run {run_single_test "all"} }
 #
 #  FUNCTION
 #     ???
 #
 #  INPUTS
 #     path                    - ???
-#     runcompleted            - ???
+#     state_to_run            - "uncompleted", "failed", "unsupported", "completed" or "all"
 #     {run_single_test "all"} - ???
 #
 #  RESULT
@@ -5280,19 +5530,28 @@ proc execute_test_preparation_procedure {func_name type {warning_counter ""}} {
 #  SEE ALSO
 #     ???/???
 #*******************************
-proc run_test {path runcompleted {run_single_test "all"} { send_mail_report 1 } } {
-   global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT check_needs CHECK_RESULT_DIR check_name CHECK_ACTUAL_TEST_PATH
-   global check_errstr check_description check_functions check_errno 
+proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } } {
+   global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT check_needs CHECK_RESULT_DIRS
+   global check_name CHECK_ACTUAL_TEST_PATH CHECK_ACT_LEVEL
+   global check_errstr check_description check_functions check_errno
    global CHECK_CUR_PROC_NAME check_root_access_needs check_need_running_system
-   global CHECK_CURRENT_WORKING_DIR check_highest_level check_init_level_procedure CHECK_ACT_LEVEL
+   global CHECK_CURRENT_WORKING_DIR check_highest_level check_init_level_procedure
    global CHECK_PRODUCT_TYPE CHECK_PRODUCT_VERSION_NUMBER check_use_installed_system
    global check_category CHECK_GROUP DISABLE_ADD_PROC_ERROR
-   global check_setup_function check_cleanup_function check_setup_level_function check_cleanup_level_function
+   global check_setup_function check_cleanup_function
+   global check_setup_level_function check_cleanup_level_function
    global ts_config
    global CHECK_TEST_RUNNING
    global CHECK_INTERRUPT check_source_files
    global CHECK_USE_HUDSON
    global exclude_array CHECK_JGDI_ENABLED
+
+   # check if the state_to_run is valid
+   if {$state_to_run != "all" &&
+       [info exists CHECK_RESULT_DIRS($state_to_run)] == 0} {
+      ts_log_severe "got invalid test state \"$state_to_run\"!"
+      return
+   }
 
    testsuite_background_tasks
 
@@ -5338,7 +5597,7 @@ proc run_test {path runcompleted {run_single_test "all"} { send_mail_report 1 } 
       if { ![string match "*JGDI*" $check_category] } {
          ts_log_finest "Check $check_name cannot be executed in JGDI mode - not a JGDI category"
          #Mark as unsupported
-         save_result $path 0 0 1
+         save_result $path 0 0 "unsupported"
          set CHECK_TEST_RUNNING 0
          return -3
       }
@@ -5347,7 +5606,7 @@ proc run_test {path runcompleted {run_single_test "all"} { send_mail_report 1 } 
       if {[llength $check_functions] == 0} {
          ts_log_finest "Check $check_name cannot be executed in JGDI mode - no check functions specified"
          #Mark as unsupported
-         save_result $path 0 0 1
+         save_result $path 0 0 "unsupported"
          set CHECK_TEST_RUNNING 0
          return -3
       }
@@ -5363,7 +5622,7 @@ proc run_test {path runcompleted {run_single_test "all"} { send_mail_report 1 } 
      #If we are in JGDI only test (jgdi_shell_qconf or jgdi_junit) we exit
      if {[string match "jgdi_*" $check_name]} {
         #Mark as unsupported
-        save_result $path 0 0 1
+        save_result $path 0 0 "unsupported"
         set CHECK_TEST_RUNNING 0
         return -3
      }
@@ -5453,7 +5712,7 @@ proc run_test {path runcompleted {run_single_test "all"} { send_mail_report 1 } 
 
    if { $possible_test_levels == 0 } {
       # the test doesn't support any check level - store it as done unsupported
-      save_result $path 0 0 1
+      save_result $path 0 0 "unsupported"
       set CHECK_TEST_RUNNING 0
       return -3
    }
@@ -5474,10 +5733,10 @@ proc run_test {path runcompleted {run_single_test "all"} { send_mail_report 1 } 
       }
 
       # check if test was already running
-      if {$runcompleted == 0} {
-         if {[file isfile "$CHECK_RESULT_DIR/$check_name.res.$level"]} {
-            continue
-         }
+      ts_log_finest "state_to_run is $state_to_run"
+      if {$state_to_run != "all" &&
+          [file isfile "$CHECK_RESULT_DIRS($state_to_run)/$check_name.res.$level"] == 0} {
+         continue
       }
       incr no_of_test_runs 1
    }
@@ -5522,11 +5781,13 @@ proc run_test {path runcompleted {run_single_test "all"} { send_mail_report 1 } 
             set CHECK_ACT_LEVEL $i
             set DISABLE_ADD_PROC_ERROR 1
             if {[$check_init_level_procedure] == 0} {
-               delete_result $path 0 $i
+               save_result $path 0 $i "failed"
+               #delete_result $path 0 $i
             }
             set DISABLE_ADD_PROC_ERROR 0
          } else {
-            delete_result $path 0 $i
+            save_result $path 0 $i "failed"
+            #delete_result $path 0 $i
          }
       }
    }
@@ -5561,11 +5822,11 @@ proc run_test {path runcompleted {run_single_test "all"} { send_mail_report 1 } 
          ts_log_fine "-> enter check level $level"
 
          if {$do_only_one_test == 0} {
-            set back [run_test_level $path $runcompleted $level 1 $nr_warnings]
+            set back [run_test_level $path $state_to_run $level 1 $nr_warnings]
             ts_log_finest "level $level return value: $back"
             incr no_level_calls 1
          } else {
-            set back [run_test_level $path $runcompleted $level 0 $nr_warnings]
+            set back [run_test_level $path $state_to_run $level 0 $nr_warnings]
             ts_log_finest "level $level return value of test $run_single_test: $back"
             incr no_level_calls 1
          }
@@ -5626,11 +5887,11 @@ proc run_test {path runcompleted {run_single_test "all"} { send_mail_report 1 } 
                set CHECK_ACT_LEVEL $i
                set DISABLE_ADD_PROC_ERROR 1
                if {[$check_init_level_procedure] == 0} {
-                  delete_result $path 0 $i
+                  save_result $path 0 $i "failed"
                }
                set DISABLE_ADD_PROC_ERROR 0
             } else {
-               delete_result $path 0 $i
+               save_result $path 0 $i "failed"
             }
          }
       }
@@ -5647,11 +5908,11 @@ proc run_test {path runcompleted {run_single_test "all"} { send_mail_report 1 } 
             set CHECK_ACT_LEVEL $i
             set DISABLE_ADD_PROC_ERROR 1
             if {[$check_init_level_procedure] == 0} {
-               delete_result $path 0 $i
+               save_result $path 0 $i "uncompleted"
             }
             set DISABLE_ADD_PROC_ERROR 0
          } else {
-            delete_result $path 0 $i
+            save_result $path 0 $i "uncompleted"
          }
       }
    }
@@ -5689,11 +5950,11 @@ proc run_test {path runcompleted {run_single_test "all"} { send_mail_report 1 } 
             set CHECK_ACT_LEVEL $i
             set DISABLE_ADD_PROC_ERROR 1
             if {[$check_init_level_procedure] == 0} {
-               delete_result $path 0 $i
+               save_result $path 0 $i "failed"
             }
             set DISABLE_ADD_PROC_ERROR 0
          } else {
-            delete_result $path 0 $i
+            save_result $path 0 $i "failed"
          }
       }
    }
@@ -5734,11 +5995,11 @@ proc run_test {path runcompleted {run_single_test "all"} { send_mail_report 1 } 
                   set CHECK_ACT_LEVEL $i
                   set DISABLE_ADD_PROC_ERROR 1
                   if {[$check_init_level_procedure] == 0} {
-                     save_result $path 0 $i
+                     save_result $path 0 $i "unsupported"
                   }
                   set DISABLE_ADD_PROC_ERROR 0
                } else {
-                  save_result $path 0 $i
+                  save_result $path 0 $i "unsupported"
                }
             }
 
@@ -6270,15 +6531,15 @@ proc get_checktree_categories {path} {
 #     ???/???
 #*******************************
 proc show_tests {path full} {
-  global ts_checktree
+   global ts_checktree
 
-  set check_directories [get_tests_from_checktree $path]
+   set check_directories [get_tests_from_checktree $path]
 
-  foreach elem $check_directories {
+   foreach elem $check_directories {
      clear_screen
      show_test $elem $full
      wait_for_enter
-  }
+   }
 }
 
 proc change_dir { input } {
@@ -6550,8 +6811,8 @@ proc clear_screen {} {
 #     ???/???
 #*******************************
 proc print_menu_header {} {
-  global CHECK_ACT_PATH CHECK_RESULT_DIR
-  global CHECK_USER CHECK_REPORT_FILE CHECK_BAD_RESULT_DIR
+  global CHECK_ACT_PATH CHECK_RESULT_DIRS
+  global CHECK_USER CHECK_REPORT_FILE
   global CHECK_MAIN_RESULTS_DIR
   global CHECK_ENABLED_RUNLEVELS CHECK_PRODUCT_VERSION_NUMBER
   global CHECK_ENABLED_CATEGORIES CHECK_USER CHECK_GROUP
@@ -6589,7 +6850,9 @@ proc print_menu_header {} {
            foreach tests_runlevel $tests_runlevels {
               if { [ is_level_enabled $tests_runlevel ] == 0 } {
                  set state_text "done"
-                 if {![file isfile "$CHECK_RESULT_DIR/$global_test_name.res.$tests_runlevel"]} {
+                 if {![file isfile "$CHECK_RESULT_DIRS(completed)/$global_test_name.res.$tests_runlevel"] &&
+                     ![file isfile "$CHECK_RESULT_DIRS(unsupported)/$global_test_name.res.$tests_runlevel"] &&
+                     ![file isfile "$CHECK_RESULT_DIRS(failed)/$global_test_name.res.$tests_runlevel"]} {
                     set run_test_ok 1
                     incr time_count [get_run_level_time $tests_runlevel]
                     set state_text "on"
@@ -7645,52 +7908,53 @@ proc run_all_at_starttime {} {
    set should_we_compile 0
 
    print_menu_header
-   if { [ ask_user_yes_or_no " Do you want to enter a special starttime (y/N) ? " ] } {
+   if {[ask_user_yes_or_no " Do you want to enter a special starttime (y/N) ? "]} {
       puts "\n now it is: [clock format [clock seconds] -format "%D %H:%M" ]"
-      set start_time [ get_user_input "    Please enter start time : " ]
+      set start_time [get_user_input "    Please enter start time : "]
       puts "\n testsuite will start at \"$start_time\""
    } else {
-
       puts "\n testsuite will run continuously"
    }
 
-   if { [ ask_user_yes_or_no "\n\n Should the testsuite update, compile and install before testing (y/N) ? " ] } {
+   if {[ask_user_yes_or_no "\n\n Should the testsuite update, compile and install before testing (y/N) ? "]} {
       set should_we_compile 1
       puts "\n testsuite will update, compile and install the latest source code"
    } else {
       puts "\n testsuite will use the current installation"
    }
 
-   if { [ ask_user_yes_or_no "\n\n Are this settings correct (y/N) ? " ] == 0 } {
+   if {[ask_user_yes_or_no "\n\n Are this settings correct (y/N) ? "] == 0} {
       puts "\n testsuite will return to the main menue, please"
       return
    }
 
    set_root_passwd
 
-
-   if { $start_time != 0 } {
+   if {$start_time != 0} {
       wait_for_start_time $start_time
    }
-   delete_tests $CHECK_ACT_PATH
-   if { $should_we_compile == 1 } {
-      set back [ compile_source ]
-      if { $back != 0 } {
+
+   delete_tests $CHECK_ACT_PATH "all"
+
+   if {$should_we_compile == 1} {
+      set back [compile_source]
+      if {$back != 0} {
          puts "error in compile source - stop"
          testsuite_shutdown 1
       }
       set saved_path $CHECK_ACT_PATH
       set CHECK_ACT_PATH "$ts_config(checktree_root_dir)/install_core_system"
-      set back [ run_test $CHECK_ACT_PATH 1 ]
-      if { $back != 0 } {
+      set back [run_test $CHECK_ACT_PATH "all"]
+      if {$back != 0} {
          puts "error in test install_core_system - stop"
          testsuite_shutdown 1
       }
       set CHECK_ACT_PATH $saved_path
    }
-   run_tests $CHECK_ACT_PATH 0
-   create_report ${CHECK_REPORT_FILE}.ok 0
-   create_report ${CHECK_REPORT_FILE}.failed 1
+   run_tests $CHECK_ACT_PATH "all"
+   create_report ${CHECK_REPORT_FILE}.ok "completed" 
+   create_report ${CHECK_REPORT_FILE}.unsupported "unsupported"
+   create_report ${CHECK_REPORT_FILE}.failed "failed"
 
    wait_for_enter
 }
@@ -7863,125 +8127,80 @@ proc ask_user_yes_or_no { question } {
 #     ???/???
 #*******************************
 proc menu {} {
-  global CHECK_ACT_PATH CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT CHECK_RESULT_DIR
-  global CHECK_USER CHECK_REPORT_FILE CHECK_BAD_RESULT_DIR
-  global CHECK_MAIN_RESULTS_DIR
-  global CHECK_ENABLED_RUNLEVELS CHECK_PRODUCT_VERSION_NUMBER CHECK_SETUP_NAMES
-  global daemon_debug CHECK_DEBUG_LEVEL CHECK_DEFAULTS_FILE CHECK_DO_SETUP
-  global CHECK_PACKAGE_DIRECTORY CHECK_SETUP_CHANGES CHECK_PACKAGE_TYPE
-  global check_reinit_on_tcl_error ts_checktree CHECK_ENABLED_CATEGORIES ts_config
-  global CHECK_INTERRUPT
-  global check_use_installed_system
+   global CHECK_ACT_PATH CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
+   global CHECK_USER CHECK_REPORT_FILE
+   global CHECK_MAIN_RESULTS_DIR
+   global CHECK_ENABLED_RUNLEVELS CHECK_PRODUCT_VERSION_NUMBER CHECK_SETUP_NAMES
+   global daemon_debug CHECK_DEBUG_LEVEL CHECK_DEFAULTS_FILE CHECK_DO_SETUP
+   global CHECK_PACKAGE_DIRECTORY CHECK_SETUP_CHANGES CHECK_PACKAGE_TYPE
+   global check_reinit_on_tcl_error ts_checktree CHECK_ENABLED_CATEGORIES ts_config
+   global CHECK_INTERRUPT
+   global check_use_installed_system
 
-  set local_host [gethostname]
-  delete_temp_script_files
+   set local_host [gethostname]
+   delete_temp_script_files
 
-  while {1} {
+   while {1} {
+      print_menu_header
+      puts "  (0) select runlevels/categories..."
+      if {$CHECK_PACKAGE_DIRECTORY == "none"} {
+         puts "  (1) compile source code and run distinst"
+      } else {
+         puts "  (1) install product packages"
+      }
+      puts "  (2) run not completed tests (including subdirectories)"
+      puts "  (3) run other tests..."
+      puts "  (4) reset test lists..."
+      puts "  (5) show test infos..."
+      puts "  (9) exit (press ^C to exit without shutdown of the cluster)"
 
-  print_menu_header
-
-  puts "  (0) select runlevels/categories"
-  puts "  (2) run not completed tests (including subdirectories)"
-  puts "  (3) show test descriptions"
-  puts "  (4) exit (press ^C to exit without shutdown of the cluster)"
-  puts "  (5) show completed test list"
-  puts "  (6) show not completed test list"
-  puts "  (7) reset completed test list (for all subdirectories)"
-  puts "  (8) create check report"
-  puts "  (9) run all tests at a special starttime"
-
-  set localtest -1
-  if {[info exists ts_checktree($CHECK_ACT_PATH)]} {
-     set local_dir_nr $ts_checktree($CHECK_ACT_PATH)
-     if {$ts_checktree($local_dir_nr,test_available) == 1} {
-        set localtest 0
-     }
-  }
-
-  if { $localtest >= 0 } {
-    puts " (11) show test descriptions of local test"
-    puts " (12) run local test"
-    puts " (13) run local test continously"
-  }
-    puts "==============================================================================="
-    puts " (19) install system"
-    puts " (20) shutdown and restart master and scheduler"
-    puts " (21) only start master and scheduler daemons"
-    puts " (22) check messages files of execds and qmaster"
-    if { $CHECK_PACKAGE_DIRECTORY == "none" } {
-       puts " (23) compile source code and pre install binaries"
-    } else {
-       puts " (23) install product packages"
-    }
-    puts " (24) do (23), then (2)"
-    puts " (25) set testsuite debug level (current value: $CHECK_DEBUG_LEVEL)"
-    puts " (26) enter testsuite setup"
-    puts " (27) set command line options"
-    puts " (28) restart cluster"
-    puts " (30) re-read checktree and re-source tcl-files"
-    puts " (31) search for old sge_processes on configured hosts"
-    puts " (32) dump status of all rlogin connections"
-    puts " (33) close all rlogin connections"
-    puts " (34) cluster shutdown and CSP cleanup on *all* hosts"
-    puts " (40) initialize code coverage checking"
-    puts " (41) delete code coverage data"
-    puts " (42) dump code coverage analysis"
-    puts " (50) only compile hooks and pre install"
-    puts " (51) run shutdown hooks"
-    puts " (52) run startup hooks"
-    puts " (53) run reset hooks"
-    puts " (54) analyze used testsuite ports (will shutdown cluster)"
-    puts " (55) shutdown cluster"
-
-   puts "\nYou can select a menu number,"
-   puts "enter a relative/absolute path or \"..\" to switch the directory."
-   puts "You can also enter a test name or pattern to switch directly to the test directory."
-   puts -nonewline "\n> "
-
-   set input [wait_for_enter 1]
-
-#  clear_screen
-  #We always reset exclude_array in the menu
-  array unset exclude_array
-
-  switch -- $input {
-     "19" {
-           if { [have_root_passwd] == -1 } {
-              puts "need root access ..."
-              set_root_passwd
-           }
-           # store the enabled runlevels and clear them
-           # (because we can only install in runlevel 0)
-           set CHECK_ENABLED_RUNLEVELS_BACKUP $CHECK_ENABLED_RUNLEVELS
-           set CHECK_ENABLED_RUNLEVELS ""
-
-           lappend CHECK_ENABLED_RUNLEVELS 0
-           ts_log_fine "set runlevel to short"
-
-           # first install additional clusters
-           operate_additional_clusters install
-
-           # now start all checks with INSTALL category
-           set org_categories $CHECK_ENABLED_CATEGORIES
-           set CHECK_ENABLED_CATEGORIES "INSTALL"
-           set runcompleted 1
-           run_tests "root" $runcompleted
-           set CHECK_ENABLED_CATEGORIES $org_categories
-
-           # reset enabled runlevels
-           set CHECK_ENABLED_RUNLEVELS $CHECK_ENABLED_RUNLEVELS_BACKUP
-           unset CHECK_ENABLED_RUNLEVELS_BACKUP
-           ts_log_fine "restore old runlevels: $CHECK_ENABLED_RUNLEVELS"
-
-           wait_for_enter
+      set localtest -1
+      if {[info exists ts_checktree($CHECK_ACT_PATH)]} {
+         set local_dir_nr $ts_checktree($CHECK_ACT_PATH)
+         if {$ts_checktree($local_dir_nr,test_available) == 1} {
+            set localtest 0
          }
-    "20" { restart_debug_daemons }
-    "21" { restart_debug_daemons 1 }
-    "22" { set output [check_messages_files]
-           puts $output
-           wait_for_enter
+      }
+
+      if {$localtest >= 0} {
+         puts " (11) show test descriptions of local test"
+         puts " (12) run local test"
+         puts " (13) run local test continously"
+      }
+      puts "==============================================================================="
+      puts " (20) run distinst (without compiling before)"
+      puts " (21) install cluster"
+      puts " (22) start cluster"
+      puts " (23) shutdown cluster"
+      puts " (24) start master (and scheduler)"
+      puts " (25) shutdown and restart master (and scheduler)"
+      puts " (26) cluster checks..."
+      puts " (27) cluster cleanups..."
+      puts " (30) enter testsuite setup..."
+      puts " (31) set command line options..."
+      puts " (32) set testsuite debug level (current value: $CHECK_DEBUG_LEVEL)"
+      puts " (33) re-read checktree and re-source tcl-files"
+      puts " (34) testsuite cleanups..."
+      puts " (40) hooks..."
+      puts " (50) run (1) and then (2)"
+
+      puts "\nYou can select a menu number,"
+      puts "enter a relative/absolute path or \"..\" to switch the directory."
+      puts "You can also enter a test name or pattern to switch directly to the test directory."
+      puts -nonewline "\n> "
+
+      set input [wait_for_enter 1]
+
+      # We always reset exclude_array in the menu
+      array unset exclude_array
+
+      switch -- $input {
+         "0" {
+            # select runlevels/categories
+            select_runlevel
          }
-    "23" {
+         "1" {
+            # compile source code and run distinst / install product packages
             if {[have_root_passwd] == -1} {
                puts "need root access ..."
                set_root_passwd
@@ -8002,126 +8221,442 @@ proc menu {} {
             } else {
                # we have product packages
                 set back [prepare_packages]
-                if { $back != 0 } {
+                if {$back != 0} {
                    puts "--> error installing product packages"
                 } else {
                    puts "--> product packages pre installed"
                 }
                 wait_for_enter
             }
-
          }
-    "24" {
-          if { [have_root_passwd] == -1 } {
-                puts "need root access ..."
-                set_root_passwd
-           }
-           set back [compile_source]
-           if { $back != 0 } {
-              puts "--> error compiling and pre installing source code"
-              wait_for_enter
-           } else {
-              puts "--> source code compiled and pre installed"
-              run_tests $CHECK_ACT_PATH 0
-              wait_for_enter
-           }
+         "2" {
+            # run not completed tests (including subdirs)
+            save_reinit_run_tests $CHECK_ACT_PATH uncompleted
+            wait_for_enter
          }
-    "25" {  incr CHECK_DEBUG_LEVEL 1
-            if  { $CHECK_DEBUG_LEVEL > 2 } {
-               set CHECK_DEBUG_LEVEL 0
+         "3" {
+            # run other tests...
+            run_other_tests_menu
+         }
+         "4" {
+            # reste test lists...
+            reset_test_lists_menu
+         }
+         "5" {
+            # show test infos...
+            show_test_infos_menu
+         }
+         "9" {
+            # exit testsuite
+            puts "bye!\n"
+            if {[have_root_passwd] == -1} {
+               puts "need root access ..."
+               set_root_passwd
+            }
+            shutdown_core_system 0 1
+            testsuite_shutdown 0
+         }
+         "11" {
+            if {$localtest >= 0} {
+               puts "local test description ..."
+               show_test $CHECK_ACT_PATH 1
+                wait_for_enter
             }
          }
-    "26" {
+         "12" {
+            if {$localtest >= 0} {
+               puts "running local test ..."
+               run_test $CHECK_ACT_PATH "all"
+               # And we send skipped test report as well (mostly just JGDI)
+               send_skipped_tests_mail
+               set CHECK_INTERRUPT 0
+               wait_for_enter
+            }
+         }
+         "13" {
+            if {$localtest >= 0} {
+               while {$CHECK_INTERRUPT == 0} {
+                  puts "running local test ..."
+                  run_test $CHECK_ACT_PATH "all"
+                  create_report ${CHECK_REPORT_FILE}.ok "completed" 
+                  create_report ${CHECK_REPORT_FILE}.unsupported "unsupported"
+                  create_report ${CHECK_REPORT_FILE}.failed "failed"
+                  # And we send skipped test report as well (mostly just JGDI)
+                  send_skipped_tests_mail
+               }
+               set CHECK_INTERRUPT 0
+            }
+         }
+         "20" {
+            array set report {}
+            report_create "Installing binaries" report
+            report_write_html report
+
+            # shutdown possibly running system (and additional config clusters)
+            shutdown_core_system 0 1
+            # compile hosts required for master, exec, shadow, submit_only, bdb_server hosts
+            set compile_hosts [compile_host_list]
+            # eliminate duplicates
+            set compile_hosts [compile_unify_host_list $compile_hosts]
+
+            # We might have cached architecture strings from an old
+            # $SGE_ROOT/util/arch. Clear the cache and resolve
+            # architecture names using dist/util/arch script.
+            set compiled_mail_architectures [compile_rebuild_arch_cache $compile_hosts arch_list]
+
+            # we have to install the GE system here because other compile
+            # hooks might need it
+            report_add_message report "Installing GE binaries ...."
+            report_write_html report
+            # We need to evaluate the architectures to install.
+            # We might have cached architecture strings from an old
+            # $SGE_ROOT/util/arch. Clear the cache and resolve
+            # architecture names using dist/util/arch script.
+            set compiled_mail_architectures [compile_rebuild_arch_cache $compile_hosts arch_list]
+
+            # DG: if arch_list contains hp11-64 then we have
+            # an additional 32 bit architecture compiled on this host
+            # which  we have to install
+            set arch_list [add_32_bit_architecture_for_HP_64 $arch_list]
+
+            if {[install_binaries $arch_list report] != 0} {
+               report_add_message report "install_binaries failed\n"
+               incr error_count 1
+            }
+            report_finish report error_count
+            wait_for_enter
+         }
+         "21" {
+            # only install cluster
+            if {[have_root_passwd] == -1} {
+               puts "need root access ..."
+               set_root_passwd
+            }
+            # store the enabled runlevels and clear them
+            # (because we can only install in runlevel 0)
+            set CHECK_ENABLED_RUNLEVELS_BACKUP $CHECK_ENABLED_RUNLEVELS
+            set CHECK_ENABLED_RUNLEVELS ""
+
+            lappend CHECK_ENABLED_RUNLEVELS 0
+            ts_log_fine "set runlevel to short"
+
+            # first install additional clusters
+            operate_additional_clusters install
+
+            # now start all checks with INSTALL category
+            set org_categories $CHECK_ENABLED_CATEGORIES
+            set CHECK_ENABLED_CATEGORIES "INSTALL"
+            run_tests "root" "all"
+            set CHECK_ENABLED_CATEGORIES $org_categories
+
+            # reset enabled runlevels
+            set CHECK_ENABLED_RUNLEVELS $CHECK_ENABLED_RUNLEVELS_BACKUP
+            unset CHECK_ENABLED_RUNLEVELS_BACKUP
+            ts_log_fine "restore old runlevels: $CHECK_ENABLED_RUNLEVELS"
+
+            wait_for_enter
+         }
+         "22" {
+            # start cluster
+            if {[have_root_passwd] == -1} {
+                puts "need root access ..."
+                set_root_passwd
+            }
+            startup_core_system 0 1
+            wait_for_enter
+         }
+         "23" {
+            # shutdown cluster
+            if {[have_root_passwd] == -1} {
+               puts "need root access ..."
+               set_root_passwd
+            }
+            shutdown_core_system 0 1
+            wait_for_enter
+         }
+         "24" {
+            # start master (and scheduler)
+            restart_debug_daemons 1
+         }
+         "25" {
+            # shutdown and restart master (and scheduler)
+            restart_debug_daemons
+         }
+         "26" {
+            # cluster checks...
+            cluster_checks_menu
+         }
+         "27" {
+            # cluster cleanups...
+            cluster_cleanups_menu
+         }
+         "30" {
+            # enter testsuite setup...
             modify_setup2
             source_tcl_files
             build_checktree
             wait_for_enter
          }
-    "27" {
-         set_command_line_options
-    }
-    "28" {
-         if { [have_root_passwd] == -1 } {
-             puts "need root access ..."
-             set_root_passwd
+         "31" {
+            # set command line options...
+            set_command_line_options
          }
-         startup_core_system 0 1
+         "32" {
+            # set testsuite debug level...
+            incr CHECK_DEBUG_LEVEL 1
+            if {$CHECK_DEBUG_LEVEL > 2} {
+               set CHECK_DEBUG_LEVEL 0
+            }
+         }
+         "33" {
+            # re-read checktree and re-source tcl files
+            source_tcl_files
+            build_checktree
+            wait_for_enter
+         }
+         "34" {
+            # testsuite cleanups...
+            testsuite_cleanups_menu
+         }
+         "40" {
+            # hooks...
+            hooks_menu
+         }
+         "50" {
+            # run (1) and then (2)
+            if {[have_root_passwd] == -1} {
+               puts "need root access ..."
+               set_root_passwd
+            }
+            set back [compile_source]
+            if {$back != 0} {
+               puts "--> error compiling and pre installing source code"
+               wait_for_enter
+            } else {
+               puts "--> source code compiled and pre installed"
+               run_tests $CHECK_ACT_PATH "uncompleted"
+               wait_for_enter
+            }
+         }
+         "-eval" {
+            # This is a undisplayed menu option to execute TCL commands
+            # interactivley in the TS environment. When you know what you are
+            # doing, this can be very helpful - also for exploring and debugging
+            # the TS framework.
+            do_eval_loop
+         }
+         default {
+            if { $input != "" } {
+               change_dir $input
+            }
+         }
+      } ;# end switch
+   } ;# end while
+}
+
+proc run_other_tests_menu {} {
+   global CHECK_ACT_PATH
+
+   print_menu_header
+   puts "  (1) run not completed tests (including subdirs)"
+   puts "  (2) run failed tests (including subdirectories)"
+   puts "  (3) run unsupported tests (including subdirectories)"
+   puts "  (4) run not completed tests at a special starttime"
+   #puts "  (5) run failed tests at a special starttime"
+   #puts "  (6) run unsupported tests at a special starttime"
+   puts ""
+   puts -nonewline "Enter a number or press return to exit: "
+
+   set input [wait_for_enter 1]
+   switch -- $input {
+      "1" {
+         # run not completed tests (including subdirs)
+         save_reinit_run_tests $CHECK_ACT_PATH uncompleted
          wait_for_enter
-    }
-    "30" {
-         source_tcl_files
-         build_checktree
+      }
+      "2" {
+         # run failed tests (including subdirectories)
+         save_reinit_run_tests $CHECK_ACT_PATH failed
          wait_for_enter
-    }
-    "31" {
-         seek_and_destroy_sge_processes
-    }
-    "32" {
-         dump_spawn_rlogin_sessions
+      }
+      "3" {
+         # run unsupported tests (including subdirectories)
+         save_reinit_run_tests $CHECK_ACT_PATH unsupported
          wait_for_enter
-    }
-    "33" {
-         close_open_rlogin_sessions
+      }
+      "4" { run_not_completed_tests_at_time }
+      #"5" { run_failed_tests_at_time }
+      #"6" { run_unsupported_tests_at_time }
+   } ;# end switch
+}
+
+proc reset_test_lists_menu {} {
+   global CHECK_ACT_PATH
+
+   print_menu_header
+   puts "  (1) reset all tests (for all subdirectories)"
+   puts "  (2) reset failed test list (for all subdirectories)"
+   puts "  (3) reset unsupported test list (for all subdirectories)"
+   puts "  (4) reset completed test list (for all subdirectories)"
+   puts ""
+   puts -nonewline "Enter a number or press return to exit: "
+
+   set input [wait_for_enter 1]
+   switch -- $input {
+      "1" {
+         # reset all tests (including subdirs)
+         delete_tests $CHECK_ACT_PATH "all"
          wait_for_enter
-    }
-    "34" {
-         full_shutdown_and_csp_cleanup
+      }
+      "2" {
+         # reset failed test list (including subdirs)
+         delete_tests $CHECK_ACT_PATH "failed"
          wait_for_enter
-    }
-    "40" {
+      }
+      "3" {
+         # reset unsupported test list (including subdirs)
+         delete_tests $CHECK_ACT_PATH "unsupported"
+         wait_for_enter
+      }
+      "4" {
+         # reset completed test list (including subdirs)
+         delete_tests $CHECK_ACT_PATH "completed"
+         wait_for_enter
+      }
+   } ;# end switch
+}
+
+proc show_test_infos_menu {} {
+   global CHECK_RESULT_DIRS CHECK_REPORT_FILE CHECK_ACT_PATH
+
+   print_menu_header
+   puts "  (1) show not completed test list"
+   puts "  (2) show failed test list"
+   puts "  (3) show unsupported test list"
+   puts "  (4) show completed test list"
+   puts "  (5) show test descriptions"
+   puts "  (6) create check report"
+   puts ""
+   puts -nonewline "Enter a number or press return to exit: "
+
+   set input [wait_for_enter 1]
+   switch -- $input {
+      "1" {
+         # show not completed tests list
+         set total [print_results $CHECK_RESULT_DIRS(uncompleted) stdout]
+         puts stdout "Total number of test functions: $total"
+         wait_for_enter
+      }
+      "2" {
+         # show not failed tests list
+         set total [print_results $CHECK_RESULT_DIRS(failed) stdout]
+         puts stdout "Total number of test functions: $total"
+         wait_for_enter
+      }
+      "3" {
+         # show unsupported tests list
+         set total [print_results $CHECK_RESULT_DIRS(unsupported) stdout]
+         puts stdout "Total number of test functions: $total"
+         wait_for_enter
+      }
+      "4" {
+         # show completed tests list
+         set total [print_results $CHECK_RESULT_DIRS(completed) stdout]
+         puts stdout "Total number of test functions: $total"
+         wait_for_enter
+      }
+      "5" {
+         # show test descriptions
+         show_tests $CHECK_ACT_PATH 1
+      }
+      "6" {
+         # create check report
+         if {[file isfile "${CHECK_REPORT_FILE}.ok"] == 1} {
+            delete_file "${CHECK_REPORT_FILE}.ok"
+         }
+         if {[file isfile "${CHECK_REPORT_FILE}.unsupported"] == 1} {
+            delete_file "${CHECK_REPORT_FILE}.unsupported"
+         }
+         if {[file isfile "${CHECK_REPORT_FILE}.failed"] == 1} {
+            delete_file "${CHECK_REPORT_FILE}.failed"
+         }
+         create_report ${CHECK_REPORT_FILE}.ok "completed" 
+         create_report ${CHECK_REPORT_FILE}.unsupported "unsupported"
+         create_report ${CHECK_REPORT_FILE}.failed "failed"
+         wait_for_enter
+      }
+   } ;# end switch
+}
+
+proc cluster_checks_menu {} {
+   print_menu_header
+   puts "  (1) check messages files of execds and qmaster"
+   puts "  (2) initialize code coverage checking"
+   puts "  (3) delete code coverage data"
+   puts "  (4) dump code coverage analysis"
+
+   puts ""
+   puts -nonewline "Enter a number or press return to exit: "
+
+   set input [wait_for_enter 1]
+   switch -- $input {
+      "1" {
+         # check messages files of execds and master
+         set output [check_messages_files]
+         puts $output
+         wait_for_enter
+      }
+      "2" {
+         # initialize code coverage checking
          coverage_initialize
          wait_for_enter
-    }
-    "41" {
+      }
+      "3" {
+         # delete code coverage data
          coverage_initialize 1
          wait_for_enter
-    }
-    "42" {
+      }
+      "4" {
+         #  dump code coverage analysis
          coverage_analyis
          wait_for_enter
-    }
-    "50" {
-         if { [have_root_passwd] == -1 } {
-            puts "need root access ..."
-            set_root_passwd
-         }
-         set back [compile_source 1]
+      }
+   } ;# end switch
+}
 
-         if { $back != 0 } {
-            puts "--> error compiling and pre installing source code"
-         } else {
-            puts "--> source code compiled and pre installed"
-         }
+proc cluster_cleanups_menu {} {
+   print_menu_header
+   puts "  (1) search for old sge_processes on configured hosts"
+   puts "  (2) cluster shutdown and CSP cleanup on *all* hosts"
+   puts ""
+   puts -nonewline "Enter a number or press return to exit: "
+
+   set input [wait_for_enter 1]
+   switch -- $input {
+      "1" {
+         # search for old sge_processes on configured hosts
+         seek_and_destroy_sge_processes
+      }
+      "2" {
+         # cluster shutdown and CSP cleanup on *all* hosts
+         full_shutdown_and_csp_cleanup
          wait_for_enter
-    }
-    "51" {
-         if { [have_root_passwd] == -1 } {
-               puts "need root access ..."
-               set_root_passwd
-         }
-         shutdown_core_system 1 0
-         wait_for_enter
-    }
-    "52" {
-         if { [have_root_passwd] == -1 } {
-               puts "need root access ..."
-               set_root_passwd
-         }
-         startup_core_system 1 1
-         wait_for_enter
-    }
-    "53" {
-         if { [have_root_passwd] == -1 } {
-               puts "need root access ..."
-               set_root_passwd
-         }
-         set save_use_inst_sys $check_use_installed_system
-         set check_use_installed_system 1
-         exec_checktree_clean_hooks
-         set check_use_installed_system $save_use_inst_sys
-         wait_for_enter
-    }
-    "54" {
+      }
+   } ;# end switch
+}
+
+proc testsuite_cleanups_menu {} {
+   print_menu_header
+   puts "  (1) analyze used testsuite ports (will shutdown cluster)"
+   puts "  (2) dump status of all rlogin connections"
+   puts "  (3) close all rlogin connections"
+   puts ""
+   puts -nonewline "Enter a number or press return to exit: "
+
+   set input [wait_for_enter 1]
+   switch -- $input {
+      "1" {
+         # analyze used testsuite ports (will shutdown cluster)
          if { [have_root_passwd] == -1 } {
             puts "need root access ..."
             set_root_passwd
@@ -8143,108 +8678,100 @@ proc menu {} {
          }
 
          wait_for_enter
-    }
-    "55" {
-         if { [have_root_passwd] == -1 } {
+      }
+      "2" {
+         # dump status of all rlogin connections
+         dump_spawn_rlogin_sessions
+         wait_for_enter
+      }
+      "3" {
+          # close all rlogin connections
+         close_open_rlogin_sessions
+         wait_for_enter
+      }
+   } ;# end switch
+}
+
+proc hooks_menu {} {
+   global check_use_installed_system
+
+   print_menu_header
+   puts "  (1) only compile hooks and pre install"
+   puts "  (2) run shutdown hooks"
+   puts "  (3) run startup hooks"
+   puts "  (4) run reset hooks"
+   puts ""
+   puts -nonewline "Enter a number or press return to exit: "
+
+   set input [wait_for_enter 1]
+   switch -- $input {
+      "1" {
+         # only compile hooks and pre install
+         if {[have_root_passwd] == -1} {
             puts "need root access ..."
             set_root_passwd
          }
-         shutdown_core_system 0 1
+         set back [compile_source 1]
+
+         if { $back != 0 } {
+            puts "--> error compiling and pre installing source code"
+         } else {
+            puts "--> source code compiled and pre installed"
+         }
          wait_for_enter
-    }
-
-
-    "0" { select_runlevel }
-    "2" { set saved_check_reinit_on_tcl_error $check_reinit_on_tcl_error
-          set check_reinit_on_tcl_error 1
-          run_tests $CHECK_ACT_PATH 0
-          set check_reinit_on_tcl_error $saved_check_reinit_on_tcl_error
-          set CHECK_INTERRUPT 0
-          wait_for_enter
-        }
-    "3" { show_tests $CHECK_ACT_PATH 1
-        }
-    "4" { puts "bye!\n"
-          if { [have_root_passwd] == -1 } {
+      }
+      "2" {
+         # run shutdown hooks
+         if { [have_root_passwd] == -1 } {
                puts "need root access ..."
                set_root_passwd
-          }
-          shutdown_core_system 0 1
-          testsuite_shutdown 0
-        }
-    "5" {
-          set total [print_results $CHECK_RESULT_DIR stdout]
-          puts stdout "Total number of test functions: $total"
-          wait_for_enter
-        }
-    "6" {
-          set total [print_results $CHECK_BAD_RESULT_DIR stdout]
-          puts stdout "Total number of test functions: $total"
-          wait_for_enter
-        }
-    "7" { delete_tests $CHECK_ACT_PATH
-          wait_for_enter
-        }
-    "8" {
-          if {[file isfile "${CHECK_REPORT_FILE}.ok"] == 1} {
-             delete_file "${CHECK_REPORT_FILE}.ok"
-          }
-          if {[file isfile "${CHECK_REPORT_FILE}.failed"] == 1} {
-             delete_file "${CHECK_REPORT_FILE}.failed"
-          }
-          create_report "${CHECK_REPORT_FILE}.ok" 0
-          create_report "${CHECK_REPORT_FILE}.failed"  1
-          wait_for_enter
-        }
-    "9" {
-          run_all_at_starttime
-          set CHECK_INTERRUPT 0
-          wait_for_enter
-        }
-    "11" {
-          if {$localtest >= 0} {
-             puts "local test description ..."
-             show_test $CHECK_ACT_PATH 1
-             wait_for_enter
-          }
-        }
-    "12" {
-          if {$localtest >= 0} {
-            puts "running local test ..."
-            run_test $CHECK_ACT_PATH 1
-            #And we send skipped test report as well (mostly just JGDI)
-            send_skipped_tests_mail
-            set CHECK_INTERRUPT 0
-            wait_for_enter
-          }
          }
-    "13" {
-            if {$localtest >= 0} {
-               while {$CHECK_INTERRUPT == 0} {
-                  puts "running local test ..."
-                  run_test $CHECK_ACT_PATH 1
-                  create_report ${CHECK_REPORT_FILE}.ok 0
-                  create_report ${CHECK_REPORT_FILE}.failed 1
-                  #And we send skipped test report as well (mostly just JGDI)
-                  send_skipped_tests_mail
-               }
-               set CHECK_INTERRUPT 0
-            }
+         shutdown_core_system 1 0
+         wait_for_enter
+      }
+      "3" {
+         # run startup hooks
+         if { [have_root_passwd] == -1 } {
+               puts "need root access ..."
+               set_root_passwd
          }
-     "-eval" {
-        # This is a undisplayed menu option to execute TCL commands
-        # interactivley in the TS environment. When you know what you are
-        # doing, this can be very helpful - also for exploring and debugging
-        # the TS framework.
-        do_eval_loop
-     }
-     default {
-        if { $input != "" } {
-           change_dir $input
-        }
-     }
-   }
-   }
+         startup_core_system 1 1
+         wait_for_enter
+      }
+      "4" {
+         # run reset hooks
+         if { [have_root_passwd] == -1 } {
+               puts "need root access ..."
+               set_root_passwd
+         }
+         set save_use_inst_sys $check_use_installed_system
+         set check_use_installed_system 1
+         exec_checktree_clean_hooks
+         set check_use_installed_system $save_use_inst_sys
+         wait_for_enter
+      }
+   } ;# end switch
+}
+
+proc save_reinit_run_tests {path state} {
+   global check_reinit_on_tcl_error
+   global CHECK_INTERRUPT
+
+   set saved_check_reinit_on_tcl_error $check_reinit_on_tcl_error
+   set check_reinit_on_tcl_error 1
+
+   run_tests $path $state
+
+   set check_reinit_on_tcl_error $saved_check_reinit_on_tcl_error
+   set CHECK_INTERRUPT 0
+}
+
+proc run_not_completed_tests_at_time {} {
+   global CHECK_INTERRUPT
+
+   run_all_at_starttime
+   set CHECK_INTERRUPT 0
+   wait_for_enter
 }
 
 #****** check/do_eval_loop() ******
@@ -9682,7 +10209,7 @@ if { $do_one_test } {
    # print_menu_header
    ts_log_fine "run all tests ..."
 
-   run_tests $CHECK_ACT_PATH 0
+   run_tests $CHECK_ACT_PATH "uncompleted"
    if { $do_kill } {
       set check_name "command line"
       shutdown_core_system 0 1
@@ -9694,7 +10221,7 @@ if { $do_one_test } {
 if { $do_all } {
    # ts_checktree ok
    set CHECK_ACT_PATH "root"
-   delete_tests $CHECK_ACT_PATH
+   delete_tests $CHECK_ACT_PATH "all"
    set CHECK_ACT_PATH "root"
    set dirs [ get_dir_names $CHECK_ACT_PATH ]
    set files [get_file_names $CHECK_ACT_PATH ]
@@ -9708,7 +10235,7 @@ if { $do_all } {
    print_menu_header
    ts_log_fine "run all tests ..."
 
-   run_tests $CHECK_ACT_PATH 0
+   run_tests $CHECK_ACT_PATH "all"
    set exit_value [print_errors]
    testsuite_shutdown $exit_value
 }
@@ -9723,7 +10250,7 @@ if { $do_install } {
    puts "installing core system on host [gethostname] ..."
    set CHECK_ENABLED_CATEGORIES "INSTALL"
    set CHECK_ACT_PATH "root"
-   run_tests $CHECK_ACT_PATH 1
+   run_tests $CHECK_ACT_PATH "all"
    operate_additional_clusters install
    set exit_value [print_errors]
    testsuite_shutdown $exit_value
@@ -9765,16 +10292,16 @@ if { $do_only_reset_config == 1 } {
   set result 1
   # ts_checktree ok
   set CHECK_ACT_PATH "$ts_config(checktree_root_dir)/install_core_system"
-  run_test $CHECK_ACT_PATH 1 "setup_queues" 0
-  run_test $CHECK_ACT_PATH 1 "setup_testcheckpointobject" 0
-  run_test $CHECK_ACT_PATH 1 "setup_conf" 0
-  run_test $CHECK_ACT_PATH 1 "setup_execd_conf" 0
-  run_test $CHECK_ACT_PATH 1 "setup_mytestproject" 0
-  run_test $CHECK_ACT_PATH 1 "setup_mytestpe" 0
-  run_test $CHECK_ACT_PATH 1 "setup_deadlineuser" 0
-  run_test $CHECK_ACT_PATH 1 "setup_schedconf" 0
-  run_test $CHECK_ACT_PATH 1 "setup_default_calendars" 0
-  run_test $CHECK_ACT_PATH 1 "setup_inhouse_cluster" 0
+  run_test $CHECK_ACT_PATH "all" "setup_queues" 0
+  run_test $CHECK_ACT_PATH "all" "setup_testcheckpointobject" 0
+  run_test $CHECK_ACT_PATH "all" "setup_conf" 0
+  run_test $CHECK_ACT_PATH "all" "setup_execd_conf" 0
+  run_test $CHECK_ACT_PATH "all" "setup_mytestproject" 0
+  run_test $CHECK_ACT_PATH "all" "setup_mytestpe" 0
+  run_test $CHECK_ACT_PATH "all" "setup_deadlineuser" 0
+  run_test $CHECK_ACT_PATH "all" "setup_schedconf" 0
+  run_test $CHECK_ACT_PATH "all" "setup_default_calendars" 0
+  run_test $CHECK_ACT_PATH "all" "setup_inhouse_cluster" 0
 
   puts "configuration reset done"
   testsuite_shutdown $result
