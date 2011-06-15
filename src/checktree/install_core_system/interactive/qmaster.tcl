@@ -249,8 +249,7 @@ proc install_qmaster {{report_var report}} {
 
    set hostcount 0
    set do_stop 0
-   set found_darwin_more 0
-   set found_hp_more 0
+   set found_exotic_more 0
    while {!$do_stop} {
       log_user 1
       flush stdout
@@ -939,29 +938,24 @@ proc install_qmaster {{report_var report}} {
             continue
          }
 
-         #  This is for More license output on darwin
-         -i $sp_id "LICENSE ??%" {
-            set found_darwin_more 1
-            ts_log_newline FINER ; ts_log_finer "-->testsuite: sending >space< (darwin)"
+         # This is for More license output on darwin and hp
+         # with UGE the name of the license file got a .txt suffix
+         -i $sp_id "LICENSE*" {
+            set found_exotic_more 1
+            ts_log_newline FINER ; ts_log_finer "-->testsuite: sending >space<"
             ts_send $sp_id " "
             continue
          }
-         -i $sp_id "LICENSE (*" {
-            set found_hp_more 1
-            ts_log_newline FINER ; ts_log_finer "-->testsuite: sending >space< (hp)"
-            ts_send $sp_id " "
-            continue
-         }
-         -i $sp_id "LICENSE: END" {
-            if {$found_hp_more} {
-               ts_log_newline FINER ; ts_log_finer "-->testsuite: sending >space< (hp)"
+         -i $sp_id "LICENSE*: END" {
+            if {$found_exotic_more} {
+               ts_log_newline FINER ; ts_log_finer "-->testsuite: sending >space<"
                ts_send $sp_id " "
             }
             continue
          }
          # Also for darwin: First "more" will print file name, second only percentage of file
          -i $sp_id "\[0-9\]%" {
-            if {$found_darwin_more} {
+            if {$found_exotic_more} {
                ts_log_newline FINER ; ts_log_finer "-->testsuite: sending >space< (darwin)"
                ts_send $sp_id " "
             }
