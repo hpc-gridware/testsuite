@@ -150,7 +150,10 @@ proc compile_host_list {} {
    # For SGE 6.0 we build the drmaa.jar on the java build host.
    # Beginning with SGE 6.1 we build java code on all platforms.
    # Add the java build host to the host list.
-   lappend host_list [host_conf_get_java_compile_host]
+   set jc_host [host_conf_get_java_compile_host]
+   if {$jc_host != ""} {
+      lappend host_list [host_conf_get_java_compile_host]
+   }
 
    # remove duplicates from host_list
    set host_list [compile_unify_host_list $host_list]
@@ -177,12 +180,13 @@ proc compile_host_list {} {
    # The java compile host may not duplicate the build host for it's architecture, 
    # it must be also a c build host,
    # so it must be contained in the build host list.
-   set jc_host [host_conf_get_java_compile_host]
-   set jc_arch [host_conf_get_arch $jc_host]
+   if {$jc_host != ""} {
+      set jc_arch [host_conf_get_arch $jc_host]
 
-   if {$compile_host($jc_arch) != $jc_host} {
-      ts_log_severe "the java compile host ($jc_host) has architecture $jc_arch\nbut compile host for architecture $jc_arch is $compile_host($jc_arch).\nJava and C compile must be done on the same host"
-      return {}
+      if {$compile_host($jc_arch) != $jc_host} {
+         ts_log_severe "the java compile host ($jc_host) has architecture $jc_arch\nbut compile host for architecture $jc_arch is $compile_host($jc_arch).\nJava and C compile must be done on the same host"
+         return {}
+      }
    }
 
    return [lsort -dictionary $compile_host(list)]
@@ -731,7 +735,7 @@ proc compile_source { { do_only_hooks 0} } {
       if {$do_only_hooks == 0} {
          # TODO: remove pre building on java host if ant build procedure
          #       supports parallel build correctly
-         set tmp_java_compile_host [host_conf_get_java_compile_host]
+         set tmp_java_compile_host [get_preferred_build_host $compile_hosts]
          set exclude_host ""
          if {[lsearch $compile_hosts $tmp_java_compile_host] >= 0} {
             if {[compile_with_aimk $tmp_java_compile_host report "compile_clean_java_build_host" "clean"] != 0} {
@@ -797,6 +801,7 @@ proc compile_source { { do_only_hooks 0} } {
          #       supports parallel build correctly
          set tmp_java_compile_host [host_conf_get_java_compile_host]
          set exclude_host ""
+         # if no java compile host is configured, skip this step
          if {[lsearch $compile_hosts $tmp_java_compile_host] >= 0} {
             if {[compile_with_aimk $tmp_java_compile_host report "compile_clean_java_build_host" "clean"] != 0} {
                incr error_count 1
@@ -862,7 +867,7 @@ proc compile_source { { do_only_hooks 0} } {
          # start build process
          if {$do_only_hooks == 0} {
             # build the man pages on the java build host
-            set man_build_host [host_conf_get_java_compile_host]
+            set man_build_host [get_preferred_build_host $compile_hosts]
             if {[lsearch $compile_hosts $man_build_host] >= 0} {
                if {[compile_with_aimk $man_build_host report "man_pages" "-man -catman -univaman"] != 0} {
                   incr error_count 1
@@ -870,6 +875,7 @@ proc compile_source { { do_only_hooks 0} } {
             }
 
             set java_doc_build_host [host_conf_get_java_compile_host]
+            # skip this step if there is no java build host configured
             if {[lsearch $compile_hosts $java_doc_build_host] >= 0} {
                if {[compile_with_aimk $java_doc_build_host report "java_doc" "-javadoc"] != 0} {
                   incr error_count 1
@@ -879,6 +885,7 @@ proc compile_source { { do_only_hooks 0} } {
             # TODO: remove pre building on java host if ant build procedure
             #       supports parallel build correctly
             set tmp_java_compile_host [host_conf_get_java_compile_host]
+            # skip this step if there is no java build host configured
             if {[lsearch $compile_hosts $tmp_java_compile_host] >= 0} {
                if {[compile_with_aimk $tmp_java_compile_host report "compile_java_build_host"] != 0} {
                   incr error_count 1
@@ -1089,7 +1096,6 @@ proc compile_with_aimk {host_list a_report task_name {aimk_options ""}} {
    set table_row 2
    set status_rows {}
    set status_cols {status file}
-   set java_compile_host [host_conf_get_java_compile_host]
    set prog "$ts_config(testsuite_root_dir)/scripts/remotecompile.sh"
    set par1 "$ts_config(source_dir)"
    if {$define_daily_build_nr} {
@@ -1416,6 +1422,12 @@ proc delete_build_number_object {host build} {
 proc compile_create_java_properties { compile_hosts } {
    global CHECK_USER ts_config
 
+   set jc_host [host_conf_get_java_compile_host 0 1]
+   if {$jc_host == ""} {
+      # no java compile host - no need for properties file
+      return
+   }
+
    if {$ts_config(source_dir) == "none"} {
       ts_log_config "source directory is set to \"none\" - cannot create properties"
       return 
@@ -1430,7 +1442,7 @@ proc compile_create_java_properties { compile_hosts } {
    # store long resolved host name in properties file ...
    ts_log_fine "creating $properties_file"
    set f [open $properties_file "w"]
-   puts $f "java.buildhost=[host_conf_get_java_compile_host 1 1]"
+   puts $f "java.buildhost=$jc_host"
    close $f
 
    foreach host $compile_hosts {
@@ -1465,5 +1477,28 @@ proc compile_delete_java_properties {} {
    if {[file isfile $properties_file]} {
       ts_log_fine "deleting $properties_file"
       file delete $properties_file
+   }
+}
+
+#****** compile/get_preferred_build_host() *******************************
+#  NAME
+#     get_preferred_build_host() -- get the preferred compile host
+#
+#  SYNOPSIS
+#     get_preferred_build_host {}
+#
+#  FUNCTION
+#     Returns a preferred compile host.
+#     This is the java compile host if one is configured,
+#     otherwise the first host in the compile_hosts list.
+#
+#  INPUTS
+#     compile_hosts - list of all compile hosts
+#*******************************************************************************
+proc get_preferred_build_host {compile_hosts} {
+   set host [host_conf_get_java_compile_host 0]
+
+   if {$host == ""} {
+      set host [lindex compile_hosts 0]
    }
 }

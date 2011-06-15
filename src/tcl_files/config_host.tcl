@@ -2831,15 +2831,16 @@ proc host_conf_get_java_compile_host {{raise_error 1} {resolve_long 0}} {
    }
 
    if {$compile_host == ""} {
-      ts_log_severe "didn't find java compile host in host configuration" $raise_error
-   }
-
-   if { $resolve_long != 0 } {
-      set short_compile_host [resolve_host $compile_host 0]
-      set compile_host [resolve_host "${short_compile_host}.$ts_config(dns_domain)" 1]
-   }
-   if {$compile_host == "unknown"} {
-      ts_log_severe "cannot get java build host name"
+      ts_log_config "didn't find java compile host in host configuration"
+   } else {
+      if { $resolve_long != 0 } {
+         set short_compile_host [resolve_host $compile_host 0]
+         set compile_host [resolve_host "${short_compile_host}.$ts_config(dns_domain)" 1]
+      }
+      if {$compile_host == "unknown"} {
+         ts_log_severe "cannot get java build host name"
+         set compile_host ""
+      }
    }
    return $compile_host
 }
