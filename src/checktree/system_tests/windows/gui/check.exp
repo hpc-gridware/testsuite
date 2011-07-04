@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -67,6 +69,7 @@ set check_cleanup_function SGE_Helper_Service_cleanup
 set check_functions ""
 lappend check_functions "service_error_handling"
 lappend check_functions "display_win_gui"
+lappend check_functions "check_gui_job_accounting"
 
 
 proc SGE_Helper_Service_init_level {} {
@@ -152,7 +155,7 @@ proc SGE_Helper_Service_cleanup  {} {
 proc start_SGE_Helper_Service {} {
    ts_log_newline
    ts_log_fine "starting Sun Grid Engine Helper Service"
-   
+
    set ret [control_SGE_Helper_Service 1]
    if {$ret == 0} {
       ts_log_fine "Sun Grid Engine Helper Service is running"
@@ -481,6 +484,83 @@ proc display_win_gui {} {
          ts_log_severe "error starting Sun Grid Engine Helper Service"
       }
    }
+}
+
+#****** check_gui_job_accounting() ********************************************
+#
+#  NAME
+#     check_gui_job_accounting() -- check if accounting data is reported
+#
+#  SYNOPSIS
+#     check_gui_job_accounting {}
+#
+#  FUNCTION
+#     Check if accounting data is reported after job end for GUI jobs.
+#     Currently, only cpu, ru_utime and ru_stime are reported.
+#
+#  RESULT
+#     int 0 - test succeeded
+#        -1 - test failed
+#
+#  SEE ALSO
+#******************************************************************************
+proc check_gui_job_accounting {} {
+   global host ts_config
+
+   set worker_binary_path "$ts_config(source_dir)/WIN32_X86/worker.exe"
+   set job_runtime 30
+   set submit_command [get_display_win_gui_parameter]
+   set submit_command "$submit_command -l h=$host -b y -shell no $worker_binary_path $job_runtime"
+
+   # submit job
+   ts_log_newline
+   set job_id [submit_job $submit_command]
+
+   if {$job_id < 0} {
+      ts_log_severe "error submitting job!"
+      return -1
+   }
+
+   # wait for job to be scheduled, expect timeout
+   if {[wait_for_jobstart $job_id "" 30 0 1] != 0} {
+      ts_log_severe "job wasn't scheduled after 30s!"
+      delete_job $job_id
+      return -1
+   }
+
+   set job_timeout [expr $job_runtime * 2]
+   if {[wait_for_jobend $job_id "" $job_timeout 1] != 0} {
+      ts_log_severe "job didn't end within timeout of $job_timeout s!"
+      delete_job $job_id
+      return -1
+   }
+
+   # get accounting
+   if {[get_qacct $job_id] == 0} {
+      # check if job failed
+      if {[string index $qacct_info(failed) 0] != "0" } {
+         ts_log_severe "job $job_id failed, $qacct_info(failed)"
+         return -1
+      } else {
+         # check if cpu, ru_utime and ru_stime are ok
+         if {$qacct_info(cpu) == "0"} {
+            ts_log_severe "qacct value \"cpu\" is 0, should be >0!"
+            return -1
+         }
+         if {$qacct_info(ru_utime) == "0"} {
+            ts_log_severe "qacct value \"ru_utime\" is 0, should be >0!"
+            return -1
+         }
+         if {$qacct_info(ru_stime) == "0"} {
+            # Sometimes, ru_stime is 0, even if the worker ran for 30 s.
+            # So we don't log an error if this happens.
+         }
+      }
+   } else {
+      ts_log_severe "didn't get qacct output for job $job_id"
+      return -1
+   }
+   return 0
 }
 
 #****** service_error_handling() **********************************************

@@ -1222,8 +1222,15 @@ proc get_passwd {user {raise_error 1}} {
    }
 
    if {![info exists stored_passwd($user)] || $stored_passwd($user) == ""} {
-      ts_log_warning "$user's password not set" $raise_error
-      return ""
+      # ask for password now
+      set passwd [query_passwd $user]
+      if {$passwd != ""} {
+         set stored_passwd($user) $passwd
+      } else {
+         # we still don't have the password of this user -> return empty string
+         ts_log_warning "$user's password not set" $raise_error
+         return ""
+      }
    }
 
    return $stored_passwd($user)
