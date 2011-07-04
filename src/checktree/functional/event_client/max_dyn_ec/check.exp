@@ -1,0 +1,202 @@
+#___INFO__MARK_BEGIN__
+###########################################################################
+#
+#  The contents of this file are made available subject to the terms of the
+#  Apache Software License 2.0 ('The License').
+#  You may not use this file except in compliance with The License.
+#  You may obtain a copy of The License at
+#  http://www.apache.org/licenses/LICENSE-2.0.html
+#
+#  Copyright (c) 2011 Univa Corporation.
+#
+###########################################################################
+#___INFO__MARK_END__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_highest_level
+global check_init_level_procedure
+global check_root_access_needs
+global check_need_running_system
+
+#set check_root_access_needs "yes"
+#set check_need_running_system "no"
+
+# define a level initialization procedure:
+set check_init_level_procedure "max_dyn_ec_init_level"
+
+# define test's name and run level descriptions
+set check_name            "max_dyn_ec"
+set check_category        "COMPATIBILITY SYSTEM EVENTCLIENT VERIFIED"
+set check_highest_level   0
+set check_description(0)  "test setting of the maximum number of dynamic event clients"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function max_dyn_ec_setup
+set check_cleanup_function max_dyn_ec_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "max_dyn_ec_massive_qsub_sync"
+
+proc max_dyn_ec_init_level {} {
+   global CHECK_ACT_LEVEL
+
+   switch -- $CHECK_ACT_LEVEL {
+      0 {
+         return 0
+      }
+   }
+
+   return -1  ;# no other level
+}
+
+# -------- local test procedures: initialization------------------------------
+
+proc max_dyn_ec_setup {} {
+   global ts_config
+   global max_dyn_ec_backup
+
+   # we want to modify the global config - make a backup
+   get_config max_dyn_ec_backup
+
+   # scheduling on demand
+   set sconf(flush_submit_sec) 1
+   set sconf(flush_finish_sec) 1
+   set_schedd_config sconf
+
+   # set high number of event clients
+   set conf(qmaster_params) "MAX_DYN_EC=2000"
+   set_config conf
+}
+
+proc max_dyn_ec_cleanup {} {
+   global ts_config
+   global max_dyn_ec_backup
+
+   # cleanup jobs
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # standard reset config
+   reset_config max_dyn_ec_backup
+   reset_schedd_config
+
+   # unset our test's global variables
+   foreach var "max_dyn_ec_backup" {
+      unset -nocomplain $var
+   }
+}
+
+
+#****** max_dyn_ec/max_dyn_ec_massive_qsub_sync() *************************************************
+#  NAME
+#     max_dyn_ec_massive_qsub_sync() -- test high number of event clients (qsub -sync y)
+#
+#  SYNOPSIS
+#     max_dyn_ec_massive_qsub_sync {}
+#
+#  FUNCTION
+#     Submits a high number of qsub -sync y jobs.
+#     Will report unexpected output (e.g. error messages from qsub) as error.
+#     TODO: check qmaster messages file
+#*******************************************************************************
+proc max_dyn_ec_massive_qsub_sync {} {
+   global ts_config CHECK_USER
+
+   # maximum number of qsub -sync y to start
+   set max_jobs 1000
+   set max_jobs_per_host 100
+
+   # on every host call scripts/qsub_sync.sh to submit a bunch of qsub -sync jobs
+   set hosts $ts_config(execd_nodes)
+   set num_hosts [llength $hosts]
+
+   # compute job numbers
+   set max_jobs [min $max_jobs [expr $num_hosts * $max_jobs_per_host]]
+   set jobs_per_host [expr $max_jobs / $num_hosts]
+   set num_jobs [expr $jobs_per_host * $num_hosts]
+
+   ts_log_fine "starting $num_jobs jobs on $num_hosts hosts"
+
+   set id_list {}
+   set spawn_list {}
+   set submit_script "$ts_config(testsuite_root_dir)/scripts/qsub_sync.sh"
+   foreach host $hosts {
+      set id [open_remote_spawn_process $host $CHECK_USER $submit_script "$jobs_per_host 10"]
+      lappend id_list $id
+      set spawn_id [lindex $id 1]
+      lappend spawn_list $spawn_id
+   }
+
+   set submitted 0
+   set finished 0
+   set unexpected_output ""
+   set timeout 60
+   expect_user {
+      -i $spawn_list full_buffer {
+         ts_log_severe "expect full_buffer error"
+      }
+      -i $spawn_list timeout {
+         ts_log_severe "timeout"
+      }
+      -i $spawn_list eof {
+         ts_log_severe "got eof"
+      }
+      -i $spawn_list  "?*\n" {
+         foreach line [split $expect_out(0,string) "\n"] {
+            set line [string trim $line]
+            if {$line != ""} {
+               switch -glob -- $line {
+                  "Your job * has been submitted" {
+                     incr submitted
+                  }
+                  "Job * exited with exit code *." {
+                     incr finished
+                  }
+                  "qsub_sync.sh exiting" {
+                     set spawn_id $expect_out(spawn_id)
+                     set pos [lsearch -exact $spawn_list $spawn_id]
+                     if {$pos >= 0} {
+                        set spawn_list [lreplace $spawn_list $pos $pos]
+                     }
+                  }
+                  "*_qsub_sync.sh_*_*.sh" -
+                  "_start_mark_:(0)" -
+                  "script done. (_END_OF_FILE_)" -
+                  "_exit_status_:(*)" {
+                     # ignore
+                  }
+                  default {
+                     ts_log_fine "max_dyn_ec_massive_qsub_sync: unexpected output: $line"
+                     append unexpected_output "\n$line"
+                  }
+               }
+            }
+         }
+         if {[llength $spawn_list] > 0} {
+            exp_continue
+         }
+      }
+   }
+
+   foreach id $id_list {
+      close_spawn_process $id
+   }
+
+   # some additional checks ...
+   ts_log_fine "submitted $submitted jobs, $finished jobs finished"
+   if {$submitted != $finished} {
+      ts_log_severe "submitted $submitted jobs, but $finished jobs finished"
+   }
+   if {$unexpected_output != ""} {
+      ts_log_severe "running qsub -sync y jobs produced unexpected output:$unexpected_output"
+   }
+}
