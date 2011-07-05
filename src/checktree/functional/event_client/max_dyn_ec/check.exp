@@ -44,6 +44,7 @@ set check_cleanup_function max_dyn_ec_cleanup
 
 # define test's procedure order
 set check_functions {}
+lappend check_functions "max_dyn_ec_default"
 lappend check_functions "max_dyn_ec_massive_qsub_sync"
 
 proc max_dyn_ec_init_level {} {
@@ -72,9 +73,6 @@ proc max_dyn_ec_setup {} {
    set sconf(flush_finish_sec) 1
    set_schedd_config sconf
 
-   # set high number of event clients
-   set conf(qmaster_params) "MAX_DYN_EC=2000"
-   set_config conf
 }
 
 proc max_dyn_ec_cleanup {} {
@@ -95,6 +93,27 @@ proc max_dyn_ec_cleanup {} {
    }
 }
 
+#****** max_dyn_ec/max_dyn_ec_default() *************************************************
+#  NAME
+#     max_dyn_ec_default() -- check default at qmaster startup
+#
+#  SYNOPSIS
+#     max_dyn_ec_default {}
+#
+#  FUNCTION
+#     Make sure the correct default value is active for MAX_DYN_EC at qmaster startup
+#*******************************************************************************
+proc max_dyn_ec_default {} {
+   global ts_config CHECK_USER
+
+   set expected_message [translate_macro MSG_SET_MAXDYNEVENTCLIENT_U 1000]
+
+   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
+   init_logfile_wait $ts_config(master_host) [get_qmaster_messages_file]
+   startup_qmaster
+   logfile_wait $expected_message
+   wait_for_load_from_all_queues 60
+}
 
 #****** max_dyn_ec/max_dyn_ec_massive_qsub_sync() *************************************************
 #  NAME
@@ -111,9 +130,16 @@ proc max_dyn_ec_cleanup {} {
 proc max_dyn_ec_massive_qsub_sync {} {
    global ts_config CHECK_USER
 
+   # set high number of event clients
+   # set it to a higher value than the actual number of jobs we will submit,
+   # to avoid running into issue
+   # GE-3585: can only start one qsub -sync y less than configured with MAX_DYN_EC
+   set conf(qmaster_params) "MAX_DYN_EC=2000"
+   set_config conf
+
    # maximum number of qsub -sync y to start
    set max_jobs 1000
-   set max_jobs_per_host 100
+   set max_jobs_per_host 50
 
    # on every host call scripts/qsub_sync.sh to submit a bunch of qsub -sync jobs
    set hosts $ts_config(execd_nodes)
@@ -140,6 +166,7 @@ proc max_dyn_ec_massive_qsub_sync {} {
    set finished 0
    set unexpected_output ""
    set timeout 60
+   #log_user 1
    expect_user {
       -i $spawn_list full_buffer {
          ts_log_severe "expect full_buffer error"
