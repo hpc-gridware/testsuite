@@ -44,8 +44,9 @@ set check_cleanup_function max_dyn_ec_cleanup
 
 # define test's procedure order
 set check_functions {}
-lappend check_functions "max_dyn_ec_default"
+lappend check_functions "max_dyn_ec_default" ;# shall be first check_function
 lappend check_functions "max_dyn_ec_massive_qsub_sync"
+lappend check_functions "max_dyn_ec_out_of_ids"
 
 proc max_dyn_ec_init_level {} {
    global CHECK_ACT_LEVEL
@@ -225,5 +226,120 @@ proc max_dyn_ec_massive_qsub_sync {} {
    }
    if {$unexpected_output != ""} {
       ts_log_severe "running qsub -sync y jobs produced unexpected output:$unexpected_output"
+   }
+}
+
+proc max_dyn_ec_out_of_ids {} {
+   global ts_config CHECK_USER
+
+   # this message gets written when qsub -sync y succeeded
+   set msg_exited_0 [translate_macro MSG_QSUB_JOBEXITED_SI "*" "0"]
+
+   # dynamic event clients disabled
+   ts_log_fine "testing MAX_DYN_EC=0"
+   set conf(qmaster_params) "MAX_DYN_EC=0"
+   set_config conf
+
+   set msg_out_of_ids [translate_macro MSG_TO_MANY_DYNAMIC_EC_U 0]
+
+   set qsub_options "-o /dev/null -j y -sync y -b y sleep 1"
+   set output [start_sge_bin "qsub" $qsub_options]
+   ts_log_fine $output
+   if {[string first $msg_out_of_ids $output] < 0} {
+      ts_log_severe "expected qsub to be rejected with message\n$msg_out_of_ids\nbut got\n$output"
+   }
+
+   # 1 dynamic event client allowed
+   ts_log_fine "testing MAX_DYN_EC=1"
+   set conf(qmaster_params) "MAX_DYN_EC=1"
+   set_config conf
+   set msg_out_of_ids [translate_macro MSG_TO_MANY_DYNAMIC_EC_U 1]
+   # positive test: start one event client
+   set output [start_sge_bin "qsub" $qsub_options]
+   ts_log_fine $output
+   if {![string match "*$msg_exited_0*" $output]} {
+      ts_log_severe "a single qsub -sync y job should have run through, but qsub output\n$output"
+   }
+   # wait a moment for qsub to be deregistered as event client
+   after 2000
+   # negative test: try to start 2 event clients, 2nd one must fail
+   set submit_script "$ts_config(testsuite_root_dir)/scripts/qsub_sync.sh"
+   set id [open_remote_spawn_process $ts_config(master_host) $CHECK_USER $submit_script "2 1"]
+   set spawn_id [lindex $id 1]
+
+   set submitted 0
+   set finished 0
+   set rejected 1
+   set unexpected_output ""
+   set done 0
+   set timeout 60
+   #log_user 1
+   expect_user {
+      -i $spawn_id full_buffer {
+         ts_log_severe "expect full_buffer error"
+      }
+      -i $spawn_id timeout {
+         ts_log_severe "timeout"
+      }
+      -i $spawn_id eof {
+         ts_log_severe "got eof"
+      }
+      -i $spawn_id  "?*\n" {
+         foreach line [split $expect_out(0,string) "\n"] {
+            set line [string trim $line]
+            if {$line != ""} {
+               switch -glob -- $line {
+                  "Your job * has been submitted" {
+                     incr submitted
+                  }
+                  "Job * exited with exit code *." {
+                     incr finished
+                  }
+                  "cannot register event client. Only 1 event clients are allowed in the system" {
+                     incr rejected
+                  }
+                  "qsub_sync.sh exiting" {
+                     set done 1
+                  }
+                  "*_qsub_sync.sh_*_*.sh" -
+                  "_start_mark_:(0)" -
+                  "script done. (_END_OF_FILE_)" -
+                  "_exit_status_:(*)" -
+                  "Unable to initialize environment*" -
+                  "Exiting." {
+                     # ignore
+                  }
+                  default {
+                     ts_log_fine "max_dyn_ec_massive_qsub_sync: unexpected output: $line"
+                     append unexpected_output "\n$line"
+                  }
+               }
+            }
+         }
+         if {!$done} {
+            exp_continue
+         }
+      }
+   }
+
+   close_spawn_process $id
+
+   set error ""
+   if {$submitted != 1} {
+      append error "$submitted job(s) got submitted, but expected 1\n"
+   }
+   if {$finished != 1} {
+      append error "$finished job(s) got submitted, but expected 1\n"
+   }
+   if {$rejected != 1} {
+      append error "$rejected job(s) got submitted, but expected 1\n"
+   }
+   if {$unexpected_output != ""} {
+      append error "running the test produced unexpected output:\n"
+      append error $unexpected_output
+   }
+
+   if {$error != ""} {
+      ts_log_severe $error
    }
 }
