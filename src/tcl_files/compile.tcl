@@ -563,7 +563,7 @@ proc compile_source { { do_only_hooks 0} } {
    global ts_host_config ts_config
    global CHECK_PRODUCT_TYPE
    global CHECK_HTML_DIRECTORY
-   global CHECK_DEFAULTS_FILE do_not_update check_name
+   global CHECK_DEFAULTS_FILE check_name
    global CHECK_JOB_OUTPUT_DIR
    global CHECK_PROTOCOL_DIR CHECK_USER check_do_clean_compile
 

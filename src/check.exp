@@ -214,7 +214,7 @@ global do_wait_on_error
 set do_wait_on_error 0
 
 global define_daily_build_nr
-set define_daily_build_nr 1
+set define_daily_build_nr 0
 
 global create_csv_file
 set create_csv_file "false"
@@ -6302,7 +6302,7 @@ proc check_display {} {
 proc set_command_line_options {} {
      global CHECK_ENABLED_RUNLEVELS CHECK_ENABLED_CATEGORIES
      global CHECK_SGE_DEBUG_LEVEL check_use_installed_system
-     global master_debug schedd_debug do_not_update CHECK_JGDI_ENABLED CHECK_DISPLAY_OUTPUT daemon_debug ts_config
+     global master_debug schedd_debug CHECK_JGDI_ENABLED CHECK_DISPLAY_OUTPUT daemon_debug ts_config
      set data ""
      while { $data != 0 } {
         clear_screen
@@ -6323,11 +6323,6 @@ proc set_command_line_options {} {
         } else {
            set sd_flag "on"
         }
-        if { $do_not_update == 0 } {
-           set nu_flag "off"
-        } else {
-           set nu_flag "on"
-        }
 
         if { $CHECK_JGDI_ENABLED == 1 } {
            set jgdi_mode_flag "no_jgdi \[only_jgdi]"
@@ -6344,7 +6339,6 @@ proc set_command_line_options {} {
         puts "(1) master_debug    : $md_flag"
         puts "(2) schedd_debug    : $sd_flag"
         puts "(3) SGE_DEBUG_LEVEL : $CHECK_SGE_DEBUG_LEVEL"
-        puts "(4) no_update       : $nu_flag"
         puts "(5) re_init         : $re_init_flag"
         puts "(6) jgdi_mode            : $jgdi_mode_flag"
 
@@ -6393,13 +6387,6 @@ proc set_command_line_options {} {
            "3" {
                puts "enter new SGE_DEBUG_LEVEL: "
                set CHECK_SGE_DEBUG_LEVEL [wait_for_enter 1]
-           }
-           "4" {
-               if { $do_not_update == 0 } {
-                  set do_not_update 1
-               } else {
-                  set do_not_update 0
-               }
            }
            "5" {
               if { $check_use_installed_system == 0 } {
@@ -8345,7 +8332,7 @@ proc operate_additional_clusters {operation} {
 proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {execute_func_return rpc_retval} {ignore_spool_switches 0} {additional_switches ""}} {
    global CHECK_USER CHECK_HTML_DIRECTORY
    global check_use_installed_system fast_setup be_quiet
-   global check_do_clean_compile do_not_update ts_config ts_log_config
+   global check_do_clean_compile ts_config ts_log_config
    global CHECK_TESTSUITE_TRASH check_do_not_use_spool_config_entries ts_log_levels
    upvar $execute_func_return rpcret
 
@@ -8442,9 +8429,6 @@ proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {e
          append args " compile"
          if {$check_do_clean_compile } {      ;# inherit "compile_clean" command line param
             append args " compile_clean"
-         }
-         if {$do_not_update } {               ;# inherit "no_update" command line param
-            append args " no_update"
          }
       }
       "kill" {
@@ -8634,7 +8618,6 @@ set do_kill           0
 set do_install        0
 set do_start          0
 set do_compile        0
-set do_not_update     0
 set do_all            0
 set do_one_test       0
 set do_category       0
@@ -8728,12 +8711,6 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "compile               checkout source code and recompile"
       puts ""
-      puts "no_update             do not update source when compile option is used."
-      puts "                      ATTENTION: "
-      puts "                         Compiling is done without aimk clean option!"
-      puts "                         Use compile_clean option to trigger a aimk clean at"
-      puts "                         compile time!"
-      puts ""
       puts "all RUNLEVEL          run every test automatically up to runlevel RUNLEVEL"
       puts "                      (RUNLEVEL is a value from 0=short tests, up to 4=week tests)"
       puts ""
@@ -8744,7 +8721,7 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "execute_func ARGS     just run this procedure with given arguments"
       puts "                      (all arguments after this keyword are used as function call)"
-      puts "                      e.g.: .. no_update execute_func compare_dump_data_file arg1 arg2"
+      puts "                      e.g.: .. fast_setup execute_func compare_dump_data_file arg1 arg2"
       puts ""
       puts "category CAT_LIST     set users category list (COMPATIBILITY SYSTEM \[...\])"
       puts "                      (CAT_LIST must be 1 single parameter, must be quoted"
@@ -8776,7 +8753,7 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "interactive_mode      run the test in interactive mode."
       puts ""
-      puts "compile_clean         force aimk clean when no_update option is set at compile time."
+      puts "compile_clean         call aimk clean before building."
       puts ""
       puts "mfile FILE            write all mails into file FILE (when mail is enabled)"
       puts ""
@@ -8840,7 +8817,7 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "                      install_core_system test. Supported modes are \"manual\" or \"automatic\"."
       puts "                      Default is \"manual\"."
       puts ""
-      puts "no_daily_build_nr     Don't define daily build number at compile time."
+      puts "daily_build_nr        Define a daily build number at compile time."
       puts ""
       puts "create_csv_report     Analyse checktree and create a *.csv file in testsuite directory."
       puts ""
@@ -8852,8 +8829,8 @@ for {set i 0} {$i < $argc} {incr i} {
       testsuite_shutdown 1
    }
 
-   if {([string compare [lindex $argv $i] "--no_daily_build_nr"] == 0) || ([string compare [lindex $argv $i] "no_daily_build_nr"] == 0) } {
-      set define_daily_build_nr 0
+   if {([string compare [lindex $argv $i] "--daily_build_nr"] == 0) || ([string compare [lindex $argv $i] "daily_build_nr"] == 0) } {
+      set define_daily_build_nr 1
       continue
    }
 
@@ -9106,13 +9083,6 @@ for {set i 0} {$i < $argc} {incr i} {
       set do_compile 1
       continue
    }
-
-   if { ( [string compare [lindex $argv $i] "--no_update"] == 0 ) || ([string compare [lindex $argv $i] "no_update"] == 0 ) } {
-      set do_not_update 1
-      continue
-   }
-
-
 
    if { ( [string compare [lindex $argv $i] "--reset_conf"] == 0 ) || ([string compare [lindex $argv $i] "reset_conf"] == 0 ) } {
       set do_only_reset_config 1
