@@ -875,8 +875,11 @@ proc compile_source { { do_only_hooks 0} } {
             }
 
             set java_doc_build_host [host_conf_get_java_compile_host]
-            # skip this step if there is no java build host configured
-            if {[lsearch $compile_hosts $java_doc_build_host] >= 0} {
+            # skip this step if there is no java build host configured or if
+            # "-no-java" is specified in the aimk options
+            set options $ts_config(aimk_compile_options)
+            if {[lsearch $compile_hosts $java_doc_build_host] >= 0 &&
+                [string first "-no-java" $options] == -1} {
                if {[compile_with_aimk $java_doc_build_host report "java_doc" "-javadoc"] != 0} {
                   incr error_count 1
                }

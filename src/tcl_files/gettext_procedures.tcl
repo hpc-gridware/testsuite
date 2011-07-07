@@ -29,6 +29,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -739,14 +741,17 @@ proc get_macro_string_from_name { macro_name } {
   if { [info exists macro_messages_list] == 0 } {
      update_macro_messages_list
   }
-  for {set i 1} {$i <= $macro_messages_list(0)} {incr i 1} {
-     if { [string compare $macro_name $macro_messages_list($i,macro) ] == 0 } {
-#        ts_log_fine "found macro for message id $macro_messages_list($i,id)"
-#        ts_log_fine "macro number is $i"
-        return $macro_messages_list($i,string);
-     }
-  }
-  return -1
+  if {[info exists macro_messages_list] == 1 &&
+      [info exists macro_messages_list(0)] == 1} {
+      for {set i 1} {$i <= $macro_messages_list(0)} {incr i 1} {
+         if { [string compare $macro_name $macro_messages_list($i,macro) ] == 0 } {
+#            ts_log_fine "found macro for message id $macro_messages_list($i,id)"
+#            ts_log_fine "macro number is $i"
+            return $macro_messages_list($i,string);
+         }
+      }
+   }
+   return -1
 }
 
 proc get_macro_id_from_name { macro_name } {
