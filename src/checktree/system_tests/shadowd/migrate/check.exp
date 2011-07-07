@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -51,7 +53,7 @@ set check_init_level_procedure "shadowd_migrate_init_level"
 
 # define test's name and run level descriptions
 set check_name            "shadowd_migrate"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM EVENTCLIENT VERIFIED"
 set check_highest_level   9
 set check_description(0)  "test heartbeat file writing"
 set check_description(1)  "test shadowd functionality"
@@ -66,7 +68,7 @@ set check_description(9)  "start qmaster with own ip adress in act_qmaster file"
 
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function shadowd_migrate_setup

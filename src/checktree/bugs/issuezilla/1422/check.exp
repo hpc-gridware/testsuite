@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -38,7 +40,7 @@ global check_root_access_needs
 
 set check_init_level_procedure "issue_1422_init_level"
 
-set check_category            "COMPATIBILITY SYSTEM VERIFIED"
+set check_category            "COMPATIBILITY SYSTEM EVENTCLIENT VERIFIED"
 set check_name                "issue_1422"
 set check_description(0)      "qsub -sync y doesn't remove session directories"
 set check_needs               "init_core_system"      ;# dependencies of this check (name of other check)
@@ -89,8 +91,8 @@ proc issue_1422_run {} {
    foreach host $ts_config(unique_arch_nodes) {
       catch {eval exec "/bin/ls -lR $session_directory | wc -l"} result1
 
-      set jobargs "-sync y -o /dev/null -j y $ts_config(product_root)/examples/jobs/sleeper.sh 5" 
-      set result [submit_job $jobargs 1 30 $host] 
+      set jobargs "-sync y -o /dev/null -j y $ts_config(product_root)/examples/jobs/sleeper.sh 5"
+      set result [submit_job $jobargs 1 30 $host]
 
       catch {eval exec "/bin/ls -lR $session_directory | wc -l"} result2
 

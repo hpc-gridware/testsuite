@@ -28,6 +28,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -37,7 +39,7 @@ global check_init_level_procedure check_category
 global check_root_access_needs
 set check_init_level_procedure "issue_1556_init_level"
 
-set check_category            "COMPATIBILITY SYSTEM VERIFIED"
+set check_category            "COMPATIBILITY SYSTEM EVENTCLIENT VERIFIED"
 set check_name                "issue_1556"
 set check_description(0)      "First character is lost in quoting"
 set check_needs               "init_core_system"      ;# dependencies of this check (name of other check)
