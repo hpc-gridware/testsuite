@@ -29,6 +29,7 @@
 #  All Rights Reserved.
 #
 #  Portions of this software are Copyright (c) 2011 Univa Corporation.
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -48,7 +49,7 @@ set check_description(0)  "check every qsub option"
 
 set check_init_level_procedure "qsub_init_level"
 set check_name         "qsub"
-set check_category     "COMPATIBILITY SYSTEM L10N VERIFIED"
+set check_category     "COMPATIBILITY SYSTEM L10N EVENTCLIENT VERIFIED"
 set check_needs        "init_core_system"       ;# dependencies of this check (name of other check)
 
 # setup and cleanup functions
@@ -59,8 +60,8 @@ set check_cleanup_function "qsub_cleanup"
 set check_functions {}
 lappend check_functions "check_submit"
 lappend check_functions "qsub_starter_method"
-lappend check_functions "check_start_time"  
-lappend check_functions "check_hold"           
+lappend check_functions "check_start_time"
+lappend check_functions "check_hold"
 lappend check_functions "check_option_ac"
 lappend check_functions "check_option_A"
 lappend check_functions "check_option_clear"
@@ -96,7 +97,6 @@ lappend check_functions "check_option_t"
 lappend check_functions "check_option_v"
 lappend check_functions "check_option_verify"
 lappend check_functions "check_option_V"
-lappend check_functions "check_option_w"
 lappend check_functions "check_option_@"
 lappend check_functions "check_huge_script"
 lappend check_functions "check_qhold_jobname"
@@ -105,7 +105,6 @@ lappend check_functions "check_qsub_ts_iz_72" ;# Testcase for TS IZ 72
 lappend check_functions "check_deadline"
 lappend check_functions "check_option_sync"
 lappend check_functions "check_option_sync_t"
-lappend check_functions "check_option_sync_ww"
 lappend check_functions "check_option_terse"
 
 lappend check_functions "qsub_wd"         ;# test the -wd <dir>/-cwd options
@@ -2341,50 +2340,6 @@ proc check_option_V {} {
 }
 
 #                                                             max. column:     |
-#****** qsub/check_option_w() ******
-# 
-#  NAME
-#     check_option_w -- ??? 
-#
-#  SYNOPSIS
-#     check_option_w { } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
-proc check_option_w {} {
-   global job_output_dir
-   global test_host default_args
-
-   # first clean up output directory:
-   setup_output_directory
-
-   set option "-w e"
-   set jobargs "$option $default_args"
-   qsub_submit_check $jobargs 0
-
-   # negative test: -w e -q <invalid queue> has to be rejected
-   qsub_submit_check "-q blah $jobargs" 1
-}
-
-#                                                             max. column:     |
 #****** qsub/check_option_@() ******
 # 
 #  NAME
@@ -2910,59 +2865,6 @@ proc check_option_sync_t {} {
    if {$prg_exit_state != 5} {
       ts_log_severe "qsub did not exit with correct exit code: $result"
    }
-}
-
-proc check_option_sync_ww {} {
-   global ts_config
-   global CHECK_USER
-
-   set found_warning 0
-   set found_job_submitted 0
-   set found_timeout 0
-
-   set JOB_SUBMITTED [translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]
-   set WARNING       [translate_macro MSG_JOB_VERIFYWARN]
-   set NOSUITABLEQ_S [translate_macro MSG_JOB_NOSUITABLEQ_S $WARNING]
-
-   set option "-sync y -w w -l arch=no_arch"
-   set jobargs "$option -o /dev/null -e /dev/null $ts_config(product_root)/examples/jobs/sleeper.sh 100"
-
-   set qsub_id [open_remote_spawn_process $ts_config(master_host) $CHECK_USER "qsub" "$jobargs"]
-   set sp_id [lindex $qsub_id 1]
-  
-   set timeout 20
-   expect {
-      -i $sp_id full_buffer {
-         ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
-      }
-       -i $sp_id -- "$NOSUITABLEQ_S" {
-         set found_warning 1
-         exp_continue
-      }
-      -i $sp_id -- "$JOB_SUBMITTED" {
-         set found_job_submitted 1
-         trigger_scheduling
-         exp_continue
-      }
-      -i $sp_id "_exit_status_:(*)*\n" {
-            ts_log_fine "got exit status from script:\n$expect_out(buffer)"
-      }
-      -i $sp_id timeout {
-         set found_timeout 1
-      }
-   }
-   close_spawn_process $qsub_id
-
-   if {$found_warning == 0} {
-      ts_log_severe "IZ 1945: qsub -sync -w w broken - got no warning message"
-   } elseif {$found_job_submitted == 0} {
-      ts_log_severe "IZ 1945: qsub -sync -w w broken - got no submitted message"
-   } elseif {$found_timeout == 0} {
-      ts_log_severe "IZ 1945: qsub -sync -w w broken - sync does not wait until jobend"
-   }
-
-   delete_all_jobs
-   wait_for_end_of_all_jobs
 }
 
 proc invalid_job_has_valid_account_string {option} {

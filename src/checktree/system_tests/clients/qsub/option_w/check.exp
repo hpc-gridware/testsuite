@@ -1,0 +1,307 @@
+#___INFO__MARK_BEGIN__
+###########################################################################
+#
+#  The contents of this file are made available subject to the terms of the
+#  Apache Software License 2.0 ('The License').
+#  You may not use this file except in compliance with The License.
+#  You may obtain a copy of The License at
+#  http://www.apache.org/licenses/LICENSE-2.0.html
+#
+#  Copyright (c) 2011 Univa Corporation.
+#
+###########################################################################
+#___INFO__MARK_END__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_highest_level
+global check_init_level_procedure
+global check_root_access_needs
+global check_need_running_system
+
+#set check_root_access_needs "yes"
+#set check_need_running_system "no"
+
+# define a level initialization procedure:
+set check_init_level_procedure "qsub_option_w_init_level"
+
+# define test's name and run level descriptions
+set check_name            "qsub_option_w"
+set check_category        "COMPATIBILITY SYSTEM EVENTCLIENT VERIFIED"
+set check_highest_level   0
+set check_description(0)  "check qsub -w option"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function qsub_option_w_setup
+set check_cleanup_function qsub_option_w_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "qsub_option_w_e"
+lappend check_functions "qsub_option_w_e_3132"
+lappend check_functions "qsub_option_w_w"
+
+proc qsub_option_w_init_level {} {
+   global CHECK_ACT_LEVEL
+
+   switch -- $CHECK_ACT_LEVEL {
+      0 {
+         return 0
+      }
+   }
+
+   return -1  ;# no other level
+}
+
+# -------- local test procedures: initialization------------------------------
+
+proc qsub_option_w_setup {} {
+   # speed up scheduling
+   set sconf(flush_submit_sec) 1
+   set sconf(flush_finish_sec) 1
+   set_schedd_config sconf
+}
+
+proc qsub_option_w_cleanup {} {
+   # we modified the scheduler configuration
+   reset_schedd_config
+}
+
+#****** qsub_option_w/qsub_option_w_qsub_sync() ********************************
+#  NAME
+#     qsub_option_w_qsub_sync() -- run qsub -sync y -w ... job
+#
+#  SYNOPSIS
+#     qsub_option_w_qsub_sync {options expect_success {messages {}}
+#
+#  FUNCTION
+#     Tries to submit a short sync job with the options passed.
+#     The caller can specify if he expects the submission to fail (due to -w option)
+#     or to succeed.
+#     The function checks the standard success messages as well as the qsub exit code.
+#     If the caller passed additional error messages,
+#     in case job rejection is expected, we check for these messages as well.
+#
+#  INPUT
+#     options        - qsub options
+#     expect_success - 0: expect the submission to get rejected
+#                      1: expect the job to get accepted and to run through
+#     {messages {}   - optionally: expected error messages
+#*******************************************************************************
+proc qsub_option_w_qsub_sync {options expect_success {messages {}}} {
+   set msg_submitted [translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]
+   set msg_exited [translate_macro MSG_QSUB_JOBEXITED_SI "*" "0"]
+
+   set all_options "-sync y -o /dev/null -j y -b y $options sleep 1"
+   ts_log_fine "==> qsub $all_options"
+   set output [start_sge_bin "qsub" $all_options]
+   ts_log_fine "$output\n"
+
+   set error ""
+   # look for messages indicating that job was submitted or
+   # ran through and exited with exit status 0
+   set submitted [string match "*$msg_submitted*" $output]
+   set exited [string match "*$msg_exited*" $output]
+
+   # check if qsub behaved as expected
+   if {$expect_success} {
+      # make sure output contains msg_submitted and msg_exited
+      if {!$submitted} {
+         append error "job didn't get submitted\n"
+      }
+      if {!$exited} {
+         append error "job didn't run and exit with exit code 0\n"
+      }
+      # check qsub exit status
+      if {$prg_exit_state != 0} {
+         append error "qsub exited with exit status $prg_exit_state, expected 0\n"
+      }
+   } else {
+      # output may not contain msg_submitted or msg_exited
+      if {$submitted} {
+         append error "job didn't get submitted\n"
+      }
+      if {$exited} {
+         append error "job didn't run and exit with exit code 0\n"
+      }
+      # check qsub exit status
+      if {$prg_exit_state == 0} {
+         append error "qsub exited with exit status 0, expected 1\n"
+      }
+      # look for additional error messages
+      foreach message $messages {
+         if {![string match "*$message*" $output]} {
+            append error "qsub output does not contain: $message\n"
+         }
+      }
+   }
+   if {$error != ""} {
+      ts_log_severe "$error\n\nqsub output was:\n$output"
+   }
+}
+
+#****** qsub_option_w/qsub_option_w_e() *************************************************
+#  NAME
+#     qsub_option_w_e() -- check qsub -w e
+#
+#  SYNOPSIS
+#     qsub_option_w_e {}
+#
+#  FUNCTION
+#     Checks various job submissions with the -w e option.
+#     Positive and negative tests.
+#*******************************************************************************
+proc qsub_option_w_e {} {
+   # simple positive test, qsub -w e in the default cluster
+   # without special options must succeed
+   qsub_option_w_qsub_sync "-w e" 1
+
+   # negative test: -w e -q <invalid queue> must get rejected
+   set msg [translate_macro MSG_QREF_QUNKNOWN_S "blah"]
+   qsub_option_w_qsub_sync "-w e -q blah" 0 $msg
+}
+
+#****** qsub_option_w/qsub_option_w_e_3132() *************************************************
+#  NAME
+#     qsub_option_w_e_3132() -- check for issue GE-3132
+#
+#  SYNOPSIS
+#     qsub_option_w_e_3132 {}
+#
+#  FUNCTION
+#     Checks issue GE-3132: Job validation behavour changed since 6.0 / 6.1.
+#     With the issue present, qsub -w e fails if all queues are disabled.
+#*******************************************************************************
+proc qsub_option_w_e_3132 {} {
+   global ts_config CHECK_USER
+
+   set msg_submitted [translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]
+   set msg_exited [translate_macro MSG_QSUB_JOBEXITED_SI "*" "0"]
+
+   # disable all queues
+   # qsub -w e may not fail - this is issue GE-3132
+   disable_queue "all.q"
+
+   # submit the job
+   set options "-sync y -o /dev/null -j y -b y -w e sleep 1"
+   set id [open_remote_spawn_process $ts_config(master_host) $CHECK_USER "qsub" $options]
+   set spawn_id [lindex $id 1]
+
+   set submitted 0
+   set exited 0
+   set exit_status -1
+   set timeout 20
+   expect_user {
+      -i $spawn_id full_buffer {
+         ts_log_severe "expect full_buffer error"
+      }
+      -i $spawn_id timeout {
+         ts_log_severe "timeout"
+      }
+      -i $spawn_id eof {
+         ts_log_severe "got eof"
+      }
+      -i $spawn_id $msg_submitted {
+         set submitted 1
+         # now enable queues to allow the job to run through
+         enable_queue "all.q"
+         trigger_scheduling
+         exp_continue
+      }
+      -i $spawn_id -- $msg_exited {
+         set exited 1
+         exp_continue
+      }
+      -i $spawn_id "_exit_status_:(*)" {
+         set exit_status [get_string_value_between "_exit_status_:(" ")" $expect_out(buffer)]
+         ts_log_fine "got qsub exit status: $exit_status"
+      }
+   }
+   close_spawn_process $id
+
+   set error ""
+   if {$submitted != 1} {
+      append error "job didn't get submitted\n"
+   }
+   if {$exited != 1} {
+      append error "job didn't run through\n"
+   }
+   if {$exit_status != 0} {
+      append error "qsub didn't exit 0\n"
+   }
+
+   if {$error != ""} {
+      ts_log_severe $error
+   }
+}
+
+#****** qsub_option_w/qsub_option_w_w() *************************************************
+#  NAME
+#     qsub_option_w_w() -- check qsub -w w
+#
+#  SYNOPSIS
+#     qsub_option_w_w {}
+#
+#  FUNCTION
+#     Checks qsub option -w w, especially for issue GE-1945.
+#*******************************************************************************
+proc qsub_option_w_w {} {
+   global ts_config
+   global CHECK_USER
+
+   set found_warning 0
+   set found_job_submitted 0
+   set found_timeout 0
+
+   set JOB_SUBMITTED [translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]
+   set WARNING       [translate_macro MSG_JOB_VERIFYWARN]
+   set NOSUITABLEQ_S [translate_macro MSG_JOB_NOSUITABLEQ_S $WARNING]
+
+   set option "-sync y -w w -l arch=no_arch"
+   set jobargs "$option -o /dev/null -e /dev/null $ts_config(product_root)/examples/jobs/sleeper.sh 100"
+
+   set qsub_id [open_remote_spawn_process $ts_config(master_host) $CHECK_USER "qsub" "$jobargs"]
+   set sp_id [lindex $qsub_id 1]
+
+   set timeout 20
+   expect {
+      -i $sp_id full_buffer {
+         ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
+      }
+       -i $sp_id -- "$NOSUITABLEQ_S" {
+         set found_warning 1
+         exp_continue
+      }
+      -i $sp_id -- "$JOB_SUBMITTED" {
+         set found_job_submitted 1
+         trigger_scheduling
+         exp_continue
+      }
+      -i $sp_id "_exit_status_:(*)*\n" {
+            ts_log_fine "got exit status from script:\n$expect_out(buffer)"
+      }
+      -i $sp_id timeout {
+         set found_timeout 1
+      }
+   }
+   close_spawn_process $qsub_id
+
+   if {$found_warning == 0} {
+      ts_log_severe "IZ 1945: qsub -sync -w w broken - got no warning message"
+   } elseif {$found_job_submitted == 0} {
+      ts_log_severe "IZ 1945: qsub -sync -w w broken - got no submitted message"
+   } elseif {$found_timeout == 0} {
+      ts_log_severe "IZ 1945: qsub -sync -w w broken - sync does not wait until jobend"
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
