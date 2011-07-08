@@ -237,10 +237,13 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
       append auto_config_content "SGE_JMX_SSL_KEYSTORE=\"\"\n"
       append auto_config_content "SGE_JMX_SSL_KEYSTORE_PW=\"\"\n"
    }
-   append auto_config_content "SERVICE_TAGS=\"enable\"\n"
+   # SGE 6.* uses SERVICE_TAGS
+   if {$ts_config(gridengine_version) < 80} {
+      append auto_config_content "SERVICE_TAGS=\"disable\"\n"
+   }
    append auto_config_content "CELL_NAME=\"$ts_config(cell)\"\n"
    append auto_config_content "ADMIN_USER=\"$CHECK_USER\"\n"
-   
+
    if {$exechost || $shadowd} {
       set spooldir [get_local_spool_dir $host qmaster 0]
    } else {

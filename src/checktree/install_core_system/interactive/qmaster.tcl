@@ -499,8 +499,8 @@ proc install_qmaster {{report_var report}} {
             continue
          }
 
-         -i $sp_id $SERVICE_TAGS_SUPPORT { 
-            install_send_answer $sp_id $ANSWER_YES "6"
+         -i $sp_id $SERVICE_TAGS_SUPPORT {
+            install_send_answer $sp_id $ANSWER_NO "6"
             continue
          }
 

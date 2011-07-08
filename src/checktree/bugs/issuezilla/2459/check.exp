@@ -359,7 +359,9 @@ proc issue_2459_write_autoinst_config {filename host {do_cleanup 1}} {
    puts $fdo "SHADOW_HOST=\"\""
    puts $fdo "PAR_EXECD_INST_COUNT=\"nonumber\""
    puts $fdo "WINDOWS_SUPPORT=\"fase\""
-   puts $fdo "SERVICE_TAGS=\"ele\""
+   if {$ts_config(gridengine_version) < 80} {
+      puts $fdo "SERVICE_TAGS=\"ele\""
+   }
    puts $fdo "CSP_COPY_CERTS=\"fae\""
    puts $fdo "CSP_RECREATE=\"fae\""
    puts $fdo "CSP_COUNTRY_CODE=\"DUE\""
@@ -442,7 +444,9 @@ proc init_found_install_entries {} {
    set found_install_entries(CSP_RECREATE) 0  
    set found_install_entries(CSP_COPY_CERTS) 0  
    set found_install_entries(CSP_COUNTRY_CODE) 0
-   set found_install_entries(SERVICE_TAGS) 0  
+   if {$ts_config(gridengine_version) < 80} {
+      set found_install_entries(SERVICE_TAGS) 0
+   }
    if {[is_smf_host $ts_config(master_host)]} {
       set found_install_entries(SGE_ENABLE_SMF) 0
    } else {
