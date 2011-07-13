@@ -28,6 +28,7 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2011 Univa Corporation.
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -83,6 +84,7 @@ lappend check_functions "qrsh_wd"                    ;# test the -wd <dir>/-cwd 
 lappend check_functions "qrsh_w_v_test"
 lappend check_functions "qrsh_pty_yes_redirect"
 lappend check_functions "qrsh_pty_yes_line_breaks"   ;# test if NL gets converted to CR NL
+lappend check_functions "qrsh_forward_stdin"         ;# test if stdin forward works via <
 
 proc qrsh_init_level {} {
    global CHECK_ACT_LEVEL
@@ -2166,4 +2168,62 @@ proc qrsh_pty_yes_redirect {} {
       }
    }
    wait_for_end_of_all_jobs 60 0
+}
+
+#****** qrsh/qrsh_forward_stdin () ******
+#
+#  NAME
+#     qrsh_forward_stdin
+#
+#  SYNOPSIS
+#     proc qrsh_forward_stdin { }
+#
+#  FUNCTION
+#     Tests if "qrsh cat < out.txt" works properly.
+#     To do this, this test starts a 
+#     "qrsh cat < $SGE_ROOT/man/man1/qdel.1 > $tmpfile",
+#     checks if qrsh ends automatically within 60 seconds and checks if the 
+#     input- and output-files are identical.
+#     In runlevel long, this is done for hosts of all different architectures
+#     in the test cluster, from all architectures to all architectures.
+#
+#     This test tests the fix for Issue GE-3580.
+#
+#  SEE ALSO
+#
+#*******************************
+proc qrsh_forward_stdin {} {
+   global ts_config CHECK_USER
+   global qrsh_hostlist
+
+   foreach submit_host $qrsh_hostlist {
+      foreach host $qrsh_hostlist {
+         set arch [resolve_arch $submit_host]
+         set tmpfile [get_tmp_file_name $submit_host]
+         set inputfile "$ts_config(product_root)/man/man1/qdel.1"
+
+         # Start "qrsh stdin.sh < input_file"
+         # Job has to finish within 60 seconds (timeout of start_remote_prog) otherwise GE-3580 is still present.
+         ts_log_fine "executing $ts_config(product_root)/bin/$arch/qrsh \
+                      -l h=$host cat < $inputfile > $tmpfile on host $submit_host as $CHECK_USER"
+         # Unfortunatelly we cannot use submit_job as the qrsh support is broken.
+         # created TS-414
+         start_remote_prog $submit_host $CHECK_USER "qrsh" "-l h=$host cat < $inputfile > $tmpfile" exit_code
+
+         if {$exit_code != 0} {
+            ts_log_severe "qrsh job failed. Exit code: $exit_code"
+            delete_all_jobs
+            return
+         }
+
+         # Check if tmp-file is identical to the input-file
+         start_remote_prog $submit_host $CHECK_USER "diff" "$tmpfile $inputfile" exit_code
+         if {$exit_code != 0} {
+            ts_log_severe "Output file differs form input file"
+            delete_all_jobs
+            return
+         }
+      }
+   }
+   wait_for_end_of_all_jobs 60
 }
