@@ -1251,6 +1251,192 @@ proc map_special_users {hostname user win_local_user} {
    }
 }
 
+proc parse_ts_exit_code {buffer} {
+   set pos [string first "ts_exit_code" $buffer]
+   if {$pos >= 0} {
+      set str [string range $buffer $pos end]
+      return [get_string_value_between "ts_exit_code=(" ")" $buffer]
+   }
+
+   return -1
+}
+
+###
+# @brief start a command on a remote host as the test user via ssh
+#
+# Starts a given command with arguments on a given host.
+# Expects passwordless ssh to work.
+# In case of errors will shutdown testsuite.
+# Meant for very basic commands before the testsuite remote mechanism is working.
+#
+# @param[in] hostname
+# @param[in] command
+# @param[in] args
+##
+proc ssh_start_remote_prog {hostname command args} {
+   get_current_cluster_config_array ts_config
+
+   set cmd "$ts_config(testsuite_root_dir)/scripts/start_cmd.sh"
+   append cmd " $command"
+   foreach arg $args {
+      append cmd " $arg"
+   }
+   ts_log_finer "   -> starting ssh $hostname $cmd"
+   set prg_exit_state [catch {
+      spawn "ssh" $hostname $cmd
+   } catch_output]
+   if {$prg_exit_state == 0} {
+      set timeout 5
+      expect {
+         eof {
+            ts_log_finer "   -> ssh($hostname): eof, $expect_out(buffer)"
+            set prg_exit_state [parse_ts_exit_code $expect_out(buffer)]
+         }
+         timeout {
+            ts_log_finer "   -> ssh($hostname): timeout"
+            set prg_exit_state 1
+         }
+         "*ermission denied*" {
+            set prg_exit_state 1
+         }
+         "*onnection refused*" {
+            set prg_exit_state 1
+         }
+         "*Are you sure you want to continue connecting*" {
+            ts_send $spawn_id "yes\n"
+            exp_continue
+         }
+         "ts_exit_code*" {
+            set prg_exit_state [parse_ts_exit_code $expect_out(buffer)]
+            ts_log_finer "   -> ssh($hostname) returned $prg_exit_state"
+         }
+      }
+   }
+
+   # if such a basic operation failes, then exit
+   if {$prg_exit_state != 0} {
+      ts_log_fine "   -> ssh $hostname $cmd failed"
+      testsuite_shutdown 1
+   }
+}
+
+###
+# @brief copies a file to a remote host as the test user via scp
+#
+# Uses scp to copy an arbitrary file to a target directory on a remote host.
+# Expects passwordless ssh/scp to work.
+# In case of errors will shutdown testsuite.
+# Meant for distributing basic files (e.g. files used in open_remote_spawn process)
+# at testsuite startup before the remote mechanism is working.
+#
+# @param[in] hostname
+# @param[in] src
+# @param[in] dest
+##
+proc scp_remote_file {hostname src dest} {
+   get_current_cluster_config_array ts_config
+   set start_script "$ts_config(testsuite_root_dir)/scripts/start_cmd.sh"
+   set cmd "scp $src $hostname:$dest"
+   ts_log_finer "   -> starting $start_script $cmd"
+   set prg_exit_state [catch {
+      spawn $start_script $cmd
+   } catch_output]
+   if {$prg_exit_state == 0} {
+      set timeout 5
+      expect {
+         eof {
+            ts_log_finer "   -> $cmd: eof, $expect_out(buffer)"
+            set prg_exit_state [parse_ts_exit_code $expect_out(buffer)]
+         }
+         timeout {
+            ts_log_finer "   -> $cmd: timeout"
+            set prg_exit_state 1
+         }
+         "*ermission denied*" {
+            set prg_exit_state 1
+         }
+         "*onnection refused*" {
+            set prg_exit_state 1
+         }
+         "*Are you sure you want to continue connecting*" {
+            ts_send $spawn_id "yes\n"
+            exp_continue
+         }
+         "ts_exit_code*" {
+            set prg_exit_state [parse_ts_exit_code $expect_out(buffer)]
+            ts_log_finer "   -> $cmd returned $prg_exit_state"
+         }
+      }
+   }
+
+   # if such a basic operation failes, then exit
+   if {$prg_exit_state != 0} {
+      ts_log_fine "   -> $cmd failed"
+      testsuite_shutdown 1
+   }
+}
+
+###
+# @brief return locally installed script
+#
+# Returns the path to a locally installed testsuite script.
+# If necessary copies the script from testsuite/src/scripts to
+# local_dir/testsuite/scripts
+# We do this currently for 
+#    - shell_start_output.sh
+#    - file_check.sh
+#    - check_identity.sh
+# but the function will work for any script.
+# The scripts are installed once into the local directory after every
+# testsuite startup, later calls to the function use a cached value.
+#
+# @param[in] hostname
+# @param[in] script
+#
+# @return path to the local script
+##
+global get_ts_local_script_cache
+unset -nocomplain get_ts_local_script_cache
+proc get_ts_local_script {hostname script} {
+   get_current_cluster_config_array ts_config
+   global ts_host_config
+   global get_ts_local_script_cache
+
+   # need short hostname
+   set hostname [get_short_hostname $hostname]
+
+   # if we have a cached value then return it
+   if {[info exists get_ts_local_script_cache($hostname,$script)]} {
+      ts_log_finer "   -> returning cached value $get_ts_local_script_cache($hostname,$script)"
+      return $get_ts_local_script_cache($hostname,$script)
+   }
+
+   set source_path "$ts_config(testsuite_root_dir)/scripts/$script"
+
+   # during startup we might not yet have the host config - simply return the original script
+   if {![info exists ts_host_config($hostname,spooldir)]} {
+      ts_log_finer "   -> no ts_host_config yet - returning $source_path"
+      return $source_path
+   }
+
+   if {$ts_host_config($hostname,spooldir) == ""} {
+      ts_log_finer "   -> no local spooldir configured on host $hostname - returning $source_path"
+      set get_ts_local_script_cache($hostname,$script) $source_path
+      return $source_path
+   }
+
+   set target_path "$ts_host_config($hostname,spooldir)/$ts_config(commd_port)/testsuite/scripts"
+
+   # install the script
+   ssh_start_remote_prog $hostname "mkdir" "-p -m 755 $target_path"
+   scp_remote_file $hostname $source_path $target_path
+   set get_ts_local_script_cache($hostname,$script) "$target_path/$script"
+
+   ts_log_finer "   -> returning $target_path/$script"
+   return "$target_path/$script"
+}
+
+
 #****** remote_procedures/open_remote_spawn_process() **************************
 #  NAME
 #     open_remote_spawn_process() -- open spawn process on remote host
@@ -1686,8 +1872,9 @@ proc open_remote_spawn_process { hostname
          # try to start a shell script doing some output we'll wait for
          set catch_return [catch {
             set num_tries $nr_of_tries
+            set shell_start_output [get_ts_local_script $hostname "shell_start_output.sh"]
             # try to start the shell_start_output.sh script
-            ts_send $spawn_id "$testsuite_root_dir/scripts/shell_start_output.sh\n" $hostname
+            ts_send $spawn_id "$shell_start_output\n" $hostname
             set timeout 2
             expect {
                -i $spawn_id eof {
@@ -1702,7 +1889,7 @@ proc open_remote_spawn_process { hostname
                   incr num_tries -1
                   if {$num_tries > 0} {
                      # try to restart the shell_start_output.sh script
-                     ts_send $spawn_id "$testsuite_root_dir/scripts/shell_start_output.sh\n" $hostname
+                     ts_send $spawn_id "$shell_start_output\n" $hostname
                      increase_timeout
                      exp_continue
                   } else {
@@ -1767,7 +1954,8 @@ proc open_remote_spawn_process { hostname
       # now we know that we have a connection and can start a shell script
       # try to check login id
       set catch_return [ catch {
-         ts_send $spawn_id "$testsuite_root_dir/scripts/check_identity.sh\n" $hostname
+         set check_identity [get_ts_local_script $hostname "check_identity.sh"]
+         ts_send $spawn_id "$check_identity\n" $hostname
          set num_tries $nr_of_tries
          set timeout 2
          expect {
@@ -1782,7 +1970,7 @@ proc open_remote_spawn_process { hostname
             -i $spawn_id timeout {
                incr num_tries -1
                if {$num_tries > 0} {
-                  ts_send $spawn_id "$testsuite_root_dir/scripts/check_identity.sh\n" $hostname
+                  ts_send $spawn_id "$check_identity\n" $hostname
                   increase_timeout
                   exp_continue
                } else {
@@ -1877,7 +2065,8 @@ proc open_remote_spawn_process { hostname
          # now we should have the id of the target user
          # check login id
          set catch_return [catch {
-            ts_send $spawn_id "$testsuite_root_dir/scripts/check_identity.sh\n" $hostname
+            set check_identity [get_ts_local_script $hostname "check_identity.sh"]
+            ts_send $spawn_id "$check_identity\n" $hostname
             set num_tries $nr_of_tries
             set timeout 2
             expect {
@@ -1892,7 +2081,7 @@ proc open_remote_spawn_process { hostname
                -i $spawn_id timeout {
                   incr num_tries -1
                   if {$num_tries > 0} {
-                     ts_send $spawn_id "$testsuite_root_dir/scripts/check_identity.sh\n" $hostname
+                     ts_send $spawn_id "$check_identity\n" $hostname
                      increase_timeout
                      exp_continue
                   } else {
@@ -1962,7 +2151,8 @@ proc open_remote_spawn_process { hostname
    # we wait for some time, as it might take some time until the command is visible (NFS)
    if {$re_use_script == 0} {
       set catch_return [catch {
-         ts_send $spawn_id "$testsuite_root_dir/scripts/file_check.sh $script_name\n" $hostname
+         set file_check [get_ts_local_script $hostname "file_check.sh"]
+         ts_send $spawn_id "$file_check $script_name\n" $hostname
          set connect_errors 0
          set num_tries $nr_of_tries
          set timeout 2
@@ -1978,7 +2168,7 @@ proc open_remote_spawn_process { hostname
             -i $spawn_id timeout {
                incr num_tries -1
                if {$num_tries > 0} {
-                  ts_send $spawn_id "$testsuite_root_dir/scripts/file_check.sh $script_name\n" $hostname
+                  ts_send $spawn_id "$file_check $script_name\n" $hostname
                   increase_timeout
                   exp_continue
                } else {
@@ -3033,7 +3223,8 @@ proc check_rlogin_session { spawn_id pid hostname user nr_of_shells {only_check 
       # Normally this branch should not be executed, as the id_check_needed is set to true in close_spawn_id()
       ts_log_fine "Doing identity check. Might be related to forgotten close_spawn_id() call!"
       set catch_return [catch {
-         ts_send $spawn_id "$ts_config(testsuite_root_dir)/scripts/check_identity.sh\n" $con_data(hostname) 0 0
+         set check_identity [get_ts_local_script $hostname "check_identity.sh"]
+         ts_send $spawn_id "$check_identity\n" $con_data(hostname) 0 0
          set num_tries 30
          set timeout 1
          expect {
@@ -3049,7 +3240,7 @@ proc check_rlogin_session { spawn_id pid hostname user nr_of_shells {only_check 
                   if {$num_tries < 12} {
                      ts_log_progress
                   }
-                  ts_send $spawn_id "$ts_config(testsuite_root_dir)/scripts/check_identity.sh\n" $con_data(hostname) 0 0
+                  ts_send $spawn_id "$check_identity\n" $con_data(hostname) 0 0
                   increase_timeout
                   exp_continue
                } else {
@@ -3270,7 +3461,8 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
          # sending just a ENTER
          # if this is not working, send CTRL-C
          ts_log_finest "real user of connection is \"$con_data(real_user)\""
-         ts_send $spawn_id "$ts_config(testsuite_root_dir)/scripts/check_identity.sh\n" $con_data(hostname)
+         set check_identity [get_ts_local_script $con_data(hostname) "check_identity.sh"]
+         ts_send $spawn_id "$check_identity\n" $con_data(hostname)
          set timeout 2
          set num_tries 10
          if {$CHECK_USE_HUDSON == 1} {
@@ -3292,7 +3484,7 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
                   ts_log_finest "close_spawn_process: sending CTRL-C"
                   ts_send $spawn_id "\003" $con_data(hostname) ;# CTRL-C
                   ts_send $spawn_id "\n" $con_data(hostname)
-                  ts_send $spawn_id "$ts_config(testsuite_root_dir)/scripts/check_identity.sh\n" $con_data(hostname)
+                  ts_send $spawn_id "$check_identity\n" $con_data(hostname)
                   increase_timeout
                   exp_continue
                } else {

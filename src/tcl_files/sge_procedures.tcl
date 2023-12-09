@@ -1676,7 +1676,8 @@ proc submit_wait_type_job {job_type host user {variable qacct_info}} {
                         }
                      }
                   } else {
-                     ts_send $sp_id "\n$ts_config(testsuite_root_dir)/scripts/shell_start_output.sh\n" $host
+                     set shell_start_output [get_ts_local_script $host "shell_start_output.sh"]
+                     ts_send $sp_id "\n$shell_start_output\n" $host
                   }
 
                   if { $max_timeouts <= 0 } {

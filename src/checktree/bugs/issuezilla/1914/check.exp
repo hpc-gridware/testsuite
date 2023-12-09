@@ -151,7 +151,8 @@ proc issue_1914_submit_test_job {job_type host user test_path} {
                   }
                } else {
                   ts_log_fine "TS: starting shell_output check script ..."
-                  ts_send $sp_id "\n$ts_config(testsuite_root_dir)/scripts/shell_start_output.sh\n" $host
+                  set shell_start_output [get_ts_local_script $host "shell_start_output.sh"]
+                  ts_send $sp_id "\n$shell_start_output\n" $host
                }
                log_user 1
                if { $max_timeouts > 0 } {
@@ -243,7 +244,8 @@ proc issue_1914_submit_test_job {job_type host user test_path} {
                   }
                } else {
                   ts_log_fine "TS: starting shell_output check script ..."
-                  ts_send $sp_id "\n$ts_config(testsuite_root_dir)/scripts/shell_start_output.sh\n"
+                  set shell_start_output [get_ts_local_script $host "shell_start_output.sh"]
+                  ts_send $sp_id "\n$shell_start_output\n" $host
                }
                log_user 1
                if {$max_timeouts > 0} {
