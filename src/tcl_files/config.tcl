@@ -3366,11 +3366,11 @@ proc config_qmaster_install_options { only_check name config_array } {
    if { $value == -1 } { return -1 }
    
    # -jmx must be set since 8.0.0 in order to activate the JMX dialog
-   if { $value == "none" } {
-      set value "-jmx"
-   } else {
-      append value "-jmx"
-   }
+#   if { $value == "none" } {
+#      set value "-jmx"
+#   } else {
+#      append value "-jmx"
+#   }
 
    # set global values
    set CHECK_QMASTER_INSTALL_OPTIONS  $value

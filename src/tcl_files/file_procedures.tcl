@@ -4902,6 +4902,8 @@ proc parse_testsuite_info_file { user uri info_file } {
 
    set pack_info_index 1
 
+   set was_error 0
+
    for {set i 1} {$i <= $farray(0)} {incr i} {
       set line [string trim $farray($i)]
 
