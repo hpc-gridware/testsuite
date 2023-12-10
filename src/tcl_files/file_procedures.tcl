@@ -3146,9 +3146,10 @@ proc wait_for_remote_file {hostname user path {mytimeout 60} {raise_error 1} {to
    if { $method == "complete_remote"} {
       set exp_cmd [get_binary_path $hostname "expect"]
       if {$exp_cmd != ""} {
+         set script_file [get_ts_local_script $hostname "wait_for_file.exp"]
          set cmd_timeout [expr $mytimeout + 10]
          set output [start_remote_prog $hostname $user "$exp_cmd" \
-                                       "$ts_config(testsuite_root_dir)/scripts/wait_for_file.exp file $path $mytimeout $to_go_away" \
+                                       "$script_file file $path $mytimeout $to_go_away" \
                                        prg_exit_state $cmd_timeout 0 "" "" 0 0]
 
          if {$to_go_away == 0} {
@@ -3300,9 +3301,10 @@ proc wait_for_remote_dir { hostname user path { mytimeout 60 } {raise_error 1} {
    if {$method == "complete_remote"} {
       set exp_cmd [get_binary_path $hostname "expect"]
       if {$exp_cmd != ""} {
+         set script_file [get_ts_local_script $hostname "wait_for_file.exp"]
          set cmd_timeout [expr $mytimeout + 10]
          set output [start_remote_prog $hostname $user "$exp_cmd" \
-                                       "$ts_config(testsuite_root_dir)/scripts/wait_for_file.exp dir $path $mytimeout $to_go_away" \
+                                       "$script_file dir $path $mytimeout $to_go_away" \
                                        prg_exit_state $cmd_timeout 0 "" "" 0 0]
          if {$to_go_away == 0} {
             switch -exact -- $prg_exit_state {
