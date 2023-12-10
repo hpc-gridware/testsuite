@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -98,10 +97,6 @@ proc qmake_setup {} {
    set queue(load_thresholds) "np_load_avg=11"
    set queue(slots)           10
    add_queue "qmake.q" "@allhosts" queue
-
-   # speedup scheduling
-   set schedd_conf(flush_submit_sec) 1
-   set_schedd_config schedd_conf
 }
 
 proc qmake_setup_level {} {
@@ -150,9 +145,6 @@ proc qmake_cleanup {} {
 
    # delete queue
    del_queue qmake.q "" 0 1
-
-   # reset the scheduler config
-   reset_schedd_config
 }
 
 proc qmake_cleanup_level {} {

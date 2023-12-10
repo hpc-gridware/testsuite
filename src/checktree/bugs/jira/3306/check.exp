@@ -93,6 +93,8 @@ proc ge_3306_setup {} {
 
    # set a high scheduling interval - we trigger it manually
    set schedd_config(schedule_interval) "0:10:0"
+   set schedd_config(flush_submit_sec) "0"
+   set schedd_config(flush_finish_sec) "0"
    set_schedd_config schedd_config
 
    # restart qmaster (scheduler) instrumented with delay before scheduling

@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -206,11 +205,6 @@ proc jsv_ge_add_setup {} {
    set global_conf(max_unheard) "00:00:15"
    set global_conf(jsv_url) "script:${jsv_base_path}/jsv.sh"   
    set_config_and_propagate global_conf
-
-   # change schedd config
-   set sched_conf(flush_submit_sec) "1"
-   set sched_conf(flush_finish_sec) "1"
-   set_schedd_config sched_conf
 }
 
 proc jsv_ge_add_cleanup {} {
@@ -231,7 +225,6 @@ proc jsv_ge_add_cleanup {} {
 
    # reset configurations
    reset_config_and_propagate jsv_org_global_conf
-   reset_schedd_config
 
    # delete queue, pe and ckpt
    del_queue "all2.q" "@allhosts" 0 1

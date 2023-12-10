@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -110,7 +109,6 @@ proc per_job_consumables_setup {} {
 
    set sched_conf(queue_sort_method) seqno
    set sched_conf(schedule_interval) "0:0:5"
-   set sched_conf(flush_submit_sec)  "1"
    set_schedd_config sched_conf
 
    disable_queue "all.q"

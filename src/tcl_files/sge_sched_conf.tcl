@@ -1,4 +1,3 @@
-#!/usr/local/bin/tclsh
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -94,8 +93,8 @@ proc reset_schedd_config {} {
    set default_array(load_formula)                    "np_load_avg"
    set default_array(schedd_job_info)                 "false"
 
-   set default_array(flush_submit_sec)                "0"
-   set default_array(flush_finish_sec)                "0"
+   set default_array(flush_submit_sec)                "1"
+   set default_array(flush_finish_sec)                "1"
    set default_array(params)                          "none"
    set default_array(reprioritize_interval)           "00:00:40"
 

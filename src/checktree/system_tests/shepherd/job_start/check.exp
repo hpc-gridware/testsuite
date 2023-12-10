@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -139,8 +138,6 @@ proc job_start_setup  {} {
 
    ts_log_fine "saving actual configuration ..."   
    get_config job_start_stored_configuration
-   set my_job_start_schedd_config(schedule_interval) "0:0:01"
-   set_schedd_config my_job_start_schedd_config 
 
    # create parallel environment
    set pe(slots)              1000
@@ -163,12 +160,9 @@ proc job_start_cleanup  {} {
    wait_for_end_of_all_jobs 60
 
    ts_log_fine "restoring original configuration ..."
-   reset_schedd_config
    reset_config job_start_stored_configuration
-   
 
    del_pe tight_job_start
-
 
    switch_to_admin_user_system
 }

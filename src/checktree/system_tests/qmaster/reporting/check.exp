@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -132,11 +131,6 @@ proc reporting_setup  {} {
    get_config reporting_old_config_test_host $reporting_test_host
    get_complex reporting_complex_backup
 
-   # enable immediate scheduling
-   set schedd_conf(flush_submit_sec) 1
-   set schedd_conf(flush_finish_sec) 1
-   set_schedd_config schedd_conf
-
    # create consumables for consumable reporting test
    set complex(F001) "F001 INT <= YES YES 0 0"
    set complex(F002) "F002 INT <= YES YES 0 0"
@@ -182,7 +176,6 @@ proc reporting_cleanup {} {
    reset_config reporting_old_config
    reset_config_and_propagate reporting_old_config_test_host $reporting_test_host
    set_exechost reporting_old_exechost $reporting_test_host
-   reset_schedd_config
 
    # remove test queues
    del_queue "reporting_super" $reporting_test_host 0 1

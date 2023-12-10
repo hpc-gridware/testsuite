@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -184,10 +183,6 @@ proc usage_setup {} {
    # backup old config
    get_config saved_config
 
-   # set scheduler flushing params
-   set my_schedd_conf(flush_submit_sec) "1"
-   set_schedd_config my_schedd_conf 
-
    # set global config params
    set new_config(load_report_time) "0:0:5"
    set new_config(execd_params) "$saved_config(execd_params) acct_reserved_usage=1 sharetree_reserved_usage=1"
@@ -229,8 +224,6 @@ proc usage_cleanup {} {
    # reset config
    reset_config_and_propagate saved_config
 
-   reset_schedd_config;
-   
    del_queue usage.q "" 0 1
 
    # remove pe's

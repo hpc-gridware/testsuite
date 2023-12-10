@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -119,11 +118,6 @@ proc jsv_full_setup {} {
    set global_conf(load_report_time) "00:00:04"
    set global_conf(max_unheard) "00:00:15"
    set_config global_conf
-
-   # change schedd config
-   set sched_conf(flush_submit_sec) "1"
-   set sched_conf(flush_finish_sec) "1"
-   set_schedd_config sched_conf
 }
 
 proc jsv_full_cleanup {} {
@@ -144,7 +138,6 @@ proc jsv_full_cleanup {} {
 
    # reset configurations
    reset_config jsv_org_global_conf
-   reset_schedd_config
 
    # unset our test's global variables
    foreach var "org_global_conf jsv_enabled jsv_base_path jsv_job_id jsv_hjob_id" {

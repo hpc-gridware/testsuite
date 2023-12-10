@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -184,11 +183,6 @@ proc jsv_ge_mod_setup_level {} {
    set global_conf(max_unheard) "00:00:15"
    set_config_and_propagate global_conf
 
-   # change schedd config
-   set sched_conf(flush_submit_sec) "1"
-   set sched_conf(flush_finish_sec) "1"
-   set_schedd_config sched_conf
-
    # submit one job which can be used for hold_jid test
    set jsv_hjob_id [submit_job "-N h_job -h -t 1-2 $ts_config(product_root)/examples/jobs/sleeper.sh 60"]
    set jsv_job_id  [submit_job "-N job -h -t 1-2 $ts_config(product_root)/examples/jobs/sleeper.sh 60"]
@@ -216,13 +210,11 @@ proc jsv_ge_mod_cleanup_level {} {
 
    # reset configurations
    reset_config_and_propagate jsv_org_global_conf
-   reset_schedd_config
 
    # delete pe and ckpt
    del_pe "jsv_ge_mod_pe"
    del_ckpt "jsv_ge_mod_ckpt"
    del_project "jsv_ge_mod_prj"
-
 }
 
 proc jsv_ge_mod_cleanup {} {

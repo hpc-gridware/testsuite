@@ -69,11 +69,6 @@ proc max_dyn_ec_setup {} {
    # we want to modify the global config - make a backup
    get_config max_dyn_ec_backup
 
-   # scheduling on demand
-   set sconf(flush_submit_sec) 1
-   set sconf(flush_finish_sec) 1
-   set_schedd_config sconf
-
 }
 
 proc max_dyn_ec_cleanup {} {
@@ -86,7 +81,6 @@ proc max_dyn_ec_cleanup {} {
 
    # standard reset config
    reset_config max_dyn_ec_backup
-   reset_schedd_config
 
    # unset our test's global variables
    foreach var "max_dyn_ec_backup" {

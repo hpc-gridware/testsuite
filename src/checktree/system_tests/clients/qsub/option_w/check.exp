@@ -63,15 +63,9 @@ proc qsub_option_w_init_level {} {
 # -------- local test procedures: initialization------------------------------
 
 proc qsub_option_w_setup {} {
-   # speed up scheduling
-   set sconf(flush_submit_sec) 1
-   set sconf(flush_finish_sec) 1
-   set_schedd_config sconf
 }
 
 proc qsub_option_w_cleanup {} {
-   # we modified the scheduler configuration
-   reset_schedd_config
 }
 
 #****** qsub_option_w/qsub_option_w_qsub_sync() ********************************

@@ -964,6 +964,8 @@ proc setup_schedconf {} {
           if { [ string compare $param "weight_tickets_deadline" ] == 0 } { continue }
           if { [ string compare $param "job_load_adjustments" ] == 0 } { continue }
           if { [ string compare $param "schedule_interval" ] == 0 } { continue }
+          if { [ string compare $param "flush_submit_sec" ] == 0 } { continue }
+          if { [ string compare $param "flush_finish_sec" ] == 0 } { continue }
           ts_log_config "scheduler parameter $param:\ndefault setup: $old, after testsuite reset: $new" 
        }
     }

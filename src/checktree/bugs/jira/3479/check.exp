@@ -84,7 +84,6 @@ proc ge_3479_setup {} {
 
    # scheduler config: load_formula + speed up
    set schedd_conf(load_formula) "-slots"
-   set schedd_conf(flush_submit_sec) 1
    set_schedd_config schedd_conf
 
    # test queue

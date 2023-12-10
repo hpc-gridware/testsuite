@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -101,6 +100,8 @@ proc issue_2328_setup {} {
    set mysched_config(params) "PROFILE=true"
    set mysched_config(max_reservation) "1000"
    set mysched_config(schedule_interval) "0:0:30"
+   set mysched_config(flush_submit_sec) "0"
+   set mysched_config(flush_finish_sec) "0"
    mod_schedd_config mysched_config
 
    # Modify the global cluster 

@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -131,8 +130,6 @@ proc project_access_lists_setup {} {
    get_exechost      project_access_lists_host_conf $project_access_lists_host  
    get_exechost      project_access_lists_global_host_conf "global"       
    get_config        project_access_lists_cluster_conf 
-   get_schedd_config project_access_lists_schedd_conf
-   set my_schedd_config(schedule_interval)       "0:0:01"
    # in SGE >= 62, schedd_info is turned off by default
    set my_schedd_config(schedd_job_info) "true"
    set_schedd_config my_schedd_config
@@ -182,7 +179,7 @@ proc project_access_lists_cleanup {} {
    set_exechost  project_access_lists_host_conf $project_access_lists_host 
    set_exechost  project_access_lists_global_host_conf "global"
    reset_config_and_propagate project_access_lists_cluster_conf
-   set_schedd_config project_access_lists_schedd_conf
+   reset_schedd_config
 
    # enable all.q
    foreach host $ts_config(execd_nodes) {

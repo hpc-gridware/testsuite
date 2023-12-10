@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -194,9 +193,6 @@ proc qsub_setup {} {
    # set config for fast scheduling / fast writing of accounting record
    set my_config(reporting_params) "accounting=true reporting=false flush_time=00:00:01 joblog=true sharelog=00:10:00"
    set_config my_config
-
-   set my_schedd_conf(flush_submit_sec) "1"
-   set_schedd_config my_schedd_conf
 }
 
 proc qsub_cleanup {} {
@@ -219,7 +215,6 @@ proc qsub_cleanup {} {
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   reset_schedd_config
    reset_config stored_configuration
 
    # unset our test global variables

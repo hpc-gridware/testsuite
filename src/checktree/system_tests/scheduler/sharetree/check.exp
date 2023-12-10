@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -412,8 +411,6 @@ proc share_tree_test {} {
       }
    }
 
-#   set mod_config(schedule_interval)    "0:0:10"
-#   set_schedd_config mod_config
    enable_queue "$test_queue"
 
    set done 0

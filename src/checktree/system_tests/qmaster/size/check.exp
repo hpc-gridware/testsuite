@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -92,7 +91,6 @@ proc qmaster_size_init_level {} {
    global MONITOR_SIZE_ERROR
 
    upvar MONITOR_SIZE_INTERVAL    monitor_size_interval
-   upvar SCHEDULE_INTERVAL        schedule_interval
    upvar NUM_ZOMBIES              num_zombies
    upvar CHECK_IDLE_DELAY         check_idle_delay
    upvar CHECK_IDLE_DURATION      check_idle_duration
@@ -626,14 +624,6 @@ proc check_flood {} {
 proc check_size_config {} {
    global ts_config
 
-   upvar SCHEDULE_INTERVAL        schedule_interval
-
-   set schedd_conf(flush_submit_sec) 1
-   set schedd_conf(flush_finish_sec) 1
-
-   set schedd_conf(schedule_interval)   $schedule_interval
-   set_schedd_config schedd_conf
-
    monitor_size [get_job_count] "set initial parameters"
 }
 
@@ -709,8 +699,6 @@ proc qmaster_size_cleanup {} {
 
    delete_all_jobs
    wait_for_end_of_all_jobs 180
-
-   reset_schedd_config
 
    reset_config config_backup
 

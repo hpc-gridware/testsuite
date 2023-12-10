@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -88,9 +87,6 @@ proc submit_del_setup  {} {
    global CHECK_MAIN_RESULTS_DIR CHECK_USER
    global submit_del_qconfig
    global submit_del_check_queue
-
-   set my_schedd_conf(flush_submit_sec) "1"
-   set_schedd_config my_schedd_conf
 }
 
 proc submit_del_test { } {
@@ -167,9 +163,6 @@ proc submit_del_test { } {
 proc submit_del_cleanup  {} {
    global ts_config
    global submit_del_qconfig submit_del_check_queue
-
-
-   reset_schedd_config
 
    delete_all_jobs
    wait_for_end_of_all_jobs 100
