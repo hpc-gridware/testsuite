@@ -271,6 +271,9 @@ set CHECK_DISPLAY_OUTPUT [set env(DISPLAY)]
 } else {
 set CHECK_DISPLAY_OUTPUT "undefined"
 }
+global CHECK_START_VNCSERVER
+set CHECK_START_VNCSERVER 0
+
 global CHECK_SETTINGS_VERSION    ;# settings file version number
 set CHECK_SETTINGS_VERSION "undefined"
 global CHECK_PRODUCT_VERSION_NUMBER ;# version string of qstat -help of tested system
@@ -6260,40 +6263,6 @@ proc select_runlevel {} {
         }
      }
 }
-proc check_display {} {
-     global CHECK_DISPLAY_OUTPUT CHECK_USER
-
-     if { [ string compare $CHECK_DISPLAY_OUTPUT "undefined" ] == 0 } {
-        puts "no debug x display set"
-        return -1
-     }
-
-     if { [ have_root_passwd ] != 0 } {
-         set_root_passwd
-     }
-
-     ts_log_fine "using display: $CHECK_DISPLAY_OUTPUT"
-
-     set local_host [gethostname]
-     set xterm_path [get_binary_path $local_host "xterm"]
-
-     start_remote_prog $local_host "$CHECK_USER" $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e sleep 1"
-     if { $prg_exit_state != 0 } {
-         puts "can't open display $CHECK_DISPLAY_OUTPUT as user $CHECK_USER from host $local_host"
-         return -1
-     }
-
-     if { [ have_root_passwd ] != 0 } {
-         set_root_passwd
-     }
-     start_remote_prog "$local_host" "root" $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e sleep 1"
-     if { $prg_exit_state != 0 } {
-         puts "can't open display $CHECK_DISPLAY_OUTPUT as user root from host $local_host"
-         return -1
-     }
-     return 0
-}
-
 
 proc set_command_line_options {} {
      global CHECK_ENABLED_RUNLEVELS CHECK_ENABLED_CATEGORIES
@@ -8201,6 +8170,8 @@ proc source_tcl_files {} {
    ts_source $libdir/report_procedures
    ts_source $libdir/hudson_procedures
 
+   ts_source $libdir/display
+
    # source a user private tcl file, e.g. to contain a
    # inhouse_cluster_post_install function
    ts_source $libdir/private
@@ -8792,6 +8763,8 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "                      please enable xhost display for all users)"
       puts ""
       puts "display DISPLAY       set display for daemon debug windows"
+      puts "vncserver <num>       starts vnc server on display number <num> at testsuite startup"
+      puts "                      and terminates it when shutting down testsuite"
       puts ""
       puts "coverage <type(s)>    with code coverage analysis, type =\"tcov|insure|emma\""
       puts "coverage_dir <dir>    directory for test coverage profiles"
@@ -8940,6 +8913,14 @@ for {set i 0} {$i < $argc} {incr i} {
    }
    if { ( [string compare [lindex $argv $i] "--display"] == 0 ) || ([string compare [lindex $argv $i] "display"] == 0) } {
       incr i
+      set CHECK_DISPLAY_OUTPUT [lindex $argv $i]
+      set CHECK_SET_USER_ENV_DISPLAY 0
+      continue
+   }
+
+   if { ( [string compare [lindex $argv $i] "--vncserver"] == 0 ) || ([string compare [lindex $argv $i] "vncserver"] == 0) } {
+      incr i
+      set CHECK_START_VNCSERVER 1
       set CHECK_DISPLAY_OUTPUT [lindex $argv $i]
       set CHECK_SET_USER_ENV_DISPLAY 0
       continue
@@ -9649,6 +9630,11 @@ proc ctrlc {} {
 }
 
 trap ctrlc { SIGINT }
+
+# check / start vnc server if configured
+if {$CHECK_START_VNCSERVER} {
+   check_start_vncserver
+}
 
 if {$do_nomain == 0} {
   if {$daemon_debug != 0} {
