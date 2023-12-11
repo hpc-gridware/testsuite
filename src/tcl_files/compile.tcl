@@ -718,108 +718,12 @@ proc compile_source { { do_only_hooks 0} } {
    } else {
       set do_aimk_depend_clean 0
    }
-   if {$check_do_clean_compile} {
-      # make dependencies before compile clean
-      if {$do_only_hooks == 0} {
-         if {[compile_depend $compile_hosts report 1] != 0} {
-            incr error_count 1
-         } else {
-            set compile_depend_done "true"
-            set do_aimk_depend_clean 0
-         }
-      } else {
-         ts_log_fine "Skip aimk compile, I am on do_only_hooks mode"
-      }
-
-      # after an update, do an aimk clean
-      if {$do_only_hooks == 0} {
-         # TODO: remove pre building on java host if ant build procedure
-         #       supports parallel build correctly
-         set tmp_java_compile_host [get_preferred_build_host $compile_hosts]
-         set exclude_host ""
-         if {[lsearch $compile_hosts $tmp_java_compile_host] >= 0} {
-            if {[compile_with_aimk $tmp_java_compile_host report "compile_clean_java_build_host" "clean"] != 0} {
-               incr error_count 1
-            } else {
-               if {![wait_for_NFS_after_compile_clean $tmp_java_compile_host report]} {
-                  incr error_count 1
-               } else {
-                  set exclude_host $tmp_java_compile_host
-               }
-            }
-         }
-
-         set tmp_clean_list {}
-         foreach chost $compile_hosts {
-            if {$chost != $exclude_host} {
-               lappend tmp_clean_list $chost
-            }
-         }
-
-         if {[compile_with_aimk $tmp_clean_list report "compile_clean" "clean"] != 0} {
-            incr error_count 1
-         }
-
-         if {$error_count == 0} {
-            set aimk_clean_done 1
-            if {![wait_for_NFS_after_compile_clean $compile_hosts report]} {
-               incr error_count 1
-            }
-         }
-      } else {
-         ts_log_fine "Skip aimk compile, I am on do_only_hooks mode"
-      }
-
-      # execute all registered compile_clean hooks of the checktree
-      set res [exec_compile_clean_hooks $compile_hosts report]
-      if {$res < 0} {
-         report_add_message report "exec_compile_clean_hooks returned fatal error"
-         incr error_count 1
-      } elseif {$res > 0} {
-         report_add_message report "$res compile_clean hooks failed\n"
-         incr error_count 1
-      } else {
-         report_add_message report "All compile_clean hooks successfully executed\n"
-      }
-
-      # after an update, delete macro messages file to have it updated
-      set macro_messages_file [get_macro_messages_file_name]
-
-      # only clean macro file if GE sources were updated!
-      if {[file isfile $macro_messages_file] && $do_only_hooks == 0} {
-         ts_log_fine "deleting macro messages file after update!"
-         ts_log_fine "file: $macro_messages_file"
-         file delete $macro_messages_file
-      }
-      update_macro_messages_list
-   }
 
    # do clean (if not already done)
    if {$error_count == 0 && $check_do_clean_compile == 1 && $aimk_clean_done == 0} {
       if {$do_only_hooks == 0} {
-         # TODO: remove pre building on java host if ant build procedure
-         #       supports parallel build correctly
-         set tmp_java_compile_host [host_conf_get_java_compile_host]
-         set exclude_host ""
-         # if no java compile host is configured, skip this step
-         if {[lsearch $compile_hosts $tmp_java_compile_host] >= 0} {
-            if {[compile_with_aimk $tmp_java_compile_host report "compile_clean_java_build_host" "clean"] != 0} {
-               incr error_count 1
-            } else {
-               if {![wait_for_NFS_after_compile_clean $tmp_java_compile_host report]} {
-                  incr error_count 1
-               } else {
-                  set exclude_host $tmp_java_compile_host
-               }
-            }
-         }
 
-         set tmp_clean_list {}
-         foreach chost $compile_hosts {
-            if {$chost != $exclude_host} {
-               lappend tmp_clean_list $chost
-            }
-         }
+         set tmp_clean_list $compile_hosts
 
          if {[compile_with_aimk $tmp_clean_list report "compile_clean" "clean"] != 0} {
             incr error_count 1
@@ -881,16 +785,6 @@ proc compile_source { { do_only_hooks 0} } {
             if {[lsearch $compile_hosts $java_doc_build_host] >= 0 &&
                 [string first "-no-java" $options] == -1} {
                if {[compile_with_aimk $java_doc_build_host report "java_doc" "-javadoc"] != 0} {
-                  incr error_count 1
-               }
-            }
-
-            # TODO: remove pre building on java host if ant build procedure
-            #       supports parallel build correctly
-            set tmp_java_compile_host [host_conf_get_java_compile_host]
-            # skip this step if there is no java build host configured
-            if {[lsearch $compile_hosts $tmp_java_compile_host] >= 0} {
-               if {[compile_with_aimk $tmp_java_compile_host report "compile_java_build_host"] != 0} {
                   incr error_count 1
                }
             }
@@ -1105,27 +999,32 @@ proc compile_with_aimk {host_list a_report task_name {aimk_options ""}} {
    set table_row 2
    set status_rows {}
    set status_cols {status file}
-   set prog "$ts_config(testsuite_root_dir)/scripts/remotecompile.sh"
-   set par1 "$ts_config(source_dir)"
+   set compile_prog "$ts_config(testsuite_root_dir)/scripts/remotecompile.sh"
+   set compile_dir "$ts_config(source_dir)"
+
+   # add build number
    if {$define_daily_build_nr} {
-      set par2 "-DDAILY_BUILD_NUMBER=$build_number $my_compile_options"
+      set compile_args "-DDAILY_BUILD_NUMBER=$build_number $my_compile_options"
    } else {
-      set par2 "$my_compile_options"
+      set compile_args "$my_compile_options"
    }
-   ts_log_fine "$prog $par1 '$par2'"
 
    set spawn_list {}
    foreach host $host_list {
-      # start build jobs
-      ts_log_fine "-> starting $task_name on host $host ..."
+      # use all processors for regular build of C code
+      if {$task_name == "compile"} {
+         set compile_args "$compile_args -parallel [node_get_processors $host]"
+      }
 
-      # we have to make sure that the build number is compiled into
-      # the object code (therefore delete the appropriate object module).
+      # start build jobs
+      ts_log_fine "starting $task_name on host $host with switches $compile_args"
+
+      # enforce deletion of file containing the build_number
       if {$define_daily_build_nr} {
          delete_build_number_object $host $build_number
       }
 
-      set open_spawn [open_remote_spawn_process $host $CHECK_USER $prog "$par1 '$par2'" 0 "" "" 0 15 0]
+      set open_spawn [open_remote_spawn_process $host $CHECK_USER $compile_prog "$compile_dir '$compile_args'" 0 "" "" 0 15 0]
       set spawn_id [lindex $open_spawn 1]
 
       set host_array($spawn_id,host) $host
@@ -1135,16 +1034,16 @@ proc compile_with_aimk {host_list a_report task_name {aimk_options ""}} {
 
       # initialize fancy compile output
       lappend status_rows $host
-      set status_array(file,$host)     "unknown"
-      set status_array(status,$host)   "running"
+      set status_array(file,$host) "unknown"
+      set status_array(status,$host) "running"
+      set status_array(compile_args,$host) $compile_args
       incr num 1
    }
 
    ts_log_fine "now waiting for end of compile ..."
    set status_updated 1
    set status_time 0
-   set timeout 3600 ;# need this extreme long timeout because of long jgdi wrapper classes
-   # TODO (CR): decrease timeout when jgdi wrapper classes compilation is splitted into smaller c files
+   set timeout 60
    set done_count 0
    log_user 0
 
@@ -1292,7 +1191,7 @@ proc compile_with_aimk {host_list a_report task_name {aimk_options ""}} {
             }
          }
       }
-      if { $do_stop == 1 } {
+      if {$do_stop == 1} {
          foreach tmp_spawn_id $spawn_list {
             set host $host_array($tmp_spawn_id,host)
             ts_log_fine "stoping $tmp_spawn_id (host: $host)!"
@@ -1321,16 +1220,14 @@ proc compile_with_aimk {host_list a_report task_name {aimk_options ""}} {
 
          # output compile status
          set status_output [print_xy_array $status_cols $status_rows status_array status_max_column_len status_max_index_len]
-         #if {[info exists status_max_column_len]} {
-         #   unset status_max_column_len
-         #}
-         #if {[info exists status_max_index_len]} {
-         #   unset status_max_index_len
-         #}
+         
+         # show
          clear_screen
          ts_log_frame INFO "================================================================================"
-         ts_log_info "open compile connections (aimk $my_compile_options):\n" 0 "" 1 0 0
-         ts_log_info $status_output 0 "" 1 0 0
+         foreach host $host_list {
+            ts_log_info "task \'$task_name\' on \'$host\' with args \'$status_array(compile_args,$host)\'" 0 "" 1 0 0
+         }
+         ts_log_info "$status_output" 0 "" 1 0 0
          ts_log_frame INFO "================================================================================"
       }
    }
