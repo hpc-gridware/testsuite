@@ -1,5 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/tclsh
-# expect script 
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #

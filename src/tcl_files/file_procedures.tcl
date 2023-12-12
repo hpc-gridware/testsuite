@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/tclsh
 # expect script 
 #___INFO__MARK_BEGIN__
 ##########################################################################
@@ -2022,7 +2021,7 @@ proc create_shell_script { scriptfile
       } else {
          append script_content "unset SGE_SINGLE_LINE\n"
       }
-#      TODO (CR): check out if LS_COLORS settings may disable qtcsh or qrsh on linux
+#      TODO (CR): check out if LS_COLORS settings may disable qrsh on linux
        append script_content "unset LS_COLORS\n" 
 #      do not enable this without rework of qstat parsing routines
 #      append script_content "SGE_LONG_QNAMES=40\n"

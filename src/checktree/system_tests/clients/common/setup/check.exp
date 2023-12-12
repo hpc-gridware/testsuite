@@ -1,4 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -112,7 +111,6 @@ proc client_setup_do_test {scenario expected_error_list {error_info_message_arra
    # qacct - it doesn't depend on these files or a running qmaster
    # qmake - it is not linked against SGE code, but calls qrsh
    # qping - it does not rely on the tested mechanisms
-   # qtcsh - is a shell - would need shell runtime checks
    # sgepasswd - doesn't rely on act_qmaster
    set commands(index)      "qalter qconf qdel qhold qhost qlogin qmod qresub qrls qrsh qselect qsh qstat qsub"
    set commands(qalter,args) "-o /dev/null 1"

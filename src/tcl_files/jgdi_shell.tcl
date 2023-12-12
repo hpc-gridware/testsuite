@@ -1,6 +1,3 @@
-#!/vol2/TCL_TK/glinux/bin/expect
-# expect script 
-# test SGE/SGEEE System
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
