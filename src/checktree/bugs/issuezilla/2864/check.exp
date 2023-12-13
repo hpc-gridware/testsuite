@@ -84,8 +84,6 @@ proc issue_2864_setup {} {
       return 99
    }
 
-   
-
    set pe(slots)             "2"
    set pe(allocation_rule)   "\$round_robin"
    add_pe "round_robin" pe
@@ -115,6 +113,7 @@ proc issue_2864_setup {} {
    set schedconf(job_load_adjustments)       "NONE"
    set schedconf(load_adjustment_decay_time) "0:0:00"
    set schedconf(params)                     "MONITOR=true"
+   set schedconf(queue_sort_method)          "seqno"
    set result [set_schedd_config schedconf]
 
    # ensure schedule file exists
@@ -138,6 +137,9 @@ proc issue_2864_cleanup {  } {
 
    # reset the scheduler configuration
    reset_schedd_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
 
    # remove the cqueues
    del_queue "A" "" 1 1

@@ -2589,7 +2589,7 @@ proc resolve_host {name {long 0}} {
 #     queue - queue name e.g. "queue1@testhost"
 #
 #*******************************************************************************
-proc resolve_queue { queue } { 
+proc resolve_queue {queue {raise_queue_too_long_error 1}} { 
    set at_sign [string first "@" $queue]
    set new_queue_name $queue
    if { $at_sign >= 0 } {
@@ -2610,8 +2610,8 @@ proc resolve_queue { queue } {
    }
    ts_log_finest "queue \"$queue\" resolved to \"$new_queue_name\""
 
-   if { [string length $new_queue_name] > 30 } {
-      ts_log_config "The length of the queue name \"$new_queue_name\" will exceed qstat queue name output"
+   if {[string length $new_queue_name] > 30 } {
+      ts_log_config "The length of the queue name \"$new_queue_name\" will exceed qstat queue name output" $raise_queue_too_long_error
    }
 
    return $new_queue_name 

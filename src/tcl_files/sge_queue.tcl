@@ -676,8 +676,12 @@ proc get_queue_state { queue_name } {
   get_current_cluster_config_array ts_config
 
   # resolve the queue name
-  set queue [resolve_queue $queue_name]
-  set result [start_sge_bin "qstat" "-f -q $queue"]
+  set queue [resolve_queue $queue_name 0]
+  # long queue names would be truncated by plain qstat, e.g.
+  # test.1684141028@centos-7-amd64-1
+  # set the size of the queue column
+  set qstat_env(SGE_LONG_QNAMES) [expr [string length $queue] + 1]
+  set result [start_sge_bin "qstat" "-f -q $queue" "" "" prg_exit_state 60 "" "bin" output_lines qstat_env]
   if {$prg_exit_state != 0} {
      ts_log_severe "qstat -f -q $queue failed:\n$result"
      return ""
