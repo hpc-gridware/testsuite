@@ -149,17 +149,6 @@ proc jsv_script_setup {} {
    set jsv_expect_timeout 4
    set jsv_base_path "$ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_script"
 
-   # create a Java JSV script that uses the jjsv.sh from the GE distribution 
-   # to start our own test code contained in the set of build class files in 
-   # CLASSES directory
-   set jjsv_filename [get_tmp_file_name $ts_config(master_host) "jjsv" "sh"]
-   set jjsv_dist_script "$ts_config(product_root)/util/resources/jsv/jjsv.sh"
-   set jjsv_classpath "-cp $ts_config(source_dir)/CLASSES/jjsv/test/classes"
-   set jjsv_class "com.sun.grid.jsv.ts.JsvScriptTest"
-   create_shell_script $jjsv_filename $ts_config(master_host) "exec" "$jjsv_dist_script $jjsv_classpath $jjsv_class" "" "" "/bin/sh" 0 1 1 1
-
-   puts "$jjsv_filename"
-
    # TODO: Use correct path in test script !!!
    # How to do:
    # tmp_file_name [get_tmp_file_name $ts_config(master_host) "jsv_script" "sh"]
@@ -190,15 +179,6 @@ proc jsv_script_setup {} {
       lappend jsv_enter_list "\r\n"
       lappend jsv_enter2_list "\r\n"
    }
-
-   # test Java JSV template
-   if {1} {
-      lappend jsv_script_list $jjsv_filename 
-      lappend jsv_name_list "JavaJSV"
-      lappend jsv_enter_list "\r\n"
-      lappend jsv_enter2_list "\r\n"
-   }
-
 
    # spawn processes and store id's so that the can be terminated later 
    set i 0
