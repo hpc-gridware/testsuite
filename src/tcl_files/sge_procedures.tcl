@@ -4906,64 +4906,71 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1}} {
 #     sge_procedures/delete_job()
 #     sge_procedures/submit_job_parse_job_id()
 #*******************************
+global g_submit_job_messages
+unset -nocomplain g_submit_job_messages
 proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {cd_dir ""} {show_args 1} {qcmd "qsub"} {dev_null 1} {the_output ""} {ignore_list {}}} {
-   global CHECK_USER
    get_current_cluster_config_array ts_config
+   global g_submit_job_messages
+   global CHECK_USER
 
    if {$the_output != ""} {
       upvar $the_output output
       set output ""
    }
 
-   # we first want to parse errors first, then the positive messages, 
-   # as e.g. an immediate job might be correctly submitted, but then cannot be scheduled
-   set messages(index) "-3 -6 -7 -8 -9 -10 -11 -12 -13 -14 -15 -16 -17 -18 -19 -20 -21 -22 -23 -24 -25 -26 -27 -28 -29 -30 -31 -32 -33 -34 -35 -36 -37 -38"
+   # cache the messages in a global variable, map it to our local messages variable
+   upvar 0 g_submit_job_messages messages
+   if {![info exists messages(index)]} {
+      ts_log_fine "submit_job: translating messages"
+      # we first want to parse errors first, then the positive messages, 
+      # as e.g. an immediate job might be correctly submitted, but then cannot be scheduled
+      set messages(index) "-3 -6 -7 -8 -9 -10 -11 -12 -13 -14 -15 -16 -17 -18 -19 -20 -21 -22 -23 -24 -25 -26 -27 -28 -29 -30 -31 -32 -33 -34 -35 -36 -37 -38"
+      append messages(index) " 0 1 2"
 
-   append messages(index) " 0 1 2"
+      # success messages:
+      set messages(0)      "*[translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]*"
+      set messages(1)      "*[translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_S "*"]*"
+      set messages(2)      "*[translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUS "*" "*" "*" "*" "*"]*"
 
-   # success messages:
-   set messages(0)      "*[translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]*"
-   set messages(1)      "*[translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_S "*"]*"
-   set messages(2)      "*[translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUS "*" "*" "*" "*" "*"]*"
+      # failure messages:
+      set messages(-14)   "TODO: jobnet handling changed, old message NON_AMBIGUOUS"
+      set messages(-15)   "TODO: jobnet handling changed, old message UNAMBIGUOUSNESS"
+      set messages(-24)   "*[translate_macro MSG_JOB_NAMETOOLONG_I "*"]*"
+      set messages(-25)   "*[translate_macro MSG_JOB_JOBALREADYEXISTS_S "*"]*"
+      set messages(-26)   "*[translate_macro MSG_INVALIDJOB_REQUEST_S "*"]*"
+      set messages(-28)   "*[translate_macro MSG_QREF_QUNKNOWN_S "*"]*"
 
-   # failure messages:
-   set messages(-14)   "TODO: jobnet handling changed, old message NON_AMBIGUOUS"
-   set messages(-15)   "TODO: jobnet handling changed, old message UNAMBIGUOUSNESS"
-   set messages(-24)   "*[translate_macro MSG_JOB_NAMETOOLONG_I "*"]*"
-   set messages(-25)   "*[translate_macro MSG_JOB_JOBALREADYEXISTS_S "*"]*"
-   set messages(-26)   "*[translate_macro MSG_INVALIDJOB_REQUEST_S "*"]*"
-   set messages(-28)   "*[translate_macro MSG_QREF_QUNKNOWN_S "*"]*"
+      set messages(-29)    "*[translate_macro MSG_JOB_NONADMINPRIO]*"
+      set messages(-37)    "*[translate_macro MSG_EVAL_EXPRESSION_LONG_EXPRESSION "*"]*"
+      set messages(-36)   "*[translate_macro MSG_JOB_SAMEPATHSFORINPUTANDOUTPUT_SSS "*" "*" "*"]"
 
-   set messages(-29)    "*[translate_macro MSG_JOB_NONADMINPRIO]*"
-   set messages(-37)    "*[translate_macro MSG_EVAL_EXPRESSION_LONG_EXPRESSION "*"]*"
-   set messages(-36)   "*[translate_macro MSG_JOB_SAMEPATHSFORINPUTANDOUTPUT_SSS "*" "*" "*"]"
+      set messages(-35)    "*[translate_macro MSG_JOB_HRTLIMITTOOLONG_U "*"]*"
 
-   set messages(-35)    "*[translate_macro MSG_JOB_HRTLIMITTOOLONG_U "*"]*"
-
-   set messages(-3)     "*[translate_macro MSG_GDI_USAGE_USAGESTRING] qsub*"
-   set messages(-6)     "*[translate_macro MSG_QSUB_YOURQSUBREQUESTCOULDNOTBESCHEDULEDDTRYLATER]*"
-   set messages(-7)     "*[translate_macro MSG_JOB_MORETASKSTHAN_U "*"]*"
-   set messages(-8)     "*[translate_macro MSG_SGETEXT_UNKNOWN_RESOURCE_S "*"]*"
-   set messages(-9)     "*[translate_macro MSG_SGETEXT_CANTRESOLVEHOST_S "*"]*"
-   set messages(-10)    "*[translate_macro MSG_SGETEXT_RESOURCE_NOT_REQUESTABLE_S "*"]*"
-   set messages(-11)    "*[translate_macro MSG_JOB_NOPERMS_SS "*" "*"]*"
-   set messages(-12)    "*[translate_macro MSG_SGETEXT_NO_ACCESS2PRJ4USER_SS "*" "*"]*"
-   set messages(-13)    "*[translate_macro MSG_ANSWER_UNKOWNOPTIONX_S "*"]*"
-   set messages(-16)    "*[translate_macro MSG_FILE_ERROROPENINGXY_SS "*" "*"]*"
-   set messages(-17)    "*[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC [translate_macro MSG_GDI_KEYSTR_COLON] ":"]*"
-   set messages(-18)    "*[translate_macro MSG_QCONF_ONLYONERANGE]*"
-   set messages(-19)    "*[translate_macro MSG_PARSE_DUPLICATEHOSTINFILESPEC]*"
-   set messages(-20)    "*[translate_macro MSG_GDI_NEGATIVSTEP]*"
-   set messages(-21)    "*[translate_macro MSG_GDI_INITIALPORTIONSTRINGNODECIMAL_S "*"] *"
-   set messages(-22)    "*[translate_macro MSG_JOB_NODEADLINEUSER_S $user]*"
-   set messages(-23)    "*[translate_macro MSG_CPLX_WRONGTYPE_SSS "*" "*" "*"]*"
-   set messages(-27)    "*[translate_macro MSG_PARSE_INVALIDPRIORITYMUSTBEINNEG1023TO1024]*"
-   set messages(-30)    "*[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC "*" "*"]*"
-   set messages(-31)    "*[translate_macro MSG_ANSWER_INVALIDOPTIONARGX_S "*"]*"
-   set messages(-32)    "*[translate_macro MSG_JOB_PRJNOSUBMITPERMS_S "*"]*"
-   set messages(-33)    "*[translate_macro MSG_STREE_USERTNOACCESS2PRJ_SS "*" "*"]*"
-   set messages(-34)    "*[translate_macro MSG_JOB_NOSUITABLEQ_S "*"]*"
-   set messages(-38)    "*[translate_macro MSG_QSUB_COULDNOTRUNJOB_S "*"]*"
+      set messages(-3)     "*[translate_macro MSG_GDI_USAGE_USAGESTRING] qsub*"
+      set messages(-6)     "*[translate_macro MSG_QSUB_YOURQSUBREQUESTCOULDNOTBESCHEDULEDDTRYLATER]*"
+      set messages(-7)     "*[translate_macro MSG_JOB_MORETASKSTHAN_U "*"]*"
+      set messages(-8)     "*[translate_macro MSG_SGETEXT_UNKNOWN_RESOURCE_S "*"]*"
+      set messages(-9)     "*[translate_macro MSG_SGETEXT_CANTRESOLVEHOST_S "*"]*"
+      set messages(-10)    "*[translate_macro MSG_SGETEXT_RESOURCE_NOT_REQUESTABLE_S "*"]*"
+      set messages(-11)    "*[translate_macro MSG_JOB_NOPERMS_SS "*" "*"]*"
+      set messages(-12)    "*[translate_macro MSG_SGETEXT_NO_ACCESS2PRJ4USER_SS "*" "*"]*"
+      set messages(-13)    "*[translate_macro MSG_ANSWER_UNKOWNOPTIONX_S "*"]*"
+      set messages(-16)    "*[translate_macro MSG_FILE_ERROROPENINGXY_SS "*" "*"]*"
+      set messages(-17)    "*[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC [translate_macro MSG_GDI_KEYSTR_COLON] ":"]*"
+      set messages(-18)    "*[translate_macro MSG_QCONF_ONLYONERANGE]*"
+      set messages(-19)    "*[translate_macro MSG_PARSE_DUPLICATEHOSTINFILESPEC]*"
+      set messages(-20)    "*[translate_macro MSG_GDI_NEGATIVSTEP]*"
+      set messages(-21)    "*[translate_macro MSG_GDI_INITIALPORTIONSTRINGNODECIMAL_S "*"] *"
+      set messages(-22)    "*[translate_macro MSG_JOB_NODEADLINEUSER_S $user]*"
+      set messages(-23)    "*[translate_macro MSG_CPLX_WRONGTYPE_SSS "*" "*" "*"]*"
+      set messages(-27)    "*[translate_macro MSG_PARSE_INVALIDPRIORITYMUSTBEINNEG1023TO1024]*"
+      set messages(-30)    "*[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC "*" "*"]*"
+      set messages(-31)    "*[translate_macro MSG_ANSWER_INVALIDOPTIONARGX_S "*"]*"
+      set messages(-32)    "*[translate_macro MSG_JOB_PRJNOSUBMITPERMS_S "*"]*"
+      set messages(-33)    "*[translate_macro MSG_STREE_USERTNOACCESS2PRJ_SS "*" "*"]*"
+      set messages(-34)    "*[translate_macro MSG_JOB_NOSUITABLEQ_S "*"]*"
+      set messages(-38)    "*[translate_macro MSG_QSUB_COULDNOTRUNJOB_S "*"]*"
+   }
 
    # add the standard/error output options if necessary
    if { $qcmd == "qsub" } {

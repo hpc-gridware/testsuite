@@ -65,48 +65,56 @@
 #     
 #
 #*******************************
+global g_submit_ar_messages
+unset -nocomplain g_submit_ar_messages
 proc submit_ar {args {on_host ""} {as_user ""} {raise_error 1}} {
-   # failure messages from jobs common valiation part:
-   set messages(-3)       "[translate_macro MSG_GDI_USAGE_USAGESTRING] qrsub"
-   set messages(-8)       "[translate_macro MSG_SGETEXT_UNKNOWN_RESOURCE_S "*"]"
-   set messages(-9)       "[translate_macro MSG_SGETEXT_CANTRESOLVEHOST_S "*"]"
-   set messages(-10)      "[translate_macro MSG_SGETEXT_RESOURCE_NOT_REQUESTABLE_S "*"]"
+   global g_submit_ar_messages
+   upvar 0 g_submit_ar_messages messages
+  
+   if {![info exists messages(index)]} {
+      ts_log_fine "submit_ar: translating messages"
+      # failure messages from jobs common valiation part:
+      set messages(-3)       "[translate_macro MSG_GDI_USAGE_USAGESTRING] qrsub"
+      set messages(-8)       "[translate_macro MSG_SGETEXT_UNKNOWN_RESOURCE_S "*"]"
+      set messages(-9)       "[translate_macro MSG_SGETEXT_CANTRESOLVEHOST_S "*"]"
+      set messages(-10)      "[translate_macro MSG_SGETEXT_RESOURCE_NOT_REQUESTABLE_S "*"]"
 
-   set messages(-12)      "[translate_macro MSG_SGETEXT_NO_ACCESS2PRJ4USER_SS "*" "*"]"
-   set messages(-13)      "[translate_macro MSG_ANSWER_UNKOWNOPTIONX_S "*"]"
-   set messages(-16)      "[translate_macro MSG_FILE_ERROROPENINGXY_SS "*" "*"]"
-   set messages(-17)      "[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC [translate_macro MSG_GDI_KEYSTR_COLON] ":"]"
-   set messages(-18)      "[translate_macro MSG_QCONF_ONLYONERANGE]"
-   set messages(-21)      "[translate_macro MSG_GDI_INITIALPORTIONSTRINGNODECIMAL_S "*"]"
-   set messages(-23)      "[translate_macro MSG_CPLX_WRONGTYPE_SSS "*" "*" "*"]"
-   set messages(-30)      "[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC "*" "*"]"
-   set messages(-31)      "[translate_macro MSG_ANSWER_INVALIDOPTIONARGX_S "*"]"
-   set messages(-32)      "[translate_macro MSG_PARSE_INVALIDOPTIONARGUMENT]"
-   set messages(-33)      "[translate_macro MSG_STREE_USERTNOACCESS2PRJ_SS "*" "*"]"
-   set messages(-36)      "[translate_macro MSG_PARSE_NOOPTIONARGUMENT]"
-   set messages(-37)      "[translate_macro MSG_PARSE_WRONGTIMEFORMATXSPECTODLOPTION_S "*"]"
-   set messages(-38)      "[translate_macro MSG_ANSWER_WRONGTIMEFORMATEXSPECIFIEDTOAOPTION_S "*"]"
-   set messages(-39)      "[translate_macro MSG_PARSE_INVALIDDAY]"
-   set messages(-40)      "[translate_macro MSG_ANSWER_WRONGTIMEFORMATEXSPECIFIEDTODOPTION_S "*"]"
+      set messages(-12)      "[translate_macro MSG_SGETEXT_NO_ACCESS2PRJ4USER_SS "*" "*"]"
+      set messages(-13)      "[translate_macro MSG_ANSWER_UNKOWNOPTIONX_S "*"]"
+      set messages(-16)      "[translate_macro MSG_FILE_ERROROPENINGXY_SS "*" "*"]"
+      set messages(-17)      "[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC [translate_macro MSG_GDI_KEYSTR_COLON] ":"]"
+      set messages(-18)      "[translate_macro MSG_QCONF_ONLYONERANGE]"
+      set messages(-21)      "[translate_macro MSG_GDI_INITIALPORTIONSTRINGNODECIMAL_S "*"]"
+      set messages(-23)      "[translate_macro MSG_CPLX_WRONGTYPE_SSS "*" "*" "*"]"
+      set messages(-30)      "[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC "*" "*"]"
+      set messages(-31)      "[translate_macro MSG_ANSWER_INVALIDOPTIONARGX_S "*"]"
+      set messages(-32)      "[translate_macro MSG_PARSE_INVALIDOPTIONARGUMENT]"
+      set messages(-33)      "[translate_macro MSG_STREE_USERTNOACCESS2PRJ_SS "*" "*"]"
+      set messages(-36)      "[translate_macro MSG_PARSE_NOOPTIONARGUMENT]"
+      set messages(-37)      "[translate_macro MSG_PARSE_WRONGTIMEFORMATXSPECTODLOPTION_S "*"]"
+      set messages(-38)      "[translate_macro MSG_ANSWER_WRONGTIMEFORMATEXSPECIFIEDTOAOPTION_S "*"]"
+      set messages(-39)      "[translate_macro MSG_PARSE_INVALIDDAY]"
+      set messages(-40)      "[translate_macro MSG_ANSWER_WRONGTIMEFORMATEXSPECIFIEDTODOPTION_S "*"]"
 
-   # failure messages from AR specific validation part:
-   set messages(-51)      "[translate_macro MSG_AR_QUEUEDISABLEDINTIMEFRAME "*"]"
-   set messages(-52)      "[translate_macro MSG_AR_QUEUEDNOPERMISSIONS "*"]"
-   set messages(-53)      "[translate_macro MSG_AR_MAXARSPERCLUSTER_U "*"]"
-   set messages(-54)      "[translate_macro MSG_AR_RESERVEDQUEUEHASERROR_SS "*" "*"]"
-   set messages(-55)      "[translate_macro MSG_AR_MISSING_VALUE_S "*"]"
-   set messages(-56)      "[translate_macro MSG_AR_START_END_DURATION_INVALID]"
-   set messages(-57)      "[translate_macro MSG_AR_START_LATER_THAN_END]"
-   set messages(-58)      "[translate_macro MSG_AR_START_IN_PAST]"
-   set messages(-59)      "[translate_macro MSG_JOB_CKPTUNKNOWN_S "*"]"
-   set messages(-60)      "[translate_macro MSG_JOB_NOSUITABLEQ_S "*"]"
-   # success messages:
-   set messages(0)        "*[translate_macro MSG_AR_GRANTED_U "*"]*"
-   set messages(1)        "*[translate_macro MSG_JOB_VERIFYFOUNDQ]*"
+      # failure messages from AR specific validation part:
+      set messages(-51)      "[translate_macro MSG_AR_QUEUEDISABLEDINTIMEFRAME "*"]"
+      set messages(-52)      "[translate_macro MSG_AR_QUEUEDNOPERMISSIONS "*"]"
+      set messages(-53)      "[translate_macro MSG_AR_MAXARSPERCLUSTER_U "*"]"
+      set messages(-54)      "[translate_macro MSG_AR_RESERVEDQUEUEHASERROR_SS "*" "*"]"
+      set messages(-55)      "[translate_macro MSG_AR_MISSING_VALUE_S "*"]"
+      set messages(-56)      "[translate_macro MSG_AR_START_END_DURATION_INVALID]"
+      set messages(-57)      "[translate_macro MSG_AR_START_LATER_THAN_END]"
+      set messages(-58)      "[translate_macro MSG_AR_START_IN_PAST]"
+      set messages(-59)      "[translate_macro MSG_JOB_CKPTUNKNOWN_S "*"]"
+      set messages(-60)      "[translate_macro MSG_JOB_NOSUITABLEQ_S "*"]"
+      # success messages:
+      set messages(0)        "*[translate_macro MSG_AR_GRANTED_U "*"]*"
+      set messages(1)        "*[translate_macro MSG_JOB_VERIFYFOUNDQ]*"
 
-   set messages(index) ""
-   foreach idx [lsort [array names messages]] {
-      append messages(index) "$idx "
+      set messages(index) {}
+      foreach idx [lsort [array names messages]] {
+         lappend messages(index) $idx
+      }
    }
    
    set output [start_sge_bin "qrsub" $args $on_host $as_user]
@@ -191,7 +199,12 @@ proc delete_all_ars {} {
 #  SEE ALSO
 #     delete_job
 #*******************************************************************************
+global g_delete_ar_messages
+unset -nocomplain g_delete_ar_messages
 proc delete_ar {ar_id {wait_for_end 0} {all_users 0} {on_host ""} {as_user ""} {raise_error 1}} {
+   global g_delete_ar_messages
+   upvar 0 g_delete_ar_messages messages
+
    set ret 0
    set args ""
 
@@ -199,12 +212,15 @@ proc delete_ar {ar_id {wait_for_end 0} {all_users 0} {on_host ""} {as_user ""} {
       set args "-u '*'"
    }
 
-   set messages(index) "-3 -2 -1 0 1"
-   set messages(-3) [translate_macro MSG_DELETEPERMS_SSU "*" "advance_reservation" $ar_id]
-   set messages(-2) [translate_macro MSG_SGETEXT_SPECIFYUSERORID_S "advance_reservation"]
-   set messages(-1) [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "advance_reservation" $ar_id]
-   set messages(0) [translate_macro MSG_JOB_DELETEX_SSU "*" "advance_reservation" $ar_id]
-   set messages(1) [translate_macro MSG_JOB_REGDELX_SSU "*" "advance_reservation" $ar_id]
+   if {![info exists messages(index)]} {
+      ts_log_fine "delete_ar: translating messages"
+      set messages(index) "-3 -2 -1 0 1"
+      set messages(-3) [translate_macro MSG_DELETEPERMS_SSU "*" "advance_reservation" "*"]
+      set messages(-2) [translate_macro MSG_SGETEXT_SPECIFYUSERORID_S "advance_reservation"]
+      set messages(-1) [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "advance_reservation" "*"]
+      set messages(0) [translate_macro MSG_JOB_DELETEX_SSU "*" "advance_reservation" "*"]
+      set messages(1) [translate_macro MSG_JOB_REGDELX_SSU "*" "advance_reservation" "*"]
+   }
 
    set output [start_sge_bin "qrdel" "$args $ar_id" $on_host $as_user]
 
@@ -251,13 +267,26 @@ proc delete_ar {ar_id {wait_for_end 0} {all_users 0} {on_host ""} {as_user ""} {
 #  SEE ALSO
 #     sge_ar/submit_ar()
 #*******************************************************************************
+global g_submit_ar_parse_ar_id_messages
+unset -nocomplain g_submit_ar_parse_ar_id_messages
 proc submit_ar_parse_ar_id {output_var message} {
+   global g_submit_ar_parse_ar_id_messages
+   upvar 0 g_submit_ar_parse_ar_id_messages messages
    upvar $output_var output
 
    set ret -1
-   set AR_SUBMITTED_DUMMY [translate_macro MSG_AR_GRANTED_U "*" ]
-   set pos [lsearch -exact $AR_SUBMITTED_DUMMY "*"]
 
+   if {![info exists messages(index)]} {
+      ts_log_fine "submit_ar_parse_ar_id: translating messages"
+      set messages(0) [translate_macro MSG_AR_GRANTED_U "*" ]
+      set messages(index) {0}
+   }
+
+   set pos [lsearch -exact $messages(0) "*"]
+ts_log_fine "submit_ar_parse_ar_id: $output"
+ts_log_fine "message: $message"
+ts_log_fine "pattern: $messages(0)"
+ts_log_fine "pos:     $pos"
    # output might contain multiple lines, e.g. with additional warning messages
    # we have to find the right one
    foreach line [split $output "\n"] {
@@ -274,6 +303,7 @@ proc submit_ar_parse_ar_id {output_var message} {
       ts_log_severe "couldn't find qrsub success message\n$message\nin qrsub output\n$output"
    }
 
+ts_log_fine "AR id: $ret"
    return $ret
 }
 
