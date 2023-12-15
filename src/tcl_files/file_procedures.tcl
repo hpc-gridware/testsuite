@@ -1941,14 +1941,6 @@ proc create_shell_script { scriptfile
    set_users_environment $host users_env
 
    set script "no_script"
-   set catch_return [catch {
-       set script [open "$scriptfile" "w" "0755"]
-   }]
-   if {$catch_return != 0} {
-      ts_log_warning "could not open file $scriptfile for writing"
-      return
-   }
-
    set script_content ""
 
    # script header
@@ -2100,6 +2092,14 @@ proc create_shell_script { scriptfile
       }
    }
   
+   set catch_return [catch {
+       set script [open $scriptfile "w" "0755"]
+   }]
+   if {$catch_return != 0} {
+      ts_log_warning "could not open file $scriptfile for writing"
+      return
+   }
+
    puts -nonewline $script $script_content
    close $script
 
