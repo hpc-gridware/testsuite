@@ -1,4 +1,3 @@
-#!/usr/local/bin/tclsh
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -392,21 +391,21 @@ proc get_hostgroup_messages {msg_var action obj_name {on_host ""} {as_user ""}} 
    # see sge_procedures/sge_client_messages
    switch -exact $action {
       "add" {
-         add_message_to_container messages -4 [translate_macro MSG_GDI_KEYSTR_KEYWORD_SS "*" "$obj_name"]
-         add_message_to_container messages -5 [translate_macro MSG_HGRP_INVALIDHOSTGROUPNAME_S "$obj_name"]
+         add_message_to_container messages -4 [translate_macro MSG_GDI_KEYSTR_KEYWORD_SS "*" $obj_name]
+         add_message_to_container messages -5 [translate_macro MSG_HGRP_INVALIDHOSTGROUPNAME_S $obj_name]
          add_message_to_container messages -6 [translate_macro MSG_HGRP_UNKNOWNHOST "*"]
       }
       "get" {
          # BUG: rather use the generic message, see sge_procedures/sge_client_messages
-         add_message_to_container messages -1 [translate_macro MSG_HGROUP_NOTEXIST_S "$obj_name"]
+         add_message_to_container messages -1 [translate_macro MSG_HGROUP_NOTEXIST_S $obj_name]
       }
       "mod" {
          add_message_to_container messages -6 [translate_macro MSG_HGRP_UNKNOWNHOST "*" ]
          add_message_to_container messages -7 "error: [translate_macro MSG_UNKNOWNATTRIBUTENAME_S "*"]"
       }
       "del" {
-         add_message_to_container messages -2 [translate_macro MSG_HGROUP_REFINHGOUP_SS "$obj_name" "*"]
-         add_message_to_container messages -3 [translate_macro MSG_CQUEUE_REFINHGOUP_SS "$obj_name" "*"]
+         add_message_to_container messages -2 [translate_macro MSG_HGROUP_REFINHGOUP_SS $obj_name "*"]
+         add_message_to_container messages -3 [translate_macro MSG_CQUEUE_REFINHGOUP_SS $obj_name "*"]
          # BUG: group entry instead of host group
          # set up the values of host and user for macro messages, if not set
          if {$on_host == ""} {
@@ -415,7 +414,7 @@ proc get_hostgroup_messages {msg_var action obj_name {on_host ""} {as_user ""}} 
          if {$as_user == ""} {
             set as_user "*"
          } 
-         set REMOVED [translate_macro MSG_SGETEXT_REMOVEDFROMLIST_SSSS "$as_user" "$on_host" "$obj_name" "$GROUP entry"]
+         set REMOVED [translate_macro MSG_SGETEXT_REMOVEDFROMLIST_SSSS "$as_user" "$on_host" $obj_name "$GROUP entry"]
          add_message_to_container messages 0 $REMOVED        
       }
       "list" {

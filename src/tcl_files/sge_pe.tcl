@@ -1,4 +1,3 @@
-#!/usr/local/bin/tclsh
 # expect script
 #___INFO__MARK_BEGIN__
 ##########################################################################
@@ -219,7 +218,7 @@ proc mod_pe {pe_name change_array {fast_add 1} {on_host ""} {as_user ""} {raise_
       set option "-mp"
       set vi_commands [build_vi_command chgar]
       # BUG: different message for "vi" from fastadd ...
-      set NOT_EXISTS [translate_macro MSG_PARALLEL_XNOTAPARALLELEVIRONMENT_S "$pe_name"]
+      set NOT_EXISTS [translate_macro MSG_PARALLEL_XNOTAPARALLELEVIRONMENT_S $pe_name]
       add_message_to_container messages -1 $NOT_EXISTS
       set result [start_vi_edit "qconf" "$option $pe_name" $vi_commands messages $on_host $as_user]
    }
@@ -362,7 +361,7 @@ proc get_pe_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
          add_message_to_container messages -9 [translate_macro MSG_GDI_APATH_S "*"]
       }
       "del" {
-         add_message_to_container messages -2 [translate_macro MSG_PEREFINQUEUE_SS "$obj_name" "*"]
+         add_message_to_container messages -2 [translate_macro MSG_PEREFINQUEUE_SS $obj_name "*"]
       }
       "list" {
       }

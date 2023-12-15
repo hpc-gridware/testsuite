@@ -317,7 +317,7 @@ proc get_calendar_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
      unset messages
    }
 
-  # set CALENDAR [translate_macro SGE_OBJ_CALENDAR]
+   # set CALENDAR [translate_macro SGE_OBJ_CALENDAR]
    set CALENDAR "calendar"
 
    # set the expected client messages
@@ -328,27 +328,27 @@ proc get_calendar_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
    # see sge_procedures/sge_client_messages
    switch -exact $action {
       "add" {
-         set DISABLED_YEAR [translate_macro MSG_ANSWER_ERRORINDISABLYEAROFCALENDARXY_SS "*" "$obj_name"]
+         set DISABLED_YEAR [translate_macro MSG_ANSWER_ERRORINDISABLYEAROFCALENDARXY_SS "*" $obj_name]
          add_message_to_container messages -4 $DISABLED_YEAR
-         set DISABLED_WEEK [translate_macro MSG_PARSE_ERRORINDISABLEDWEEKOFCALENDAR_SS "$obj_name" "*"]
+         set DISABLED_WEEK [translate_macro MSG_PARSE_ERRORINDISABLEDWEEKOFCALENDAR_SS $obj_name "*"]
          add_message_to_container messages -5 $DISABLED_WEEK
       }
       "get" {
          # CD: not expected generic message
-         set NOT_EXISTS [translate_macro MSG_CALENDAR_XISNOTACALENDAR_S "$obj_name"]
+         set NOT_EXISTS [translate_macro MSG_CALENDAR_XISNOTACALENDAR_S $obj_name]
          add_message_to_container messages -1 $NOT_EXISTS     
       }
       "mod" {
-         set DISABLED_YEAR [translate_macro MSG_ANSWER_ERRORINDISABLYEAROFCALENDARXY_SS "*" "$obj_name"]
+         set DISABLED_YEAR [translate_macro MSG_ANSWER_ERRORINDISABLYEAROFCALENDARXY_SS "*" $obj_name]
          add_message_to_container messages -6 $DISABLED_YEAR
-         set DISABLED_WEEK [translate_macro MSG_PARSE_ERRORINDISABLEDWEEKOFCALENDAR_SS "$obj_name" "*"]
+         set DISABLED_WEEK [translate_macro MSG_PARSE_ERRORINDISABLEDWEEKOFCALENDAR_SS $obj_name "*"]
          add_message_to_container messages -7 $DISABLED_WEEK
          set AR_REJECTED [translate_macro MSG_PARSE_MOD2_REJECTED_DUE_TO_AR_SSU "*" "*" "*"]
          add_message_to_container messages -8 $AR_REJECTED
       }
       "del" {
          # references: queue
-         set STILL_REF [translate_macro MSG_SGETEXT_USERSETSTILLREFERENCED_SSSS "$obj_name" "*" "*" "*"]
+         set STILL_REF [translate_macro MSG_SGETEXT_USERSETSTILLREFERENCED_SSSS $obj_name "*" "*" "*"]
          add_message_to_container messages -2 $STILL_REF
 
          set REFINQUEUE [translate_macro MSG_CALENDAR_REFINQUEUE_SS $obj_name  "*"]

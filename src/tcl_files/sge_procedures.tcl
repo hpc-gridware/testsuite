@@ -1,5 +1,3 @@
-#!/usr/local/bin/tclsh
-# expect script 
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -1171,52 +1169,69 @@ proc start_source_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {t
 #  SEE ALSO
 #     sge_procedures/get_sge_error()
 #*******************************************************************************
+global g_generic_messages
+unset -nocomplain g_generic_messages
 proc get_sge_error_generic {messages_var} {
    get_current_cluster_config_array ts_config
-   upvar $messages_var messages
+   global g_generic_messages
 
-   # CSP errors
-   lappend messages(index) "-100"
-   set messages(-100) "*[translate_macro MSG_CL_RETVAL_SSL_COULD_NOT_SET_CA_CHAIN_FILE]*"
+   upvar 0 g_generic_messages messages
 
-   # generic communication errors
-   lappend messages(index) "-120"
-   set messages(-120) "*[translate_macro MSG_GDI_UNABLE_TO_CONNECT_SUS "qmaster" "*" "*"]*"
-   set messages(-120,description) "probably sge_qmaster is down"
+   if {![info exists messages(index)]} {
+      ts_log_fine "get_sge_error_generic: translating messages"
 
-   lappend messages(index) "-121"
-   set messages(-121) "*[translate_macro MSG_GDI_CANT_SEND_MSG_TO_PORT_ON_HOST_SUSS "qmaster" "*" "*" "*"]*"
-   set messages(-121,description) "probably sge_qmaster is down"
+      # CSP errors
+      lappend messages(index) "-100"
+      set messages(-100) "*[translate_macro MSG_CL_RETVAL_SSL_COULD_NOT_SET_CA_CHAIN_FILE]*"
 
-   # messages indicating insufficient host privileges
-   lappend messages(index) -200
-   lappend messages(index) -201
-   lappend messages(index) -202
-   set messages(-200) "*[translate_macro MSG_SGETEXT_NOSUBMITORADMINHOST_S "*"]"
-   set messages(-201) "*[translate_macro MSG_SGETEXT_NOADMINHOST_S "*"]"
-   set messages(-202) "*[translate_macro MSG_SGETEXT_NOSUBMITHOST_S "*"]"
+      # generic communication errors
+      lappend messages(index) "-120"
+      set messages(-120) "*[translate_macro MSG_GDI_UNABLE_TO_CONNECT_SUS "qmaster" "*" "*"]*"
+      set messages(-120,description) "probably sge_qmaster is down"
 
-   # messages indicating insufficient user privileges
-   lappend messages(index) -210
-   lappend messages(index) -211
-   set messages(-210) "*[translate_macro MSG_SGETEXT_MUSTBEMANAGER_S "*"]"
-   set messages(-211) "*[translate_macro MSG_SGETEXT_MUSTBEOPERATOR_S "*"]"
+      lappend messages(index) "-121"
+      set messages(-121) "*[translate_macro MSG_GDI_CANT_SEND_MSG_TO_PORT_ON_HOST_SUSS "qmaster" "*" "*" "*"]*"
+      set messages(-121,description) "probably sge_qmaster is down"
 
-   # file io problems
-   lappend messages(index) -300
-   set bootstrap "$ts_config(product_root)/$ts_config(cell)/common/bootstrap"
-   set messages(-300) "*[translate_macro MSG_FILE_FOPENFAILED_SS $bootstrap "*"]"
+      # messages indicating insufficient host privileges
+      lappend messages(index) -200
+      lappend messages(index) -201
+      lappend messages(index) -202
+      set messages(-200) "*[translate_macro MSG_SGETEXT_NOSUBMITORADMINHOST_S "*"]"
+      set messages(-201) "*[translate_macro MSG_SGETEXT_NOADMINHOST_S "*"]"
+      set messages(-202) "*[translate_macro MSG_SGETEXT_NOSUBMITHOST_S "*"]"
 
-   lappend messages(index) -301
-   set act_qmaster "$ts_config(product_root)/$ts_config(cell)/common/act_qmaster"
-   set messages(-301) "*[translate_macro MSG_FILE_FOPENFAILED_SS $act_qmaster "*"]"
+      # messages indicating insufficient user privileges
+      lappend messages(index) -210
+      lappend messages(index) -211
+      set messages(-210) "*[translate_macro MSG_SGETEXT_MUSTBEMANAGER_S "*"]"
+      set messages(-211) "*[translate_macro MSG_SGETEXT_MUSTBEOPERATOR_S "*"]"
 
-   lappend messages(index) -900
-   lappend messages(index) -901
-   set messages(-900) "*?egmentation ?ault*"
-   set messages(-901) "*?ore ?umped*"
+      # file io problems
+      lappend messages(index) -300
+      set bootstrap "$ts_config(product_root)/$ts_config(cell)/common/bootstrap"
+      set messages(-300) "*[translate_macro MSG_FILE_FOPENFAILED_SS $bootstrap "*"]"
 
-   get_sge_error_generic_vdep messages
+      lappend messages(index) -301
+      set act_qmaster "$ts_config(product_root)/$ts_config(cell)/common/act_qmaster"
+      set messages(-301) "*[translate_macro MSG_FILE_FOPENFAILED_SS $act_qmaster "*"]"
+
+      lappend messages(index) -900
+      lappend messages(index) -901
+      set messages(-900) "*?egmentation ?ault*"
+      set messages(-901) "*?ore ?umped*"
+
+      get_sge_error_generic_vdep messages
+   }
+
+   # copy the messages to the target array
+   upvar $messages_var copy
+   foreach idx $messages(index) {
+      set copy($idx) $messages($idx)
+      lappend copy(index) $idx
+   }
+   # remove possible duplicates
+   set copy(index) [lsort -unique $copy(index)]
 }
 
 # STUB for version dependent messages generation
@@ -2422,10 +2437,12 @@ proc get_config { change_array {host global} {atimeout 60}} {
 #  SEE ALSO
 #     sge_procedures/get_config()
 #*******************************
+global g_set_config_messages_add g_set_config_messages_mod
+unset -nocomplain g_set_config_messages_add g_set_config_messages_mod
 proc set_config {change_array {host global} {do_add 0} {raise_error 1} {do_reset 0}} {
-   global env
-   global CHECK_USER CHECK_JOB_OUTPUT_DIR
    get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_JOB_OUTPUT_DIR
+   global g_set_config_messages_add g_set_config_messages_mod
 
    upvar $change_array chgar_orig
 
@@ -2433,13 +2450,28 @@ proc set_config {change_array {host global} {do_add 0} {raise_error 1} {do_reset
       set chgar($elem) $chgar_orig($elem)
    }
 
-   add_message_to_container messages -1 [translate_macro_if_possible MSG_CONF_THEPATHGIVENFORXMUSTSTARTWITHANY_S "*"]
-   add_message_to_container messages -2 [translate_macro_if_possible MSG_WARN_CHANGENOTEFFECTEDUNTILRESTARTOFEXECHOSTS "execd_spool_dir"]
-   add_message_to_container messages -3 [translate_macro MSG_CONFIG_CONF_GIDRANGELESSTHANNOTALLOWED_I "*"]
-   add_message_to_container messages -4 [translate_macro MSG_PARSE_EDITFAILED]
-   if {$do_add == 1} {
-      add_message_to_container messages 0 [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS $CHECK_USER "*" "*" "*"]
-      add_message_to_container messages 1 [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS $CHECK_USER "*" "*" "*"]
+   if {$do_add} {
+      upvar 0 g_set_config_messages_add messages
+   } else {
+      upvar 0 g_set_config_messages_mod messages
+   }
+   if {![info exists messages(index)]} {
+      ts_log_fine "set_config($do_add): translating messages"
+
+      add_message_to_container messages -1 [translate_macro_if_possible MSG_CONF_THEPATHGIVENFORXMUSTSTARTWITHANY_S "*"]
+      add_message_to_container messages -2 [translate_macro_if_possible MSG_WARN_CHANGENOTEFFECTEDUNTILRESTARTOFEXECHOSTS "execd_spool_dir"]
+      add_message_to_container messages -3 [translate_macro MSG_CONFIG_CONF_GIDRANGELESSTHANNOTALLOWED_I "*"]
+      add_message_to_container messages -4 [translate_macro MSG_PARSE_EDITFAILED]
+      if {$do_add} {
+         add_message_to_container messages 0 [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS $CHECK_USER "*" "*" "*"]
+         add_message_to_container messages 1 [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS $CHECK_USER "*" "*" "*"]
+      } else {
+         add_message_to_container messages 0 [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS $CHECK_USER "*" "*" "*"]
+         add_message_to_container messages 1 [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS $CHECK_USER "*" "*" "*"]
+      }
+   }
+
+   if {$do_add} {
       set tmpfile "$CHECK_JOB_OUTPUT_DIR/$host"
       set qconf_cmd "-Aconf $tmpfile"
       array set data {}
@@ -2454,8 +2486,6 @@ proc set_config {change_array {host global} {do_add 0} {raise_error 1} {do_reset
       delete_remote_file $ts_config(master_host) $CHECK_USER $tmpfile
       unset data
    } else {
-      add_message_to_container messages 0 [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS $CHECK_USER "*" "*" "*"]
-      add_message_to_container messages 1 [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS $CHECK_USER "*" "*" "*"]
       set config_return [get_config current_values $host]
       if {$do_reset && $config_return == 0} {
          # Any elem in current_values which should not be in new config
@@ -2805,7 +2835,6 @@ proc compare_complex {a b} {
 #     change_array(resource_capability_factor)  "0.000000"
 #*******************************
 proc add_exechost {change_array {fast_add 1}} {
-  global env
   get_current_cluster_config_array ts_config
 
   upvar $change_array chgar
@@ -4727,19 +4756,24 @@ proc is_job_id { job_id } {
 #  SEE ALSO
 #     sge_procedures/submit_job()
 #*******************************
+global g_delete_job_messages
+unset -nocomplain g_delete_job_messages
 proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1}} {
-   global CHECK_USER
    get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global g_delete_job_messages
+   upvar 0 g_delete_job_messages messages
 
    ts_log_fine "deleting job $jobid"
 
-   set ALREADYDELETED [translate_macro MSG_JOB_ALREADYDELETED_U "*"]
-   set REGISTERED1 [translate_macro MSG_JOB_REGDELTASK_SUU "*" "*" "*"]
-   set REGISTERED2 [translate_macro MSG_JOB_REGDELX_SSU "*" "job" "*" ]
-   set DELETED1  [translate_macro MSG_JOB_DELETETASK_SUU "*" "*" "*"]
-   set DELETED2  [translate_macro MSG_JOB_DELETEX_SSU "*" "job" "*" ]
-
-   set UNABLETOSYNC [translate_macro MSG_COM_NOSYNCEXECD_SU $CHECK_USER $jobid]
+   if {![info exists messages(ALREADYDELETED)]} {
+      set messages(ALREADYDELETED) [translate_macro MSG_JOB_ALREADYDELETED_U "*"]
+      set messages(REGISTERED1)    [translate_macro MSG_JOB_REGDELTASK_SUU "*" "*" "*"]
+      set messages(REGISTERED2)    [translate_macro MSG_JOB_REGDELX_SSU "*" "job" "*" ]
+      set messages(DELETED1)       [translate_macro MSG_JOB_DELETETASK_SUU "*" "*" "*"]
+      set messages(DELETED2)       [translate_macro MSG_JOB_DELETEX_SSU "*" "job" "*" ]
+      set messages(UNABLETOSYNC)   [translate_macro MSG_COM_NOSYNCEXECD_SU $CHECK_USER "*"]
+   }
 
    set result -100
    if { [is_job_id $jobid] } {
@@ -4768,11 +4802,11 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1}} {
              set result -5
              ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value" $raise_error
           }
-          -i $sp_id $REGISTERED1 {
+          -i $sp_id $messages(REGISTERED1) {
              ts_log_finest $expect_out(0,string)
              set result 0
           }
-          -i $sp_id $REGISTERED2 {
+          -i $sp_id $messages(REGISTERED2) {
              ts_log_finest $expect_out(0,string)
              set result 0
           }
@@ -4780,11 +4814,11 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1}} {
              ts_log_finest $expect_out(0,string)
              set result 0
           }
-          -i $sp_id  $DELETED1 {
+          -i $sp_id  $messages(DELETED1) {
              ts_log_finest $expect_out(0,string)
              set result 0
           }
-          -i $sp_id  $DELETED2 {
+          -i $sp_id  $messages(DELETED2) {
              ts_log_finest $expect_out(0,string)
              set result 0
           }
@@ -4792,11 +4826,11 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1}} {
              ts_log_finest $expect_out(0,string)
              set result 0
           }
-          -i $sp_id $ALREADYDELETED {
+          -i $sp_id $messages(ALREADYDELETED) {
              ts_log_finest $expect_out(0,string)
              set result 0
           }
-          -i $sp_id $UNABLETOSYNC {
+          -i $sp_id $messages(UNABLETOSYNC) {
             ts_log_severe "$UNABLETOSYNC" $raise_error
             set result -1
           }
@@ -5119,21 +5153,28 @@ proc quick_submit_job {args {host ""} {user ""}} {
 #  SEE ALSO
 #     sge_procedures/submit_job() 
 #*******************************************************************************
+global g_resubmit_job_messages
+unset -nocomplain g_resubmit_job_messages
 proc resubmit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {show_args 1}} {
-   
-   # job was submitted  
-   add_message_to_container messages 1 [translate_macro MSG_QSUB_YOURJOBHASBEENSUBMITTED_SS "*" "*"]
-   add_message_to_container messages 2 [translate_macro MSG_GDI_USAGE_USAGESTRING "qresub"]
-   add_message_to_container messages 3 [translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]
+   global g_resubmit_job_messages
+   upvar 0 g_resubmit_job_messages messages
+  
+   if {![info exists messages(index)]} {
+      ts_log_fine "resubmit_job: translating messages"
+      # job was submitted  
+      add_message_to_container messages 1 [translate_macro MSG_QSUB_YOURJOBHASBEENSUBMITTED_SS "*" "*"]
+      add_message_to_container messages 2 [translate_macro MSG_GDI_USAGE_USAGESTRING "qresub"]
+      add_message_to_container messages 3 [translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]
 
-   # modied hold 
-   add_message_to_container messages -1 [translate_macro MSG_PARSE_UNKNOWNHOLDLISTXSPECTOHOPTION_S "*"]
-   add_message_to_container messages -2 [translate_macro MSG_JOB_XISINVALIDJOBTASKID_S "*"]   
-   add_message_to_container messages -3 [translate_macro MSG_ERROR_JOBDOESNOTEXIST]
+      # modied hold 
+      add_message_to_container messages -1 [translate_macro MSG_PARSE_UNKNOWNHOLDLISTXSPECTOHOPTION_S "*"]
+      add_message_to_container messages -2 [translate_macro MSG_JOB_XISINVALIDJOBTASKID_S "*"]   
+      add_message_to_container messages -3 [translate_macro MSG_ERROR_JOBDOESNOTEXIST]
 
-   # when modification is not allowed because of needed manager/operator rights 
-   add_message_to_container messages -4 [translate_macro MSG_SGETEXT_MUST_BE_OPR_TO_SS "*" "*"]
-   add_message_to_container messages -5 [translate_macro MSG_SGETEXT_MUST_BE_MGR_TO_SS "*" "*"]
+      # when modification is not allowed because of needed manager/operator rights 
+      add_message_to_container messages -4 [translate_macro MSG_SGETEXT_MUST_BE_OPR_TO_SS "*" "*"]
+      add_message_to_container messages -5 [translate_macro MSG_SGETEXT_MUST_BE_MGR_TO_SS "*" "*"]
+   }
  
    # process 
    set output [start_sge_bin "qresub" $args $host $user prg_exit_state $submit_timeout]
@@ -5166,29 +5207,31 @@ proc resubmit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} 
 #  SEE ALSO
 #     sge_procedures/submit_job()
 #*******************************************************************************
+global g_submit_job_parse_pos
+unset -nocomplain g_submit_job_parse_pos
 proc submit_job_parse_job_id {output_var type message} {
    get_current_cluster_config_array ts_config
+   global g_submit_job_parse_pos
 
    upvar $output_var output
 
    set ret -1
 
    # we need to determine the position of the job id in the output message
-   switch -exact -- $type {
-      0 {
-         set JOB_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOB_US "__JOB_ID__" "__JOB_NAME__"]
-         set pos [lsearch -exact $JOB_SUBMITTED_DUMMY "__JOB_ID__"]
-      }
-      1 {
-         # 6.0 and higher
-         set JOB_IMMEDIATE_DUMMY [translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_S "__JOB_ID__"]
-         set pos [lsearch -exact $JOB_IMMEDIATE_DUMMY "__JOB_ID__"]
-      }
-      2 {
-         set JOB_ARRAY_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUS "__JOB_ID__" "" "" "" "__JOB_NAME__"]
-         set pos [lsearch -exact $JOB_ARRAY_SUBMITTED_DUMMY "__JOB_ID__.-:"]
-      }
+   if {![info exists g_submit_job_parse_pos(0)]} {
+      ts_log_fine "submit_job_parse_job_id: translating messages"
+      set JOB_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOB_US "__JOB_ID__" "__JOB_NAME__"]
+      set g_submit_job_parse_pos(0) [lsearch -exact $JOB_SUBMITTED_DUMMY "__JOB_ID__"]
+
+      # 6.0 and higher
+      set JOB_IMMEDIATE_DUMMY [translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_S "__JOB_ID__"]
+      set g_submit_job_parse_pos(1) [lsearch -exact $JOB_IMMEDIATE_DUMMY "__JOB_ID__"]
+
+      set JOB_ARRAY_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUS "__JOB_ID__" "" "" "" "__JOB_NAME__"]
+      set g_submit_job_parse_pos(2) [lsearch -exact $JOB_ARRAY_SUBMITTED_DUMMY "__JOB_ID__.-:"]
    }
+
+   set pos $g_submit_job_parse_pos($type)
 
    # output might contain multiple lines, e.g. with additional warning messages
    # we have to find the right one
@@ -5761,13 +5804,20 @@ proc get_qconf_se_info {hostname {variable qconf_se_info}} {
 #  NOTES
 #     There are most certainly much more error codes that could be handled.
 #*******************************************************************************
+global g_get_qacct_error_messages
+unset -nocomplain g_get_qacct_error_messages
 proc get_qacct_error {result job_id raise_error} {
    get_current_cluster_config_array ts_config
+   global g_get_qacct_error_messages
+   upvar 0 g_get_qacct_error_messages messages
 
    # recognize certain error messages and return special return code
-   set messages(index) "-1 -2"
-   set messages(-1) "*[translate_macro MSG_HISTORY_NOJOBSRUNNINGSINCESTARTUP]"
-   set messages(-2) "*[translate_macro MSG_HISTORY_JOBIDXNOTFOUND_D $job_id]"
+   if {![info exists messages(index)]} {
+      ts_log_fine "get_qacct_error: translating messages"
+      set messages(index) "-1 -2"
+      set messages(-1) "*[translate_macro MSG_HISTORY_NOJOBSRUNNINGSINCESTARTUP]"
+      set messages(-2) "*[translate_macro MSG_HISTORY_JOBIDXNOTFOUND_D $job_id]"
+   }
 
    # should we have version dependent error messages, create following 
    # procedure in sge_procedures.<version>.tcl
@@ -9118,10 +9168,10 @@ proc sge_client_messages {msg_var action obj_type obj_name {on_host ""} {as_user
          # expect: successfully added [ user, host, object type, object name ]
          #         already exists [ object type, object name ]
          #         not modified [ ]
-         set ADDED [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS "$as_user" "$on_host" "$obj_name" "$obj_type"]
+         set ADDED [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS $as_user $on_host $obj_name $obj_type]
          add_message_to_container messages 0 $ADDED
 
-         set ALREADY_EXISTS [translate_macro MSG_SGETEXT_ALREADYEXISTS_SS "$obj_type" "$obj_name"]
+         set ALREADY_EXISTS [translate_macro MSG_SGETEXT_ALREADYEXISTS_SS $obj_type $obj_name]
          add_message_to_container messages -2 $ALREADY_EXISTS
 
          set NOT_MODIFIED [translate_macro MSG_FILE_NOTCHANGED ]
@@ -9130,14 +9180,14 @@ proc sge_client_messages {msg_var action obj_type obj_name {on_host ""} {as_user
       "get" {
          # expect: does not exist [ object type, object name ]
          #         object [ result ] 
-         set NOT_EXISTS [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "$obj_type" "$obj_name"]
+         set NOT_EXISTS [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS $obj_type $obj_name]
          add_message_to_container messages -1 $NOT_EXISTS
       }
       "del" {
          # expect: successfully removed [ user, host, object type, object name ]
          #         does not exist [ object type, object name ]
-         set REMOVED [translate_macro MSG_SGETEXT_REMOVEDFROMLIST_SSSS "$as_user" "$on_host" "$obj_name" "$obj_type"]
-         set NOT_EXISTS [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "$obj_type" "$obj_name"]
+         set REMOVED [translate_macro MSG_SGETEXT_REMOVEDFROMLIST_SSSS $as_user $on_host $obj_name $obj_type]
+         set NOT_EXISTS [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS $obj_type $obj_name]
          add_message_to_container messages 0 $REMOVED
          add_message_to_container messages -1 $NOT_EXISTS
       }
@@ -9148,10 +9198,10 @@ proc sge_client_messages {msg_var action obj_type obj_name {on_host ""} {as_user
          #         unknown attribute [ attribute ]
          #         no ulong [ value ]
          #         obiect not exists
-         set MODIFIED [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS "$as_user" "$on_host" "$obj_name" "$obj_type" ]
+         set MODIFIED [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS $as_user $on_host $obj_name $obj_type]
          add_message_to_container messages 0 $MODIFIED
 
-         set ALREADY_EXISTS [translate_macro MSG_SGETEXT_ALREADYEXISTS_SS "$obj_type" "$obj_name"]
+         set ALREADY_EXISTS [translate_macro MSG_SGETEXT_ALREADYEXISTS_SS $obj_type $obj_name]
          add_message_to_container messages -2 $ALREADY_EXISTS
 
          set NOT_MODIFIED [translate_macro MSG_FILE_NOTCHANGED ]
@@ -9163,13 +9213,13 @@ proc sge_client_messages {msg_var action obj_type obj_name {on_host ""} {as_user
          set NO_ATTR "error: [translate_macro MSG_UNKNOWNATTRIBUTENAME_S \"*\" ]"
          add_message_to_container messages -5 $NO_ATTR
 
-         set NOT_EXISTS [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "$obj_type" "$obj_name"]
+         set NOT_EXISTS [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS $obj_type $obj_name]
          add_message_to_container messages -1 $NOT_EXISTS
       }
       "list" {
          # expect: object [ result ]
          #         not defined [ object type ]
-         set NOT_DEFINED [translate_macro MSG_QCONF_NOXDEFINED_S "$obj_type"]
+         set NOT_DEFINED [translate_macro MSG_QCONF_NOXDEFINED_S $obj_type]
          add_message_to_container messages -1 $NOT_DEFINED
       }
    }
@@ -9542,7 +9592,6 @@ proc get_complex { change_array } {
 #*******************************************************************************
 proc set_complex {change_array {raise_error 1} {fast_add 1} {do_reset 0} } {
    global CHECK_USER
-   global env
    get_current_cluster_config_array ts_config
    upvar $change_array chgar_orig
 
