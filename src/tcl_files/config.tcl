@@ -555,7 +555,7 @@ proc modify_setup2 {} {
    global CHECK_ACT_LEVEL CHECK_PACKAGE_DIRECTORY check_name
    global CHECK_CUR_CONFIG_FILE CHECK_DEFAULTS_FILE
 
-   lock_testsuite
+   #lock_testsuite
 
    set old_exed $ts_config(execd_hosts)
    set old_master $ts_config(master_host)
@@ -726,7 +726,7 @@ proc modify_setup2 {} {
          compile_source
       }
    }
-   unlock_testsuite
+   #unlock_testsuite
    return $change_level
 }
 
@@ -1687,13 +1687,13 @@ proc config_verify_uri { value } {
 #
 #  FUNCTION
 #     This function gets the usages in all defined configurations with the
-#     current configuration. This include - main, hedeby, additional(s) configurations.
+#     current configuration. This include - main, additional(s) configurations.
 #     The usage can be either of ports, or hosts
 #
 #  INPUTS
 #     check_list    - the array of all values in configuration
 #     config_array  - current configuration array
-#                     (main, hedeby, arco, additional(s) configurations)
+#                     (main, arco, additional(s) configurations)
 #     type          - host or port
 #
 #  SEE ALSO
@@ -1706,30 +1706,25 @@ proc config_check_all_usages { check_list config_array type } {
    upvar $check_list checks
    upvar $config_array config
    set main_list ""
-   set hedeby_list ""
    set arco_list ""
 
    switch -- $type {
       "host" {
          set main_list "master_host shadowd_hosts execd_hosts submit_only_hosts bdb_server"
-         set hedeby_list "hedeby_master_host hedeby_host_resources"
          set arco_list "dbwriter_host"
       }
       "port" {
          set main_list "commd_port jmx_port reserved_port"
-         set hedeby_list "hedeby_cs_port hedeby_user_jvm_port"
          set arco_list ""
       }
       default { return }
    }
 
    # find all files
-   set hedeby_config_file [ get_additional_config_file_path "hedeby" ]
    set arco_config_file [ get_additional_config_file_path "arco" ]
    array set filenames {
       testsuite ""
       arco ""
-      hedeby ""
    }
 
    # append main config
@@ -1751,16 +1746,10 @@ proc config_check_all_usages { check_list config_array type } {
          }
       }
    }
-   # append arco and hedeby confirugations
+   # append arco configurations
    foreach fl $filenames(testsuite) {
       if { [info exists tmp_config] } { unset tmp_config }
       read_array_from_file "$fl" "testsuite configuration" tmp_config
-      if { [string match "*hedeby*" $tmp_config(additional_checktree_dirs)] == 1 } {
-         set add_tmp_file [ get_additional_config_file_path "hedeby" $fl]
-         if { [lsearch $filenames(hedeby) $add_tmp_file] == -1 } { 
-            lappend filenames(hedeby) $add_tmp_file
-         }
-      }
       if { [string match "*arco*" $tmp_config(additional_checktree_dirs)] == 1 } {
          set add_tmp_file [ get_additional_config_file_path "arco" $fl]
          if { [lsearch $filenames(arco) $add_tmp_file] == -1 } { 
@@ -1779,10 +1768,6 @@ proc config_check_all_usages { check_list config_array type } {
          arco {
             set curr_list $arco_list
             set config_name "ARCo configuration"
-         }
-         hedeby {
-            set curr_list $hedeby_list
-            set config_name "Hedeby configuration"
          }
          default { continue }
       }
@@ -1809,7 +1794,7 @@ proc config_check_all_usages { check_list config_array type } {
 #     it checks config_array, and if the parameter $name is not found, it searches
 #     the corresponding global configuration.
 #     examples of values: port, host
-#     examples of configurations: main, hedeby, arco, additional(s))
+#     examples of configurations: main, arco, additional(s))
 #
 #  INPUTS
 #     check_list   - the searched list of values
@@ -2033,10 +2018,8 @@ proc config_additional_checktree_dirs { only_check name config_array } {
    #            for storing these path ~/.testsuite private file could be used
 
 #   set arco "$config(testsuite_root_dir)/checktree_arco"
-#   set hedeby "$config(testsuite_root_dir)/checktree_hedeby"
 #   array set dirs { }
 #   set dirs($arco) ""
-#   set dirs($hedeby) ""
 
 #   set value [config_generic $only_check "$name" config $help_text "choice" 1 0 dirs]
    set value [config_generic $only_check "$name" config $help_text "directory" 1 0]
@@ -2054,29 +2037,7 @@ proc config_additional_checktree_dirs { only_check name config_array } {
       } else { return -1 }
    }
 
-   if { [string match "*checktree_hedeby" $value] == 1 } {
-      if { "$config(additional_config)" == "none" } {
-         puts ""
-         set ret [ $config(additional_config,setup_func) $only_check additional_config config ]
-         if { $ret != -1 } {
-            set config(additional_config) $ret
-            ts_log_fine "setting additional_config to $ret"
-            puts ""
-         } else { return -1 }
-         # if hedeby is set, be sure that the cluster will compile on additional config parameter change
-         set config(additional_config,onchange)   "compile"
-         }
-      if { "$config(jmx_ssl)" == "false" } {
-         puts "Need enabled jmx_ssl option for GE installation for Hedeby!"
-         wait_for_enter
-         set config(jmx_ssl) "true"
-         ts_log_fine "setting jmx_ssl to $config(jmx_ssl)"
-         puts ""
-            }
-      } else {
-      # if hedeby is not set, there is no need to compile on additional config parameter change
-      set config(additional_config,onchange)   ""
-      }
+   set config(additional_config,onchange)   ""
 
    return $value
 }
@@ -2088,27 +2049,14 @@ proc config_additional_config { only_check name config_array } {
    upvar $config_array config
    
    set allow_null 1
-   set hedeby_is_set 0
    set config($name,onchange)   ""
-   if { $config(additional_checktree_dirs) != "none" } {
-      foreach dir $config(additional_checktree_dirs) {
-         if { [string match "*checktree_hedeby" $dir] == 1 } {
-            set allow_null 0
-            set hedeby_is_set 1
-            set config($name,onchange)   "compile"
-            break
-      }
-   }
-      }
 
    set help_text { "Enter the full pathname(s) of additional testsuite configuration(s)"
                    "used for installing a secondary Grid Engine cluster(s)."
                    "Multiple values separate by space."
                    "All configurations must use the same testsuite root directory,"
                    "and both global user and host configuration files."
-                   "The result directories of configurations must be different."
-                   "Hedeby requires at least one cell cluster, and one independent cluster"
-                   "configuration." }
+                   "The result directories of configurations must be different." }
    if { $allow_null } { lappend help_text "Enter \"none\" for no additional configuration." }
 
    set add_param(exclude_list) "$CHECK_CUR_CONFIG_FILE"
@@ -2118,9 +2066,6 @@ proc config_additional_config { only_check name config_array } {
 
    # now verify
    if {!$fast_setup} {
-      # this is a verification for hedeby. Once we use additional configurations
-      # also for another purposes than for hedeby testsuite setup, this should be changed.
-
          foreach filename $value {
 
             if { $only_check == 0 } {
@@ -2141,108 +2086,6 @@ proc config_additional_config { only_check name config_array } {
             if { $add_config($param) != $config($param) } {
                puts "Parameter $param must be same for additional configuration $filename."
                return -1
-            }
-         }
-         if { $hedeby_is_set == 1 } {
-            # jmx_ssl must be enabled
-            if { $add_config(jmx_ssl) == "false" } {
-               puts "Additional configuration $filename: SSL server authentication for qmaster JMX mbean server must be enabled."
-               return -1
-            }
-
-            #  cell or independed cluster support?
-            #  o if cluster have the same source directory AND the same SGE_ROOT the
-            #    compilation is done in the main cluster (ts with additional config)
-            #
-            #  o if SGE_ROOT is different the source has also to be different
-            #    (complete independed additional cluster config). Then the compilation
-            #    is done via operate_additional_clusters call. This means
-            #    gridengine version, and release may be different
-
-            set allow_master_as_execd 1
-            if { $add_config(product_root) == $config(product_root) &&
-                 $add_config(source_dir)   == $config(source_dir) } {
-               if { $only_check == 0 } {
-                  puts -nonewline "   (cell cluster) ..."
-               }
-               # now make sure that the additional configurations can work together
-               # the following parameters have to be the same for all configs
-               set same_params "gridengine_version source_dir product_root product_feature aimk_compile_options dist_install_options qmaster_install_options execd_install_options package_directory package_type"
-               # the following parameters have to differ between all configs
-               # TODO (Issue #139): remove master_host and execd_hosts from this list if issue #139 is fixed
-               set diff_params "results_dir commd_port cell master_host execd_hosts"
-
-               # TODO (Issue #139): also remove this allow_master_as_execd check if issue #139 is fixed
-               # since testsuite has problems with shutdown different cell clusters (because of same SGE_ROOT directory)
-               # we also don't allow the qmaster host be an exed host in an additional cluster
-               set allow_master_as_execd 0
-            } else {
-               if { $only_check == 0 } {
-                  puts -nonewline "   (independent cluster) ..."
-               }
-               # now make sure that the additional configurations can work together
-               # the following parameters have to be the same for all configs
-               set same_params ""
-               # the following parameters have to differ between all configs
-               set diff_params "results_dir commd_port product_root"
-            }
-
-            # clear previously joined_config
-            if { [info exists joined_config ] } {
-               unset joined_config
-            }
-
-            # create joined_config
-            foreach param "$same_params $diff_params" {
-               set helpval {}
-               lappend helpval $config($param) 
-               set joined_config($param) $helpval
-            }
-
-            # add the params to be checked to our joined config
-            foreach param "$same_params $diff_params" {
-               set helpval {}
-               lappend helpval $add_config($param)
-               lappend joined_config($param) $helpval
-            }
-
-            # now we check for equality or difference
-            foreach param $same_params {
-               if {[llength [lsort -unique $joined_config($param)]] != 1} {
-                  puts "\nThe parameter \"$param\" has to be the same for configuration\n\"$filename\","
-                  puts "but has the following values:\n$joined_config($param)"
-                  return -1
-               }
-            }
-            foreach param $diff_params {
-               if {[llength [lsort -unique $joined_config($param)]] != 2} {
-                  puts "\nThe parameter \"$param\" (=\"$config($param)\") has to be different for configuration\n\"$filename\","
-                  puts "but has the following values:\n$joined_config($param)"
-                  return -1
-               }
-               # now if param is a list check content
-               if {[llength $add_config($param)] > 1 || [llength $config($param)] > 1} {
-                  foreach val $add_config($param) {
-                     if { [string first $val $config($param)] >= 0 } {
-                        puts "\nFound value \"$val\" of configuration\n\"$filename\"\nin configuration for parameter \"$param\" in testsuite config"
-                        return -1
-                     }
-                  }
-               }
-            }
-
-            if {$allow_master_as_execd == 0} {
-               # since testsuite has problems with shutdown different cell clusters (because of same SGE_ROOT directory)
-               # we also don't allow the qmaster host be an exed host in an additional cluster
-               if { [string first $config(master_host) $add_config(execd_hosts) ] >= 0 } {
-                  puts "\nThe master host ($config(master_host)) of the testsuite configuration"
-                  puts "is not a supported cell execd host for config \"$filename\""
-                  return -1
-               }
-            }
-
-            if { $only_check == 0 } {
-               puts "ok"
             }
          }
       }

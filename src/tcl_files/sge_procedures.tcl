@@ -601,7 +601,6 @@ proc full_shutdown_and_csp_cleanup {} {
 
       get_local_spool_dir $host qmaster 1
       get_local_spool_dir $host execd 1
-      get_local_spool_dir $host hedeby_spool 1
    }
 }
 
@@ -919,15 +918,7 @@ proc start_sge_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {time
    get_current_cluster_config_array ts_config
 
    if {$host == ""} {
-      # The hedeby tests may move resources between clusters, so it is no longer guaranteed that all hosts from
-      # the configured execd host lists are really admin hosts!!!
-      # For active hedeby checktree we are using the master hosts of the cluster.
-      if {[is_hedeby_active] != 0} {
-         ts_log_finer "Hedeby checktree active - Using qmaster host \"$ts_config(master_host)\" of cluster \"[get_current_cluster_config_nr]\" for starting sge binaries!"
-         set host $ts_config(master_host)
-      } else {
-         set host [host_conf_get_suited_hosts]
-      }
+      set host [host_conf_get_suited_hosts]
       ts_log_finer "starting \"$bin $args\" on host \"$host\"!"
    }
 
@@ -997,46 +988,6 @@ proc start_sge_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {time
    incr index -1
    set line_buf(0) $index
    return $result
-}
-
-#****** sge_procedures/is_hedeby_active() **************************************
-#  NAME
-#     is_hedeby_active() -- check if hedeby checktree is configured
-#
-#  SYNOPSIS
-#     is_hedeby_active { } 
-#
-#  FUNCTION
-#     This procedure returns 1 if the actual checktree contains the
-#     "hedeby_install" test.
-#
-#  INPUTS
-#
-#  RESULT
-#     0 - no hedeby checktree active,
-#     1 - testsuite is configured with hedeby checktree
-#
-#  NOTES
-#     The value is cached. Cache is deleted when re-sourcing the file
-#     (TS menu 30)
-#
-#*******************************************************************************
-global hedeby_active_cache
-set hedeby_active_cache ""
-proc is_hedeby_active {} {
-   global hedeby_active_cache ts_checktree 
-   if {$hedeby_active_cache == ""} {
-      ts_log_fine "checking if hedeby is configured in the checktree ..."
-      set hedeby_active_cache 0
-      for {set i 0} {$i< $ts_checktree(act_nr)} {incr i 1} {
-         if {[info exists ts_checktree($i,check_name)] && $ts_checktree($i,check_name) == "hedeby_install"} {
-            ts_log_fine "Found active hedeby checktree."
-            set hedeby_active_cache 1
-            break
-         }
-      }
-   }
-   return $hedeby_active_cache
 }
 
 #****** sge_procedures/start_sge_utilbin() *************************************
@@ -4831,7 +4782,7 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1}} {
              set result 0
           }
           -i $sp_id $messages(UNABLETOSYNC) {
-            ts_log_severe "$UNABLETOSYNC" $raise_error
+            ts_log_severe "$messages(UNABLETOSYNC)" $raise_error
             set result -1
           }
           -i default {
@@ -6936,7 +6887,6 @@ proc startup_daemon { host service } {
 	 }
 	 startup_dbwriter $host
       }
-      #TODO: Add other Hedeby services HERE
       default {
 	 ts_log_severe "Invalid argument $service passed to shutdown_daemon{}"
 	 return -1

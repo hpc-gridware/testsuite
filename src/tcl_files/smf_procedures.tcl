@@ -274,7 +274,6 @@ proc smf_get_process_name { service } {
       "bdb" {
 	 return "berkeley_db_svc"
       }
-      "hedeby" -
       "sdm" -
       "dbwriter" {
 	 return "java"

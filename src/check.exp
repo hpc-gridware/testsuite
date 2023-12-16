@@ -2720,7 +2720,7 @@ proc setup2 { } {
          modify_setup2
       }
 
-      unlock_testsuite
+      #unlock_testsuite
    } else {
       puts "could not open defaults file."
       if { [ file isfile $CHECK_DEFAULTS_FILE ] } {
@@ -4504,7 +4504,7 @@ proc run_tests {path state_to_run} {
                   set check_use_installed_system 1
 
                   # first run cleanup hooks
-                  # This is done because some additional checktree implementations (like hedeby)
+                  # This is done because some additional checktree implementations
                   # have to cleanup the clusters before re_init (e.g. to re-add removed execds)
                   exec_checktree_clean_hooks
 
@@ -4952,9 +4952,9 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
    set start_time [clock seconds]
    set total_check_duration 0
 
-   # get lock
    delete_temp_script_files
-   lock_testsuite
+   # get lock
+   #lock_testsuite
 
    set CHECK_ACT_LEVEL $level
    ts_log_fine "starting test functions (runlevel is $CHECK_ACT_LEVEL)..."
@@ -5193,7 +5193,7 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
       save_result $path $duration $level $finished
    }
 
-   unlock_testsuite
+   #unlock_testsuite
 
    return $ret
 }

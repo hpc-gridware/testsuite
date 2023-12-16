@@ -91,7 +91,7 @@ proc bigdecimal_setup {} {
    set Big_Number 1000000000000000000000000000000000
    set Num_Jobs 5
    set Prj_Name1 "arco"
-   set Prj_Name2 "hedeby"
+   set Prj_Name2 "gridengine"
    set Queue_Name1 "et.q"
    set Queue_Name2 "sust.q"
    set AR_Name "sge_ar"

@@ -1,4 +1,3 @@
-# expect script 
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -3978,7 +3977,7 @@ proc check_output_is_tty {} {
 #
 #  INPUTS
 #     host           - hostname
-#     subdir         - "execd" or "qmaster" or "hedeby_spool"
+#     subdir         - "execd" or "qmaster"
 #     {do_cleanup 1} - if 1: delete spool dir contents
 #
 #  RESULT
@@ -4531,7 +4530,7 @@ proc set_jobseqnum {jobseqnum} {
 #     project_name: $config_path/sge.$project_name.conf
 #
 #  INPUTS
-#     project_name  - the name of the project, i.e. arco, hedeby
+#     project_name  - the name of the project, i.e. arco
 #     {filename ""} - the name of the testsuite configuration file
 #
 #  RESULT

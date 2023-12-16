@@ -582,7 +582,7 @@ proc compile_source { { do_only_hooks 0} } {
 
    set error_count 0
 
-   # for additional configurations, we might want to start remote operation, if hedeby is set up
+   # for additional configurations, we might want to start remote operation
    # (for independed clusters)
    if { $do_only_hooks == 0 } {
       if {$ts_config(additional_config) != "none"} {
