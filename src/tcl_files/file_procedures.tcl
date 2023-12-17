@@ -3986,7 +3986,7 @@ proc check_output_is_tty {} {
 #  SEE ALSO
 #     file_procedures/get_spool_dir()
 #*******************************************************************************
-proc get_local_spool_dir {host subdir {do_cleanup 1}} {
+proc get_local_spool_dir {host subdir {do_cleanup 1} {only_local 0}} {
    global ts_host_config 
    global check_do_not_use_spool_config_entries
    get_current_cluster_config_array ts_config
@@ -4030,9 +4030,15 @@ proc get_local_spool_dir {host subdir {do_cleanup 1}} {
    set physical_host [node_get_host $host]
 
    # read local spool dir from host config
+   set local_spooldir 0
    if {[info exist ts_host_config($physical_host,spooldir)]} {
       set spooldir $ts_host_config($physical_host,spooldir)
       set local_spooldir 1
+   }
+
+   if {$only_local && ! $local_spooldir} {
+      ts_log_severe "no local spool directory configured on host $physical_host"
+      return $spooldir
    }
 
    # if we have a toplevel spooldir, we can construct the real spooldir

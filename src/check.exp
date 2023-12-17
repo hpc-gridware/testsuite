@@ -476,12 +476,17 @@ set CHECK_TESTSUITE_TRASH 0
 
 global CHECK_INTERACTIVE_TRANSPORT
 set CHECK_INTERACTIVE_TRANSPORT "default"
+
+# compile tool to use: aimk vs. cmake, default aimk
+global CHECK_COMPILE_TOOL
+set CHECK_COMPILE_TOOL "aimk"
+
 #
 #                                                             max. column:     |
 #****** check/debug_puts() ******
 #  NAME
 #     debug_puts -- ???
-#
+# 
 #  SYNOPSIS
 #     debug_puts { args }
 #
@@ -8318,7 +8323,7 @@ proc operate_additional_clusters {operation} {
 #     check/operate_additional_clusters()
 #*******************************************************************************
 proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {execute_func_return rpc_retval} {ignore_spool_switches 0} {additional_switches ""}} {
-   global CHECK_USER CHECK_HTML_DIRECTORY
+   global CHECK_USER CHECK_HTML_DIRECTORY CHECK_COMPILE_TOOL
    global check_use_installed_system fast_setup be_quiet
    global check_do_clean_compile ts_config ts_log_config
    global CHECK_TESTSUITE_TRASH check_do_not_use_spool_config_entries ts_log_levels
@@ -8380,6 +8385,9 @@ proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {e
    if {$CHECK_TESTSUITE_TRASH != 0} {
       append args " testsuite_trash"
    }
+
+   # inherit "compile_tool" command line param (always set it)
+   append args " compile_tool $CHECK_COMPILE_TOOL"
 
    if {$ignore_spool_switches == 0} {
       # inherit "no_local_spool" command line param
@@ -8699,6 +8707,12 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "compile               checkout source code and recompile"
       puts ""
+      puts "compile_clean         call aimk clean before building."
+      puts ""
+      puts "compile_tool          choose between aimk (default) and cmake as build system"
+      puts ""
+      puts "daily_build_nr        Define a daily build number at compile time."
+      puts ""
       puts "all RUNLEVEL          run every test automatically up to runlevel RUNLEVEL"
       puts "                      (RUNLEVEL is a value from 0=short tests, up to 4=week tests)"
       puts ""
@@ -8740,8 +8754,6 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "                      ssh (use ssh as transport)"
       puts ""
       puts "interactive_mode      run the test in interactive mode."
-      puts ""
-      puts "compile_clean         call aimk clean before building."
       puts ""
       puts "mfile FILE            write all mails into file FILE (when mail is enabled)"
       puts ""
@@ -8806,8 +8818,6 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "install_mode <mode>   With this option it is possible to set the default install mode for the"
       puts "                      install_core_system test. Supported modes are \"manual\" or \"automatic\"."
       puts "                      Default is \"manual\"."
-      puts ""
-      puts "daily_build_nr        Define a daily build number at compile time."
       puts ""
       puts "create_csv_report     Analyse checktree and create a *.csv file in testsuite directory."
       puts ""
@@ -8885,6 +8895,22 @@ for {set i 0} {$i < $argc} {incr i} {
 
    if { ( [string compare [lindex $argv $i] "--compile_clean"] == 0 ) || ([string compare [lindex $argv $i] "compile_clean"] == 0) } {
       set check_do_clean_compile 1
+      continue
+   }
+
+   if { ( [string compare [lindex $argv $i] "--compile_tool"] == 0 ) || ([string compare [lindex $argv $i] "compile_tool"] == 0) } {
+      incr i
+      set compile_tool [lindex $argv $i]
+      switch -exact $compile_tool {
+         "aimk" -
+         "cmake" {
+            set CHECK_COMPILE_TOOL $compile_tool
+         }
+         default {
+            puts "invalid argument to option compile_tool, must be \"aimk\", or \"cmake\""
+            testsuite_shutdown 1
+         }
+      }
       continue
    }
 

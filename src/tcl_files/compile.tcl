@@ -562,6 +562,7 @@ proc wait_for_NFS_after_compile_clean { host_list a_report } {
 proc compile_source { { do_only_hooks 0} } {
    global ts_host_config ts_config
    global CHECK_PRODUCT_TYPE
+   global CHECK_COMPILE_TOOL
    global CHECK_HTML_DIRECTORY
    global CHECK_DEFAULTS_FILE check_name
    global CHECK_JOB_OUTPUT_DIR
@@ -709,9 +710,89 @@ proc compile_source { { do_only_hooks 0} } {
    # create it before update, clean, depend
    compile_create_java_properties $compile_hosts
 
-   set compile_depend_done "false"
+   if {$CHECK_COMPILE_TOOL == "aimk"} {
+      incr error_count [compile_source_aimk $do_only_hooks $compile_hosts report]
+   } else {
+      incr error_count [compile_source_cmake $do_only_hooks $compile_hosts report]
+   }
 
-   set aimk_clean_done 0
+   if {$error_count == 0} {
+      # new all registered compile_hooks of the checktree
+      set res [exec_compile_hooks $compile_hosts report]
+      if {$res < 0} {
+         ts_log_fine "exec_compile_hooks returned fatal error\n"
+         incr error_count 1
+      } elseif {$res > 0} {
+         ts_log_fine "$res compile hooks failed\n"
+         incr error_count 1
+      } else {
+         ts_log_fine "All compile hooks successfully executed\n"
+      }
+   }
+
+   # delete the build_testsuite.properties
+   compile_delete_java_properties
+
+   # install
+   if {$error_count == 0} {
+      # We need to evaluate the architectures to install.
+      # We might have cached architecture strings from an old
+      # $SGE_ROOT/util/arch. Clear the cache and resolve
+      # architecture names using dist/util/arch script.
+      set compiled_mail_architectures [compile_rebuild_arch_cache $compile_hosts arch_list]
+
+      # new all registered compile_hooks of the checktree
+      set res [exec_install_binaries_hooks $arch_list report]
+      if {$res < 0} {
+         report_add_message report "exec_install_binaries_hooks returned fatal error\n"
+         incr error_count 1
+      } elseif {$res > 0} {
+         report_add_message report "$res install_binaries hooks failed\n"
+         incr error_count 1
+      } else {
+         report_add_message report "All install_binaries hooks successfully executed\n"
+      }
+   } else {
+      report_add_message report "Skip installation due to previous error\n"
+   }
+
+   if {$error_count > 0} {
+      report_add_message report "Error occured during compilation or pre-installation of binaries"
+      report_finish report -1
+      return -1
+   }
+
+   report_add_message report "Successfully compiled and pre-installed following architectures:"
+   report_add_message report "${compiled_mail_architectures}\n"
+
+   report_add_message report "init_core_system check will install the $CHECK_PRODUCT_TYPE execd at:"
+   foreach elem $ts_config(execd_hosts) {
+      set host_arch [ resolve_arch $elem ]
+      report_add_message report "$elem ($host_arch)"
+   }
+
+   # if required, build distribution
+   if {$ts_config(package_type) == "create_tar"} {
+      if {![build_distribution $arch_list report]} {
+         report_add_message report "building distribution packages failed"
+         report_finish report -1
+         return -1
+      }
+   }
+
+   # finish the HTML report
+   report_finish report 0
+
+   return 0
+}
+
+proc compile_source_aimk {do_only_hooks compile_hosts report_var} {
+   global ts_host_config ts_config
+   global check_do_clean_compile
+
+   upvar $report_var report
+   
+   set error_count 0
 
    if {$check_do_clean_compile} {
       set do_aimk_depend_clean 1
@@ -720,17 +801,13 @@ proc compile_source { { do_only_hooks 0} } {
    }
 
    # do clean (if not already done)
-   if {$error_count == 0 && $check_do_clean_compile == 1 && $aimk_clean_done == 0} {
+   if {$error_count == 0 && $check_do_clean_compile == 1} {
       if {$do_only_hooks == 0} {
-
-         set tmp_clean_list $compile_hosts
-
-         if {[compile_with_aimk $tmp_clean_list report "compile_clean" "clean"] != 0} {
+         if {[compile_with_aimk $compile_hosts report "compile_clean" "clean"] != 0} {
             incr error_count 1
          }
 
          if {$error_count == 0} {
-            set aimk_clean_done 1
             if {![wait_for_NFS_after_compile_clean $compile_hosts report]} {
                incr error_count 1
             }
@@ -756,12 +833,8 @@ proc compile_source { { do_only_hooks 0} } {
       ts_log_fine "Skip compile due to previous errors"
    } else {
       if {$do_only_hooks == 0} {
-         if {$compile_depend_done == "false"} {
-            if {[compile_depend $compile_hosts report $do_aimk_depend_clean] != 0} {
-               incr error_count 1
-            }
-         } else {
-            ts_log_fine "Skip second depend, already done!"
+         if {[compile_depend $compile_hosts report $do_aimk_depend_clean] != 0} {
+            incr error_count 1
          }
       } else {
          ts_log_fine "Skip aimk compile, I am on do_only_hooks mode"
@@ -802,11 +875,6 @@ proc compile_source { { do_only_hooks 0} } {
                # architecture names using dist/util/arch script.
                set compiled_mail_architectures [compile_rebuild_arch_cache $compile_hosts arch_list]
 
-               # DG: if arch_list contains hp11-64 then we have
-               # an additional 32 bit architecture compiled on this host
-               # which  we have to install
-               set arch_list [add_32_bit_architecture_for_HP_64 $arch_list]
-
                if {[install_binaries $arch_list report] != 0} {
                   report_add_message report "install_binaries failed\n"
                   incr error_count 1
@@ -816,84 +884,360 @@ proc compile_source { { do_only_hooks 0} } {
             ts_log_fine "Skip aimk compile, I am on do_only_hooks mode"
          }
          report_write_html report
-         if {$error_count == 0} {
-            # new all registered compile_hooks of the checktree
-            set res [exec_compile_hooks $compile_hosts report]
-            if { $res < 0 } {
-               ts_log_fine "exec_compile_hooks returned fatal error\n"
-               incr error_count 1
-            } elseif { $res > 0 } {
-               ts_log_fine "$res compile hooks failed\n"
-               incr error_count 1
-            } else {
-               ts_log_fine "All compile hooks successfully executed\n"
+      }
+   }
+
+   return $error_count
+}
+
+proc compile_source_cmake_get_build_dir {host} {
+   global ts_host_config ts_config
+
+   # fetch a local build directory
+   set build_dir [get_local_spool_dir $host "build" 0 1]
+   ts_log_fine "build directory on host $host is $build_dir"
+
+   return $build_dir
+}
+
+proc compile_source_cmake_clean {compile_hosts report_var} {
+   upvar $report_var report
+
+   set error_count 0
+
+   # clear the build dir on every host
+   foreach host $compile_hosts {
+      set task_nr [report_create_task report "compile clean" $host]
+
+      set build_dir [compile_source_cmake_get_build_dir $host]
+      if {$build_dir == ""} {
+         incr error_count ;# ts_log_severe has already been done
+         report_task_add_message report $task_nr "no local build directory on host $host"
+         break
+      }
+    
+      # delete the existing build directory
+      if {[remote_file_isdirectory $host $build_dir]} {
+         if {[remote_delete_directory $host $build_dir] != 0} {
+            incr error_count
+            report_task_add_message report $task_nr "cannot delete $build_dir on host $host"
+            break
+         }
+      }
+
+      # create a new build directory
+      remote_file_mkdir $host $build_dir 0 "root" "777"
+      report_task_add_message report $task_nr "Successfully re-created build directory $build_dir on host $host"
+
+      if {$error_count == 0} {
+         report_finish_task report $task_nr 0
+      } else {
+         report_finish_task report $task_nr 1
+      }
+   }
+
+   report_write_html report
+
+   return $error_count
+}
+
+proc compile_source_cmake_execute {task_name compile_hosts options_var report_var} {
+   global CHECK_USER
+
+   upvar $options_var options
+   upvar $report_var report
+
+   report_add_message report "starting $task_name"
+
+   set error_count 0
+
+   # table output while running command
+   set table_row 2
+   set status_rows {}
+   set status_cols {status file}
+
+   # start command on all hosts
+   set spawn_list {}
+   foreach host $compile_hosts {
+      ts_log_fine "starting $task_name on host $host"
+      set cmd $options($host,cmd)
+      set args $options($host,args)
+      set dir $options($host,dir)
+      set open_spawn [open_remote_spawn_process $host $CHECK_USER $cmd $args 0 $dir "" 0]
+      set spawn_id [lindex $open_spawn 1]
+
+      set host_array($spawn_id,host) $host
+      set host_array($spawn_id,task_nr) [report_create_task report $task_name $host]
+      set host_array($spawn_id,open_spawn) $open_spawn
+      lappend spawn_list $spawn_id
+      report_task_add_message report $host_array($spawn_id,task_nr) "in $dir started $cmd $args"
+
+      # initialize fancy compile output
+      lappend status_rows $host
+      set status_array(file,$host) "unknown"
+      set status_array(status,$host) "running"
+      set status_array(compile_args,$host) $args
+   }
+
+   # wait for all commands to finish
+   log_user 0
+   set do_stop 0
+   set done 0
+   set status_time [clock seconds]
+   set status_updated 0
+   set timeout 60
+   expect_user {
+      -i $spawn_list full_buffer {
+         set spawn_id $expect_out(spawn_id)
+         set host $host_array($spawn_id,host)
+         ts_log_severe "full_buffer on host $host while building, step $task_name"
+         set do_stop 1
+         incr error_count
+      }
+      -i $spawn_list timeout {
+         ts_log_severe "timeout on host $host while building, step $task_name"
+         set do_stop 1
+         incr error_count
+      }
+      -i $spawn_list eof {
+         set spawn_id $expect_out(spawn_id)
+         set host $host_array($spawn_id,host)
+         ts_log_fine "eof on host $host while building, step $task_name"
+
+         report_task_add_message report $host_array($spawn_id,task_nr) "got eof for host \"$host\""
+         set host_array($spawn_id,bad_compile) 1
+
+         close_spawn_process $host_array($spawn_id,open_spawn)
+         set host_array($spawn_id,open_spawn) "--"
+         set index [lsearch -exact $spawn_list $spawn_id]
+         set spawn_list [lreplace $spawn_list $index $index]
+
+         set status_array(file,$host)   "-"
+         set status_array(status,$host) "eof"
+         set status_updated 1
+      }
+      -i $spawn_list "*\n" {
+         set spawn_id $expect_out(spawn_id)
+         set host $host_array($spawn_id,host)
+         #ts_log_fine "got data from host $host while building, step $task_name"
+         set lines [split [string trim $expect_out(0,string)] "\n"]
+         foreach line $lines {
+            set line [string trim $line]
+            if {$line != ""} {
+               #ts_log_fine $line
+               set now [clock milliseconds]
+               set secs [expr $now / 1000]
+               set millis [expr $now % 1000]
+               set report_line "[clock format $secs -format "%H:%M:%S"].$millis:$line"
+               report_task_add_message report $host_array($spawn_id,task_nr) $report_line
+
+               # analyse line
+               switch -glob $line {
+                  "\\\[*%\\\]*" -
+                  "-- *" {
+                     #ts_log_fine "==> status line $line"
+                     set status_array(file,$host) $line
+                     set status_array(status,$host) "running"
+                     set status_updated 1
+                  }
+                  "_exit_status_:(*)*" {
+                     set exit_status [get_string_value_between "(" ")" $line]
+                     report_task_add_message report $host_array($spawn_id,task_nr) "exited with exit status $exit_status"
+                     if {$exit_status == 0} {
+                        set status_array(status,$host) "done"
+                     } else {
+                        set status_array(status,$host) "failed"
+                        incr error_count
+                     }
+                     set status_array(file,$host) "-"
+                     set status_updated 1
+                     set host_array($spawn_id,exit_status) $exit_status
+                  }
+                  "script done. (_END_OF_FILE_)" {
+                     # we are done with this connection
+                     ts_log_fine "done with spawn_id $spawn_id on host $host"
+                     close_spawn_process $host_array($spawn_id,open_spawn)
+                     set host_array($spawn_id,open_spawn) "--"
+                     set index [lsearch -exact $spawn_list $spawn_id]
+                     set spawn_list [lreplace $spawn_list $index $index]
+                     if {[llength $spawn_list] == 0} {
+                        ts_log_fine "all commands finished"
+                        set done 1
+                     }
+                     if {![info exists host_array($spawn_id,exit_status)] || $host_array($spawn_id,exit_status) != 0} {
+                        report_finish_task report $host_array($spawn_id,task_nr) 1
+                        incr error_count
+                     } else {
+                        report_finish_task report $host_array($spawn_id,task_nr) 0
+                     }
+                  }
+                  default {
+                     ts_log_finer $line
+                  }
+               }
+            }
+         }
+
+         # update screen
+         set now [clock seconds]
+         if {$status_updated && ($status_time < $now || $done)} {
+            set status_time $now
+            set status_updated 0
+
+            set status_output [print_xy_array $status_cols $status_rows status_array status_max_column_len status_max_index_len]
+            
+            # show
+            clear_screen
+            ts_log_frame INFO "================================================================================"
+            foreach host $compile_hosts {
+               ts_log_info "task \'$task_name\' on \'$host\':  \'$options($host,cmd) $options($host,args)\'" 0 "" 1 0 0
+            }
+            ts_log_info "$status_output" 0 "" 1 0 0
+            ts_log_frame INFO "================================================================================"
+         }
+
+         if {!$do_stop && !$done} {
+            # continue expect loop
+            exp_continue
+         }
+      }
+   }
+
+   # close the remaining connections which did not yet get a eof
+   foreach spawn_id $spawn_list {
+      close_spawn_process $host_array($spawn_id,open_spawn)
+      if {![info exists host_array($spawn_id,exit_status)] || $host_array($spawn_id,exit_status) != 0} {
+         report_finish_task report $host_array($spawn_id,task_nr) 1
+         incr error_count
+      } else {
+         report_finish_task report $host_array($spawn_id,task_nr) 0
+      }
+   }
+
+   if {$error_count > 0} {
+      report_add_message report "$task_name failed"
+   } else {
+      report_add_message report "$task_name succeeded"
+   }
+
+   return $error_count
+}
+
+
+proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
+   global ts_host_config ts_config
+   global CHECK_USER
+   global check_do_clean_compile
+
+   upvar $report_var report
+
+   # @todo what about do_only_hooks?
+   # @todo check for tools and their versions? cmake, bison, flex, ...
+   # when to do 3rdparty build? after clean?
+   
+   set error_count 0
+
+   if {$check_do_clean_compile} {
+      incr error_count [compile_source_cmake_clean $compile_hosts report]
+   }
+   
+   # we'll pass a build number into aimk to distinguish our binaries
+   # from official builds.
+   # @todo what do we want here?
+   # @todo add this to the cmake build
+   # set build_number [get_build_number]
+
+   if {$error_count == 0} {
+      # call cmake on every host
+      # we use the "preferred" host to install common files
+      set preferred_host [get_preferred_build_host $compile_hosts]
+
+      foreach host $compile_hosts {
+         set options($host,cmd) "cmake"
+         set source_dir [file dirname $ts_config(source_dir)]
+         set args "-S $source_dir"
+         append args " -DCMAKE_INSTALL_PREFIX=$ts_config(product_root)"
+         append args " -DCMAKE_BUILD_TYPE=Debug" ;# @todo need command line option to distinguish dev and release build
+         append args " -DINSTALL_SGE_BIN=ON"
+         if {$host == $preferred_host} {
+            append args " -DINSTALL_SGE_COMMON=ON"
+         } else {
+            append args " -DINSTALL_SGE_COMMON=OFF"
+         }
+         append args " -DINSTALL_SGE_DOC=OFF"    ;# @todo need doc compile host
+         append args " -DINSTALL_SGE_TEST=ON"
+         set options($host,args) $args
+         set options($host,dir) [compile_source_cmake_get_build_dir $host]
+      }
+
+      incr error_count [compile_source_cmake_execute "cmake" $compile_hosts options report]
+   }
+
+   if {$error_count == 0 && $check_do_clean_compile} {
+      # build 3rdparty tools only after clean
+      foreach host $compile_hosts {
+         set options($host,cmd) "make"
+         set num_procs [node_get_processors $host]
+         if {$num_procs > 1} {
+            set options($host,args) "-j $num_procs VERBOSE=1 3rdparty"
+         } else {
+            set options($host,args) "VERBOSE=1 3rdparty"
+         }
+      }
+      incr error_count [compile_source_cmake_execute "3rdparty" $compile_hosts options report]
+   }
+
+   if {$error_count == 0} {
+      # call make on every host
+      foreach host $compile_hosts {
+         set options($host,cmd) "make"
+         set num_procs [node_get_processors $host]
+         if {$num_procs > 1} {
+            set options($host,args) "-j $num_procs VERBOSE=1"
+         } else {
+            set options($host,args) "VERBOSE=1"
+         }
+      }
+      incr error_count [compile_source_cmake_execute "make" $compile_hosts options report]
+   }
+
+   if {$error_count == 0} {
+      # now delete install directory
+      set task_nr [report_create_task report "clear SGE_ROOT" $host]
+      report_task_add_message report $task_nr "deleting directory \"$ts_config(product_root)\""
+      if {[delete_directory "$ts_config(product_root)"] != 0} {
+         ts_log_severe "could not delete $ts_config(product_root) directory"
+         report_task_add_message report $task_nr "could not delete $ts_config(product_root) directory"
+         incr error_count
+      }
+
+      if {$error_count == 0} {
+         # Wait until product root is available on all used cluster hosts
+         foreach host [get_all_hosts] {
+            if {[wait_for_remote_dir $host $CHECK_USER $ts_config(product_root) 60 1 1] != 0} {
+               incr error_count
+               break
             }
          }
       }
+
+      if {$error_count == 0} {
+         report_finish_task report $task_nr 0
+      } else {
+         report_finish_task report $task_nr 1
+      }
    }
 
-   # delete the build_testsuite.properties
-   compile_delete_java_properties
-
-   # install
    if {$error_count == 0} {
-      if { $error_count == 0 } {
-         # We need to evaluate the architectures to install.
-         # We might have cached architecture strings from an old
-         # $SGE_ROOT/util/arch. Clear the cache and resolve
-         # architecture names using dist/util/arch script.
-         set compiled_mail_architectures [compile_rebuild_arch_cache $compile_hosts arch_list]
-
-         # HP 64 compiles 32 bit binaries: so add 32 bit architecture if not inside
-         set arch_list [add_32_bit_architecture_for_HP_64 $arch_list]
-
-         # new all registered compile_hooks of the checktree
-         set res [exec_install_binaries_hooks $arch_list report]
-         if { $res < 0 } {
-            report_add_message report "exec_install_binaries_hooks returned fatal error\n"
-            incr error_count 1
-         } elseif { $res > 0 } {
-            report_add_message report "$res install_binaries hooks failed\n"
-            incr error_count 1
-         } else {
-            report_add_message report "All install_binaries hooks successfully executed\n"
-         }
+      # call make install on every host
+      foreach host $compile_hosts {
+         set options($host,cmd) "make"
+         set options($host,args) "install VERBOSE=1"
       }
-   } else {
-      report_add_message report "Skip installation due to previous error\n"
+      incr error_count [compile_source_cmake_execute "install" $compile_hosts options report]
    }
 
-   if { $error_count > 0 } {
-      report_add_message report "Error occured during compilation or pre-installation of binaries"
-      report_finish report -1
-      return -1
-   }
-
-   report_add_message report "Successfully compiled and pre-installed following architectures:"
-   report_add_message report "${compiled_mail_architectures}\n"
-
-   report_add_message report "init_core_system check will install the $CHECK_PRODUCT_TYPE execd at:"
-   foreach elem $ts_config(execd_hosts) {
-      set host_arch [ resolve_arch $elem ]
-      report_add_message report "$elem ($host_arch)"
-   }
-
-   # HP 64 compiles 32 bit binaries: so add 32 bit architecture if not inside
-   set arch_list [add_32_bit_architecture_for_HP_64 $arch_list]
-
-   # if required, build distribution
-   if {$ts_config(package_type) == "create_tar"} {
-      if {![build_distribution $arch_list report]} {
-         report_add_message report "building distribution packages failed"
-         report_finish report -1
-         return -1
-      }
-   }
-
-   # finish the HTML report
-   report_finish report 0
-
-   return 0
+   return $error_count
 }
 
 #****** check/add_32_bit_architecture_for_HP_64() **************************************************
@@ -1407,6 +1751,8 @@ proc get_preferred_build_host {compile_hosts} {
    if {$host == ""} {
       set host [lindex compile_hosts 0]
    }
+
+   return $host
 }
 
 
