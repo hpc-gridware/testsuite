@@ -7395,6 +7395,7 @@ proc menu {} {
       puts " (40) hooks..."
       puts " (50) run (1) and then (2)"
       puts " (51) run (1) and then (21)"
+      puts " (60) interactive TCL shell"
 
       puts "\nYou can select a menu number,"
       puts "enter a relative/absolute path or \"..\" to switch the directory."
@@ -7640,7 +7641,7 @@ proc menu {} {
                wait_for_enter
             }
          }
-         "-eval" {
+         "60" {
             # This is a undisplayed menu option to execute TCL commands
             # interactivley in the TS environment. When you know what you are
             # doing, this can be very helpful - also for exploring and debugging
