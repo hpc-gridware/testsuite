@@ -2615,22 +2615,29 @@ proc remote_file_isdirectory {hostname dir {win_local_user 0}} {
 #  RESULT
 #     command output
 #*******************************************************************************
-proc remote_file_mkdir {hostname dir {win_local_user 0} {user ""} {permissions ""}} {
-  global CHECK_USER
-  if {$user == ""} {
-     set exec_user $CHECK_USER
-  } else {
-     set exec_user $user
-  }
-  set result [start_remote_prog $hostname $exec_user "mkdir" "-p $dir" prg_exit_state 60 0 "" "" 1 0 0 1 $win_local_user]
-  if {$prg_exit_state != 0} {
-     ts_log_severe "Cannot create directory $dir as user $exec_user on host $hostname: $result"
-  }
-  if {$permissions != ""} {
-      ts_log_fine "setting permissions of dir \"$dir\" to $permissions"
-      start_remote_prog $hostname $exec_user "chmod" "$permissions $dir"
-  }
-  return $result
+proc remote_file_mkdir {hostname dir {win_local_user 0} {user ""} {permissions ""} {prg_exit_state_var ""}} {
+   global CHECK_USER
+
+   if {$prg_exit_state_var != ""} {
+      upvar $prg_exit_state_var prg_exit_state
+   }
+
+   if {$user == ""} {
+      set exec_user $CHECK_USER
+   } else {
+      set exec_user $user
+   }
+   set result [start_remote_prog $hostname $exec_user "mkdir" "-p $dir" prg_exit_state 60 0 "" "" 1 0 0 1 $win_local_user]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "Cannot create directory $dir as user $exec_user on host $hostname: $result"
+   } else {
+      if {$permissions != ""} {
+         ts_log_fine "setting permissions of dir \"$dir\" to $permissions"
+         append result "\n"
+         append result [start_remote_prog $hostname $exec_user "chmod" "$permissions $dir" prg_exit_state]
+      }
+   }
+   return $result
 }
 
 #****** file_procedures/remote_file_get_mtime() ***************************************
