@@ -1550,7 +1550,7 @@ proc open_remote_spawn_process { hostname
    global open_remote_spawn_script_cache
    upvar $shell_script_name_var used_script_name
    get_current_cluster_config_array ts_config
-   
+  
    set testsuite_root_dir $ts_config(testsuite_root_dir)
    if {$CHECK_DEBUG_LEVEL != 0} {
       ts_log_finest "open_remote_spawn_process on host \"$hostname\""
@@ -3426,7 +3426,7 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
       set nr_of_shells 0
    }
 
-   ts_log_finest "close_spawn_process: closing $spawn_id $pid"
+   ts_log_finest "close_spawn_process: closing $spawn_id $pid, check_exit_state: $check_exit_state, keep_open: $keep_open"
 
    # in debug mode we want to see all the shell output
    log_user 0
@@ -3508,7 +3508,8 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
 
       # are we done?
       if {$do_return != ""} {
-         testsuite_background_tasks
+         # @todo: this would be a recursive call!
+         # testsuite_background_tasks
          return $do_return
       }
       
@@ -3526,7 +3527,7 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
       ts_log_finest "-->sending $nr_of_shells exit(s) to shell on id $spawn_id"
       set catch_return [catch {
          # send CTRL-C to stop poss. still running processes
-         ts_send $spawn_id "\003" "" 0 0
+         ts_send $spawn_id "   \003" "" 0 0
          
          # wait for CTRL-C to take effect
          set timeout 5
@@ -3554,7 +3555,7 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
 
          # now we try to close the shells with "exit"
          if {$send_exit} {
-            ts_send $spawn_id "exit\n" "" 0 0
+            ts_send $spawn_id "   exit\n" "" 0 0
             expect {
                -i $spawn_id full_buffer {
                   ts_log_warning "buffer overflow"
@@ -3576,7 +3577,7 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
                   # if we still have open shells, send "exit"
                   if {$nr_of_shells > 0} {
                      ts_log_finest "sending exit to shell (nr of shells=$nr_of_shells)..."
-                     ts_send $spawn_id "exit\n" "" 0 0
+                     ts_send $spawn_id "   exit\n" "" 0 0
                   } else {
                      ts_log_finest "all shells exited - wait for EOF ..."
                   }
