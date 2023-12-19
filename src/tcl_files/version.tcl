@@ -146,104 +146,93 @@ proc ts_source {filebase {extension tcl}} {
 #     Version string e.g. "GE 8.0.0 beta" or "0.0" if it is not possible to
 #     get the version string.
 #*******************************************************************************
+
+# cache release info
+# g_rel_info(major_release)      - 8
+# g_rel_info(minor_release)      - 1
+# g_rel_info(update_release)     - 2
+# g_rel_info(full)               - GE 8.1.2 (this is what qconf reports)
+# g_rel_info(detected_version)   - 8.1.2
+global g_rel_info
+unset -nocomplain g_rel_info
+proc clear_version_info {} {
+   global g_rel_info
+   unset -nocomplain g_rel_info
+}
+
 proc get_version_info {{version_information_array_name ""}} {
+   get_current_cluster_config_array ts_config
+   global g_rel_info
    global CHECK_PRODUCT_VERSION_NUMBER
    global CHECK_PRODUCT_TYPE CHECK_USER
 
-   get_current_cluster_config_array ts_config
-
-   if {$version_information_array_name != ""} {
-      upvar $version_information_array_name rel_info
+   if {[info exists g_rel_info] && $g_rel_info(major_release) > 0} {
+      set CHECK_PRODUCT_VERSION_NUMBER $g_rel_info(full)
+   } else {
+      set CHECK_PRODUCT_VERSION_NUMBER "n.a."
    }
-
-   if {[info exists rel_info]} {
-      unset rel_info
-   }
-
-   set CHECK_PRODUCT_VERSION_NUMBER "n.a."
 
    if {[info exists ts_config(product_root)] != 1} {
       set CHECK_PRODUCT_VERSION_NUMBER "testsuite configuration not initialized"
       return $CHECK_PRODUCT_VERSION_NUMBER
    }
 
-   set qconf_host [host_conf_get_suited_hosts]
-   set qconf_host_arch [resolve_arch $qconf_host]
-   set qconf_bin $ts_config(product_root)/bin/$qconf_host_arch/qconf
+   # if we do not yet know the version, try to get it via qconf -help
+   if {$CHECK_PRODUCT_VERSION_NUMBER == "n.a."} {
+      set qconf_host [host_conf_get_suited_hosts]
+      set qconf_host_arch [resolve_arch $qconf_host]
+      set qconf_bin $ts_config(product_root)/bin/$qconf_host_arch/qconf
 
-   if {[file isfile $qconf_bin]} {
-      # We don't use start_sge_bin since we don't want to call this over JGDI
-      set result [start_remote_prog $qconf_host $CHECK_USER $qconf_bin "-help" prg_exit_state 15 0 "" "" 1 1 0 1]
-      set help [split $result "\n"]
-      if {([string first "fopen" [ lindex $help 0]]        >= 0) ||
-          ([string first "error" [ lindex $help 0]]        >= 0) ||
-          ([string first "product_mode" [ lindex $help 0]] >= 0)} {
-          ts_log_finer "cannot get version starting qconf -help!"
-      } else {
-         set CHECK_PRODUCT_VERSION_NUMBER [string trim [lindex $help 0]]
-         if {[string first "exit" $CHECK_PRODUCT_VERSION_NUMBER ] >= 0} {
-            ts_log_finer "output of qconf -help contains \"exit\"! Output: \"$CHECK_PRODUCT_VERSION_NUMBER\""
-            set CHECK_PRODUCT_VERSION_NUMBER "n.a."
+      if {[file isfile $qconf_bin]} {
+         # We don't use start_sge_bin since we don't want to call this over JGDI
+         set result [start_remote_prog $qconf_host $CHECK_USER $qconf_bin "-help" prg_exit_state 15 0 "" "" 1 1 0 1]
+         set help [split $result "\n"]
+         if {([string first "fopen" [ lindex $help 0]]        >= 0) ||
+             ([string first "error" [ lindex $help 0]]        >= 0) ||
+             ([string first "product_mode" [ lindex $help 0]] >= 0)} {
+             ts_log_finer "cannot get version starting qconf -help!"
+         } else {
+            set CHECK_PRODUCT_VERSION_NUMBER [string trim [lindex $help 0]]
+            if {[string first "exit" $CHECK_PRODUCT_VERSION_NUMBER ] >= 0} {
+               ts_log_finer "output of qconf -help contains \"exit\"! Output: \"$CHECK_PRODUCT_VERSION_NUMBER\""
+               set CHECK_PRODUCT_VERSION_NUMBER "n.a."
+            }
          }
       }
-   }
 
-   #  try to get version from install script
-   if {$CHECK_PRODUCT_VERSION_NUMBER == "n.a."} {
-      set install_master_file "$ts_config(product_root)/inst_sge"
-      if {[file isfile $install_master_file]} {
-         set result [start_remote_prog $qconf_host $CHECK_USER $install_master_file "-v" prg_exit_state 15 0 $ts_config(product_root)]
-         if {$prg_exit_state == 0} {
-            set CHECK_PRODUCT_VERSION_NUMBER [string trim [lindex [split $result ":"] 1]]
+      #  try to get version from install script
+      if {$CHECK_PRODUCT_VERSION_NUMBER == "n.a."} {
+         set install_master_file "$ts_config(product_root)/inst_sge"
+         if {[file isfile $install_master_file]} {
+            set result [start_remote_prog $qconf_host $CHECK_USER $install_master_file "-v" prg_exit_state 15 0 $ts_config(product_root)]
+            if {$prg_exit_state == 0} {
+               set CHECK_PRODUCT_VERSION_NUMBER [string trim [lindex [split $result ":"] 1]]
+            } else {
+               set CHECK_PRODUCT_VERSION_NUMBER "0.0"
+            }
          } else {
             set CHECK_PRODUCT_VERSION_NUMBER "0.0"
          }
-      } else {
-         set CHECK_PRODUCT_VERSION_NUMBER "0.0"
       }
-   }
 
-   # e.g. "GE 6.2u3beta"
-   set help [split $CHECK_PRODUCT_VERSION_NUMBER "."]
-   set major_help [lindex $help 0]
-   set rel_info(major_release) "0"
+      # e.g. "GE 6.2u3beta"
+      set help [split $CHECK_PRODUCT_VERSION_NUMBER "."]
+      set major_help [lindex $help 0]
+      set g_rel_info(major_release) "0"
 
-   # strip GE from major version
-   foreach str [split $major_help " "] {
-      if {[string is integer $str]} {
-         set rel_info(major_release) [string trim $str]
-      }
-   }
-
-   # distinguish old version scheme 6.2u5
-   # from new one 8.0.0
-   if {[llength $help] > 2} {
-      # new Univa versioning scheme
-      set rel_info(minor_release) [lindex $help 1]
-      set update_help [lindex $help 2]
-      set up_rel ""
-      for {set i 0} {$i < [string length $update_help]} {incr i 1} {
-         set char [string index $update_help $i]
-         if {[string is integer $char]} {
-            append up_rel $char
-         } else {
-            break
-         }
-         if {$up_rel == ""} {
-            set up_rel 0
+      # strip GE from major version
+      foreach str [split $major_help " "] {
+         if {[string is integer $str]} {
+            set g_rel_info(major_release) [string trim $str]
          }
       }
-      set rel_info(update_release) $up_rel
-      set rel_info(full) $CHECK_PRODUCT_VERSION_NUMBER
-      set rel_info(detected_version) "$rel_info(major_release).$rel_info(minor_release).$rel_info(update_release)"
-   } else {
-      # old Sun versioning scheme
-      # split minor version from patch number: "2u5"
-      set minor_help [lindex $help 1]
-      set help [split $minor_help "u"]
-      set rel_info(minor_release) [string trim [lindex $help 0]]
-      if {[llength $help] > 1} {
-         set update_help [lindex $help 1]  ;# "3beta"
+
+      # distinguish old version scheme 6.2u5
+      # from new one 8.0.0
+      if {[llength $help] > 2} {
+         # new Univa versioning scheme
+         set g_rel_info(minor_release) [lindex $help 1]
+         set update_help [lindex $help 2]
          set up_rel ""
          for {set i 0} {$i < [string length $update_help]} {incr i 1} {
             set char [string index $update_help $i]
@@ -252,19 +241,51 @@ proc get_version_info {{version_information_array_name ""}} {
             } else {
                break
             }
+            if {$up_rel == ""} {
+               set up_rel 0
+            }
          }
-         if {$up_rel == ""} {
+         set g_rel_info(update_release) $up_rel
+         set g_rel_info(full) $CHECK_PRODUCT_VERSION_NUMBER
+         set g_rel_info(detected_version) "$g_rel_info(major_release).$g_rel_info(minor_release).$g_rel_info(update_release)"
+      } else {
+         # old Sun versioning scheme
+         # split minor version from patch number: "2u5"
+         set minor_help [lindex $help 1]
+         set help [split $minor_help "u"]
+         set g_rel_info(minor_release) [string trim [lindex $help 0]]
+         if {[llength $help] > 1} {
+            set update_help [lindex $help 1]  ;# "3beta"
+            set up_rel ""
+            for {set i 0} {$i < [string length $update_help]} {incr i 1} {
+               set char [string index $update_help $i]
+               if {[string is integer $char]} {
+                  append up_rel $char
+               } else {
+                  break
+               }
+            }
+            if {$up_rel == ""} {
+               set up_rel 0
+            }
+         } else {
             set up_rel 0
          }
-      } else {
-         set up_rel 0
+         set g_rel_info(update_release) $up_rel
+         set g_rel_info(full) $CHECK_PRODUCT_VERSION_NUMBER
+         if { $up_rel == 0 } {
+            set g_rel_info(detected_version) "$g_rel_info(major_release).$g_rel_info(minor_release)"
+         } else {
+            set g_rel_info(detected_version) "$g_rel_info(major_release).$g_rel_info(minor_release)u$g_rel_info(update_release)"
+         }
       }
-      set rel_info(update_release) $up_rel
-      set rel_info(full) $CHECK_PRODUCT_VERSION_NUMBER
-      if { $up_rel == 0 } {
-         set rel_info(detected_version) "$rel_info(major_release).$rel_info(minor_release)"
-      } else {
-         set rel_info(detected_version) "$rel_info(major_release).$rel_info(minor_release)u$rel_info(update_release)"
+   }
+
+   # caller requested detailed release info - copy from global cache
+   if {$version_information_array_name != ""} {
+      upvar $version_information_array_name rel_info
+      foreach name [array names g_rel_info] {
+         set rel_info($name) $g_rel_info($name)
       }
    }
 
