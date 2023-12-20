@@ -887,6 +887,9 @@ proc compile_source_aimk {do_only_hooks compile_hosts report_var} {
       }
    }
 
+   # we installed new binaries and scripts, version information might have changed
+   clear_version_info
+
    return $error_count
 }
 
@@ -922,12 +925,51 @@ proc compile_source_cmake_clean {compile_hosts report_var} {
             incr error_count
             report_task_add_message report $task_nr "cannot delete $build_dir on host $host"
             break
+         } else {
+            report_task_add_message report $task_nr "deleted $build_dir on host $host"
          }
       }
+   }
 
+   report_write_html report
+
+   return $error_count
+}
+
+proc compile_source_cmake_make_build_dir {compile_hosts report_var {build_3rdparty_hosts_var ""}} {
+   upvar $report_var report
+
+   # these are the hosts where 3rdparty code needs to be built
+   if {$build_3rdparty_hosts_var != ""} {
+      upvar $build_3rdparty_hosts_var build_3rdparty_hosts
+   }
+
+   set error_count 0
+
+   # clear the build dir on every host
+   foreach host $compile_hosts {
+      set task_nr [report_create_task report "create build directory" $host]
+
+      set build_dir [compile_source_cmake_get_build_dir $host]
+      if {$build_dir == ""} {
+         incr error_count ;# ts_log_severe has already been done
+         report_task_add_message report $task_nr "no local build directory on host $host"
+         break
+      }
+    
       # create a new build directory
-      remote_file_mkdir $host $build_dir 0 "root" "777"
-      report_task_add_message report $task_nr "Successfully re-created build directory $build_dir on host $host"
+      if {![remote_file_isdirectory $host $build_dir]} {
+         lappend build_3rdparty_hosts $host
+         set output [remote_file_mkdir $host $build_dir 0 "root" "777" prg_exit_state]
+         if {$prg_exit_state == 0} {
+            report_task_add_message report $task_nr "Successfully created build directory $build_dir on host $host"
+         } else {
+            incr error_count
+            report_task_add_message report $task_nr "Creating build directory $build_dir on host $host failed:\n$output"
+         }
+      } else {
+         report_task_add_message report $task_nr "Build directory $build_dir on host $host already exists"
+      }
 
       if {$error_count == 0} {
          report_finish_task report $task_nr 0
@@ -985,7 +1027,7 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
    set done 0
    set status_time [clock seconds]
    set status_updated 0
-   set timeout 60
+   set timeout 300
    expect_user {
       -i $spawn_list full_buffer {
          set spawn_id $expect_out(spawn_id)
@@ -1133,12 +1175,24 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
 
    # @todo what about do_only_hooks?
    # @todo check for tools and their versions? cmake, bison, flex, ...
-   # when to do 3rdparty build? after clean?
+
+   # we do a 3rdparty build only when build directories had to be created
+   # - on first build
+   # - after clean
+   set build_3rdparty 0
    
    set error_count 0
 
+   # if clean build requested: simply delete the build directories
    if {$check_do_clean_compile} {
       incr error_count [compile_source_cmake_clean $compile_hosts report]
+   }
+
+   # create build directories if they do not yet exist
+   # where they got created we need to build the 3rdparty tools
+   set build_3rdparty_hosts {}
+   if {$error_count == 0} {
+      incr error_count [compile_source_cmake_make_build_dir $compile_hosts report build_3rdparty_hosts]
    }
    
    # we'll pass a build number into aimk to distinguish our binaries
@@ -1150,6 +1204,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
    if {$error_count == 0} {
       # call cmake on every host
       # we use the "preferred" host to install common files
+      unset -nocomplain options
       set preferred_host [get_preferred_build_host $compile_hosts]
 
       foreach host $compile_hosts {
@@ -1173,22 +1228,27 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
       incr error_count [compile_source_cmake_execute "cmake" $compile_hosts options report]
    }
 
-   if {$error_count == 0 && $check_do_clean_compile} {
-      # build 3rdparty tools only after clean
-      foreach host $compile_hosts {
-         set options($host,cmd) "make"
-         set num_procs [node_get_processors $host]
-         if {$num_procs > 1} {
-            set options($host,args) "-j $num_procs VERBOSE=1 3rdparty"
-         } else {
-            set options($host,args) "VERBOSE=1 3rdparty"
+   if {$error_count == 0} {
+      # build 3rdparty tools only on hosts where required
+      if {[llength $build_3rdparty_hosts] > 0} {
+         unset -nocomplain options
+         foreach host $build_3rdparty_hosts {
+            set options($host,cmd) "make"
+            set num_procs [node_get_processors $host]
+            if {$num_procs > 1} {
+               set options($host,args) "-j $num_procs VERBOSE=1 3rdparty"
+            } else {
+               set options($host,args) "VERBOSE=1 3rdparty"
+            }
+            set options($host,dir) [compile_source_cmake_get_build_dir $host]
          }
+         incr error_count [compile_source_cmake_execute "3rdparty" $build_3rdparty_hosts options report]
       }
-      incr error_count [compile_source_cmake_execute "3rdparty" $compile_hosts options report]
    }
 
    if {$error_count == 0} {
       # call make on every host
+      unset -nocomplain options
       foreach host $compile_hosts {
          set options($host,cmd) "make"
          set num_procs [node_get_processors $host]
@@ -1197,6 +1257,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
          } else {
             set options($host,args) "VERBOSE=1"
          }
+         set options($host,dir) [compile_source_cmake_get_build_dir $host]
       }
       incr error_count [compile_source_cmake_execute "make" $compile_hosts options report]
    }
@@ -1230,12 +1291,17 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
 
    if {$error_count == 0} {
       # call make install on every host
+      unset -nocomplain options
       foreach host $compile_hosts {
          set options($host,cmd) "make"
          set options($host,args) "install VERBOSE=1"
+         set options($host,dir) [compile_source_cmake_get_build_dir $host]
       }
       incr error_count [compile_source_cmake_execute "install" $compile_hosts options report]
    }
+
+   # we installed new binaries and scripts, version information might have changed
+   clear_version_info
 
    return $error_count
 }
