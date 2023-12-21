@@ -1260,44 +1260,20 @@ proc sge_drmaa {report_var} {
 
       ts_log_fine "Perform a drmaa test with $b_arch binaries"
       append output "$b_arch:\n"
-      set compile_arch [start_remote_prog $host $CHECK_USER \
-                        $ts_config(source_dir)/scripts/compilearch "-c $b_arch"]
-      set compile_arch [string trim $compile_arch]
-
-      if {$compile_arch == ""} {
-         set compile_arch [start_remote_prog $host $CHECK_USER \
-                        $ts_config(source_dir)/scripts/compilearch "-b $b_arch"]
-         set compile_arch [string trim $compile_arch]
-      }
-      if {$compile_arch == ""} {
-         append output "Unknown compilearch! "
+      set drmaa_bin test_drmaa_perf
+      # set the shared library variable
+      set shared_lib_var [get_shared_lib_path_variable_name $b_arch]
+      set my_env($shared_lib_var) $ts_config(product_root)/lib/$b_arch
+      set result [start_test_bin $drmaa_bin ""-jobs 2 -threads 2 -wait yes \
+                 $ts_config(product_root)/examples/jobs/sleeper.sh 5" \
+                 prg_exit_state 120 my_env]
+      if {[string trim "$result"] == ""} {
+         append output "No output! "
          incr err_count 1
       } else {
-         set drmaa_bin $ts_config(source_dir)/$compile_arch/test_drmaa_perf
-         if {[file isfile $drmaa_bin] != 1} {
-            set drmaa_bin "/vol2/SW/$b_arch/bin/test_drmaa_perf"
-            }
-         if {[file isfile $drmaa_bin] != 1} {
-            append output "$drmaa_bin not found! "
-            #incr err_count 1
-             incr skipped_count 1
-         } else {
-            # set the shared library variable
-            set shared_lib_var [get_shared_lib_path_variable_name $b_arch]
-            set env($shared_lib_var) $ts_config(product_root)/lib/$b_arch
-            set result [start_remote_prog $host $CHECK_USER $drmaa_bin \
-                                              "-jobs 2 -threads 2 -wait yes \
-                       $ts_config(product_root)/examples/jobs/sleeper.sh 5" \
-                                                 prg_exit_state 120 0 "" env]
-            if {[string trim "$result"] == ""} {
-               append output "No output! "
-               incr err_count 1
-            } else {
-               append output "$result "
-               if {$prg_exit_state != 0} {
-                  incr err_count 1
-               }
-            }
+         append output "$result "
+         if {$prg_exit_state != 0} {
+            incr err_count 1
          }
       }
       append output "\n"

@@ -77,7 +77,7 @@ proc issue_1270_run  {} {
 
    set client_args "$ts_config(product_root)/examples/jobs/sleeper.sh"
 
-   set output [start_source_bin "test_drmaa_sync" $client_args "" "" prg_exit_state 600]
+   set output [start_test_bin "test_drmaa_sync" $client_args "" "" prg_exit_state 600]
 
    if {$prg_exit_state <= 0} {
       ts_log_severe "drmaa_synchronize() did not ignore new jobs:\n$output"

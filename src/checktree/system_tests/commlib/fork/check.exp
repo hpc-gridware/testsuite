@@ -68,11 +68,6 @@ proc fork_posix_behaviour_init_level {} {
 proc fork_posix_behaviour_setup {} {
    global ts_config
 
-   if {$ts_config(source_dir) == "none"} {
-      ts_log_config "source directory is set to \"none\" - cannot run test"
-      return 99
-   }
-
    shutdown_core_system
 }
 
@@ -120,8 +115,7 @@ proc fork_posix_behaviour_run {} {
    foreach host $host_list {
       # setup the test variables for the host
       ts_log_fine "testing host $host ..."
-      set server_up_arch [resolve_build_arch $host]
-      set server_binary  $ts_config(source_dir)/$server_up_arch/test_cl_commlib
+      set server_binary [get_test_or_source_path "test_cl_commlib" $host]
 
       # we need debug level 4, using TCP connection
       set server_args "4 TCP"

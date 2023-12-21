@@ -203,13 +203,13 @@ proc jsv_issues_job_start_user_qsub {} {
    }
 }
 
-proc submit_drmaa_job {host binary_path job_id_var} {
+proc submit_drmaa_job {host job_id_var} {
    global CHECK_USER 
    global ts_config
 
    upvar $job_id_var job_id
    set prg_exit_stat 0
-   set drmaa_out [start_remote_prog $host $CHECK_USER "cd" ".\n$binary_path/test_drmaa_perf -jobs 1 -wait no -native \"-h\" $ts_config(product_root)/examples/jobs/sleeper.sh 1" prg_exit_state 500 0 "" "" 1 0 1]
+   set drmaa_out [start_test_bin "test_drmaa_perf" "-jobs 1 -wait no -native \"-h\" $ts_config(product_root)/examples/jobs/sleeper.sh 1" $host $CHECK_USER prg_exit_state 500]
 
    if {$prg_exit_state != 0} {
       ts_log_severe "Submitting drmaa job failed. Output of command was $drmaa_out and exit state is $prg_exit_stat"
@@ -243,18 +243,14 @@ proc jsv_issues_job_start_user_drmaa {} {
    puts $fd "-jsv ${jsv_base_path}/jsv_get_owner.sh"
    close $fd
 
-   drmaa_redirect_lib "1.0" $host
-   set drmaa_binary_name "test_drmaa.1.0"
-   set compile_arch_mt [resolve_build_arch_installed_libs $host]
-   set binary_path "$ts_config(source_dir)/$compile_arch_mt"
-   ts_log_fine "host is $host has arch $compile_arch_mt mt bin path $binary_path"
+   set drmaa_binary_name "test_drmaa"
 
    # unset SGE_ROOT and try test_drmaa -h
    ts_log_fine "starting single threaded test $drmaa_binary_name -h without SGE_ROOT"
 
    # Submit a drmaa job
    # if the issue is present the binary might return (null) as user or die 
-   submit_drmaa_job $host $binary_path job_id 
+   submit_drmaa_job $host job_id 
 
    # restore safed file
    if {$did_copy == 1} {

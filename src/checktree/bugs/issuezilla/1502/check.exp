@@ -74,9 +74,7 @@ proc issue_1502_run {} {
 
    foreach host $ts_config(unique_arch_nodes) {
       ts_log_fine "host: $host ..."
-      set up_arch [resolve_build_arch $host]
-      set binary $ts_config(source_dir)/$up_arch/test_general
-      set output [start_remote_prog $host $CHECK_USER $binary ""]
+      set output [start_test_bin "test_general" "" $host $CHECK_USER]
       ts_log_fine $output
       if {$prg_exit_state != 0} {
          ts_log_severe "general commlib test error on host $host:\n$output"

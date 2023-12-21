@@ -81,12 +81,6 @@ proc cl_throughput_setup_level {} {
    global cl_throughput_prot_output_dir
    global nr_event_clients nr_rgdi_clients nr_sgdi_clients
 
-   if {$ts_config(source_dir) == "none"} {
-      ts_log_config "source directory is set to \"none\" - cannot run test"
-      return 99
-   }
-
-
    set cl_throughput_ge_version [get_version_info] 
    set cl_throughput_prot_output_dir "$CHECK_PROTOCOL_DIR/commlib/level_$CHECK_ACT_LEVEL"
 
@@ -551,8 +545,8 @@ proc cl_throughput_run {} {
    set vqmaster_host     $ts_config(master_host)
    set vqmaster_port     $ts_config(commd_port)
    set vqmaster_debug    0
-   set vqmaster_binary   $ts_config(source_dir)/$up_arch/test_virtual_qmaster
-   set vevc_binary       $ts_config(source_dir)/$up_arch/test_virtual_event_client
+   set vqmaster_binary   [get_test_or_source_path "test_virtual_qmaster" $vqmaster_host]
+   set vevc_binary       [get_test_or_source_path "test_virtual_event_client" $vqmaster_host]
 
    set nr_of_remote_hosts [llength $commlib_host_list]
 
@@ -574,8 +568,7 @@ proc cl_throughput_run {} {
       set host_count 1 
       set used_hosts ""
       foreach host $commlib_host_list {
-         set up_arch [resolve_build_arch $host]
-         set vgdi_binary $ts_config(source_dir)/$up_arch/test_virtual_gdi_client
+         set vgdi_binary [get_test_or_source_path "test_virtual_gdi_client" $host]
 
          if {[string compare $host $vqmaster_host] == 0} {
             continue

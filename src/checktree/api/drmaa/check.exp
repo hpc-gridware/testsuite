@@ -100,11 +100,6 @@ global drmaa_binary_name
 proc drmaa_setup {} {
    global drmaa_config current_drmaa_mode ts_config host_list
 
-   if {$ts_config(source_dir) == "none"} {
-      ts_log_config "source directory is set to \"none\" - cannot run test"
-      return 99
-   }
-
    # must forbit reschedule on job exiting with 99 
    # must forbit job error upon job exiting with 100
    # otherwise drmaa_test ST_EXIT_STATUS never finishes
@@ -185,6 +180,7 @@ proc drmaa_setup_level {} {
       set current_drmaa_mode($host) [get_current_drmaa_mode $host]
    }
 
+if {0} {
    # redirect DRMAA mode
    switch -- $CHECK_ACT_LEVEL {
       "0" {
@@ -203,6 +199,9 @@ proc drmaa_setup_level {} {
             set drmaa_binary_name "test_drmaa.1.0"
          }
       }
+   }
+   } else {
+      set drmaa_binary_name "test_drmaa"
    }
 }
 
@@ -240,10 +239,12 @@ proc drmaa_cleanup_level {} {
 
    ts_log_fine "cleanup level $CHECK_ACT_LEVEL: $check_description($CHECK_ACT_LEVEL)"
 
+if {0} {
    # go through level host list and restore test_drmaa again 
    foreach host $level_host_list {
       drmaa_redirect_lib $current_drmaa_mode($host) $host
    }
+}
 
    # clear level host list to avoid redirection of old hosts 
    unset level_host_list
@@ -324,24 +325,15 @@ proc drmaa_check_single_threaded_part_01 { } {
    global CHECK_USER drmaa_binary_name level_host_list 
 
    foreach host $level_host_list {
-      set compile_arch_mt [resolve_build_arch_installed_libs $host]
-      set drmaa_preamble [drmaa_resolve_preamble $host]
-      set binary_path "$ts_config(source_dir)/$compile_arch_mt"
-      ts_log_fine "host is $host has arch $compile_arch_mt mt bin path $binary_path"
-
-      # -- do all ST_DRMAA_CONTROL tests
-      drmaa_test_failing_control_operations $host $binary_path
-
-      # unset SGE_ROOT and try test_drmaa -h
-      ts_log_fine "starting single threaded test $drmaa_binary_name -h without SGE_ROOT"
-      set test_output [start_remote_prog $host $CHECK_USER "unset" "SGE_ROOT\n$drmaa_preamble$binary_path/$drmaa_binary_name -h" prg_exit_state 500 0 "" "" 0 0 1]
-      if { $prg_exit_state == 0 } {
-         ts_log_severe "$drmaa_binary_name -h without SGE_ROOT must exit with unequal 0 at host $host"
+      set myenv(UNSET_VARS) "SGE_ROOT"
+      set test_output [start_test_bin "test_drmaa" "-h" $host $CHECK_USER prg_exit_state 60 myenv]
+      if {$prg_exit_state == 0} {
+         ts_log_severe "test_drmaa -h without SGE_ROOT must exit with unequal 0 at host $host"
          break
       }
 
       # the ST_INPUT_BECOMES_OUTPUT test
-      drmaa_test_st_input_becomes_output $host $binary_path
+      drmaa_test_st_input_becomes_output $host
    }
 }
 
@@ -374,11 +366,6 @@ proc drmaa_check_single_threaded_part_02 { } {
    global ts_config CHECK_USER level_host_list
 
    foreach host $level_host_list {
-      set compile_arch_mt [resolve_build_arch_installed_libs $host]
-
-      set binary_path "$ts_config(source_dir)/$compile_arch_mt"
-      ts_log_fine "host is $host has arch $compile_arch_mt mt bin path $binary_path"
-
       # -- tests without an argument
       set test_scenario {}
       lappend test_scenario "ST_ERROR_CODES"
@@ -398,7 +385,7 @@ proc drmaa_check_single_threaded_part_02 { } {
 
       foreach st_test $test_scenario {
          ts_log_fine "starting single threaded test $st_test"
-         drmaa_test $host $binary_path $st_test ""
+         drmaa_test $host $st_test ""
       }
     
       # -- tests to ensure control operations on session without jobs result in DRMAA_ERRNO_SUCCESS 
@@ -410,7 +397,7 @@ proc drmaa_check_single_threaded_part_02 { } {
       lappend test_scenario "DRMAA_CONTROL_TERMINATE"
       foreach control_op $test_scenario {
          ts_log_fine "starting single threaded test ST_EMPTY_SESSION_CONTROL $control_op"
-         drmaa_test $host $binary_path ST_EMPTY_SESSION_CONTROL "$control_op"
+         drmaa_test $host ST_EMPTY_SESSION_CONTROL "$control_op"
       }
    }
 }
@@ -441,11 +428,6 @@ proc drmaa_check_single_threaded_part_03 { } {
    global ts_config CHECK_USER level_host_list
 
    foreach host $level_host_list {
-      set compile_arch_mt [resolve_build_arch_installed_libs $host]
-
-      set binary_path "$ts_config(source_dir)/$compile_arch_mt"
-      ts_log_fine "host is $host has arch $compile_arch_mt mt bin path $binary_path"
-
       # -- tests with a <sleeper_job> argument
       set test_scenario {}
       lappend test_scenario "ST_SUBMIT_WAIT"
@@ -475,7 +457,7 @@ proc drmaa_check_single_threaded_part_03 { } {
 
       foreach st_test $test_scenario {
          ts_log_fine "starting single threaded test $st_test"
-         drmaa_test $host $binary_path $st_test $ts_config(testsuite_root_dir)/scripts/suspendable_sleeper.sh
+         drmaa_test $host $st_test $ts_config(testsuite_root_dir)/scripts/suspendable_sleeper.sh
       }
 
       # -- tests with a <sleeper_job> argument repeatedly 
@@ -486,7 +468,7 @@ proc drmaa_check_single_threaded_part_03 { } {
          ts_log_fine "starting single threaded test $st_test $n times each"
          for {set i 0} {$i < $n} {incr i} {
             ts_log_fine "test $i/$n"
-            drmaa_test $host $binary_path $st_test $ts_config(testsuite_root_dir)/scripts/suspendable_sleeper.sh
+            drmaa_test $host $st_test $ts_config(testsuite_root_dir)/scripts/suspendable_sleeper.sh
          }
       }
    }
@@ -517,18 +499,13 @@ proc drmaa_check_single_threaded_part_04 { } {
    global ts_config CHECK_USER level_host_list
 
    foreach host $level_host_list {
-      set compile_arch_mt [resolve_build_arch_installed_libs $host]
-
-      set binary_path "$ts_config(source_dir)/$compile_arch_mt"
-      ts_log_fine "host is $host has arch $compile_arch_mt mt bin path $binary_path"
-
       # -- tests with a <exit_arg_job> argument
       set test_scenario {}
       lappend test_scenario "ST_EXIT_STATUS"
       lappend test_scenario "ST_USAGE_CHECK"
       foreach ste_test $test_scenario {
          ts_log_fine "starting single threaded test $ste_test"
-         drmaa_test $host $binary_path $ste_test $ts_config(testsuite_root_dir)/scripts/exit.sh
+         drmaa_test $host $ste_test $ts_config(testsuite_root_dir)/scripts/exit.sh
       }
 
       # -- tests with <exit_arg_job> and <email_addr> arguments
@@ -536,7 +513,7 @@ proc drmaa_check_single_threaded_part_04 { } {
       # need to add "-m a" to sge_request file 
       # test assumes job do run at submission host
       # ts_log_fine "starting single threaded test ST_ATTRIBUTE_CHECK"
-      # drmaa_test $host $binary_path ST_ATTRIBUTE_CHECK $ts_config(testsuite_root_dir)/scripts/exit.sh "$CHECK_USER@localhost"
+      # drmaa_test $host ST_ATTRIBUTE_CHECK $ts_config(testsuite_root_dir)/scripts/exit.sh "$CHECK_USER@localhost"
       # need to remove "-m a" from sge_request file 
       # need to move entry "test.cat -N ExitTest -h" to users .qtask file
       # -- 
@@ -568,12 +545,6 @@ proc drmaa_check_multi_threaded { } {
    global ts_config CHECK_USER level_host_list
 
    foreach host $level_host_list {
-      set compile_arch_mt [resolve_build_arch_installed_libs $host]
-
-      set binary_path "$ts_config(source_dir)/$compile_arch_mt"
-      ts_log_fine "host is $host has arch $compile_arch_mt mt bin path $binary_path"
-
-
       # all MT tests need a sleeper job as argument
       set test_scenario {}
       lappend test_scenario "MT_SUBMIT_WAIT"
@@ -583,7 +554,7 @@ proc drmaa_check_multi_threaded { } {
       lappend test_scenario "MT_SUBMIT_BEFORE_INIT_WAIT"
       foreach mt_test $test_scenario {
          ts_log_fine "starting multi threaded test $mt_test"
-         drmaa_test $host $binary_path $mt_test $ts_config(product_root)/examples/jobs/sleeper.sh
+         drmaa_test $host $mt_test $ts_config(product_root)/examples/jobs/sleeper.sh
       }
    }
 }
@@ -618,19 +589,13 @@ proc drmaa_check_additional_interfaces { } {
    shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir] 
 
    foreach host $level_host_list {
-      set compile_arch_mt [resolve_build_arch_installed_libs $host]
-      set binary_path "$ts_config(source_dir)/$compile_arch_mt"
-      set drmaa_preamble [drmaa_resolve_preamble $host]
-
-      ts_log_fine "host is $host has arch $compile_arch_mt mt bin path $binary_path"
-
       # this test must fail when qmaster is down
-      set test_output [start_remote_prog $host $CHECK_USER "cd" ".\n$drmaa_preamble$binary_path/$drmaa_binary_name ST_SUBMIT_WAIT $ts_config(product_root)/examples/jobs/sleeper.sh" prg_exit_state 500 0 "" "" 1 0 1]
+      set test_output [start_test_bin $drmaa_binary_name "ST_SUBMIT_WAIT $ts_config(product_root)/examples/jobs/sleeper.sh" $host $CHECK_USER prg_exit_state 500]
 
       ts_log_fine "exit status was $prg_exit_state"
       ts_log_fine "output was\n$test_output"
 
-      if { $prg_exit_state == 0 } {
+      if {$prg_exit_state == 0} {
          ts_log_severe "$drmaa_binary_name ST_SUBMIT_WAIT should have failed at host $host"
       }
    }
@@ -665,11 +630,9 @@ proc drmaa_check_additional_interfaces { } {
 #     drmaa_test ST_SUBMIT_WAIT ori <source-path>/SOLARIS86/ $SGE_ROOT/examples/jobs/sleeper.sh
 #*******************************
 #
-proc drmaa_test { host binary_path test_name arguments {user ""} } {
+proc drmaa_test { host test_name arguments {user ""} } {
    global CHECK_USER drmaa_test_scenario_settings
    global drmaa_binary_name CHECK_ACT_LEVEL
-
-   set drmaa_preamble [drmaa_resolve_preamble $host]
 
    if {$user == ""} { 
       set user $CHECK_USER
@@ -679,23 +642,14 @@ proc drmaa_test { host binary_path test_name arguments {user ""} } {
    append add_info "dramaa scenario description:           \"$drmaa_test_scenario_settings(level_name)\"\n"
    append add_info "test_drmaa host: $host\n"
    append add_info "test_drmaa user: $user\n"
-   append add_info "test_drmaa binary: $binary_path/$drmaa_binary_name\n"
+   append add_info "test_drmaa binary: $drmaa_binary_name\n"
    append add_info "test_drmaa arguments: $test_name $arguments\n"
 
-   ts_log_fine "first checking testsuite connection by starting remote command ..."
-   set output [start_remote_prog $host $user ls "-la"]
-   if { $output == "" } {
-      ts_log_severe "remote shell problems!"
-   }
-   if { $prg_exit_state != 0 } {
-      ts_log_severe "remote shell problems! (exit state not 0)"
-   }
-
    ts_log_fine "starting ..."
-   ts_log_fine "$binary_path/$drmaa_binary_name $test_name $arguments"
 
    set time_start [clock seconds]
-   set test_output [start_remote_prog $host $user "cd" ".\n$drmaa_preamble$binary_path/$drmaa_binary_name $test_name $arguments" prg_exit_state 650 0 "" "" 1 0 1]
+   #set test_output [start_remote_prog $host $user "cd" ".\n$drmaa_preamble$binary_path/$drmaa_binary_name $test_name $arguments" prg_exit_state 650 0 "" "" 1 0 1]
+   set test_output [start_test_bin $drmaa_binary_name "$test_name $arguments" $host $user prg_exit_state 650]
    set time_end [clock seconds]
    set run_time [expr $time_end - $time_start]
 
@@ -709,7 +663,7 @@ proc drmaa_test { host binary_path test_name arguments {user ""} } {
       ts_log_info "test $test_name $arguments on host $host took more than 550 seconds! (testsuite timeout=650)\n$add_info"
    }
    if {$prg_exit_state != 0} {
-      ts_log_severe "$binary_path/$drmaa_binary_name $test_name $arguments failed at host $host (runtime: $run_time)\n$add_info"
+      ts_log_severe "$drmaa_binary_name $test_name $arguments failed at host $host (runtime: $run_time)\n$add_info"
    }
 }
 
@@ -731,10 +685,9 @@ proc drmaa_test { host binary_path test_name arguments {user ""} } {
 #
 #  INPUTS
 #     host                       - The host where 'test_drmaa' is run
-#     binary_path                - The path where 'test_drmaa' can be found
 #*******************************
 #
-proc drmaa_test_st_input_becomes_output { host binary_path } {
+proc drmaa_test_st_input_becomes_output { host } {
    global CHECK_USER drmaa_binary_name
 
    # prepare input file
@@ -750,22 +703,17 @@ proc drmaa_test_st_input_becomes_output { host binary_path } {
       ts_log_severe "input and output file are equal"
    }
 
-   set drmaa_preamble [drmaa_resolve_preamble $host]
-
-   ts_log_fine "$binary_path/$drmaa_binary_name ST_INPUT_BECOMES_OUTPUT $input_file $output_file"
-
-   # run job
-   set test_output [start_remote_prog $host $CHECK_USER "cd" ".\n$drmaa_preamble$binary_path/$drmaa_binary_name ST_INPUT_BECOMES_OUTPUT $input_file $output_file" prg_exit_state 500 0 "" "" 1 0 1]
+   set test_output [start_test_bin "test_drmaa" "ST_INPUT_BECOMES_OUTPUT $input_file $output_file" $host $CHECK_USER]
 
    ts_log_fine "exit status was $prg_exit_state"
    ts_log_fine "output was\n$test_output"
 
    # remove input and output file
-   file delete "$input_file"
-   file delete "$output_file"
+   file delete $input_file
+   file delete $output_file
 
-   if { $prg_exit_state != 0 } {
-      ts_log_severe "$drmaa_binary_name ST_INPUT_BECOMES_OUTPUT failed at host $host\nexit status was $prg_exit_state\noutput was $test_output"
+   if {$prg_exit_state != 0} {
+      ts_log_severe "test_drmaa ST_INPUT_BECOMES_OUTPUT failed at host $host\nexit status was $prg_exit_state\noutput was $test_output"
    }
 }
 

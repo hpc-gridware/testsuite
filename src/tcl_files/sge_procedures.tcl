@@ -1023,6 +1023,15 @@ proc start_sge_utilbin {bin args {host ""} {user ""} {exit_var prg_exit_state} {
    return [start_sge_bin $bin $args $host $user exit_state $timeout $cd_dir "utilbin"]
 }
 
+proc get_source_path {bin host} {
+   get_current_cluster_config_array ts_config
+
+   set arch [resolve_build_arch_installed_libs $host]
+   set source_path "$ts_config(source_dir)/$arch/$bin"
+
+   return $source_path
+}
+
 #****** sge_procedures/start_source_bin() *****************************************
 #  NAME
 #     start_source_bin() -- start a binary in compile directory
@@ -1077,15 +1086,59 @@ proc start_source_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {t
       set user $CHECK_USER
    }
 
-   set arch [resolve_build_arch_installed_libs $host]
-   set ret 0
-   set binary "$ts_config(source_dir)/$arch/$bin"
+   set bin_path [get_source_path $bin $host]
 
-   ts_log_finest "executing $binary $args\nas user $user on host $host"
+   ts_log_finest "executing $bin_path $args\nas user $user on host $host"
    # Add " around $args if there are more the 1 args....
-   set result [start_remote_prog $host $user $binary "$args" exit_state $timeout $background "" $env_var 1 0 1]
+   set result [start_remote_prog $host $user $bin_path "$args" exit_state $timeout $background "" $env_var 1 0 1]
 
    return $result
+}
+
+proc get_test_path {bin host} {
+   get_current_cluster_config_array ts_config
+
+   set arch [resolve_arch $host]
+   set test_bin "$ts_config(product_root)/testbin/$arch/$bin"
+
+   return $test_bin
+}
+
+proc get_test_or_source_path {bin host} {
+   global CHECK_USER
+
+   set path [get_test_path $bin $host]
+   if {![is_remote_file $host $CHECK_USER $path]} {
+      set path [get_source_path $bin $host]
+   }
+
+   return $path
+}
+
+proc start_test_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {timeout 60} {envlist_var ""}} {
+   global CHECK_USER
+   get_current_cluster_config_array ts_config
+
+   upvar $exit_var prg_exit_state
+
+   if {$envlist_var != ""} {
+      upvar $envlist_var envlist
+   }
+
+   if {$host == ""} {
+      set host [host_conf_get_suited_hosts]
+   }
+
+   set test_bin [get_test_path $bin $host]
+   if {[is_remote_file $host $CHECK_USER $test_bin]} {
+      ts_log_finer "found test binary $test_bin"
+      set output [start_sge_bin $bin $args $host $user prg_exit_state $timeout "" "testbin" output_lines envlist]
+   } else {
+      ts_log_finer "didn't find test binary $test_bin - trying to start from aimk build"
+      set output [start_source_bin $bin $args $host $user prg_exit_state $timeout 0 envlist]
+   }
+
+   return $output
 }
 
 #****** sge_procedures/get_sge_error_generic() *********************************

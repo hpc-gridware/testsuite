@@ -169,10 +169,6 @@ proc qconf_setup {} {
       ts_log_config "need at least 2 execd hosts for this check"
       return 99
    }
-   if {$ts_config(source_dir) == "none"} {
-      ts_log_config "source directory is set to \"none\" - cannot run test"
-      return 99
-   }
 
    get_complex qconf_setup_complex_backup
 
@@ -1751,8 +1747,7 @@ proc qconf_event_client {} {
    global ts_config env
    global CHECK_USER 
 
-   set up_arch [resolve_build_arch $ts_config(master_host)]
-   set event_client_bin $ts_config(source_dir)/$up_arch/qevent
+   set event_client_bin [get_test_or_source_path "qevent" $ts_config(master_host)]
 
    if { [file isfile $event_client_bin] != 1 } {
       ts_log_config "could not open event client binary: $event_client_bin"

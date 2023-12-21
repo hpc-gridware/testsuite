@@ -82,8 +82,7 @@ proc issue_1141_run {} {
    ts_log_fine "looking for string \"$qmaster_abort\""
    ts_log_fine "not expected error string is \"$got_send_error\""
 
-   set up_arch [resolve_build_arch $ts_config(master_host)]
-   set client_binary $ts_config(source_dir)/$up_arch/qevent
+   set client_binary [get_test_or_source_path "qevent" $ts_config(master_host)]
    set client_args "-ts"
 
 #  setting the environment variable SGE_PRODUCE_ALIVE_TIMEOUT_ERROR

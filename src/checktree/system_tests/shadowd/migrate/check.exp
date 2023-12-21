@@ -110,10 +110,6 @@ proc shadowd_migrate_setup_level {} {
 
 proc shadowd_migrate_setup  {} {
    global ts_config
-   if {$ts_config(source_dir) == "none"} {
-      ts_log_config "source directory is set to \"none\" - cannot run test"
-      return 99
-   }
 }
 
 proc shadowd_migrate_cleanup  {} {
@@ -812,8 +808,7 @@ proc shadowd_migrate_test {} {
          ts_log_fine "\ntesting heartbeat incrementation on host $host ..."
       
          set heartbeat_file [get_tmp_file_name]
-         set arch [resolve_build_arch $host]
-         set test_heartbeat_binary $ts_config(source_dir)/${arch}/test_heartbeat
+         set test_heartbeat_binary [get_test_or_source_path "test_heartbeat" $host]
 
          set exp_heartbeat 1
          while { $exp_heartbeat != 3 } {

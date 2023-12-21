@@ -887,11 +887,8 @@ proc get_FD_SETSIZE_for_host { host } {
       ts_log_severe "source directory is set to \"none\" - need test binaries for this procedure"
       return "" 
    }
-
    
-   set up_arch [resolve_build_arch $host]
-   set binary_path $ts_config(source_dir)/$up_arch/test_general
-
+   set binary_path [get_test_or_source_path "test_general" $host]
    if {[is_remote_file $host $CHECK_USER $binary_path 1] == 0} {
       ts_log_severe "binary \"$binary_path\" not found on host \"$host\""
       return ""

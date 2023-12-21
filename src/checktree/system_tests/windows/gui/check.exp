@@ -53,7 +53,7 @@ set check_init_level_procedure "SGE_Helper_Service_init_level"
 
 # define test's name and run level descriptions
 set check_name            "SGE_Helper_Service"
-set check_category        "SYSTEM VERIFIED"
+set check_category        "SYSTEM"
 set check_highest_level   0
 set check_description(0)  "test SGE_Helper_Service functionality"
 

@@ -111,12 +111,6 @@ proc generic_module_tests_setup {} {
    global CHECK_ACT_LEVEL
    global generic_module_tests_test_hosts
 
-   if {$ts_config(source_dir) == "none"} {
-      ts_log_config "source directory is set to \"none\" - cannot run test"
-      return 99
-   }
-
-
    switch -- $CHECK_ACT_LEVEL {
       "0" {
          set generic_module_tests_test_hosts $ts_config(master_host)
@@ -167,17 +161,9 @@ proc generic_module_tests_run {} {
    set error_text ""
    set config_text ""
    foreach host $generic_module_tests_test_hosts {
-      set compile_arch [resolve_build_arch $host]
       foreach module_test $generic_module_tests {
-         set command "$ts_config(source_dir)/$compile_arch/$module_test"
-         ts_log_fine "$module_test:"
-         if {[wait_for_remote_file $host $CHECK_USER $command 1 0] != 0} {
-            append config_text "module test binary $command doesn't exist on host $host\n"
-            continue
-         } else {
-            ts_log_fine "starting $module_test ..."
-            set output [start_source_bin $module_test "" $host $CHECK_USER ret 300]
-         }
+         ts_log_fine "starting $module_test ..."
+         set output [start_test_bin $module_test "" $host $CHECK_USER ret 300]
          if {$ret == 0} {
             ts_log_fine "   => $module_test ok"
          } else {

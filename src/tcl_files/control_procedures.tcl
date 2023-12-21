@@ -233,8 +233,7 @@ proc check_correct_testsuite_setup_user { error_text } {
    foreach host [get_all_hosts] {
       foreach port $test_port_list {
          ts_log_fine "testing port $port on host \"$host\" ..."
-         set up_arch [resolve_build_arch $host]
-         set client_binary $ts_config(source_dir)/$up_arch/test_cl_commlib
+         set client_binary [get_test_or_source_path "test_cl_commlib" $host]
          set my_env_list(CL_RUNS) 0
          set my_env_list(CL_PORT) $port
          set output [start_remote_prog $host root $client_binary "0 TCP" prg_exit_state 60 0 "" my_env_list]

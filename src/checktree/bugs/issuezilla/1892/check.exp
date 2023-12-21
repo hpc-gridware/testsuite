@@ -77,7 +77,7 @@ proc issue_1892_run  {} {
       if {[resolve_arch $host] == "win32-x86"} {
          ts_log_warning "DRMAA not supported on win32-x86"
       } else {
-         set output [start_source_bin "test_drmaa_issue1892" "/bin/date" $host]
+         set output [start_test_bin "test_drmaa_issue1892" "/bin/date" $host]
          # If we segfault on any architecture, the bug still exists.
          if {$prg_exit_state != 0} {
              ts_log_severe "test binary test_drmaa_issue1892 failed on host $host: issue 1892 still exists:\n$output"

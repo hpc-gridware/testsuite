@@ -84,7 +84,7 @@ proc issue_1832_run_simple  {} {
    set host $ts_config(master_host)
 
    # use only drmaa_wait() for task status information 
-   set output [start_source_bin "test_drmaa_issue1832" "$ts_config(product_root)/examples/jobs/sleeper.sh" $host]
+   set output [start_test_bin "test_drmaa_issue1832" "$ts_config(product_root)/examples/jobs/sleeper.sh" $host]
    ts_log_fine "output:\n$output"
 
    # If we segfault on any architecture, the bug still exists.
@@ -93,7 +93,7 @@ proc issue_1832_run_simple  {} {
    }
 
    # retrieve task status via drmaa_job_ps() during run
-   set output [start_source_bin "test_drmaa_issue1832" "-ps $ts_config(product_root)/examples/jobs/sleeper.sh" $host]
+   set output [start_test_bin "test_drmaa_issue1832" "-ps $ts_config(product_root)/examples/jobs/sleeper.sh" $host]
    ts_log_fine "output:\n$output"
 
    # If we segfault on any architecture, the bug still exists.
@@ -106,14 +106,16 @@ proc issue_1832_run_master_down  {} {
    global ts_config CHECK_USER
    set host $ts_config(master_host)
 
-   set arch [resolve_build_arch_installed_libs $host]
-   set binary "$ts_config(source_dir)/$arch/test_drmaa_issue1832"
    set bin_args "-1st -exit_unknown $ts_config(product_root)/examples/jobs/sleeper.sh"
+
+   # if test binary is installed in SGE_ROOT (from cmake build) then use this one
+   # else use the one from the aimk build
+   set bin_path [get_test_or_source_path "test_drmaa_issue1832" $host]
 
    set error_text ""
    set output ""
 
-   set pr_id [open_remote_spawn_process $host $CHECK_USER $binary $bin_args 0 "" "" 0 15 1]
+   set pr_id [open_remote_spawn_process $host $CHECK_USER $bin_path $bin_args 0 "" "" 0 15 1]
    set sp_id [lindex $pr_id 1]
 
    set master_down 0

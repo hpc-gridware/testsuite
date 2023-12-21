@@ -403,11 +403,6 @@ proc throughput_setup {} {
       return 99
    }
 
-   if {$ts_config(source_dir) == "none"} {
-      ts_log_config "source directory is set to \"none\" - cannot run test"
-      return 99
-   }
-
    get_complex throughput_complex_backup
 
    # global settings
@@ -852,8 +847,7 @@ proc run_throughput_test {} {
    wait_for_load_from_all_queues 300
 
    # evaluate path to qevent binary
-   set up_arch [resolve_build_arch $ts_config(master_host)]
-   set event_client_bin $ts_config(source_dir)/$up_arch/qevent
+   set event_client_bin [get_test_or_source_path "qevent" $ts_config(master_host)]
    if {[file isfile $event_client_bin] != 1} {
       ts_log_severe "could not open event client binary: $event_client_bin"
       return

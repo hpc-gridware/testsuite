@@ -89,11 +89,10 @@ proc issue_1126_run {} {
    set test_host [host_conf_get_suited_hosts]
    ts_log_fine "testing on host $test_host"
 
-   set up_arch [resolve_build_arch $test_host]
-   set client_binary $ts_config(source_dir)/$up_arch/test_cl_commlib_client
+   set client_binary [get_test_or_source_path "test_cl_commlib_client" $test_host]
    set client_args "$test_host $ts_config(commd_port) 0 0 0 0"
 
-   set server_binary $ts_config(source_dir)/$up_arch/test_server_connection
+   set server_binary [get_test_or_source_path "test_server_connection" $test_host]
    set server_args "0 $ts_config(commd_port) 10"
    
    set client_sid [open_remote_spawn_process $test_host $CHECK_USER $client_binary $client_args]

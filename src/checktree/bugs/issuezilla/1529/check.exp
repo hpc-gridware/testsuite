@@ -67,7 +67,7 @@ proc issue_1529_run  {} {
    global ts_config
 
    set client_args "$ts_config(product_root)/examples/jobs/sleeper.sh"
-   set output [start_source_bin "test_drmaa_no_bin" $client_args]
+   set output [start_test_bin "test_drmaa_no_bin" $client_args]
 
    if {$prg_exit_state != 0} {
       ts_log_severe "DRMAA failed to accept non-binary job:\n$output"

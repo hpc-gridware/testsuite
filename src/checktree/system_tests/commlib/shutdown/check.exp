@@ -81,10 +81,6 @@ proc commlib_shutdown_init_level {} {
 
 proc commlib_shutdown_setup {} {
    global ts_config
-   if {$ts_config(source_dir) == "none"} {
-      ts_log_config "source directory is set to \"none\" - cannot run test"
-      return 99
-   }
    shutdown_core_system
 }
 
@@ -106,7 +102,7 @@ proc commlib_shutdown_setup {} {
 #        commlib shutdown. This results in some lost messages which server
 #        wants to send to client which is not availabe anymore.
 #     7) if server blocks (here for more than 30 seconds) the issue IZ 2747
-#        occured
+#        occured - it is not yet fixed!
 #     8) The blocking server only happens when there is a bin messages send
 #        between the ccm (connection close message) and the ccrm (connection
 #        close response message).
@@ -135,13 +131,10 @@ proc commlib_shutdown_run {} {
       ts_log_fine "using server host $server_host"
       ts_log_fine "using client host $client_host"
 
-      set client_up_arch [resolve_build_arch $client_host]
-      set server_up_arch [resolve_build_arch $server_host]
-
-      set server_binary      $ts_config(source_dir)/$server_up_arch/test_cl_issue_2747_server
-      set client_binary      $ts_config(source_dir)/$client_up_arch/test_cl_issue_2747_client
-      set qping_dump_binary  $ts_config(source_dir)/$server_up_arch/qping
-      set qping_info_binary  $ts_config(source_dir)/$client_up_arch/qping
+      set server_binary      [get_test_or_source_path "test_cl_issue_2747_server" $server_host]
+      set client_binary      [get_test_or_source_path "test_cl_issue_2747_client" $client_host]
+      set qping_dump_binary  [get_test_or_source_path "qping" $server_host]
+      set qping_info_binary  [get_test_or_source_path "qping" $client_host]
 
       set server_args ""
       set client_args     "$server_host $ts_config(commd_port)"
