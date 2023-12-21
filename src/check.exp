@@ -479,7 +479,11 @@ set CHECK_INTERACTIVE_TRANSPORT "default"
 
 # compile tool to use: aimk vs. cmake, default aimk
 global CHECK_COMPILE_TOOL
-set CHECK_COMPILE_TOOL "aimk"
+set CHECK_COMPILE_TOOL "cmake"
+
+# cmake build type
+global CHECK_CMAKE_BUILD_TYPE
+set CHECK_CMAKE_BUILD_TYPE "Debug"
 
 #
 #                                                             max. column:     |
@@ -8712,6 +8716,8 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "compile_tool          choose between aimk (default) and cmake as build system"
       puts ""
+      puts "cmake_build_type      choose between Debug (default) and Release"
+      puts ""
       puts "daily_build_nr        Define a daily build number at compile time."
       puts ""
       puts "all RUNLEVEL          run every test automatically up to runlevel RUNLEVEL"
@@ -8909,6 +8915,22 @@ for {set i 0} {$i < $argc} {incr i} {
          }
          default {
             puts "invalid argument to option compile_tool, must be \"aimk\", or \"cmake\""
+            testsuite_shutdown 1
+         }
+      }
+      continue
+   }
+
+   if { ( [string compare [lindex $argv $i] "--cmake_build_type"] == 0 ) || ([string compare [lindex $argv $i] "cmake_build_type"] == 0) } {
+      incr i
+      set cmake_build_type [lindex $argv $i]
+      switch -exact $cmake_build_type {
+         "Debug" -
+         "Release" {
+            set CHECK_CMAKE_BUILD_TYPE $cmake_build_type
+         }
+         default {
+            puts "invalid argument to option cmake_build_type, must be \"Debug\", or \"Release\""
             testsuite_shutdown 1
          }
       }

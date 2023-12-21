@@ -1168,7 +1168,7 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
 
 proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
    global ts_host_config ts_config
-   global CHECK_USER
+   global CHECK_USER CHECK_CMAKE_BUILD_TYPE
    global check_do_clean_compile
 
    upvar $report_var report
@@ -1221,6 +1221,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
          }
          append args " -DINSTALL_SGE_DOC=OFF"    ;# @todo need doc compile host
          append args " -DINSTALL_SGE_TEST=ON"
+         append args " -DCMAKE_BUILD_TYPE=$CHECK_CMAKE_BUILD_TYPE"
          set options($host,args) $args
          set options($host,dir) [compile_source_cmake_get_build_dir $host]
       }
