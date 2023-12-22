@@ -128,13 +128,15 @@ proc commlib_shutdown_run {} {
       set qping_dump_host $server_host
       set client_host [lindex $host_list 1]
       set qping_info_host $client_host
-      ts_log_fine "using server host $server_host"
-      ts_log_fine "using client host $client_host"
+      set server_arch [resolve_arch $server_host]
+      set client_arch [resolve_arch $client_host]
+      ts_log_fine "using server host $server_host ($server_arch)"
+      ts_log_fine "using client host $client_host ($client_arch)"
 
       set server_binary      [get_test_or_source_path "test_cl_issue_2747_server" $server_host]
       set client_binary      [get_test_or_source_path "test_cl_issue_2747_client" $client_host]
-      set qping_dump_binary  [get_test_or_source_path "qping" $server_host]
-      set qping_info_binary  [get_test_or_source_path "qping" $client_host]
+      set qping_dump_binary  "$ts_config(product_root)/bin/$server_arch/qping"
+      set qping_info_binary  "$ts_config(product_root)/bin/$client_arch/qping"
 
       set server_args ""
       set client_args     "$server_host $ts_config(commd_port)"
