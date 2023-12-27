@@ -75,7 +75,7 @@ proc jemalloc_verify {} {
    # binaries to test
    # @todo should we better build the list dynamically?
    # @todo also test utilbin and jobsbin binaries?
-   set binaries "qacct qconf qmod qping qrdel qrls qrstat qselect qstat sge_execd sge_qmaster sge_shepherd qalter qdel qhost qquota qresub qrsh qrsub qsh qsub sge_coshepherd sgepasswd sge_shadowd"
+   set binaries "qacct qconf qmod qping qrdel qrls qrstat qselect qstat sge_execd sge_qmaster sge_shepherd qalter qdel qhost qquota qresub qrsh qrsub qsh qsub sge_coshepherd sge_shadowd"
 
    # we use jemalloc only on lx-amd64
    # @todo extend test when we link it on other archs as well
