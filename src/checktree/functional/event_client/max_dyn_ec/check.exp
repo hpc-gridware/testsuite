@@ -65,15 +65,19 @@ proc max_dyn_ec_init_level {} {
 proc max_dyn_ec_setup {} {
    global ts_config
    global max_dyn_ec_backup
+   global max_dyn_ec_clients
+
+   # default value
+   set max_dyn_ec_clients 1000
 
    # we want to modify the global config - make a backup
    get_config max_dyn_ec_backup
-
 }
 
 proc max_dyn_ec_cleanup {} {
    global ts_config
    global max_dyn_ec_backup
+   global max_dyn_ec_clients
 
    # cleanup jobs
    delete_all_jobs
@@ -83,9 +87,7 @@ proc max_dyn_ec_cleanup {} {
    reset_config max_dyn_ec_backup
 
    # unset our test's global variables
-   foreach var "max_dyn_ec_backup" {
-      unset -nocomplain $var
-   }
+   unset -nocomplain max_dyn_ec_backup max_dyn_ec_clients
 }
 
 #****** max_dyn_ec/max_dyn_ec_default() *************************************************
@@ -100,13 +102,40 @@ proc max_dyn_ec_cleanup {} {
 #*******************************************************************************
 proc max_dyn_ec_default {} {
    global ts_config CHECK_USER
+   global max_dyn_ec_clients
 
-   set expected_message [translate_macro MSG_SET_MAXDYNEVENTCLIENT_U 1000]
+   set expected_message [translate_macro MSG_SET_MAXDYNEVENTCLIENT_U "*"]
+   set exceeds_message [translate_macro MSG_CONF_NR_DYNAMIC_EVENT_CLIENT_EXCEEDS_MAX_FILEDESCR_U "*"]
 
    shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
    init_logfile_wait $ts_config(master_host) [get_qmaster_messages_file]
    startup_qmaster
-   logfile_wait $expected_message
+   set messages [logfile_wait $expected_message]
+   # if we got the expected message then check for the actual maximal number of event clients
+   # it should be 1000 unless the file descriptor limit enforces a lower value
+   if {$logfile_wait_error == 0} {
+      set exceeded 0
+      foreach msg [split $messages "\n"] {
+	if {[string match "*$exceeds_message*" $msg]} {
+      	   ts_log_fine "master host file descriptor limit restricts the number of event clients"
+	   set exceeded 1
+	}
+	if {[string match "*$expected_message*" $msg]} {
+	   set max_dyn [lindex $msg 9]
+	   ts_log_fine "dynamic event client limit is set to $max_dyn"
+	   if {$exceeded} {
+	      set max_dyn_ec_clients $max_dyn
+	      ts_log_config "master host file descriptor limit allows only $max_dyn dynamic event clients"
+	   } else {
+	      if {$max_dyn != $max_dyn_ec_clients} {
+	         ts_log_severe "invalid max dynamic event clients: expected $max_dyn_ec_clients, got $max_dyn"
+	         set max_dyn_ec_clients $max_dyn
+	      }
+	   }
+	}
+      }
+   }
+
    wait_for_load_from_all_queues 60
 }
 
@@ -124,6 +153,7 @@ proc max_dyn_ec_default {} {
 #*******************************************************************************
 proc max_dyn_ec_massive_qsub_sync {} {
    global ts_config CHECK_USER
+   global max_dyn_ec_clients
 
    # set high number of event clients
    # set it to a higher value than the actual number of jobs we will submit,
@@ -133,7 +163,7 @@ proc max_dyn_ec_massive_qsub_sync {} {
    set_config conf
 
    # maximum number of qsub -sync y to start
-   set max_jobs 1000
+   set max_jobs $max_dyn_ec_clients
    set max_jobs_per_host 50
 
    # on every host call scripts/qsub_sync.sh to submit a bunch of qsub -sync jobs
@@ -191,7 +221,7 @@ proc max_dyn_ec_massive_qsub_sync {} {
                      }
                   }
                   "*_qsub_sync.sh_*_*.sh" -
-                  "_start_mark_:(0)" -
+                  "*_start_mark_:(0)*" -
                   "script done. (_END_OF_FILE_)" -
                   "_exit_status_:(*)" {
                      # ignore

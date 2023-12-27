@@ -278,7 +278,7 @@ proc jsv_ge_mod {param_name argument {reset_job_name ""}} {
    # ts_log_fine [get_test_info global_conf $param_name "$argument $jsv_job_id"]
    set first_message [start_sge_bin "qalter" "$argument $jsv_job_id" $ts_config(master_host) $CHECK_USER first_exit_state]
    if {$reset_job_name != "" && $first_exit_state == 0} {
-      ts_log_fine "reseting job name to \"job\" ..."
+      ts_log_fine "resetting job name to \"job\" ..."
       start_sge_bin "qalter" "-N job $reset_job_name" $ts_config(master_host) $CHECK_USER
    }
 
@@ -289,7 +289,7 @@ proc jsv_ge_mod {param_name argument {reset_job_name ""}} {
    #ts_log_fine [get_test_info global_conf $param_name "$argument $jsv_job_id"]
    set second_message [start_sge_bin "qalter" "$argument $jsv_job_id" $ts_config(master_host) $CHECK_USER second_exit_state]
    if {$reset_job_name != "" && $second_exit_state == 0} {
-      ts_log_fine "reseting job name to \"job\" ..."
+      ts_log_fine "resetting job name to \"job\" ..."
       start_sge_bin "qalter" "-N job $reset_job_name" $ts_config(master_host) $CHECK_USER
    }
 
@@ -300,7 +300,7 @@ proc jsv_ge_mod {param_name argument {reset_job_name ""}} {
    #ts_log_fine [get_test_info global_conf $param_name "$argument $jsv_job_id"]
    set third_message [start_sge_bin "qalter" "$argument $jsv_job_id" $ts_config(master_host) $CHECK_USER third_exit_state]
    if {$reset_job_name != "" && $third_exit_state == 0} {
-      ts_log_fine "reseting job name to \"job\" ..."
+      ts_log_fine "resetting job name to \"job\" ..."
       start_sge_bin "qalter" "-N job $reset_job_name" $ts_config(master_host) $CHECK_USER
    }
 
