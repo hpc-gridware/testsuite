@@ -10415,7 +10415,6 @@ proc get_current_drmaa_mode { host } {
    global ts_config
    ts_log_fine "checking DRMAA version on $host ..."
    
-   set compile_arch [resolve_build_arch_installed_libs $host]
    set install_arch [resolve_arch $host]
 
    set files [get_file_names "$ts_config(product_root)/lib/$install_arch" "*drmaa*"]
