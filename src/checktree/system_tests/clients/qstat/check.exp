@@ -215,7 +215,8 @@ proc qstat_count_jobs {func_name qstat_options expected_jobs} {
    global ts_config 
    
    ts_log_fine "\nrunning qstat $qstat_options"
-   set output [start_sge_bin "qstat" $qstat_options]
+   set myenv(SGE_LONG_QNAMES) 50
+   set output [start_sge_bin "qstat" $qstat_options "" "" prg_exit_state 60 "" "bin" output_lines myenv]
    ts_log_fine $output
 
    if {$prg_exit_state == 0} {
@@ -3912,7 +3913,8 @@ proc qstat_profile {} {
    # The real test begins right now.
    #
    ts_log_fine "\nrunning qstat without any command line options...."
-   set result [start_sge_bin "qstat" "" $ts_config(master_host)]
+   set myenv(SGE_LONG_QNAMES) 50
+   set result [start_sge_bin "qstat" "" $ts_config(master_host) "" prg_exit_state 60 "" "bin" output_lines myenv]
    ts_log_fine $result
    if {$prg_exit_state == 0} {
       if { [info exists jobinfo] } {
@@ -3948,7 +3950,8 @@ proc qstat_profile {} {
    # Issue qstat command without any further options. We should see entries
    # of check user and sgetest1 user.
    #
-   set result [start_sge_bin "qstat" "" $ts_config(master_host)]
+   set myenv(SGE_LONG_QNAMES) 50
+   set result [start_sge_bin "qstat" "" $ts_config(master_host) "" prg_exit_state 60 "" "bin" output_lines myenv]
    ts_log_fine $result
    if { $prg_exit_state == 0 } {
       if { [info exists jobinfo] } {
@@ -3973,7 +3976,8 @@ proc qstat_profile {} {
    # Now with global and local profile active, select second foreign
    # test user from command line.
    #
-   set result [start_sge_bin "qstat" "-u $CHECK_SECOND_FOREIGN_SYSTEM_USER"]
+   set myenv(SGE_LONG_QNAMES) 50
+   set result [start_sge_bin "qstat" "-u $CHECK_SECOND_FOREIGN_SYSTEM_USER" $ts_config(master_host) "" prg_exit_state 60 "" "bin" output_lines myenv]
    ts_log_fine $result
    if { $prg_exit_state == 0 } {
       if { [info exists jobinfo] } {
@@ -4041,15 +4045,18 @@ proc qstat_profile {} {
 proc transform_memory_value { value } {
 
    set multiplicator 1
+   if {[string match "*G*" $value]} {
+      set multiplicator [expr 1024*1024*1024]
+   }
    if {[string match "*M*" $value]} {
-      set multiplicator [ expr 1024*1024]
+      set multiplicator [expr 1024*1024]
    }
    if {[string match "*K*" $value]} {
       set multiplicator 1024
    }
 
-   set new_value [lindex [split $value "MK"] 0]
-   set new_value [ expr $new_value * $multiplicator ]
+   set new_value [lindex [split $value "GMK"] 0]
+   set new_value [expr $new_value * $multiplicator]
    ts_log_fine "value $value transformed to $new_value"
    return $new_value
 }

@@ -236,13 +236,19 @@ proc issue_2222_test {} {
    # make the jobs to be scheduled
    trigger_scheduling
    after 5000
+#   trigger_scheduling
+#   after 5000
 
    # verify that jobs of both users are running in the Batch queue
    set qstat_options "-q Batch -s r"
    append qstat_options " -u '*'"
-   set qstat_output [start_sge_bin "qstat" $qstat_options]
+   set myenv(SGE_LONG_QNAMES) 50
+   set qstat_output [start_sge_bin "qstat" $qstat_options "" "" prg_exit_state 60 "" "bin" output_lines myenv]
+ts_log_fine "============="
+ts_log_fine $qstat_output
+ts_log_fine "============="
    parse_qstat qstat_output qstat_data
-
+parray qstat_data
    # we must see running jobs of both users
    if {![info exists qstat_data(index)]} {
       ts_log_severe "qstat, or qstat parsing didn't produce results"
@@ -259,6 +265,7 @@ proc issue_2222_test {} {
    }
    if {$user1_jobs == 0 || $user2_jobs == 0} {
       ts_log_severe "we don't see jobs of both test users running:\n$qstat_output"
+#wait_for_enter
    }
 }
 

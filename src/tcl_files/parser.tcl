@@ -1283,10 +1283,11 @@ proc parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1}} {
       set  position(13)  "127 131"           ; set   names(13)    ftckt
       set  position(14)  "133 137"           ; set   names(14)    stckt
       set  position(15)  "139 143"           ; set   names(15)    share
-      set  position(16)  "145 174"           ; set   names(16)    queue
+
+      set  position(16)  "145 194"           ; set   names(16)    queue
       set     rules(16)  rule_list
-      set  position(17)  "176 180"           ; set   names(17)    master
-      set  position(18)  "182 end"           ; set   names(18)    jatask
+      set  position(17)  "196 200"           ; set   names(17)    master
+      set  position(18)  "202 end"           ; set   names(18)    jatask
       set     rules(18)  rule_list
    } elseif {$ext == 2} {
       # qstat -urg
@@ -1304,10 +1305,10 @@ proc parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1}} {
       set   position(10) "90 110"            ; set    names(10)   time
       set  transform(10)  transform_date_time
       set   position(11) "111 129"           ; set    names(11)   deadline
-      set   position(12) "130 160"           ; set    names(12)   queue
+      set   position(12) "130 180"           ; set    names(12)   queue
       set      rules(12)  rule_list
-      set   position(13) "161 165"           ; set    names(13)   slots
-      set   position(14) "167 end"           ; set    names(14)   jatask
+      set   position(13) "181 185"           ; set    names(13)   slots
+      set   position(14) "187 end"           ; set    names(14)   jatask
       set      rules(14)  rule_list
    } elseif {$ext == 3} {
       # qstat -pri
@@ -1323,10 +1324,10 @@ proc parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1}} {
       set      rules(8)  rule_list
       set   position(9)  "76 94"             ; set    names(9)    time
       set  transform(9)  transform_date_time
-      set   position(10) "96 125"            ; set    names(10)   queue
+      set   position(10) "96 145"            ; set    names(10)   queue
       set      rules(10)  rule_list
-      set   position(11) "127 132"           ; set    names(11)   slots
-      set   position(12) "133 end"           ; set    names(12)   jatask
+      set   position(11) "147 152"           ; set    names(11)   slots
+      set   position(12) "153 end"           ; set    names(12)   jatask
       set      rules(12)  rule_list
    } else { # normat qstat
       set   position(0)  "0 6"               ; set    names(0)    id
@@ -1337,11 +1338,11 @@ proc parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1}} {
       set      rules(4)  rule_list
       set   position(5)  "46 64"             ; set    names(5)    time
       set  transform(5)  transform_date_time
-      set   position(6)  "66 95"             ; set    names(6)    queue
+      set   position(6)  "66 115"            ; set    names(6)    queue
       set      rules(6)  rule_list
-      set   position(7)  "97 101"            ; set    names(7)    master
+      set   position(7)  "117 121"            ; set    names(7)    master
       set      rules(7)  rule_list
-      set   position(8)  "103 end"           ; set    names(8)    jatask
+      set   position(8)  "123 end"           ; set    names(8)    jatask
       set      rules(8)  rule_list
    }
 
@@ -1591,7 +1592,8 @@ proc qstat_plain_parse { output  {params ""} } {
    upvar $output qstat_output
 
    # Run usual command
-   set result [start_sge_bin "qstat" $params]
+   set myenv(SGE_LONG_QNAMES) 50
+   set result [start_sge_bin "qstat" $params "" "" prg_exit_state 60 "" "bin" output_lines myenv]
 
    parse_qstat result qstat_output
 }
@@ -3019,7 +3021,8 @@ proc test_parse_qstat {jobid opt} {
       return
    }
 
-   set result [start_sge_bin qstat "$opt"]
+   set myenv(SGE_LONG_QNAMES) 50
+   set result [start_sge_bin "qstat" $opt "" "" prg_exit_state 60 "" "bin" output_lines myenv]
    if {$prg_exit_state != 0} {
       ts_log_fine "qstat failed:\n$result"
       return

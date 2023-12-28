@@ -2199,7 +2199,7 @@ proc qrsh_forward_stdin {} {
       foreach host $qrsh_hostlist {
          set arch [resolve_arch $submit_host]
          set tmpfile [get_tmp_file_name $submit_host]
-         set inputfile "$ts_config(product_root)/man/man1/qdel.1"
+         set inputfile "$ts_config(product_root)/util/arch"
 
          # Start "qrsh stdin.sh < input_file"
          # Job has to finish within 60 seconds (timeout of start_remote_prog) otherwise GE-3580 is still present.

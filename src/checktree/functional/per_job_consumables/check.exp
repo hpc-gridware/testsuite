@@ -350,7 +350,9 @@ proc per_job_consumables_master_task {} {
    set queue_list [create_unique_list $job_info(queue)]
    set gdil_count [llength $queue_list]
    if {$gdil_count != 2} {
-      ts_log_severe "fill_up job was incorrect dispatched, expected to run on 2 qinstances, got $gdil_count"
+      set msg "fill_up job was incorrect dispatched, expected to run on 2 qinstances, got $gdil_count\n\n"
+      append msg [start_sge_bin "qstat" "-u '*' -f"]
+      ts_log_severe $msg
    } else {
       foreach queue $queue_list {
          set host_name [get_short_hostname [lindex [split $queue "@"] 1]]
@@ -372,7 +374,9 @@ proc per_job_consumables_master_task {} {
    set queue_list [create_unique_list $job_info(queue)]
    set gdil_count [llength $queue_list]
    if {$gdil_count != 3} {
-      ts_log_severe "round_robin job was incorrect dispatched, expected to run on 3 qinstances, got $gdil_count"
+      set msg "round_robin job was incorrect dispatched, expected to run on 3 qinstances, got $gdil_count\n\n"
+      append msg [start_sge_bin "qstat" "-u '*' -f"]
+      ts_log_severe $msg
    } 
    delete_job $job_id 1
 

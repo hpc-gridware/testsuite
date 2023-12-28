@@ -3668,7 +3668,7 @@ proc check_option_pty_io {} {
          return
       }
 
-      wait_for_jobend $job_id "pty_io" 60
+      wait_for_jobend $job_id "pty_io" 60 0
       wait_for_file $output_tmpfile 10
 
       set result [start_remote_prog $host $user cat $output_tmpfile exit_code]

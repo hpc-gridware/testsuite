@@ -5653,11 +5653,13 @@ proc get_extended_job_info {jobid {variable job_info} {do_replace_NA 1} {do_grou
       set group_options "-g t"
    }
 
+   set myenv(SGE_LONG_QNAMES) 50
+
    if {$ts_config(product_type) == "sgeee" } {
-      set result [start_sge_bin "qstat" "$qstat_options -ext $group_options" "" "" exit_code ]
+      set result [start_sge_bin "qstat" "$qstat_options -ext $group_options" "" "" exit_code 60 "" "bin" output_lines myenv]
       set ext 1
    } else {
-      set result [start_sge_bin "qstat" "$qstat_options" "" "" exit_code ]
+      set result [start_sge_bin "qstat" "$qstat_options" "" "" exit_code 60 "" "bin" output_lines myenv]
       set ext 0
    }
 
@@ -10336,7 +10338,8 @@ proc startup_bdb_rpc { hostname } {
 proc get_urgency_job_info {jobid {variable job_info} { do_replace_NA 1 } } {
    get_current_cluster_config_array ts_config
    upvar $variable jobinfo
-   set result [start_sge_bin "qstat" "-urg" ]
+   set myenv(SGE_LONG_QNAMES) 50
+   set result [start_sge_bin "qstat" "-urg" "" "" prg_exit_state 60 "" "bin" output_lines myenv]
    if {$prg_exit_state == 0} {
       parse_qstat result jobinfo $jobid 2 $do_replace_NA
       return 1
