@@ -48,7 +48,7 @@ set check_init_level_procedure "drmaaj_init_level"
 
 # define test's name and run level descriptions
 set check_name            "drmaa-j"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM"
 set check_highest_level   303
 set check_description(0)    "short test: only one host; verify highest DRMAA-J library with highest DRMAA-C library" 
 set check_description(103)  "One host (>= SGE 6.1); Lowest Java-version: tests to verify DRMAA-J 1.0 library with DRMAA-C 1.0 library"
