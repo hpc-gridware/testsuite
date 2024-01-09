@@ -141,7 +141,7 @@ proc cleanup_system {} {
       ts_log_fine "no ckpt interface definition defined"
    } else {
       foreach elem $result {
-         ts_log_fine "removing ckpt interface $elem."
+         ts_log_fine "removing ckpt interface $elem"
          del_ckpt $elem
       }
    }
