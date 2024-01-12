@@ -968,6 +968,8 @@ proc get_supported_config_parameter_list {} {
    lappend clone_argument_list "shadowd_hosts"
    lappend clone_argument_list "execd_hosts"
    lappend clone_argument_list "submit_only_hosts"
+   lappend clone_argument_list "admin_only_hosts"
+   lappend clone_argument_list "non_cluster_hosts"
    lappend clone_argument_list "add_compile_archs"
    lappend clone_argument_list "commd_port"
    lappend clone_argument_list "jmx_port"
