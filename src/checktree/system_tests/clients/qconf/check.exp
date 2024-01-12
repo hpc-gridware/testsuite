@@ -850,7 +850,7 @@ proc qconf_se {} {
   
    # test hosts
    set cluster_host [host_conf_get_suited_hosts]
-   set non_cluster_host [host_conf_get_unused_host]
+   set non_cluster_host [host_conf_get_non_cluster_host]
 
    # fields delivered by qconf -se
    set qconf_se_fields "hostname load_scaling complex_values load_values processors user_lists xuser_lists projects xprojects usage_scaling report_variables"
@@ -886,7 +886,7 @@ proc qconf_sel {} {
    global ts_config
   
    # test hosts
-   set non_cluster_host [host_conf_get_unused_host]
+   set non_cluster_host [host_conf_get_non_cluster_host]
 
    # positive check
    # qconf -sel, has to match testsuite's execd_nodes list
@@ -2618,7 +2618,7 @@ proc qconf_create_modify_sharetree {} {
    if {$ret != -210} {
       ts_log_severe "qconf -Mstree should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
-   set non_cluster_host [host_conf_get_unused_host]
+   set non_cluster_host [host_conf_get_non_cluster_host]
    if {$non_cluster_host != ""} {
       set ret [stree_buffer_commit stree $non_cluster_host "" 0]
       if {![check_for_non_cluster_host_error $ret "admin"]} {
@@ -2676,7 +2676,7 @@ proc qconf_del_sharetree {} {
    if {$ret != -210} {
       ts_log_severe "qconf -dstree should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
-   set non_cluster_host [host_conf_get_unused_host]
+   set non_cluster_host [host_conf_get_non_cluster_host]
    if {$non_cluster_host != ""} {
       set ret [del_sharetree $non_cluster_host "" 0]
       if {![check_for_non_cluster_host_error $ret "admin"]} {
@@ -2764,7 +2764,7 @@ proc qconf_add_project {} {
       ts_log_severe "qconf -Aprj should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
 
-   set non_cluster_host [host_conf_get_unused_host]
+   set non_cluster_host [host_conf_get_non_cluster_host]
    set ret [add_project "$MY_PROJECT_NAME" project 0 $non_cluster_host "" 0]
    #if {$ret != -201} {
    #   ts_log_severe "qconf -aprj should have failed on host $non_cluster_host"
@@ -4275,7 +4275,7 @@ proc qconf_purge_queue {} {
    }
 
    # negative test: qconf -purge from non admin host
-   set non_cluster_host [host_conf_get_unused_host]
+   set non_cluster_host [host_conf_get_non_cluster_host]
    if {$non_cluster_host != ""} {
       set ret [purge_queue $qi "load_thresholds" $non_cluster_host "" 0]
       if {$ret == 0} {
@@ -4489,7 +4489,7 @@ proc qconf_add_rqs {} {
       ts_log_severe "qconf -Arqs should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
       del_rqs $rqs_name
    }
-   set non_cluster_host [host_conf_get_unused_host]
+   set non_cluster_host [host_conf_get_non_cluster_host]
    if {$non_cluster_host != ""} {
       set ret [add_rqs rqs_charray  1 $non_cluster_host "" 0]
       if {![check_for_non_cluster_host_error $ret "any"]} {
@@ -4581,7 +4581,7 @@ proc qconf_modify_rqs {} {
    if {$ret != -210} {
       ts_log_severe "qconf -Mrqs should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
-   set non_cluster_host [host_conf_get_unused_host]
+   set non_cluster_host [host_conf_get_non_cluster_host]
    if {$non_cluster_host != ""} {
       set ret [mod_rqs new_rqs_charray "$rqs_name_fast" 1 $non_cluster_host "" 0]
       if {![check_for_non_cluster_host_error $ret "any"]} {
@@ -4659,7 +4659,7 @@ proc qconf_modifyreplace_rqs {} {
    if {$ret != -210} {
       ts_log_severe "qconf -Mrqs should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
-   set non_cluster_host [host_conf_get_unused_host]
+   set non_cluster_host [host_conf_get_non_cluster_host]
    if {$non_cluster_host != ""} {
       set ret [mod_rqs old_rqs_config "" 1 $non_cluster_host "" 0]
       if {![check_for_non_cluster_host_error $ret "any"]} {
@@ -4679,7 +4679,7 @@ proc qconf_remove_rqs {} {
    if {$ret != -210} {
       ts_log_severe "qconf -drqs should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
-   set non_cluster_host [host_conf_get_unused_host]
+   set non_cluster_host [host_conf_get_non_cluster_host]
    if {$non_cluster_host != ""} {
       set ret [del_rqs $rqs_name_fast $non_cluster_host "" 0]
       if {![check_for_non_cluster_host_error $ret "admin"]} {

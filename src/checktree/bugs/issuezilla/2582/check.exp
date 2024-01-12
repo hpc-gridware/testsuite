@@ -83,9 +83,9 @@ proc issue_2582_setup {} {
    global cluster_host non_cluster_host
 
    # test hosts
-   set non_cluster_host [host_conf_get_unused_host]
+   set non_cluster_host [host_conf_get_non_cluster_host]
    if {$non_cluster_host == ""} {
-      # config error was already raised in host_conf_get_unused_host()
+      # config error was already risen in host_conf_get_non_cluster_host()
       # return 1 - run cleanup and mark test as unsupported
       return 99
    }

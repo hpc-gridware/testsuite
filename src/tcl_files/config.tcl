@@ -2753,10 +2753,34 @@ proc config_submit_only_hosts { only_check name config_array } {
 
    array set params {}
    set params(verify) "compile"
-   set params(exclude_list) [lsort -unique "$config(master_host) $config(shadowd_hosts) $config(execd_hosts)"]
+   set params(exclude_list) [lsort -unique "$config(master_host) $config(shadowd_hosts) $config(execd_hosts) $config(admin_only_hosts) $config(non_cluster_hosts)"]
 
    return [config_generic $only_check $name config "" "host" 1 0 "" params]
-      }
+}
+
+proc config_admin_only_hosts {only_check name config_array} {
+     global ts_host_config fast_setup
+
+     upvar $config_array config
+
+     array set params {}
+     set params(verify) "compile"
+     set params(exclude_list) [lsort -unique "$config(master_host) $config(shadowd_hosts) $config(execd_hosts) $config(submit_only_hosts) $config(non_cluster_hosts)"]
+
+     return [config_generic $only_check $name config "" "host" 1 0 "" params]
+}
+
+proc config_non_cluster_hosts {only_check name config_array} {
+     global ts_host_config fast_setup
+
+     upvar $config_array config
+
+     array set params {}
+     set params(verify) "compile"
+     set params(exclude_list) [lsort -unique "$config(master_host) $config(shadowd_hosts) $config(execd_hosts) $config(submit_only_hosts) $config(admin_only_hosts)"]
+
+     return [config_generic $only_check $name config "" "host" 1 0 "" params]
+}
 
 #****** config/config_commd_port() *********************************************
 #  NAME
@@ -5242,12 +5266,56 @@ proc config_build_ts_config_1_21 {} {
    set ts_config(version) "1.21"
 }
 
+# move positions of following parameters to make room for new param
+proc ts_config_move_params {insert_pos} {
+   global ts_config
+
+   set names [array names ts_config "*,pos"]
+   foreach name $names {
+      if {$ts_config($name) >= $insert_pos} {
+         set ts_config($name) [expr $ts_config($name) + 1]
+      }
+   }
+}
+
+proc config_build_ts_config_1_22 {} {
+   global ts_config
+
+   # add new parameter submit_only_hosts
+   set new_param "non_cluster_hosts"
+   set insert_pos $ts_config(submit_only_hosts,pos)
+   incr insert_pos 1
+   ts_config_move_params $insert_pos 
+   set ts_config($new_param)            ""
+   set ts_config($new_param,desc)       "Non-cluster hosts"
+   set ts_config($new_param,default)    "none" 
+   set ts_config($new_param,setup_func) "config_$new_param"
+   set ts_config($new_param,onchange)   ""
+   set ts_config($new_param,pos)        $insert_pos
+
+   # add new parameter submit_only_hosts
+   set new_param "admin_only_hosts"
+   set insert_pos $ts_config(submit_only_hosts,pos)
+   incr insert_pos 1
+   ts_config_move_params $insert_pos 
+   set ts_config($new_param)            ""
+   set ts_config($new_param,desc)       "Pure administration hosts"
+   set ts_config($new_param,default)    "none" 
+   set ts_config($new_param,setup_func) "config_$new_param"
+   set ts_config($new_param,onchange)   ""
+   set ts_config($new_param,pos)        $insert_pos
+
+   # now we have a configuration version 1.22
+   set ts_config(version) "1.22"
+}
+
+
 ################################################################################
 #  MAIN                                                                        #
 ################################################################################
 
 global actual_ts_config_version      ;# actual config version number
-set actual_ts_config_version "1.21"
+set actual_ts_config_version "1.22"
 
 # first source of config.tcl: create ts_config
 if {![info exists ts_config]} {
@@ -5274,4 +5342,5 @@ if {![info exists ts_config]} {
    config_build_ts_config_1_19
    config_build_ts_config_1_20
    config_build_ts_config_1_21
+   config_build_ts_config_1_22
 }

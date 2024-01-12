@@ -2036,8 +2036,21 @@ proc host_conf_get_arch_hosts {archs} {
    global ts_host_config
 
    set hostlist {}
-
    foreach host $ts_host_config(hostlist) {
+      if {[lsearch -exact $archs [host_conf_get_arch $host]] >= 0} {
+         lappend hostlist $host
+      }
+   }
+
+   return $hostlist
+}
+
+# return non-cluster host having the given architecture
+proc host_conf_get_non_cluster_hosts {archs} {
+   global ts_config
+
+   set hostlist {}
+   foreach host $ts_config(non_cluster_hosts) {
       if {[lsearch -exact $archs [host_conf_get_arch $host]] >= 0} {
          lappend hostlist $host
       }
@@ -2093,6 +2106,30 @@ proc host_conf_get_unused_host {{raise_error 1}} {
 
    return $ret
 }
+
+proc host_conf_get_non_cluster_host {{raise_error 1}} {
+   global ts_config ts_host_config
+
+   # return an empty string if we don't find a suited host
+   set ret ""
+
+   # get a list of all available architectures
+   set cluster_hosts [host_conf_get_cluster_hosts]
+   set archs [host_conf_get_archs $cluster_hosts]
+   set archs [lsort -unique $archs]
+
+   # now search a non-cluster host having an installed arch
+   set non_cluster_hosts [host_conf_get_non_cluster_hosts $archs]
+   set ret [lindex $non_cluster_hosts 0]
+
+   # handle error if requested
+   if {$ret == "" && $raise_error} {
+      ts_log_config "cannot find a non-cluster host having one of the architecture: $archs"
+   }
+
+   return $ret
+}
+
 
 #****** config_host/get_java_home_for_host() ***********************************
 #  NAME
@@ -2272,7 +2309,7 @@ proc get_testsuite_java_version {{version "1.4"}} {
 proc host_conf_get_cluster_hosts {} {
    global ts_config
 
-   set hosts "$ts_config(master_host) $ts_config(execd_hosts) $ts_config(execd_nodes) $ts_config(submit_only_hosts) $ts_config(bdb_server) $ts_config(shadowd_hosts)"
+   set hosts "$ts_config(master_host) $ts_config(execd_hosts) $ts_config(execd_nodes) $ts_config(admin_only_hosts) $ts_config(submit_only_hosts) $ts_config(bdb_server) $ts_config(shadowd_hosts)"
    set cluster_hosts [lsort -dictionary -unique $hosts]
    set none_elem [lsearch $cluster_hosts "none"]
    if {$none_elem >= 0} {

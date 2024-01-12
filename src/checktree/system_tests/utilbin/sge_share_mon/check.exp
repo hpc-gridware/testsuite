@@ -101,10 +101,10 @@ proc sge_share_mon_setup  {} {
    global non_cluster_host
 
    # check if we have an unused host, otherwise the test will fail anyway
-   set non_cluster_host [host_conf_get_unused_host]
+   set non_cluster_host [host_conf_get_non_cluster_host]
    if {$non_cluster_host == ""} {
       # we have no non_cluster_host - skip this test
-      # config error was already raised in host_conf_get_unused_host()
+      # config error was already risen in host_conf_get_non_cluster_host()
       return 99
    }
 
