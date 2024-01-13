@@ -1414,15 +1414,6 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_JAVA_HOME"  { set value "Please enter JAVA_HOME or press enter \[%s\] >> " }
       "DISTINST_JAVA_HOME_OR_NONE"  { set value "Enter JAVA_HOME (use \"none\" when none available) \[%s\] >> " }
       "DISTINST_ADD_JVM_ARGS"  { set value "Please enter additional JVM arguments (optional, default is \[%s\]) >> " }
-      "DISTINST_ENABLE_JMX" { set value "Do you want to enable the JMX MBean server (y/n) *" }
-      "DISTINST_JMX_PORT"   { set value "Please enter an unused port number for the JMX MBean server *" }
-      "DISTINST_JMX_SSL"   { set value "Enable JMX SSL server authentication (y/n) \[y\] >> " }
-      "DISTINST_JMX_SSL_CLIENT"   { set value "Enable JMX SSL client authentication (y/n) \[y\] >> " }
-      "DISTINST_JMX_SSL_KEYSTORE"   { set value "Enter JMX SSL server keystore path \[%s\] >> " }
-      "DISTINST_JMX_SSL_KEYSTORE_PW"   { set value "Enter JMX SSL server keystore *" }
-      "DISTINST_JMX_USER_KEYSTORE_PW" { set value "Enter * for * keystore (at least 6 characters) >> " }
-      "DISTINST_JMX_PW_RETYPE" { set value "Retype the password >> " }
-      "DISTINST_JMX_USE_DATA"   { set value "Do you want to use these data (y/n) \[y\] >> " }
       "DISTINST_UNIQUE_CLUSTER_NAME" {set value "Unique cluster name" }
       "DISTINST_DETECT_CHOOSE_NEW_NAME" {set value "NOTE: Choose 'n' to select new SGE_CLUSTER_NAME  (y/n) *" }
       "DISTINST_DETECT_REMOVE_OLD_CLUSTER" {set value "*Stop the installation (WARNING: selecting 'n' *" }
@@ -1437,7 +1428,6 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINT_UPGRADE_COMMD_PORT_SETUP" { set value "*How do you want to configure the Grid Engine communication ports?\n\nUsing the >shell environment<:                           \[1\]\n\nUsing a network service like >/etc/service<, >NIS/NIS+<: \[2\]\n\n(default: 1) >> " }
       "DISTINT_UPGRADE_IJS_SELECTION" { set value "\nThe backup configuration includes information for running \ninteractive jobs. Do you want to use the IJS information from \nthe backup ('y') or use new default values ('n') (y/n) \[y\] >> " }
       "DISTINCT_UPGRADE_NEXT_RANK_NUMBER" { set value "\nBackup contains last * ID *. As a suggested value, we added 1000 \nto that number and rounded it up to the nearest 1000.\nIncrease the value, if appropriate.\nChoose the new next * ID \[*\] >> " }
-      "DISTINCT_UPGRADE_USE_EXISTING_JMX" { set value "Found JMX settings in the backup\nUse the JMX settings from the backup ('y') or reconfigure ('n') (y/n) \[y\] >> " }
       "DISTINCT_UPGRADE_USE_EXISTING_SPOOLING" { set value "\nUse previous %s spooling method ('y') or use new spooling method *" }
       "DISTINT_ENTER_CA_COUNTRY_CODE" { set value "Please enter your two letter country code, e.g. 'US' >> " }
       "DISTINT_ENTER_CA_STATE" { set value "Please enter your state >> " }

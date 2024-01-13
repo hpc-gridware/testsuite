@@ -30,36 +30,6 @@
 ##########################################################################
 #___INFO__MARK_END__
 
-# install qmaster check 
-#                                                             max. column:     |
-#****** install_core_system/install_qmaster() ******
-# 
-#  NAME
-#     install_qmaster -- ??? 
-#
-#  SYNOPSIS
-#     install_qmaster { } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc install_qmaster {} {
    global ts_config
    global CHECK_USER
@@ -102,17 +72,6 @@ proc install_qmaster {} {
    set feature_install_options ""
    if {$ts_config(product_feature) == "csp"} {
       append feature_install_options "-csp"
-   }
-
-   if {$ts_config(jmx_port) > 0} {
-      # For the JMX MBean Server we need java 1.5+
-      set java_home [get_java_home_for_host $ts_config(master_host) "1.5+"]
-      if {$java_home == ""} {
-         ts_log_severe "Cannot install qmaster with JMX MBean Server on host $ts_config(master_host). java15 is not defined in host configuration"
-         return
-      }
-      set env_list(JAVA_HOME) $java_home
-      append feature_install_options " -jmx"
    }
 
    set my_timeout 500
@@ -215,28 +174,6 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
    append auto_config_content "SGE_ENABLE_SMF=\"false\"\n"
    append auto_config_content "SGE_CLUSTER_NAME=\"$ts_config(cluster_name)\"\n"
 
-   if {$ts_config(jmx_port) > 0} {
-      if {$shadowd} {
-         set jvm_lib_path [get_jvm_lib_path_for_host $host]
-      } else {
-         set jvm_lib_path [get_jvm_lib_path_for_host $ts_config(master_host)]
-      }
-      append auto_config_content "SGE_JVM_LIB_PATH=\"$jvm_lib_path\"\n"
-      append auto_config_content "SGE_ADDITIONAL_JVM_ARGS=\"\"\n"
-      append auto_config_content "SGE_JMX_PORT=\"$ts_config(jmx_port)\"\n"
-      append auto_config_content "SGE_JMX_SSL=\"$ts_config(jmx_ssl)\"\n"
-      append auto_config_content "SGE_JMX_SSL_CLIENT=\"$ts_config(jmx_ssl_client)\"\n"
-      append auto_config_content "SGE_JMX_SSL_KEYSTORE=\"/var/sgeCA/port${ts_config(commd_port)}/$ts_config(cell)/private/keystore\"\n"
-      append auto_config_content "SGE_JMX_SSL_KEYSTORE_PW=\"$ts_config(jmx_ssl_keystore_pw)\"\n"
-   } else {
-      append auto_config_content "SGE_JVM_LIB_PATH=\"none\"\n"
-      append auto_config_content "SGE_ADDITIONAL_JVM_ARGS=\"\"\n"
-      append auto_config_content "SGE_JMX_PORT=\"0\"\n"
-      append auto_config_content "SGE_JMX_SSL=\"false\"\n"
-      append auto_config_content "SGE_JMX_SSL_CLIENT=\"false\"\n"
-      append auto_config_content "SGE_JMX_SSL_KEYSTORE=\"\"\n"
-      append auto_config_content "SGE_JMX_SSL_KEYSTORE_PW=\"\"\n"
-   }
    # SGE 6.* uses SERVICE_TAGS
    if {$ts_config(gridengine_version) < 80} {
       append auto_config_content "SERVICE_TAGS=\"disable\"\n"

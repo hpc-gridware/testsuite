@@ -972,10 +972,6 @@ proc get_supported_config_parameter_list {} {
    lappend clone_argument_list "non_cluster_hosts"
    lappend clone_argument_list "add_compile_archs"
    lappend clone_argument_list "commd_port"
-   lappend clone_argument_list "jmx_port"
-   lappend clone_argument_list "jmx_ssl"
-   lappend clone_argument_list "jmx_ssl_client"
-   lappend clone_argument_list "jmx_ssl_keystore_pw"
    lappend clone_argument_list "reserved_port"
    lappend clone_argument_list "product_root"
    lappend clone_argument_list "product_type"
@@ -2517,6 +2513,14 @@ proc update_ts_config_version {} {
       return 0
    }
 
+   if {[string compare $ts_config(version) "1.22"] == 0} {
+      puts "\ntestsuite configuration update from 1.22 to 1.23 ..."
+      config_build_ts_config_1_23
+      show_config ts_config
+      wait_for_enter
+      return 0
+   }
+
    puts "\nunexpected version $ts_config(version), need version $actual_ts_config_version"
    return -1
 }
@@ -2537,8 +2541,6 @@ proc update_ts_config_version {} {
 #  RESULT
 #     string with given number of spaces
 #
-#  SEE ALSO
-#     ???/???
 #*******************************************************************************
 proc get_spaces { nr } {
    set spaces ""

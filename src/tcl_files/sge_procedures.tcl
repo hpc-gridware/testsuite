@@ -365,8 +365,6 @@ proc get_qmaster_spool_dir {} {
 #     "exclusive-host-usage":        Returns true if current GE release supports
 #                                    exclusive host usage.
 #
-#     "jmx-thread" :                 Returns true if the jmx thread is enabled
-#
 #  RESULT
 #     true or false if feature string is valid, "unsupported" on error
 #      
@@ -389,13 +387,6 @@ proc ge_has_feature {feature {quiet 0}} {
             set result false
          } else {
             set result true
-         }
-      }
-      "jmx-thread" {
-         if {$ts_config(jmx_port) > 0} {
-            set result true
-         } else {
-            set result false
          }
       }
       "scheduler-thread" {
@@ -6713,16 +6704,6 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
    } 
 
    set schedd_message ""
-   
-   if {$ts_config(jmx_port) > 0} {
-      # For the JMX MBean Server we need java 1.5+
-      set java_home [get_java_home_for_host $ts_config(master_host) "1.5+"]
-      if {$java_home == ""} {
-         ts_log_severe "Cannot start qmaster with JMX MBean Server on host $ts_config(master_host). Java 1.5+ is not defined in host configuration"
-         return                                       
-      }
-      set envlist(JAVA_HOME) $java_home
-   }
    
    ts_log_fine "starting up qmaster $schedd_message on host \"$start_host\" as user \"$startup_user\""
    set arch [resolve_arch $start_host]

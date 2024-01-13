@@ -70,35 +70,6 @@ proc make_user_cert {} {
       } else {
          ts_log_fine "no csp feature enabled"
       }
-
-      # support jmx ssl testsuite keystore and certificate creation
-      if {$ts_config(jmx_ssl) == "true" && $ts_config(jmx_port) != 0} {
-         ts_log_fine "creating certificates and keystore files for jgdi jmx ssl access ..."
-         set file [get_tmp_file_name]
-         set script [ open $file "w" ]
-         puts $script "$CHECK_FIRST_FOREIGN_SYSTEM_USER:first_testsuite_user:$CHECK_REPORT_EMAIL_TO"
-         puts $script "$CHECK_SECOND_FOREIGN_SYSTEM_USER:second_testsuite_user:$CHECK_REPORT_EMAIL_TO"
-         flush $script
-         close $script
-         ts_log_fine "creating certificates for testsuite users ..."
-         set result [ start_remote_prog "$ts_config(master_host)" $cert_user "util/sgeCA/sge_ca" "-usercert $file" prg_exit_state 60 0 $ts_config(product_root)]
-         ts_log_fine $result
-       
- 
-         set file [get_tmp_file_name]
-         set script [ open $file "w" ]
-         puts $script "$ts_config(jmx_ssl_keystore_pw)"
-         flush $script
-         close $script
-             
-         # encrypt keystores by specifing -kspwf file (file is a password file)
-         ts_log_fine "creating keystore files for testsuite users ..."
-         set my_env(JAVA_HOME) [get_java_home_for_host $ts_config(master_host) "1.5+"]
-         set result [start_remote_prog "$ts_config(master_host)" $cert_user "util/sgeCA/sge_ca" "-userks -kspwf $file" prg_exit_state 60 0 $ts_config(product_root) my_env]
-         ts_log_fine $result
-      } else {
-         ts_log_fine "jmx ssl not enabled"
-      }
    }
 }
 
@@ -239,63 +210,8 @@ proc cleanup_system {} {
   if { [ exec_checktree_clean_hooks ] != 0 } {
      ts_log_config "exec_checktree_clean_hooks reported an error"
   }
-
-  # if we have jvm thread enabled we check that it is a event client
-  # a) first get qping info for qmaster
-  set ping_args "-info $ts_config(master_host) $ts_config(commd_port) qmaster 1"
-  set output [start_sge_bin "qping" "$ping_args"]
-  if {![string match "*jvm*" $output]} {
-     set jvm_running false
-  } else {
-     set jvm_running true
-  }
-
-  # b) check if jmx thread is enabled
-  if {[ge_has_feature "jmx-thread"]} {
-     if {$jvm_running == false} {
-        ts_log_warning "JMX thread is not running!"
-     } else {
-        ts_log_fine "JMX thread running - FINE!"
-     }
-  } else {
-     if {$jvm_running == true} {
-        ts_log_warning "JMX thread running, but should not run!"
-     } else {
-        ts_log_fine "JMX thread not running - FINE!"
-     }
-  }
 }
 
-
-#                                                             max. column:     |
-#****** install_core_system/setup_queues() ******
-# 
-#  NAME
-#     setup_queues -- ??? 
-#
-#  SYNOPSIS
-#     setup_queues { } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc setup_queues {} {
    global env
    global check_use_installed_system CHECK_USER
@@ -571,9 +487,6 @@ proc setup_execd_conf {} {
    global ts_config
    global CHECK_USER
 
-   set have_additional_jvm_args [ge_has_feature "additional-jvm-arguments"] 
-
-
    set host_list $ts_config(execd_nodes)
    foreach sh_host $ts_config(shadowd_hosts) {
       if {[lsearch -exact $host_list $sh_host] == -1} {
@@ -616,13 +529,6 @@ proc setup_execd_conf {} {
          set expected_entries 8
       }
 
-      # additional jvm arguments + JMX: shadows add their local configuration (jvm_lib + args)
-      if {$have_additional_jvm_args && $ts_config(jmx_port) > 0} {
-         if {$is_shadowd_host || $host == $ts_config(master_host)} {
-            incr expected_entries 2
-         }
-      }
-
       if {$have_exec_spool_dir != "" && $is_execd_host} {
          ts_log_fine "host $host has spooldir in \"$have_exec_spool_dir\""
          set spool_dir 1
@@ -657,7 +563,7 @@ proc setup_execd_conf {} {
                   set tmp_log_text "Host \"$host\" xterm path \"$tmp_config($elem)\" not found!\n"
                   append tmp_log_text "The install script should check if the default xterm path is available during installation!\n"
                   append tmp_log_text "Testsuite is setting xterm for host \"$host\" to \"$config_xterm_path\"!\n"
-                  ts_log_info $tmp_log_text
+                  ts_log_fine $tmp_log_text
                   set tmp_config($elem) $config_xterm_path
                }
                set config_xterm_path [get_binary_path $host "xterm"]

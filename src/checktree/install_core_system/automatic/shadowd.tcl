@@ -30,35 +30,6 @@
 ##########################################################################
 #___INFO__MARK_END__
 
-#                                                             max. column:     |
-#****** install_core_system/install_shadowd() ******
-# 
-#  NAME
-#     install_shadowd -- ??? 
-#
-#  SYNOPSIS
-#     install_shadowd { } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc install_shadowd {} {
    global CORE_INSTALLED
    global check_use_installed_system
@@ -83,11 +54,6 @@ proc install_shadowd {} {
    if {!$check_use_installed_system} {
       set feature_install_options ""
       set my_csp_host_list ""
-
-      # support jmx ssl testsuite keystore and certificate creation
-      if {$ts_config(jmx_ssl) == "true" && $ts_config(jmx_port) != 0} {
-         set my_csp_host_list $shadowd_hosts
-      }
 
       # are we installing secure grid engine?
       if {$ts_config(product_feature) == "csp"} {

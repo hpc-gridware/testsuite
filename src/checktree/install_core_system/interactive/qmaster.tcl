@@ -30,36 +30,6 @@
 ##########################################################################
 #___INFO__MARK_END__
 
-# install qmaster check 
-#                                                             max. column:     |
-#****** install_core_system/install_qmaster() ******
-# 
-#  NAME
-#     install_qmaster -- ??? 
-#
-#  SYNOPSIS
-#     install_qmaster { } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc install_qmaster {{report_var report}} {
    global CHECK_USER
    global CORE_INSTALLED CORE_INSTALLED
@@ -198,20 +168,6 @@ proc install_qmaster {{report_var report}} {
    set WINDOWS_DOMAIN_USER          [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_QMASTER_WINDOWS_DOMAIN_USER]]
    set WINDOWS_MANAGER              [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_QMASTER_WINDOWS_MANAGER]]
 
-   # java
-   set JMX_JAVA_HOME                [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_JAVA_HOME] "*" ]
-   set JMX_JAVA_HOME_OR_NONE        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_JAVA_HOME_OR_NONE] "*" ]
-   set JMX_ADD_JVM_ARGS             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ADD_JVM_ARGS] "*"]
-   set JMX_ENABLE_JMX               [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENABLE_JMX]]
-   set JMX_PORT_QUESTION            [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_JMX_PORT]]
-   set JMX_SSL_QUESTION             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_JMX_SSL]]
-   set JMX_SSL_CLIENT_QUESTION      [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_JMX_SSL_CLIENT]]
-   set JMX_SSL_KEYSTORE_QUESTION    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_JMX_SSL_KEYSTORE] "*" ]
-   set JMX_SSL_KEYSTORE_PW_QUESTION [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_JMX_SSL_KEYSTORE_PW]]
-   set JMX_USE_DATA                 [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_JMX_USE_DATA]]
-   set JMX_USER_KEYSTORE_PW         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_JMX_USER_KEYSTORE_PW]]
-   set JMX_PW_RETYPE                [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_JMX_PW_RETYPE]]
-
    set UNIQUE_CLUSTER_NAME          [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_UNIQUE_CLUSTER_NAME]]
    set DETECT_CHOOSE_NEW_NAME       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DETECT_CHOOSE_NEW_NAME]]
    set DETECT_REMOVE_OLD_CLUSTER    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DETECT_REMOVE_OLD_CLUSTER]]
@@ -222,10 +178,6 @@ proc install_qmaster {{report_var report}} {
    set feature_install_options ""
    if {$ts_config(product_feature) == "csp"} {
       append feature_install_options "-csp"
-   }
-
-   if {$ts_config(jmx_port) > 0} {
-      append feature_install_options " -jmx"
    }
 
    ts_log_fine "install_qmaster $CHECK_QMASTER_INSTALL_OPTIONS $feature_install_options"
@@ -392,108 +344,6 @@ proc install_qmaster {{report_var report}} {
             continue
          }
          
-         -i $sp_id $JMX_ENABLE_JMX {
-            if {$ts_config(jmx_port) > 0} {
-               install_send_answer $sp_id "y" "enable jmx"
-            } else {
-               ts_log_info "jmx disabled - jmx should be enabled for testing"
-               install_send_answer $sp_id "n" "disable jmx"
-            }
-            continue
-         }
-         -i $sp_id $JMX_JAVA_HOME {
-            # For the JMX MBean Server we need java 1.5+
-            set java_home [get_java_home_for_host $ts_config(master_host) "1.5+"]
-            if {$java_home == ""} {
-               set msg "Cannot install qmaster with JMX MBean Server on host \
-               $ts_config(master_host). java15+ is not defined in host configuration"
-               ts_log_warning $msg
-               close_spawn_process $id
-               test_report report $curr_task_nr $report_id result [get_result_failed]
-               test_report report $curr_task_nr $report_id value $msg
-               return
-            }
-            install_send_answer $sp_id $java_home "sending java_home"
-            continue
-         }
-         -i $sp_id $JMX_JAVA_HOME_OR_NONE {
-            # For the JMX MBean Server we need java 1.5+
-            set java_home [get_java_home_for_host $ts_config(master_host) "1.5+"]
-            if {$java_home == ""} {
-               set msg "Cannot install qmaster with JMX MBean Server on host \
-               $ts_config(master_host). java15+ is not defined in host configuration"
-               ts_log_warning $msg
-               close_spawn_process $id
-               test_report report $curr_task_nr $report_id result [get_result_failed]
-               test_report report $curr_task_nr $report_id value $msg
-               return
-            }
-            install_send_answer $sp_id $java_home "sending java_home"
-            continue
-         }
-
-         -i $sp_id $JMX_ADD_JVM_ARGS {
-            install_send_answer $sp_id "" "additional_jvm_args"
-            continue
-         }
-
-         -i $sp_id $JMX_PORT_QUESTION {
-            if {$ts_config(jmx_port) > 0} {
-               install_send_answer $sp_id $ts_config(jmx_port) "jmx port $ts_config(jmx_port)"
-            } else {
-               set msg "got jmx port question, but jmx port is set to $ts_config(jmx_port)"
-               ts_log_severe $msg
-               close_spawn_process $id
-               test_report report $curr_task_nr $report_id result [get_result_failed]
-               test_report report $curr_task_nr $report_id value $msg
-               return
-            }
-            continue
-         }
-
-         -i $sp_id $JMX_SSL_QUESTION {
-            if { $ts_config(jmx_ssl) == "true" } {
-               install_send_answer $sp_id $ANSWER_YES "jmx ssl"
-            } else {
-               install_send_answer $sp_id $ANSWER_NO "jmx ssl"
-            }
-            continue
-         }
-
-         -i $sp_id $JMX_SSL_CLIENT_QUESTION {
-            if {$ts_config(jmx_ssl_client) == "true"} {
-               install_send_answer $sp_id $ANSWER_YES "jmx ssl client"
-            } else {
-               install_send_answer $sp_id $ANSWER_NO "jmx ssl client"
-            }
-            continue
-         }
-
-         -i $sp_id $JMX_SSL_KEYSTORE_QUESTION {
-            install_send_answer $sp_id "" "jmx ssl keystore"
-            continue
-         }
-
-         -i $sp_id $JMX_SSL_KEYSTORE_PW_QUESTION {
-            install_send_answer $sp_id $ts_config(jmx_ssl_keystore_pw) "jmx ssl keystore pw"
-            continue
-         }
-         
-         -i $sp_id $JMX_USER_KEYSTORE_PW {
-            install_send_answer $sp_id $ts_config(jmx_ssl_keystore_pw) "user keystore password"
-            continue
-         }
-
-         -i $sp_id $JMX_PW_RETYPE {
-            install_send_answer $sp_id $ts_config(jmx_ssl_keystore_pw) "keystore password retype"
-            continue
-         }
-
-         -i $sp_id $JMX_USE_DATA {
-            install_send_answer $sp_id "y"
-            continue
-         }
-
          -i $sp_id $DNS_DOMAIN_QUESTION { 
             install_send_answer $sp_id $ANSWER_YES "4"
             continue

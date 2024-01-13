@@ -697,28 +697,16 @@ proc current_version_upgrade_test {} {
 
                   switch -exact $rotate_features_setup {
                      "no_jmx_no_ijs" {    
-                        # no jmx, no new ijs
-                        set clone_config_array(jmx_port) "0"
-                        set clone_config_array(jmx_ssl) "false"
-                        set clone_config_array(jmx_ssl_client) "false"
-                        set clone_config_array(jmx_ssl_keystore_pw) "changeit"
+                        # no new ijs
                         append additional_switches " interactive rtools"
                         set enable_interactive_job_support 0
                      }
                      "jmx" {    
-                        # enable jmx
-                        set clone_config_array(jmx_ssl) "true"
-                        set clone_config_array(jmx_ssl_client) "true"
-
                         append additional_switches " interactive rtools"
                         set enable_interactive_job_support 0
                      }
                      "ijs" {  
                         # enable new interactive job support
-                        set clone_config_array(jmx_port) "0"
-                        set clone_config_array(jmx_ssl) "false"
-                        set clone_config_array(jmx_ssl_client) "false"
-                        set clone_config_array(jmx_ssl_keystore_pw) "changeit"
                         set enable_interactive_job_support 1
                      }
 
@@ -746,27 +734,12 @@ proc current_version_upgrade_test {} {
                   }
                   
 
-   #               TODO: foreach feature check that jmx port is started/not started and old/new job support is configured after upgrade !!!! 
-   #               TODO: (Test that jmx thread is running and working!!!)
-   #               TODO: check bootstrap file content (jvm thread)
-   #               TODO: check messages files (qmaster, etc)
-
                   ts_log_frame
                   current_version_upgrade_log test_log "testing $rel_info($i,version) ($rel_info($i,description)) upgrade to $cur_version(detected_version) ($cur_version(full))..."
 
                   current_version_upgrade_log test_log " => install mode setup \"$rotate_install_mode\""
                   current_version_upgrade_log test_log "    product install mode:   $clone_config_array(product_feature)"
 
-                  current_version_upgrade_log test_log " => feature setup \"$rotate_features_setup\""
-                  if { $clone_config_array(jmx_port) == 0 } {
-                     current_version_upgrade_log test_log "    jmx port:              $clone_config_array(jmx_port) (disabled - do not start mbean server)"
-                  } else {
-                     current_version_upgrade_log test_log "    jmx port:              $clone_config_array(jmx_port)"
-                  }
-                  current_version_upgrade_log test_log "    jmx server security:   $clone_config_array(jmx_ssl)"
-                  current_version_upgrade_log test_log "    jmx client security:   $clone_config_array(jmx_ssl_client)"
-                  current_version_upgrade_log test_log "    jmx keystore password: $clone_config_array(jmx_ssl_keystore_pw)"
-                  
                   if {$enable_interactive_job_support} {
                      current_version_upgrade_log test_log "    new interactive job support: enabled"
                   } else {
@@ -1135,18 +1108,6 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
    set CSP_COPY_FAILED [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CSP_COPY_FAILED]]
    set CSP_COPY_RSH_FAILED [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CSP_COPY_RSH_FAILED]]
 
-   # java
-   set JMX_ENABLE_JMX               [translate_macro DISTINST_ENABLE_JMX "*" ]
-   set JMX_JAVA_HOME                [translate_macro DISTINST_JAVA_HOME "*" ]
-   set JMX_JAVA_HOME_OR_NONE        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_JAVA_HOME_OR_NONE] "*" ]
-   set JMX_ADD_JVM_ARGS             [translate_macro DISTINST_ADD_JVM_ARGS "*"]
-   set JMX_PORT_QUESTION            [translate_macro DISTINST_JMX_PORT]
-   set JMX_SSL_QUESTION             [translate_macro DISTINST_JMX_SSL]
-   set JMX_SSL_CLIENT_QUESTION      [translate_macro DISTINST_JMX_SSL_CLIENT]
-   set JMX_SSL_KEYSTORE_QUESTION    [translate_macro DISTINST_JMX_SSL_KEYSTORE "*" ]
-   set JMX_SSL_KEYSTORE_PW_QUESTION [translate_macro DISTINST_JMX_SSL_KEYSTORE_PW]
-   set JMX_USE_DATA                 [translate_macro DISTINST_JMX_USE_DATA]
-
    # upgrade
    set BCKP_DIR                     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINT_UPGRADE_BCKP_DIR] ]
    set USE_BCKP_DIR                 [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINT_UPGRADE_USE_BCKP_DIR] ]
@@ -1154,7 +1115,6 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
    set COMMD_PORT_SETUP             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINT_UPGRADE_COMMD_PORT_SETUP] ]
    set IJS_SELECTION                [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINT_UPGRADE_IJS_SELECTION]]
    set NEXT_RANK_NUMBER             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINCT_UPGRADE_NEXT_RANK_NUMBER]]
-   set USE_EXISTING_JMX             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINCT_UPGRADE_USE_EXISTING_JMX]]
    set USE_EXISTING_SPOOLING        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINCT_UPGRADE_USE_EXISTING_SPOOLING] "*"]
    set PKGADD_QUESTION              [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_PKGADD_QUESTION] ]
    set PKGADD_QUESTION_SINCE_U3     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_PKGADD_QUESTION_SINCE_U3] ]
@@ -2007,174 +1967,6 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          exp_continue
       }
       
-      -i $sp_id -- $JMX_ENABLE_JMX {
-         if {$ts_config(jmx_port) == 0 } {
-            set my_answer $ANSWER_NO
-         } else {
-            set my_answer $ANSWER_YES
-         }
-         ts_log_fine "\n -->testsuite: sending enable jmx >$my_answer<"
-         if {$do_log_output == 1} {
-           puts "press RETURN"
-           set anykey [wait_for_enter 1]
-         }
-         ts_send $sp_id "$my_answer\n"
-         append install_output $expect_out(buffer)
-         log_user 1
-         exp_continue
-      }
-
-      -i $sp_id -- $JMX_JAVA_HOME {
-         # For the JMX MBean Server we need java 1.5+
-         # TODO: We need a prefered java version in the testsuite configuration ?
-         set java_home [get_java_home_for_host $ts_config(master_host) "1.5+"]
-         if {$java_home == ""} {
-            ts_log_severe "Cannot install qmaster with JMX MBean Server on host $ts_config(master_host). java15 is not defined in host configuration"
-            set return_value 1
-         } else {
-            ts_log_fine "\n -->testsuite: sending java_home (1) >$java_home<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "$java_home\n"
-            append install_output $expect_out(buffer)
-            log_user 1
-            exp_continue
-         }
-      }
-  
-      -i $sp_id $JMX_JAVA_HOME_OR_NONE {
-         # For the JMX MBean Server we need java 1.5+
-         set java_home [get_java_home_for_host $ts_config(master_host) "1.5+"]
-         if {$java_home == ""} {
-            ts_log_severe "Cannot install qmaster with JMX MBean Server on host $ts_config(master_host). java15 is not defined in host configuration"
-            set return_value 1
-         } else {
-            ts_log_fine "\n -->testsuite: sending java_home (2) >$java_home<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "$java_home\n"
-            append install_output $expect_out(buffer)
-            log_user 1
-            exp_continue
-         }
-      }        
-
-      -i $sp_id -- $JMX_ADD_JVM_ARGS {
-         ts_log_fine "\n -->testsuite: sending additional_jvm_args (defaults)"
-         if {$do_log_output == 1} {
-            puts "press RETURN"
-            set anykey [wait_for_enter 1]
-         }
-         ts_send $sp_id "\n"
-         append install_output $expect_out(buffer)
-         log_user 1
-         exp_continue
-      }
-
-      -i $sp_id -- $JMX_PORT_QUESTION {
-         # INFO JMX port 
-         ts_log_fine "\n -->testsuite: sending jmx port >$ts_config(jmx_port)<"
-         if {$do_log_output == 1} {
-            puts "press RETURN"
-            set anykey [wait_for_enter 1]
-         }
-         ts_send $sp_id "$ts_config(jmx_port)\n"
-         append install_output $expect_out(buffer)
-         log_user 1
-         exp_continue
-      }
-
-      -i $sp_id -- $JMX_SSL_QUESTION {
-         # TODO: is Enable JMX SSL server authentication correct? Should we also test NO with jmx=yes?
-         if { $ts_config(jmx_ssl) == "true" } {
-            set enable_jmx_ssl "$ANSWER_YES"
-         } else {
-            set enable_jmx_ssl "$ANSWER_NO"
-         }
-         ts_log_fine "\n -->testsuite: sending jmx ssl >${enable_jmx_ssl}<"
-         if {$do_log_output == 1} {
-            puts "press RETURN"
-            set anykey [wait_for_enter 1]
-         }
-         ts_send $sp_id "${enable_jmx_ssl}\n"
-         append install_output $expect_out(buffer)
-         log_user 1
-         exp_continue
-      }
-
-      -i $sp_id -- $JMX_SSL_CLIENT_QUESTION {
-         # TODO: is Enable JMX SSL client authentication correct? Should we also test NO with jmx=yes?
-         if { $ts_config(jmx_ssl_client) == "true" } {
-            set enable_jmx_ssl_client "$ANSWER_YES"
-         } else {
-            set enable_jmx_ssl_client "$ANSWER_NO"
-         }
-         ts_log_fine "\n -->testsuite: sending jmx ssl client >${enable_jmx_ssl_client}<"
-         if {$do_log_output == 1} {
-            puts "press RETURN"
-            set anykey [wait_for_enter 1]
-         }
-         ts_send $sp_id "${enable_jmx_ssl_client}\n"
-         append install_output $expect_out(buffer)
-         log_user 1
-         exp_continue
-      }
-
-      -i $sp_id -- $JMX_SSL_KEYSTORE_QUESTION {
-         ts_log_fine "\n -->testsuite: sending jmx ssl keystore >RETURN<"
-         if {$do_log_output == 1} {
-            puts "press RETURN"
-            set anykey [wait_for_enter 1]
-         }
-         ts_send $sp_id "\n"
-         append install_output $expect_out(buffer)
-         log_user 1
-         exp_continue
-      }
-
-      -i $sp_id -- $JMX_SSL_KEYSTORE_PW_QUESTION {
-         ts_log_fine "\n -->testsuite: sending jmx ssl keystore pw >$ts_config(jmx_ssl_keystore_pw)<"
-         if {$do_log_output == 1} {
-            puts "press RETURN"
-            set anykey [wait_for_enter 1]
-         }
-         ts_send $sp_id "$ts_config(jmx_ssl_keystore_pw)\n"
-         append install_output $expect_out(buffer)
-         log_user 1
-         exp_continue
-      }
-
-      -i $sp_id -- $JMX_USE_DATA {
-         # NOTE: This is also called after creating CSP certificates !!!
-         ts_log_fine "\n -->testsuite: sending answer >$ANSWER_YES<"
-         if {$do_log_output == 1} {
-            puts "press RETURN"
-            set anykey [wait_for_enter 1]
-         }
-         ts_send $sp_id "$ANSWER_YES\n"
-
-         # Workaround (the sge_ca script will disable output to stdout somehow)
-         append install_output $expect_out(buffer)
-         log_user 1
-         exp_continue
-      }
-
-      -i $sp_id -- $USE_EXISTING_JMX {
-         ts_log_fine "\n -->testsuite: sending >$ANSWER_NO<"
-         if {$do_log_output == 1} {
-              puts "press RETURN"
-              set anykey [wait_for_enter 1]
-         }
-         ts_send $sp_id "$ANSWER_NO\n"
-         append install_output $expect_out(buffer)
-         log_user 1
-         exp_continue
-      }
-
       -i $sp_id -- $USE_EXISTING_SPOOLING {
          ts_log_fine "matched correct spooling question!"
          ts_log_fine "\n -->testsuite: sending >$ANSWER_NO< (use spooling method - OK)"

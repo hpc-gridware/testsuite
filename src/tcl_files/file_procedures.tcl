@@ -2295,7 +2295,7 @@ proc get_binary_path {nodename binary {raise_error 1}} {
          # The binary path is not configured in the host configuration, report config warning
          set config_text "No entry for binary \"$binary\" on host \"$hostname\" in host configuration!\n"
          append config_text "Using \"$binary\" binary: \"$binary_path\"\n"
-         ts_log_info $config_text
+         ts_log_fine $config_text
          # Now add the binary path to the cache
          set cached_binary_path_array($hostname,$binary,$CHECK_USER) $binary_path
          set get_binary_path_recursive_call 0

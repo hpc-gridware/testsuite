@@ -250,22 +250,6 @@ proc basic_cluster_configure {host} {
       set ts_config(all_nodes) $host
       set ts_config(product_feature) $ts_config_backup(product_feature)
    }
-   if {$ts_config_backup(jmx_port) != 0} {
-      switch -glob $arch {
-         sol* -
-         lx* {
-            set java_path [get_java_home_for_host $host 1.5+ 0]
-            if {$java_path == ""} {
-               set ts_config(jmx_port) 0
-            } else {
-               set ts_config(jmx_port) $ts_config_backup(jmx_port)
-            }
-         }
-         default {
-            set ts_config(jmx_port) 0
-         }
-      }
-   }
    set ts_config(shadowd_hosts) ""
    set ts_config(execd_hosts) $host
    set ts_config(execd_nodes) $host
@@ -508,12 +492,6 @@ proc get_cluster_configuration {} {
    lappend sge_info_list "SGE root directory: $ts_config(product_root)"
    lappend sge_info_list "SGE cell: $ts_config(cell)"
    lappend sge_info_list "Cluster name: $ts_config(cluster_name)"
-   if {$ts_config(jmx_port) > 0} {
-      set jmx_enabled true
-   } else {
-      set jmx_enabled false
-   }
-   lappend sge_info_list "JMX enabled: $jmx_enabled"
    lappend sge_info_list "Qmaster port: $ts_config(commd_port)"
    lappend sge_info_list  "Execd port: [expr $ts_config(commd_port) + 1]"
    lappend sge_info_list "Spooling method: $ts_config(spooling_method)"

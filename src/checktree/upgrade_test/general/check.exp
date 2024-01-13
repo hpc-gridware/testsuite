@@ -137,7 +137,7 @@ proc upgrade_test_backup_initial_config {} {
    set result [backup_remote_cluster_config $CHECK_DEFAULTS_FILE $CHECK_UPGRADE_INITIAL_CLUSTER_CONFIG_DIR]
    ts_log_finest $result
    if {$result != 0} {
-      ts_log_severe "Back up of current cluster configuration failed."
+      ts_log_severe "Back up of current cluster configuration faile (params=$CHECK_DEFAULTS_FILE $CHECK_UPGRADE_INITIAL_CLUSTER_CONFIG_DIR result=$result)."
       return -1
    }
    return 0
@@ -463,9 +463,6 @@ proc upgrade_test_upgrade_run_script { bckp_dir } {
    if {$ts_config(product_feature) == "csp"} {
       append feature_install_options "-csp"
    }
-   if {$ts_config(jmx_port) > 0} {
-      append feature_install_options " -jmx"
-   }
 
    set do_log_output 0
    if {$CHECK_DEBUG_LEVEL == 2} {
@@ -541,19 +538,6 @@ proc upgrade_test_upgrade_run_script { bckp_dir } {
    set CSP_COPY_CMD [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CSP_COPY_CMD]]
    set CSP_COPY_FAILED [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CSP_COPY_FAILED]]
    set CSP_COPY_RSH_FAILED [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CSP_COPY_RSH_FAILED]]
-
-   # java
-   set JMX_ENABLE_JMX               [translate_macro DISTINST_ENABLE_JMX "*" ]
-   set JMX_JAVA_HOME                [translate_macro DISTINST_JAVA_HOME "*" ]
-   set JMX_JAVA_HOME_OR_NONE        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_JAVA_HOME_OR_NONE] "*" ]
-   set JMX_ADD_JVM_ARGS             [translate_macro DISTINST_ADD_JVM_ARGS "*"]
-   set JMX_PORT_QUESTION            [translate_macro DISTINST_JMX_PORT]
-   set JMX_SSL_QUESTION             [translate_macro DISTINST_JMX_SSL]
-   set JMX_SSL_CLIENT_QUESTION      [translate_macro DISTINST_JMX_SSL_CLIENT]
-   set JMX_SSL_KEYSTORE_QUESTION    [translate_macro DISTINST_JMX_SSL_KEYSTORE "*" ]
-   set JMX_SSL_KEYSTORE_PW_QUESTION [translate_macro DISTINST_JMX_SSL_KEYSTORE_PW]
-   set JMX_USE_DATA                 [translate_macro DISTINST_JMX_USE_DATA]
-   set JMX_PW_RETYPE                [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_JMX_PW_RETYPE]]
 
    # upgrade
    set BCKP_DIR                     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINT_UPGRADE_BCKP_DIR] ]
@@ -1297,148 +1281,6 @@ proc upgrade_test_upgrade_run_script { bckp_dir } {
             continue
          }
          
-         -i $sp_id $JMX_ENABLE_JMX {
-            if {$ts_config(jmx_port) == 0 } {
-               ts_log_fine "\n -->testsuite: sending disable jmx -> ANSWER_NO ><"
-               ts_send $sp_id "$ANSWER_NO\n"
-            } else {
-               ts_log_fine "\n -->testsuite: sending enable jmx ><"
-               ts_send $sp_id "\n"
-            }
-            continue
-         }
-
-         -i $sp_id $JMX_JAVA_HOME {
-            # For the JMX MBean Server we need java 1.5+
-            set java_home [get_java_home_for_host $ts_config(master_host) "1.5+"]
-            if {$java_home == ""} {
-               ts_log_severe "Cannot install qmaster with JMX MBean Server on host $ts_config(master_host). java15 is not defined in host configuration"
-            } else {
-               ts_log_fine "\n -->testsuite: sending java_home >$java_home<"
-               if {$do_log_output == 1} {
-                  puts "press RETURN"
-                  set anykey [wait_for_enter 1]
-               }
-               ts_send $sp_id "$java_home\n"
-               continue
-            }
-         }
-         -i $sp_id $JMX_JAVA_HOME_OR_NONE {
-            # For the JMX MBean Server we need java 1.5+
-            set java_home [get_java_home_for_host $ts_config(master_host) "1.5+"]
-            if {$java_home == ""} {
-               ts_log_severe "Cannot install qmaster with JMX MBean Server on host $ts_config(master_host). java15 is not defined in host configuration"
-            } else {
-               ts_log_fine "\n -->testsuite: sending java_home >$java_home<"
-               if {$do_log_output == 1} {
-                  puts "press RETURN"
-                  set anykey [wait_for_enter 1]
-               }
-               ts_send $sp_id "$java_home\n"
-               continue
-            }
-         }         
-
-         -i $sp_id $JMX_ADD_JVM_ARGS {
-            ts_log_fine "\n -->testsuite: sending additional_jvm_args ><"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "\n"
-            continue
-         }
-
-         -i $sp_id $JMX_PORT_QUESTION {
-            ts_log_fine "\n -->testsuite: sending jmx port >$ts_config(jmx_port)<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "$ts_config(jmx_port)\n"
-            continue
-         }
-
-         -i $sp_id $JMX_SSL_QUESTION {
-            if { $ts_config(jmx_ssl) == "true" } {
-               set enable_jmx_ssl "$ANSWER_YES"
-            } else {
-               set enable_jmx_ssl "$ANSWER_NO"
-            }
-            ts_log_fine "\n -->testsuite: sending jmx ssl >${enable_jmx_ssl}<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "${enable_jmx_ssl}\n"
-            continue
-         }
-
-         -i $sp_id $JMX_SSL_CLIENT_QUESTION {
-            if { $ts_config(jmx_ssl_client) == "true" } {
-               set enable_jmx_ssl_client "$ANSWER_YES"
-            } else {
-               set enable_jmx_ssl_client "$ANSWER_NO"
-            }
-            ts_log_fine "\n -->testsuite: sending jmx ssl client >${enable_jmx_ssl_client}<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "${enable_jmx_ssl_client}\n"
-            continue
-         }
-
-         -i $sp_id $JMX_SSL_KEYSTORE_QUESTION {
-            ts_log_fine "\n -->testsuite: sending jmx ssl keystore >RETURN<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "\n"
-            continue
-         }
-
-         -i $sp_id $JMX_SSL_KEYSTORE_PW_QUESTION {
-            ts_log_fine "\n -->testsuite: sending jmx ssl keystore pw >$ts_config(jmx_ssl_keystore_pw)<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "$ts_config(jmx_ssl_keystore_pw)\n"
-            continue
-         }
-
-         -i $sp_id $JMX_PW_RETYPE {
-            ts_log_fine "\n -->testsuite: resending jmx ssl keystore pw >$ts_config(jmx_ssl_keystore_pw)<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "$ts_config(jmx_ssl_keystore_pw)\n"
-            continue
-         }
-
-         -i $sp_id $JMX_USE_DATA {
-            ts_log_fine "\n -->testsuite: sending answer >$ANSWER_YES<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "$ANSWER_YES\n"
-            continue
-         }
-
-         -i $sp_id $USE_EXISTING_JMX {
-            ts_log_fine "\n -->testsuite: sending >$ANSWER_NO<"
-            if {$do_log_output == 1} {
-                 puts "press RETURN"
-                 set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "$ANSWER_NO\n"
-            continue
-         }
-
          -i $sp_id $USE_EXISTING_SPOOLING {
             ts_log_fine "\n -->testsuite: sending >$ANSWER_NO<"
             if {$do_log_output == 1} {

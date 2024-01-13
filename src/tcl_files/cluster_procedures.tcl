@@ -350,7 +350,6 @@ proc get_all_reserved_ports { } {
    set portlist {}
    lappend portlist $ts_config(commd_port)
    lappend portlist $ts_config(reserved_port)
-   lappend portlist $ts_config(jmx_port)
    set execd_port $ts_config(commd_port)
    incr execd_port 1
    lappend portlist $execd_port
@@ -359,7 +358,6 @@ proc get_all_reserved_ports { } {
       foreach filename $ts_config(additional_config) {
          get_additional_config $filename add_config
          lappend portlist $add_config(commd_port)
-         lappend portlist $add_config(jmx_port)
          lappend portlist $add_config(reserved_port)
          set execd_port $add_config(commd_port)
          incr execd_port 1

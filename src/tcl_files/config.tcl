@@ -1714,7 +1714,7 @@ proc config_check_all_usages { check_list config_array type } {
          set arco_list "dbwriter_host"
       }
       "port" {
-         set main_list "commd_port jmx_port reserved_port"
+         set main_list "commd_port reserved_port"
          set arco_list ""
       }
       default { return }
@@ -2822,9 +2822,6 @@ proc config_commd_port { only_check name config_array } {
    } else {
       array set params { port_type even }
    }
-   if { [info exists config(jmx_port)] } { 
-      set params(exclude_list) $config(jmx_port)
-   }
 
    set value [config_generic $only_check $name config $help_text "port" 0 1 "" params]
    
@@ -3230,19 +3227,14 @@ proc config_qmaster_install_options { only_check name config_array } {
 
    set value [config_generic $only_check $name config $help_text "string" 1 0]
 
-   if { $value == -1 } { return -1 }
+   if {$value == -1} { 
+      return -1 
+   }
    
-   # -jmx must be set since 8.0.0 in order to activate the JMX dialog
-#   if { $value == "none" } {
-#      set value "-jmx"
-#   } else {
-#      append value "-jmx"
-#   }
-
    # set global values
    set CHECK_QMASTER_INSTALL_OPTIONS  $value
-   if { $value == "none"  } {
-      set CHECK_QMASTER_INSTALL_OPTIONS  ""
+   if {$value == "none"} {
+      set CHECK_QMASTER_INSTALL_OPTIONS ""
    }
 
    return $value
@@ -5267,13 +5259,25 @@ proc config_build_ts_config_1_21 {} {
 }
 
 # move positions of following parameters to make room for new param
-proc ts_config_move_params {insert_pos} {
+proc ts_config_move_down_params {insert_pos elements} {
    global ts_config
 
    set names [array names ts_config "*,pos"]
    foreach name $names {
       if {$ts_config($name) >= $insert_pos} {
-         set ts_config($name) [expr $ts_config($name) + 1]
+         set ts_config($name) [expr $ts_config($name) + $elements]
+      }
+   }
+}
+
+# move positions of following parameters to close gap of previous params
+proc ts_config_move_up_params {remove_pos elements} {
+   global ts_config
+
+   set names [array names ts_config "*,pos"]
+   foreach name $names {
+      if {$ts_config($name) > $remove_pos} {
+         set ts_config($name) [expr $ts_config($name) - $elements]
       }
    }
 }
@@ -5285,7 +5289,7 @@ proc config_build_ts_config_1_22 {} {
    set new_param "non_cluster_hosts"
    set insert_pos $ts_config(submit_only_hosts,pos)
    incr insert_pos 1
-   ts_config_move_params $insert_pos 
+   ts_config_move_down_params $insert_pos 1
    set ts_config($new_param)            ""
    set ts_config($new_param,desc)       "Non-cluster hosts"
    set ts_config($new_param,default)    "none" 
@@ -5297,7 +5301,7 @@ proc config_build_ts_config_1_22 {} {
    set new_param "admin_only_hosts"
    set insert_pos $ts_config(submit_only_hosts,pos)
    incr insert_pos 1
-   ts_config_move_params $insert_pos 
+   ts_config_move_down_params $insert_pos 1 
    set ts_config($new_param)            ""
    set ts_config($new_param,desc)       "Pure administration hosts"
    set ts_config($new_param,default)    "none" 
@@ -5309,13 +5313,53 @@ proc config_build_ts_config_1_22 {} {
    set ts_config(version) "1.22"
 }
 
+proc config_build_ts_config_1_23 {} {
+   global ts_config
+
+   # we remove jmx_port, jmx_ssl, jmx_ssl_client, jmx_ssl_keystore_pw
+   set remove_pos $ts_config(jmx_port,pos)
+
+   unset ts_config(jmx_port)
+   unset ts_config(jmx_port,desc)
+   unset ts_config(jmx_port,default)
+   unset ts_config(jmx_port,setup_func)
+   unset ts_config(jmx_port,onchange)
+   unset ts_config(jmx_port,pos)
+
+   unset ts_config(jmx_ssl)
+   unset ts_config(jmx_ssl,desc)
+   unset ts_config(jmx_ssl,default)
+   unset ts_config(jmx_ssl,setup_func)
+   unset ts_config(jmx_ssl,onchange)
+   unset ts_config(jmx_ssl,pos)
+
+   unset ts_config(jmx_ssl_client)
+   unset ts_config(jmx_ssl_client,desc)
+   unset ts_config(jmx_ssl_client,default)
+   unset ts_config(jmx_ssl_client,setup_func)
+   unset ts_config(jmx_ssl_client,onchange)
+   unset ts_config(jmx_ssl_client,pos)
+
+   unset ts_config(jmx_ssl_keystore_pw)
+   unset ts_config(jmx_ssl_keystore_pw,desc)
+   unset ts_config(jmx_ssl_keystore_pw,default)
+   unset ts_config(jmx_ssl_keystore_pw,setup_func)
+   unset ts_config(jmx_ssl_keystore_pw,onchange)
+   unset ts_config(jmx_ssl_keystore_pw,pos)
+
+   # move positions of following parameters up
+   ts_config_move_up_params $remove_pos 4 
+
+   # now we have a configuration version 1.23
+   set ts_config(version) "1.23"
+}
 
 ################################################################################
 #  MAIN                                                                        #
 ################################################################################
 
 global actual_ts_config_version      ;# actual config version number
-set actual_ts_config_version "1.22"
+set actual_ts_config_version "1.23"
 
 # first source of config.tcl: create ts_config
 if {![info exists ts_config]} {
@@ -5343,4 +5387,5 @@ if {![info exists ts_config]} {
    config_build_ts_config_1_20
    config_build_ts_config_1_21
    config_build_ts_config_1_22
+   config_build_ts_config_1_23
 }
