@@ -234,8 +234,6 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
    append auto_config_content "SCHEDD_CONF=\"1\"\n"
    append auto_config_content "SHADOW_HOST=\"$ts_config(shadowd_hosts)\"\n"
    append auto_config_content "REMOVE_RC=\"false\"\n"
-   append auto_config_content "WINDOWS_SUPPORT=\"false\"\n"
-   append auto_config_content "WIN_ADMIN_NAME=\"Administrator\"\n"
    append auto_config_content "CSP_RECREATE=\"true\"\n"
    append auto_config_content "CSP_COPY_CERTS=\"true\"\n"
    append auto_config_content "CSP_COUNTRY_CODE=\"DE\"\n"

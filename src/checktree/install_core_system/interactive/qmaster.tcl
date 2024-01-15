@@ -163,11 +163,6 @@ proc install_qmaster {{report_var report}} {
    set CSP_COPY_FAILED [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CSP_COPY_FAILED]]
    set CSP_COPY_RSH_FAILED [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CSP_COPY_RSH_FAILED]]
 
-   # windows
-   set WINDOWS_SUPPORT              [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_WINDOWS_SUPPORT]]
-   set WINDOWS_DOMAIN_USER          [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_QMASTER_WINDOWS_DOMAIN_USER]]
-   set WINDOWS_MANAGER              [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_QMASTER_WINDOWS_MANAGER]]
-
    set UNIQUE_CLUSTER_NAME          [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_UNIQUE_CLUSTER_NAME]]
    set DETECT_CHOOSE_NEW_NAME       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DETECT_CHOOSE_NEW_NAME]]
    set DETECT_REMOVE_OLD_CLUSTER    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DETECT_REMOVE_OLD_CLUSTER]]
@@ -470,25 +465,6 @@ proc install_qmaster {{report_var report}} {
 
          -i $sp_id $INSTALL_GE_NOT_AS_ROOT {
             install_send_answer $sp_id $ANSWER_NO "4"
-            continue
-         }
-
-         -i $sp_id $WINDOWS_SUPPORT {
-            if {$have_windows_host} {
-               install_send_answer $sp_id $ANSWER_YES "4"
-            } else {
-               install_send_answer $sp_id $ANSWER_NO "4"
-            }
-            continue
-         }
-
-         -i $sp_id $WINDOWS_DOMAIN_USER {
-            install_send_answer $sp_id $ANSWER_YES "4"
-            continue
-         }
-
-         -i $sp_id $WINDOWS_MANAGER {
-            install_send_answer $sp_id "" "4"
             continue
          }
 

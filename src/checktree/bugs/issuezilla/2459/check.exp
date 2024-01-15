@@ -171,12 +171,6 @@ proc issue_2459_parse_autoinstall {} {
          "*SCHEDD_CONF*" {
                set found_install_entries(SCHEDD_CONF) 1  
          }
-         "*WINDOWS_SUPPORT*" {
-               set found_install_entries(WINDOWS_SUPPORT) 1  
-         }
-         "*WIN_ADMIN_NAME*" {
-               set found_install_entries(WIN_ADMIN_NAME) 1  
-         }
          "*CSP_RECREATE*" {
                set found_install_entries(CSP_RECREATE) 1  
          }
@@ -326,7 +320,6 @@ proc issue_2459_write_autoinst_config {filename host {do_cleanup 1}} {
    puts $fdo "SCHEDD_CONF=\"5\""
    puts $fdo "SHADOW_HOST=\"\""
    puts $fdo "PAR_EXECD_INST_COUNT=\"nonumber\""
-   puts $fdo "WINDOWS_SUPPORT=\"fase\""
    if {$ts_config(gridengine_version) < 80} {
       puts $fdo "SERVICE_TAGS=\"ele\""
    }
@@ -408,8 +401,7 @@ proc init_found_install_entries {} {
    set found_install_entries(ADD_TO_RC) 0  
    set found_install_entries(SET_FILE_PERMS) 0  
    set found_install_entries(SCHEDD_CONF) 0  
-   set found_install_entries(WINDOWS_SUPPORT) 0  
-   set found_install_entries(CSP_RECREATE) 0  
+   set found_install_entries(CSP_RECREATE) 0
    set found_install_entries(CSP_COPY_CERTS) 0  
    set found_install_entries(CSP_COUNTRY_CODE) 0
    if {$ts_config(gridengine_version) < 80} {

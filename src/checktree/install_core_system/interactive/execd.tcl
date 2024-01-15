@@ -208,9 +208,6 @@ proc install_execd {{report_var report}} {
       set SMF_IMPORT_SERVICE           [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_SMF_IMPORT_SERVICE] ]
       set REMOVE_OLD_RC_SCRIPT         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_REMOVE_OLD_RC_SCRIPT] ]
 
-      # windows
-      set WINDOWS_HELPER_SERVICE       [translate_macro DISTINST_EXECD_WINDOWS_HELPER_SERVICE]
-      
       ts_log_fine "install_execd $CHECK_EXECD_INSTALL_OPTIONS $feature_install_options"
 
       if {$CHECK_ADMIN_USER_SYSTEM} {
@@ -492,11 +489,6 @@ proc install_execd {{report_var report}} {
             }
             -i $sp_id $HOSTNAME_KNOWN_AT_MASTER {
                install_send_answer $sp_id ""
-               continue
-            }
-
-            -i $sp_id $WINDOWS_HELPER_SERVICE {
-               install_send_answer $sp_id "" "4"
                continue
             }
 

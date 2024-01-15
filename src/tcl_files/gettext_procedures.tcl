@@ -1341,7 +1341,6 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_ENTER_SPOOL_DIR" { set value "Please enter a qmaster spool directory now! >>" }
       "DISTINST_ENTER_QMASTER_SPOOL_DIR" { set value "Enter a qmaster spool directory * >>" }
       "DISTINST_USING_GID_RANGE_HIT_RETURN" { set value "\nUsing >%s< as gid range. Hit <RETURN> to continue >> " }
-      "DISTINST_WINDOWS_SUPPORT" { set value "\nAre you going to install Windows Execution Hosts? (y/n) \[n\] >> " }
       "DISTINST_EXECD_INSTALL_COMPLETE" { set value "Your execution daemon installation is now completed." }
       "DISTINST_LOCAL_CONFIG_FOR_HOST" { set value "Local configuration for host >%s< created." }
       "DISTINST_CELL_NAME_FOR_QMASTER" { set value "\nGrid Engine supports multiple cells.\n\nIf you are not planning to run multiple Grid Engine clusters or if you don't\nknow yet what is a Grid Engine cell it is safe to keep the default cell name\n\n   default\n\nIf you want to install multiple cells you can enter a cell name now.\n\nThe environment variable\n\n   \\\$SGE_CELL=<your_cell_name>\n\nwill be set for all further Grid Engine commands.\n\nEnter cell name \[%s\] >> " }
@@ -1408,9 +1407,6 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_CSP_COPY_RSH_FAILED" { set value "Certificates couldn't be copied!"}
       "DISTINST_EXECD_UNINST_NO_ADMIN" { set value "This host is not an admin host. Uninstallation is not allowed\nfrom this host!" }
       "DISTINST_EXECD_UNINST_ERROR_CASE" { set value "Disabling queues now!" }
-      "DISTINST_QMASTER_WINDOWS_DOMAIN_USER" { set value "or are you going to use local Windows Users (answer: n) (y/n) \[y\] >> " }
-      "DISTINST_QMASTER_WINDOWS_MANAGER" { set value "Please, enter the Windows Administrator name \[Default: Administrator\] >> " }
-      "DISTINST_EXECD_WINDOWS_HELPER_SERVICE" { set value "Do you want to install the Windows Helper Service? (y/n) \[n\] >> " }
       "DISTINST_JAVA_HOME"  { set value "Please enter JAVA_HOME or press enter \[%s\] >> " }
       "DISTINST_JAVA_HOME_OR_NONE"  { set value "Enter JAVA_HOME (use \"none\" when none available) \[%s\] >> " }
       "DISTINST_ADD_JVM_ARGS"  { set value "Please enter additional JVM arguments (optional, default is \[%s\]) >> " }

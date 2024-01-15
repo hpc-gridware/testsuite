@@ -528,11 +528,6 @@ proc upgrade_test_upgrade_run_script { bckp_dir } {
    set ENTER_CA_ADMIN_EMAIL         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINT_ENTER_CA_ADMIN_EMAIL]]
    set CA_RECREATE                  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINT_CA_RECREATE]]
 
-   # windows
-   set WINDOWS_SUPPORT              [translate_macro DISTINST_WINDOWS_SUPPORT]
-   set WINDOWS_DOMAIN_USER          [translate_macro DISTINST_QMASTER_WINDOWS_DOMAIN_USER]
-   set WINDOWS_MANAGER              [translate_macro DISTINST_QMASTER_WINDOWS_MANAGER]
-
    # csp
    set CSP_COPY_CERTS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CSP_COPY_CERTS]]
    set CSP_COPY_CMD [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CSP_COPY_CMD]]
@@ -546,7 +541,6 @@ proc upgrade_test_upgrade_run_script { bckp_dir } {
    set COMMD_PORT_SETUP             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINT_UPGRADE_COMMD_PORT_SETUP] ]
    set IJS_SELECTION                [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINT_UPGRADE_IJS_SELECTION]]
    set NEXT_RANK_NUMBER             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINCT_UPGRADE_NEXT_RANK_NUMBER]]
-   set USE_EXISTING_JMX             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINCT_UPGRADE_USE_EXISTING_JMX]]
    set USE_EXISTING_SPOOLING        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINCT_UPGRADE_USE_EXISTING_SPOOLING]"*"]
 
 
@@ -818,42 +812,6 @@ proc upgrade_test_upgrade_run_script { bckp_dir } {
                set anykey [wait_for_enter 1]
             }
             ts_send $sp_id "$ts_config(cluster_name)\n"
-            continue
-         }
-
-         -i $sp_id $WINDOWS_SUPPORT {
-            if {$have_windows_host} {
-              set answer $ANSWER_YES
-            } else {
-              set answer $ANSWER_NO
-            }
-            ts_log_fine "\n -->testsuite: sending >$answer<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "$answer\n"
-            continue
-         }
-
-         -i $sp_id $WINDOWS_DOMAIN_USER {
-            set answer $ANSWER_YES
-            ts_log_fine "\n -->testsuite: sending >$answer<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "$answer\n"
-            continue
-         }
-
-         -i $sp_id $WINDOWS_MANAGER {
-            ts_log_fine "\n -->testsuite: sending >RETURN<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "\n"
             continue
          }
 

@@ -314,11 +314,7 @@ proc basic_test {report_var} {
       sge_qacct report
       sge_qsub_sync report
       sge_mod_queue report
-      if {[string first "win" $arch] == 0} {
-         sge_check_win_gui report
-      } else {
-         sge_qmon report
-      }
+      sge_qmon report
       sge_qsh report
       sge_qrsh report
       sge_qrsh_hostname report
