@@ -2340,15 +2340,15 @@ proc resolve_build_arch { host } {
      return $build_arch_cache($nr,$host)
   }
 
-  set result [start_remote_prog $host $CHECK_USER "./aimk" "-no-mk" prg_exit_state 60 0 $ts_config(source_dir) "" 1 0]
+  set result [start_remote_prog $host $CHECK_USER "scripts/compilearch" "-b" prg_exit_state 60 0 $ts_config(source_dir) "" 1 0]
  
   set result [split $result "\n"]
   set result [join $result ""]
   set result [split $result "\r"]
   set result [join $result ""]
 
-  if { $prg_exit_state != 0 } {
-     ts_log_severe "architecture not found or aimk not found in $ts_config(source_dir)"
+  if {$prg_exit_state != 0} {
+     ts_log_severe "architecture not found in $ts_config(source_dir): $result"
      return ""
   }
   set build_arch_cache($nr,$host) $result

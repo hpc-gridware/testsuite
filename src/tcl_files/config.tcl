@@ -2274,7 +2274,7 @@ proc config_source_dir { only_check name config_array } {
 
    set help_text { "Enter the full pathname of the Grid Engine source directory, or"
                    "press >RETURN< to use the default value."
-                   "The testsuite needs this directory to call aimk (to compile source code)"
+                   "The testsuite needs this directory to compile source code"
                    "and for resolving the host names (util scripts)." }
  
    if { $config($name,default) == "" } {
@@ -2291,8 +2291,9 @@ proc config_source_dir { only_check name config_array } {
       ts_log_fine "no source dir specified - running in limited test mode"
    } else {
       if {!$fast_setup} {
-         if { [ file isfile $value/aimk ] != 1 } {
-            puts "File \"$value/aimk\" not found"
+         if {![file isfile "$value/aimk"] && ![file isfile "$value/CMakeLists.txt"]} {
+            puts "$value is not a valid Grid Engine source directory"
+            puts "it needs to contain a build procedure, either aimk or CMakeLists.txt"
             return -1
          }
          set local_arch [ resolve_arch "none" 1 $value]

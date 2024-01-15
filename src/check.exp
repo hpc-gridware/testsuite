@@ -1745,7 +1745,9 @@ proc check_executable_files {  } {
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/qmaster/size/pminiworm.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/qmaster/size/flood_sleeper.sh"
    if {$ts_config(source_dir) != "none"} {
-      lappend filelist "$ts_config(source_dir)/aimk"
+      if {[file isfile "$ts_config(source_dir)/aimk"]} {
+         lappend filelist "$ts_config(source_dir)/aimk"
+      }
       lappend filelist "$ts_config(source_dir)/dist/examples/jobs/array_submitter.sh"
       lappend filelist "$ts_config(source_dir)/dist/examples/jobs/env-tester.csh"
       lappend filelist "$ts_config(source_dir)/dist/examples/jobs/jobnet_submitter.sh"
@@ -2486,7 +2488,6 @@ proc update_ts_config_version {} {
       config_build_ts_config_1_19
       show_config ts_config
       wait_for_enter
-      return 0
    }
 
    if {[string compare $ts_config(version) "1.19"] == 0} {
@@ -2494,7 +2495,6 @@ proc update_ts_config_version {} {
       config_build_ts_config_1_20
       show_config ts_config
       wait_for_enter
-      return 0
    }
 
    if {[string compare $ts_config(version) "1.20"] == 0} {
@@ -2502,7 +2502,6 @@ proc update_ts_config_version {} {
       config_build_ts_config_1_21
       show_config ts_config
       wait_for_enter
-      return 0
    }
 
    if {[string compare $ts_config(version) "1.21"] == 0} {
@@ -2510,7 +2509,6 @@ proc update_ts_config_version {} {
       config_build_ts_config_1_22
       show_config ts_config
       wait_for_enter
-      return 0
    }
 
    if {[string compare $ts_config(version) "1.22"] == 0} {
