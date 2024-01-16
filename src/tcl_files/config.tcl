@@ -3954,7 +3954,8 @@ proc config_testsuite_gridengine_version { only_check name config_array } {
 
    array set version_list {
       62 "SGE 6.2 systems"
-      80 "UGE 8.0.* systems (git master branch)"
+      80 "UGE 8.0.* systems"
+      90 "OGE 9.0.* systems"
    }
 
    return [config_generic $only_check $name config "" "choice" 0 1 version_list]
