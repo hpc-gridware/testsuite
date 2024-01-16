@@ -120,7 +120,6 @@ proc compile_host_list {} {
    # build host list according to cluster requirements
    set host_list [concat $ts_config(master_host) $ts_config(execd_hosts) \
                          $ts_config(shadowd_hosts) $submit_hosts \
-                         $ts_config(bdb_server) \
                          [checktree_get_required_hosts]]
 
    # for additional configurations, we might have different architectures
@@ -152,7 +151,7 @@ proc compile_host_list {} {
    # Add the java build host to the host list.
    set jc_host [host_conf_get_java_compile_host]
    if {$jc_host != ""} {
-      lappend host_list [host_conf_get_java_compile_host]
+      lappend host_list $jc_host
    }
 
    # remove duplicates from host_list
@@ -187,6 +186,14 @@ proc compile_host_list {} {
          ts_log_severe "the java compile host ($jc_host) has architecture $jc_arch\nbut compile host for architecture $jc_arch is $compile_host($jc_arch).\nJava and C compile must be done on the same host"
          return {}
       }
+   }
+
+   # Beginning with OGE 9.0.0 we build documentation (man pages and manuals) from markdown
+   # Add the doc compile host to the host list
+   # It can be one of the c/c++ compile hosts but can also be a separate host
+   set doc_host [host_conf_get_doc_compile_host]
+   if {$doc_host != "" && [lsearch -exact $compile_host(list) $doc_host] < 0} {
+      lappend compile_host(list) $doc_host
    }
 
    return [lsort -dictionary $compile_host(list)]
@@ -677,19 +684,24 @@ proc compile_source { { do_only_hooks 0} } {
    }
 
    # check if compile hosts are unique per arch
-   foreach elem $compile_arch_list {
-      set found 0
-      set hostarch ""
-      foreach host $compile_arch_list {
-         if {[string compare $host $elem] == 0}  {
-            incr found 1
-            set hostarch $host
+   # this can be the case in the cmake build where c/c++ build host can have the same architecture
+   # as an additional doc build host - this is handled in the cmake build
+   # do the check for uniqueness only for the aimk build (for old SGE/UGE versions)
+   if {$CHECK_COMPILE_TOOL == "aimk"} {
+      foreach elem $compile_arch_list {
+         set found 0
+         set hostarch ""
+         foreach host $compile_arch_list {
+            if {[string compare $host $elem] == 0}  {
+               incr found 1
+               set hostarch $host
+            }
          }
-      }
-      if {$found != 1} {
-         report_add_message report "two compile hosts have the same architecture -> error"
-         report_finish report -1
-         return -1
+         if {$found > 1} {
+            report_add_message report "two compile hosts have the same architecture $elem -> error"
+            report_finish report -1
+            return -1
+         }
       }
    }
 
@@ -1179,6 +1191,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
    # we do a 3rdparty build only when build directories had to be created
    # - on first build
    # - after clean
+   # @todo better check if tools are available and only build them if not (and this could be done in cmake itself)
    set build_3rdparty 0
    
    set error_count 0
@@ -1212,15 +1225,24 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
          set source_dir [file dirname $ts_config(source_dir)]
          set args "-S $source_dir"
          append args " -DCMAKE_INSTALL_PREFIX=$ts_config(product_root)"
-         append args " -DCMAKE_BUILD_TYPE=Debug" ;# @todo need command line option to distinguish dev and release build
-         append args " -DINSTALL_SGE_BIN=ON"
+
          if {$host == $preferred_host} {
             append args " -DINSTALL_SGE_COMMON=ON"
          } else {
             append args " -DINSTALL_SGE_COMMON=OFF"
          }
-         append args " -DINSTALL_SGE_DOC=OFF"    ;# @todo need doc compile host
-         append args " -DINSTALL_SGE_TEST=ON"
+         if {[host_conf_is_compile_host $host]} {
+            append args " -DINSTALL_SGE_BIN=ON"
+            append args " -DINSTALL_SGE_TEST=ON"
+         } else {
+            append args " -DINSTALL_SGE_BIN=OFF"
+            append args " -DINSTALL_SGE_TEST=OFF"
+         }
+         if {[host_conf_is_doc_compile_host $host]} {
+            append args " -DINSTALL_SGE_DOC=ON"
+         } else {
+            append args " -DINSTALL_SGE_DOC=OFF"
+         }
          append args " -DCMAKE_BUILD_TYPE=$CHECK_CMAKE_BUILD_TYPE"
          set options($host,args) $args
          set options($host,dir) [compile_source_cmake_get_build_dir $host]

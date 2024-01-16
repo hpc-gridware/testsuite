@@ -32,7 +32,7 @@
 
 global ts_host_config               ;# new testsuite host configuration array
 global actual_ts_host_config_version      ;# actual host config version number
-set    actual_ts_host_config_version "1.13"
+set    actual_ts_host_config_version "1.14"
 
 if {![info exists ts_host_config]} {
    # ts_host_config defaults
@@ -320,6 +320,9 @@ proc host_config_get_host_parameters { } {
    lappend params compile,62
    lappend params compile,80
    lappend params compile,90
+   lappend params doc_compile,62
+   lappend params doc_compile,80
+   lappend params doc_compile,90
    lappend params java_compile,62
    lappend params java_compile,80
    lappend params java_compile,90
@@ -358,8 +361,10 @@ proc host_config_display_host_params { host config_array } {
 
    puts "\n"
    foreach param "[host_config_get_host_parameters] host" {
-      if { [string length $param] > $max_length } { set max_length [string length $param] }
+      if {[string length $param] > $max_length} {
+         set max_length [string length $param]
       }
+   }
 
    puts "   host      [get_spaces [expr ( $max_length - [ string length host ] ) ]] : $host"
 
@@ -368,12 +373,23 @@ proc host_config_display_host_params { host config_array } {
 
    if {[host_conf_is_compile_host $host config]} {
       set value "compile host for \"$arch\" binaries ($ts_config(gridengine_version))"
-   } else { set value "not a compile host" }
+   } else {
+      set value "not a compile host"
+   }
    puts "   compile      [get_spaces [expr ( $max_length - [ string length compile ] ) ]] : $value"
 
-      if {[host_conf_is_java_compile_host $host config]} {
+   if {[host_conf_is_doc_compile_host $host config]} {
+      set value "compile host for documentation ($ts_config(gridengine_version))"
+   } else {
+      set value "not a doc compile host"
+   }
+   puts "   doc_compile      [get_spaces [expr ( $max_length - [ string length doc_compile ] ) ]] : $value"
+
+   if {[host_conf_is_java_compile_host $host config]} {
       set value "compile host for java ($ts_config(gridengine_version))"
-   } else { set value "not a java compile host" }
+   } else {
+      set value "not a java compile host"
+   }
    puts "   java_compile      [get_spaces [expr ( $max_length - [ string length java_compile ] ) ]] : $value"
 
    foreach param [host_config_get_host_parameters] {
@@ -428,6 +444,7 @@ proc config_display_hosts { host_list host_index {selected ""} {null_value "none
 
    array set archs { }
    set comp_c ""
+   set comp_doc ""
    set comp_java ""
    set max_length 0
    foreach host [lsort [array names hosts]] {
@@ -447,6 +464,8 @@ proc config_display_hosts { host_list host_index {selected ""} {null_value "none
             if {[string length $arch] > $max_arch_length} { set max_arch_length [string length $arch] }
          } elseif { [string compare $elem java] == 0 } {
             lappend comp_java $host
+         } elseif { [string compare $elem doc] == 0 } {
+            lappend comp_doc $host
          } elseif { [string compare $elem c] == 0 } {
             lappend comp_c "$arch|$host"
          } else { append usage "($elem)" }
@@ -461,10 +480,10 @@ proc config_display_hosts { host_list host_index {selected ""} {null_value "none
       }
    }
    set index 1
+   puts "doc compile host: $comp_doc\n"
    puts "java compile host: $comp_java\n"
    set gap 0
    foreach arch [lsort [array names archs]] {
- 
       if { [set ind [string first "," $arch]] >= 0 } {
          if { $disp_usage == 1 } {
             # display host usages in configuration
@@ -568,14 +587,15 @@ proc host_config_get_hostlist { config_array result_array { all 1 } } {
       set arch [host_conf_get_arch $host config]
       if { $all == 0 && [string compare "$arch" "unsupported"] == 0 } {
          continue 
-   }
+      }
       if {[host_conf_is_compile_host $host config]} { append arch "|c" }
+      if {[host_conf_is_doc_compile_host $host config]} { append arch "|doc" }
       if {[host_conf_is_java_compile_host $host config]} { append arch "|java" }
       set host_list($host) $arch
    }
 
    return [array names host_list]
-   }
+}
 
 #****** config_host/host_config_hostlist_get_architectures() *******************
 #  NAME
@@ -606,14 +626,14 @@ proc host_config_hostlist_get_architectures { config_array result_array } {
    foreach host $config(hostlist) {
       if {[host_conf_is_compile_host $host config]} {
          set arch [host_conf_get_arch $host config]
-         if { [string compare $arch "unsupported"] != 0 } {
+         if {[string compare $arch "unsupported"] != 0} {
             set arch_list($arch) "$host"
-            }
          }
       }
+   }
 
    return
-         }
+}
 
 #****** config_host/host_config_hostlist_add_host() ****************************
 #  NAME
@@ -824,6 +844,7 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
             set isdir 1 
          }
          "compile" -
+         "doc_compile" -
          "java_compile" { 
             set help_text ""
             lappend help_text "Use this host for $input of $ts_config(gridengine_version) version?"
@@ -1616,6 +1637,29 @@ wait_for_enter
          wait_for_enter
          return
       }
+      return
+   }
+
+   if {[string compare $ts_host_config(version)  "1.13"] == 0} {
+      puts "\ntestsuite host configuration update from 1.13 to 1.14 ..."
+
+      # introduce doc_compile host
+      foreach host $ts_host_config(hostlist) {
+         puts $host
+         set ts_host_config($host,doc_compile,62) 0
+         set ts_host_config($host,doc_compile,80) 0
+         set ts_host_config($host,doc_compile,90) 0
+      }
+
+      set ts_host_config(version) "1.14"
+
+      show_config ts_host_config
+      wait_for_enter
+      if {[save_host_configuration $filename] != 0} {
+         puts "Could not save host configuration"
+         wait_for_enter
+         return
+      }
       return 0
    }
 
@@ -2384,6 +2428,36 @@ proc host_conf_is_compile_host {host {config_var ""}} {
    return $ret
 }
 
+###
+# @brief is a given host a doc compile host?
+#
+# Returns if a given host is used as doc compile host.
+# The information is retrieved from the ts_host_config array,
+# unless another array is specified (e.g. during configuration).
+#
+# @param[in] host       - name of the host to check
+# @param[in] config_var - optional: name of a TCL array holdig a host configuration
+# @return 1, if it is a doc build host, else 0
+##
+proc host_conf_is_doc_compile_host {host {config_var ""}} {
+   global ts_config ts_host_config
+   
+   # we might work on a temporary config
+   if {$config_var == ""} { 
+      upvar 0 ts_host_config config
+   } else {
+      upvar 1 $config_var config
+   }
+
+   set ret 0
+
+   if {[info exists config($host,doc_compile,$ts_config(gridengine_version))]} {
+      set ret $config($host,doc_compile,$ts_config(gridengine_version))
+   }
+
+   return $ret
+}
+
 #****** config_host/host_conf_is_java_compile_host() ***************************
 #  NAME
 #     host_conf_is_java_compile_host() -- is a given host compile host for java?
@@ -2857,6 +2931,43 @@ proc host_conf_get_windows_exec_host {} {
    }
 
    return $ret
+}
+
+### 
+# @brief get doc compile host
+#
+# Returns the name of the doc host configured in the host config.
+# If no doc compile host is found, an error is raised and an empty string
+# is returned.
+#
+# @param[in] raise_error  - raise an error condition if no doc compile host is found, default: yes
+# @param[in] resolve_long - if 1 the the host name including the dns_domain is resolved
+# @return the host name of an empty string ("") if no doc compile host is configured
+##
+proc host_conf_get_doc_compile_host {{raise_error 1} {resolve_long 0}} {
+   global ts_config ts_host_config
+
+   set compile_host ""
+   foreach host $ts_host_config(hostlist) {
+      if {[host_conf_is_doc_compile_host $host]} {
+         set compile_host $host
+         break
+      }
+   }
+
+   if {$compile_host == ""} {
+      ts_log_config "didn't find doc compile host in host configuration"
+   } else {
+      if { $resolve_long != 0 } {
+         set short_compile_host [resolve_host $compile_host 0]
+         set compile_host [resolve_host "${short_compile_host}.$ts_config(dns_domain)" 1]
+      }
+      if {$compile_host == "unknown"} {
+         ts_log_severe "cannot get doc build host name"
+         set compile_host ""
+      }
+   }
+   return $compile_host
 }
 
 #****** config_host/host_conf_get_java_compile_host() **************************
