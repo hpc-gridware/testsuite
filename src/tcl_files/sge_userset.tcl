@@ -342,7 +342,7 @@ proc add_access_list { user_array list_name } {
 
   set result [start_sge_bin "qconf" "-au $arguments"]
 
-  set ADDED [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_GDI_ADDTOACL_SS ] $user_array $list_name]
+  set ADDED [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_ACL_ADDTOACL_SS ] $user_array $list_name]
   if { [string first "added" $result ] < 0 && [string first $ADDED $result ] < 0 } {
      ts_log_severe "could not add access_list $list_name"
      return -1
@@ -429,8 +429,8 @@ proc add_user_to_access_list { user_name list_name {on_host ""} {as_user ""} {ra
    set result [start_sge_bin "qconf" "-au $user_name $list_name" $on_host $as_user]
 
    set messages(index) "0 -1"
-   set messages(0) [translate_macro MSG_GDI_ADDTOACL_SS $user_name $list_name]
-   set messages(-1) [translate_macro MSG_GDI_USERINACL_SS $user_name $list_name]
+   set messages(0) [translate_macro MSG_ACL_ADDTOACL_SS $user_name $list_name]
+   set messages(-1) [translate_macro MSG_ACL_USERINACL_SS $user_name $list_name]
 
    set ret [handle_sge_errors "add_user_to_access_list" "-au $user_name $list_name" $result messages $raise_error]
 
@@ -581,16 +581,16 @@ proc get_userset_messages {msg_var action obj_attr {on_host ""} {as_user ""}} {
       }
       "add_user" {
          # aja: TODO: foreach user, foreach userset, build the expected. message
-         add_message_to_container messages 0 [translate_macro MSG_GDI_ADDTOACL_SS "*" "*"]
-         add_message_to_container messages -1 [translate_macro MSG_GDI_USERINACL_SS "*" "*"]
+         add_message_to_container messages 0 [translate_macro MSG_ACL_ADDTOACL_SS "*" "*"]
+         add_message_to_container messages -1 [translate_macro MSG_ACL_USERINACL_SS "*" "*"]
       }
       "del_user" {
          # aja: TODO: foreach user, foreach userset, build the expected. message
-         add_message_to_container messages 0 [translate_macro MSG_GDI_DELFROMACL_SS "*" "*"]
-         add_message_to_container messages -1 [translate_macro MSG_GDI_USERNOTINACL_SS "*" "*"]
-         #add_message_to_container messages -2 [translate_macro MSG_GDI_DELFROMACL_SS "*" "*"]
+         add_message_to_container messages 0 [translate_macro MSG_ACL_DELFROMACL_SS "*" "*"]
+         add_message_to_container messages -1 [translate_macro MSG_ACL_USERNOTINACL_SS "*" "*"]
+         #add_message_to_container messages -2 [translate_macro MSG_ACL_DELFROMACL_SS "*" "*"]
          add_message_to_container messages -3 [translate_macro MSG_PARSE_MOD3_REJECTED_DUE_TO_AR_SU "*" "*"]
-         add_message_to_container messages -4 [translate_macro MSG_GDI_ACLDOESNOTEXIST_S "*"] 
+         add_message_to_container messages -4 [translate_macro MSG_ACL_ACLDOESNOTEXIST_S "*"]
       }
    } 
 }

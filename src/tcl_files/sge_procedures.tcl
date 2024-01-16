@@ -4098,7 +4098,7 @@ proc mod_attr_error {result object attribute value target raise_error} {
 
    # recognize certain error messages and return special return code
    set messages(index) "-1 -2"
-   set messages(-1) [translate_macro MSG_PARSE_BAD_ATTR_ARGS_SS $attribute $value]
+   set messages(-1) [translate_macro MSG_QCONF_BAD_ATTR_ARGS_SS $attribute $value]
    set messages(-2) [translate_macro MSG_QCONF_CANTCHANGEOBJECTNAME_SS "qconf" $attribute]
 
    set ret 0
@@ -4237,7 +4237,7 @@ proc del_attr_error {result object attribute value target raise_error} {
 
    # recognize certain error messages and return special return code
    set messages(index) "-1"
-   set messages(-1) [translate_macro MSG_PARSE_BAD_ATTR_ARGS_SS $attribute $value]
+   set messages(-1) [translate_macro MSG_QCONF_BAD_ATTR_ARGS_SS $attribute $value]
 
    set ret 0
    # now evaluate return code and raise errors
@@ -4358,7 +4358,7 @@ proc add_attr_error {result object attribute value target raise_error} {
 
    # recognize certain error messages and return special return code
    set messages(index) "-1"
-   set messages(-1) [translate_macro MSG_PARSE_BAD_ATTR_ARGS_SS $attribute $value]
+   set messages(-1) [translate_macro MSG_QCONF_BAD_ATTR_ARGS_SS $attribute $value]
 
    set ret 0
    # now evaluate return code and raise errors
@@ -4479,7 +4479,7 @@ proc replace_attr_error {result object attribute value target raise_error} {
 
    # recognize certain error messages and return special return code
    set messages(index) "-1"
-   set messages(-1) [translate_macro MSG_PARSE_BAD_ATTR_ARGS_SS $attribute $value]
+   set messages(-1) [translate_macro MSG_QCONF_BAD_ATTR_ARGS_SS $attribute $value]
 
    set ret 0
    # now evaluate return code and raise errors

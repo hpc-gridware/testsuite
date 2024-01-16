@@ -1328,7 +1328,7 @@ proc purge_queue_error {result queue object raise_error} {
    set messages(-1) "*[translate_macro MSG_CQUEUE_DOESNOTEXIST_S $cqueue]"
 
    lappend messages(index) -2
-   set messages(-2) [translate_macro MSG_PARSE_ATTR_ARGS_NOT_FOUND $object $host_or_group]
+   set messages(-2) [translate_macro MSG_QCONF_ATTR_ARGS_NOT_FOUND $object $host_or_group]
 
    lappend messages(index) -3
    set messages(-3) [translate_macro MSG_QCONF_MODIFICATIONOFOBJECTNOTSUPPORTED_S]
@@ -1343,7 +1343,7 @@ proc purge_queue_error {result queue object raise_error} {
    set messages(-6) [translate_macro MSG_QCONF_MODIFICATIONOFHOSTNOTSUPPORTED_S "*"]
 
    lappend messages(index) -7
-   set messages(-7) "*[translate_macro MSG_PARSE_NOOPTIONARGPROVIDEDTOX_S "*"]*"
+   set messages(-7) "*[translate_macro MSG_QCONF_NOOPTIONARGPROVIDEDTOX_S "*"]*"
 
    # we might have version dependent, queue specific error messages
    get_clear_queue_error_vdep messages $queue
