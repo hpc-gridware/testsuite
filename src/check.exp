@@ -8164,6 +8164,7 @@ proc source_tcl_files {} {
    ts_source $libdir/parser
    ts_source $libdir/parser_xml
    ts_source $libdir/tcl_utils
+   ts_source $libdir/sge_ce
    ts_source $libdir/sge_config
    ts_source $libdir/sge_procedures
    ts_source $libdir/sge_job
