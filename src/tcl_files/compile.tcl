@@ -2440,6 +2440,11 @@ proc build_distribution {arch_list report_var} {
    append args " -basedir $ts_config(package_directory)"    ;# destination dir
    append args " -bin -common"                              ;# which packages
 
+   # if we built documentation then also create a doc package
+   if {[host_conf_get_doc_compile_host] != ""} {
+      append args " -doc"
+   }
+
    # add mk_dist options specific to additional checktrees
    for {set i 0} {$i < $ts_checktree(act_nr)} {incr i} {
       if {[info exists ts_checktree($i,mk_dist_options)]} {
