@@ -1,52 +1,44 @@
 proc ce_add {{change_array_name ""} {fast 1} {on_host ""} {as_user ""} {raise_error 1}} {
     upvar $change_array_name change_array
-    ce_get_messages messages "add" "$change_array(name)" $on_host $as_user $product
+    ce_get_messages messages "add" "$change_array(name)" $on_host $as_user
 
     # prepare command and options
-    if {$fast_add == 1} {
+    if {$fast == 1} {
         set option "-Ace"
     } else {
         set option "-ace $change_array(name)"
     }
-    set binary [get_conf_binary $product]
-
     if {$fast == 1} {
         # set defaults and overwrite some with values given by caller
         ce_set_defaults ce_array
         update_change_array ce_array change_array
 
         # create a temp-file with the centry
-        if {$on_host == ""} {
-            get_fastest_host_for_adding on_host 0 $product
-        }
-        set tmp_file [dump_array_to_tmpfile ce_array $local $on_host 0]
+        set tmp_file [dump_array_to_tmpfile ce_array]
 
         # trigger the change
-        set result [start_${product}_bin $binary "${option} ${tmp_file}" $on_host $as_user]
+        set result [start_sge_bin "qconf" "${option} ${tmp_file}" $on_host $as_user]
     } else {
         set vi_commands [build_vi_command change_array]
-        set result [start_vi_edit $binary $option $vi_commands messages $on_host $as_user]
+        set result [start_vi_edit "qconf" $option $vi_commands messages $on_host $as_user]
     }
 
     # evaluate message and return
-    return [handle_sge_errors "ce_add" "$binary $option" $result messages $raise_error ""]
+    return [handle_sge_errors "ce_add" "qconf $option" $result messages $raise_error ""]
 }
 
-proc ce_del {ce_name {on_host ""} {as_user ""} {raise_error 1} {product "sge"}} {
-    ce_get_messages messages "del" $ce_name $on_host $as_user $product
+proc ce_del {ce_name {on_host ""} {as_user ""} {raise_error 1}} {
+    ce_get_messages messages "del" $ce_name $on_host $as_user
 
     # trigger command
-    set binary [get_conf_binary $product]
-    set output [start_${product}_bin $binary "-dce $ce_name" $on_host $as_user]
+    set output [start_sge_bin "qconf" "-dce $ce_name" $on_host $as_user]
 
     # evaluate message and return
-    return [handle_sge_errors "ce_del" "$binary -dce $ce_name" $output messages $raise_error "" {} $product]
+    return [handle_sge_errors "ce_del" "qconf -dce $ce_name" $output messages $raise_error "" {}]
 }
 
 proc ce_exists {ce_name} {
     ce_get_list ce_list
-
-    puts "XXXX $ce_list XXXX"
 
     set ret [lsearch $ce_list $ce_name]
     if {$ret == -1} {
@@ -95,37 +87,33 @@ proc ce_mod {ce_array_name {fast 1} {on_host ""} {as_user ""} {raise_error 1}} {
     ce_get_messages messages "mod" "$ce_array(name)" $on_host $as_user
 
     # prepare command and options
-    if {$fast_add} {
+    if {$fast} {
         set option "-Mce"
     } else {
         set option "-mce"
     }
-    set binary [get_conf_binary $product]
 
     if {$fast} {
         # set defaults and overwrite some with values given by caller
-        ce_get "$ce_array(name)" old_ce_array "" "" 0 $product
+        ce_get "$ce_array(name)" old_ce_array "" "" 0
         if {![info exists old_ce_array]} {
             ce_set_defaults old_ce_array
         }
         update_change_array old_ce_array ce_array
 
         # create a temp-file with the centry
-        if {$on_host == ""} {
-            get_fastest_host_for_adding on_host 0 $product
-        }
-        set tmp_file [dump_array_to_tmpfile old_ce_array $local $on_host 0]
+        set tmp_file [dump_array_to_tmpfile old_ce_array]
 
         # trigger the change
-        set result [start_${product}_bin $binary "$option $tmp_file" $on_host $as_user]
+        set result [start_sge_bin "qconf" "$option $tmp_file" $on_host $as_user]
     } else {
         # trigger the change
         set vi_commands [build_vi_command ce_array]
-        set result [start_vi_edit $binary "$option $ce_array(name)" $vi_commands messages $on_host $as_user]
+        set result [start_vi_edit "qconf" "$option $ce_array(name)" $vi_commands messages $on_host $as_user]
     }
 
     # evaluate message and return
-    set ret [handle_sge_errors "ce_mod" "$binary $option $ce_array(name)" $result messages $raise_error ""]
+    set ret [handle_sge_errors "ce_mod" "qconf $option $ce_array(name)" $result messages $raise_error ""]
     return $ret
 }
 
