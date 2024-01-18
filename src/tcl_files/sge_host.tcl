@@ -733,14 +733,6 @@ proc host_get_suspended_states {host} {
    set arch [resolve_arch $host]
 
    switch -exact $arch {
-      "aix42" -
-      "aix43" -
-      "aix51" {
-         set states T
-      }
-      "darwin" -
-      "darwin-ppc" -
-      "darwin-x86" - 
       "darwin-x64" {
          set states ST
       }
@@ -776,14 +768,6 @@ proc host_get_running_states {host} {
    set arch [resolve_arch $host]
 
    switch -exact $arch {
-      "aix42" -
-      "aix43" -
-      "aix51" {
-         set states AWI
-      }
-      "darwin" -
-      "darwin-ppc" -
-      "darwin-x86" -
       "darwin-x64" {
          set states R
       }

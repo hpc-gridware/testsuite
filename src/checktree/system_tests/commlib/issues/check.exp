@@ -80,13 +80,7 @@ proc commlib_issues_run  {} {
  
    set execd_no 2
    set client_up_arch [resolve_build_arch $client_host]
-   while { [string match "*AIX*" $client_up_arch] || [string match "*IRIX*" $client_up_arch] } {
-      ts_log_fine "skipping aix/irix host because there may be a malloc() problem for this test"
-      set client_host [lindex $ts_config(execd_nodes) $execd_no]
-      set client_up_arch [resolve_build_arch $client_host]
-      incr execd_no 1
-   }
-   
+
    ts_log_fine "using server host $server_host"
    ts_log_fine "using client host $client_host"
 

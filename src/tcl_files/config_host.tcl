@@ -2317,12 +2317,6 @@ proc get_jvm_lib_path_for_host { host {java_version "1.5+"} } {
       "lx*-x86" {
          set jvm_lib_path $java_home/jre/lib/i386/server/libjvm.so
       }
-      "darwin-ppc" {
-         set jvm_lib_path $java_home/../Libraries/libjvm.dylib
-      }
-      "darwin-x86" {
-         set jvm_lib_path $java_home/../Libraries/libjvm.dylib
-      }
       "darwin-x64" {
          set jvm_lib_path $java_home/../Libraries/libjvm.dylib
       }
@@ -2666,23 +2660,7 @@ proc host_conf_53_arch {arch} {
       "lx*-sparc" { return "slinux" }
       "lx*-ia64" { return "ia64linux" }
       "lx*-amd64" { return "lx24-amd64" }
-      "irix65" { return "irix6" }
 
-      "osf4" -
-      "tru64" -
-      "irix6" -
-      "hp10" -
-      "hp11" -
-      "hp11-64" -
-      "aix42" -
-      "aix43" -
-      "aix51" -
-      "cray" -
-      "crayts" -
-      "craytsieee" -
-      "necsx4" -
-      "necsx5" -
-      "sx" -
       "darwin" -
       "fbsd-*" -
       "nbsd-*" {
@@ -2731,26 +2709,13 @@ proc host_conf_60_arch {arch} {
       "alinux" { return "lx24-alpha" }
       "slinux" { return "lx24-sparc" }
       "ia64linux" { return "lx24-ia64" }
-      "darwin-ppc" { return "darwin" }
 
       "sol-*" -
       "lx??-*" -
       "fbsd-*" -
       "nbsd-*" -
 
-      "tru64" -
-      "irix65" -
-      "hp11" -
-      "hp11-64" -
-      "aix43" -
-      "aix51" -
-      "cray" -
-      "crayts" -
-      "craytsieee" -
-      "craysmp" -
-      "sx" -
-      "darwin" -
-      "win32-*" {
+      "darwin" {
          return $arch
       }
    }
@@ -2792,31 +2757,12 @@ proc host_conf_61_arch {arch} {
       "solaris" { return "sol-sparc" }
       "solaris64" { return "sol-sparc64" }
       "solaris86" { return "sol-x86" }
-      "glinux" { return "lx24-x86" }
-      "alinux" { return "lx24-alpha" }
-      "slinux" { return "lx24-sparc" }
-      "ia64linux" { return "lx24-ia64" }
-
-      "darwin" { return "darwin-ppc" }
 
       "sol-*" -
       "lx??-*" -
       "fbsd-*" -
       "nbsd-*" -
-
-      "irix65" -
-      "hp11" -
-      "hp11-64" -
-      "aix51" -
-      "cray" -
-      "crayts" -
-      "craytsieee" -
-      "craysmp" -
-      "sx" -
-      "darwin-ppc" -
-      "darwin-x86" -
-      "darwin-x64" -
-      "win32-*" {
+      "darwin-x64" {
          return $arch
       }
    }
@@ -3133,19 +3079,8 @@ proc host_get_id_a_command {host} {
    set arch [resolve_arch $host]
 
    switch -exact $arch {
-      "aix42" -
-      "aix43" -
-      "aix51" -
-      "darwin" -
-      "darwin-ppc" -
-      "darwin-x86" -
       "darwin-x64" -
-      "hp11" -
-      "hp11-64" -
-      "nbsd-i386" -
-      "osf4" -
-      "tru64" -
-      "win32-x86" {
+      "nbsd-i386" {
          set ret "/usr/bin/id"
       }
       default {

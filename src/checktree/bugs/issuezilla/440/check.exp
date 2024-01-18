@@ -79,14 +79,7 @@ proc issue_440_setup {} {
    set issue_440_config(host_list) $ts_config(unique_arch_nodes)
 
    foreach host $issue_440_config(host_list) {
-      switch -exact [resolve_arch $host] {
-         irix65 {
-            set issue_440_MAX_KBYTE 10
-         }
-         default {
-            set issue_440_MAX_KBYTE 20
-         }
-      }
+      set issue_440_MAX_KBYTE 20
       ts_log_fine "$host: testing with MAX_KBYTE=$issue_440_MAX_KBYTE"
       set issue_440_config(max_kbyte,$host) $issue_440_MAX_KBYTE
    }

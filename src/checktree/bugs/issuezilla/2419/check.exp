@@ -81,7 +81,7 @@ proc issue_2419_setup {} {
    global issue_2419_backup issue_2419_hosts
 
    # our test host - exclude all archs where we don't get online usage
-   set excluded "aix43 hp11 hp11-64 win32-x86"
+   set excluded ""
    set issue_2419_hosts [host_conf_get_suited_hosts 1 "" "" $excluded]
 
    # we want to modify the global config - make a backup

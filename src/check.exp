@@ -7541,11 +7541,6 @@ proc menu {} {
             # architecture names using dist/util/arch script.
             set compiled_mail_architectures [compile_rebuild_arch_cache $compile_hosts arch_list]
 
-            # DG: if arch_list contains hp11-64 then we have
-            # an additional 32 bit architecture compiled on this host
-            # which  we have to install
-            set arch_list [add_32_bit_architecture_for_HP_64 $arch_list]
-
             if {[install_binaries $arch_list report] != 0} {
                report_add_message report "install_binaries failed\n"
                incr error_count 1
@@ -8092,19 +8087,8 @@ proc get_shared_lib_path { host name path } {
 proc get_shared_lib_path_variable_name { arch } {
    set name ""
    switch -exact $arch {
-      aix41 -
-      aix42 -
-      aix43 {
-         set name LIBPATH
-      }
-      hp10 -
-      hp11 {
-         set name SHLIB_PATH
-      }
       darwin -
-      darwin-x86 -
-      darwin-x64 -
-      darwin-ppc {
+      darwin-x64 {
          set name DYLD_LIBRARY_PATH
       }
       default {
@@ -8799,7 +8783,7 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "preferred_archs <archs> specify architectures, that shall be used whenever possible"
       puts "                      please use quotes, when specifying multiple architectures, e.g."
-      puts "                      preferred_archs sol-sparc64, or preferred_archs \"hp11 hp11-64\""
+      puts "                      preferred_archs sol-sparc64, or preferred_archs \"lx-amd64 lx-arm64\""
       puts ""
       puts "send_speed <value>    specify the used testsuite send speed. This value overwrites"
       puts "                      the settings from the host configurations. A send_speed value of"

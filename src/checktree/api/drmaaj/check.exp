@@ -727,12 +727,7 @@ proc is_32_bit_jvm {host jvm} {
 proc is_64_bit_OS {binary_arch} {
    # check if it is a 64 bit OS
    switch -- $binary_arch {
-      "hp11-64" -
       "lx-amd64" -
-      "lx24-amd64" -
-      "lx26-amd64" -
-      "lx-ia64" -
-      "lx24-ia64" -
       "sol-amd64" -
       "sol-sparc64" {
          return true
@@ -776,23 +771,8 @@ proc get_java_library_path {host binary_arch} {
 
    # set architecture string
    switch -- $binary_arch {
-      "hp11-64" {
-         set arch_dir "hp11"
-      }
       "lx-amd64" {
          set arch_dir "lx-x86"
-      }
-      "lx24-amd64" {
-         set arch_dir "lx24-x86"
-      }
-      "lx26-amd64" {
-         set arch_dir "lx26-x86"
-      }
-      "lx-ia64" {
-         set arch_dir "lx-x86"
-      }
-      "lx24-ia64" {
-         set arch_dir "lx24-x86"
       }
       "sol-amd64" {
          set arch_dir "sol-x86"

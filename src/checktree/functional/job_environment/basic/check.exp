@@ -118,7 +118,7 @@ proc job_environment_basic_setup {} {
    global job_environment_basic_config
 
    # we do qsh, this doesn't work on windows, and in our lab also not on hp
-   set job_environment_basic_exec_host [host_conf_get_suited_hosts 1 {sol-amd64 sol-sparc64 sol-x86 sol-sparc} {} {hp11 hp11-64 win32-x86} 1]
+   set job_environment_basic_exec_host [host_conf_get_suited_hosts 1 {sol-amd64 sol-sparc64 sol-x86 sol-sparc} {} {} 1]
    set job_environment_basic_queue [get_queue_instance "all.q" $job_environment_basic_exec_host]
 
    get_config job_environment_basic_config $job_environment_basic_exec_host

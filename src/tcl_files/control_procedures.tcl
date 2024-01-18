@@ -1490,8 +1490,7 @@ proc ps_grep { forwhat { host "local" } { variable ps_info } } {
 #       up the information into one resulting list
 #
 #     o this procedure should run on following platforms:
-#       solaris64, solaris, osf4, tru64, irix6, aix43, aix42, hp10, hp11, 
-#       hp11-64, glinux and alinux
+#       solaris64, solaris
 #
 #  BUGS
 #     ??? 
@@ -1574,109 +1573,6 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
          set nice_pos   -1
       }
  
-      "osf4" -
-      "tru64" { 
-         set myenvironment(COLUMNS) "500"
-         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-eo \"pid pgid ppid uid state stime vsz time args\"" prg_exit_state 60 0 "" myenvironment 1 0]
-         set index_names "   PID   PGID   PPID        UID {S   } {STIME   }   VSZ        TIME COMMAND"
-         set pid_pos     0
-         set gid_pos     1
-         set ppid_pos    2
-         set uid_pos     3
-         set state_pos   4
-         set stime_pos   5
-         set vsz_pos     6
-         set time_pos    7
-         set command_pos 8
-         set nice_pos    -1
-      }
-
-      "irix6" -
-      "irix65" { 
-         set myenvironment(COLUMNS) "500"
-         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-eo \"pid,pgid,ppid,uid=LONGUID,state,stime,vsz,time,nice,args\"" prg_exit_state 60 0 "" myenvironment 1 0]
-         set index_names "  PID  PGID  PPID LONGUID S    STIME {VSZ   }        TIME NICE COMMAND           "
-         set pid_pos     0
-         set gid_pos     1
-         set ppid_pos    2
-         set uid_pos     3
-         set state_pos   4
-         set stime_pos   5
-         set vsz_pos     6
-         set time_pos    7
-         set command_pos 8
-         set nice_pos    9
-      }
- 
-      "aix43" -
-      "aix51" {
-         set myenvironment(COLUMNS) "500"
-         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-eo \"pid pgid=BIG_AIX_PGID ppid=BIG_AIX_PPID uid=BIG_AIX_UID stat=AIXSTATE started vsz=BIG_AIX_VSZ time nice args\"" prg_exit_state 60 0 "" myenvironment 1 0]
-         set index_names "  PID BIG_AIX_PGID BIG_AIX_PPID BIG_AIX_UID AIXSTATE  STARTED BIG_AIX_VSZ        TIME NICE COMMAND"
-         set pid_pos     0
-         set gid_pos     1
-         set ppid_pos    2
-         set uid_pos     3
-         set state_pos   4
-         set stime_pos   5
-         set vsz_pos     6
-         set time_pos    7
-         set command_pos 9
-         set nice_pos    8
-      }
-      
-      "aix42"   {
-         set myenvironment(COLUMNS) "500"
-
-         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-eo \"pid pgid=BIG_AIX_PGID ppid=BIG_AIX_PPID uid=BIG_AIX_UID stat=AIXSTATE started vsz=BIG_AIX_VSZ time args\"" prg_exit_state 60 0 "" myenvironment 1 0 ]
-         set index_names "  PID BIG_AIX_PGID BIG_AIX_PPID BIG_AIX_UID AIXSTATE  STARTED BIG_AIX_VSZ        TIME COMMAND"
-         set pid_pos     0
-         set gid_pos     1
-         set ppid_pos    2
-         set uid_pos     3
-         set state_pos   4
-         set stime_pos   5
-         set vsz_pos     6
-         set time_pos    7
-         set command_pos 8
-         set nice_pos    -1
-      }
-
-      "hp10" {
-         set myenvironment(COLUMNS) "500"
-         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-efl" prg_exit_state 60 0 "" myenvironment 1 0]
-         set index_names "  F S      UID   PID  PPID  C PRI NI     ADDR   SZ    WCHAN    STIME {TTY   }    TIME COMD"
-         set pid_pos     3
-         set gid_pos     -1
-         set ppid_pos    4
-         set uid_pos     2
-         set state_pos   1
-         set stime_pos   11
-         set vsz_pos     -1
-         set time_pos    13
-         set command_pos 14
-         set nice_pos    -1
-      }
-
-      "hp11" -
-      "hp11-64" {
-         set myenvironment(COLUMNS) "500"
-         set myenvironment(UNIX95)  ""
-         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-eo \"pid pgid ppid uid state stime vsz time nice args\"" prg_exit_state 60 0 "" myenvironment 1 0]
-         set index_names "  PID        GID  PPID        UID S    STIME     VSZ     TIME NICE COMMAND"
-         set pid_pos     0
-         set gid_pos     1
-         set ppid_pos    2
-         set uid_pos     3
-         set state_pos   4
-         set stime_pos   5
-         set vsz_pos     6
-         set time_pos    7
-         set command_pos 9
-         set nice_pos    8
-      }
-
-      "glinux" -
       "lx2?-*" -
       "ulx24-*" -
       "lx-*" -
@@ -1696,7 +1592,6 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
          set nice_pos    8
       }
 
-      "alinux" -
       "lx22-alpha" -
       "lx24-alpha" {
          if { $additional_run == 0 } {
@@ -1733,22 +1628,6 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
             set command_pos 10
             set nice_pos    -1
          } 
-      }
-
-      "win32-x86" {
-         set myenvironment(COLUMS) "500"
-         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-efo pid,pgid,ppid,user,state,stime,vsz,time,nice,comm=\"COMMANDCOMMANDCOMMANDCOMMANDCOMMANDCOMMANDCOMMANDCOMMANDCOMMANDCOMMAND\"" prg_exit_state 60 0 "" myenvironment 1 0]
-         set index_names "   PID   PGID   PPID       USER STATE       STIME    VSZ     TIME NICE COMMANDCOMMANDCOMMANDCOMMANDCOMMANDCOMMANDCOMMANDCOMMANDCOMMANDCOMMAND"
-         set pid_pos     0
-         set gid_pos     1
-         set ppid_pos    2
-         set uid_pos     3
-         set state_pos   4
-         set stime_pos   5
-         set vsz_pos     6
-         set time_pos    7
-         set command_pos 9
-         set nice_pos    8
       }
 
       "nbsd-*" {
@@ -2146,7 +2025,7 @@ proc gethostname { { do_debug_puts 1} {source_dir_path ""} } {
 #     The installed arch script might return a different architecture than
 #     the source arch script, for example when a cluster was installed from
 #     Grid Engine packages <= 6.2u5, where we deliver lx-24-* packages also for
-#     Linux kernel 2.6 machines (lx26-*), or hp11 packages for hp11-64.
+#     Linux kernel 2.6 machines (lx26-*).
 #
 #  INPUTS
 #     {node "none"}     - return architecture of this host.
@@ -2460,15 +2339,8 @@ proc resolve_build_arch_installed_libs {host {raise_error 1}} {
 
    
 
-   # we need special handling for some architectures, e.g. HP11 64bit
+   # we need special handling for some architectures
    switch $build_arch {
-      "HP1164" {
-         set arch [resolve_arch $host]
-         if {$arch == "hp11" && [is_remote_path $host $CHECK_USER $ts_config(source_dir)/HP11]} {
-            ts_log_info "We are on hp11 64bit platform (build platform HP1164) with 32bit binaries installed.\nUsing hp11 (build platform HP11) test binaries" $raise_error
-            set build_arch "HP11"
-         }
-      }
       "LINUXAMD64_26" {
          set arch [resolve_arch $host]
          if {$arch == "lx24-amd64" && [is_remote_path $host $CHECK_USER $ts_config(source_dir)/LINUXAMD64_24]} {
@@ -2704,9 +2576,7 @@ proc operational_lock {operation_name {host ""} {lock_location "/tmp"}} {
       return -1
    }
 
-   # ls -crt behaves approximately the same on all platforms.  On HP-UX and
-   # IRIX, symbolic links are not included in the sorting, but since we're not
-   # using symbolic links, it shouldn't be an issue.
+   # ls -crt behaves approximately the same on all platforms.
    set output [start_remote_prog $local_host $CHECK_USER "ls" "-crt $all_locks | head -1" result]
 
    if {$result != 0} {

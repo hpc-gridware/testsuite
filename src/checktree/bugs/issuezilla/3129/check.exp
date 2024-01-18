@@ -111,8 +111,9 @@ proc get_exec_host_classic_spool_time {host} {
    global ts_config CHECK_USER
 
    # check the exec_host spool file on the master host
+   set fqdn_host [resolve_host $host 1]
    set spooldir [get_qmaster_spool_dir]
-   set spoolfile "$spooldir/exec_hosts/$host"
+   set spoolfile "$spooldir/exec_hosts/$fqdn_host"
    set time [remote_file_get_mtime $ts_config(master_host) $CHECK_USER $spoolfile]
 
    return $time

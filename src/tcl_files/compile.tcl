@@ -287,11 +287,6 @@ proc compile_unify_host_list {host_list} {
 proc compile_search_compile_host {arch} {
    global ts_host_config
    
-   # special case for HP11-64: it is now compile host for HP11
-   if { $arch == "hp11"} {
-      set arch "hp11-64"
-   }
-
    foreach host $ts_host_config(hostlist) {
       if {[host_conf_get_arch $host] == $arch && [host_conf_is_compile_host $host]} {
          return $host
@@ -1327,61 +1322,6 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
    clear_version_info
 
    return $error_count
-}
-
-#****** check/add_32_bit_architecture_for_HP_64() **************************************************
-#  NAME
-#    add_32_bit_architecture_for_HP_64() -- adds the hp11 host to the arch list 
-#
-#  SYNOPSIS
-#    add_32_bit_architecture_for_HP_64 { arch_list } 
-#
-#  FUNCTION
-#    HP11-64 hosts are building 32 bit binaries. These binaries must be 
-#    installed. Therefore we need to add the HP11 arch into the list. 
-#    This function adds the 32 bit HP11 arch to the list if and only if 
-#    we have an HP11-64 arch and not an HP11 arch inside. 
-#
-#  INPUTS
-#    arch_list --  list of architectures 
-#
-#  RESULT
-#    modified arch list which contains the HP11 32 bit arch 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************************************************************
-proc add_32_bit_architecture_for_HP_64 { arch_list } {
-   
-   set contains_hp11_64 0
-   set contains_hp11 0
-
-   # if $arch_list contains hp11-64 add hp11 because we have the 
-   # 32 bit binaries too
-
-   foreach arch $arch_list {
-      if { $arch == "hp11-64" } {
-         set contains_hp11_64 1   
-      }
-      if { $arch == "hp11" } {
-         set contains_hp11 1 
-      }
-   }
-
-   if { $contains_hp11_64 == 1 && $contains_hp11 == 0 } {
-      lappend arch_list "hp11"
-   }
-
-  return $arch_list  
 }
 
 #****** check/compile_with_aimk() **************************************************
@@ -2634,8 +2574,6 @@ proc install_binaries {arch_list a_report} {
       }
 
       # For SGE <= 6.2u5: copy source/dist/util/arch to $SGE_ROOT/util.
-      # When we compiled our own binaries (including non distributed architectures like
-      # lx26-x86 or hp11-64, source/dist/util/arch will give us the correct arch strings.
       if {$ts_config(gridengine_version) <= 62} {
          set arch_script_src "$ts_config(source_dir)/dist/util/arch"
          set arch_script_dst "$ts_config(product_root)/util/arch"

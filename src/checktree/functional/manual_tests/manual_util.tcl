@@ -936,11 +936,6 @@ proc sge_qsh {report_var} {
          set_config sge_conf
          unset sge_conf
       }
-      hp11 {
-         set sge_conf(xterm) "/usr/contrib/bin/X11/xterm"
-         set_config sge_conf $host
-         unset sge_conf
-      }
    }
    set job_id [submit_job "-- -bg red" 1 60 $host $CHECK_USER "" 1 "qsh"]
    if {$job_id > 0} {
@@ -1338,15 +1333,6 @@ proc sge_jdrmaa {report_var} {
    set java_path [get_java_home_for_host $host 1.5+ 0]
    if {"$java_path" == ""} {
       set java_path [get_java_home_for_host $host 1.4]
-   } else {
-      if {$host_arch == "aix51" || $host_arch == "irix65"} {
-         set java_path [get_java_home_for_host $host 1.4]
-      }
-   }
-   switch -exact $host_arch {
-      hp11-64 {
-         set env(SHLIB_PATH) "$ts_config(product_root)/lib/hp11"
-      }
    }
    set env(PATH) "$java_path/bin"
    set result [start_remote_prog $host $CHECK_USER $jdrmaa_bin "" prg_exit_state 900 0 "" env]
@@ -1722,18 +1708,7 @@ proc manual_arch32_mapping {arch} {
 
    set arch_32 ""
    switch -- $arch {
-      "hp11-64" {
-         set arch_32 "hp11"
-      }
-      "lx24-amd64" -
-      "lx24-ia64" {
-         set arch_32 "lx24-x86"
-      }
-      "lx26-amd64" {
-         set arch_32 "lx26-x86"
-      }
       "lx-amd64" -
-      "lx-ia64" {
          set arch_32 "lx-x86"
       }
       "sol-amd64" {
