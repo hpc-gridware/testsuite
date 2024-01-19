@@ -640,7 +640,7 @@ proc get_user_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
          add_message_to_container messages -7 [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "project" "*"]
       }
       "del" {
-         #define MSG_HGROUP_REFINCUSER_SS        _MESSAGE(33692, _("denied: following user mapping entries still reference "SFQ": "SFN))
+         #
       }
    } 
 }
