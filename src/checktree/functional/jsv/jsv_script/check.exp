@@ -736,6 +736,11 @@ proc jsv_script_start_begin_param_rejectwait_quit {} {
                lappend sequence_list 7
                exp_continue 
             }
+            -i $spawn_id -re "^PARAM l_hard b,a=true$jsv_enter2" {
+               # optional: local echo of send commands will not appear with Java JSV
+               lappend sequence_list 7
+               exp_continue
+            }
             -i $spawn_id -re "^RESULT STATE REJECT_WAIT .*$jsv_enter" {
                ts_send $spawn_id "QUIT\n"
                lappend sequence_list 9

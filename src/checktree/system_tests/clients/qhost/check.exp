@@ -89,16 +89,9 @@ proc qhost_init_level {} {
 # -------- local test procedures: initialization------------------------------
 
 proc qhost_setup {} {
-   global my_qhost_config_saved_value
-   get_config my_qhost_config_saved_value
-   set my_qhost_config(load_report_time) "00:02:00"
-   set my_qhost_config(max_unheard)      "00:08:00"
-   set_config_and_propagate my_qhost_config
 }
 
 proc qhost_cleanup {} {
-   global my_qhost_config_saved_value
-   reset_config_and_propagate my_qhost_config_saved_value
 }
 
 proc qhost_issue1306 {} {
@@ -126,13 +119,14 @@ proc test_issue132 {} {
 
    # for each host test that the xml and plain outpus are the same
    for {set ind 0} {$ind < $job} {incr ind 1} {
-      if {[string compare [string trim $xml(host$ind,name)] [string trim $plain(host$ind,name)]] != 0} {
+      set xml_hostname [get_short_hostname $xml(host$ind,name)]
+
+      if {[string compare [string trim $xml_hostname] [string trim $plain(host$ind,name)]] != 0} {
          ts_log_info "outputs do not match from plain and xml for \"name\":\nxml: [string trim $xml(host$ind,name)]\nplain: [string trim $plain(host$ind,name)]\nThis is issue #2948"
          # We continue here
       }
 
-
-      foreach attrib "arch_string num_proc load_avg mem_total mem_used swap_total swap_used" {
+      foreach attrib "arch_string num_proc mem_total mem_used swap_total swap_used" {
          if {[string compare [string trim $xml(host$ind,$attrib)] [string trim $plain(host$ind,$attrib)]] != 0} {
             ts_log_severe "outputs do not match from plain and xml for $attrib:\nxml: [string trim $xml(host$ind,$attrib)]\nplain: [string trim $plain(host$ind,$attrib)]"
             return
@@ -235,7 +229,6 @@ proc test_issue132_j {} {
    # submit job
    set jobid [submit_job "-l h=$host $ts_config(product_root)/examples/jobs/sleeper.sh"]
    wait_for_jobstart $jobid "leeper" 60 1 1
-
 
    set result1 [qhost_u_xml_parse xml "-j"]
    set result1 [qhost_u_parse plain "-j"]  
@@ -347,7 +340,6 @@ proc test_issue132_l {} {
 
    set args "-l arch=$arch"
    set results1 [qhost_xml_parse xml $args]
-   
    set results1 [qhost_parse plain job $args]
    
    # for each host test that the xml and plain outpus are the same

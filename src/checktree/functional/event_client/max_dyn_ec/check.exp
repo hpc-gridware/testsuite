@@ -37,6 +37,7 @@ set check_description(0)  "test setting of the maximum number of dynamic event c
 
 # define test's dependencies
 set check_needs           "init_core_system"
+set check_root_access_needs "yes"
 
 # setup and cleanup functions
 set check_setup_function max_dyn_ec_setup
