@@ -116,7 +116,7 @@ proc issue_2717 {} {
    # check if file schedd_runlog in <cellname>/common/ exists 
    if {[is_remote_file $ts_config(master_host) root $path_to_file]} {
       ts_log_fine "schedd_runlog file exists already." 
-      delete_remote_file $ts_config(master_host) root $path_to_file
+      delete_remote_file $ts_config(master_host) $CHECK_USER $path_to_file
    }
     
    # submit a sleeper 
