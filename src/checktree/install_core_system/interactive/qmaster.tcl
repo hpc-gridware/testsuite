@@ -764,7 +764,7 @@ proc install_qmaster {{report_var report}} {
             continue
          }
 
-         # This is for More license output on darwin and hp
+         # This is for More license output on darwin
          # with UGE the name of the license file got a .txt suffix
          -i $sp_id "LICENSE*" {
             set found_exotic_more 1

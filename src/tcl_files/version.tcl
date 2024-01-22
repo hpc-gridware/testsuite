@@ -184,7 +184,6 @@ proc get_version_info {{version_information_array_name ""}} {
       set qconf_bin $ts_config(product_root)/bin/$qconf_host_arch/qconf
 
       if {[file isfile $qconf_bin]} {
-         # We don't use start_sge_bin since we don't want to call this over JGDI
          set result [start_remote_prog $qconf_host $CHECK_USER $qconf_bin "-help" prg_exit_state 15 0 "" "" 1 1 0 1]
          set help [split $result "\n"]
          if {([string first "fopen" [ lindex $help 0]]        >= 0) ||
@@ -290,10 +289,4 @@ proc get_version_info {{version_information_array_name ""}} {
    }
 
    return $CHECK_PRODUCT_VERSION_NUMBER
-}
-
-
-# TODO (CR): We should remove this is_61AR function and make a ge_has_feature call out of it !!!
-proc is_61AR {} {
-   return 0
 }

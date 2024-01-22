@@ -94,6 +94,13 @@ proc install_execd {{report_var report}} {
 
    if {!$check_use_installed_system} {
       set feature_install_options ""
+      if {$ts_config(admin_only_hosts) != "none"} {
+         foreach elem $ts_config(admin_only_hosts) {
+            ts_log_fine "do a qconf -ah $elem ..."
+            set result [start_sge_bin "qconf" "-ah $elem" $ts_config(master_host)]
+            ts_log_fine $result
+         }
+      }
       if {$ts_config(submit_only_hosts) != "none"} {
          foreach elem $ts_config(submit_only_hosts) {
             ts_log_fine "do a qconf -as $elem ..."
@@ -104,6 +111,11 @@ proc install_execd {{report_var report}} {
       if {$ts_config(product_feature) == "csp" || $have_windows_host} {
          set feature_install_options "-csp"
          set my_csp_host_list $ts_config(execd_nodes)
+         if {$ts_config(admin_only_hosts) != "none"} {
+            foreach elem $ts_config(admin_only_hosts) {
+              lappend my_csp_host_list $elem
+            }
+         }
          if {$ts_config(submit_only_hosts) != "none"} {
             foreach elem $ts_config(submit_only_hosts) {
               lappend my_csp_host_list $elem

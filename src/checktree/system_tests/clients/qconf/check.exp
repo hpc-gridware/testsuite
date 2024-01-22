@@ -49,7 +49,7 @@ set check_init_level_procedure "qconf_init_level"
 
 # define test's name and run level descriptions
 set check_name            "qconf"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED JGDI"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_highest_level    0
 set check_description(0)  "test all qconf options (test not complete)"
 
@@ -83,66 +83,66 @@ lappend check_functions "qconf_sel"
 #lappend check_functions "qconf_Rattr_check"
 
 # Show options DONE
-lappend check_functions "qconf_scal_check"   	;# List calendars
-lappend check_functions "qconf_scall_check"	;# List all calalendars
-lappend check_functions "qconf_sconfl_check"	;# List all hosts with configurations
-lappend check_functions "qconf_sds_check"	;# List detached settings in the cluster  config
-append_check_and_exclude_in_jgdi "qconf_secl_check" "No event clients that JGDI returns is an unknown error"	;# List event client list
-lappend check_functions "qconf_sep_check"	;# List processors
-lappend check_functions "qconf_sm_check"	;# List  managers
-lappend check_functions "qconf_so_check"	;# List operators
-lappend check_functions "qconf_ss_check"	;# List submit hosts
-lappend check_functions "qconf_sss_check"	;# Show scheduler status
-lappend check_functions "qconf_sul_check"	;# Show user list
-lappend check_functions "qconf_sprjl_check"	;# Show project list
+lappend check_functions "qconf_scal_check"   ;# List calendars
+lappend check_functions "qconf_scall_check"	 ;# List all calalendars
+lappend check_functions "qconf_sconfl_check" ;# List all hosts with configurations
+lappend check_functions "qconf_sds_check"	 ;# List detached settings in the cluster  config
+lappend check_functions "qconf_secl_check" 	 ;# List event client list
+lappend check_functions "qconf_sep_check"	 ;# List processors
+lappend check_functions "qconf_sm_check"	 ;# List  managers
+lappend check_functions "qconf_so_check"	 ;# List operators
+lappend check_functions "qconf_ss_check"	 ;# List submit hosts
+lappend check_functions "qconf_sss_check"	 ;# Show scheduler status
+lappend check_functions "qconf_sul_check"	 ;# Show user list
+lappend check_functions "qconf_sprjl_check"	 ;# Show project list
 
 # New options, non-show DONE
-append_check_and_exclude_in_jgdi "qconf_add_delete_manager" "Options *q do not handle queue instances"	;# Add and delete manager users
-append_check_and_exclude_in_jgdi "qconf_add_show_mod_del_queue" "JGDI Shell can't handle queue instances (bug)" 	;# Add, show, modify and delete queue "qconf_queue.q"
-append_check_and_exclude_in_jgdi "qconf_add_show_delete_stnode" "Options *stnode not implemented" ;# Add, show and delete share tree nodes
-append_check_and_exclude_in_jgdi "qconf_create_modify_sharetree" "Options *stree not implemented" ;# create and modify a sharetree (qconf -Mstree)
-append_check_and_exclude_in_jgdi "qconf_del_sharetree" "Options *stree not implemented"           ;# delete the whole sharetree (qconf -dstree)
-append_check_and_exclude_in_jgdi "qconf_event_client" "-kec fails for all"	;# Create, show and delete event clients
-lappend check_functions "qconf_add_delete_modify_calendar"	;# Add, delete and modify calendar
-append_check_and_exclude_in_jgdi "qconf_add_delete_modify_replace_attr" "Options -Mattr/-sobjl not implemented" ;# Add, delete and modify attributes
-lappend check_functions "qconf_modify_checkpoint" ;# Create, modify and delete checkpoint
-lappend check_functions "qconf_add_project"        ;# qconf -aprj / qconf -Aprj
-lappend check_functions "qconf_modify_exechost"	;# Modify exec host
-lappend check_functions "qconf_modify_project";# Modify project
-lappend check_functions "qconf_modify_userlist";# Modify user list
-lappend check_functions "qconf_modify_sched_conf";# Modify scheduler config
+lappend check_functions "qconf_add_delete_manager" 	            ;# Add and delete manager users
+lappend check_functions "qconf_add_show_mod_del_queue" 	        ;# Add, show, modify and delete queue "qconf_queue.q"
+lappend check_functions "qconf_add_show_delete_stnode"          ;# Add, show and delete share tree nodes
+lappend check_functions "qconf_create_modify_sharetree"         ;# create and modify a sharetree (qconf -Mstree)
+lappend check_functions "qconf_del_sharetree"                   ;# delete the whole sharetree (qconf -dstree)
+lappend check_functions "qconf_event_client"                    ;# Create, show and delete event clients
+lappend check_functions "qconf_add_delete_modify_calendar"	    ;# Add, delete and modify calendar
+lappend check_functions "qconf_add_delete_modify_replace_attr"  ;# Add, delete and modify attributes
+lappend check_functions "qconf_modify_checkpoint"               ;# Create, modify and delete checkpoint
+lappend check_functions "qconf_add_project"                     ;# qconf -aprj / qconf -Aprj
+lappend check_functions "qconf_modify_exechost"	                ;# Modify exec host
+lappend check_functions "qconf_modify_project"                  ;# Modify project
+lappend check_functions "qconf_modify_userlist"                 ;# Modify user list
+lappend check_functions "qconf_modify_sched_conf"               ;# Modify scheduler config
 lappend check_functions "qconf_issue_2023"
-append_check_and_exclude_in_jgdi "qconf_brief_exercise" "Some issues like with -au";# check the output messages
+lappend check_functions "qconf_brief_exercise" ;# check the output messages
 
-append_check_and_exclude_in_jgdi "qconf_de_check" "Does not use start_sge_bin, so it never uses JGDI"
-append_check_and_exclude_in_jgdi "qconf_backslash_default_space_check" "Options a/rattr not implemented" ;# functions to call (in order)
-append_check_and_exclude_in_jgdi "qconf_backslash_default_comma_check" "Options a/rattr not implemented"
-append_check_and_exclude_in_jgdi "qconf_backslash_custom_space_check" "Options a/rattr not implemented"
-append_check_and_exclude_in_jgdi "qconf_backslash_custom_comma_check" "Options a/rattr not implemented"
-append_check_and_exclude_in_jgdi "qconf_backslash_space_output_check" "Options a/rattr not implemented"
-append_check_and_exclude_in_jgdi "qconf_backslash_comma_output_check" "Options a/rattr not implemented"
+lappend check_functions "qconf_de_check"
+lappend check_functions "qconf_backslash_default_space_check"  ;# functions to call (in order)
+lappend check_functions "qconf_backslash_default_comma_check"
+lappend check_functions "qconf_backslash_custom_space_check"
+lappend check_functions "qconf_backslash_custom_comma_check"
+lappend check_functions "qconf_backslash_space_output_check"
+lappend check_functions "qconf_backslash_comma_output_check"
 
-append_check_and_exclude_in_jgdi "qconf_issue1767"
-append_check_and_exclude_in_jgdi "qconf_shgrp_tree_check"	;# List tree like structure of hosts
-append_check_and_exclude_in_jgdi "qconf_shgrp_resolved_check"	;# List  hosts in a group
-append_check_and_exclude_in_jgdi "qconf_modify_hostgroup"
+lappend check_functions "qconf_issue1767"
+lappend check_functions "qconf_shgrp_tree_check"	    ;# List tree like structure of hosts
+lappend check_functions "qconf_shgrp_resolved_check"	;# List  hosts in a group
+lappend check_functions "qconf_modify_hostgroup"
 
-append_check_and_exclude_in_jgdi "qconf_purge_queue" "BROKEN -purge succeeds with invalid arg"
+lappend check_functions "qconf_purge_queue"
 
 
-append_check_and_exclude_in_jgdi "qconf_add_rqs" "RQS file format not completetly handled yet";           # add resource quota set
-append_check_and_exclude_in_jgdi "qconf_modify_rqs" "RQS file format not completetly handled yet";        # modify resource quota set
-append_check_and_exclude_in_jgdi "qconf_modifyreplace_rqs" "RQS file format not completetly handled yet"; # modify/replace resource quota set
-append_check_and_exclude_in_jgdi "qconf_remove_rqs" "RQS file format not completetly handled yet";        # delete resource quota set
-append_check_and_exclude_in_jgdi "qconf_dynamic_limit" "RQS file format not completetly handled yet";      # add a dynamic limit
-append_check_and_exclude_in_jgdi "qconf_rqs_Xattr" "RQS file format not completetly handled yet";          # resource quota set Xattr
-append_check_and_exclude_in_jgdi "qconf_rqs_rattr_qmaster_dump" "RQS file format not completetly handled yet"; # verify error handling
-append_check_and_exclude_in_jgdi "qconf_issue_2383" "-mc fails for maintrunk" ;# TS case for IZ 2383
-append_check_and_exclude_in_jgdi "qconf_issue_2445" "Test for IZ 2445" ; # TS case for IZ 2445
-append_check_and_exclude_in_jgdi "qconf_help" ; # TS case for qconf [-help] return values
-append_check_and_exclude_in_jgdi "qconf_Aconf" ; # TS case for qconf -Aconf with already existing configuration
-append_check_and_exclude_in_jgdi "qconf_delete_admin_user" ;# deleting manager or operator must fail for root and admin user
-append_check_and_exclude_in_jgdi "qconf_ke"	;# TS case for qconf -ke with already shutdown daemon
+lappend check_functions "qconf_add_rqs"                 ;# add resource quota set
+lappend check_functions "qconf_modify_rqs"              ;# modify resource quota set
+lappend check_functions "qconf_modifyreplace_rqs"       ;# modify/replace resource quota set
+lappend check_functions "qconf_remove_rqs"              ;# delete resource quota set
+lappend check_functions "qconf_dynamic_limit"           ;# add a dynamic limit
+lappend check_functions "qconf_rqs_Xattr"               ;# resource quota set Xattr
+lappend check_functions "qconf_rqs_rattr_qmaster_dump"  ;# verify error handling
+lappend check_functions "qconf_issue_2383"              ;# TS case for IZ 2383
+lappend check_functions "qconf_issue_2445"              ;# TS case for IZ 2445
+lappend check_functions "qconf_help"                    ;# TS case for qconf [-help] return values
+lappend check_functions "qconf_Aconf"                   ;# TS case for qconf -Aconf with already existing configuration
+lappend check_functions "qconf_delete_admin_user"       ;# deleting manager or operator must fail for root and admin user
+lappend check_functions "qconf_ke"	                    ;# TS case for qconf -ke with already shutdown daemon
 
 lappend check_functions "qconf_issue_2960"
 
@@ -162,7 +162,7 @@ proc qconf_setup {} {
    global ts_config CHECK_USER
    global qconf_original_host_groups qconf_original_usersets qconf_orig_queues qconf_project qconf_sched_config qconf_userlist
    global backup_allhosts
-   global queue_names CHECK_JGDI_ENABLED
+   global queue_names
    global qconf_setup_complex_backup
 
    if {[llength $ts_config(execd_nodes)] < 2} {
@@ -174,9 +174,6 @@ proc qconf_setup {} {
 
    set queue_names ""
    set MAX 1000
-   if {$CHECK_JGDI_ENABLED} {
-      set MAX 3
-   }
    for {set i 0} {$i < $MAX}  {incr i 1} {
       lappend queue_names "q.$i"
    }

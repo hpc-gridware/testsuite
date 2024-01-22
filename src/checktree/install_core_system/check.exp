@@ -42,7 +42,7 @@ global check_use_installed_system
 # This file shows some check specific things
 set check_root_access_needs  "yes"
 set check_name          "init_core_system"
-set check_category      "COMPATIBILITY SYSTEM L10N VERIFIED INSTALL JGDI USE_CLI"
+set check_category      "COMPATIBILITY SYSTEM L10N VERIFIED INSTALL USE_CLI"
 set check_description(0)   "install a default system (bdb_rpc/master/execution/shadow daemon on local host and start them up)"
 #set check_needs         "connection_test home_dirs check_user_permissions"
 set check_needs         ""

@@ -875,7 +875,7 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
 #*******************************************************************************
 proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} {user ""}} {
    #TODO: Should also return the exit_code of executed prog_binary and report it up
-   global CHECK_USER CHECK_DEBUG_LEVEL env CHECK_JGDI_ENABLED jgdi_config
+   global CHECK_USER CHECK_DEBUG_LEVEL env
    get_current_cluster_config_array ts_config
    upvar $msg_var messages
 
@@ -895,19 +895,7 @@ proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
    ts_log_finest "using EDITOR=$vi_env(EDITOR)"
    # start program (e.g. qconf)
 
-   if {$CHECK_JGDI_ENABLED == 1} {
-      if {[jgdi_shell_setup $host] == 0} {
-         set vi_env(JAVA_HOME) $jgdi_config(java15)
-         set java $vi_env(JAVA_HOME)/bin/java
-         set id [open_remote_spawn_process $host $user "$java" "$jgdi_config(classpath) $jgdi_config(flags) \
-           com/sun/grid/jgdi/util/JGDIShell -c $jgdi_config(connect_cmd) $prog_binary $prog_args" 0 "" vi_env]
-      } else {
-         ts_log_finest "Skipping test using JGDI shell, there is an error in setup."
-         return "JGDI shell setup failed."
-      }
-   } else {
-      set id [open_remote_spawn_process $host $user $binary "$prog_args" 0 "" vi_env]
-   }
+   set id [open_remote_spawn_process $host $user $binary "$prog_args" 0 "" vi_env]
 
    set sp_id [ lindex $id 1 ] 
    if {$CHECK_DEBUG_LEVEL != 0} {
@@ -1559,8 +1547,10 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
 
       "fbsd*" {
          set myenvironment(COLUMNS) "500"
-         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-eo \"pid pgid ppid uid state start vsz time args\"" prg_exit_state 60 0 "" myenvironment 1 0]
-         set index_names "  PID  PGID  PPID   UID STAT STARTED   VSZ      TIME COMMAND"
+         #set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-eo \"pid pgid ppid uid state start vsz time args\"" prg_exit_state 60 0 "" myenvironment 1 0]
+         #set index_names "  PID  PGID  PPID   UID STAT STARTED   VSZ      TIME COMMAND"
+         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-axww -o \"pid=_____pid\" -o \"pgid=_____pgid\" -o \"ppid=_____ppid\" -o \"uid=_____uid\" -o \"state=_____s\" -o \"start=_____stime\" -o \"vsz=_____vsz\" -o \"time=________time\" -o \"args=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
+         set index_names "_____pid _____pgid _____ppid _____uid _____s _____stime _____vsz ________time _____args"
          set pid_pos     0
          set gid_pos     1
          set ppid_pos    2

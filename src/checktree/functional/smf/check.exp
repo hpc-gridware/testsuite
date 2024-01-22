@@ -71,12 +71,6 @@ proc smf_init_level {} {
 }
 
 proc smf_setup {} {
-
-   if {[is_61AR]} {
-      ts_log_config "test is not working for 61AR"
-      return 99
-   }
-
    remove_smf_from_cluster
 }
 

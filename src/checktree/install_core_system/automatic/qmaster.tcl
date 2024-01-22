@@ -209,7 +209,11 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
       }
       append auto_config_content "EXECD_SPOOL_DIR_LOCAL=\"$spooldir\"\n"
    } else {
-      append auto_config_content "ADMIN_HOST_LIST=\"$ts_config(all_nodes)\"\n"
+      if {$ts_config(admin_only_hosts) != "none"} {
+         append auto_config_content "ADMIN_HOST_LIST=\"$ts_config(all_nodes) $ts_config(admin_only_hosts)\"\n"
+      } else {
+         append auto_config_content "ADMIN_HOST_LIST=\"$ts_config(all_nodes)\"\n"
+      }
       if {$ts_config(submit_only_hosts) != "none"} {
          append auto_config_content "SUBMIT_HOST_LIST=\"$ts_config(all_nodes) $ts_config(submit_only_hosts)\"\n"
       } else {

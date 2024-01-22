@@ -895,8 +895,7 @@ proc check_execd_messages { hostname { show_mode 0 } } {
 #*******************************************************************************
 proc start_sge_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {timeout 60} {cd_dir ""} {sub_path "bin"} {line_array output_lines} {env_list ""} } {
    global CHECK_USER
-   global CHECK_JGDI_ENABLED CHECK_DISPLAY_OUTPUT
-   global jgdi_config
+   global CHECK_DISPLAY_OUTPUT
    global check_category
 
    upvar $exit_var exit_state
@@ -935,35 +934,21 @@ proc start_sge_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {time
    }
 
    # We test only qconf and qstat for now
-   if { $USE_CLIENT != 1 && $CHECK_JGDI_ENABLED } {
-      if { ![info exists jgdi_config] } {
-         if {[jgdi_shell_setup $host] != 0} {
-            ts_log_finest "Skipping test using JGDI shell, there is an error in setup."
-            return "JGDI shell setup failed."
-         }
-      #Else we setup the jgdi_config for the host
-      } elseif { [setup_jgdi_config_for_host $host] != 0 } {
-         ts_log_finest "Skipping test using JGDI shell, there is an error in setup."
-         return "JGDI shell setup failed."
-      }
-      set result [run_jgdi_command_as_user $host "$bin $args" $jgdi_config(java15) $user exit_state]
-   } else {   
-      set arch [resolve_arch $host]
-      set ret 0
-      set binary "$ts_config(product_root)/$sub_path/$arch/$bin"
-      
-      if {[string compare $bin "qsh"] == 0 && [string compare $CHECK_DISPLAY_OUTPUT ""] != 0} {
-         #We should always use CHECK_DISPLAY_OUTPUT when available
-         ts_log_fine "setting DISPLAY=$CHECK_DISPLAY_OUTPUT"         
-         set envlist(DISPLAY) $CHECK_DISPLAY_OUTPUT
-      }
+   set arch [resolve_arch $host]
+   set ret 0
+   set binary "$ts_config(product_root)/$sub_path/$arch/$bin"
 
-      ts_log_finest "executing $binary $args\nas user $user on host $host"
-      # Add " around $args if there are more the 1 args....
-      set result [start_remote_prog $host $user $binary "$args" exit_state $timeout 0 $cd_dir envlist]
-      ts_log_finer "result:\n\"$result\""
+   if {[string compare $bin "qsh"] == 0 && [string compare $CHECK_DISPLAY_OUTPUT ""] != 0} {
+      #We should always use CHECK_DISPLAY_OUTPUT when available
+      ts_log_fine "setting DISPLAY=$CHECK_DISPLAY_OUTPUT"
+      set envlist(DISPLAY) $CHECK_DISPLAY_OUTPUT
    }
-   
+
+   ts_log_finest "executing $binary $args\nas user $user on host $host"
+   # Add " around $args if there are more the 1 args....
+   set result [start_remote_prog $host $user $binary "$args" exit_state $timeout 0 $cd_dir envlist]
+   ts_log_finer "result:\n\"$result\""
+
    if {[info exists line_buf]} {
       unset line_buf
    }

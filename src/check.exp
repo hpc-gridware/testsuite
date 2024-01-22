@@ -285,14 +285,6 @@ global CHECK_GROUP                 ;# group of user who start test
 global CHECK_ACT_LEVEL             ;# actual check level ( value from 0 up to xxx )
 global CHECK_CUR_PREPARATION_PROCEDURE
 set CHECK_CUR_PREPARATION_PROCEDURE ""
-global CHECK_SPOOL_DIR_CONFIG_FILE ;# file for local spooldirs in $CHECK_CONFIG_DIR path
-set CHECK_SPOOL_DIR_CONFIG_FILE "local-spool.conf"
-global CHECK_LOCAL_BINARY_DIR_CONFIG_FILE ;# file for local spooldirs in $CHECK_CONFIG_DIR path
-set CHECK_LOCAL_BINARY_DIR_CONFIG_FILE "local-bin.conf"
-global CHECK_BINARY_DIR_CONFIG_FILE ;# file for binary directories in $CHECK_CONFIG_DIR
-set CHECK_BINARY_DIR_CONFIG_FILE "binary-path.conf"
-global CHECK_LOADSENSOR_DIR_CONFIG_FILE ;# file for architecture specific loadsensor binaries in
-set CHECK_LOADSENSOR_DIR_CONFIG_FILE "loadsensor.conf" ;# $CHECK_CONFIG_DIR
 global CHECK_MAIL_OUTPUT_FILE
 set CHECK_MAIL_OUTPUT_FILE "all_test_mails.txt"
 
@@ -4645,9 +4637,6 @@ proc run_tests {path state_to_run} {
    # do send mail
    mail_report "$mail_subject" $mail_body
 
-   #And we send skipped test report as well (mostly just JGDI)
-   send_skipped_tests_mail
-
    set CHECK_TESTS_RUNNING 0
 }
 
@@ -4942,7 +4931,7 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
    global CHECK_CURRENT_WORKING_DIR check_init_level_procedure CHECK_ACT_LEVEL
    global errorInfo check_need_running_system
    global check_setup_level_function check_cleanup_level_function
-   global CHECK_JGDI_ENABLED check_category
+   global check_category
    global CHECK_INTERRUPT
    global CHECK_USE_HUDSON CHECK_HUDSON_OUTPUT CHECK_HUDSON_STACKTRACE
    global CHECK_DURATIONS
@@ -5472,7 +5461,6 @@ proc execute_test_preparation_procedure {func_name type {warning_counter ""}} {
 
    # execute the setup/cleanup function
    if {$ret == 1} {
-      #setup/cleanup are never executed over JGDI
       set old_category $check_category
       lappend check_category "USE_CLI"
 
@@ -5567,7 +5555,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    global CHECK_TEST_RUNNING
    global CHECK_INTERRUPT check_source_files
    global CHECK_USE_HUDSON
-   global exclude_array CHECK_JGDI_ENABLED
+   global exclude_array
 
    # check if the state_to_run is valid
    if {$state_to_run != "all" &&
@@ -5615,41 +5603,6 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    }
 
 
-   #We skip tests in JGDI  that do not have JGDI category set
-   if {$CHECK_JGDI_ENABLED} {
-      if { ![string match "*JGDI*" $check_category] } {
-         ts_log_finest "Check $check_name cannot be executed in JGDI mode - not a JGDI category"
-         #Mark as unsupported
-         save_result $path 0 0 "unsupported"
-         set CHECK_TEST_RUNNING 0
-         return -3
-      }
-
-      #If we have no checks left we exit
-      if {[llength $check_functions] == 0} {
-         ts_log_finest "Check $check_name cannot be executed in JGDI mode - no check functions specified"
-         #Mark as unsupported
-         save_result $path 0 0 "unsupported"
-         set CHECK_TEST_RUNNING 0
-         return -3
-      }
-   } else {
-     #We remove any JGDI related check from exclude_array
-     if { [info exists exclude_array] } {
-        foreach desc [array names exclude_array] {
-           if { [string match "JGDI*" $desc] } {
-              array unset exclude_array $desc
-           }
-        }
-     }
-     #If we are in JGDI only test (jgdi_shell_qconf or jgdi_junit) we exit
-     if {[string match "jgdi_*" $check_name]} {
-        #Mark as unsupported
-        save_result $path 0 0 "unsupported"
-        set CHECK_TEST_RUNNING 0
-        return -3
-     }
-   }
 
    if {[string compare $run_single_test "all"] != 0} {
       set do_only_one_test 1
@@ -6284,7 +6237,7 @@ proc select_runlevel {} {
 proc set_command_line_options {} {
      global CHECK_ENABLED_RUNLEVELS CHECK_ENABLED_CATEGORIES
      global CHECK_SGE_DEBUG_LEVEL check_use_installed_system
-     global master_debug schedd_debug CHECK_JGDI_ENABLED CHECK_DISPLAY_OUTPUT daemon_debug ts_config
+     global master_debug schedd_debug CHECK_DISPLAY_OUTPUT daemon_debug ts_config
      set data ""
      while { $data != 0 } {
         clear_screen
@@ -6306,12 +6259,6 @@ proc set_command_line_options {} {
            set sd_flag "on"
         }
 
-        if { $CHECK_JGDI_ENABLED == 1 } {
-           set jgdi_mode_flag "no_jgdi \[only_jgdi]"
-        } else {
-           set jgdi_mode_flag "\[no_jgdi] only_jgdi"
-        }
-
         if { $check_use_installed_system == 0 } {
            set re_init_flag "off"
         } else {
@@ -6322,7 +6269,6 @@ proc set_command_line_options {} {
         puts "(2) schedd_debug    : $sd_flag"
         puts "(3) SGE_DEBUG_LEVEL : $CHECK_SGE_DEBUG_LEVEL"
         puts "(5) re_init         : $re_init_flag"
-        puts "(6) jgdi_mode            : $jgdi_mode_flag"
 
         set data [wait_for_enter 1]
         if { $data <= 2 && $data > 0 } {
@@ -6375,13 +6321,6 @@ proc set_command_line_options {} {
                  set check_use_installed_system 1
               } else {
                  set check_use_installed_system 0
-              }
-           }
-           "6" {
-              if { $CHECK_JGDI_ENABLED == 1 } {
-                 set CHECK_JGDI_ENABLED 0
-              } else {
-                 set CHECK_JGDI_ENABLED 1
               }
            }
         }
@@ -7494,8 +7433,6 @@ proc menu {} {
             if {$localtest >= 0} {
                puts "running local test ..."
                run_test $CHECK_ACT_PATH "all"
-               # And we send skipped test report as well (mostly just JGDI)
-               send_skipped_tests_mail
                set CHECK_INTERRUPT 0
                wait_for_enter
             }
@@ -7508,8 +7445,6 @@ proc menu {} {
                   create_report ${CHECK_REPORT_FILE}.ok "completed" 
                   create_report ${CHECK_REPORT_FILE}.unsupported "unsupported"
                   create_report ${CHECK_REPORT_FILE}.failed "failed"
-                  # And we send skipped test report as well (mostly just JGDI)
-                  send_skipped_tests_mail
                }
                set CHECK_INTERRUPT 0
             }
@@ -8140,7 +8075,6 @@ proc source_tcl_files {} {
    ts_source $libdir/compile
    ts_source $libdir/file_procedures
    ts_source $libdir/gettext_procedures
-   ts_source $libdir/jgdi_shell
    ts_source $libdir/remote_procedures
    ts_source $libdir/control_procedures
    ts_source $libdir/cluster_procedures
@@ -8621,7 +8555,6 @@ set do_nomain         0
 set do_prog_start     0
 set do_only_reset_config 0
 set do_only_diff_macros  0
-set CHECK_JGDI_ENABLED   0
 set be_quiet          0
 set fast_setup        0
 set CHECK_CUR_PROC_NAME "main"
@@ -8793,10 +8726,6 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "                      about current remote script execution times."
       puts "                      If some hosts have unexpected connection errors the send_speed"
       puts "                      value can be used to prevent errors."
-      puts "no_jgdi               specify that only normal client tests should be executed (no JGDI)"
-      puts "                      Used by default. If encountered removes effect of only_jgdi flag."
-      puts "only_jgdi             specify that tests should be executed just over JGDI Shell. Ignored for SGE  < 6.2"
-      puts ""
       puts "testsuite_trash       When files shall be deleted, move them to the testsuite_trash directory,"
       puts "                      instead of deleting them."
       puts ""
@@ -9245,16 +9174,6 @@ for {set i 0} {$i < $argc} {incr i} {
          testsuite_shutdown 1
       }
       incr i
-      continue
-   }
-
-   if { ( [string compare [lindex $argv $i] "--no_jgdi"] == 0 ) || ([string compare [lindex $argv $i] "no_jgdi"] == 0 ) } {
-      set CHECK_JGDI_ENABLED 0
-      continue
-   }
-
-   if { ( [string compare [lindex $argv $i] "--only_jgdi"] == 0 ) || ([string compare [lindex $argv $i] "only_jgdi"] == 0 ) } {
-      set CHECK_JGDI_ENABLED 1
       continue
    }
 

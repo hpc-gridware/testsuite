@@ -66,6 +66,11 @@ proc home_dirs_test {} {
          lappend hostlist $host
       }
    }
+   if {[string compare $ts_config(admin_only_hosts) "none"] != 0} {
+      foreach host $ts_config(admin_only_hosts) {
+         lappend hostlist $host
+      }
+   }
    if {[string compare $ts_config(submit_only_hosts) "none"] != 0} {
       foreach host $ts_config(submit_only_hosts) {
          lappend hostlist $host

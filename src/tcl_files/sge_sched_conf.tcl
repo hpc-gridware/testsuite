@@ -237,11 +237,7 @@ proc set_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {ra
       set vi_commands [build_vi_command chgar]
       set CHANGED_SCHEDD_CONFIG [translate_macro MSG_SCHEDD_CHANGEDSCHEDULERCONFIGURATION ]
       set NOTULONG [translate_macro MSG_OBJECT_VALUENOTULONG_S "*" ]
-      if {[is_61AR]} {
-         set ADDNOTULONG "61AR branch does not have MSG_MUST_BE_POSITIVE_VALUE_S"
-      } else {
-         set ADDNOTULONG [translate_macro MSG_MUST_BE_POSITIVE_VALUE_S "*"]
-      }
+      set ADDNOTULONG [translate_macro MSG_MUST_BE_POSITIVE_VALUE_S "*"]
       set master_arch [resolve_arch $ts_config(master_host)]
       set result [handle_vi_edit "$ts_config(product_root)/bin/$master_arch/qconf" "-msconf" $vi_commands $CHANGED_SCHEDD_CONFIG $NOTULONG $ADDNOTULONG]
       if { $result == -1 } { 

@@ -110,6 +110,11 @@ proc issue_1802_cleanup  {} {
       }
 
       set my_csp_host_list $ts_config(execd_nodes)
+      if {$ts_config(admin_only_hosts) != "none"} {
+         foreach elem $ts_config(admin_only_hosts) {
+           lappend my_csp_host_list $elem
+         }
+      }
       if {$ts_config(submit_only_hosts) != "none"} {
          foreach elem $ts_config(submit_only_hosts) {
            lappend my_csp_host_list $elem

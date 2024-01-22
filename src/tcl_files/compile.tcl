@@ -713,10 +713,6 @@ proc compile_source { { do_only_hooks 0} } {
    # shutdown possibly running system (and additional config clusters)
    shutdown_core_system $do_only_hooks 1
 
-   # for building java code, we need a build_testsuite.properties file
-   # create it before update, clean, depend
-   compile_create_java_properties $compile_hosts
-
    if {$CHECK_COMPILE_TOOL == "aimk"} {
       incr error_count [compile_source_aimk $do_only_hooks $compile_hosts report]
    } else {
@@ -736,9 +732,6 @@ proc compile_source { { do_only_hooks 0} } {
          ts_log_fine "All compile hooks successfully executed\n"
       }
    }
-
-   # delete the build_testsuite.properties
-   compile_delete_java_properties
 
    # install
    if {$error_count == 0} {
@@ -1679,83 +1672,6 @@ proc delete_build_number_object {host build} {
       if {[file mtime $filename] < $midnight} {
          file delete $filename
       }
-   }
-}
-
-#****** compile/compile_create_java_properties() *******************************
-#  NAME
-#     compile_create_java_properties() -- create java properites file for 61 builds
-#
-#  SYNOPSIS
-#     compile_create_java_properties { compile_hosts } 
-#
-#  FUNCTION
-#     Create and check availablity of the properties file on the specified compile
-#     hosts.
-#     This is only needed with SGE >= 6.1 (where we build jgdi).
-#
-#  INPUTS
-#     compile_hosts - list of compile hosts
-#
-#*******************************************************************************
-proc compile_create_java_properties { compile_hosts } {
-   global CHECK_USER ts_config
-
-   set jc_host [host_conf_get_java_compile_host 0 1]
-   if {$jc_host == ""} {
-      # no java compile host - no need for properties file
-      return
-   }
-
-   if {$ts_config(source_dir) == "none"} {
-      ts_log_config "source directory is set to \"none\" - cannot create properties"
-      return 
-   }
-
-   set properties_file "$ts_config(source_dir)/build_testsuite.properties"
-   ts_log_fine "deleting $properties_file"
-   foreach host $compile_hosts {
-      delete_remote_file $host $CHECK_USER $properties_file
-   }
-
-   # store long resolved host name in properties file ...
-   ts_log_fine "creating $properties_file"
-   set f [open $properties_file "w"]
-   puts $f "java.buildhost=$jc_host"
-   close $f
-
-   foreach host $compile_hosts {
-      ts_log_fine "waiting for $properties_file on host $host ..."
-      wait_for_remote_file $host $CHECK_USER $properties_file
-   }
-}
-
-#****** compile/compile_delete_java_properties() *******************************
-#  NAME
-#     compile_delete_java_properties() -- delete testsuite properties file
-#
-#  SYNOPSIS
-#     compile_delete_java_properties { } 
-#
-#  FUNCTION
-#     Delete the generated testsuite properties file.
-#     This is only needed with SGE >= 6.1 (where we build jgdi).
-#
-#  INPUTS
-#
-#*******************************************************************************
-proc compile_delete_java_properties {} {
-   global ts_config
-
-   if {$ts_config(source_dir) == "none"} {
-      ts_log_config "source directory is set to \"none\" - cannot create properties"
-      return 
-   }
-
-   set properties_file "$ts_config(source_dir)/build_testsuite.properties"
-   if {[file isfile $properties_file]} {
-      ts_log_fine "deleting $properties_file"
-      file delete $properties_file
    }
 }
 

@@ -453,12 +453,7 @@ proc add_manager {manager {on_host ""} {as_user ""} {raise_error 1}} {
 #     sge_procedures/get_qconf_list()
 #*******************************************************************************
 proc del_manager {manager {on_host ""} {as_user ""} {raise_error 1}} {
-   global CHECK_JGDI_ENABLED
-   if {$CHECK_JGDI_ENABLED == 1} {
-      set raise_error 0
-   }
    return [get_qconf_list "del_manager" "-dm $manager" out $on_host $as_user $raise_error]
-
 }
 
 
