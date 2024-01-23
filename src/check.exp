@@ -477,37 +477,6 @@ set CHECK_COMPILE_TOOL "cmake"
 global CHECK_CMAKE_BUILD_TYPE
 set CHECK_CMAKE_BUILD_TYPE "Debug"
 
-#
-#                                                             max. column:     |
-#****** check/debug_puts() ******
-#  NAME
-#     debug_puts -- ???
-# 
-#  SYNOPSIS
-#     debug_puts { args }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     args - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
-#
 proc debug_puts {args} {
    global CHECK_DEBUG_LEVEL
 
@@ -1511,35 +1480,6 @@ proc get_testsuite_root_dir_from_file { filename } {
    return "testsuite_root_dir_not_found"
 }
 
-#                                                             max. column:     |
-#****** check/edit_defaults() ******
-#
-#  NAME
-#     edit_defaults -- ???
-#
-#  SYNOPSIS
-#     edit_defaults { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc edit_defaults {} {
   global CHECK_DEFAULTS_FILE CHECK_CONFIG_DIR
   global env
@@ -1614,37 +1554,6 @@ proc edit_defaults {} {
   return $return_value
 }
 
-#                                                             max. column:     |
-#****** check/calc_space() ******
-#
-#  NAME
-#     calc_space -- ???
-#
-#  SYNOPSIS
-#     calc_space { space name }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     space - ???
-#     name  - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc calc_space {space name} {
 
   set length [ string length $name ]
@@ -3414,38 +3323,6 @@ proc validate_needs {needs} {
    return -1
 }
 
-#                                                             max. column:     |
-#****** check/delete_result() ******
-#
-#  NAME
-#     delete_result -- ???
-#
-#  SYNOPSIS
-#     delete_result { path runtime level }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     path    - ???
-#     runtime - ???
-#     level   - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc delete_result {path runtime level} {
    save_result $path $runtime $level "uncompleted"
 }
@@ -3745,38 +3622,6 @@ proc get_checktree_levels { path } {
    return $levels
 }
 
-
-# get test result
-#                                                             max. column:     |
-#****** check/get_test_result() ******
-#
-#  NAME
-#     get_test_result -- ???
-#
-#  SYNOPSIS
-#     get_test_result { filename }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     filename - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc get_test_result {filename} {
    if {[file isfile $filename] != 1} {
       return {"file not found"}
@@ -3840,39 +3685,6 @@ proc create_report {file state} {
   puts "report was written to $file"
 }
 
-# formatted output
-#                                                             max. column:     |
-#****** check/format_output() ******
-#
-#  NAME
-#     format_output -- ???
-#
-#  SYNOPSIS
-#     format_output { prefix size text }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     prefix - ???
-#     size   - ???
-#     text   - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc format_output { prefix size text} {
 
   if {[string length $text] <= $size } {
@@ -3894,38 +3706,6 @@ proc format_output { prefix size text} {
 
 }
 
-# print results
-#                                                             max. column:     |
-#****** check/print_results() ******
-#
-#  NAME
-#     print_results -- ???
-#
-#  SYNOPSIS
-#     print_results { ckpath where }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     ckpath - ???
-#     where  - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc print_results {ckpath where} {
    global CHECK_ACT_PATH
    set numb_of_check_functions 0
@@ -4025,36 +3805,7 @@ proc print_results {ckpath where} {
    puts $where "\nTotal number of check functions in\n\"$ckpath\":\n$numb_of_check_functions\n"
    return $numb_of_check_functions
 }
-#                                                             max. column:     |
-#****** check/is_level_enabled() ******
-#
-#  NAME
-#     is_level_enabled -- ???
-#
-#  SYNOPSIS
-#     is_level_enabled { level_nr }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     level_nr - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
+
 proc is_level_enabled { level_nr } {
 
     global CHECK_ENABLED_RUNLEVELS
@@ -4360,21 +4111,6 @@ proc build_checks_to_do_list {list path state} {
 #     state_to_run - tests in this state are to be run. Allowed values are
 #                    "completed", "failed", "unsupported", "uncompleted"
 #                    and "all".
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
 #*******************************
 proc run_tests {path state_to_run} {
    global check_errstr CHECK_RESULT_DIRS
@@ -4702,35 +4438,6 @@ proc write_check_durations_spoolfile {durations_param} {
    spool_array_to_file $check_durations_spoolfile "durations" durations
 }
 
-#                                                             max. column:     |
-#****** check/lock_testsuite() ******
-#
-#  NAME
-#     lock_testsuite -- ???
-#
-#  SYNOPSIS
-#     lock_testsuite { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc lock_testsuite {} {
    global CHECK_USER
    global CHECK_MAIN_RESULTS_DIR
@@ -4836,35 +4543,6 @@ proc lock_testsuite {} {
     ts_log_finest "lock success!"
 }
 
-#                                                             max. column:     |
-#****** check/unlock_testsuite() ******
-#
-#  NAME
-#     unlock_testsuite -- ???
-#
-#  SYNOPSIS
-#     unlock_testsuite { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc unlock_testsuite {} {
     global CHECK_MAIN_RESULTS_DIR CHECK_TESTSUITE_LOCKFILE
 
@@ -4910,19 +4588,6 @@ proc unlock_testsuite {} {
 #     {do_save 1}  - ??? 
 #     {warnings 0}  - warnings count of setup function
 #
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
 #*******************************
 proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
    global check_needs CHECK_RESULT_DIRS check_name CHECK_ACTUAL_TEST_PATH
@@ -5232,36 +4897,7 @@ proc private_check_error_run_test_level { errorvar unsupvar } {
    }
    return $was_error
 }
-#                                                             max. column:     |
-#****** check/check_root_access() ******
-#
-#  NAME
-#     check_root_access -- ???
-#
-#  SYNOPSIS
-#     check_root_access { path }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     path - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
+
 proc check_root_access {path} {
   global check_root_access_needs
   global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
@@ -5526,20 +5162,6 @@ proc execute_test_preparation_procedure {func_name type {warning_counter ""}} {
 #     state_to_run            - "uncompleted", "failed", "unsupported", "completed" or "all"
 #     {run_single_test "all"} - ???
 #
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
 #*******************************
 proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } } {
    global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT check_needs CHECK_RESULT_DIRS
@@ -5986,35 +5608,6 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    }
 }
 
-#                                                             max. column:     |
-#****** check/clean_up_globals() ******
-#
-#  NAME
-#     clean_up_globals -- ???
-#
-#  SYNOPSIS
-#     clean_up_globals { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc clean_up_globals {} {
   global check_init_level_procedure check_name check_description check_highest_level
   global check_needs check_functions check_category
@@ -6035,38 +5628,6 @@ proc clean_up_globals {} {
   set check_highest_level 0        ;# here a check can define his check levels count 0 ...
 }
 
-# show test description
-#                                                             max. column:     |
-#****** check/show_test() ******
-#
-#  NAME
-#     show_test -- ???
-#
-#  SYNOPSIS
-#     show_test { path full }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     path - ???
-#     full - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc show_test {path full} {
   global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT check_needs check_highest_level
   global check_init_level_procedure CHECK_ACT_LEVEL check_category
@@ -6125,35 +5686,6 @@ proc show_test {path full} {
   }
 }
 
-#                                                             max. column:     |
-#****** check/select_runlevel() ******
-#
-#  NAME
-#     select_runlevel -- ???
-#
-#  SYNOPSIS
-#     select_runlevel { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc select_runlevel {} {
      global CHECK_ENABLED_RUNLEVELS CHECK_ENABLED_CATEGORIES
 
@@ -6414,37 +5946,6 @@ proc get_checktree_categories {path} {
 
 
 # show test descriptons (of all subtests)
-#                                                             max. column:     |
-#****** check/show_tests() ******
-#
-#  NAME
-#     show_tests -- ???
-#
-#  SYNOPSIS
-#     show_tests { path full }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     path - ???
-#     full - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc show_tests {path full} {
    global ts_checktree
 
@@ -6576,37 +6077,6 @@ proc change_dir { input } {
   wait_for_enter
 }
 
-
-#                                                             max. column:     |
-#****** check/get_run_level_name() ******
-#
-#  NAME
-#     get_run_level_name -- ???
-#
-#  SYNOPSIS
-#     get_run_level_name { level }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     level - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc get_run_level_name { level } {
   if {[string is integer $level]} {
      if { $level >= 400 } {
@@ -6656,36 +6126,6 @@ proc get_run_level_time { level } {
   return 0
 }
 
-
-#                                                             max. column:     |
-#****** check/clear_screen() ******
-#
-#  NAME
-#     clear_screen -- ???
-#
-#  SYNOPSIS
-#     clear_screen { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc clear_screen {} {
    global CHECK_DEBUG_LEVEL
    if { $CHECK_DEBUG_LEVEL == 0 } {
@@ -6696,35 +6136,6 @@ proc clear_screen {} {
    }
 }
 
-#                                                             max. column:     |
-#****** check/print_menu_header() ******
-#
-#  NAME
-#     print_menu_header -- ???
-#
-#  SYNOPSIS
-#     print_menu_header { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc print_menu_header {} {
   global CHECK_ACT_PATH CHECK_RESULT_DIRS
   global CHECK_USER CHECK_REPORT_FILE
@@ -6992,36 +6403,6 @@ proc testsuite_background_tasks {} {
    set next_testsuite_background_tasks_run [ expr ( [timestamp] + 30 ) ]
 }
 
-#                                                             max. column:     |
-#****** check/wait_for_start_time() ******
-#
-#  NAME
-#     wait_for_start_time -- ???
-#
-#  SYNOPSIS
-#     wait_for_start_time { substring }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     substring - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc wait_for_start_time { substring } {
    puts "wait for start time: \"$substring\""
    while { 1 } {
@@ -7036,35 +6417,6 @@ proc wait_for_start_time { substring } {
    puts ""
 }
 
-#                                                             max. column:     |
-#****** check/run_all_at_starttime() ******
-#
-#  NAME
-#     run_all_at_starttime -- ???
-#
-#  SYNOPSIS
-#     run_all_at_starttime { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc run_all_at_starttime {} {
    global CHECK_ACT_PATH CHECK_REPORT_FILE ts_config
 
@@ -7148,36 +6500,6 @@ proc do_wait { time } {
    }
 }
 
-#                                                             max. column:     |
-#****** check/get_user_input() ******
-#
-#  NAME
-#     get_user_input -- ???
-#
-#  SYNOPSIS
-#     get_user_input { what }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     what - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc get_user_input { what } {
    puts -nonewline $what
    flush stdout
@@ -7215,36 +6537,6 @@ proc restart_debug_daemons { { shutdown 0 } } {
    wait_for_load_from_all_queues 300
 }
 
-#                                                             max. column:     |
-#****** check/ask_user_yes_or_no() ******
-#
-#  NAME
-#     ask_user_yes_or_no -- ???
-#
-#  SYNOPSIS
-#     ask_user_yes_or_no { question }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     question - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc ask_user_yes_or_no { question } {
 
    puts -nonewline $question
@@ -7260,36 +6552,6 @@ proc ask_user_yes_or_no { question } {
    return 0
 }
 
-# select action
-#                                                             max. column:     |
-#****** check/menu() ******
-#
-#  NAME
-#     menu -- ???
-#
-#  SYNOPSIS
-#     menu { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc menu {} {
    global CHECK_ACT_PATH CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
    global CHECK_USER CHECK_REPORT_FILE

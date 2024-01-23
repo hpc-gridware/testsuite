@@ -52,18 +52,6 @@ global macro_messages_list
 #
 #  RESULT
 #     output to stdout:
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
 #*******************************
 proc test_file { me two} {
   ts_log_fine "printing \"$me\" \"$two\". host is [exec hostname]"

@@ -302,23 +302,6 @@ proc set_hosts_for_runlevel {} {
 #
 #  SYNOPSIS
 #     drmaa_check_single_threaded_part_01 { hostlist } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
 #*******************************************************************************
 proc drmaa_check_single_threaded_part_01 { } {
    global ts_config CHECK_ACT_LEVEL
@@ -344,23 +327,6 @@ proc drmaa_check_single_threaded_part_01 { } {
 #
 #  SYNOPSIS
 #     drmaa_check_single_threaded_part_02 { hostlist } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
 #*******************************************************************************
 proc drmaa_check_single_threaded_part_02 { } {
    global ts_config CHECK_USER level_host_list
@@ -409,20 +375,6 @@ proc drmaa_check_single_threaded_part_02 { } {
 #
 #  SYNOPSIS
 #     drmaa_check_single_threaded_part_03 { hostlist } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
 #*******************************************************************************
 proc drmaa_check_single_threaded_part_03 { } {
    global ts_config CHECK_USER level_host_list
@@ -480,20 +432,6 @@ proc drmaa_check_single_threaded_part_03 { } {
 #
 #  SYNOPSIS
 #     drmaa_check_single_threaded_part_04 { hostlist } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
 #*******************************************************************************
 proc drmaa_check_single_threaded_part_04 { } {
    global ts_config CHECK_USER level_host_list

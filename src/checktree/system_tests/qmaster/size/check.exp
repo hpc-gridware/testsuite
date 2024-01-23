@@ -185,35 +185,6 @@ proc qmaster_size_init_level {} {
    return -1
 }
 
-#                                                             max. column:     |
-#****** size/qmaster_size_setup() ******
-#
-#  NAME
-#     qmaster_size_setup -- ???
-#
-#  SYNOPSIS
-#     qmaster_size_setup { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qmaster_size_setup {} {
    global CHECK_USER
    global time_start MONITOR_SIZE_FILENAME
@@ -627,35 +598,6 @@ proc check_size_config {} {
    monitor_size [get_job_count] "set initial parameters"
 }
 
-#                                                             max. column:     |
-#****** size/check_size_config_zombies() ******
-#
-#  NAME
-#     check_size_config_zombies -- ???
-#
-#  SYNOPSIS
-#     check_size_config_zombies { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc check_size_config_zombies {} {
    global NUM_ZOMBIES
 
@@ -665,35 +607,6 @@ proc check_size_config_zombies {} {
    monitor_size [get_job_count] "set finished jobs to $NUM_ZOMBIES"
 }
 
-#                                                             max. column:     |
-#****** size/qmaster_size_cleanup() ******
-#
-#  NAME
-#     qmaster_size_cleanup -- ???
-#
-#  SYNOPSIS
-#     qmaster_size_cleanup { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qmaster_size_cleanup {} {
    global config_backup
 

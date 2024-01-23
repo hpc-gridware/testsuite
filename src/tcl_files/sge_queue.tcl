@@ -1270,6 +1270,8 @@ proc purge_queue {queue object {on_host ""} {as_user ""} {raise_error 1}} {
    set result [start_sge_bin "qconf" "-purge queue $object $queue" $on_host $as_user]
    set ret [purge_queue_error $result $queue $object $raise_error]
 
+   puts "### $ret ### $result"
+
    return $ret
 
 }

@@ -307,18 +307,6 @@ proc sqlutil_connect { sp_id { use_admin_db 0 } } {
 #  RESULT
 #     -1   -- error
 #     else -- return code of the command
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
 #*******************************************************************************
 proc sqlutil_exec { sp_id cmd { a_timeout 30 } } {
 

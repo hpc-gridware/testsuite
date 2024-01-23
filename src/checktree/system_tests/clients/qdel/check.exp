@@ -752,35 +752,6 @@ proc qdel_iz_125_case_5 {} {
    wait_for_end_of_all_jobs
 }
 
-#                                                             max. column:     |
-#****** qdel/qdel_delete_task_range() ******
-#
-#  NAME
-#     qdel_delete_task_range -- ???
-#
-#  SYNOPSIS
-#     qdel_delete_task_range { }
-#
-#  FUNCTION
-#     qdel a valid range of jobs
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qdel_delete_task_range {} {
    global ts_config CHECK_USER
 
@@ -819,25 +790,6 @@ proc qdel_delete_task_range {} {
 #  SYNOPSIS
 #     qdel_delete_job_0 { } 
 #
-#  FUNCTION
-#
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
 #*******************************
 proc qdel_delete_job_0 {} {
    global ts_config
@@ -864,25 +816,6 @@ proc qdel_delete_job_0 {} {
 #  SYNOPSIS
 #     qdel_help { } 
 #
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
 #*******************************
 proc qdel_help {} {
    global ts_config CHECK_PRODUCT_VERSION_NUMBER
@@ -1689,22 +1622,6 @@ proc qdel_force {} {
 #  FUNCTION
 #     qdel a valid range of jobs
 #
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     CR 6288953
-#
-#  SEE ALSO
-#     ???/???
 #*******************************
 proc qdel_delete_large_array {} {
    global ts_config

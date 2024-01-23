@@ -236,36 +236,6 @@ proc qstat_count_jobs {func_name qstat_options expected_jobs} {
    }
 }
 
-# here starts the test
-#                                                             max. column:     |
-#****** qstat/check_core_queues() ******
-# 
-#  NAME
-#     check_core_queues -- ??? 
-#
-#  SYNOPSIS
-#     check_core_queues { } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc check_core_queues {} {
   global ts_config CHECK_USER
 

@@ -213,7 +213,8 @@ proc submit_hosts_test {} {
       set job_id [submit_job $arguments 0 60 $submit_host $CHECK_USER "" 1 "qsub" 1 "" {-38}]
       if {$job_id != -202} {
          ts_log_severe "submitting on host $submit_host didn't fail with expected error message."
-      } 
+      }
+
       ts_log_fine "*** step 2 on $submit_host: qstat ***"
       set output [start_sge_bin "qstat" "-f" $submit_host $CHECK_USER]
       submit_hosts_permission_check "qstat" $submit_host $prg_exit_state $output

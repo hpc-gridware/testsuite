@@ -141,35 +141,6 @@ proc qrsh_cleanup {} {
 }
 
 # -------- check functions -----------------------------------------------------
-#                                                             max. column:     |
-#****** qrsh/qrsh_function() ******
-#
-#  NAME
-#     qrsh_function -- ???
-#
-#  SYNOPSIS
-#     qrsh_function { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qrsh_function {} {
    global ts_config CHECK_USER
    global qrsh_hostlist qrsh_submithost
@@ -566,35 +537,6 @@ proc qrsh_hold_jid {} {
    wait_for_end_of_all_jobs
 }
 
-#                                                             max. column:     |
-#****** qrsh/qrsh_alltoall() ******
-#
-#  NAME
-#     qrsh_alltoall -- ???
-#
-#  SYNOPSIS
-#     qrsh_alltoall { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qrsh_alltoall {} {
    global ts_config
    global CHECK_USER
@@ -682,35 +624,6 @@ proc qrsh_starter_method {} {
    mod_queue "all.q" "" change_array
 }
 
-#                                                             max. column:     |
-#****** qrsh/qrsh_accounting() ******
-#
-#  NAME
-#     qrsh_accounting -- ???
-#
-#  SYNOPSIS
-#     qrsh_accounting { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qrsh_accounting {} {
    global ts_config CHECK_PRODUCT_TYPE
    global CHECK_USER
@@ -825,35 +738,6 @@ proc qrsh_accounting {} {
    }
 }
 
-#                                                             max. column:     |
-#****** qrsh/qrsh_suspend() ******
-#
-#  NAME
-#     qrsh_suspend -- ???
-#
-#  SYNOPSIS
-#     qrsh_suspend { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qrsh_suspend {} {
    global ts_config
    global CHECK_USER
@@ -974,35 +858,6 @@ proc qrsh_suspend {} {
    wait_for_end_of_all_jobs
 }
 
-#                                                             max. column:     |
-#****** qrsh/qrsh_delete() ******
-#
-#  NAME
-#     qrsh_delete -- ???
-#
-#  SYNOPSIS
-#     qrsh_delete { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qrsh_delete {} {
    global ts_config CHECK_ACTUAL_TEST_PATH
    global CHECK_USER
@@ -1069,35 +924,6 @@ proc qrsh_delete {} {
    wait_for_end_of_all_jobs
 }
 
-#                                                             max. column:     |
-#****** qrsh/qrsh_terminate() ******
-#
-#  NAME
-#     qrsh_terminate -- ???
-#
-#  SYNOPSIS
-#     qrsh_terminate { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qrsh_terminate {} {
    global ts_config CHECK_USER CHECK_ACTUAL_TEST_PATH
    global qrsh_hostlist qrsh_submithost
@@ -1212,37 +1038,6 @@ proc qrsh_terminate {} {
    wait_for_end_of_all_jobs
 }
 
-#                                                             max. column:     |
-#****** qrsh/check_qsub_gid_output() ******
-#
-#  NAME
-#     check_qsub_gid_output -- ???
-#
-#  SYNOPSIS
-#     check_qsub_gid_output { output check_group }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     output      - ???
-#     check_group - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc check_qsub_gid_output {output check_group} {
    set substring [string range $output [string first "gid=" $output] end]
    set group [string trim [string range $substring [string first "(" $substring] [string first ")" $substring]] "()"]
@@ -1321,35 +1116,6 @@ proc qrsh_qsub_gid {} {
    wait_for_end_of_all_jobs
 }
 
-#                                                             max. column:     |
-#****** qrsh/qrsh_batch() ******
-#
-#  NAME
-#     qrsh_batch -- ???
-#
-#  SYNOPSIS
-#     qrsh_batch { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qrsh_batch {} {
    global ts_config
    global CHECK_USER
@@ -1493,35 +1259,6 @@ proc qrsh_batch {} {
    wait_for_end_of_all_jobs
 }
 
-#                                                             max. column:     |
-#****** qrsh/qrsh_limits() ******
-#
-#  NAME
-#     qrsh_limits -- ???
-#
-#  SYNOPSIS
-#     qrsh_limits { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qrsh_limits {} {
    global ts_config CHECK_ACTUAL_TEST_PATH CHECK_USER
    global qrsh_hostlist qrsh_submithost

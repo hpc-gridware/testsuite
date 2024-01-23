@@ -193,7 +193,7 @@ proc job_environment_enhanced_cleanup {} {
 proc job_environment_enhanced_INHERIT_ENV {} {
    global env job_environment_enhanced_exec_host
 
-   set args "-l h=$job_environment_enhanced_exec_host -o /dev/null -j yes"
+   set args "-l h=$job_environment_enhanced_exec_host -j yes"
 
    set errors ""
 

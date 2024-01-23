@@ -1828,35 +1828,6 @@ proc qalter_IZ_2972 {} {
    }
 }
 
-#                                                             max. column:     |
-#****** qalter/qalter_h() ******
-#
-#  NAME
-#     qalter_h -- test -h option for altering jobs' hold states
-#
-#  SYNOPSIS
-#     qalter_h { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     1434
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qalter_h {} {
    global ts_config submitresult
    global hold_job_D hold_job_U
@@ -1963,36 +1934,6 @@ proc qalter_h {} {
    }
 }
 
-
-#                                                             max. column:     |
-#****** qalter/qalter_t() ******
-#
-#  NAME
-#     qalter_w -- test -t option for altering array jobs
-#
-#  SYNOPSIS
-#     qalter_w { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qalter_t {} {
    global ts_config
    global submitresult

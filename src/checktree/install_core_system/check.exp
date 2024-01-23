@@ -150,35 +150,6 @@ proc install_wait_for_settings_file {} {
    }
 }
 
-#                                                             max. column:     |
-#****** install_core_system/read_install_list() ******
-#
-#  NAME
-#     read_install_list -- ???
-#
-#  SYNOPSIS
-#     read_install_list { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc read_install_list {} {
    global ts_config
    global CORE_INSTALLED
