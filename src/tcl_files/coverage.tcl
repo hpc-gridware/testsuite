@@ -788,8 +788,8 @@ proc tcov_recursive_coverage {node subdirs_var files_var result_var} {
    # recursively descend tree
    foreach dir $subdirs {
       if {[file tail $dir] != "CVS"} {
-         set directories [glob -directory $dir -nocomplain -types d -- *]
-         set sourcefiles [glob -directory $dir -nocomplain -types f -- *.c]
+         set directories [glob -directory $dir -nocomplain -types d *]
+         set sourcefiles [glob -directory $dir -nocomplain -types f *.c *.cc]
          tcov_recursive_coverage $dir directories sourcefiles result
 
          incr result($node,blocks) $result($dir,blocks)

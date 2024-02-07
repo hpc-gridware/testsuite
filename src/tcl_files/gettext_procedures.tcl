@@ -286,7 +286,7 @@ proc search_for_macros_in_c_source_code_files { file_list search_macro_list} {
 #     check_c_source_code_files_for_macros { }
 #
 #  FUNCTION
-#     This procedure tries to find all sge macros in the source code *.c files.
+#     This procedure tries to find all sge macros in the source code *.cc files.
 #     If not all macros are found, an error message is generated.
 #
 #  NOTES
@@ -306,7 +306,7 @@ proc check_c_source_code_files_for_macros {} {
    }
 
    if {$ts_config(source_dir) == "none"} {
-      ts_log_severe "source directory is set to \"none\" - cannot parse c code"
+      ts_log_severe "source directory is set to \"none\" - cannot parse c++ code"
       return
    }
 
@@ -316,6 +316,7 @@ proc check_c_source_code_files_for_macros {} {
    set dirs [get_all_subdirectories $ts_config(source_dir) ]
    foreach dir $dirs {
       set files [get_file_names $ts_config(source_dir)/$dir "*.c"]
+      set files [concat $files [get_file_names $ts_config(source_dir)/$dir "*.cc"]]
       foreach file $files {
          if { [string first "qmon" $file] >= 0 } {
             lappend second_run_files $ts_config(source_dir)/$dir/$file
