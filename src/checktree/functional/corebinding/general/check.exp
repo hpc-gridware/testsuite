@@ -42,8 +42,6 @@ global check_highest_level
 global check_init_level_procedure
 global check_root_access_needs
 
-# set check_root_access_needs "yes"
-
 # define a level initialization procedure:
 set check_init_level_procedure   "core_binding_basic_init_level"
 
@@ -69,9 +67,7 @@ proc core_binding_basic_init_level {} {
    global CHECK_ACT_LEVEL
 
    switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
+      0 { return 0 }
    }
 
    return -1  ;# no other level else
@@ -180,15 +176,15 @@ proc core_binding_basic {} {
      ts_log_fine "---> do positive testing <---"
      ts_log_fine "-----------------------------"
 
-      core_binding_basic_set $host
+     core_binding_basic_set $host
 
-      if { $runs == 0 } {
-         # just test it one time
-         ts_log_fine "-----------------------------"
-         ts_log_fine "--> project spooling bug  <--"
-         ts_log_fine "-----------------------------"
-         project_spooling_bug $host
-      }
+     if { $runs == 0 } {
+        # just test it one time
+        ts_log_fine "-----------------------------"
+        ts_log_fine "--> project spooling bug  <--"
+        ts_log_fine "-----------------------------"
+        project_spooling_bug $host
+     }
 
       incr runs
 
@@ -637,7 +633,7 @@ proc is_known_host { host } {
    ts_log_fine "host $host has core per socket [get_cores_per_socket $host]"  
 
    # do test only linux hosts because of race conditions
-   if { [get_architecture $host] != "linux" } {
+   if {[get_architecture $host] != "linux"} {
       return 0
    }
 
@@ -660,20 +656,27 @@ proc is_known_host { host } {
 #     host - Supported hostname to check architecture 
 #
 #  RESULT
-#     A string which contains either "linux" or "solaris" 
-#
+#     A string which contains the OS name, currently either "linux" or "solaris" 
+#     or "unsupported-<arch> for other platforms
 #*******************************************************************************
-proc get_architecture { host } {
-   # resolve_arch 
+proc get_architecture {host} {
+   # resolve_arch
    set arch [resolve_arch $host] 
-
    ts_log_fine "ARCH of supported host is: $arch"
 
-   if {[string first "lx" $arch] != -1} {
-      return "linux"
+   switch -glob $arch {
+      "lx-*" {
+         set ret "linux"
+      }
+      "sol-*" {
+         set ret "solaris"
+      }
+      default {
+         set ret "unknown-$arch"
+      }
    }
-      
-   return "solaris"
+
+   return $ret
 }
 
 #****** check.62/get_amount_of_cores() *****************************************
@@ -723,7 +726,7 @@ proc get_amount_of_cores { host } {
    
    # because when it is a Solaris host we need to decrement the amount 
    # because of Solaris Processor Sets feature (needs a free remaining core)
-   if { [get_architecture $host] == "solaris" } {
+   if {[get_architecture $host] == "solaris"} {
       incr amount -1      
    }
  
@@ -1055,7 +1058,7 @@ proc check_binding { host jobid { amount 1 } { threads_per_core 1 } { stepsize 0
       return
    }
 
-   if { [get_architecture $host] == "linux" } {
+   if {[get_architecture $host] == "linux"} {
       check_binding_linux $host $jobid $amount $threads_per_core $stepsize $startingpoint $type
    } else {
       # it must be solaris 
