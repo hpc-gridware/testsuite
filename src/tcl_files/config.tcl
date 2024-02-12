@@ -603,7 +603,7 @@ proc modify_setup2 {} {
       set numSetups 4
    }
 
-   for {set i 0} { $i < $ts_checktree(act_nr)} {incr i 1 } {
+   for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,setup_hooks_${ii}_name)]} {incr ii 1} {
          incr numSetups 1
          ts_log_fine "found setup hook $ts_checktree($i,setup_hooks_${ii}_name)"

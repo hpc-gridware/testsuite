@@ -359,7 +359,7 @@ proc check_c_source_code_files_for_macros {} {
 
    if { [llength $search_list ] > 0 } {
       set full_answer ""
-      append full_answer "following macros seems not to be used in source code:\n"
+      append full_answer "following macros seem not to be used in source code:\n"
       append full_answer "$ts_config(source_dir)\n\n"
       append full_answer "---------------------------------------------------------------\n"
       append full_answer $answer

@@ -37,19 +37,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 
 set check_root_access_needs "yes"
 
-# define a level initialization procedure:
-set check_init_level_procedure "qdel_init_level"
-
 # define test's name and run level descriptions
 set check_name            "qdel"
 set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level   3
 set check_description(0)  "checking all options in job pending state"
 set check_description(1)  "checking all options in job pending and hold state"
 set check_description(2)  "checking all options in job running state"
@@ -60,6 +54,7 @@ set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function "qdel_setup"
+set check_setup_level_function "qdel_setup_level"
 set check_cleanup_function "qdel_cleanup"
 
 # number of lines in qdel help
@@ -95,51 +90,8 @@ lappend check_functions "qdel_delete_by_job_wildcard6"
 
 lappend check_functions "qdel_wc_job_range_list"
 
-proc qdel_init_level {} {
-  global CHECK_ACT_LEVEL
-  global hold_state pending_state
-
-  switch -- $CHECK_ACT_LEVEL {
-     "0" { set hold_state 0 ; set pending_state 1 ; return 0 }
-     "1" { set hold_state 1 ; set pending_state 1 ; return 0 }
-     "2" { set hold_state 0 ; set pending_state 0 ; return 0 }
-     "3" { set hold_state 1 ; set pending_state 0 ; return 0 }
-  }
-
-  return -1  ;# no other level else
-}
-
 # -------- local test procedures -----------------------------------------------
 
-#                                                             max. column:     |
-#****** qdel/qdel_setup() ******
-# 
-#  NAME
-#     qdel_setup -- ??? 
-#
-#  SYNOPSIS
-#     qdel_setup { } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qdel_setup {} {
    global ts_config
    global qdel_host qdel_queue qdel_qinstance
@@ -152,6 +104,20 @@ proc qdel_setup {} {
    set q_param(slots)                 "50"
 
    add_queue $qdel_queue $qdel_host q_param
+}
+
+proc qdel_setup_level {} {
+  global CHECK_ACT_LEVEL
+  global hold_state pending_state
+
+  switch $CHECK_ACT_LEVEL {
+     0 { set hold_state 0 ; set pending_state 1 }
+     1 { set hold_state 1 ; set pending_state 1 }
+     2 { set hold_state 0 ; set pending_state 0 }
+     3 { set hold_state 1 ; set pending_state 0 }
+  }
+
+  return -1  ;# no other level else
 }
 
 proc qdel_translate_message {msg {p1 ""} {p2 ""} {p3 ""}} {
@@ -188,43 +154,17 @@ proc qdel_translate_message {msg {p1 ""} {p2 ""} {p3 ""}} {
 
 }
 
-#                                                             max. column:     |
-#****** qdel/qdel_cleanup() ******
-# 
-#  NAME
-#     qdel_cleanup -- ??? 
-#
-#  SYNOPSIS
-#     qdel_cleanup { } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qdel_cleanup {} {
    global ts_config
    global qdel_queue qdel_host
+   global hold_state pending_state
 
    delete_all_jobs
    wait_for_end_of_all_jobs
 
    del_queue $qdel_queue $qdel_host 0 1
+
+   unset -nocomplain qdel_queue qdel_host hold_state pending_state
 }
 
 proc qdel_submit_delete_when_transfered {} {

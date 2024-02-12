@@ -18,21 +18,15 @@ global check_category
 global check_description
 global check_needs
 global check_functions
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 global check_need_running_system
 
 #set check_root_access_needs "yes"
 #set check_need_running_system "no"
 
-# define a level initialization procedure:
-set check_init_level_procedure "ge_3306_init_level"
-
 # define test's name and run level descriptions
 set check_name            "ge_3306"
 set check_category        "VERIFIED COMPATIBILITY SYSTEM SCHEDULER"
-set check_highest_level   0
 set check_description(0)  "jobs get scheduled but are not started after global host changed"
 
 # define test's dependencies
@@ -48,18 +42,6 @@ lappend check_functions "ge_3306_test"
 lappend check_functions "ge_3306_per_job"
 lappend check_functions "ge_3306_exclusive"
 lappend check_functions "ge_3306_pe_slots"
-
-proc ge_3306_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
 
 # -------- local test procedures: initialization------------------------------
 

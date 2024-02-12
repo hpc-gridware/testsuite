@@ -40,9 +40,6 @@ set check_description(0)  "checking probes used by Dtrace \"monitor\" are functi
 set check_needs        "init_core_system"  ;# dependencies of this check (name of other check)
 set check_root_access_needs "yes"
 
-# define a level initialization procedure:
-set check_init_level_procedure "dtrace_init_level"
-
 # setup and cleanup functions
 set check_setup_function ""
 set check_cleanup_function ""
@@ -50,21 +47,6 @@ set check_cleanup_function ""
 # define test's procedure order
 set check_functions    ""             ;# functions to call (in order)
 lappend check_functions    "check_dtrace_probes"
-
-
-proc dtrace_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level else
-}
-
-
 
 # here starts the test
 #                                                             max. column:     |

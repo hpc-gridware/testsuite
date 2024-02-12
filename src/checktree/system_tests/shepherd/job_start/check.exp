@@ -56,20 +56,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "job_start_init_level"
 
 # define test's name and run level descriptions
 set check_name            "job_start"
 set check_category        "COMPATIBILITY SYSTEM"
-set check_highest_level   102
 set check_description(0)   "test shepherd trace file write on admin  user system"
 set check_description(1)   "test shepherd trace file write on root   user system"
 set check_description(2)   "test shepherd trace file write on normal user system"
@@ -99,38 +92,7 @@ lappend check_functions "job_start_test"
 
 global job_start_stored_configuration  
 
-proc job_start_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" { 
-         return 0
-      } 
-      "1" {
-         return 0
-      }
-      "2" {
-         return 0
-      }
-      "100" {
-         return 0
-      }
-      "101" {
-         return 0
-      }
-      "102" {
-         return 0
-      }
-   } 
-
-   return -1  ;# no other level 
-}
-
-
-
-
 # -------- local test procedures: initialization------------------------------
-
 
 proc job_start_setup  {} {
    global ts_config  job_start_stored_configuration 

@@ -36,20 +36,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "no"
-
-# define a level initialization procedure:
-set check_init_level_procedure "eval_expression_init_level"
 
 # define test's name and run level descriptions
 set check_name            "eval_expression"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "run the eval_expression_test"
 
 # define test's dependencies
@@ -70,18 +63,6 @@ lappend check_functions "qsub_complex_expression_test2"
 
 global eval_expression_test_hosts
 global eval_expression_saved_slot_count
-
-proc eval_expression_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
 
 # -------- local test procedures: initialization------------------------------
 

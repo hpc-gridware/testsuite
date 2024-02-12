@@ -36,19 +36,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 
 set check_root_access_needs "yes"
 
-# define a level initialization procedure:
-set check_init_level_procedure "jsv_issues_init_level"
-
 # define test's name and run level descriptions
 set check_name            "jsv_issues"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0 
 set check_description(0)  "test special jsv issues"
 
 # define test's dependencies
@@ -84,16 +78,6 @@ proc file_touch {name} {
    set expect_bin [get_binary_path $ts_config(master_host) expect]
    start_remote_prog $ts_config(master_host) $CHECK_USER $expect_bin "-c \"file mtime $name [clock seconds]\""
 
-}
-
-proc jsv_issues_init_level {} {
-   global CHECK_ACT_LEVEL
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-   }
-   return -1  ;# no other level
 }
 
 # -------- local test procedures: initialization------------------------------

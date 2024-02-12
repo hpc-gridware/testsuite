@@ -36,21 +36,14 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 # we need root access 
 set check_root_access_needs "yes"
 
-# define a level initialization procedure:
-set check_init_level_procedure "qmod_auto_reschedule_init_level"
-
 # define test's name and run level descriptions
 set check_name            "qmod_auto_reschedule"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   4 
 set check_description(0)  "checking auto_reschedule with global reschedule_unknown 00:01:00"
 set check_description(1)  "checking auto_reschedule with global reschedule_unknown 00:00:00"
 set check_description(2)  "checking auto_reschedule with global reschedule_unknown 00:01:00 and ENABLE_RESCHEDULE_KILL"
@@ -119,24 +112,6 @@ lappend check_functions "auto_reschedule_GE-3331"
 #  5) restart execds, wait for jobs to get rescheduled, remove jobs
 #
 # -------- local test procedures -----------------------------------------------
-
-proc qmod_auto_reschedule_init_level {} {
-   global CHECK_ACT_LEVEL
-  
-   switch -- $CHECK_ACT_LEVEL {
-      0 -
-      1 {
-         return 0
-      }
-      2 -
-      3 -
-      4 {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level else
-}
 
 proc auto_reschedule_setup {} {
    global ts_config CHECK_ACT_LEVEL

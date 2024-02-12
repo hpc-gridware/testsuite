@@ -36,22 +36,15 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
 
 # JG: TODO: we have to create an own queue for this test!
 
-# define a level initialization procedure:
-set check_init_level_procedure "error_states_init_level"
-
 # define test's name and run level descriptions
 set check_name            "error_states"
 set check_category        "COMPATIBILITY SYSTEM"
-set check_highest_level   0
 set check_description(0)  "Test job error behaviour"
 
 # define test's dependencies
@@ -70,22 +63,6 @@ lappend check_functions "error_states_wrong_pe"
 lappend check_functions "error_states_submit_error_script"
 lappend check_functions "error_states_job_output"
 lappend check_functions "error_states_cleanup"
-
-proc error_states_init_level {} {
-   global CHECK_ACT_LEVEL
-   global CHECK_PRODUCT_TYPE
-   global test_array_jobs 
-
-  switch -- $CHECK_ACT_LEVEL {
-     "0" { 
-           return 0    
-     } 
-     "1" {
-           return -1
-     }
-  } 
-  return -1  ;# no other level else
-}
 
 # -------- local test procedures -----------------------------------------------
 

@@ -36,20 +36,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "resource_quota_init_level"
 
 # define test's name and run level descriptions
 set check_name            "resource_quota"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "resource quota test"
 
 # define test's dependencies
@@ -68,18 +61,6 @@ lappend check_functions "resource_quota_issue_2762"
 
 global resource_quota_test_host
 global resource_quota_test_qname
-
-proc resource_quota_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" { 
-         return 0
-      } 
-   } 
-
-   return -1  ;# no other level 
-}
 
 proc resource_quota_setup  {} {
    global ts_config resource_quota_test_host resource_quota_test_qname

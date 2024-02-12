@@ -38,20 +38,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "no"
-
-# define a level initialization procedure:
-set check_init_level_procedure "generic_module_tests_init_level"
 
 # define test's name and run level descriptions
 set check_name            "generic_module_tests"
 set check_category        "MODULE VERIFIED COMMLIB"
-set check_highest_level   100
 set check_description(0)   "run all generic module tests on master host"
 set check_description(100) "run all generic module tests on all architectures"
 
@@ -92,19 +85,6 @@ lappend generic_module_tests "test_sge_sl"
 lappend generic_module_tests "test_sge_tq"
 lappend generic_module_tests "test_sge_string"
 
-
-proc generic_module_tests_init_level {} {
-   global CHECK_ACT_LEVEL
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-      "100" {
-         return 0
-      }
-   }
-   return -1  ;# no other level
-}
 
 proc generic_module_tests_setup {} {
    global ts_config

@@ -33,11 +33,9 @@
 #___INFO__MARK_END__
 
 # Define the global veriables to give them back
-global check_name check_description check_needs check_functions check_highest_level
-global check_init_level_procedure check_category
+global check_name check_description check_needs check_functions
+global check_category
 global check_root_access_needs
-
-set check_init_level_procedure "issue_1141_init_level"
 
 set check_category            "COMPATIBILITY SYSTEM EVENTCLIENT VERIFIED"
 set check_name                "issue_1141"
@@ -52,19 +50,6 @@ set check_setup_function "issue_1141_setup"
 # define test's procedure order
 set check_functions           ""
 lappend check_functions       "issue_1141_run"
-set check_highest_level       0
-
-proc issue_1141_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0"  {
-         return 0
-      }
-   }
-
-   return -1
-}
 
 proc issue_1141_setup {} {
    global ts_config

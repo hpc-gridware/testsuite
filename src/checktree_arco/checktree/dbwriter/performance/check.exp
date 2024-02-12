@@ -36,20 +36,13 @@ global check_category
 global check_description 
 global check_needs       
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "arco_dbwriter_performance_init_level"
 
 # define test's name and run level descriptions
 set check_name            "arco_dbwriter_performance"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level    400
 set check_description(0)  "Tests the performance of the dbwriter (short test) 5 minutes"
 set check_description(200)  "Tests the performance of the dbwriter (long test) 1 hour"
 set check_description(300)  "Tests the performance of the dbwriter (day test) 1 day"
@@ -65,29 +58,6 @@ set check_cleanup_function arco_dbwriter_performance_cleanup
 # define test's procedure order
 set check_functions ""
 lappend check_functions "arco_dbwriter_performance_execute"
-
-proc arco_dbwriter_performance_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" { 
-         return 0
-      }
-      "200" { 
-         return 0
-      }   
-      "300" {
-         return 0
-      }
-      "400" { 
-         return 0
-      }
-      default {
-         return -1
-      }
-   }
-   return -1  ;# no other level 
-}
 
 # -------- local test procedures: initialization------------------------------
 

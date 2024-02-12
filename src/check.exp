@@ -69,8 +69,7 @@
 #        and the actual check cannot be run.
 #
 #     check_setup_level_function
-#        per level setup function. It is called after the init_level_function
-#        and before the first check_function is called.
+#        per level setup function. It is called before the first check_function is called.
 #        Use this function for configuration that only applies to a specific
 #        level, or if you have to shutdown Grid Engine for the test.
 #
@@ -84,12 +83,9 @@
 #
 #  EXAMPLE
 #     1. per check setup/cleanup
-#     #define a level initialization procedure:
-#     set check_init_level_procedure "access_lists_init_level"
 #     # define test's name and run level descriptions
 #     set check_name            "access_lists"
 #     set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-#     set check_highest_level   0
 #     set check_description(0)  "Test (x)user_lists access for queue/cluster/pe"
 #
 #     # define test's dependencies
@@ -111,13 +107,9 @@
 #     2. per level setup/cleanup
 #
 #
-#     # define a level initialization procedure:
-#     set check_init_level_procedure "usage_init_level"
-#
 #     # define test's name and run level descriptions
 #     set check_name            "usage"
 #     set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-#     set check_highest_level   1
 #     set check_description(0)  "check reserved usage of jobs submitted with qsub"
 #     set check_description(1)  "check reserved usage of jobs submitted with qrsh"
 #
@@ -369,10 +361,8 @@ global check_category              ;# check category name array (z.b. COMPATIBIL
 global check_description           ;# description of actual check module (append more levels as list)
 global check_needs                 ;# dependencies of this check (name of other check)
 global check_functions             ;# functions to call (in order)
-global check_init_level_procedure  ;# name of procedure to call before starting level run
 global check_errno                 ;# list of errors that were raised for a certain test
 global check_errstr                ;# short error descriptions in text form for check_errno
-global check_highest_level         ;# here a check can define his check levels count 0 ...
 
 # for global procedures
 global check_cur_proc_error        ;# short error description in text form ( in public procedures )
@@ -876,7 +866,7 @@ proc set_root_passwd {} {
 proc get_user_passwd_hooks {} {
    global ts_checktree
    set res 0
-   for {set i 0} {$i < $ts_checktree(act_nr)} {incr i 1} {
+   for {set i 0} {$i < $ts_checktree(next_free)} {incr i 1} {
       if {[info exists ts_checktree($i,passwd_hook)]} {
          set prog $ts_checktree($i,passwd_hook)
          if {[info procs $prog] != $prog} {
@@ -2764,25 +2754,24 @@ proc get_category_string_out_of_path { path seperator } {
    return $result
 }
 
-#   set ts_checktree(act_nr) 1             ;# contains the next free number for a checktree directory element
-#   set ts_checktree(0,dir_name) "root"    ;# set directory name of root element
-#   set ts_checktree(0,test_available) 0   ;# there is no test available for the directory entry 0
-#   set ts_checktree(0,upper_nrs) 0        ;# upper_nrs contains the directory number of the parent checktree
-#   set ts_checktree(root) 0               ;# maps the directory path to directory number
-#   set ts_checktree($i,max_level_count) 
-#   set ts_checktree($i,check_levels) 
-#   set ts_checktree($nr,check_name) $check_name
-#   set ts_checktree($nr,check_needs) $check_needs
-#   set ts_checktree($nr,check_init_level_procedure) $check_init_level_procedure
-#   set ts_checktree($nr,check_highest_level) $check_highest_level
-#   set ts_checktree($nr,check_category) $check_category
-#   set ts_checktree($nr,check_functions) $check_functions
-#   set ts_checktree($nr,dir_name) $path
-#   set ts_checktree($path)        $nr
-#   set ts_checktree($nr,sub_nrs) {}                   ;# list of numbers of subdirectories checktree elements
-#   set ts_checktree($nr,upper_nrs) 0
-#   set ts_checktree($index,$level,check_description)
-# 239 test(s) available in subdir: checktree
+#   ts_checktree(next_free) 1                   ;# contains the next free number for a checktree directory element
+#   ts_checktree(0,dir_name) "root"             ;# set directory name of root element
+#   ts_checktree(0,test_available) 0            ;# there is no test available for the directory entry 0
+#   ts_checktree(0,parent) 0                    ;# parent contains the directory number of the parent checktree
+#   ts_checktree(root) 0                        ;# maps the directory path to directory number
+#   ts_checktree($nr,max_level_count)           ;# all levels of this directory and all subdirectories
+#   ts_checktree($nr,check_levels)              ;# all levels of the current check (directory)
+#   ts_checktree($nr,check_highest_level)       ;# highest check level
+#   ts_checktree($nr,check_name)                ;# the check name
+#   ts_checktree($nr,check_needs)               ;# the list of check needs (e.g. init_core_system)
+#   ts_checktree($nr,check_category)            ;# the list of check categories
+#   ts_checktree($nr,check_functions)           ;# the list of check_ unctions
+#   ts_checktree($nr,dir_name)                  ;# directory name of the check
+#   ts_checktree($path)                         ;# the nr for the given (absolute) path
+#   ts_checktree($nr,children)                  ;# list of numbers of subdirectories checktree elements
+#   ts_checktree($nr,parent)                    ;# nr of the parent node
+#   ts_checktree($nr,$level,check_description)  ;# per check (nr) and per level check description
+#
 proc build_checktree {} {
    global ts_checktree create_csv_file
    global ACT_CHECKTREE CHECK_CUR_CONFIG_FILE
@@ -2792,11 +2781,11 @@ proc build_checktree {} {
    if { [info exists ts_checktree] } {
       unset ts_checktree
    }
-   set ts_checktree(act_nr) 1             ;# contains the next free number for a checktree directory element
+   set ts_checktree(next_free) 1             ;# contains the next free number for a checktree directory element
 
    set ts_checktree(0,dir_name) "root"    ;# set directory name of root element
    set ts_checktree(0,test_available) 0   ;# there is no test available for the directory entry 0
-   set ts_checktree(0,upper_nrs) 0        ;# upper_nrs contains the directory number of the parent checktree
+   set ts_checktree(0,parent) 0        ;# parent contains the directory number of the parent checktree
                                           ;# directory element
    set ts_checktree(root) 0               ;# maps the directory path to directory number
 
@@ -2836,19 +2825,17 @@ proc build_checktree {} {
       }
    }
 
+   # fill in the max_level_counts
+   # this is per checktree node its own levels and the levels of all its children
+   fill_max_level_count 0
+
    ts_log_fine "verify checktree ..."
 
-   for {set i 0} {$i< $ts_checktree(act_nr)} {incr i 1} {
-#      ts_log_fine "test $i $ts_checktree($i,dir_name) , up-dir=$ts_checktree($i,upper_nrs), subdir(s)=$ts_checktree($i,sub_nrs)"
-      set ts_checktree($i,max_level_count) [get_max_level_count $ts_checktree($i,dir_name)]
-#      ts_log_fine "dir $ts_checktree($i,dir_name) has max level state: $ts_checktree($i,max_level_count)"
-      if { $ts_checktree($i,test_available) == 1 } {
-         set ts_checktree($i,check_levels) [get_check_levels $ts_checktree($i,dir_name)]
-#         ts_log_fine "test $ts_checktree($i,check_name) has checklevels: $ts_checktree($i,check_levels)"
-#         ts_log_fine "name $ts_checktree($i,check_name), $ts_checktree($i,check_category), $ts_checktree($i,check_highest_level)"
-         for { set j [expr ( $i + 1 ) ] } {$j< $ts_checktree(act_nr)} {incr j 1} {
-            if { $ts_checktree($j,test_available) == 1 } {
-               if { $ts_checktree($i,check_name) == $ts_checktree($j,check_name) } {
+   for {set i 0} {$i < $ts_checktree(next_free)} {incr i} {
+      if {$ts_checktree($i,test_available) == 1} {
+         for {set j [expr $i + 1]} {$j < $ts_checktree(next_free)} {incr j} {
+            if {$ts_checktree($j,test_available)} {
+               if {$ts_checktree($i,check_name) == $ts_checktree($j,check_name)} {
                   set error_text ""
                   append error_text "check_name \"$ts_checktree($i,check_name)\" is not unique:\n"
                   append error_text "please check the following tests directories:\n"
@@ -2858,27 +2845,13 @@ proc build_checktree {} {
                   wait_for_enter
                   return -1
                }
-               if { $ts_checktree($i,check_init_level_procedure) != "--" &&
-                    $ts_checktree($i,check_init_level_procedure) == $ts_checktree($j,check_init_level_procedure) } {
-                  set error_text ""
-                  append error_text "check_init_level_procedure \"$ts_checktree($i,check_init_level_procedure)\" is not unique:\n"
-                  append error_text "please check the following tests directories:\n"
-                  append error_text "$ts_checktree($i,dir_name)\n"
-                  append error_text "$ts_checktree($j,dir_name)\n"
-                  ts_log_severe $error_text
-                  wait_for_enter
-                  return -1
-               }
             }
          }
-
       }
-
    }
 
    # read configurations of the checktree
-
-   for {set i 0} { $i < $ts_checktree(act_nr)} {incr i 1 } {
+   for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,setup_hooks_${ii}_name)]} {incr ii 1} {
 
          if { [info exists ts_checktree($i,setup_hooks_${ii}_filename)] == 0 } {
@@ -2967,7 +2940,7 @@ proc build_checktree {} {
       # first detect the categories
       
       set max_cat 0
-      for {set index 0} {$index < $ts_checktree(act_nr)} {incr index 1} {
+      for {set index 0} {$index < $ts_checktree(next_free)} {incr index 1} {
          if {$ts_checktree($index,test_available) != 0} {
             set cat [get_category_string_out_of_path $ts_checktree($index,dir_name) "|"]
             set list [split $cat "|"]
@@ -2986,7 +2959,7 @@ proc build_checktree {} {
       append file_data(1) "|Name|Level count|Function count|Description|Location"
 
       
-      for {set index 0} {$index < $ts_checktree(act_nr)} {incr index 1} {
+      for {set index 0} {$index < $ts_checktree(next_free)} {incr index 1} {
          if {$ts_checktree($index,test_available) != 0} {
             set nr_of_levels [llength $ts_checktree($index,check_levels)]
             set nr_of_functions [llength $ts_checktree($index,check_functions)]
@@ -3040,22 +3013,24 @@ proc build_checktree {} {
 }
 
 
-proc read_checktree_nodes { path } {
+proc read_checktree_nodes {path} {
    global ts_checktree CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
-   global check_highest_level check_init_level_procedure check_name check_needs
+   global check_name check_needs
    global check_category CHECK_USER check_source_files check_functions
    global CHECK_ACT_LEVEL sourced_commands  check_description
 
    # remember last check name - we'll reset to it on function exit
-   set old_check_name $check_name
+   set last_check_name $check_name
 
    # every checktree directory gets an individual number
-   set nr $ts_checktree(act_nr)
-   incr ts_checktree(act_nr) 1
+   set nr $ts_checktree(next_free)
+   incr ts_checktree(next_free)
 
-   # prepare for sourceing check.exp files
-   set check_highest_level 0
-   set check_init_level_procedure "--"
+   # store this checktree node
+   set ts_checktree($nr,dir_name) $path
+   set ts_checktree($path)        $nr
+
+   # prepare for sourcing check.exp files
    set check_setup_function "--"
    set check_category "--"
    set check_source_files "--"
@@ -3064,7 +3039,7 @@ proc read_checktree_nodes { path } {
       unset check_description
    }
 
-   # try to find and source check files in this directory for the configured N1GE version
+   # try to find and source check files in this directory for the configured Grid Engine version
    set sourced_files [ts_source $path/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT]
    
    # additionally source all tcl files
@@ -3080,57 +3055,23 @@ proc read_checktree_nodes { path } {
       # here is a test file
       set ts_checktree($nr,test_available) 1
 
-      for { set lt 0 } { $lt <= $check_highest_level } { incr lt 1 } {
-         if { [info exists check_description($lt)] } {
-            if { [string match "*\n*" $check_description($lt)] } {
+      set levels [lsort -integer [array names check_description]]
+      set check_highest_level [lindex $levels end]
+
+      foreach level $levels {
+         if { [info exists check_description($level)] } {
+            if { [string match "*\n*" $check_description($level)] } {
                puts "--------------------------------------------------------------"
                puts "check directory: $path"
-               puts "description($lt): \"$check_description($lt)\""
+               puts "description($level): \"$check_description($level)\""
                puts "PANIC: check \"$check_name\" contains unexpected new line characters in check description!"
                puts "--------------------------------------------------------------"
                testsuite_shutdown 1
             }
-            set ts_checktree($nr,$lt,check_description) $check_description($lt)
+            set ts_checktree($nr,$level,check_description) $check_description($level)
          } 
       }
 
-      if {$check_init_level_procedure == "--" || $check_init_level_procedure == ""} {
-         puts "--------------------------------------------------------------"
-         puts "check directory: $path"
-         puts "PANIC: check \"$check_name\" - init level procedure \"$check_init_level_procedure\" not allowed! You must specify a init level procedure!"
-         puts "--------------------------------------------------------------"
-         testsuite_shutdown 1
-      }
-
-      if {[llength [info procs $check_init_level_procedure]] == 0} {
-         puts "--------------------------------------------------------------"
-         puts "check directory: $path"
-         puts "PANIC: check \"$check_name\" -  init level procedure \"$check_init_level_procedure\" not implemented!"
-         puts "--------------------------------------------------------------"
-         testsuite_shutdown 1
-      }
-
-      set init_level_body [info body $check_init_level_procedure]
-      if {[string match "*ts_*config*" $init_level_body]} {
-         puts "--------------------------------------------------------------"
-         puts "check directory: $path"
-         puts "PANIC: check \"$check_name\" - init level procedure \"$check_init_level_procedure\" seems to access a config file!"
-         puts "NOTE: Please do sanity checks in test setup or test setup level procedure by returning 99!"
-         puts "--------------------------------------------------------------"
-         testsuite_shutdown 1
-      }
-
-      foreach command $sourced_commands {
-         if {[string match "*$command*" $init_level_body]} {
-            puts "--------------------------------------------------------------"
-            puts "check directory: $path"
-            puts "PANIC: check \"$check_name\" - init level procedure \"$check_init_level_procedure\" is using procedure \"$command\"!"
-            puts "NOTE: Please do sanity checks in test setup or test setup level procedure by returning 99!"
-            puts "--------------------------------------------------------------"
-            testsuite_shutdown 1
-         }
-      }
-      
       if {$check_setup_function != "--" && $check_setup_function != ""} {
          if {[llength [info procs $check_setup_function]] == 0} {
             puts "--------------------------------------------------------------"
@@ -3152,26 +3093,23 @@ proc read_checktree_nodes { path } {
 
       set ts_checktree($nr,check_name) $check_name
       set ts_checktree($nr,check_needs) $check_needs
-      set ts_checktree($nr,check_init_level_procedure) $check_init_level_procedure
       set ts_checktree($nr,check_highest_level) $check_highest_level
+      set ts_checktree($nr,check_levels) $levels
       set ts_checktree($nr,check_category) $check_category
       set ts_checktree($nr,check_functions) $check_functions
    } else {
       set ts_checktree($nr,test_available) 0
    }
-   set ts_checktree($nr,dir_name) $path
-   set ts_checktree($path)        $nr
 
-
-   if {[info exists ts_checktree($nr,sub_nrs)] == 0} {   ;# ts_checktree($nr,sub_nrs) contains the
-      set ts_checktree($nr,sub_nrs) {}                   ;# list of numbers of subdirectories checktree elements
+   if {![info exists ts_checktree($nr,children)]} {   ;# ts_checktree($nr,children) contains the
+      set ts_checktree($nr,children) {}               ;# list of numbers of subdirectories checktree elements
    }
-   set upper_dir [file dirname $path]
-   if { [info exists ts_checktree($upper_dir) ] } {
-      set ts_checktree($nr,upper_nrs) $ts_checktree($upper_dir)
+   set parent [file dirname $path]
+   if {[info exists ts_checktree($parent)]} {
+      set ts_checktree($nr,parent) $ts_checktree($parent)
    } else {
-      set ts_checktree($nr,upper_nrs) 0
-      lappend ts_checktree(0,sub_nrs) $nr               ;# this is for the "root" element. Additional checktree
+      set ts_checktree($nr,parent) 0
+      lappend ts_checktree(0,children) $nr              ;# this is for the "root" element. Additional checktree
                                                         ;# directories are children of the "root" tree. The sub_nr
                                                         ;# can't be initalized by the directory list.
    }
@@ -3180,11 +3118,12 @@ proc read_checktree_nodes { path } {
    set dirs [get_dir_names $path]
    foreach element $dirs {
       read_checktree_nodes "$path/$element"
-      lappend ts_checktree($nr,sub_nrs) $ts_checktree($path/$element)
+      lappend ts_checktree($nr,children) $ts_checktree($path/$element)
    }
 
    # stay in directory of former check
-   set check_name $old_check_name
+   set check_name $last_check_name
+
    return 0
 }
 
@@ -3205,7 +3144,7 @@ proc get_tests_from_checktree { { path "root" } } {
       lappend all_nrs $nr
 
       set ret_val {}
-      lappend_sub_nrs_from_checktree $nr ret_val
+      lappend_children_from_checktree $nr ret_val
       foreach sub_nr $ret_val {
          lappend all_nrs $sub_nr
       }
@@ -3221,13 +3160,13 @@ proc get_tests_from_checktree { { path "root" } } {
    return $path_list
 }
 
-proc lappend_sub_nrs_from_checktree { dir_nr result } {
+proc lappend_children_from_checktree { dir_nr result } {
    global ts_checktree
    upvar $result res
 
-   foreach nr $ts_checktree($dir_nr,sub_nrs) {
+   foreach nr $ts_checktree($dir_nr,children) {
       lappend res $nr
-      lappend_sub_nrs_from_checktree $nr res
+      lappend_children_from_checktree $nr res
    }
 }
 
@@ -3239,7 +3178,7 @@ proc get_checktree_dir_names { path { only_basename 0 } } {
    set selected_dirs {}
    if { [info exists ts_checktree($path)] } {
      set nr $ts_checktree($path)
-     set selected_dirs $ts_checktree($nr,sub_nrs)
+     set selected_dirs $ts_checktree($nr,children)
    } else {
      ts_log_severe "path=$path not found in checktree"
    }
@@ -3474,7 +3413,6 @@ proc get_all_check_functions {} {
 proc save_result {path runtime level state} {
    global check_name check_description check_needs check_errno check_errstr
    global CHECK_RESULT_DIRS
-   global check_highest_level
 
    # only for supported levels
    if {[is_level_enabled $level] == -1} {
@@ -3536,7 +3474,7 @@ proc save_result {path runtime level state} {
 
    lappend data $runtime
    lappend data [clock format [clock seconds]]
-   lappend data $check_highest_level
+   lappend data [checktree_get_highest_level_by_path $path]
 
    # dump test description to result file
    set output [open "$save_dir/$check_result_file" "w"]
@@ -3577,37 +3515,6 @@ proc get_check_depends {path} {
 
    return $name
 }
-
-
-proc get_check_levels { path } {
-   global CHECK_ACT_LEVEL
-   global ts_checktree
-   global DISABLE_ADD_PROC_ERROR
-
-   set saved_level $CHECK_ACT_LEVEL
-   set levels {}
-   if {[info exists ts_checktree($path)]} {
-      set nr $ts_checktree($path)
-      if {$ts_checktree($nr,check_highest_level) > 0 && $ts_checktree($nr,check_init_level_procedure) != "--"} {
-         for {set i 0} {$i <= $ts_checktree($nr,check_highest_level)} {incr i 1} {
-            set CHECK_ACT_LEVEL $i
-            set DISABLE_ADD_PROC_ERROR 1
-#            ts_log_fine "calling $ts_checktree($nr,check_init_level_procedure) for level $i ..."
-            if {[$ts_checktree($nr,check_init_level_procedure)] != 0} {
-               set DISABLE_ADD_PROC_ERROR 0
-               continue
-            }
-            set DISABLE_ADD_PROC_ERROR 0
-            lappend levels $CHECK_ACT_LEVEL
-         }
-      } else {
-         lappend levels 0
-      }
-   }
-   set CHECK_ACT_LEVEL $saved_level
-   return $levels
-}
-
 
 proc get_checktree_levels { path } {
    global CHECK_ACT_LEVEL
@@ -3878,10 +3785,11 @@ proc get_test_level_state {name level} {
 }
 
 proc delete_tests {path state_to_delete {only_if_not_there 0}} {
+   global ts_checktree
+   global CHECK_ACT_LEVEL
    global check_errno check_errstr check_functions check_name
-   global check_highest_level check_name check_description check_category check_needs
+   global check_name check_description check_category check_needs
    global check_root_access_needs
-   global check_init_level_procedure CHECK_ACT_LEVEL
    global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
    global check_setup_function check_cleanup_function
    global check_setup_level_function check_cleanup_level_function
@@ -3896,8 +3804,7 @@ proc delete_tests {path state_to_delete {only_if_not_there 0}} {
    }
 
    set old_check_name $check_name
-   set selected_tests [get_tests_from_checktree $path]
-
+   set selected_tests [get_tests_from_checktree $path] ;# the test paths
    foreach elem $selected_tests {
       set check_highest_level 0
       set check_name ""
@@ -3911,14 +3818,11 @@ proc delete_tests {path state_to_delete {only_if_not_there 0}} {
          clear_all_check_errors $check_name
 
          set do_delete 1
-         # TODO HP: Instead of doing this test, shouldn't the function be called at all?
-         #          It seems the function is abused to source all tests modules then, but
-         #          this should be moved to a separate function instead.
-         if {$only_if_not_there == 1} {
+         if {$only_if_not_there} {
             # the next line checks if any runlevel of the test $check_name is already
             # completed or unsupported. If there is not a single runlevel of the test
             # completed or unsupported, "result" will be 0.
-            set result [validate_needs $check_name]
+            set result [validate_needs $check_name
             if {$result == 0} {
                set do_delete 0
             }
@@ -3926,20 +3830,12 @@ proc delete_tests {path state_to_delete {only_if_not_there 0}} {
 
          if {$do_delete == 1} {
             # check for all runlevels of the current test...
-            for {set i 0} {$i <= $check_highest_level} {incr i 1} {
+            set check_number $ts_checktree($elem)
+            foreach level $ts_checktree($check_number,check_levels) {
                # ...if the runlevel of this test is in the state that is to be deleted
-               set test_level_state [get_test_level_state $check_name $i]
+               set test_level_state [get_test_level_state $check_name $level]
                if {$state_to_delete == "all" || $test_level_state == $state_to_delete} {
-                  if {[string compare $check_init_level_procedure "--"] != 0} {
-                     set CHECK_ACT_LEVEL $i
-                     set DISABLE_ADD_PROC_ERROR 1
-                     if {[$check_init_level_procedure] == 0} {
-                        delete_result $elem 0 $i
-                     }
-                     set DISABLE_ADD_PROC_ERROR 0
-                  } else {
-                     delete_result $elem 0 $i
-                  }
+                  delete_result $elem 0 $level
                }
             }
          }
@@ -4593,7 +4489,7 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
    global check_needs CHECK_RESULT_DIRS check_name CHECK_ACTUAL_TEST_PATH
    global check_errstr check_description check_functions check_errno
    global CHECK_CUR_PROC_NAME
-   global CHECK_CURRENT_WORKING_DIR check_init_level_procedure CHECK_ACT_LEVEL
+   global CHECK_CURRENT_WORKING_DIR CHECK_ACT_LEVEL
    global errorInfo check_need_running_system
    global check_setup_level_function check_cleanup_level_function
    global check_category
@@ -4677,19 +4573,6 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
                append runlevel_error_text "Runlevel hooks returned an error!\n"
             }
          }
-      }
-   }
-
-   # call init_check_level procedure!
-   # JG:       init_check_level is run twice (already in run_test.
-   #           do we really have to call it twice?
-   #           or call it here and return if it doesn't return 0
-   # CR:       This must be done, because a test can be started for a
-   #           specified runlevel
-   if {[info exists check_init_level_procedure]} {
-      if {[string compare $check_init_level_procedure "--"] != 0} {
-         ts_log_fine ">>> C A L L I N G   >init level< function \"$check_init_level_procedure\" ..."
-         $check_init_level_procedure
       }
    }
 
@@ -5164,16 +5047,16 @@ proc execute_test_preparation_procedure {func_name type {warning_counter ""}} {
 #
 #*******************************
 proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } } {
+   global ts_config
    global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT check_needs CHECK_RESULT_DIRS
    global check_name CHECK_ACTUAL_TEST_PATH CHECK_ACT_LEVEL
    global check_errstr check_description check_functions check_errno
    global CHECK_CUR_PROC_NAME check_root_access_needs check_need_running_system
-   global CHECK_CURRENT_WORKING_DIR check_highest_level check_init_level_procedure
+   global CHECK_CURRENT_WORKING_DIR
    global CHECK_PRODUCT_TYPE CHECK_PRODUCT_VERSION_NUMBER check_use_installed_system
    global check_category CHECK_GROUP DISABLE_ADD_PROC_ERROR
    global check_setup_function check_cleanup_function
    global check_setup_level_function check_cleanup_level_function
-   global ts_config
    global CHECK_TEST_RUNNING
    global CHECK_INTERRUPT check_source_files
    global CHECK_USE_HUDSON
@@ -5208,11 +5091,11 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    set check_cleanup_function ""
    set check_setup_level_function ""
    set check_cleanup_level_function ""
-   set check_highest_level 0
-   set check_init_level_procedure "--"
    set check_root_access_needs   "no" 
    set check_need_running_system "yes"
    set check_source_files "--"
+
+   set check_levels [checktree_get_check_levels_by_path $path]
 
    ts_source $path/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT
  
@@ -5223,8 +5106,6 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
          ts_source $path/$asf
       }
    }
-
-
 
    if {[string compare $run_single_test "all"] != 0} {
       set do_only_one_test 1
@@ -5243,40 +5124,12 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    # if dependencies are not fulfilled, we mark the test as not yet run
    set result [validate_needs $check_needs]
    ts_log_finest "needs returned $result"
-   ts_log_finest "highest level of test is $check_highest_level"
+   ts_log_finest "highest level of test is [checktree_get_highest_level_by_path $path]"
    if {$result != 0} {
       ts_log_fine "dependencies ($check_needs) not fulfilled! Stop!"
       clear_all_check_errors $check_name
-      for {set level 0} {$level <= $check_highest_level} {incr level 1} {
-         # We should do a hudson report only for valid levels (either check_init_level_procedure succeeds or does not exists and we have a valid level)
-         set do_hudson_report 0
-         if {[string compare $check_init_level_procedure "--"] != 0} {
-            set DISABLE_ADD_PROC_ERROR 1
-            set CHECK_ACT_LEVEL $level
-            if {[$check_init_level_procedure ] == 0} {
-               delete_result $path 0 $level
-               set do_hudson_report 1
-            }
-            set DISABLE_ADD_PROC_ERROR 0
-         } else {
-            delete_result $path 0 $level
-            #Report a skipped test due to dependency when level is valid (test would be run)
-            if {[is_level_enabled $level] != -1} {
-               set do_hudson_report 1
-            }
-         }
-         #Create skipped reports when using hudson (to keep number of executed tests constant)
-         if {$CHECK_USE_HUDSON == 1 && $do_hudson_report == 1} {
-            #prepare a path name for hudson XML reports
-            set pkg [join [split $path "/"] "."]
-            set pkg [string range $pkg [string first "checktree." $pkg] end]
-            set i 1
-            foreach elem $check_functions {
-               generate_xml_junit_report $pkg $check_name [format %3.3u $i]_$elem 0 "TCL WARNING\nDependencies ($check_needs) not fullfilled!\nTest skipped." "" "" 1
-            }
-            #Also the global skipped report
-            generate_xml_junit_report $pkg $check_name "000_GLOBAL" 0 "TCL WARNING\nDependencies ($check_needs) not fullfilled!\nTest skipped." "Dependencies ($check_needs) not fullfilled!" "TCL.WARNING" 1
-         }
+      foreach level $check_levels {
+         delete_result $path 0 $level
       }
       set CHECK_TEST_RUNNING 0
       return -2  ;# dependencies not fulfilled
@@ -5293,22 +5146,9 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    set no_of_test_runs 0
    set immediate_return 0
 
-   set possible_test_levels 0
-   for {set level 0} {$level <= $check_highest_level} {incr level 1} {
-      if {[string compare $check_init_level_procedure "--"] != 0} {
-         set CHECK_ACT_LEVEL $level
-         if {[$check_init_level_procedure] == 0} {
-            incr possible_test_levels 1
-         }
-      } else {
-         # we have an old test which has no check level defined,
-         # assume at least 1 test level (0)
-         incr possible_test_levels 1
-         break
-      }
-   }
+   set possible_test_levels [llength $check_levels]
 
-   if { $possible_test_levels == 0 } {
+   if {$possible_test_levels == 0} {
       # the test doesn't support any check level - store it as done unsupported
       save_result $path 0 0 "unsupported"
       set CHECK_TEST_RUNNING 0
@@ -5316,18 +5156,10 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    }
 
    # check if this test is enabled for the actual runlevel, test is already done, ...
-   for {set level 0} {$level <= $check_highest_level} {incr level 1} {
+   foreach level $check_levels {
       # check if this is a global enabled level
       if {[is_level_enabled $level] == -1} {
          continue
-      }
-
-      # check test's init level procedure return value
-      if {[string compare $check_init_level_procedure "--"] != 0} {
-         set CHECK_ACT_LEVEL $level
-         if {[$check_init_level_procedure] != 0} {
-            continue
-         }
       }
 
       # check if test was already running
@@ -5339,13 +5171,11 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       incr no_of_test_runs 1
    }
 
-   if { $no_of_test_runs == 0 } {
+   if {$no_of_test_runs == 0} {
       # no active runlevel for this check, return 2
       set CHECK_TEST_RUNNING 0
       return 2
    }
-
-
    
    clear_all_check_errors $check_name
 
@@ -5374,19 +5204,8 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       ts_log_fine "* Setup function returned error. Setting test state to failed!   *"
       ts_log_fine "******************************************************************"
       incr nr_errors 1
-      for {set i 0} {$i <= $check_highest_level} {incr i 1} {
-         if {[string compare $check_init_level_procedure "--"] != 0} {
-            set CHECK_ACT_LEVEL $i
-            set DISABLE_ADD_PROC_ERROR 1
-            if {[$check_init_level_procedure] == 0} {
-               save_result $path 0 $i "failed"
-               #delete_result $path 0 $i
-            }
-            set DISABLE_ADD_PROC_ERROR 0
-         } else {
-            save_result $path 0 $i "failed"
-            #delete_result $path 0 $i
-         }
+      foreach level $check_levels {
+         save_result $path 0 $level "failed"
       }
    }
 
@@ -5399,7 +5218,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
 
    set was_check_abort 0
    if {$immediate_return == 0 && $setup_ret != 99} {
-      for {set level 0} {$level <= $check_highest_level} {incr level 1} {
+      foreach level $check_levels {
          # check for interrupt
          if {$CHECK_INTERRUPT >= 2} {
             set was_check_abort 1
@@ -5409,13 +5228,8 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
          if {[is_level_enabled $level] == -1} {
             continue
          }
+
          set my_current_runlevel $level
-         if {[string compare $check_init_level_procedure "--"] != 0} {
-            set CHECK_ACT_LEVEL $level
-            if {[$check_init_level_procedure] != 0} {
-               continue
-            }
-         }
          ts_log_fine "----------------------------------------------"
          ts_log_fine "-> enter check level $level"
 
@@ -5480,17 +5294,8 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
          ts_log_fine "******************************************************************"
          set immediate_return -1
          incr nr_errors 1
-         for {set i 0} {$i <= $check_highest_level} {incr i 1} {
-            if {[string compare $check_init_level_procedure "--"] != 0} {
-               set CHECK_ACT_LEVEL $i
-               set DISABLE_ADD_PROC_ERROR 1
-               if {[$check_init_level_procedure] == 0} {
-                  save_result $path 0 $i "failed"
-               }
-               set DISABLE_ADD_PROC_ERROR 0
-            } else {
-               save_result $path 0 $i "failed"
-            }
+         foreach level $check_levels {
+            save_result $path 0 $level "failed"
          }
       }
    }
@@ -5501,17 +5306,8 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       ts_log_fine "******************************************************************"
       set immediate_return -1
       incr nr_errors 1
-      for {set i 0} {$i <= $check_highest_level} {incr i 1} {
-         if {[string compare $check_init_level_procedure "--"] != 0} {
-            set CHECK_ACT_LEVEL $i
-            set DISABLE_ADD_PROC_ERROR 1
-            if {[$check_init_level_procedure] == 0} {
-               save_result $path 0 $i "uncompleted"
-            }
-            set DISABLE_ADD_PROC_ERROR 0
-         } else {
-            save_result $path 0 $i "uncompleted"
-         }
+      foreach level $check_levels {
+         save_result $path 0 $level "uncompleted"
       }
    }
    # check the number of busy rlogin sessions
@@ -5543,17 +5339,8 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       # this means there was no ts_log_config. We will not let the test (level) be successfull
       ts_log_severe "Test setup function returned 99 without ts_log_config error! Setting test to failed!"
       incr nr_errors 1
-      for {set i 0} {$i <= $check_highest_level} {incr i 1} {
-         if {[string compare $check_init_level_procedure "--"] != 0} {
-            set CHECK_ACT_LEVEL $i
-            set DISABLE_ADD_PROC_ERROR 1
-            if {[$check_init_level_procedure] == 0} {
-               save_result $path 0 $i "failed"
-            }
-            set DISABLE_ADD_PROC_ERROR 0
-         } else {
-            save_result $path 0 $i "failed"
-         }
+      foreach level $check_levels {
+         save_result $path 0 $level "failed"
       }
    }
 
@@ -5569,13 +5356,12 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
          append mail_body "product root:     $ts_config(product_root)\n"
          append mail_body "cell:             $ts_config(cell)\n"
          append mail_body "runlevel:         [get_run_level_name $my_current_runlevel]\n"
-         append mail_body "max. runlevel:    [get_run_level_name $check_highest_level]\n"
+         append mail_body "highest runlevel: [get_run_level_name [checktree_get_highest_level_by_path $path]]\n"
          append mail_body "dependencies:     $check_needs\n"
          append mail_body "check functions:  \n"
          foreach elem $check_functions {
             append mail_body "                   $elem\n"
          }
-         append mail_body "init level proc:  $check_init_level_procedure\n"
          #mail_report "testsuite success - $check_name" $mail_body
          ts_log_info $mail_body 0 "" 0 0 1
       }
@@ -5588,19 +5374,9 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
             # this means there was only ts_log_config. We will set the test to unsupported
             ts_log_fine "Test setup function returned 99 with ts_log_config error(s)! Setting test to unsupported!"
             incr nr_errors 1
-            for {set i 0} {$i <= $check_highest_level} {incr i 1} {
-               if {[string compare $check_init_level_procedure "--"] != 0} {
-                  set CHECK_ACT_LEVEL $i
-                  set DISABLE_ADD_PROC_ERROR 1
-                  if {[$check_init_level_procedure] == 0} {
-                     save_result $path 0 $i "unsupported"
-                  }
-                  set DISABLE_ADD_PROC_ERROR 0
-               } else {
-                  save_result $path 0 $i "unsupported"
-               }
+            foreach level $check_levels {
+               save_result $path 0 $level "unsupported"
             }
-
          }
          return -3 ;# we had warnings
       }
@@ -5609,7 +5385,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
 }
 
 proc clean_up_globals {} {
-  global check_init_level_procedure check_name check_description check_highest_level
+  global check_name check_description
   global check_needs check_functions check_category
 
   if { [ info exists check_category ] } {
@@ -5624,13 +5400,11 @@ proc clean_up_globals {} {
   set check_name        ""                 ;# name of actual check module
   set check_needs       ""          ;# dependencies of this check (name of other check)
   set check_functions   ""          ;# functions to call (in order)
-  set check_init_level_procedure "--"   ;# name of procedure to call before starting level run
-  set check_highest_level 0        ;# here a check can define his check levels count 0 ...
 }
 
 proc show_test {path full} {
-  global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT check_needs check_highest_level
-  global check_init_level_procedure CHECK_ACT_LEVEL check_category
+  global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT check_needs
+  global CHECK_ACT_LEVEL check_category
   global DISABLE_ADD_PROC_ERROR
 
   clean_up_globals
@@ -5645,37 +5419,24 @@ proc show_test {path full} {
   puts ""
   puts "==============================================================================="
 
-  if { $full == 1} {
+  if {$full} {
     puts "filename:     | [ format_output "              | " 61 $path/$CHECK_INFORMATION_FILE.$CHECK_INFORMATION_EXT ]"
 
     puts "==============================================================================="
-    for {set i 0} {$i <= $check_highest_level} {incr i 1} {
+    set check_levels [checktree_get_check_levels_by_path $path]
+    foreach level $check_levels {
        set blank ""
-       if { $i <= 99} {
+       if {$level <= 99} {
          set blank " "
        }
-       if { $i <= 9 } {
+       if {$level <= 9} {
          set blank "  "
        }
 
        set do_print 0
-       if { [string compare $check_init_level_procedure "--" ] != 0 } {
-          set CHECK_ACT_LEVEL $i
-          set DISABLE_ADD_PROC_ERROR 1
-          if { [$check_init_level_procedure ]  == 0 } {
-             set do_print 1
-          }
-          set DISABLE_ADD_PROC_ERROR 0
-       } else {
-          set do_print 1
-       }
-       if { $do_print == 1 } {
-          puts "run level ${blank}$i |"
-          puts "description:  | [ format_output "              | " 61 $check_description($i)]"
-          puts "==============================================================================="
-       }
-
-
+       puts "run level ${blank}$level |"
+       puts "description:  | [ format_output "              | " 61 $check_description($level)]"
+       puts "==============================================================================="
     }
 
     puts "dependencies: |"
@@ -5865,46 +5626,43 @@ proc set_command_line_options {} {
      }
 }
 
-#****** check/get_max_level_count() ********************************************
-#  NAME
-#     get_max_level_count() -- get runleves of check
+###
+# @brief build max_level_count
 #
-#  SYNOPSIS
-#     get_max_level_count { path }
+# max_level_count is a list of all runlevel a current checktree node
+# and all of its children have.
+# The function descends recursively the checktree beginning with a given node number.
+# It calculates the list of runlevels for each node,
+# stores it in ts_checktree(<node-nr>,max_level_count)
+# and returns it.
 #
-#  FUNCTION
-#     This function returns all runlevel numbers for the check specified by
-#     its testsuite path.
-#
-#  INPUTS
-#     path - full path name of check
-#
-#  RESULT
-#     a list of runlevel numbers
-#
-#*******************************************************************************
-proc get_max_level_count {path} {
-  global CHECK_ACT_LEVEL
-  global ts_checktree DISABLE_ADD_PROC_ERROR
+# @param[in] the start node's node number
+# @return the max_level_count list for the start node
+##
+proc fill_max_level_count {{nr 0}} {
+   global ts_checktree
 
-  set check_directories [get_tests_from_checktree $path]
-  set max_level {}
-  foreach elem $check_directories {
-     set nr $ts_checktree($elem)
-     if { [string compare $ts_checktree($nr,check_init_level_procedure) "--" ] != 0 } {
-        set DISABLE_ADD_PROC_ERROR 1
-        for {set x 0 } {$x <= $ts_checktree($nr,check_highest_level)} {incr x 1 } {
-           set CHECK_ACT_LEVEL $x
-           if { [$ts_checktree($nr,check_init_level_procedure)]  == 0 } {
-              if { [lsearch $max_level $x] < 0 } {
-                 lappend max_level $x
-              }
-           }
-        }
-        set DISABLE_ADD_PROC_ERROR 0
-     }
-  }
-  return $max_level
+   # for a real check: its own levels
+   if {$ts_checktree($nr,test_available)} {
+      set max_level $ts_checktree($nr,check_levels)
+   } else {
+      set max_level {}
+   }
+
+   # add the levels of its children (and a directory can both contain a check and have subdirectories)
+   foreach child $ts_checktree($nr,children) {
+      set max_level [concat $max_level [fill_max_level_count $child]]
+   }
+
+   # remove duplicates
+   set max_level [lsort -integer -unique $max_level]
+   # ts_log_fine "$nr: $ts_checktree($nr,dir_name): $max_level"
+
+   # store the value for this node
+   set ts_checktree($nr,max_level_count) $max_level
+
+   # and return it
+   return $max_level
 }
 
 proc get_checktree_max_level_count {path} {
@@ -5917,11 +5675,6 @@ proc get_checktree_max_level_count {path} {
   }
   return ""
 }
-
-
-
-
-
 
 proc get_checktree_categories {path} {
   global ts_checktree
@@ -5996,7 +5749,7 @@ proc change_dir { input } {
   if { $input == ".." }  {
      if { [info exists ts_checktree($CHECK_ACT_PATH)] } {
         set nr $ts_checktree($CHECK_ACT_PATH)
-        set updir $ts_checktree($nr,upper_nrs);
+        set updir $ts_checktree($nr,parent);
         set CHECK_ACT_PATH $ts_checktree($updir,dir_name)
      }
      return
@@ -6016,7 +5769,7 @@ proc change_dir { input } {
   # here we try to find check names and dir names
   set matches {}
   # here we try to find a test name
-  for {set i 0} {$i< $ts_checktree(act_nr)} {incr i 1} {
+  for {set i 0} {$i< $ts_checktree(next_free)} {incr i 1} {
      if { $ts_checktree($i,test_available) == 1 } {
         # match check_name as a pattern
         if { [string match $input_pattern $ts_checktree($i,check_name)] } {
@@ -6239,7 +5992,7 @@ proc print_menu_header {} {
      }
   }
   set possible_levels [lsort $possible_levels]
-  puts " max. runlevel      :  $possible_levels"
+  puts " possible runlevels :  $possible_levels"
 
   set selected_levels ""
   set CHECK_ENABLED_RUNLEVELS [ lsort $CHECK_ENABLED_RUNLEVELS  ]
@@ -7926,10 +7679,10 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "                      (CAT_LIST must be 1 single parameter, must be quoted"
       puts "                       when using more than one category)"
       puts ""
-      puts "no_main               don't run main part (usefull for sourceing this file)"
+      puts "no_main               don't run main part (usefull for sourcing this file)"
       puts ""
       puts "no_main2              don't run main part and don't do setup"
-      puts "                      (usefull for sourceing this file)"
+      puts "                      (usefull for sourcing this file)"
       puts ""
       puts "reset_conf            reset test cluster"
       puts ""

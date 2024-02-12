@@ -36,22 +36,11 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
-
-# set check_root_access_needs "yes"
-
-
-# define a level initialization procedure:
-set check_init_level_procedure "path_alias_init_level"
-
 
 # define test's name and run level descriptions
 set check_name            "path_alias"
 set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level   1
 set check_description(0)  "checking global path alias file"
 set check_description(1)  "checking user path alias file"
 
@@ -60,8 +49,8 @@ set check_needs           "init_core_system display_test"
 
 
 # setup and cleanup functions
-set check_setup_level_function "path_alias_setup"
-set check_cleanup_level_function "path_alias_cleanup"
+set check_setup_level_function "path_alias_setup_level"
+set check_cleanup_level_function "path_alias_cleanup_level"
 
 # define test's procedure order
 set check_functions ""
@@ -72,30 +61,22 @@ global PATH_ALIAS_OUTPUT2
 global path_alias_test
 set path_alias_test 0
 
-proc path_alias_init_level {} {
-  global CHECK_ACT_LEVEL
-  global path_alias_test
-
-  switch -- $CHECK_ACT_LEVEL {
-     "0" { set path_alias_test 1 ; return 0   } 
-     "1" { set path_alias_test 2 ; return 0   }
-  } 
-  return -1  ;# no other level else
-}
-
 # -------- local test procedures -----------------------------------------------
 
-
-
-proc path_alias_setup {} {
+proc path_alias_setup_level {} {
    global ts_config
+   global CHECK_ACT_LEVEL
    global CHECK_JOB_OUTPUT_DIR
    global CHECK_USER
    global PATH_ALIAS_OUTPUT1
    global PATH_ALIAS_OUTPUT2
    global path_alias_test
    global env CHECK_PROTOCOL_DIR
-  
+
+   switch -- $CHECK_ACT_LEVEL {
+      0 { set path_alias_test 1 } 
+      1 { set path_alias_test 2 }
+   } 
    
    set PATH_ALIAS_OUTPUT1 [ file dirname "$CHECK_JOB_OUTPUT_DIR/adir" ]
    set PATH_ALIAS_OUTPUT2 [ file dirname "$CHECK_JOB_OUTPUT_DIR/adir" ]
@@ -115,12 +96,12 @@ proc path_alias_setup {} {
    }
 
    set do_it 0
-   if { $path_alias_test == 1 } {
+   if {$path_alias_test == 1} {
       set do_it 1
       set file_name "$ts_config(product_root)/$ts_config(cell)/common/sge_aliases"
    }
 
-   if { $path_alias_test == 2 } {
+   if {$path_alias_test == 2} {
       set do_it 1
       set file_name "$env(HOME)/.sge_aliases"
    }
@@ -300,7 +281,7 @@ proc path_alias_main {} {
    }
 }
 
-proc path_alias_cleanup {} {
+proc path_alias_cleanup_level {} {
    global ts_config
    global path_alias_test
    global PATH_ALIAS_OUTPUT1

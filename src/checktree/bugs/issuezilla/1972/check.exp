@@ -37,20 +37,12 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env job_id1 job_id2 job_id3 job_id4 job_id5
-
-#set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "issue_1972_init_level"
+global job_id1 job_id2 job_id3 job_id4 job_id5
 
 # define test's name and run level descriptions
 set check_name            "issue_1972"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0 
 set check_description(0)  "Adding idle complex, submitting job requesting idle comp, doing qstat -j"
 
 
@@ -67,21 +59,7 @@ set check_cleanup_function issue_1972_cleanup
 set check_functions ""
 lappend check_functions "issue_1972_test1"
 
-proc issue_1972_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
-
-
 # -------- local test procedures: initialization------------------------------
-
 
 proc issue_1972_setup {} {
    global ts_config

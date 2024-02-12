@@ -38,16 +38,8 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 global check_need_running_system
-
-#set check_root_access_needs "yes"
-#set check_need_running_system "no"
-
-# define a level initialization procedure:
-set check_init_level_procedure "general_ssos_init_level"
 
 # define tcl files which should be sourced at startup of testsuite
 set check_source_files "remote_cluster_procedures"
@@ -55,7 +47,6 @@ set check_source_files "remote_cluster_procedures"
 # define test's name and run level descriptions
 set check_name             "general_ssos"
 set check_category         "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level    100 
 set check_description(0)   "General Slotwise Suspend on Subordinate test"
 set check_description(100) "General Slotwise Suspend on Subordinate test on all architectures"
 
@@ -69,22 +60,6 @@ set check_cleanup_level_function "general_ssos_level_cleanup"
 # define test's procedure order
 set check_functions {}
 lappend check_functions "general_ssos_test"
-
-
-proc general_ssos_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-      100 {
-         return 0
-      }
-   }
-   return -1  ;# no other level
-}
-
 
 proc general_ssos_level_setup {} {
    global CHECK_USER CHECK_HAVE_TDOM

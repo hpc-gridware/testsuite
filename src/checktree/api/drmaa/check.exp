@@ -36,20 +36,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "drmaa_init_level"
 
 # define test's name and run level descriptions
 set check_name            "drmaa"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   201
 set check_description(0)    "tests available DMRAA lib on one arbitrary host" 
 set check_description(101)  "tests to verify DRMAA 1.0 library on one host"
 set check_description(201)  "tests to verify DRMAA 1.0 library on one host of each architecture available"
@@ -72,26 +65,6 @@ lappend check_functions "drmaa_check_single_threaded_part_03"
 lappend check_functions "drmaa_check_single_threaded_part_04"
 lappend check_functions "drmaa_check_multi_threaded"
 lappend check_functions "drmaa_check_additional_interfaces"
-
-# this function is called each time before
-# a new run level is started
-proc drmaa_init_level {} {
-  global CHECK_ACT_LEVEL
-  # returning -1 causes disabling a certain runlevel
-  # here per run level settings can be prepared
-  switch -- $CHECK_ACT_LEVEL {
-     "0" {
-         return 0
-      }
-      "101" {
-         return 0
-      }
-      "201" {
-         return 0
-      }
-  }
-  return -1  ;# no other level else
-}
 
 # -------- local test procedures -----------------------------------------------
 global drmaa_test_scenario_settings

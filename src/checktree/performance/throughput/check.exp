@@ -128,12 +128,11 @@
 #           Verifies the scheduler decisions regarding sharetree policy.
 #
 #***************************************************************************
-global check_name check_description check_needs check_functions check_highest_level
-global check_init_level_procedure check_category
+global check_name check_description check_needs check_functions
+global check_category
 global check_root_access_needs
 
 set check_root_access_needs  "yes"
-set check_init_level_procedure "throughput_init_level"
 set check_category            "PERFORMANCE EVENTCLIENT VERIFIED"
 set check_name                "throughput"
 set check_description(0)      "Functional test, submit 300 jobs with enabled queues"
@@ -194,8 +193,6 @@ set check_functions           ""
 lappend check_functions       "run_throughput_test"
 #set check_functions          "compare_dump_data_file"
 
-set check_highest_level       310
-
 # settings for the chart generation:
 # we have a certain number of data sets (xy_rows)
 global throughput_num_data_sets
@@ -204,28 +201,6 @@ global throughput_max_job_categories
 set throughput_max_job_categories 300
 global throughput_max_consumable_per_job
 set throughput_max_consumable_per_job 3
-
-proc throughput_init_level {} {
-   global CHECK_ACT_LEVEL CHECK_PRODUCT_TYPE
-
-   # setup levels
-   set major_level [expr $CHECK_ACT_LEVEL / 100]
-   set minor_level [expr $CHECK_ACT_LEVEL % 100]
- 
-   if {$major_level > 3} {
-      return -1
-   }
-
-   if {$minor_level > 10} {
-      return -1
-   }
-
-#if {$minor_level != 3 && $minor_level != 2} {
-#   return -1
-#}
-
-   return 0
-}
 
 proc throughput_setup_sharetree {extended} {
    global ts_config

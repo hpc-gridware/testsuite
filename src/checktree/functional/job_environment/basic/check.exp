@@ -36,20 +36,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 
 # set check_root_access_needs "yes"
 
-
-# define a level initialization procedure:
-set check_init_level_procedure "job_environment_basic_init_level"
-
 # define test's name and run level descriptions
 set check_name            "job_environment_basic"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "test job environment variables"
 
 # define test's dependencies
@@ -66,33 +59,7 @@ lappend check_functions "job_environment_basic_JOB_NAME"
 lappend check_functions "job_environment_basic_amount_uninherited"
 lappend check_functions "job_environment_basic_JOB_NAME_uninherited"
 
-####### job_environment_basic_init_level() ###########################################
-#  NAME
-#     job_environment_basic_init_level() -- init the job env test
-#
-#  SYNOPSIS
-#     job_environment_basic_init_level {}
-#
-#  FUNCTION
-#     Initialize the job environment test
-#
-#  RESULT
-#     0 -> ok   1 -> error
-################################################################################
-proc job_environment_basic_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level else
-}
-
 # -------- local test procedures -----------------------------------------------
-
 
 ####### job_environment_basic_setup() ################################################
 #  NAME

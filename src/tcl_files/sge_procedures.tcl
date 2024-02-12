@@ -2971,28 +2971,15 @@ proc get_scheduling_info { job_id { check_pending 1 }} {
 #     logging/ts_log_severe
 #*******************************
 proc was_job_running {jobid {do_errorcheck 1} } {
-  global check_timestamp
-  get_current_cluster_config_array ts_config
-# returns
-# -1 on error
-# qacct in listform else
+   get_current_cluster_config_array ts_config
 
-  while {[timestamp] == $check_timestamp} {
-     after 500
-  }
-  set check_timestamp [timestamp]
-
-  set result [start_sge_bin "qacct" "-j $jobid"]
+   set ret [get_qacct $jobid qacct_info "" "" $do_errorcheck -1 0 1 qacct_output]
   
-  if {$prg_exit_state != 0} {
-      if {$do_errorcheck == 1} { 
-         ts_log_severe "job \"$jobid\" not found:\n$result"
-      }
+   if {$ret != 0} {
       return -1
-  }
+   }
 
-  set return_value [lreplace $result 0 0]
-  return $return_value
+   return $qacct_output
 }
 
 
@@ -5867,10 +5854,11 @@ proc get_qacct_error {result job_id raise_error} {
 #     parser/parse_qacct()
 #     sge_procedures/get_qacct_error()
 #*******************************
-proc get_qacct {job_id {my_variable "qacct_info"} {on_host ""} {as_user ""} {raise_error 1} {expected_amount -1} {atimeout_value 0} {sum_up_tasks 1}} {
+proc get_qacct {job_id {my_variable "qacct_info"} {on_host ""} {as_user ""} {raise_error 1} {expected_amount -1} {atimeout_value 0} {sum_up_tasks 1} {qacct_output_var qacct_output}} {
    get_current_cluster_config_array ts_config
 
    upvar $my_variable qacctinfo
+   upvar $qacct_output_var qacct_output
    set timeout_value $atimeout_value
 
    if {[info exists qacctinfo]} {
@@ -5909,15 +5897,15 @@ proc get_qacct {job_id {my_variable "qacct_info"} {on_host ""} {as_user ""} {rai
       if {[info exists qacctinfo]} {
          unset qacctinfo
       }
-      set result [start_sge_bin "qacct" "$qacct_args" $on_host $as_user]
+      set qacct_output [start_sge_bin "qacct" "$qacct_args" $on_host $as_user]
       if {$prg_exit_state == 0} {
          if {$expected_amount == -1} {
             # we have the qacct info without errors
-            parse_qacct result qacctinfo $job_id $sum_up_tasks
+            parse_qacct qacct_output qacctinfo $job_id $sum_up_tasks
             break
          } else {
             # we want to have $expected_amount accounting data sets
-            parse_qacct result qacctinfo $job_id $sum_up_tasks
+            parse_qacct qacct_output qacctinfo $job_id $sum_up_tasks
             set num_acct [llength $qacctinfo(exit_status)]
             if {$num_acct == $expected_amount} {
                ts_log_fine "found all $num_acct expected accounting records!"
@@ -5943,7 +5931,7 @@ proc get_qacct {job_id {my_variable "qacct_info"} {on_host ""} {as_user ""} {rai
 
    # parse output or raise error
    if {$prg_exit_state != 0} {
-      set ret [get_qacct_error $result $job_id $raise_error]
+      set ret [get_qacct_error $qacct_output $job_id $raise_error]
    }
 
    return $ret

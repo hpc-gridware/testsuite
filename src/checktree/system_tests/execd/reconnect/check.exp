@@ -38,20 +38,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "execd_reconnect_init_level"
 
 # define test's name and run level descriptions
 set check_name            "execd_reconnect"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "test execd re-connect after changed act_qmaster host file"
 
 
@@ -64,32 +57,6 @@ set check_cleanup_level_function "execd_reconnect_cleanup_level"
 
 # define test's procedure order
 set check_functions "execd_reconnect_test"
-
-
-#****** check/execd_reconnect_init_level() *************************************
-#  NAME
-#     execd_reconnect_init_level() -- report supported runlevels
-#
-#  SYNOPSIS
-#     execd_reconnect_init_level { } 
-#
-#  FUNCTION
-#     This test supports only runlevle 0
-#
-#  RESULT
-#     0 for runlevel 0, otherwise -1
-#
-#*******************************************************************************
-proc execd_reconnect_init_level {} {
-   global CHECK_ACT_LEVEL
-   switch -- $CHECK_ACT_LEVEL {
-      "0" { 
-         return 0
-      } 
-   } 
-   return -1  ;# no other level 
-}
-
 
 #****** check/execd_reconnect_cleanup_level() **********************************
 #  NAME

@@ -36,19 +36,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 
 set check_root_access_needs "yes"
 
-# define a level initialization procedure:
-set check_init_level_procedure "jsv_script_init_level"
-
 # define test's name and run level descriptions
 set check_name            "jsv_script"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0 
 set check_description(0)  "test jsv script protocol"
 
 # define test's dependencies
@@ -79,16 +73,6 @@ set jsv_id_list {}
 set jsv_expect_timeout 0
 set jsv_enter_list {}
 set jsv_enter2_list {}
-
-proc jsv_script_init_level {} {
-   global CHECK_ACT_LEVEL
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-   }
-   return -1  ;# no other level
-}
 
 global jsv_enabled
 set jsv_enabled ""

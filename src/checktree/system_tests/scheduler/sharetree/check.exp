@@ -39,21 +39,11 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
-
-# set check_root_access_needs "yes"
-
-
-# define a level initialization procedure:
-set check_init_level_procedure "share_tree_init_level"
 
 # define test's name and run level descriptions
 set check_name            "share_tree"
 set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level   100
 set check_description(0)  "Testing geee share_tree (functional test)"
 set check_description(100)  "Testing geee share_tree"
 
@@ -62,6 +52,7 @@ set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function "share_tree_setup"
+set check_setup_level_function "share_tree_setup_level"
 set check_cleanup_function "share_tree_cleanup"
 
 # define test's procedure order
@@ -69,36 +60,114 @@ set check_functions ""
 lappend check_functions "share_tree_test"
 lappend check_functions "issue_751"
 
-global share_tree_job_counter 
-global share_tree_percentage_variation
-global sharetree_stored_configuration
+# -------- local test procedures -----------------------------------------------
 
-proc share_tree_init_level {} {
-   global CHECK_ACT_LEVEL
+proc share_tree_setup  {} {
+   global ts_config
    global CHECK_PRODUCT_TYPE
-   global share_tree_job_counter
-   global share_tree_percentage_variation
+   global sharetree_stored_configuration test_queue test_host
 
    if {[string compare $CHECK_PRODUCT_TYPE "sgeee"] != 0} {
-      return -1
+      ts_log_config "test requires sgeee mode"
+      return 99
    }
+
+   get_config sharetree_stored_configuration
+   set my_execd_params "SHARETREE_RESERVED_USAGE=true"
+   if {[string compare -nocase "none" $sharetree_stored_configuration(execd_params)] != 0} {
+      append my_execd_params ",$sharetree_stored_configuration(execd_params)"
+   }
+   set myconfig(execd_params) "$my_execd_params"
+   set_config myconfig
+
+   foreach elem $ts_config(execd_nodes) {
+      disable_queue [get_queue_instance "all.q" "$elem"] 
+   }  
+  
+   set test_host [lindex $ts_config(execd_nodes) 0]
+   set test_queue [get_queue_instance "test" "$test_host"]
+   set change_array(slots) "1"
+   set change_array(load_thresholds) "none"
+   add_queue "test" $test_host change_array
+
+   add_project "project1"
+   add_project "project2"
+   add_project "project3"
+
+   # delete a possibly existing sharetree
+   del_sharetree
+ 
+   # create the sharetree
+   stree_buffer_init stree
+   stree_buffer_add_node stree "/node1" 8000
+   stree_buffer_add_node stree "/node1/project1" 4000
+   stree_buffer_add_node stree "/node1/project2" 6000
+   stree_buffer_add_node stree "/node2" 2000
+   stree_buffer_add_node stree "/node2/project3" 10000
+   stree_buffer_commit stree
+
+   # setup scheduler config
+   get_schedd_config my_config 
+   set my_config(weight_tickets_share) "10000"
+   set my_config(job_load_adjustments) "np_load_avg=0.0"
+   set my_config(schedule_interval)    "2:0:0"
+   set my_config(usage_weight_list)    "cpu=1,mem=0,io=0"
+   set my_config(halftime)             "10"
+   set_schedd_config my_config
+}
+
+proc share_tree_setup_level {} {
+   global CHECK_ACT_LEVEL
+   global share_tree_job_counter
+   global share_tree_percentage_variation
 
    switch -- $CHECK_ACT_LEVEL {
       0 {
          set share_tree_job_counter 5 
          set share_tree_percentage_variation 10
-         return 0
       }
       100 {
          set share_tree_job_counter       100
          set share_tree_percentage_variation  2
-         return 0
       }
    }
-   return -1  ;# no other level else
 }
 
-# -------- local test procedures -----------------------------------------------
+proc share_tree_cleanup  {} {
+   global ts_config
+   global CHECK_PRODUCT_TYPE 
+   global prj1_id_list prj2_id_list prj3_id_list
+   global sharetree_stored_configuration test_host
+ 
+   # reset the schedd config to enable schedule interval again
+   reset_schedd_config
+
+   # delete all jobs
+   delete_all_jobs
+
+   # wait for real end of all jobs
+   wait_for_end_of_all_jobs 60
+
+   # enable all queues again
+   foreach elem $ts_config(execd_nodes) {
+      enable_queue [get_queue_instance "all.q" $elem]
+   }  
+
+   # remote test quque
+   del_queue test $test_host 0 1
+
+   # delete the sharetree
+   del_sharetree
+
+   # delete projects
+   del_project "project1"
+   del_project "project2"
+   del_project "project3"
+
+   # reset configuration
+   reset_config sharetree_stored_configuration
+}
+
 
 proc wait_for_job_tickes {job_id} {
    set my_timeout [timestamp]
@@ -238,60 +307,6 @@ proc get_normalized_ticket_order {job_list_prj1 job_list_prj2 job_list_prj3 most
    set my_job_ticket_list(job_percent_prj3) $prj3_percentage
  
    return $normalized_list
-}
-
-proc share_tree_setup  {} {
-   global ts_config
-   global CHECK_PRODUCT_TYPE
-   global sharetree_stored_configuration test_queue test_host
-
-   if {[string compare $CHECK_PRODUCT_TYPE "sgeee"] != 0} {
-      ts_log_config "not available for sge system"
-      return 
-   }
-    
-   get_config sharetree_stored_configuration
-   set my_execd_params "SHARETREE_RESERVED_USAGE=true"
-   if {[string compare -nocase "none" $sharetree_stored_configuration(execd_params)] != 0} {
-      append my_execd_params ",$sharetree_stored_configuration(execd_params)"
-   }
-   set myconfig(execd_params) "$my_execd_params"
-   set_config myconfig
-
-   foreach elem $ts_config(execd_nodes) {
-      disable_queue [get_queue_instance "all.q" "$elem"] 
-   }  
-  
-   set test_host [lindex $ts_config(execd_nodes) 0]
-   set test_queue [get_queue_instance "test" "$test_host"]
-   set change_array(slots) "1"
-   set change_array(load_thresholds) "none"
-   add_queue "test" $test_host change_array
-
-   add_project "project1"
-   add_project "project2"
-   add_project "project3"
-
-   # delete a possibly existing sharetree
-   del_sharetree
- 
-   # create the sharetree
-   stree_buffer_init stree
-   stree_buffer_add_node stree "/node1" 8000
-   stree_buffer_add_node stree "/node1/project1" 4000
-   stree_buffer_add_node stree "/node1/project2" 6000
-   stree_buffer_add_node stree "/node2" 2000
-   stree_buffer_add_node stree "/node2/project3" 10000
-   stree_buffer_commit stree
-
-   # setup scheduler config
-   get_schedd_config my_config 
-   set my_config(weight_tickets_share) "10000"
-   set my_config(job_load_adjustments) "np_load_avg=0.0"
-   set my_config(schedule_interval)    "2:0:0"
-   set my_config(usage_weight_list)    "cpu=1,mem=0,io=0"
-   set my_config(halftime)             "10"
-   set_schedd_config my_config
 }
 
 proc get_project_member {prj1 prj2 prj3 job_id} {
@@ -514,42 +529,6 @@ proc share_tree_test {} {
          file delete $CHECK_PROTOCOL_DIR/$job
       }
    }
-}
-
-
-proc share_tree_cleanup  {} {
-   global ts_config
-   global CHECK_PRODUCT_TYPE 
-   global prj1_id_list prj2_id_list prj3_id_list
-   global sharetree_stored_configuration test_host
- 
-   # reset the schedd config to enable schedule interval again
-   reset_schedd_config
-
-   # delete all jobs
-   delete_all_jobs
-
-   # wait for real end of all jobs
-   wait_for_end_of_all_jobs 60
-
-   # enable all queues again
-   foreach elem $ts_config(execd_nodes) {
-      enable_queue [get_queue_instance "all.q" $elem]
-   }  
-
-   # remote test quque
-   del_queue test $test_host 0 1
-
-   # delete the sharetree
-   del_sharetree
-
-   # delete projects
-   del_project "project1"
-   del_project "project2"
-   del_project "project3"
-
-   # reset configuration
-   reset_config sharetree_stored_configuration
 }
 
 

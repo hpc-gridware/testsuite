@@ -33,9 +33,7 @@
 # Define the global veriables to give them back
 global check_name check_description check_needs check_functions row
 global check_category
-global check_init_level_procedure
 
-set check_init_level_procedure "qmod_general_init_level"
 set check_name         "qmod_general"
 set check_category     "COMPATIBILITY SYSTEM L10N VERIFIED"
 
@@ -71,18 +69,6 @@ lappend qmod_test_queues "qmod2"
 
 global qmod_num_help_lines
 set qmod_num_help_lines 30
-
-proc qmod_general_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level else
-}
 
 #                                                             max. column:     |
 #****** qmod/qmod_setup() ******

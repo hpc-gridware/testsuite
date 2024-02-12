@@ -37,20 +37,11 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
-
-#set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "pe_ranges_init_level"
 
 # define test's name and run level descriptions
 set check_name            "pe_ranges"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   1
 set check_description(0)  "test pe-ranges"
 set check_description(1)  "test pe-ranges with resource quota sets"
 
@@ -65,21 +56,6 @@ set check_cleanup_function pe_ranges_cleanup
 set check_functions "pe_ranges_test"
 
 global pe_ranges_test_hosts
-
-proc pe_ranges_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   if { $CHECK_ACT_LEVEL == 0 } {
-      return 0 
-   } 
-   if { $CHECK_ACT_LEVEL == 1 } {
-      return 0
-   }
-   return -1  ;# no other level 
-}
-
-
-
 
 # -------- local test procedures: initialization------------------------------
 proc pe_ranges_setup {} {

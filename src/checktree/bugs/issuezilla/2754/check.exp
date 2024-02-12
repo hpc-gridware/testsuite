@@ -32,30 +32,14 @@
 
 # define global variable in this namespace
 
-# define a level initialization procedure:
-set check_init_level_procedure "issue2754_init_level"
-
 # define test's name and run level descriptions
 set check_name            "issue2754_test"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "Tests, if user enters the same port for master and execd, which is not allowed"
 
 # define test's procedure order
 set check_fuctions ""
 lappend check_functions "issue2754_test"
-set check_highest_level 0
-
-proc issue2754_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0"  {
-         return 0
-      }
-   }
-   return -1
-}
 
 # This test starts a simple installation of qmaster. 
 # After entering the qmaster port the execd port has to entered. 

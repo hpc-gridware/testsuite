@@ -36,17 +36,10 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
-global env
-
-# define a level initialization procedure:
-set check_init_level_procedure "issue_1933_init_level"
 
 # define test's name and run level descriptions
 set check_name            "issue_1933"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "check for double qstat queue error messages"
 
 # define test's dependencies
@@ -61,18 +54,6 @@ set check_functions ""
 lappend check_functions "issue_1933_test"
 
 global queue_name
-
-proc issue_1933_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level else
-}
 
 proc issue_1933_setup  {} {
    global ts_config queue_name

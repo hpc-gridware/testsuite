@@ -36,24 +36,16 @@ global check_description
 global check_needs 
 global check_functions
 global check_category
-global check_highest_level
-global check_init_level_procedure
 global ts_config
 global check_root_access_needs
-global env
 
 # some parameters to huge_script test
 
 set check_root_access_needs "no"
 
-# setup check's highest level
-
-set check_highest_level 0
-
 # set description for each level
 set check_description(0)  "check qrsub command and options"
 
-set check_init_level_procedure "qrsub_init_level"
 set check_name         "qrsub"
 set check_category     "COMPATIBILITY SYSTEM VERIFIED"
 set check_needs        "init_core_system"       ;# dependencies of this check (name of other check)
@@ -119,16 +111,6 @@ proc qrsub_cleanup {} {
    unassign_queues_with_ckpt_object "qrsub_ckpt"
    del_ckpt "qrsub_ckpt"
    ts_log_fine "qrsub cleanup function"
-}
-
-proc qrsub_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   if {$CHECK_ACT_LEVEL == 0} {
-      return 0
-   }
-
-   return -1 
 }
 
 proc check_submit_ar {} {

@@ -87,21 +87,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-
-# define a level initialization procedure:
-set check_init_level_procedure "complex_init_level"
 
 # define test's name and run level descriptions
 set check_name            "complex"
 set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level  1
 set check_description(0)  "Test complex attributes and loadsensor"
 set check_description(1)  "Test complex attributes and loadsensor and resource quota sets"
 
@@ -125,19 +117,6 @@ lappend check_functions "invalid_host_requests"
 
 global complex_host
 global complex_old_config
-
-proc complex_init_level {} {
-   global CHECK_ACT_LEVEL
-   switch -- $CHECK_ACT_LEVEL {
-      "0" { 
-         return 0
-      }
-      "1" {
-         return 0
-      }
-   }
-   return -1  ;# no other level else
-}
 
 # -------- local test procedures -----------------------------------------------
 

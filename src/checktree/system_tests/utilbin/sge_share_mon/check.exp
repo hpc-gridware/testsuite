@@ -38,20 +38,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "sge_share_mon_init_level"
 
 # define test's name and run level descriptions
 set check_name            "sge_share_mon"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   1
 set check_description(0)  "test sge_share_mon without sharetree"
 set check_description(1)  "test sge_share_mon with sharetree"
 
@@ -68,37 +61,23 @@ set check_functions ""
 lappend check_functions "share_mon_sharetree"
 lappend check_functions "share_mon_permissions"
 
-
-global sge_share_mon_test_hosts
-global sge_share_mon_saved_slot_count
-
-proc sge_share_mon_init_level {} {
-   global CHECK_ACT_LEVEL
-   global have_share_tree
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         set have_share_tree 0
-         return 0
-      } 
-      "1" {
-         set have_share_tree 1
-         return 0
-      }
-   } 
-
-   return -1  ;# no other level 
-}
-
-
 # -------- local test procedures: initialization------------------------------
-
 
 proc sge_share_mon_setup  {} {
    global ts_config
+   global CHECK_ACT_LEVEL
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
    global have_share_tree submitted_jobs
    global non_cluster_host
+
+   switch -- $CHECK_ACT_LEVEL {
+      0 {
+         set have_share_tree 0
+      } 
+      1 {
+         set have_share_tree 1
+      }
+   } 
 
    # check if we have an unused host, otherwise the test will fail anyway
    set non_cluster_host [host_conf_get_non_cluster_host]
@@ -144,9 +123,8 @@ proc sge_share_mon_cleanup  {} {
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
    global have_share_tree submitted_jobs
 
-   foreach job $submitted_jobs {
-      wait_for_job_end $job
-   }
+   delete_all_jobs
+   wait_for_end_of_all_jobs
 
    if {$have_share_tree} {
       del_sharetree
@@ -157,6 +135,8 @@ proc sge_share_mon_cleanup  {} {
       # makes sure, sge_schedd knows about deletion of users and sharetree
       trigger_scheduling
    }
+
+   unset -nocomplain have_share_tree submitted_jobs
 }
 
 #****** sge_share_mon/share_mon_sharetree_check_node() ******************************

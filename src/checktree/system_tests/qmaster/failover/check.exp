@@ -31,19 +31,17 @@
 #___INFO__MARK_END__
 
 global check_name check_description check_needs check_functions
-global check_category check_root_access_needs  check_highest_level
+global check_category check_root_access_needs
 
 set check_root_access_needs  "yes"
 
 
 set check_name           "qmaster_failover"
 set check_category       "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level  0
 set check_description(0) "checking status of queue with attribute"
 set check_description(1) "initial_state after qmaster failover"
 set check_needs          "init_core_system"
 
-set check_init_level_procedure "qmaster_failover_init_level"
 #
 # Setup function
 #
@@ -57,17 +55,6 @@ set check_cleanup_function "qmaster_failover_cleanup"
 #
 set check_functions      "";
 lappend check_functions  "check_queue_state"
-
-
-proc qmaster_failover_init_level {} {
-   global CHECK_ACT_LEVEL
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-   }
-   return -1  ;# no other level else
-}
 
 #
 # Fun starts here.

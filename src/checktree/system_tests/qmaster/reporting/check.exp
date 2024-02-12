@@ -59,20 +59,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "reporting_init_level"
 
 # define test's name and run level descriptions
 set check_name            "reporting"
 set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level   0
 set check_description(0)  "Test reporting parameters and qmaster reporting"
 
 # define test's dependencies
@@ -97,20 +90,7 @@ lappend check_functions "reporting_ar_warning_state_test"
 
 global reporting_old_config reporting_acct_file
 
-proc reporting_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level else
-}
-
 # -------- local test procedures -----------------------------------------------
-
 
 proc reporting_setup  {} {
    global ts_config CHECK_USER

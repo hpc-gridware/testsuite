@@ -18,21 +18,15 @@ global check_category
 global check_description
 global check_needs
 global check_functions
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 global check_need_running_system
 
 #set check_root_access_needs "yes"
 #set check_need_running_system "no"
 
-# define a level initialization procedure:
-set check_init_level_procedure "max_dyn_ec_init_level"
-
 # define test's name and run level descriptions
 set check_name            "max_dyn_ec"
 set check_category        "COMPATIBILITY SYSTEM EVENTCLIENT VERIFIED"
-set check_highest_level   0
 set check_description(0)  "test setting of the maximum number of dynamic event clients"
 
 # define test's dependencies
@@ -48,18 +42,6 @@ set check_functions {}
 lappend check_functions "max_dyn_ec_default" ;# shall be first check_function
 lappend check_functions "max_dyn_ec_massive_qsub_sync"
 lappend check_functions "max_dyn_ec_out_of_ids"
-
-proc max_dyn_ec_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
 
 # -------- local test procedures: initialization------------------------------
 

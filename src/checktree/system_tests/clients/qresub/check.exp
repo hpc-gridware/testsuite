@@ -41,9 +41,6 @@ set check_category     "COMPATIBILITY SYSTEM L10N VERIFIED"
 set check_description(0)  "check every qresub option"
 set check_needs        "init_core_system"       ;# dependencies of this check (name of other check)
 
-# define a level initialization procedure:
-set check_init_level_procedure "qresub_init_level"
-
 # setup and cleanup functions
 set check_setup_function "qresub_setup"
 set check_cleanup_function "qresub_cleanup"
@@ -56,18 +53,6 @@ lappend check_functions "qresub_minus_h_o_option"
 lappend check_functions "qresub_minus_h_u_option"
 lappend check_functions "qresub_minus_h_s_option"
 lappend check_functions "qresub_check_permissions"
-
-proc qresub_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level else
-}
 
 proc qresub_setup {} {
    global ts_user_config

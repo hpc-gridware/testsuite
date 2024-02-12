@@ -36,19 +36,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 
 set check_root_access_needs "yes"
 
-# define a level initialization procedure:
-set check_init_level_procedure "jsv_ge_mod_init_level"
-
 # define test's name and run level descriptions
 set check_name            "jsv_ge_mod"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   1
 set check_description(0)  "test qalter jsv requests using job id of job to modify"
 set check_description(1)  "test qalter jsv requests using job name of job to modify"
 
@@ -110,21 +104,6 @@ global jsv_enabled
 global jsv_base_path 
 
 set jsv_enabled ""
-
-proc jsv_ge_mod_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-      1 {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
 
 proc jsv_ge_mod_setup_level {} {
    global CHECK_ACT_LEVEL

@@ -38,10 +38,7 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 global CHECK_ACTUAL_TEST_PATH
 
 ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/init_cluster
@@ -52,13 +49,9 @@ ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/automatic/execd
 
 set check_root_access_needs "yes"
 
-# define a level initialization procedure:
-set check_init_level_procedure "Autoinstall_test_init_level"
-
 # define test's name and run level descriptions
 set check_name            "issue_1330"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level  0 
 set check_description(0)  "This test installs sge using the automatic installation"
 
 # define test's dependencies
@@ -98,21 +91,6 @@ lappend check_functions "setup_sge_aliases_file"
 
 global Autoinstall_test_test_hosts
 global Autoinstall_test_saved_slot_count
-
-proc Autoinstall_test_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
-
-
-
 
 # -------- local test procedures: initialization------------------------------
 proc issue_1330_setup {} {

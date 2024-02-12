@@ -49,9 +49,6 @@ set check_needs         ""
 
 set install_mode        $CHECK_TESTSUITE_INSTALL_MODE ;# sets the install mode. allowed are: automatic and manual
 
-# define a level initialization procedure:
-set check_init_level_procedure "install_core_system_init_level"
-
 set check_functions     ""                              ;# functions to call (in order)
 
 if {$install_mode == "automatic"} {
@@ -114,17 +111,6 @@ set local_master_spool_set 0
 set local_execd_spool_set 0
 
 set CORE_INSTALLED ""
-
-proc install_core_system_init_level {} {
-   global CHECK_ACT_LEVEL
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-   }
-   return -1  ;# no other level else
-}
-
 
 proc write_install_list {} {
    global ts_config

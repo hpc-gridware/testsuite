@@ -36,21 +36,15 @@ global check_name
 global check_description
 global check_needs
 global check_functions
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env ts_config
+global ts_config
 global check_category
 
 set check_root_access_needs "yes"
 
-# define a level initialization procedure:
-set check_init_level_procedure "qconf_init_level"
-
 # define test's name and run level descriptions
 set check_name            "qconf"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level    0
 set check_description(0)  "test all qconf options (test not complete)"
 
 # define test's dependencies
@@ -148,14 +142,6 @@ lappend check_functions "qconf_issue_2960"
 global queue_names
 
 global submitjob_jobid
-
-proc qconf_init_level {} {
-   global CHECK_ACT_LEVEL
-   if { $CHECK_ACT_LEVEL == 0 } {
-      return 0
-   }
-   return -1  ;# no other level else
-}
 
 proc qconf_setup {} {
    global ts_config CHECK_USER

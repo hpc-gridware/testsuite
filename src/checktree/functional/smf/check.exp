@@ -32,13 +32,9 @@
 
 # define global variable in this namespace
 
-# define a level initialization procedure:
-set check_init_level_procedure "smf_init_level"
-
 # define test's name and run level descriptions
 set check_name            "smf"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "Test SMF support"
 
 set check_root_access_needs  "yes"
@@ -59,16 +55,6 @@ lappend check_functions "smf_test_qmaster"
 
 set check_setup_function "smf_setup"
 set check_cleanup_function "smf_cleanup"
-
-proc smf_init_level {} {
-   global CHECK_ACT_LEVEL
-   switch -- $CHECK_ACT_LEVEL {
-      0  {
-         return 0
-      }
-   }
-   return -1
-}
 
 proc smf_setup {} {
    remove_smf_from_cluster

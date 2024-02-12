@@ -36,20 +36,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "client_setup_init_level"
 
 # define test's name and run level descriptions
 set check_name            "client_setup"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "test setup (startup) of clients in certain error situations"
 
 # define test's dependencies
@@ -64,19 +57,6 @@ set check_functions {}
 lappend check_functions "client_setup_test_bootstrap"
 lappend check_functions "client_setup_test_act_qmaster"
 lappend check_functions "client_setup_test_qmaster_down"
-
-proc client_setup_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" { 
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
-
 
 # -------- local test procedures: initialization------------------------------
 

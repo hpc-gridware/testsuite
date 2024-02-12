@@ -1,16 +1,5 @@
-#___INFO__MARK_BEGIN__
-###########################################################################
-#
-#  The contents of this file are made available subject to the terms of the
-#  Apache Software License 2.0 ('The License').
-#  You may not use this file except in compliance with The License.
-#  You may obtain a copy of The License at
-#  http://www.apache.org/licenses/LICENSE-2.0.html
-#
-#  Copyright (c) 2011 Univa Corporation.
-#
-###########################################################################
-#___INFO__MARK_END__
+#___INFO__MARK_BEGIN_NEW__
+#___INFO__MARK_END_NEW__
 
 # Template for testsuite check
 #
@@ -22,19 +11,16 @@
 #
 # 3) set check_category
 #
-# 4) set check_highest_level ( e.g.: runlevel "short" has reserved values from 0 to 99 )
-#
-# 5) set check_needs (e.g.: "init_core_system" this means that this test is not
+# 4) set check_needs (e.g.: "init_core_system" this means that this test is not
 #    started without succesfull run of "init_core_system" test
-# 6) implement the default functions (e.g.: __TESTSUITE_TEST_NAME_init_level)
 #
-# 7) you can add any function name to check_functions (all function (no paramters allowed) are started
+# 5) you can add any function name to check_functions (all function (no paramters allowed) are started
 #    within each runlevel number
 #    PLEASE use ts_log_severe() to submit errors
 #    ts_log_severe() is used in many testsuite standard functions, so not every
 #    function call must check the return state.
 #
-# 8) set check_need_running_system != "yes" if you shutdown the qmaster in the setup(level)
+# 6) set check_need_running_system != "yes" if you shutdown the qmaster in the setup(level)
 #    procedures. This will skip the qmaster alive test before starting test procedures.
 
 
@@ -44,21 +30,15 @@ global check_category
 global check_description
 global check_needs
 global check_functions
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 global check_need_running_system
 
 #set check_root_access_needs "yes"
 #set check_need_running_system "no"
 
-# define a level initialization procedure:
-set check_init_level_procedure "__TESTSUITE_TEST_NAME_init_level"
-
 # define test's name and run level descriptions
 set check_name            "__TESTSUITE_TEST_NAME"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   1
 set check_description(0)  ""
 set check_description(1)  ""
 
@@ -67,24 +47,13 @@ set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function __TESTSUITE_TEST_NAME_setup
+set check_setup_level_function __TESTSUITE_TEST_NAME_setup_level
+set check_cleanup_level_function __TESTSUITE_TEST_NAME_cleanup_level
 set check_cleanup_function __TESTSUITE_TEST_NAME_cleanup
 
 # define test's procedure order
 set check_functions {}
 lappend check_functions "__TESTSUITE_TEST_NAME_test"
-
-proc __TESTSUITE_TEST_NAME_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 -
-      1 {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
 
 # -------- local test procedures: initialization------------------------------
 
@@ -97,6 +66,12 @@ proc __TESTSUITE_TEST_NAME_setup {} {
 
    # we want to modify the global config - make a backup
    get_config __TESTSUITE_TEST_NAME_backup
+}
+
+proc __TESTSUITE_TEST_NAME_setup_level {} {
+}
+
+proc __TESTSUITE_TEST_NAME_cleanup_level {} {
 }
 
 proc __TESTSUITE_TEST_NAME_cleanup {} {
@@ -116,6 +91,8 @@ proc __TESTSUITE_TEST_NAME_cleanup {} {
    foreach var "__TESTSUITE_TEST_NAME_hosts __TESTSUITE_TEST_NAME_backup" {
       unset -nocomplain $var
    }
+
+   unset -nocomplain __TESTSUITE_TEST_NAME_hosts __TESTSUITE_TEST_NAME_backup
 }
 
 

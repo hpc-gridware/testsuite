@@ -37,17 +37,11 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-
-# define a level initialization procedure:
-set check_init_level_procedure "job_environment_enhanced_init_level"
 
 # define test's name and run level descriptions
 set check_name            "job_environment_enhanced"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "enhanced job environment variables test"
 
 # define test's dependencies
@@ -63,20 +57,6 @@ set check_root_access_needs "yes"
 set check_functions {}
 lappend check_functions "job_environment_enhanced_INHERIT_ENV"
 lappend check_functions "job_environment_enhanced_SET_LIB_PATH"
-
-
-proc job_environment_enhanced_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level else
-}
-
 
 ####### job_environment_enhanced_setup() #############################################
 #  NAME

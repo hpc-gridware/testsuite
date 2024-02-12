@@ -36,21 +36,15 @@ global check_category
 global check_description
 global check_needs
 global check_functions
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 global check_need_running_system
 
 set check_root_access_needs "no"
 set check_need_running_system "yes"
 
-# define a level initialization procedure:
-set check_init_level_procedure "issue_2542_init_level"
-
 # define test's name and run level descriptions
 set check_name            "issue_2542"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "check limitation concurrent array job task execution"
 set check_description(1)  ""
 
@@ -68,18 +62,6 @@ lappend check_functions "issue_2542_check_bad_tc_number"
 lappend check_functions "issue_2542_check_tc_with_non_array_job"
 lappend check_functions "issue_2542_check_qalter_tc"
 lappend check_functions "issue_2542_check_qalter_tc_with_non_array_job"
-
-proc issue_2542_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
 
 # -------- local test procedures: initialization------------------------------
 

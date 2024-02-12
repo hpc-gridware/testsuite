@@ -40,20 +40,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "shadowd_migrate_init_level"
 
 # define test's name and run level descriptions
 set check_name            "shadowd_migrate"
 set check_category        "COMPATIBILITY SYSTEM EVENTCLIENT VERIFIED"
-set check_highest_level   9
 set check_description(0)  "test heartbeat file writing"
 set check_description(1)  "test shadowd functionality"
 set check_description(2)  "test simple shadowd functionality"
@@ -82,18 +75,6 @@ lappend check_functions "shadowd_migrate_test"
 
 global shadowd_migrate_test_hosts
 global shadowd_migrate_saved_slot_count
-
-proc shadowd_migrate_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   if { $CHECK_ACT_LEVEL >= 0 && $CHECK_ACT_LEVEL <= 9 } {
-      return 0
-   }
-   return -1  ;# no other level 
-}
-
-
-
 
 # -------- local test procedures: initialization------------------------------
 proc shadowd_migrate_setup_level {} {

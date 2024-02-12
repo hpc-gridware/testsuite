@@ -39,20 +39,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "no"
-
-# define a level initialization procedure:
-set check_init_level_procedure "scheduler_queue_requests_init_level"
 
 # define test's name and run level descriptions
 set check_name            "scheduler_queue_requests"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "check scheduling with -q and -masterq requests"
 
 # define test's dependencies
@@ -74,25 +67,6 @@ lappend check_functions "scheduler_queue_requests_mastercq"
 lappend check_functions "scheduler_queue_requests_softqi"
 lappend check_functions "scheduler_queue_requests_softcq"
 
-proc scheduler_queue_requests_init_level {} {
-   global CHECK_ACT_LEVEL
-   global queue_count queue_request_count pe_count
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         set queue_count 10
-         set queue_request_count 5
-         set pe_count 5
-         return 0
-      }
-   }
-
-   return -1  ;# no other level 
-}
-
-
-
-
 # -------- local test procedures: initialization------------------------------
 
 proc scheduler_queue_requests_get_qname {num} {
@@ -101,7 +75,11 @@ proc scheduler_queue_requests_get_qname {num} {
 
 proc scheduler_queue_requests_setup  {} {
    global ts_config
-   global queue_count pe_count sched_conf_backup
+   global queue_count pe_count queue_request_count sched_conf_backup
+
+   set queue_count 10
+   set queue_request_count 5
+   set pe_count 5
 
    # backup schedd config
    get_schedd_config sched_conf_backup
@@ -137,7 +115,7 @@ proc scheduler_queue_requests_setup  {} {
 
 proc scheduler_queue_requests_cleanup  {} {
    global ts_config
-   global queue_count pe_count sched_conf_backup
+   global queue_count pe_count queue_request_count sched_conf_backup
 
    # restore old schedd config
    set_schedd_config sched_conf_backup
@@ -156,6 +134,8 @@ proc scheduler_queue_requests_cleanup  {} {
    for {set i 0} {$i < $queue_count} {incr i} {
       del_queue [scheduler_queue_requests_get_qname $i] "@allhosts" 0 1
    }
+
+   unset -nocomplain queue_count pe_count queue_request_count sched_conf_backup
 }
 
 proc scheduler_queue_requests_sched_time {} {

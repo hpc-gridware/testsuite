@@ -36,21 +36,14 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 # we need root access
 set check_root_access_needs "yes"
 
-# define a level initialization procedure:
-set check_init_level_procedure "qmod_reschedule_init_level"
-
 # define test's name and run level descriptions
 set check_name            "qmod_reschedule"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "checking reschedule option of qmod"
 
 # define test's dependencies
@@ -70,17 +63,6 @@ lappend check_functions "reschedule_pe_jobs"
 lappend check_functions "reschedule_deleted_job"
 
 # -------- local test procedures -----------------------------------------------
-proc qmod_reschedule_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-   }
-   return -1  ;# no other level else
-}
-
 #
 #                                                             max. column:     |
 #

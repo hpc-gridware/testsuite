@@ -35,18 +35,13 @@
 # Define the global veriables to give them back
 global check_name check_description check_needs check_functions
 global check_category
-global check_highest_level check_init_level_procedure
 global ts_config
 global check_root_access_needs
 set check_root_access_needs "yes"
 
-# setup check's highest level
-set check_highest_level 0
-
 # set description for each level
 set check_description(0)  "check every qsub option"
 
-set check_init_level_procedure "qsub_init_level"
 set check_name         "qsub"
 set check_category     "COMPATIBILITY SYSTEM L10N EVENTCLIENT VERIFIED"
 set check_needs        "init_core_system"       ;# dependencies of this check (name of other check)
@@ -112,45 +107,6 @@ lappend check_functions "check_sync_failover" ;# Testcase for TS IZ 3
 lappend check_functions "check_option_pty"
 lappend check_functions "check_option_pty_no"
 lappend check_functions "check_option_pty_io"
-
-#                                                             max. column:     |
-#****** qsub/qsub_init_level() ******
-# 
-#  NAME
-#     qsub_init_level -- ??? 
-#
-#  SYNOPSIS
-#     qsub_init_level { } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
-proc qsub_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   if {$CHECK_ACT_LEVEL == 0} {
-      return 0
-   }
-
-   return -1 
-}
 
 proc qsub_setup {} {
    global ts_config

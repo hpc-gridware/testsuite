@@ -37,19 +37,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 
 set check_root_access_needs "yes"
 
-# define a level initialization procedure:
-set check_init_level_procedure "issue_2050_init_level"
-
 # define test's name and run level descriptions
 set check_name            "issue_2050"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "check setup qlogin_daemon rlogin_daemon paths"
 
 # define test's dependencies
@@ -67,20 +61,7 @@ global act_time
 set check_functions ""
 lappend check_functions "issue_2050_test"
 
-proc issue_2050_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   } 
-
-   return -1  ;# no other level 
-}
-
 # -------- local test procedures: initialization------------------------------
-
 
 proc issue_2050_setup  {} {
    global test_host

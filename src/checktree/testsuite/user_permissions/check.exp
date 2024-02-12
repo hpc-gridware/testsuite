@@ -38,19 +38,13 @@ global check_category
 global check_description
 global check_needs
 global check_functions
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 
 set check_root_access_needs "yes"
 
-# level initialization procedure:
-set check_init_level_procedure "check_user_permissions_init_level"
-
 # test's name and run level descriptions
 set check_name            "check_user_permissions"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "check user permissions"
 
 # test's dependencies
@@ -59,18 +53,6 @@ set check_needs           "init_core_system"
 # define test's procedure order
 set check_functions {}
 lappend check_functions   "check_user_permissions"
-
-proc check_user_permissions_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
 
 proc check_user_permissions {} {
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER

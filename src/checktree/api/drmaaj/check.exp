@@ -36,20 +36,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "drmaaj_init_level"
 
 # define test's name and run level descriptions
 set check_name            "drmaa-j"
 set check_category        "COMPATIBILITY SYSTEM"
-set check_highest_level   303
 set check_description(0)    "short test: only one host; verify highest DRMAA-J library with highest DRMAA-C library" 
 set check_description(103)  "One host (>= SGE 6.1); Lowest Java-version: tests to verify DRMAA-J 1.0 library with DRMAA-C 1.0 library"
 set check_description(203)  "One host (>= SGE 6.1); Different Java-versions: tests to verify DRMAA-J 1.0 library with DRMAA-C 1.0 library"
@@ -67,44 +60,6 @@ set check_cleanup_level_function "drmaaj_cleanup_level"
 # define test's procedure order
 set check_functions ""
 lappend check_functions "drmaaj_check"
-
-#****** check.60.exp/drmaaj_init_level() *******************************************
-#  NAME
-#     drmaaj_init_level() -- ??? 
-#
-#  SYNOPSIS
-#     drmaaj_init_level { } 
-#
-#  FUNCTION
-#     this function is called each time before
-#     a new run level is started
-#
-#  INPUTS
-#
-#  RESULT
-#     1 if runlevel is supported otherwise 0 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************************************************************
-proc drmaaj_init_level {} {
-   global CHECK_ACT_LEVEL
-   switch -- $CHECK_ACT_LEVEL {
-     "0"   {
-            return 0
-     }
-     "103" {
-            return 0
-     }
-     "203" {
-            return 0
-     }
-     "303" {
-            return 0
-      }
-   }
-   return -1  ;# no other level else
-}
 
 # -------- local test procedures -----------------------------------------------
 

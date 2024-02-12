@@ -31,13 +31,10 @@
 #___INFO__MARK_END__
 global check_name check_description check_needs check_functions
 global check_category
-global check_init_level_procedure
 set check_name         "ckpt_migration_test"
 set check_category     "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level   0
 set check_description(0)  "MPI based parallel application with checkpointing and event based migration"
 set check_needs        "init_core_system"                   ;# dependencies of this check (name of other check)
-set check_init_level_procedure "migration_init_level"
 
 # setup and cleanup functions
 set check_setup_function "migration_setup"
@@ -59,26 +56,8 @@ lappend check_functions "clean_up_checkpoint_job"
 global checkpoint_host1 checkpoint_host2 q1 q2 q3 q4 migration_pe_name migration_ckpt_name
 global checkpoint_job_id 
 
-proc migration_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level else
-}
-
-
-
-
-
-
 # TODO: (CR) This test should get an overwork because of file operations which might be done better on the remote host
 #            Also some timeout settings or (wait settings) should be checked (after, sleep, etc.)
-
 
 proc migration_setup {} {
    global ts_config CHECK_PROTOCOL_DIR

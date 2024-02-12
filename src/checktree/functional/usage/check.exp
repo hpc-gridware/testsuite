@@ -72,22 +72,15 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 global ts_config
 global submit_command
 
 set check_root_access_needs "yes"
 
-# define a level initialization procedure:
-set check_init_level_procedure "usage_init_level"
-
 # define test's name and run level descriptions
 set check_name            "usage"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   102
 set check_description(0)  "check reserved usage of jobs submitted with qsub (random host)"
 set check_description(1)  "check reserved usage of jobs submitted with qrsh (random host)"
 set check_description(2)  "check reserved usage of jobs submitted with qrsh (random host), accounting summary"
@@ -109,23 +102,6 @@ lappend check_functions "usage_single"
 lappend check_functions "usage_tight"
 lappend check_functions "usage_loose1"
 lappend check_functions "usage_loose2"
-
-proc usage_init_level {} {
-   global CHECK_ACT_LEVEL
-   switch -- $CHECK_ACT_LEVEL {
-      0 -
-      1 -
-      100 -
-      101 {
-         return 0
-      }
-      2 -
-      102 {
-         return 0
-      }
-   }
-   return -1  ;# no other level
-}
 
 # -------- local test procedures: initialization------------------------------
 

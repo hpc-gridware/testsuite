@@ -32,13 +32,9 @@
 
 # define global variable in this namespace
 
-# define a level initialization procedure:
-set check_init_level_procedure "copy_certs_init_level"
-
 # define test's name and run level descriptions
 set check_name            "copy_certs"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED CSP"
-set check_highest_level   0
 set check_description(0)  "Tests the copy_certs switch installation script"
 
 set check_root_access_needs  "yes"
@@ -49,19 +45,6 @@ set check_needs           "init_core_system"
 # define test's procedure order
 set check_fuctions   ""
 lappend check_functions "copy_certs_setup"
-set check_highest_level       0
-
-proc copy_certs_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0  {
-         return 0
-      }
-   }
-
-   return -1
-}
 
 proc copy_certs_setup {} {
    global ts_config

@@ -36,20 +36,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "issue_2717_init_level"
 
 # define test's name and run level descriptions
 set check_name            "issue_2717"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   1
 set check_description(0)  "test case for IZ 2717 - schedd_runlog is growing"
 
 
@@ -63,23 +56,6 @@ set check_cleanup_function issue_2717_cleanup
 # define test's procedure order
 set check_functions {}
 lappend check_functions "issue_2717" ;# Test case for IZ2717 
-
-
-proc issue_2717_init_level {} {
-   global CHECK_ACT_LEVEL
-   
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0 
-      }
-      default {
-         return -1
-      }
-
-   }
-   
-   return -1  ;# no other level
-}
 
 # -------- local test procedures: initialization------------------------------
 

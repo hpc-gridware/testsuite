@@ -34,19 +34,15 @@
 
 # Define the global veriables to give them back
 global check_name check_description check_needs check_functions
-global check_category check_root_access_needs check_highest_level
+global check_category check_root_access_needs
 global prj_exists
 
 set check_root_access_needs  "yes"
 
 set check_name           "qstat"
 set check_category       "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level  0
 set check_description(0) "checking qstat functionality (with and without -xml)"
 set check_needs          "init_core_system "      ;# dependencies of this check (name of other check)
-
-# define a level initialization procedure:
-set check_init_level_procedure "qstat_init_level"
 
 # setup and cleanup functions
 set check_setup_function "qstat_setup"
@@ -98,19 +94,6 @@ lappend check_functions "qstat_U_valid_plain_xml_comparison" ;# Compare the two 
 lappend check_functions "test_issue123"
 lappend check_functions  "qstat_profile"
 lappend check_functions "test_qstat_j_xml"
-
-proc qstat_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-   }
-
-   return -1
-}
-
 
 # TODO: (CR) 1) This test should not simply wait 10 seconds for the job to start (after 10000)
 #            2) Why is the test useing its own submitter script (we can not work with job ids here)

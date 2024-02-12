@@ -32,13 +32,9 @@
 
 # define global variable in this namespace
 
-# define a level initialization procedure:
-set check_init_level_procedure "backup_restore_init_level"
-
 # define test's name and run level descriptions
 set check_name            "backup_restore"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "Tests the backup and restore functionality"
 
 set check_root_access_needs "yes"
@@ -54,19 +50,6 @@ set check_cleanup_function "backup_restore_cleanup"
 set check_fuctions ""
 lappend check_functions "backup_restore_do_backup_restore"
 lappend check_functions "backup_restore_check_cluster"
-set check_highest_level 0
-
-proc backup_restore_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0  {
-         return 0
-      }
-   }
-
-   return -1
-}
 
 proc backup_restore_setup {} {
    global ts_config CHECK_USER

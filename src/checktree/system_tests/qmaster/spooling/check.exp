@@ -36,22 +36,12 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
-
-# set check_root_access_needs "yes"
-
-
-# define a level initialization procedure:
-set check_init_level_procedure "qmaster_spooling_init_level"
 
 # define test's name and run level descriptions
 set check_name "qmaster_spooling"
 set check_root_access_needs  "yes"
 set check_category "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level 0
 set check_description(0) "check qmaster spooling"
 
 # define test's dependencies
@@ -67,18 +57,6 @@ lappend check_functions "qmaster_spooling_prj_restart"
 lappend check_functions "qmaster_spooling_rqs_restart"
 lappend check_functions "qmaster_spooling_ar_restart"
 lappend check_functions "qmaster_spooling_issue2442"
-
-proc qmaster_spooling_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" { 
-         return 0
-      }
-   }
-
-   return -1
-}
 
 # -------- local test procedures -----------------------------------------------
 

@@ -36,21 +36,11 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
-
-# set check_root_access_needs "yes"
-
-
-# define a level initialization procedure:
-set check_init_level_procedure "issue_171_init_level"
 
 # define test's name and run level descriptions
 set check_name            "issue_171"
 set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level   0
 set check_description(0)  "qalter -h xxx should not cause qmaster core if task is not existing"
 
 # define test's dependencies
@@ -62,18 +52,6 @@ set check_cleanup_function "issue_171_cleanup"
 # define test's procedure order
 set check_functions ""
 lappend check_functions "issue_171_check"
-
-proc issue_171_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level else
-}
 
 # -------- local test procedures -----------------------------------------------
 

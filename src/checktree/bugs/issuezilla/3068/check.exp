@@ -38,21 +38,13 @@ global check_needs
 global check_functions 
 global check_errno 
 global check_errstr 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-
-# define a level initialization procedure:
-set check_init_level_procedure "issue_3068_init_level"
 
 # define test's name and run level descriptions
 set check_name            "issue_3068"
 set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level   0
 set check_description(0)  "h_vmem setting as JOB consumable fails to set the virtual memory limit of a job"
 
 # define test's dependencies
@@ -65,18 +57,6 @@ set check_cleanup_function "issue_3068_cleanup"
 # define test's procedure order
 set check_functions ""
 lappend check_functions "issue_3068_check"
-
-proc issue_3068_init_level {} {
-   global CHECK_ACT_LEVEL 
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" { 
-         return 0    
-      } 
-   }
-
-   return -1  ;# no other level else
-}
 
 proc issue_3068_setup {} {
    global ts_config

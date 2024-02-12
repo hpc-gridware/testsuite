@@ -32,13 +32,9 @@
 
 # define global variable in this namespace
 
-# define a level initialization procedure:
-set check_init_level_procedure "inst_submit_host_init_level"
-
 # define test's name and run level descriptions
 set check_name            "inst_submit_host"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "Tests the submithost installation functionality"
 
 set check_root_access_needs "yes"
@@ -49,18 +45,6 @@ set check_needs           "init_core_system"
 # define test's procedure order
 set check_functions   ""
 lappend check_functions "inst_submit_host_setup"
-
-proc inst_submit_host_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0"  {
-         return 0
-      }
-   }
-
-   return -1
-}
 
 proc inst_submit_host_setup {} {
    global ts_config

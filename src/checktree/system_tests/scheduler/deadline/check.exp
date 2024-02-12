@@ -36,21 +36,11 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
-
-#set check_root_access_needs "yes"
-
-
-# define a level initialization procedure:
-set check_init_level_procedure "deadline_calculation_init_level"
 
 # define test's name and run level descriptions
 set check_name            "deadline_calculation"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   2
 set check_description(0)  "check deadline calculation of the scheduler with deadline in the future"
 set check_description(1)  "check deadline calculation of the scheduler with deadline in the past"
 set check_description(2)  "check deadline permissions"
@@ -67,17 +57,6 @@ set check_functions ""
 lappend check_functions "deadline_jobs_test"
 lappend check_functions "deadline_test_permission"
 
-
-proc deadline_calculation_init_level {} {
-   global CHECK_ACT_LEVEL
-   
-   switch -exact -- $CHECK_ACT_LEVEL {
-      0 {  return 0 }  # test job with deadline in the future
-      1 {  return 0 }  # test job with deadline in the past
-      2 {  return 0 }  # test permission for deadline jobs
-      default { return -1 }      
-   }
-}
 
 # -------- local test procedures: initialization------------------------------
 

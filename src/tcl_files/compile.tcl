@@ -2302,7 +2302,7 @@ proc build_distribution {arch_list report_var} {
    }
 
    # add mk_dist options specific to additional checktrees
-   for {set i 0} {$i < $ts_checktree(act_nr)} {incr i} {
+   for {set i 0} {$i < $ts_checktree(next_free)} {incr i} {
       if {[info exists ts_checktree($i,mk_dist_options)]} {
          append args " $ts_checktree($i,mk_dist_options)"
       }

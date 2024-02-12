@@ -37,16 +37,11 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 global check_need_running_system
 
 set check_root_access_needs "yes"
 #set check_need_running_system "no"
-
-# define a level initialization procedure:
-set check_init_level_procedure "current_version_upgrade_init_level"
 
 # define tcl files which should be sourced at startup of testsuite
 set check_source_files "remote_cluster_procedures"
@@ -54,7 +49,6 @@ set check_source_files "remote_cluster_procedures"
 # define test's name and run level descriptions
 set check_name            "current_version_upgrade"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   200
 set check_description(0)  "upgrade test 61x to 62x (run 1 of 30 possible scenario for all enabled previous GE versions)"
 set check_description(200)  "upgrade test 61x to 62x (run all scenarios)"
 
@@ -70,24 +64,7 @@ set check_cleanup_level_function current_version_upgrade_cleanup
 set check_functions {}
 lappend check_functions "current_version_upgrade_test"
 
-
-proc current_version_upgrade_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-      200 {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
-
 # -------- local test procedures: initialization------------------------------
-
 
 #TODO: enhancements:
 #      1) forget about backup of current cluster (just shutdown) (perhaps it is necessary to backup the certificates of the original cluster!!!)

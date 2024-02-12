@@ -37,17 +37,11 @@ global check_category
 global check_description
 global check_needs
 global check_functions
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-
-# define a level initialization procedure:
-set check_init_level_procedure "qrsh_init_level"
 
 # define test's name and run level descriptions
 set check_name            "qrsh"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   200
 set check_description(0)    "checking qrsh to one exec host (master)"
 set check_description(200)  "checking qrsh to all exec hosts"
 
@@ -84,19 +78,6 @@ lappend check_functions "qrsh_w_v_test"
 lappend check_functions "qrsh_pty_yes_redirect"
 lappend check_functions "qrsh_pty_yes_line_breaks"   ;# test if NL gets converted to CR NL
 lappend check_functions "qrsh_forward_stdin"         ;# test if stdin forward works via <
-
-proc qrsh_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -exact $CHECK_ACT_LEVEL {
-      0 -
-      200 {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level else
-}
 
 # -------- local test procedures -----------------------------------------------
 proc qrsh_setup {} {

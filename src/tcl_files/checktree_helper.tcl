@@ -65,7 +65,7 @@ proc exec_compile_hooks { compile_hosts a_report } {
    upvar $a_report report
    
    set error_count 0
-   for {set i 0} { $i < $ts_checktree(act_nr)} {incr i 1 } {
+   for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,compile_hooks_${ii})]} {incr ii 1} {
          
          set compile_proc $ts_checktree($i,compile_hooks_${ii})
@@ -119,7 +119,7 @@ proc exec_compile_clean_hooks { compile_hosts a_report } {
    
    ts_log_fine "execute exec_compile_clean_hooks ..."
    set error_count 0
-   for {set i 0} { $i < $ts_checktree(act_nr)} {incr i 1 } {
+   for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,compile_clean_hooks_${ii})]} {incr ii 1} {
          
          set compile_clean_proc $ts_checktree($i,compile_clean_hooks_${ii})
@@ -165,7 +165,7 @@ proc exec_checktree_clean_hooks { } {
    global ts_checktree
 
    set error_count 0
-   for {set i 0} { $i < $ts_checktree(act_nr)} {incr i 1 } {
+   for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,checktree_clean_hooks_${ii})]} {incr ii 1} {
          
          set clean_proc $ts_checktree($i,checktree_clean_hooks_${ii})
@@ -220,7 +220,7 @@ proc exec_install_binaries_hooks { arch_list a_report } {
 
    upvar $a_report report
    set error_count 0
-   for {set i 0} { $i < $ts_checktree(act_nr)} {incr i 1 } {
+   for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,install_binary_hooks_${ii})]} {incr ii 1} {
          
          set prog $ts_checktree($i,install_binary_hooks_${ii})
@@ -271,7 +271,7 @@ proc exec_shutdown_hooks {} {
    global ts_checktree
 
    set error_count 0
-   for {set i 0} { $i < $ts_checktree(act_nr)} {incr i 1 } {
+   for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,shutdown_hooks_${ii})]} {incr ii 1} {
          
          set shutdown_hook $ts_checktree($i,shutdown_hooks_${ii})
@@ -315,7 +315,7 @@ proc exec_start_runlevel_hooks { is_starting was_error path } {
    set error_count 0
 
    # detect the checktree where the test comes from
-   for {set i 0} { $i < $ts_checktree(act_nr)} {incr i 1 } {
+   for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       if {[string compare $ts_checktree($i,dir_name) $path] == 0} {
          ts_log_fine "test comes from checktree node nr. $i ($ts_checktree($i,dir_name))"
          set init_node_nr $i
@@ -323,7 +323,7 @@ proc exec_start_runlevel_hooks { is_starting was_error path } {
       }
    }
    set start_node_nr 0
-   foreach nr [lsort -integer $ts_checktree(0,sub_nrs)] {
+   foreach nr [lsort -integer $ts_checktree(0,children)] {
       ts_log_fine "sub_checks: $nr \"$ts_checktree($nr,dir_name)\""
       if {$nr < $init_node_nr} {
          set start_node_nr $nr
@@ -331,7 +331,7 @@ proc exec_start_runlevel_hooks { is_starting was_error path } {
    }
 
    set did_hook 0
-   for {set i $start_node_nr} { $i < $ts_checktree(act_nr) && $did_hook == 0} {incr i 1 } {
+   for {set i $start_node_nr} { $i < $ts_checktree(next_free) && $did_hook == 0} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,start_runlevel_hooks_${ii})]} {incr ii 1} {
          if {$init_node_nr < $i} {
             continue
@@ -385,7 +385,7 @@ proc exec_startup_hooks {} {
    global ts_checktree
 
    set error_count 0
-   for {set i 0} { $i < $ts_checktree(act_nr)} {incr i 1 } {
+   for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,startup_hooks_${ii})]} {incr ii 1} {
          
          set startup_hook $ts_checktree($i,startup_hooks_${ii})
@@ -428,7 +428,7 @@ proc checktree_get_required_hosts {} {
    global ts_checktree
 
    set required_hosts {}
-   for {set i 0} {$i < $ts_checktree(act_nr)} {incr i 1 } {
+   for {set i 0} {$i < $ts_checktree(next_free)} {incr i 1 } {
       if { [info exists ts_checktree($i,required_hosts_hook) ] } {
          set required_hosts_hook $ts_checktree($i,required_hosts_hook)
          if { [info procs $required_hosts_hook ] != $required_hosts_hook } {
@@ -473,7 +473,7 @@ proc checktree_get_required_ports {} {
    global ts_checktree
 
    set required_ports {}
-   for {set i 0} {$i < $ts_checktree(act_nr)} {incr i 1 } {
+   for {set i 0} {$i < $ts_checktree(next_free)} {incr i 1 } {
       if { [info exists ts_checktree($i,required_ports_hook) ] } {
          set required_ports_hook $ts_checktree($i,required_ports_hook)
          if { [info procs $required_ports_hook ] != $required_ports_hook } {
@@ -493,4 +493,18 @@ proc checktree_get_required_ports {} {
       }
    }
    return $required_ports
+}
+
+proc checktree_get_check_levels_by_path {path} {
+   global ts_checktree
+
+   set check_number $ts_checktree($path)
+   return $ts_checktree($check_number,check_levels)
+}
+
+proc checktree_get_highest_level_by_path {path} {
+   global ts_checktree
+
+   set check_number $ts_checktree($path)
+   return $ts_checktree($check_number,check_highest_level)
 }

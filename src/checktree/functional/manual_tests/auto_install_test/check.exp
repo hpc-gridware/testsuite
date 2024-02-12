@@ -36,21 +36,15 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 global check_need_running_system
 
 set check_root_access_needs "yes"
 set check_need_running_system "no"
 
-# define a level initialization procedure:
-set check_init_level_procedure "auto_install_init_level"
-
 # define test's name and run level descriptions
 set check_name             "auto_install"
 set check_category         "COMPATIBILITY SYSTEM INTERACTIVE"
-set check_highest_level    300
 set check_description(0)   "auto_install test on selected hosts"
 set check_description(100) "auto_install test on all cluster hosts"
 set check_description(200) "auto_install test on all compile hosts"
@@ -60,8 +54,8 @@ set check_description(300) "auto_install test on all supported hosts"
 set check_needs           ""
 
 # setup and cleanup functions
-set check_setup_function auto_install_setup
-set check_cleanup_function auto_install_cleanup
+set check_setup_level_function auto_install_setup_level
+set check_cleanup_level_function auto_install_cleanup_level
 
 global CHECK_ACTUAL_TEST_PATH
 
@@ -76,43 +70,32 @@ ts_source $CHECK_ACTUAL_TEST_PATH/../manual_util
 set check_functions {}
 lappend check_functions "auto_install_test_set"
 
-proc auto_install_init_level {} {
+# -------- local test procedures: initialization------------------------------
+proc auto_install_setup_level {} {
    global CHECK_ACT_LEVEL
-   global auto_install_host_set auto_install_host_select
+   global ts_config ts_config_backup
+   global auto_install_hosts auto_install_host_set auto_install_host_select
+   global auto_install_test_identificator
+   global auto_install_test_hosts auto_install_bdb
 
    switch -- $CHECK_ACT_LEVEL {
       0 {
          set auto_install_host_select true
          set auto_install_host_set "master"
-         return 0
       }
       100 {
          set auto_install_host_select false
          set auto_install_host_set "cluster"
-         return 0
       }
       200 {
          set auto_install_host_set "compile"
          set auto_install_host_select false
-         return 0
       }
       300 {
          set auto_install_host_set "supported"
          set auto_install_host_select false
-         return 0
       }
    }
-
-   return -1  ;# no other level
-}
-
-# -------- local test procedures: initialization------------------------------
-proc auto_install_setup {} {
-   global ts_config ts_config_backup
-   global auto_install_hosts auto_install_host_set auto_install_host_select
-   global auto_install_test_identificator
-#   global system_was_alive
-   global auto_install_test_hosts auto_install_bdb
 
    if {[check_is_interactive]} {
       set auto_install_host_select true
@@ -156,7 +139,7 @@ proc auto_install_setup {} {
 
 }
 
-proc auto_install_cleanup {} {
+proc auto_install_cleanup_level {} {
    global ts_config ts_config_backup
 #   global system_was_alive
    global auto_install_hosts auto_install_test_hosts auto_install_bdb

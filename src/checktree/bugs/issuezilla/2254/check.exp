@@ -30,23 +30,15 @@
 ##########################################################################
 #___INFO__MARK_END__
 
-
-
 # define global variable in this namespace
 global check_name 
 global check_category 
 global check_description 
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
-
-# define a level initialization procedure:
-set check_init_level_procedure "issue_2254_init_level"
 
 # define test's name and run level descriptions
 set check_name            "issue_2254"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "Check for Issue 2254 - PE scope of resource quotas \
                            is not considered  when -pe wildcard requests are used"
 
@@ -60,19 +52,6 @@ set check_cleanup_function issue_2254_cleanup
 # define test's procedure order
 set check_functions ""
 lappend check_functions "issue_2254"
-
-
-proc issue_2254_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-    }
-
-   return -1  ;# no other level
-}
 
 # -------- local test procedures: initialization------------------------------
 

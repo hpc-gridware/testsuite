@@ -37,16 +37,11 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 global check_need_running_system
 
 set check_root_access_needs "yes"
 #set check_need_running_system "no"
-
-# define a level initialization procedure:
-set check_init_level_procedure "issue_3170_init_level"
 
 # define tcl files which should be sourced at startup of testsuite
 set check_source_files "remote_cluster_procedures"
@@ -54,7 +49,6 @@ set check_source_files "remote_cluster_procedures"
 # define test's name and run level descriptions
 set check_name            "issue_3170"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "execd cannot get rid of not existing task which results in qmaster <-> execd protocol loop"
 
 
@@ -68,19 +62,6 @@ set check_cleanup_function issue_3170_cleanup
 # define test's procedure order
 set check_functions {}
 lappend check_functions "issue_3170_test"
-
-
-proc issue_3170_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-   }
-   return -1  ;# no other level
-}
-
 
 proc issue_3170_setup {} {
    global CHECK_USER 

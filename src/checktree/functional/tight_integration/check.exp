@@ -36,21 +36,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-
-# define a level initialization procedure:
-set check_init_level_procedure "tight_integration_init_level"
 
 # define test's name and run level descriptions
 set check_name            "tight_integration"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   2
 set check_description(0)  "check tightly integrated parallel jobs submitted with qsub"
 set check_description(1)  "check tightly integrated parallel jobs submitted with qrsh"
 set check_description(2)  "check tightly integrated parallel jobs submitted with qrsh, accounting summary"
@@ -90,23 +82,6 @@ set TIGHT_INTEGRATION_FUNCTIONAL_SLOTS 5
 set TIGHT_INTEGRATION_FUNCTIONAL_DURATION 10
 set TIGHT_INTEGRATION_MASSIVE_SLOTS 200
 set TIGHT_INTEGRATION_MASSIVE_DURATION 120
-
-proc tight_integration_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-      1 {
-         return 0
-      }
-      2 {
-         return 0
-      }
-   }
-   return -1  ;# no other level
-}
 
 proc tight_integration_setup {} {
    global ts_config

@@ -38,20 +38,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "startup_execd_init_level"
 
 # define test's name and run level descriptions
 set check_name            "startup_execd"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   3
 set check_description(0)  "Starting second execd on host with same execd port"
 set check_description(1)  "Starting second execd on host with different execd ports"
 set check_description(2)  "Starting execd without running qmaster"
@@ -72,31 +65,7 @@ lappend check_functions "startup_execd_test1"
 global startup_execd_test_hosts
 global startup_execd_saved_slot_count
 
-proc startup_execd_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" { 
-         return 0
-      } 
-      "1" {
-         return 0
-      }
-      "2" {
-         return 0
-      }
-      "3" {
-         return 0
-      }
-   } 
-   return -1  ;# no other level 
-}
-
-
-
-
 # -------- local test procedures: initialization------------------------------
-
 
 proc startup_execd_setup  {} {
    global ts_config

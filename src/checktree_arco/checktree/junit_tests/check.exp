@@ -36,7 +36,7 @@ global CHECK_ACTUAL_TEST_PATH CHECK_TESTSUITE_INSTALL_MODE
 
 global check_name check_description check_needs check_functions
 global check_root_access_needs check_category      
-global check_use_installed_system check_init_level_procedure
+global check_use_installed_system check
 
 # This file shows some check spezific things
 set check_root_access_needs    "yes"
@@ -44,25 +44,12 @@ set check_name                 "arco_junit"
 set check_category             "COMPATIBILITY SYSTEM L10N VERIFIED"
 set check_description(0)       "executes the ARCo junit tests"
 set check_needs                "arco_database_install"         ;# dependencies of this check (name of other check)
-set check_init_level_procedure "arco_junit_init_level"
 
 set check_setup_function "arco_junit_setup"
 set check_cleanup_function "arco_junit_cleanup"
 
 set check_functions            ""                                     ;# functions to call (in order)
 lappend check_functions "arco_junit_check"
-
-
-proc arco_junit_init_level {} {
-  global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         return 0
-      }
-   }
-   return -1  ;# no other level else
-}
 
 proc arco_junit_setup {} {
    # clean the arco database (drop all objects)

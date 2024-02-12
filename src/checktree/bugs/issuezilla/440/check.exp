@@ -36,17 +36,11 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-
-# define a level initialization procedure:
-set check_init_level_procedure "issue_440_init_level"
 
 # define test's name and run level descriptions
 set check_name            "issue_440"
 set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level   0
 set check_description(0) "qsub / qrsh command lines crash qmaster with arg. lines > 10 K"
 
 # define test's dependencies
@@ -60,15 +54,6 @@ set check_setup_function   "issue_440_setup"
 set check_functions ""
 lappend check_functions "issue_440_check_qsub"
 lappend check_functions "issue_440_check_qrsh"
-
-proc issue_440_init_level {} {
-   global CHECK_ACT_LEVEL 
-
-   if {$CHECK_ACT_LEVEL == 0} {
-      return 0
-   }
-   return -1  ;# no other level else
-}
 
 # -------- local test procedures -----------------------------------------------
 

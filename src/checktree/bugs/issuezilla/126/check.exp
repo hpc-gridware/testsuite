@@ -36,21 +36,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "yes"
-
-
-# define a level initialization procedure:
-set check_init_level_procedure "issue_126_init_level"
 
 # define test's name and run level descriptions
 set check_name            "issue_126"
 set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level   201
 set check_description(0)  "check iz 126 on all hosts with 5 test loops with prolog"
 set check_description(1)  "check iz 126 on all hosts with 5 test loops without prolog"
 set check_description(200)  "check iz 126 on all hosts with 200 test loops with prolog"
@@ -61,49 +53,40 @@ set check_description(201)  "check iz 126 on all hosts with 200 test loops witho
 set check_needs           "init_core_system" 
 
 # setup and cleanup functions
-set check_setup_level_function "issue_126_setup"
-set check_cleanup_level_function "issue_126_cleanup"
+set check_setup_level_function "issue_126_setup_level"
+set check_cleanup_level_function "issue_126_cleanup_level"
 
 # define test's procedure order
 set check_functions ""
 lappend check_functions "issue_126_check"
 
-proc issue_126_init_level {} {
-   global CHECK_ACT_LEVEL
+# -------- local test procedures -----------------------------------------------
+
+proc issue_126_setup_level {} {
+   global ts_config
+   global CHECK_ACT_LEVEL CHECK_ACTUAL_TEST_PATH
+   global check_126_host
    global check_126_config
+
    switch -exact $CHECK_ACT_LEVEL {
       0 {
          set check_126_config(loops)  5
          set check_126_config(prolog) 1
-         return 0
       }
       1 {
          set check_126_config(loops)  5
          set check_126_config(prolog) 0
-         return 0
       }
       200 {
          set check_126_config(loops)  200
          set check_126_config(prolog) 1
-         return 0
       }
       201 {
          set check_126_config(loops)  200
          set check_126_config(prolog) 0
-         return 0
       }
    }
-   return -1  ;# no other level else
-}
 
-# -------- local test procedures -----------------------------------------------
-
-proc issue_126_setup {} {
-   global ts_config
-   global CHECK_ACTUAL_TEST_PATH
-   global check_126_host
-
-   global check_126_config
    set check_126_config(host_list) [host_conf_get_unique_arch_nodes $ts_config(execd_hosts)]
 
    foreach check_126_host $check_126_config(host_list) {
@@ -128,7 +111,7 @@ proc issue_126_setup {} {
    }
 }
 
-proc issue_126_cleanup {} {
+proc issue_126_cleanup_level {} {
    global check_126_config
 
    delete_all_jobs

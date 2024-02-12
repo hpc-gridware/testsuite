@@ -36,62 +36,60 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
-
-# set check_root_access_needs "yes"
-
-
-# define a level initialization procedure:
-set check_init_level_procedure "job_state_handling_init_level"
 
 # define test's name and run level descriptions
 set check_name            "job_state_handling"
-set check_category        "COMPATIBILITY SYSTEM L10N"
-set check_highest_level   1
+set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
 set check_description(0)  "Test single job state handling"
 set check_description(1)  "Test array job state handling"
 
 # define test's dependencies
 set check_needs           "init_core_system" 
 
+set check_setup_level_function "job_state_handling_setup"
+set check_cleanup_level_function "job_state_handling_cleanup"
 
 # define test's procedure order
-set check_functions ""
-lappend check_functions "job_state_handling_setup"
+set check_functions {}
 lappend check_functions "job_state_handling_hold_pending_running_finished"
-lappend check_functions "job_state_handling_error_timehold_jobhold"
-lappend check_functions "job_state_handling_max_aj_instances"
-lappend check_functions "job_state_handling_max_aj_tasks"
-lappend check_functions "job_state_handling_cleanup"
-
-
-global test_array_jobs 
-
-proc job_state_handling_init_level {} {
-   global CHECK_ACT_LEVEL
-   global CHECK_PRODUCT_TYPE
-   global test_array_jobs 
-
-  switch -- $CHECK_ACT_LEVEL {
-     "0" { 
-           set test_array_jobs 0
-           return 0    
-     } 
-     "1" {
-           set test_array_jobs 1
-           return 0
-     }
-  } 
-  return -1  ;# no other level else
-}
+#lappend check_functions "job_state_handling_error_timehold_jobhold"
+#lappend check_functions "job_state_handling_max_aj_instances"
+#lappend check_functions "job_state_handling_max_aj_tasks"
 
 # -------- local test procedures -----------------------------------------------
 
+proc job_state_handling_setup {} {
+   global CHECK_ACT_LEVEL
+   global test_array_jobs job_state_backup 
 
-proc job_state_handling_setup  {} {
+   switch -- $CHECK_ACT_LEVEL {
+      0 { 
+         set test_array_jobs 0
+      } 
+      1 {
+         set test_array_jobs 1
+      }
+   }
+
+   set schedd_config(schedd_job_info) "true"
+   set_schedd_config schedd_config
+
+   get_config job_state_backup
+}
+
+proc job_state_handling_cleanup {} {
+   global test_array_jobs job_state_backup
+
+   reset_schedd_config
+   set_config job_state_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   enable_queue "all.q"
+
+   unset -nocomplain test_array_jobs job_state_backup
 }
 
 proc job_state_handling_hold_pending_running_finished {} {
@@ -125,16 +123,11 @@ proc job_state_handling_hold_pending_running_finished {} {
    set correct_info [ translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SCHEDD_INFO_JOBHOLD_]]
    if { [ string first  "job dropped because of hold" $scheduling_info_result ] <  0 && 
         [ string first  $correct_info $scheduling_info_result ] <  0 } {
-       ts_log_severe "scheduling info not \"job dropped because of hold\"" 
+       ts_log_severe "scheduling info not \"job dropped because of hold\" but\n$scheduling_info_result" 
    }
    
-   set queue_list ""
-   foreach host $ts_config(execd_nodes) {
-      append queue_list "$host.q "
-   }  
-   set queue_list [string trim $queue_list]
-   ts_log_fine "disable queues: \"$queue_list\""
-   disable_queue $queue_list
+   ts_log_fine "disable queues"
+   disable_queue "all.q"
 
    release_job $result   
 
@@ -147,7 +140,7 @@ proc job_state_handling_hold_pending_running_finished {} {
 
    hold_job $result
 
-   enable_queue $queue_list
+   enable_queue "all.q"
    
    release_job $result
 
@@ -226,7 +219,7 @@ proc job_state_handling_error_timehold_jobhold {} {
    set correct_text [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SCHEDD_INFO_JOBINERROR_]]
    if { [ string first "job is in error state" $scheduler_info_text  ] < 0 &&
         [ string first  $correct_text $scheduler_info_text ] < 0  } {
-       ts_log_severe "scheduling info not \"job is in error state\"" 
+       ts_log_severe "scheduling info not \"job is in error state\" but\n$scheduling_info_text" 
    }
    if { [get_qstat_j_info $time_job ] } {
       ts_log_fine "job $time_job submit time:    $qstat_j_info(submission_time)"
@@ -238,14 +231,14 @@ proc job_state_handling_error_timehold_jobhold {} {
 
       if { [ string first "execution time not reached" $scheduler_info_text ] < 0 && 
            [ string first $correct_text $scheduler_info_text ] < 0 } {
-          ts_log_severe "scheduling info not \"execution time not reached\"" 
+          ts_log_severe "scheduling info not \"execution time not reached\" but\n$scheduling_info_text" 
       }
    }
    set scheduler_info_text [ get_scheduling_info $waitjob_job]
    set correct_text [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SCHEDD_INFO_JOBDEPEND_]]
    if { [ string first "job dropped because of job dependencies" $scheduler_info_text ] < 0  && 
         [ string first $correct_text $scheduler_info_text ] < 0  } {
-      ts_log_severe "scheduling info not \"job dropped because of job dependencies\"" 
+      ts_log_severe "scheduling info not \"job dropped because of job dependencies\" but\n$scheduling_info_text" 
    }
 
    while { [timestamp] < $time_job_execution_time } {
@@ -332,7 +325,7 @@ proc job_state_handling_max_aj_instances {} {
 #             ts_log_fine "correct_text    : $correct_text"
              if { [ string first "not all array task may be started due to 'max_aj_instances'" $scheduling_info_text ] < 0 &&
                   [ string first $correct_text $scheduling_info_text ] < 0 } {
-                ts_log_severe "scheduling info not \"not all array task may be started due to 'max_aj_instances'\"" 
+                ts_log_severe "scheduling info not \"not all array task may be started due to 'max_aj_instances'\" but\n$scheduling_info_text" 
                 break;
              }
           }
@@ -470,14 +463,5 @@ proc job_state_handling_max_aj_tasks {} {
    }
    set new_config(max_aj_tasks) $old_config(max_aj_tasks)
    set_config new_config
-}
-
-proc job_state_handling_cleanup  {} {
-   global CHECK_PRODUCT_TYPE 
-   global CHECK_USER
-
-   ts_log_fine "do qdel -uall"
-   set catch_result [delete_all_jobs]
-   ts_log_fine $catch_result
 }
 

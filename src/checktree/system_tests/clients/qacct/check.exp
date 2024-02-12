@@ -37,20 +37,13 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "no"
-
-# define a level initialization procedure:
-set check_init_level_procedure "qacct_init_level"
 
 # define test's name and run level descriptions
 set check_name            "qacct"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "test qacct functionality"
 
 # define test's dependencies
@@ -69,18 +62,6 @@ lappend check_functions "qacct_issue1720"
 lappend check_functions "qacct_issue1686"
 lappend check_functions "qacct_issue2127"
 lappend check_functions "qacct_issue2189"
-
-proc qacct_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
 
 # -------- local test procedures: initialization------------------------------
 proc qacct_setup {} {

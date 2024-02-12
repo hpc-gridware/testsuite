@@ -36,21 +36,15 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
 global check_need_running_system
 
 set check_root_access_needs "yes"
 set check_need_running_system "no"
 
-# define a level initialization procedure:
-set check_init_level_procedure "basic_init_level"
-
 # define test's name and run level descriptions
 set check_name             "basic"
 set check_category         "COMPATIBILITY SYSTEM INTERACTIVE"
-set check_highest_level    300
 set check_description(0)   "Basic test on selected hosts"
 set check_description(100) "Basic test on all cluster hosts"
 set check_description(200) "Basic test on all compiled hosts"
@@ -60,8 +54,8 @@ set check_description(300) "Basic test on all supported hosts"
 set check_needs           ""
 
 # setup and cleanup functions
-set check_setup_function basic_setup
-set check_cleanup_function basic_cleanup
+set check_setup_level_function basic_setup_level
+set check_cleanup_level_function basic_cleanup_level
 
 global CHECK_ACTUAL_TEST_PATH
 
@@ -75,44 +69,33 @@ ts_source $CHECK_ACTUAL_TEST_PATH/../manual_util
 set check_functions {}
 lappend check_functions "basic_test_set"
 
-proc basic_init_level {} {
-   global CHECK_ACT_LEVEL
-   global basic_host_set basic_host_select
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         set basic_host_set "master"
-         set basic_host_select true
-         return 0
-      }
-      100 {
-         set basic_host_set "cluster"
-         set basic_host_select false
-         return 0
-      }
-      200 {
-         set basic_host_set "compile"
-         set basic_host_select false
-         return 0
-      }
-      300 {
-         set basic_host_set "supported"
-         set basic_host_select false
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
-
 # -------- local test procedures: initialization------------------------------
-proc basic_setup {} {
+proc basic_setup_level {} {
+   global CHECK_ACT_LEVEL
    global ts_config ts_config_backup 
    global basic_hosts basic_host_set basic_host_select
    global basic_test_identificator
    global system_was_alive
    global basic_master_host_for_win
 
+   switch -- $CHECK_ACT_LEVEL {
+      0 {
+         set basic_host_set "master"
+         set basic_host_select true
+      }
+      100 {
+         set basic_host_set "cluster"
+         set basic_host_select false
+      }
+      200 {
+         set basic_host_set "compile"
+         set basic_host_select false
+      }
+      300 {
+         set basic_host_set "supported"
+         set basic_host_select false
+      }
+   }
    if {[check_is_interactive]} {
       set basic_host_select true
    }
@@ -133,10 +116,9 @@ proc basic_setup {} {
    foreach param [array names ts_config] {
       set ts_config_backup($param) $ts_config($param)
    }
-
 }
 
-proc basic_cleanup {} {
+proc basic_cleanup_level {} {
    global ts_config ts_config_backup
    global system_was_alive
    global basic_hosts basic_master_host_for_win

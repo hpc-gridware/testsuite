@@ -37,20 +37,11 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
-
-#set check_root_access_needs "yes"
-
-# define a level initialization procedure:
-set check_init_level_procedure "issue_2300_init_level"
 
 # define test's name and run level descriptions
 set check_name            "issue_2300"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   0
 set check_description(0)  "qquota project filtering broken if -P project is not used"
 
 # define test's dependencies
@@ -64,18 +55,6 @@ set check_cleanup_function issue_2300_cleanup
 set check_functions {}
 lappend check_functions "issue_2300_P"
 lappend check_functions "issue_2300_PE"
-
-proc issue_2300_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         return 0
-      }
-   }
-
-   return -1  ;# no other level
-}
 
 # -------- local test procedures: initialization------------------------------
 

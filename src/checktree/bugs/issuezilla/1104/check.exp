@@ -31,11 +31,9 @@
 #___INFO__MARK_END__
 
 # Define the global veriables to give them back
-global check_name check_description check_needs check_functions check_highest_level
-global check_init_level_procedure check_category
+global check_name check_description check_needs check_functions
+global check_category
 global check_root_access_needs
-
-set check_init_level_procedure "issue_1104_init_level"
 
 set check_category            "COMPATIBILITY SYSTEM VERIFIED"
 set check_name                "issue_1104"
@@ -48,27 +46,12 @@ set check_root_access_needs   "yes"
 # define test's procedure order
 set check_functions           ""
 lappend check_functions       "issue_1104_run"          ;# functions to call (in order)
-set check_highest_level       0
 
 # This test saves the local configuration on the master host and removes it.
 # Then it tries to restart the sge_qmaster daemon. The qmaster should start 
 # without local_conf,
 # but writing a Warning to the messages file.
 # After restart the local configuration will be added again.
-
-proc issue_1104_init_level {} {
-   global CHECK_ACT_LEVEL
-
-   switch -- $CHECK_ACT_LEVEL {
-      "0"  { 
-         return 0
-      }
-   }
-   return -1
-}
-
-
-
 
 proc issue_1104_run {} {
    global ts_config orig_config CHECK_USER

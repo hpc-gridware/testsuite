@@ -36,24 +36,14 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 global issue_1334_job_stdout_file
 global issue_1334_job_stderr_file
 
-#set check_root_access_needs "no"
-
-
-# define a level initialization procedure:
-set check_init_level_procedure "issue_1334_init_level"
-
 # define test's name and run level descriptions
 set check_name            "issue_1334"
 set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_highest_level   0
 set check_description(0)  "starter_method is ignored with binary jobs that are started without a shell"
 
 # define test's dependencies
@@ -67,21 +57,6 @@ set check_cleanup_function "issue_1334_cleanup"
 # define test's procedure order
 set check_functions ""
 lappend check_functions "issue_1334_run"
-
-
-proc issue_1334_init_level {} {
-   global CHECK_ACT_LEVEL
-   global CHECK_PRODUCT_TYPE
-   global test_array_jobs 
-
-  switch -- $CHECK_ACT_LEVEL {
-     "0" {
-        return 0
-     }
-  }
-
-  return -1  ;# no other level else
-}
 
 # -------- local test procedures -----------------------------------------------
 

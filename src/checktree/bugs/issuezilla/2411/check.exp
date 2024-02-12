@@ -36,66 +36,45 @@ global check_category
 global check_description 
 global check_needs
 global check_functions 
-global check_highest_level
-global check_init_level_procedure
 global check_root_access_needs
-global env
 
 set check_root_access_needs "no"
-
-# define a level initialization procedure:
-set check_init_level_procedure "issue_2411_init_level"
 
 # define test's name and run level descriptions
 set check_name            "issue_2411"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_highest_level   1
 set check_description(0)  "test case for IZ 2411 - 80 cluster queues"
 set check_description(1)  "test case for IZ 2411 - 800 cluster queues"
-set check_description(2)  "test case for IZ 2411 - 8000 cluster queues" ; # Do  not use this one until CR6638556 is fixed
-
+set check_description(100)  "test case for IZ 2411 - 8000 cluster queues" ; # Do  not use this one until CR6638556 is fixed
 
 # define test's dependencies
 set check_needs           "init_core_system" 
 
 # setup and cleanup functions
-set check_setup_function issue_2411_setup
-set check_cleanup_function issue_2411_cleanup
+set check_setup_level_function issue_2411_setup_level
+set check_cleanup_level_function issue_2411_cleanup_level
 
 # define test's procedure order
 set check_functions {}
-lappend check_functions "issue_2411" ;# Test case for IZ 2411
-
-
-proc issue_2411_init_level {} {
-   global CHECK_ACT_LEVEL max_count
-   
-   switch -- $CHECK_ACT_LEVEL {
-      "0" {
-         set max_count 80
-         return 0 
-      }
-      "1" {
-         set max_count 800
-         return 0
-      }
-      "2" {
-         set max_count 8000
-         return -1
-      }
-      default {
-         return -1
-      }
-
-   }
-   
-   return -1  ;# no other level
-}
+lappend check_functions "issue_2411"
 
 # -------- local test procedures: initialization------------------------------
 
-proc issue_2411_setup {} {
+proc issue_2411_setup_level {} {
+   global CHECK_ACT_LEVEL
    global max_count
+   
+   switch -exact $CHECK_ACT_LEVEL {
+      0 {
+         set max_count 80
+      }
+      1 {
+         set max_count 800
+      }
+      100 {
+         set max_count 8000
+      }
+   }
    
    # Add $max_count queues
    
@@ -104,22 +83,22 @@ proc issue_2411_setup {} {
       set queue_name "queue$count.q"
       set queue_conf(slots) 10 
       add_queue $queue_name "@allhosts" queue_conf 1
-      incr   count 
+      incr count 
    }
-     
 }
 
-proc issue_2411_cleanup {} {
+proc issue_2411_cleanup_level {} {
+   global CHECK_ACT_LEVEL
+   global max_count
    global tcl_total_time
-   global CHECK_ACT_LEVEL max_count  
    
    # Delete now  $max_count queues 
    
    set count 1
    while { $count <= $max_count } {
       set queue_name "queue$count.q"
-      del_queue "$queue_name"  "" 1 1
-      incr     count 
+      del_queue $queue_name  "" 1 1
+      incr count 
    }
       
    ts_log_fine "The tcl time qhost took to display $max_count hosts was\n$tcl_total_time seconds"
