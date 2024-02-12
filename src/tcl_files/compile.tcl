@@ -1231,7 +1231,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
          } else {
             append args " -DINSTALL_SGE_DOC=OFF"
          }
-         append args " -DCMAKE_BUILD_TYPE=$CHECK_CMAKE_BUILD_TYPE"
+         append args " -DCMAKE_BUILD_TYPE=$CHECK_CMAKE_BUILD_TYPE -Wno-dev"
          set options($host,args) $args
          set options($host,dir) [compile_source_cmake_get_build_dir $host]
       }
