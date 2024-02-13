@@ -180,5 +180,11 @@ proc check_queue_state {} {
       #
       ts_log_severe "unexpected state for $qname: $q_state. Should be enabled"
    }
+
+   get_queue_list queue_list
+   if {[lsearch $queue_list "test.q"] != -1} {
+      ts_log_fine "Deleting test.q"
+      del_queue test.q $test_hostname 0 1
+   }
 }
 
