@@ -1212,7 +1212,10 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
    # @todo add this to the cmake build
    # set build_number [get_build_number]
 
-   if {$error_count == 0} {
+   # no need to call cmake when compiling with 1t
+   # we will not change any configuration
+   # while updates to the CMakeLists.txt files will be taken into account
+   if {$error_count == 0 && !$compile_only} {
       # call cmake on every host
       # we use the "preferred" host to install common files
       unset -nocomplain options
