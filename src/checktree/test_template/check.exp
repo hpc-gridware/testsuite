@@ -10,6 +10,14 @@
 # 2) set check_root_access_needs to "yes" or "no" (if you need root access)
 #
 # 3) set check_category
+#     - it is a list of categories, e.g.
+#        - <FEATURE> like CENTRY, EVENTCLIENT, INSTALL, RSMAP for all tests testing a certain feature
+#        - MODULE for module tests
+#        - PERFORMANCE for performance tests
+#        - <client> like QCONF for all tests verifying the qconf commandline client
+#        - VERIFIED for all tests which are known to be OK and which shall be run by default
+#     - feel free to create new categories
+#     - example: "OBJECT CENTRY QCONF VERIFIED"
 #
 # 4) set check_needs (e.g.: "init_core_system" this means that this test is not
 #    started without succesfull run of "init_core_system" test
@@ -58,7 +66,7 @@ lappend check_functions "__TESTSUITE_TEST_NAME_test"
 # -------- local test procedures: initialization------------------------------
 
 proc __TESTSUITE_TEST_NAME_setup {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global __TESTSUITE_TEST_NAME_hosts __TESTSUITE_TEST_NAME_backup
 
    # let's assume we need 2 test hosts
@@ -75,7 +83,7 @@ proc __TESTSUITE_TEST_NAME_cleanup_level {} {
 }
 
 proc __TESTSUITE_TEST_NAME_cleanup {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global __TESTSUITE_TEST_NAME_hosts __TESTSUITE_TEST_NAME_backup
 
    delete_all_jobs
@@ -97,7 +105,7 @@ proc __TESTSUITE_TEST_NAME_cleanup {} {
 
 
 proc __TESTSUITE_TEST_NAME_test {} {
-   global ts_config CHECK_USER
+   get_current_cluster_config_array ts_config
    global __TESTSUITE_TEST_NAME_hosts
 
 }
