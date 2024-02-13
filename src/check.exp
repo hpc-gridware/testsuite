@@ -3130,14 +3130,13 @@ proc read_checktree_nodes {path} {
 proc get_tests_from_checktree { { path "root" } } {
    global ts_checktree
 
-   set selected_dirs ""
+   set selected_dirs {}
 
-   if { [info exists ts_checktree($path)] } {
+   if {[info exists ts_checktree($path)]} {
      set selected_dirs $ts_checktree($path)
    } else {
      ts_log_severe "path=$path not found in checktree"
    }
-
 
    set all_nrs {}
    foreach nr $selected_dirs {
@@ -3153,7 +3152,7 @@ proc get_tests_from_checktree { { path "root" } } {
    # now we have all directory numbers, generate path list
    set path_list {}
    foreach nr $all_nrs {
-      if { $ts_checktree($nr,test_available) == 1 } {
+      if {$ts_checktree($nr,test_available)} {
          lappend path_list $ts_checktree($nr,dir_name)
       }
    }
@@ -3798,7 +3797,7 @@ proc delete_tests {path state_to_delete {only_if_not_there 0}} {
 
    # check if the state_to_delete is valid
    if {$state_to_delete != "all" &&
-       [info exists CHECK_RESULT_DIRS($state_to_delete)] == 0} {
+      ![info exists CHECK_RESULT_DIRS($state_to_delete)]} {
       ts_log_severe "got invalid test state \"$state_to_delete\"!"
       return
    }
@@ -6322,8 +6321,9 @@ proc menu {} {
    while {1} {
       print_menu_header
       puts "  (0) select runlevels/categories..."
-      if {$CHECK_PACKAGE_DIRECTORY == "none"} {
+      if {$CHECK_PACKAGE_DIRECTORY == "none" || $CHECK_PACKAGE_TYPE == "create_tar"} {
          puts "  (1) compile source code and run distinst"
+         puts "  (1t) compile and just replace binaries (no re-install needed)"
       } else {
          puts "  (1) install product packages"
       }
@@ -6380,7 +6380,8 @@ proc menu {} {
             # select runlevels/categories
             select_runlevel
          }
-         "1" {
+         "1" -
+         "1t" {
             # compile source code and run distinst / install product packages
             if {[have_root_passwd] == -1} {
                puts "need root access ..."
@@ -6390,7 +6391,11 @@ proc menu {} {
             if {$ts_config(package_directory) == "none" ||
                 $ts_config(package_type) == "create_tar"} {
                # we compile the source and do a scripts/distinst
-               set back [compile_source]
+               if {$input == "1t"} {
+                  set back [compile_source 0 1]
+               } else {
+                  set back [compile_source]
+               }
 
                 if {$back != 0} {
                    puts "--> error compiling and pre installing source code"

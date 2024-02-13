@@ -108,7 +108,7 @@ proc compile_check_compile_hosts {host_list} {
 #  SEE ALSO
 #     compile/compile_search_compile_host()
 #*******************************************************************************
-proc compile_host_list {} {
+proc compile_host_list {{binaries_only 0}} {
    global ts_host_config
    global ts_config
   
@@ -191,9 +191,11 @@ proc compile_host_list {} {
    # Beginning with OGE 9.0.0 we build documentation (man pages and manuals) from markdown
    # Add the doc compile host to the host list
    # It can be one of the c/c++ compile hosts but can also be a separate host
-   set doc_host [host_conf_get_doc_compile_host]
-   if {$doc_host != "" && [lsearch -exact $compile_host(list) $doc_host] < 0} {
-      lappend compile_host(list) $doc_host
+   if {!$binaries_only} {
+      set doc_host [host_conf_get_doc_compile_host]
+      if {$doc_host != "" && [lsearch -exact $compile_host(list) $doc_host] < 0} {
+         lappend compile_host(list) $doc_host
+      }
    }
 
    return [lsort -dictionary $compile_host(list)]
@@ -557,11 +559,12 @@ proc wait_for_NFS_after_compile_clean { host_list a_report } {
 #
 #  INPUTS
 #     { do_only_hooks 0} - if set, only compile and distinst hooks
+#     { compile_only 0}  - do not remove SGE_ROOT, just replace the binaries
 #
 #  SEE ALSO
 #     ???/???
 #*******************************************************************************
-proc compile_source { { do_only_hooks 0} } {
+proc compile_source { { do_only_hooks 0} {compile_only 0} } {
    global ts_host_config ts_config
    global CHECK_PRODUCT_TYPE
    global CHECK_COMPILE_TOOL
@@ -625,8 +628,8 @@ proc compile_source { { do_only_hooks 0} } {
       return -1
    }
 
-   # compile hosts required for master, exec, shadow, submit_only, bdb_server hosts
-   set compile_hosts [compile_host_list]
+   # compile hosts required for master, exec, shadow, submit_only hosts
+   set compile_hosts [compile_host_list $compile_only]
 
    # add compile hosts for additional compile archs
    if {$ts_config(add_compile_archs) != "none"} {
@@ -714,9 +717,9 @@ proc compile_source { { do_only_hooks 0} } {
    shutdown_core_system $do_only_hooks 1
 
    if {$CHECK_COMPILE_TOOL == "aimk"} {
-      incr error_count [compile_source_aimk $do_only_hooks $compile_hosts report]
+      incr error_count [compile_source_aimk $do_only_hooks $compile_hosts report $compile_only]
    } else {
-      incr error_count [compile_source_cmake $do_only_hooks $compile_hosts report]
+      incr error_count [compile_source_cmake $do_only_hooks $compile_hosts report $compile_only]
    }
 
    if {$error_count == 0} {
@@ -765,28 +768,35 @@ proc compile_source { { do_only_hooks 0} } {
    report_add_message report "Successfully compiled and pre-installed following architectures:"
    report_add_message report "${compiled_mail_architectures}\n"
 
-   report_add_message report "init_core_system check will install the $CHECK_PRODUCT_TYPE execd at:"
-   foreach elem $ts_config(execd_hosts) {
-      set host_arch [ resolve_arch $elem ]
-      report_add_message report "$elem ($host_arch)"
-   }
+   if {!$compile_only} {
+      report_add_message report "init_core_system check will install the $CHECK_PRODUCT_TYPE execd at:"
+      foreach elem $ts_config(execd_hosts) {
+         set host_arch [ resolve_arch $elem ]
+         report_add_message report "$elem ($host_arch)"
+      }
 
-   # if required, build distribution
-   if {$ts_config(package_type) == "create_tar"} {
-      if {![build_distribution $arch_list report]} {
-         report_add_message report "building distribution packages failed"
-         report_finish report -1
-         return -1
+      # if required, build distribution
+      if {$ts_config(package_type) == "create_tar"} {
+         if {![build_distribution $arch_list report]} {
+            report_add_message report "building distribution packages failed"
+            report_finish report -1
+            return -1
+         }
       }
    }
 
    # finish the HTML report
    report_finish report 0
 
+   if {$compile_only} {
+      startup_core_system 0 1
+   }
+
    return 0
 }
 
-proc compile_source_aimk {do_only_hooks compile_hosts report_var} {
+# @todo compile_only 1 is not implemented
+proc compile_source_aimk {do_only_hooks compile_hosts report_var {compile_only 0}} {
    global ts_host_config ts_config
    global check_do_clean_compile
 
@@ -1166,7 +1176,7 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
 }
 
 
-proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
+proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 0}} {
    global ts_host_config ts_config
    global CHECK_USER CHECK_CMAKE_BUILD_TYPE
    global check_do_clean_compile
@@ -1226,7 +1236,8 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
             append args " -DINSTALL_SGE_BIN=OFF"
             append args " -DINSTALL_SGE_TEST=OFF"
          }
-         if {[host_conf_is_doc_compile_host $host]} {
+         # compile docs only on the doc compile host and not when just replacing binaries (menu 1t)
+         if {[host_conf_is_doc_compile_host $host] && !$compile_only} {
             append args " -DINSTALL_SGE_DOC=ON"
          } else {
             append args " -DINSTALL_SGE_DOC=OFF"
@@ -1273,7 +1284,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
       incr error_count [compile_source_cmake_execute "make" $compile_hosts options report]
    }
 
-   if {$error_count == 0} {
+   if {$error_count == 0 && !$compile_only} {
       # now delete install directory
       set task_nr [report_create_task report "clear SGE_ROOT" $host]
       report_task_add_message report $task_nr "deleting directory \"$ts_config(product_root)\""
@@ -1300,6 +1311,24 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
       }
    }
 
+   if {$compile_only} {
+      # need to change the owner of binaries to the test user
+      # otherwise install will fail to overwrite binaries belonging to root
+
+      set paths_to_change "3rd_party bin ckpt doc dtrace examples hadoop include install_execd"
+      append paths_to_change " install_qmaster inst_sge lib man mpi testbin util utilbin"
+
+      # try to chown on the file server
+      set fs_host [fs_config_get_server_for_path $ts_config(product_root) 0]
+      if {$fs_host == ""} {
+         set fs_host $ts_config(master_host)
+      }
+
+      start_remote_prog $fs_host "root" "chown" "--quiet --recursive $CHECK_USER $paths_to_change" \
+                        prg_exit_state 60 0 $ts_config(product_root) "" 1 0]
+      # we use the --quiet option, so chown will never fail, no need to look at the exit status
+   }
+
    if {$error_count == 0} {
       # call make install on every host
       unset -nocomplain options
@@ -1310,6 +1339,8 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var} {
       }
       incr error_count [compile_source_cmake_execute "install" $compile_hosts options report]
    }
+
+   # @todo we might want to call setfileperm.sh in case we just replaced the binaries
 
    # we installed new binaries and scripts, version information might have changed
    clear_version_info
