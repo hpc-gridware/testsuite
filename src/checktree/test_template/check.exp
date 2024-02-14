@@ -46,7 +46,7 @@ global check_need_running_system
 
 # define test's name and run level descriptions
 set check_name            "__TESTSUITE_TEST_NAME"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "OBJECT CENTRY QCONF VERIFIED"
 set check_description(0)  ""
 set check_description(1)  ""
 
@@ -94,11 +94,6 @@ proc __TESTSUITE_TEST_NAME_cleanup {} {
 
    # standard reset config
    reset_config __TESTSUITE_TEST_NAME_backup
-
-   # unset our test's global variables
-   foreach var "__TESTSUITE_TEST_NAME_hosts __TESTSUITE_TEST_NAME_backup" {
-      unset -nocomplain $var
-   }
 
    unset -nocomplain __TESTSUITE_TEST_NAME_hosts __TESTSUITE_TEST_NAME_backup
 }
