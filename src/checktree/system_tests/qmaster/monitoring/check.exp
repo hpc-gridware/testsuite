@@ -194,6 +194,7 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
                      switch -glob -- $monitoring {
                         "P" {
                            switch -glob -- $message {
+                              "signal*" -
                               "signaler*" {
                                  incr prof(SIGNALERT)
                               }
@@ -201,12 +202,14 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
                                  incr prof(LISTENERT)
                                  #parse_monitor_tet $message
                               }
+                              "event master*" -
                               "event_master*" {
                                  incr prof(DELIVERERT)
                                  set tmp [lindex $split_line 5]
                                  set message "$message $tmp"
                                  #parse_monitor_tet $message
                               }
+                              "timed event*" -
                               "timer*" {
                                  incr prof(TIMERT)
                                  #parse_monitor_tet $message
