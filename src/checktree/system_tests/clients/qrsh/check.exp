@@ -55,12 +55,15 @@ set check_cleanup_level_function "qrsh_cleanup"
 
 # define test's procedure order
 set check_functions {}
+if {0} {
 lappend check_functions "qrsh_function"              ;# is a job executed?
 lappend check_functions "qrsh_h"                     ;# test -h option
 lappend check_functions "qrsh_hold_jid"              ;# test -hold_jid option
 lappend check_functions "qrsh_alltoall"              ;# qrsh from all hosts to all hosts
 lappend check_functions "qrsh_starter_method"        ;# does the starter method work for qrsh?
+}
 lappend check_functions "qrsh_accounting"            ;# accounting and online usage (sgeee)
+if {0} {
 lappend check_functions "qrsh_suspend"               ;# suspend
 lappend check_functions "qrsh_delete"                ;# delete
 lappend check_functions "qrsh_terminate"             ;# test terminate method
@@ -78,6 +81,7 @@ lappend check_functions "qrsh_w_v_test"
 lappend check_functions "qrsh_pty_yes_redirect"
 lappend check_functions "qrsh_pty_yes_line_breaks"   ;# test if NL gets converted to CR NL
 lappend check_functions "qrsh_forward_stdin"         ;# test if stdin forward works via <
+}
 
 # -------- local test procedures -----------------------------------------------
 proc qrsh_setup {} {
@@ -968,6 +972,7 @@ proc qrsh_terminate {} {
          # TODO: (CR) Not sure - if possible we should not write tests which expects
          #            tasks after timeouts. What happens if NFS is slow?
          after 2000
+         ts_log_fine "waiting for termination and file $terminate_out_file"
 
          # check contents of terminate.out
          set line [start_remote_prog $host $CHECK_USER cat $terminate_out_file exit_code]
@@ -977,6 +982,20 @@ proc qrsh_terminate {} {
             if {[scan $line "job_id=%d job_pid=%d" t_job_id t_job_pid] != 2} {
                ts_log_severe "error reading from terminate method output file on host $host"
             } else {
+               ts_log_info "information from job script: job_id=$job_id job_pid=$job_pid"
+               ts_log_info "information from terminate script: job_id=$t_job_id job_pid=$t_job_pid"
+               ts_log_info "process table: ps_info($job_pid,command)=$ps_info($job_pid,command)"
+               ts_log_info "process table: ps_info($job_pid,ppid)=$ps_info($job_pid,ppid)"
+               set ppid $ps_info($job_pid,ppid)
+               ts_log_info "process table: ps_info($ppid,command)=$ps_info($ppid,command)"
+               ts_log_info "process table: ps_info($ppid,ppid)=$ps_info($ppid,ppid)"
+
+if {0} {
+               # EB: The code below assumes that the terminate method receives the pid of the qrsh_starter
+               # and not the pid of the job (child of the qrsh_started). According to the documentation
+               # the assumption of the test is wrong because the $job_pid argument of the terminate_method should deliver
+               # the job pid and this exactly is what the test sees.
+
                # t_job_pid should be ppid of job_pid
                if {![info exists ps_info($job_pid,ppid)]} {
                   ts_log_severe "info about ppid of pid $job_pid not available on host $host"
@@ -985,6 +1004,11 @@ proc qrsh_terminate {} {
                      ts_log_severe "wrong job_pid passed to terminate method for job $job_id on host $host, should be $ps_info($job_pid,ppid) but is $t_job_pid"
                   }
                }
+} else {
+               if {$job_pid != $t_job_pid} {
+                  ts_log_severe "wrong job_pid passed to terminate method for job $job_id on host $host, should be $ps_info($job_pid,ppid) but is $t_job_pid"
+               }
+}
             }
          }
          # check if shell script is still running

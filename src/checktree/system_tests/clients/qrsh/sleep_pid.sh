@@ -33,7 +33,7 @@
 echo "my pid is $$ my jobid is $JOB_ID"
 
 x=0
-while [ $x -lt $1 ]; do
+while [ "$x" -lt "$1" ]; do
    x=`expr $x + 1`
    sleep 1
 done
