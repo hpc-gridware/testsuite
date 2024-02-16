@@ -126,34 +126,6 @@ proc qmod_cleanup {} {
    }
 }
 
-#                                                             max. column:     |
-#****** qmod/qmod_wildcard_enable() ******
-#
-#  NAME
-#     qmod_wildcard_enable -- ??? 
-#
-#  SYNOPSIS
-#     qmod_wildcard_enable { } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qmod_wildcard_enable {} {
    global ts_config
    global qmod_test_queues test_host
@@ -161,11 +133,11 @@ proc qmod_wildcard_enable {} {
    #enable all queues on the test host
    set queue_name "qmod*"
    set queue_instance [get_queue_instance $queue_name $test_host] 
-   set output [start_sge_bin "qmod" "-e $queue_name"]
+   set output [start_sge_bin "qmod" "-e \"$queue_name\""]
    if {$prg_exit_state != 0} {
-     ts_log_severe "exit state of \"qmod -e $queue_name\" is not 0"
+     ts_log_severe "exit state of \"qmod -e $queue_name\" is not 0: $output"
    }
-   
+
    foreach queue_name $qmod_test_queues {
       set queue_instance [get_queue_instance $queue_name $test_host]
       ts_log_fine "get state of queue \"$queue_instance\""
@@ -177,41 +149,13 @@ proc qmod_wildcard_enable {} {
    }
 }
 
-#                                                             max. column:     |
-#****** qmod/qmod_wildcard_disable() ******
-# 
-#  NAME
-#     qmod_wildcard_disable -- ??? 
-#
-#  SYNOPSIS
-#     qmod_wildcard_disable { } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc qmod_wildcard_disable { } {
    global ts_config
    global test_host qmod_test_queues
-   
+
    #disable all queues on the test host
    set queue_name [get_queue_instance "qmod*" $test_host]
-   set output [start_sge_bin "qmod" "-d $queue_name"]
+   set output [start_sge_bin "qmod" "-d \"$queue_name\""]
    if {$prg_exit_state != 0} {
      ts_log_severe "exit state of \"qmod -e $queue_name\" is not 0"
    }
