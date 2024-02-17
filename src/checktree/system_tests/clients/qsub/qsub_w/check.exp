@@ -25,7 +25,7 @@ global check_need_running_system
 #set check_need_running_system "no"
 
 # define test's name and run level descriptions
-set check_name            "qsub_option_w"
+set check_name            "qsub_w"
 set check_category        "COMPATIBILITY SYSTEM EVENTCLIENT VERIFIED"
 set check_description(0)  "check qsub -w option"
 

@@ -1,0 +1,498 @@
+#___INFO__MARK_BEGIN__
+##########################################################################
+#
+#  The Contents of this file are made available subject to the terms of
+#  the Sun Industry Standards Source License Version 1.2
+#
+#  Sun Microsystems Inc., March, 2001
+#
+#
+#  Sun Industry Standards Source License Version 1.2
+#  =================================================
+#  The contents of this file are subject to the Sun Industry Standards
+#  Source License Version 1.2 (the "License"); You may not use this file
+#  except in compliance with the License. You may obtain a copy of the
+#  License at http://gridengine.sunsource.net/Gridengine_SISSL_license.html
+#
+#  Software provided under this License is provided on an "AS IS" basis,
+#  WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING,
+#  WITHOUT LIMITATION, WARRANTIES THAT THE SOFTWARE IS FREE OF DEFECTS,
+#  MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE, OR NON-INFRINGING.
+#  See the License for the specific provisions governing your rights and
+#  obligations concerning the Software.
+#
+#  The Initial Developer of the Original Code is: Sun Microsystems, Inc.
+#
+#  Copyright: 2001 by Sun Microsystems, Inc.
+#
+#  All Rights Reserved.
+#
+#  Portions of this software are Copyright (c) 2011 Univa Corporation.
+#
+##########################################################################
+#___INFO__MARK_END__
+
+# Define the global variables to give them back
+global check_name check_description check_needs check_functions
+global check_category
+global ts_config
+global check_root_access_needs
+set check_root_access_needs "yes"
+
+# set description for each level
+set check_description(0)  "check every qsub sync option"
+
+set check_name         "qsub_sync"
+set check_category     "COMPATIBILITY SYSTEM L10N QSUB VERIFIED"
+set check_needs        "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function "qsub_setup"
+set check_cleanup_function "qsub_cleanup"
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "qsub_sync"
+lappend check_functions "qsub_sync_t"
+lappend check_functions "qsub_sync_failover"
+
+proc qsub_setup {} {
+   global ts_config
+   global CHECK_JOB_OUTPUT_DIR
+   global stored_configuration
+   global job_output_dir test_host default_args default_q_args default_h_args
+   global steps_per_queue size_interval
+
+   # set some global variables
+   set num_queues [llength $ts_config(unique_arch_nodes)] 
+   set job_output_dir $CHECK_JOB_OUTPUT_DIR
+
+   # run host specific tests on a random host
+   set test_host [host_conf_get_suited_hosts]
+
+   # set default jobargs
+   set default_args "-o $job_output_dir -e $job_output_dir $ts_config(product_root)/examples/jobs/sleeper.sh 5"
+   set qinstance [get_queue_instance "all.q" $test_host]
+   set default_q_args "-q $qinstance $default_args"
+   set default_h_args "-l h=${test_host} $default_args"
+
+   # backup global config
+   get_config stored_configuration
+  
+   # set config for fast scheduling / fast writing of accounting record
+   set my_config(reporting_params) "accounting=true reporting=false flush_time=00:00:01 joblog=true sharelog=00:10:00"
+   set_config my_config
+}
+
+proc qsub_cleanup {} {
+   global ts_config
+   global stored_configuration
+   global job_output_dir test_host default_args default_q_args default_h_args
+   global steps_per_queue size_interval
+
+   set spool_dir [get_spool_dir $ts_config(master_host)  "qmaster"] 
+   if {[is_qmaster_alive $ts_config(master_host) $spool_dir] != 1} {
+      if {[is_scheduler_alive $ts_config(master_host) $spool_dir] != 1} {
+         startup_qmaster 1
+      } else {
+      startup_qmaster 0
+      }
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   reset_config stored_configuration
+
+   # unset our test global variables
+   foreach var "stored_configuration job_output_dir test_host default_args default_q_args default_h_args steps_per_queue size_interval" {
+      if {[info exists $var]} {
+         unset $var
+      }
+   }
+}
+
+proc qsub_submit_check {jobargs expect_submit_error {user ""} {host ""} {output_files 2}} {
+   global ts_config CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global job_output_dir
+
+   # default user is the first "foreign" user!
+   if {$user == ""} {
+      set user $CHECK_FIRST_FOREIGN_SYSTEM_USER
+   }
+
+   # default submit host is "any host"
+   if {$host == ""} {
+      set host [host_conf_get_suited_hosts]
+   }
+
+   # if we expect a submit error, submit_job shall not do error checking
+   set submit_error_check 1
+   if {$expect_submit_error} {
+      set submit_error_check 0
+   }
+
+   # submit job and evaluate result
+   set job_id [submit_job $jobargs $submit_error_check 60 $host $user]
+   if {$expect_submit_error} {
+      if {$job_id > 0} {
+         ts_log_severe "submission of job \"$jobargs\" as user $user on host \"$host\" should have failed"
+         delete_job $job_id
+      }
+      # are done
+      return 0
+   } else {
+      if {$job_id < 0} {
+         ts_log_severe "submission of job \"$jobargs\" as user $user on host \"$host\" failed:\nerror $job_id"
+         return 0
+      }
+   }
+
+   # wait for job accounting record and expect 1 or 2 ($output_files) output/error files
+   set time [expr [timestamp] + 300] 
+   while {[timestamp] < $time}  {
+      after 1000
+      set back [was_job_running $job_id 0]
+      if {$back != -1} {
+         set back [del_job_files $job_id $job_output_dir $output_files]
+         if {$back != $output_files} {
+            ts_log_severe "job $job_id (\"$jobargs\") did not produce error and output file"
+            return 0
+         } else {
+            # job ran through successfully
+            return $job_id
+         }
+      }
+   }
+
+   # if we get here, we didn't find an accounting record within reasonable time
+   ts_log_severe "timeout waiting for job $job_id (\"$jobargs\")"
+
+   # cleanup
+   delete_job $job_id
+   del_job_files $job_id $job_output_dir 2
+   return 0
+}
+ 
+proc qsub_sync {} {
+   global ts_config
+   global job_output_dir test_host
+
+   # first clean up output directory:  
+   setup_output_directory
+
+   set option "-sync y"
+   set jobargs "$option -o /dev/null -e /dev/null -j y $ts_config(testsuite_root_dir)/scripts/qsub_exit.sh 5" 
+   set result [start_sge_bin "qsub" $jobargs]
+   ts_log_fine "\njob has args: \"$jobargs\""
+   ts_log_fine "exit code: $prg_exit_state"
+   if {$prg_exit_state != 5} {
+      ts_log_severe "qsub did not exit with correct exit code: $result"
+   }
+}
+
+proc qsub_sync_t {} {
+   global ts_config
+   global job_output_dir test_host
+
+   # first clean up output directory:  
+   setup_output_directory
+
+   set option "-sync y -t 1-2"
+   set jobargs "$option -o /dev/null -e /dev/null -j y $ts_config(testsuite_root_dir)/scripts/qsub_exit.sh 5"
+   set result [start_sge_bin "qsub" "$jobargs"]
+   ts_log_fine "\njob $result has args: \"$jobargs\""
+   ts_log_fine "exit state: $prg_exit_state"
+   if {$prg_exit_state != 5} {
+      ts_log_severe "qsub did not exit with correct exit code: $result"
+   }
+}
+
+#****** check.61/qsub_sync_failover() *****************************************
+#  NAME
+#     qsub_sync_failover() -- Testcase for TS IZ 3
+#
+#  SYNOPSIS
+#     1. Qmaster down before qsub -sync y
+#     2. Qmaster down after qsub -sync y
+#     3. qconf -km after qsub -sync y
+#     4. qconf -kec after qsub -sync y
+#
+#  FUNCTION
+#     Checks the qsub-output of the in synapsis described scenarios
+#
+#  BUGS
+#     TS IZ 3
+#     TS 2934
+#
+#*******************************************************************************
+proc qsub_sync_failover {} {
+   global ts_config
+   global CHECK_USER
+
+   # Delete any remaining jobs
+   delete_all_jobs
+
+   set SUBMIT_MESSAGE "*[translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]*"
+
+   set spool_dir [get_spool_dir $ts_config(master_host) "qmaster"]
+   set host $ts_config(master_host)
+   set arch [resolve_arch $host]
+   set error_text ""
+   set error 0
+   set timeout 120
+
+   # qconf -km before qsub -sync y
+   shutdown_master_and_scheduler $ts_config(master_host) $spool_dir
+   set output [start_sge_bin "qsub" "-sync y $ts_config(product_root)/examples/jobs/sleeper.sh 10" $host $CHECK_USER]
+   set text [translate_macro MSG_GDI_UNABLE_TO_CONNECT_SUS "qmaster" "*" "*"]
+   set text2 [translate_macro MSG_GDI_CANT_SEND_MSG_TO_PORT_ON_HOST_SUSS "qmaster" "*" "*" "*"]
+   if {[string match "*$text*" $output] == 0 && [string match "*$text2*" $output] == 0} {
+      append error_text "\"qconf -km before qsub -sync y\" FAILED due to an unexpected output\n"
+      set error 1
+   }
+   startup_qmaster 1
+
+   # qconf -km after qsub -sync y
+   set id [open_remote_spawn_process $host $CHECK_USER "$ts_config(product_root)/bin/$arch/qsub" "-sync y $ts_config(product_root)/examples/jobs/sleeper.sh 30"]
+   set sp_id [lindex $id 1]
+
+   expect {
+      -i $sp_id timeout {
+         append error_text "Timeout in \"Qmaster down after qsub -sync y\" test\n"
+         set error 1
+      }
+      -i $sp_id eof {
+         append error_text "Unexpected EOF in \"Qmaster down after qsub -sync y\" test\n"
+         set error 1
+      }
+      # The qmaster has become unreachable
+      -i $sp_id -- $SUBMIT_MESSAGE {
+         ts_log_fine "Qsub output: job submitted"
+      }
+      "_END_OF_FILE_" {
+         set error 1
+         append error_text "Could not submit job to qmaster\n"
+         append error_text "$expect_out(buffer)\n"
+      }
+   }
+   wait_for_event_client "qsub"
+   set output 0
+   set recon 0
+   set text [translate_macro MSG_JAPI_QMASTER_DOWN]
+   set text2 [translate_macro MSG_JAPI_RECONNECTED]
+   shutdown_master_and_scheduler $ts_config(master_host) $spool_dir
+   set timeout 660  ;# reconnect time might take some time
+   # (TODO: reconfigure delayed job reporting time for execd somehow to speedup this test)
+   ts_log_fine "now waiting for qsub -sync job finished (this might take up to 10 minutes)"
+   expect {
+      -i $sp_id timeout {
+         append error_text "Timeout in \"qconf -km after qsub -sync y\" test\n"
+         set error 1
+      }
+      -i $sp_id eof {
+         append error_text "Unexpected EOF in \"qconf -km after qsub -sync y\" test\n"
+         set error 1
+      }
+      # The qmaster has gone down.  Waiting to reconnect.error:
+      -i $sp_id -- $text {
+         ts_log_fine "Qsub output: The qmaster has gone down."
+         set output 1
+         if {[startup_qmaster 1] != 0} {
+            ts_log_severe "qmaster could not be started"
+         }
+         exp_continue
+      }
+      # Reconnected to qmaster
+      -i $sp_id -- $text2 {
+         ts_log_fine "Qsub output: Reconnected to qmaster."
+         set recon 1
+         exp_continue
+      }
+      -i $sp_id -- "*_END_OF_FILE_" {
+         ts_log_fine "$expect_out(buffer)"
+         ts_log_fine "qsub -sync job finished"
+      }
+   }
+   close_spawn_process $id
+
+   if {$output != 1} {
+      append error_text "\"qconf -km after qsub -sync y\" FAILED due to an unexpected output\n"
+      set error 1
+   }
+   if {$recon != 1} {
+      append error_text "\"qconf -km after qsub -sync y\" FAILED because the event client was unable to reconnect\n"
+      set error 1
+   }
+
+
+   del_event_client_list "all" ""
+   wait_for_event_client "qsub" 1
+
+
+   # qconf -kec after qsub -sync y
+   set id [open_remote_spawn_process $host $CHECK_USER "$ts_config(product_root)/bin/$arch/qsub" "-sync y $ts_config(product_root)/examples/jobs/sleeper.sh 120"]
+   set sp_id [lindex $id 1]
+   set timeout 120
+   expect {
+      -i $sp_id timeout {
+         append error_text "Timeout in \"Qmaster down after qsub -sync y\" test\n"
+         set error 1
+      }
+      -i $sp_id eof {
+         append error_text "Unexpected EOF in \"Qmaster down after qsub -sync y\" test\n"
+         set error 1
+      }
+      # The qmaster has become unreachable
+      -i $sp_id -- $SUBMIT_MESSAGE {
+         ts_log_fine "Qsub output: job submitted"
+      }
+      "_END_OF_FILE_" {
+         set error 1
+         append error_text "Could not submit job to qmaster\n"
+         append error_text "$expect_out(buffer)\n"
+      }
+   }
+   wait_for_event_client "qsub"
+   set output 0
+   set found_eof 0
+   set text [translate_macro MSG_JAPI_KILLED_EVENT_CLIENT]
+   del_event_client_list "all" ""
+   expect {
+      -i $sp_id timeout {
+         append error_text "Timeout in \"qconf -kec after qsub -sync y\" test\n"
+         set error 1
+      }
+      -i $sp_id eof {
+         append error_text "Unexpected EOF in \"qconf -kec after qsub -sync y\" test\n"
+         set error 1
+      }
+      # Unable to wait for job because of error: Event client got shutdown signal
+      -i $sp_id -- $text {
+         ts_log_fine "Qsub output: Unable to wait for job because of error:  Event client got shutdown signal"
+         set output 1
+         exp_continue
+      }
+      "_END_OF_FILE_" {
+         set found_eof 1
+         ts_log_fine "found end of file of qsub -sync script"
+      }
+   }
+   close_spawn_process $id
+   if {$output != 1} {
+      append error_text "\"qconf -kec after qsub -sync y\" FAILED due to an unexpected output\n"
+      set error 1
+   }
+
+   if {$found_eof != 1} {
+      append error_text "\"qconf -kec after qsub -sync y\" FAILED because qsub doesn't terminate\n"
+      set error 1
+   }
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   wait_for_event_client "qsub" 1
+
+   # Qmaster down before qsub -sync y
+   set qmaster_pid [get_qmaster_pid $ts_config(master_host) $spool_dir]
+   start_remote_prog "$ts_config(master_host)" "root" "kill" "-9 $qmaster_pid"
+   set text [translate_macro MSG_GDI_UNABLE_TO_CONNECT_SUS "qmaster" "*" "*"]
+   set text2 [translate_macro MSG_GDI_CANT_SEND_MSG_TO_PORT_ON_HOST_SUSS "qmaster" "*" "*" "*"]
+   set output [start_remote_prog $host $CHECK_USER "$ts_config(product_root)/bin/$arch/qsub" "-sync y $ts_config(product_root)/examples/jobs/sleeper.sh 10"]
+
+   if {[string match "*$text*" $output] == 0 && [string match "*$text2*" $output] == 0} {
+      append error_text "\"Qmaster down before qsub -sync y\" FAILED due to an unexpected output\n"
+      set error 1
+   }
+   startup_qmaster 0
+   wait_for_event_client "sched*"
+
+   # Qmaster down after qsub -sync y
+   ts_log_fine "Qmaster down after qsub -sync y test"
+
+   del_event_client_list "all" ""
+   wait_for_event_client "qsub" 1
+
+   wait_for_end_of_all_jobs 660  ;# qsub -sync jobs have delayed job reporting
+
+   set id [open_remote_spawn_process $host $CHECK_USER "$ts_config(product_root)/bin/$arch/qsub" "-sync y $ts_config(product_root)/examples/jobs/sleeper.sh 120"]
+   set sp_id [lindex $id 1]
+
+   expect {
+      -i $sp_id timeout {
+         append error_text "Timeout in \"Qmaster down after qsub -sync y\" test\n"
+         set error 1
+      }
+      -i $sp_id eof {
+         append error_text "Unexpected EOF in \"Qmaster down after qsub -sync y\" test\n"
+         set error 1
+      }
+      # The qmaster has become unreachable
+      -i $sp_id -- $SUBMIT_MESSAGE {
+         ts_log_fine "Qsub output: job submitted"
+      }
+      "_END_OF_FILE_" {
+         set error 1
+         append error_text "Could not submit job to qmaster\n"
+         append error_text "$expect_out(buffer)\n"
+      }
+   }
+   wait_for_event_client "qsub"
+
+   set output 0
+   set recon 0
+   set text [translate_macro MSG_JAPI_DISCONNECTED]
+   set text2 [translate_macro MSG_JAPI_RECONNECTED]
+
+   set qmaster_pid [get_qmaster_pid $ts_config(master_host) $spool_dir]
+   start_remote_prog "$ts_config(master_host)" "root" "kill" "-9 $qmaster_pid"
+
+   if {[startup_qmaster 0] != 0} {
+      ts_log_severe "qmaster could not be started"
+   }
+   expect {
+      -i $sp_id timeout {
+         append error_text "Timeout in \"Qmaster down after qsub -sync y\" test\n"
+         set error 1
+      }
+      -i $sp_id eof {
+         append error_text "Unexpected EOF in \"Qmaster down after qsub -sync y\" test\n"
+         set error 1
+      }
+      # The qmaster has become unreachable
+      -i $sp_id -- $text {
+         ts_log_fine "Qsub output: The qmaster has become unreachable."
+         set output 1
+         exp_continue
+      }
+      # Reconnected to qmaster
+      -i $sp_id -- $text2 {
+         ts_log_fine "Qsub output: Reconnected to qmaster."
+         set recon 1
+      }
+      "_END_OF_FILE_" {
+         set error 1
+         append error_text "Could no reconnect to qmaster\n"
+         append error_text "$expect_out(buffer)\n"
+      }
+   }
+
+   close_spawn_process $id
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 660   ;# qsub -sync jobs have delayed report time
+   wait_for_event_client "qsub" 1
+
+
+   if {$output != 1} {
+      append error_text "\"Qmaster down after qsub -sync y\" FAILED due to an unexpected output\n"
+      set error 1
+   }
+   if {$recon != 1} {
+      append error_text "\"Qmaster down after qsub -sync y\" FAILED because the event client was unable to reconnect\n"
+      set error 1
+   }
+
+   if {$error == 1} {
+      ts_log_severe $error_text
+   }
+}

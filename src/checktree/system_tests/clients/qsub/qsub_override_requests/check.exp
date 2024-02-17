@@ -41,8 +41,8 @@ global check_root_access_needs
 #set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
-set check_name            "client_override"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_name            "qsub_override_requests"
+set check_category        "COMPATIBILITY SYSTEM QSUB VERIFIED"
 set check_description(0)  "submit a job with command line parameters that should override the default parameters in sge_request"
 
 # define test's dependencies
