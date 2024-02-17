@@ -55,15 +55,12 @@ set check_cleanup_level_function "qrsh_cleanup"
 
 # define test's procedure order
 set check_functions {}
-if {0} {
 lappend check_functions "qrsh_function"              ;# is a job executed?
 lappend check_functions "qrsh_h"                     ;# test -h option
 lappend check_functions "qrsh_hold_jid"              ;# test -hold_jid option
 lappend check_functions "qrsh_alltoall"              ;# qrsh from all hosts to all hosts
 lappend check_functions "qrsh_starter_method"        ;# does the starter method work for qrsh?
-}
 lappend check_functions "qrsh_accounting"            ;# accounting and online usage (sgeee)
-if {0} {
 lappend check_functions "qrsh_suspend"               ;# suspend
 lappend check_functions "qrsh_delete"                ;# delete
 lappend check_functions "qrsh_terminate"             ;# test terminate method
@@ -81,7 +78,6 @@ lappend check_functions "qrsh_w_v_test"
 lappend check_functions "qrsh_pty_yes_redirect"
 lappend check_functions "qrsh_pty_yes_line_breaks"   ;# test if NL gets converted to CR NL
 lappend check_functions "qrsh_forward_stdin"         ;# test if stdin forward works via <
-}
 
 # -------- local test procedures -----------------------------------------------
 proc qrsh_setup {} {
