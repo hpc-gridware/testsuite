@@ -1417,6 +1417,8 @@ proc qstat_g_c_xml_parse { output } {
    # Run now -xml command
    set XML [start_sge_bin  "qstat" "-g c -xml" ]
 
+   puts $XML
+
    set doc  [dom parse $XML]
 
    set root [$doc documentElement]
@@ -1466,7 +1468,7 @@ proc qstat_g_c_xml_queue { node output } {
    if { $node11 == "" } { ;# Get out if at the end of tree
       break
    }
-   
+
    set queue [$node11 nodeValue]
    set output_xml_qstat($queue,clusterqueue) $queue
    lappend output_xml_qstat(queue_list) $queue
@@ -1498,7 +1500,7 @@ proc qstat_g_c_xml_queue { node output } {
       set node $node22
       set node222 [$node22 firstChild]  
       set node222 [$node22 firstChild]  
-      set node2222 [$node222 firstChild]  
+      set node2222 [$node222 firstChild]
       set queue [$node2222 nodeValue]
 
       set output_xml_qstat($queue,clusterqueue) $queue
@@ -2048,6 +2050,11 @@ proc qstat_j_xml_par { output job_id xmloutput} {
    set scriptFile [$root getElementsByTagName JB_script_file]
    foreach elem $scriptFile {
       set xml(script_file) [[$elem firstChild] nodeValue]
+   }
+   # JB_script_size
+   set scriptSize [$root getElementsByTagName JB_script_size]
+   foreach elem $scriptSize {
+      set xml(script_size) [[$elem firstChild] nodeValue]
    }
    # JB_hard_queue_list
    set hardQueue [$root getElementsByTagName JB_hard_queue_list]

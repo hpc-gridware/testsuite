@@ -1631,14 +1631,12 @@ proc check_executable_files {  } {
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/trap.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/ulimit.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/signalhandler.sh"
-   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qsub/starter.sh"
-   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qsub/sleeper.sh"
+   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qsub/qsub_all_other/starter.sh"
+   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qsub/qsub_ac_dc_sc/sleeper.sh"
+   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qsub/qsub_t/step.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/qmaster/size/pminiworm.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/qmaster/size/flood_sleeper.sh"
    if {$ts_config(source_dir) != "none"} {
-      if {[file isfile "$ts_config(source_dir)/aimk"]} {
-         lappend filelist "$ts_config(source_dir)/aimk"
-      }
       lappend filelist "$ts_config(source_dir)/dist/examples/jobs/array_submitter.sh"
       lappend filelist "$ts_config(source_dir)/dist/examples/jobs/env-tester.csh"
       lappend filelist "$ts_config(source_dir)/dist/examples/jobs/jobnet_submitter.sh"
