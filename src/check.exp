@@ -293,6 +293,9 @@ set check_do_not_use_spool_config_entries 0
 global check_do_clean_compile
 set check_do_clean_compile 0
 
+global check_set_ignore_dependencies
+set check_set_ignore_dependencies 0
+
 global check_reinit_on_tcl_error
 set check_reinit_on_tcl_error 0
 
@@ -5058,6 +5061,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    global CHECK_INTERRUPT check_source_files
    global CHECK_USE_HUDSON
    global exclude_array
+   global check_set_ignore_dependencies
 
    # check if the state_to_run is valid
    if {$state_to_run != "all" &&
@@ -5067,7 +5071,6 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    }
 
    testsuite_background_tasks
-
 
    set CHECK_ACT_LEVEL 0
 
@@ -5117,20 +5120,22 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
 
    ts_log_fine "file: $path/check.exp"
 
-   # first check the dependencies
-   # if dependencies are not fulfilled, we mark the test as not yet run
-   set result [validate_needs $check_needs]
-   ts_log_finest "needs returned $result"
-   ts_log_finest "highest level of test is [checktree_get_highest_level_by_path $path]"
-   if {$result != 0} {
-      ts_log_fine "dependencies ($check_needs) not fulfilled! Stop!"
-      clear_all_check_errors $check_name
-      foreach level $check_levels {
-         delete_result $path 0 $level
-      }
-      set CHECK_TEST_RUNNING 0
-      return -2  ;# dependencies not fulfilled
-   }
+    if {$check_set_ignore_dependencies} {
+        # first check the dependencies
+        # if dependencies are not fulfilled, we mark the test as not yet run
+        set result [validate_needs $check_needs]
+        ts_log_finest "needs returned $result"
+        ts_log_finest "highest level of test is [checktree_get_highest_level_by_path $path]"
+        if {$result != 0} {
+            ts_log_fine "dependencies ($check_needs) not fulfilled! Stop!"
+            clear_all_check_errors $check_name
+            foreach level $check_levels {
+               delete_result $path 0 $level
+            }
+            set CHECK_TEST_RUNNING 0
+            return -2  ;# dependencies not fulfilled
+        }
+    }
 
    ts_log_fine "S T A R T I N G  test  \"$check_name\""
    set nr_errors 0
@@ -7770,6 +7775,9 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "create_csv_report     Analyse checktree and create a *.csv file in testsuite directory."
       puts ""
+      puts "ignore_dependencies   If used then tests dependencies will be ignored and all tests are executed"
+      puts "                      according to runtime (from the shortest to the longest)"
+      puts ""
       testsuite_shutdown 1
    }
 
@@ -7839,6 +7847,11 @@ for {set i 0} {$i < $argc} {incr i} {
 
    if {[string compare [lindex $argv $i] "--interactive_mode"] == 0 || [string compare [lindex $argv $i] "interactive_mode"] == 0} {
       check_set_interactive true
+      continue
+   }
+
+   if {[string compare [lindex $argv $i] "--ignore_dependencies"] == 0 || [string compare [lindex $argv $i] "ignore_dependencies"] == 0} {
+      set check_set_ignore_dependencies 1
       continue
    }
 
