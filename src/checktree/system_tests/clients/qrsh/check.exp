@@ -974,38 +974,10 @@ proc qrsh_terminate {} {
          set line [start_remote_prog $host $CHECK_USER cat $terminate_out_file exit_code]
          if {$exit_code != 0} {
             ts_log_severe "error reading from terminate method output file on host $host"
-         } else {
-            if {[scan $line "job_id=%d job_pid=%d" t_job_id t_job_pid] != 2} {
-               ts_log_severe "error reading from terminate method output file on host $host"
-            } else {
-               ts_log_info "information from job script: job_id=$job_id job_pid=$job_pid"
-               ts_log_info "information from terminate script: job_id=$t_job_id job_pid=$t_job_pid"
-               ts_log_info "process table: ps_info($job_pid,command)=$ps_info($job_pid,command)"
-               ts_log_info "process table: ps_info($job_pid,ppid)=$ps_info($job_pid,ppid)"
-               set ppid $ps_info($job_pid,ppid)
-               ts_log_info "process table: ps_info($ppid,command)=$ps_info($ppid,command)"
-               ts_log_info "process table: ps_info($ppid,ppid)=$ps_info($ppid,ppid)"
-
-if {0} {
-               # EB: The code below assumes that the terminate method receives the pid of the qrsh_starter
-               # and not the pid of the job (child of the qrsh_started). According to the documentation
-               # the assumption of the test is wrong because the $job_pid argument of the terminate_method should deliver
-               # the job pid and this exactly is what the test sees.
-
-               # t_job_pid should be ppid of job_pid
-               if {![info exists ps_info($job_pid,ppid)]} {
-                  ts_log_severe "info about ppid of pid $job_pid not available on host $host"
-               } else {
-                  if {$ps_info($job_pid,ppid) != $t_job_pid} {
-                     ts_log_severe "wrong job_pid passed to terminate method for job $job_id on host $host, should be $ps_info($job_pid,ppid) but is $t_job_pid"
-                  }
-               }
-} else {
-               if {$job_pid != $t_job_pid} {
-                  ts_log_severe "wrong job_pid passed to terminate method for job $job_id on host $host, should be $ps_info($job_pid,ppid) but is $t_job_pid"
-               }
-}
-            }
+         } elseif {[scan $line "job_id=%d job_pid=%d" t_job_id t_job_pid] != 2} {
+            ts_log_severe "error reading from terminate method output file on host $host"
+         } elseif {$job_pid != $t_job_pid} {
+            ts_log_severe "wrong job_pid passed to terminate method for job $job_id on host $host, should be $job_pid but is $t_job_pid"
          }
          # check if shell script is still running
          get_ps_info $job_pid $host
