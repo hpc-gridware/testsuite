@@ -1966,6 +1966,24 @@ proc qstat_j_xml_par { output job_id xmloutput} {
          set xml(sge_o[string tolower $varName]) [$val nodeValue]
       }
    }
+   # JB_context
+   set ctxList [$root getElementsByTagName JB_context]
+   set ctx_init 0
+   foreach elemin $ctxList {
+      set varList [$elemin getElementsByTagName context_list]
+      foreach elem $varList {
+         set var [$elem selectNodes VA_variable/text()]
+         set varName [string range [$var nodeValue] 15 [string length [$var nodeValue]]]
+         set val [$elem selectNodes VA_value/text()]
+         set name_value "[$var nodeValue]=[$val nodeValue]"
+      }
+      if {$ctx_init == 0} {
+         set xml(context) $name_value
+         set ctx_init 1
+      } else {
+         set xml(context) "$xml(context),$name_value"
+      }
+   }
    # JAT_scaled_usage_list
    set usgList [$root getElementsByTagName JAT_scaled_usage_list]
    foreach usg $usgList {
