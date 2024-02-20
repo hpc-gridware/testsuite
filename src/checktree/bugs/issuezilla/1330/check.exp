@@ -63,7 +63,7 @@ set check_setup_function issue_1330_setup
 # define test's procedure order
 set check_functions "kill_running_system"
 lappend check_functions "create_autoinst_config"
-lappend check_functions "install_bdb_rpc"
+#lappend check_functions "install_bdb_rpc"
 lappend check_functions "install_qmaster"
 lappend check_functions "install_wait_for_settings_file"
 lappend check_functions "make_user_cert"
@@ -84,9 +84,9 @@ lappend check_functions "setup_deadlineuser"
 lappend check_functions "setup_schedconf" 
 lappend check_functions "setup_default_calendars"
 lappend check_functions "setup_check_messages_files"
-lappend check_functions "setup_win_users"
+#lappend check_functions "setup_win_users"
 lappend check_functions "setup_and_check_users"
-lappend check_functions "setup_inhouse_cluster"
+#lappend check_functions "setup_inhouse_cluster"
 lappend check_functions "setup_sge_aliases_file"
 
 global Autoinstall_test_test_hosts

@@ -8519,7 +8519,7 @@ if { $do_only_reset_config == 1 } {
   run_test $CHECK_ACT_PATH "all" "setup_deadlineuser" 0
   run_test $CHECK_ACT_PATH "all" "setup_schedconf" 0
   run_test $CHECK_ACT_PATH "all" "setup_default_calendars" 0
-  run_test $CHECK_ACT_PATH "all" "setup_inhouse_cluster" 0
+  #run_test $CHECK_ACT_PATH "all" "setup_inhouse_cluster" 0
 
   puts "configuration reset done"
   testsuite_shutdown $result

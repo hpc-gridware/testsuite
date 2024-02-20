@@ -1009,35 +1009,6 @@ proc setup_check_messages_files {} {
    }
 }
 
-#                                                             max. column:     |
-#****** install_core_system/setup_inhouse_cluster() ******
-# 
-#  NAME
-#     setup_inhouse_cluster -- ??? 
-#
-#  SYNOPSIS
-#     setup_inhouse_cluster { } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc setup_inhouse_cluster {} {
    global env CHECK_USER
    global ts_config
