@@ -89,6 +89,20 @@ proc appcert_setup {} {
          lappend appcert_hosts $host
       }
    }
+
+   set appcert_avail 0
+   foreach host $appcert_hosts {
+      set binary_name "appcert"
+      set binary_path [get_binary_path $host $binary_name 0]
+
+      if {$binary_name != $binary_path} {
+         set appcert_avail 1
+      }
+   }
+   if {$appcert_avail == 0} {
+      ts_log_config "test unsupported: appcert binary not available on a solaris host"
+      return 99
+   }
 }
 
 proc appcert_cleanup {} {
