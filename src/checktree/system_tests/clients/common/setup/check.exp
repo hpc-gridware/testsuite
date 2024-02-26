@@ -77,14 +77,8 @@ proc client_setup_cleanup {} {
    }
 }
 
-proc client_setup_do_test {scenario expected_error_list {error_info_message_array ""}} {
+proc client_setup_do_test {scenario expected_error_list} {
    global ts_config
-
-   if {$error_info_message_array != ""} {
-      upvar $error_info_message_array error_info_logging
-   } else {
-      set error_info_logging(dummy) "dummy info reporting"
-   }
 
    # client list:
    # all clients, except
@@ -117,11 +111,6 @@ proc client_setup_do_test {scenario expected_error_list {error_info_message_arra
       set output [start_sge_bin $command $commands($command,args)]
       set messages(index) ""
       set ret [handle_sge_errors "client_setup_do_test" "$command $commands($command,args)" $output messages 0 $prg_exit_state]
-
-      if {[info exists error_info_logging($ret)]} {
-         append info_text "$error_info_logging($ret)\nOutput of \"$command $commands($command,args)\" was:\n$output\n"
-      }
-
 
       set is_expected_error_code 0
       foreach expected_error $expected_error_list {
@@ -194,7 +183,6 @@ proc client_setup_test_qmaster_down {} {
    # test clients with qmaster down
    shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
    set did_shutdown 1
-   set info_text(-121) "This is caused by not fixed issue #2786"
-   client_setup_do_test "qmaster down" "-120 -121" info_text
+   client_setup_do_test "qmaster down" "-120 -121"
 }
 
