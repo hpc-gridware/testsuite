@@ -94,6 +94,7 @@ lappend check_functions "qstat_U_valid_plain_xml_comparison" ;# Compare the two 
 #lappend check_functions "qstat_g_d_plain_xml_comparison" ;# Compare the two qstat -g d commands
 #lappend check_functions "qstat_g_t_plain_xml_comparison" ;# Compare the two qstat -g t commands
 #lappend check_functions "qstat_s_a_plain_xml_comparison" ;# Compare the two qstat -s a commands
+set check_functions "qstat_j_xml"
 
 proc qstat_setup {} {
    global ts_config CHECK_HAVE_TDOM
@@ -3891,6 +3892,11 @@ proc qstat_j_xml {} {
    lappend var_array "io"
    lappend var_array "vmem"
 
+   if {$ts_config(gridengine_version) >= 90} {
+      lappend var_array "wallclock"
+      lappend var_array "rss"
+      lappend var_array "maxrss"
+   }
 
    # for each job test that the xml and plain outputs are the same
    set found_error ""
@@ -3926,11 +3932,11 @@ proc qstat_j_xml {} {
       set plain_elem_string [string trim $plain($elem)]
       set xml_value  [string trim $xml($elem)]
 
-      if {$elem == "cpu" || $elem == "mem" || $elem == "io" || $elem == "vmem" } {
+      if {$elem == "cpu" || $elem == "mem" || $elem == "io" || $elem == "vmem" || $elem == "maxvmem" || $elem == "wallclock" || $elem == "rss" || $elem == "maxrss"} {
          ts_log_fine "plain xml value: $xml_value"
          ts_log_fine "plain value: $plain_elem_string"
 
-         if {$elem == "cpu"} {
+         if {$elem == "cpu" || $elem == "wallclock"} {
             set help_seconds [clock scan "00:00:00"]
             set cpu_value_plain [ expr [clock scan $plain_elem_string] - $help_seconds]
             ts_log_fine "cpu_value_plain: $cpu_value_plain"

@@ -918,8 +918,9 @@ proc check_qstat_reporting { host jobid { strategy "linear" } { amount 1 } { thr
    
    ts_log_fine "requested binding: $qstat_j_cb_info(binding)"
 
+   set binding_attrib [get_qstat_j_attribute "binding" 1]
    if { $strategy != "NONE" } {
-      ts_log_fine "binding done: $qstat_j_cb_info(binding    1)"
+      ts_log_fine "binding done: $qstat_j_cb_info($binding_attrib)"
    }
 
    # get type of requested binding 
@@ -1011,7 +1012,7 @@ proc check_qstat_reporting { host jobid { strategy "linear" } { amount 1 } { thr
       }
       
       # check binding done 
-      #if { [string first $bs $qstat_j_cb_info(binding    1) ] == -1 } {
+      #if { [string first $bs $qstat_j_cb_info($binding_attrib) ] == -1 } {
       #   ts_log_severe "Requested explicit binding from qstat output not found in qstat binding which is done!"
       #} else {
       #   ts_log_fine "Explicit: Ok! Requested binding is actual binding!" 

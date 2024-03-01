@@ -153,7 +153,8 @@ proc issue_2419_test {} {
 
    # parse qstat -j usage string
    # cpu=00:01:33, mem=0.00000 GBs, io=0.00000, vmem=N/A, maxvmem=56.980M
-   set usage $qstat_j_info(usage    1)
+   set attrib [get_qstat_j_attribute "usage" 1]
+   set usage $qstat_j_info($attrib)
    set usage_split [split $usage ","]
    set cpu_raw [string trim [lindex $usage_split 0]]
    set cpu_split [split $cpu_raw "="]

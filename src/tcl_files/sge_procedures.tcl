@@ -380,6 +380,7 @@ proc get_qmaster_spool_dir {} {
 #*******************************************************************************
 proc ge_has_feature {feature {quiet 0}} {
    global CHECK_INTERACTIVE_TRANSPORT
+   global CHECK_USER
    get_current_cluster_config_array ts_config
    switch -exact $feature {
       "new-interactive-job-support" {
@@ -431,6 +432,17 @@ proc ge_has_feature {feature {quiet 0}} {
             set result true
          } else {
             set result false
+         }
+      }
+      "resource-maps" {
+         set arch [resolve_arch $ts_config(master_host)]
+         set binary "$ts_config(product_root)/bin/$arch/sge_qmaster"
+         set output [start_remote_prog $ts_config(master_host) $CHECK_USER "strings" "$binary | grep RSMAP"]
+         ts_log_fine $output
+         if {$prg_exit_state == 0} {
+            return true
+         } else {
+            return false
          }
       }
       default {
@@ -3253,7 +3265,7 @@ proc wait_for_load_from_all_queues { seconds {raise_error 1} } {
 proc wait_for_online_usage {job_id {mytimeout 60}} {
    # we can't use the index "usage    1" directly in TCL-arrays because of
    # the spaces, have to use it in a variable
-   set usage_name "usage    1"
+   set usage_name [get_qstat_j_attribute "usage" 1]
    set ret        1
    set time       [timestamp]
 
@@ -5701,7 +5713,13 @@ proc get_qstat_j_info {jobid {my_variable qstat_j_info} {add_switch ""}} {
    return 0
 }
 
-
+proc get_qstat_j_attribute {name {task 1}} {
+   if {[ge_has_feature "resource-maps"] == "true"} {
+      return [format "%-12s %11d" $name $task]
+   } else {
+      return [format "%s %4d" $name $task]
+   }
+}
 
 #****** sge_procedures/get_qconf_se_info() *************************************
 #  NAME

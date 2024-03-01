@@ -1397,7 +1397,7 @@ proc run_throughput_test {} {
             
             # tasks to be done once a second
             if {$result(test_run_time) != $time_now} {
-               show_current_system_status $start_time result schedd_data monitoring
+               set error [show_and_check_current_system_status $start_time result schedd_data monitoring]
 
                # enable queues when $enable_queues_job_count is reached
                if { ! $are_enabled && $result(jobs_submitted) >= $enable_queues_job_count } {
@@ -3822,7 +3822,7 @@ proc calculate_average_schedd_times { schedd_array_name schedd_results_array { d
 }
 
 
-proc show_current_system_status {start_time array_name schedd_array_name monitoring_name} {
+proc show_and_check_current_system_status {start_time array_name schedd_array_name monitoring_name} {
    global ts_config
    global test_scenario
 
@@ -3830,8 +3830,10 @@ proc show_current_system_status {start_time array_name schedd_array_name monitor
    upvar $schedd_array_name schedd
    upvar $monitoring_name monitoring
 
+   set ret 1
+
    # string for queue status
-   if { $data(queues_enabled) == 1 } {
+   if {$data(queues_enabled)} {
       set queue_status "enabled"
    } else {
       set queue_status "disabled"
@@ -3857,9 +3859,16 @@ proc show_current_system_status {start_time array_name schedd_array_name monitor
    flush stdout
 
    # check data
+   if {$data(jobs_pending) < 0} {
+      ts_log_severe "negative pending job count $data(jobs_pending)"
+      set ret 0
+   }
    if {[expr $data(jobs_done) + $data(jobs_running) + $data(jobs_pending)] != $data(jobs_submitted)} {
       ts_log_severe "unexpected job count error"
+      set ret 0
    }
+
+   return $ret
 }
 
 proc clean_current_system_status { results_array array_name job_array_name schedd_array_name monitoring_name qstat_name qping_name event_name} {

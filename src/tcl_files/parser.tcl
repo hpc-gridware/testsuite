@@ -1440,6 +1440,10 @@ proc parse_qacct {input output {jobid 0} {sum 1}} {
    set rules(iow)             $rule_sum
    set rules(maxvmem)         $rule_max_vmem
    set rules(taskid)          rule_list
+   set rules(wallclock)       $rule_max
+   set rules(rss)             $rule_sum
+   set rules(maxrss)          $rule_max_vmem
+
   
    # for non array jobs, taskid is "undefined", replace it by a number
    set replace(taskid,undefined) 0
@@ -3923,7 +3927,8 @@ proc plain_j_parse { output_var jobId plainoutput } {
       set plain($key) [string range $val 0 $len]
    }
 
-   set usage_split [ split $plain(usage    1) "," ]
+   set usage_attrib [get_qstat_j_attribute "usage" 1]
+   set usage_split [ split $plain($usage_attrib) "," ]
    foreach usgElem $usage_split {
       set param_split [ split $usgElem "=" ]
       set cnt 0
@@ -3938,6 +3943,16 @@ proc plain_j_parse { output_var jobId plainoutput } {
       }
       set plain($key) $val
    }
-   
+}
+
+proc parse_name_value_list {target_array_var source_string} {
+   upvar $target_array_var result
+   set split_source [split $source_string ","]
+   foreach entry $split_source {
+      set split_entry [split $entry "="]
+      set name [lindex $split_entry 0]
+      set value [lindex $split_entry 1]
+      set result($name) $value
+   }
 }
 

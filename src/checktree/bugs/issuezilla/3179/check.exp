@@ -224,7 +224,8 @@ proc issue_3179_usage {} {
       if { $found == 0 } {
          break
       }
-      set qstat_info [split $qstat_j_info(usage    1) ","]
+      set attrib [get_qstat_j_attribute "usage" 1]
+      set qstat_info [split $qstat_j_info($attrib) ","]
       set value_list [split [lindex $qstat_info 0] "="]
       set qstat_info [parse_cpu_time [lindex $value_list 1]]
       ts_log_fine "Job: $id with cpu usage: $qstat_info"
