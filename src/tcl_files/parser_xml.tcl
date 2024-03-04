@@ -1994,7 +1994,7 @@ proc qstat_j_xml_par { output job_id xmloutput} {
          if {[$var nodeValue] == "vmem" || [$var nodeValue] == "maxvmem"} {
             set xml([$var nodeValue]) [format %.3f [expr [$val nodeValue] / 1048576]]M
          } else {
-            if {[$var nodeValue] == "cpu"} {
+            if {[$var nodeValue] == "cpu" || [$var nodeValue] == "wallclock"} {
                set xml([$var nodeValue]) "00:00:[format %2.0f [$val nodeValue]]"
             } else {
                set xml([$var nodeValue]) [format %.5f [$val nodeValue]]

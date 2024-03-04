@@ -3945,9 +3945,9 @@ proc plain_j_parse { output_var jobId plainoutput } {
    }
 }
 
-proc parse_name_value_list {target_array_var source_string} {
+proc parse_name_value_list {target_array_var source_string {delimiter ", "}} {
    upvar $target_array_var result
-   set split_source [split $source_string ", "]
+   set split_source [split $source_string $delimiter]
    foreach entry $split_source {
       set split_entry [split $entry "="]
       set name [lindex $split_entry 0]
