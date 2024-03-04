@@ -211,25 +211,18 @@ proc issue_3179_usage {} {
 
    wait_for_job_state $id "r" 60
 
-   # get qstat -j info every 2 seconds and save the result
-   while { [get_qstat_j_info $id qstat_j_info] == 1 } {
-      set found 0
+   # get qstat -j info every second and save the result
+   set usage_attrib [get_qstat_j_attribute "usage" 1]
+   while {[get_qstat_j_info $id qstat_j_info] == 1} {
       # shortly after the job finished  the usage line disappears in the qstat output
       # we have to check if it is still there otherwise we can break the loop
-      foreach key [array names qstat_j_info] {
-         if {[string compare [lindex $key 0] "usage"] == 0} {
-            set found 1
-         }
-      }
-      if { $found == 0 } {
+      if {![info exists qstat_j_info($usage_attrib)]} {
          break
       }
-      set attrib [get_qstat_j_attribute "usage" 1]
-      set qstat_info [split $qstat_j_info($attrib) ","]
-      set value_list [split [lindex $qstat_info 0] "="]
-      set qstat_info [parse_cpu_time [lindex $value_list 1]]
+      parse_name_value_list usage $qstat_j_info($usage_attrib)
+      set qstat_info [parse_cpu_time $usage(cpu)]
       ts_log_fine "Job: $id with cpu usage: $qstat_info"
-      after 2000   
+      after 1000
    }
    wait_for_job_end $id 
    # allow not more then 10% difference
