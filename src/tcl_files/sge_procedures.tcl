@@ -438,7 +438,7 @@ proc ge_has_feature {feature {quiet 0}} {
          set arch [resolve_arch $ts_config(master_host)]
          set binary "$ts_config(product_root)/bin/$arch/sge_qmaster"
          set output [start_remote_prog $ts_config(master_host) $CHECK_USER "strings" "$binary | grep RSMAP"]
-         ts_log_fine $output
+         #ts_log_fine $output
          if {$prg_exit_state == 0} {
             return true
          } else {
