@@ -330,136 +330,123 @@ proc get_qmaster_spool_dir {} {
    return [get_spool_dir $ts_config(master_host) "qmaster"]
 }
 
-#****** sge_procedures/ge_has_feature() ****************************************
-#  NAME
-#     ge_has_feature() -- get feature information for tested release
+###
+# @brief get feature information for tested Grid Engine release
 #
-#  SYNOPSIS
-#     ge_has_feature { feature } 
-#
-#  FUNCTION
-#     This helper procedure is used to find out if the tested product supports
-#     the specified feature or not.
+# This helper procedure is used to find out if the tested product supports
+# the specified feature or not.
 #     
-#     The procedure reports an error if an unexpected feature string is used!
+# The procedure reports an error if an unexpected feature string is used!
 #
-#  INPUTS
-#     feature - name of the feature.
-# 
+# @param[in] feature - name of the feature.
 #     Supported feature strings are:
+#     "new-interactive-job-support"
+#     "scheduler-thread"
+#     "core-binding"
+#     "job-submission-verify"
+#     "job-consumable"
+#     "exclusive-host-usage"
+#     "additional-jvm-arguments"
+#     "resource-maps"
+# @param[in] quiet - if false (0) then the function outputs if the feature is available, else it is quiet
 #
-#     "new-interactive-job-support": Examines if the current GE release has the
-#                                    new interactive job support enabled.
+# @returns true if the feature is available or false if the feature is not available or the feature string is invalid
 #
-#     "scheduler-thread":            Returns true if current GE release has the
-#                                    scheduler implemented as thread in qmaster.
-#
-#     "job-submission-verify":       Returns true if current GE release supports
-#                                    SSV (Job Submission Verify). This is the
-#                                    case if global config has the parameter
-#                                    "jsv_url".
-#
-#     "job-consumable":              Returns true if current GE release supports
-#                                    job consumable type.
-#
-#     "exclusive-host-usage":        Returns true if current GE release supports
-#                                    exclusive host usage.
-#
-#  RESULT
-#     true or false if feature string is valid, "unsupported" on error
-#      
-#
-#  EXAMPLE
-#     if {[ge_has_feature "new-interactive-job-support"]} {
-#        # test new interactive qlogin
-#        ...
-#     }
-#
-#  SEE ALSO
-#     sge_procedures/ge_has_feature()
-#*******************************************************************************
+global ge_has_feature_cache
+unset -nocomplain ge_has_feature_cache
 proc ge_has_feature {feature {quiet 0}} {
+   get_current_cluster_config_array ts_config
    global CHECK_INTERACTIVE_TRANSPORT
    global CHECK_USER
-   get_current_cluster_config_array ts_config
-   switch -exact $feature {
-      "new-interactive-job-support" {
-         if {$CHECK_INTERACTIVE_TRANSPORT == "rtools"} {
-            set result false
-         } else {
-            set result true
-         }
-      }
-      "scheduler-thread" {
-         set result true
-      }
-      "core-binding" {
-         get_complex complex_array
+   global ge_has_feature_cache
 
-         if {[info exists complex_array(m_topology)]} {
-            set result true
-         } else {
-            set result false 
-         }
-      }
-      "job-submission-verify" {
-         if {[get_config global_config] == 0} {
-            # check if there is a jsv_url in configuration
-            set result false
-            foreach param [array names global_config] {
-               if {$param == "jsv_url"} {
-                  set result true
-                  break
-               }
+   if {[info exists ge_has_feature_cache($feature)]} {
+      set cached " Cached"
+      set result $ge_has_feature_cache($feature)
+   } else {
+      set cached ""
+      switch -exact $feature {
+         "new-interactive-job-support" {
+            if {$CHECK_INTERACTIVE_TRANSPORT == "rtools"} {
+               set result false
+            } else {
+               set result true
             }
-         } else {
-            # no we don't have jsv!
-            set result false
          }
-      }
-      "job-consumable" {
-         set result true
-      }
-      "exclusive-host-usage" {
-         set result true
-      }
-      "additional-jvm-arguments" {
-         # since 6.2u3
-         get_version_info vers_info
-         if {$vers_info(major_release) > 6 ||
-            ($vers_info(major_release) == 6 && $vers_info(minor_release) > 2) ||
-            ($vers_info(major_release) == 6 && $vers_info(minor_release) == 2 && $vers_info(update_release) >= 3)} {
+         "scheduler-thread" {
             set result true
-         } else {
+         }
+         "core-binding" {
+            get_complex complex_array
+
+            if {[info exists complex_array(m_topology)]} {
+               set result true
+            } else {
+               set result false 
+            }
+         }
+         "job-submission-verify" {
+            if {[get_config global_config] == 0} {
+               # check if there is a jsv_url in configuration
+               set result false
+               foreach param [array names global_config] {
+                  if {$param == "jsv_url"} {
+                     set result true
+                     break
+                  }
+               }
+            } else {
+               # no we don't have jsv!
+               set result false
+            }
+         }
+         "job-consumable" {
+            set result true
+         }
+         "exclusive-host-usage" {
+            set result true
+         }
+         "additional-jvm-arguments" {
+            # since 6.2u3
+            get_version_info vers_info
+            if {$vers_info(major_release) > 6 ||
+               ($vers_info(major_release) == 6 && $vers_info(minor_release) > 2) ||
+               ($vers_info(major_release) == 6 && $vers_info(minor_release) == 2 && $vers_info(update_release) >= 3)} {
+               set result true
+            } else {
+               set result false
+            }
+         }
+         "resource-maps" {
+            set arch [resolve_arch $ts_config(master_host)]
+            set binary "$ts_config(product_root)/bin/$arch/sge_qmaster"
+            set output [start_remote_prog $ts_config(master_host) $CHECK_USER "strings" "$binary | grep RSMAP"]
+            #ts_log_fine $output
+            if {$prg_exit_state == 0} {
+               set result true
+            } else {
+               set result false
+            }
+         }
+         default {
+            ts_log_severe "testsuite error: Unsupported feature string \"$feature\""
             set result false
          }
       }
-      "resource-maps" {
-         set arch [resolve_arch $ts_config(master_host)]
-         set binary "$ts_config(product_root)/bin/$arch/sge_qmaster"
-         set output [start_remote_prog $ts_config(master_host) $CHECK_USER "strings" "$binary | grep RSMAP"]
-         #ts_log_fine $output
-         if {$prg_exit_state == 0} {
-            return true
-         } else {
-            return false
-         }
-      }
-      default {
-         ts_log_severe "testsuite error: Unsupported feature string \"$feature\""
-         set result false
-      }
+
+      set ge_has_feature_cache($feature) $result
    }
 
    if {!$quiet} {
       ts_log_fine "**********************************************************************"
       if {$result == false} {
-         ts_log_fine "* Feature \"$feature\" is NOT supported!"
+         ts_log_fine "*$cached Feature \"$feature\" is NOT supported!"
       } else {
-         ts_log_fine "* Feature \"$feature\" is supported!"
+         ts_log_fine "*$cached Feature \"$feature\" is supported!"
       }
       ts_log_fine "**********************************************************************"
    }
+
    return $result
 }
 
