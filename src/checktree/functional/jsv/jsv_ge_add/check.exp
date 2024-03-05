@@ -93,18 +93,6 @@ lappend check_functions "jsv_ge_add_R"
 lappend check_functions "jsv_ge_add_r"
 lappend check_functions "jsv_ge_add_S"
 
-# global variables for this test. all of them are initiaized in the setup procedure
-global jsv_org_global_conf
-global jsv_enabled
-global jsv_job_id
-global jsv_hjob_id
-global jsv_enabled 
-global jsv_base_path 
-global jsv_has_binding
-
-set jsv_enabled ""
-set jsv_has_binding ""
-
 proc jsv_ge_add_setup {} {
    global ts_config
    global jsv_org_global_conf
@@ -115,18 +103,12 @@ proc jsv_ge_add_setup {} {
    global jsv_has_binding
 
    # check if jsv is available
-   if {$jsv_enabled == ""} {
-      set jsv_enabled [ge_has_feature "job-submission-verify"]
-      set jsv_has_binding [ge_has_feature "core-binding"]
-      if {$jsv_enabled == false} {
-         ts_log_config "Cannot run this test, jsv is not available for this GE version!"
-      }
+   set jsv_enabled [ge_has_feature "job-submission-verify"]
+   set jsv_has_binding [ge_has_feature "core-binding"]
+   if {!$jsv_enabled} {
+      ts_log_config "Cannot run this test, jsv is not available for this GE version!"
+      return 99
    }
-
-   # if jsv is not available return
-   if {$jsv_enabled == false} {
-      return 
-   }     
 
    # get base path of scripts
    set jsv_base_path $ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_ge_add
@@ -195,36 +177,30 @@ proc jsv_ge_add_cleanup {} {
    global ts_config
    global jsv_org_global_conf
    global jsv_enabled
+   global jsv_has_binding
    global jsv_job_id
    global jsv_hjob_id
  
-   # if jsv is not available return
-   if {$jsv_enabled == false} {
-      return 
-   }     
+   if {$jsv_enabled} {
+      # trigger and wait for job termination
+      delete_all_jobs
+      wait_for_end_of_all_jobs 60
 
-   # trigger and wait for job termination
-   delete_all_jobs
-   wait_for_end_of_all_jobs 60
+      # reset configurations
+      reset_config_and_propagate jsv_org_global_conf
 
-   # reset configurations
-   reset_config_and_propagate jsv_org_global_conf
-
-   # delete queue, pe and ckpt
-   del_queue "all2.q" "@allhosts" 0 1
-   del_pe "jsv_ge_add_pe1"
-   del_pe "jsv_ge_add_pe2"
-   del_ckpt "jsv_ge_add_ckpt1"
-   del_ckpt "jsv_ge_add_ckpt2"
-   del_project "jsv_ge_add_prj1"
-   del_project "jsv_ge_add_prj2"
+      # delete queue, pe and ckpt
+      del_queue "all2.q" "@allhosts" 0 1
+      del_pe "jsv_ge_add_pe1"
+      del_pe "jsv_ge_add_pe2"
+      del_ckpt "jsv_ge_add_ckpt1"
+      del_ckpt "jsv_ge_add_ckpt2"
+      del_project "jsv_ge_add_prj1"
+      del_project "jsv_ge_add_prj2"
+   }
 
    # unset our test's global variables
-   foreach var "org_global_conf jsv_enabled jsv_base_path jsv_job_id jsv_hjob_id" {
-      if {[info exists $var]} {
-         unset $var
-      }
-   }
+   unset -nocomplain jsv_org_global_conf jsv_enabled jsv_has_binding jsv_job_id jsv_hjob_id
 }
 
 proc jsv_ge_add_get_default_for_param {name} {
@@ -277,7 +253,7 @@ proc jsv_ge_add_param_set {islist name value xml_value xml_node_name add_qsub_sw
    # parse the value from the qstat -xml output
    set tag_list_string ""
    set qstat_args "-xml"
-   if {$jsv_has_binding == true} {
+   if {$jsv_has_binding} {
       set qstat_args "$qstat_args"
       if {$ts_config(gridengine_version) < 80} {
       	append qstat_args "-cb"
@@ -342,7 +318,7 @@ proc jsv_ge_add_A {} {
 proc jsv_ge_add_binding_strategy {} {
    global jsv_has_binding
 
-   if {$jsv_has_binding == true} {
+   if {$jsv_has_binding} {
       # submit a "linear" job (with specific <socket>,<core> pair) and turn it vis JSV into an "linear_automatic" job
       #                 not a list - JSV to set      - JSV value - XML value (result) - XML node name (of result) - initial request
       jsv_ge_add_param_set "false" "binding_strategy" "linear_automatic" "linear_automatic" "BN_strategy" "-binding linear:1:0,0"
@@ -358,7 +334,7 @@ proc jsv_ge_add_binding_strategy {} {
 proc jsv_ge_add_binding_type {} {
    global jsv_has_binding
 
-   if {$jsv_has_binding == true} {
+   if {$jsv_has_binding} {
       # set a type which was not provided by submitter
       jsv_ge_add_param_set "false" "binding_type" "pe" "1" "BN_type" ""
       jsv_ge_add_param_set "false" "binding_type" "env" "2" "BN_type" ""
@@ -374,7 +350,7 @@ proc jsv_ge_add_binding_type {} {
 proc jsv_ge_add_binding_amount {} {
    global jsv_has_binding
 
-   if {$jsv_has_binding == true} {
+   if {$jsv_has_binding} {
       # set the amount which was not provided by submitter
       jsv_ge_add_param_set "false" "binding_amount" "69" "69" "BN_parameter_n" ""
 
@@ -388,7 +364,7 @@ proc jsv_ge_add_binding_amount {} {
 proc jsv_ge_add_binding_socket {} {
    global jsv_has_binding
 
-   if {$jsv_has_binding == true} {
+   if {$jsv_has_binding} {
       # set socket which was not provided by submitter
       jsv_ge_add_param_set "false" "binding_socket" "123" "123" "BN_parameter_socket_offset" ""
 
@@ -402,7 +378,7 @@ proc jsv_ge_add_binding_socket {} {
 proc jsv_ge_add_binding_core {} {
    global jsv_has_binding
 
-   if {$jsv_has_binding == true} {
+   if {$jsv_has_binding} {
       # set a core which was not provided by submitter
       jsv_ge_add_param_set "false" "binding_core" "345" "345" "BN_parameter_core_offset" ""
 
@@ -416,7 +392,7 @@ proc jsv_ge_add_binding_core {} {
 proc jsv_ge_add_binding_exp {} {
    global jsv_has_binding
 
-   if {$jsv_has_binding == true} {
+   if {$jsv_has_binding} {
       # set explicit list length and element after list end which was not provided by submitter
       jsv_ge_add_param_set "false" "binding_exp_n" "1" "explicit:0,0" "BN_parameter_explicit" ""
       jsv_ge_add_param_set "false" "binding_exp_n" "3" "explicit:0,0:0,0:0,0" "BN_parameter_explicit" ""

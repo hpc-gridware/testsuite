@@ -60,9 +60,6 @@ set check_functions ""
 lappend check_functions "host_aliases_test_test1"
 
 
-global have_host_aliases
-set have_host_aliases "false"
-
 # -------- local test procedures: initialization------------------------------
 
 proc host_aliases_test_setup  {} {
@@ -95,9 +92,9 @@ proc host_aliases_test_setup  {} {
       start_remote_prog $ts_config(master_host) $CHECK_USER "cp" \
          "$ts_config(product_root)/$ts_config(cell)/common/host_aliases.saved $ts_config(product_root)/$ts_config(cell)/common/host_aliases"
       # if we don't copy the needed host_aliases file the qstat -f will fail which should check the queue loads
-      set have_host_aliases "true"
+      set have_host_aliases 1
    } else {
-      set have_host_aliases "false"
+      set have_host_aliases 0
    }
    ts_log_fine "found existing host aliases file: $have_host_aliases"
 
@@ -116,7 +113,7 @@ proc host_aliases_test_cleanup  {} {
       set fshost $ts_config(master_host)
    }
 
-   if {$have_host_aliases == "true"} {
+   if {$have_host_aliases} {
       if {[is_remote_file $fshost $CHECK_USER $host_aliases_file.saved]} {
          delete_remote_file $fshost $CHECK_USER $host_aliases_file
 

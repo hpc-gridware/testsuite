@@ -71,7 +71,7 @@ proc schedd_reconnect_setup  {} {
       unset schedd_reconnect_test_globals
    }
 
-   set schedd_reconnect_test_globals(restart_master) true
+   set schedd_reconnect_test_globals(restart_master) 1
 }
 
 proc schedd_reconnect_cleanup  {} {
@@ -81,7 +81,7 @@ proc schedd_reconnect_cleanup  {} {
 
    reset_config schedd_reconnect_saved_config
 
-   if {$schedd_reconnect_test_globals(restart_master) == true} {
+   if {$schedd_reconnect_test_globals(restart_master)} {
       set spooldir [get_qmaster_spool_dir]
       shutdown_master_and_scheduler $ts_config(master_host) $spooldir
       startup_qmaster
@@ -167,7 +167,7 @@ proc schedd_reconnect_after_timeout_test {} {
       after 5000
       set my_timeout 90
       if {[wait_for_connected_scheduler $my_timeout] == 0 } { 
-         set schedd_reconnect_test_globals(restart_master) false
+         set schedd_reconnect_test_globals(restart_master) 0
       }
    } else {
       ts_log_severe "logfile_wait_error: $logfile_wait_error\noutput:\n$output"

@@ -350,7 +350,7 @@ proc get_qmaster_spool_dir {} {
 #     "resource-maps"
 # @param[in] quiet - if false (0) then the function outputs if the feature is available, else it is quiet
 #
-# @returns true if the feature is available or false if the feature is not available or the feature string is invalid
+# @returns 1 if the feature is available or 0 if the feature is not available or the feature string is invalid
 #
 global ge_has_feature_cache
 unset -nocomplain ge_has_feature_cache
@@ -368,43 +368,43 @@ proc ge_has_feature {feature {quiet 0}} {
       switch -exact $feature {
          "new-interactive-job-support" {
             if {$CHECK_INTERACTIVE_TRANSPORT == "rtools"} {
-               set result false
+               set result 0
             } else {
-               set result true
+               set result 1
             }
          }
          "scheduler-thread" {
-            set result true
+            set result 1
          }
          "core-binding" {
             get_complex complex_array
 
             if {[info exists complex_array(m_topology)]} {
-               set result true
+               set result 1
             } else {
-               set result false 
+               set result 0 
             }
          }
          "job-submission-verify" {
             if {[get_config global_config] == 0} {
                # check if there is a jsv_url in configuration
-               set result false
+               set result 0
                foreach param [array names global_config] {
                   if {$param == "jsv_url"} {
-                     set result true
+                     set result 1
                      break
                   }
                }
             } else {
                # no we don't have jsv!
-               set result false
+               set result 0
             }
          }
          "job-consumable" {
-            set result true
+            set result 1
          }
          "exclusive-host-usage" {
-            set result true
+            set result 1
          }
          "additional-jvm-arguments" {
             # since 6.2u3
@@ -412,9 +412,9 @@ proc ge_has_feature {feature {quiet 0}} {
             if {$vers_info(major_release) > 6 ||
                ($vers_info(major_release) == 6 && $vers_info(minor_release) > 2) ||
                ($vers_info(major_release) == 6 && $vers_info(minor_release) == 2 && $vers_info(update_release) >= 3)} {
-               set result true
+               set result 1
             } else {
-               set result false
+               set result 0
             }
          }
          "resource-maps" {
@@ -423,14 +423,14 @@ proc ge_has_feature {feature {quiet 0}} {
             set output [start_remote_prog $ts_config(master_host) $CHECK_USER "strings" "$binary | grep RSMAP"]
             #ts_log_fine $output
             if {$prg_exit_state == 0} {
-               set result true
+               set result 1
             } else {
-               set result false
+               set result 0
             }
          }
          default {
             ts_log_severe "testsuite error: Unsupported feature string \"$feature\""
-            set result false
+            set result 0
          }
       }
 
@@ -439,10 +439,10 @@ proc ge_has_feature {feature {quiet 0}} {
 
    if {!$quiet} {
       ts_log_fine "**********************************************************************"
-      if {$result == false} {
-         ts_log_fine "*$cached Feature \"$feature\" is NOT supported!"
-      } else {
+      if {$result} {
          ts_log_fine "*$cached Feature \"$feature\" is supported!"
+      } else {
+         ts_log_fine "*$cached Feature \"$feature\" is NOT supported!"
       }
       ts_log_fine "**********************************************************************"
    }
@@ -5701,7 +5701,7 @@ proc get_qstat_j_info {jobid {my_variable qstat_j_info} {add_switch ""}} {
 }
 
 proc get_qstat_j_attribute {name {task 1}} {
-   if {[ge_has_feature "resource-maps"] == "true"} {
+   if {[ge_has_feature "resource-maps"]} {
       return [format "%-12s %11d" $name $task]
    } else {
       return [format "%s %4d" $name $task]
@@ -9357,8 +9357,8 @@ proc switch_spooling {} {
 #     hostname                      - host name
 #
 #  RESULT
-#     true -  the server is running on the hostname*
-#     false - the server is not running on the hostname
+#     1 - the server is running on the hostname*
+#     0 - the server is not running on the hostname
 #
 #  NOTE
 #     if the $ts_config(product_root) is too long the function doesn't
@@ -9370,23 +9370,8 @@ proc switch_spooling {} {
 #     control_procedures/ps_grep()
 #*******************************************************************************
 proc is_bdb_server_running {hostname} {
-
-   set bdb_process_string "berkeley_db_svc"
-   set index_list [ps_grep $bdb_process_string $hostname ps_info]
-
-   if {[string trim $index_list] == ""} {
-      return false
-   }
-
-   foreach elem $index_list {
-      if {[string first $bdb_process_string $ps_info(string,$elem)] >= 0 && \
-                      [is_pid_with_name_existing $hostname $ps_info(pid,$elem) \
-                                                    $bdb_process_string] == 0} {
-         ts_log_fine "BDB server is running on the host $hostname!"
-         return true
-      }
-   }
-   return false
+   # no longer supported
+   return 0
 }
 
 #****** sge_procedures/get_short_hostname() ***************************************

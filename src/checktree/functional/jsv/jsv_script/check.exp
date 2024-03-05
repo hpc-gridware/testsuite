@@ -74,9 +74,6 @@ set jsv_expect_timeout 0
 set jsv_enter_list {}
 set jsv_enter2_list {}
 
-global jsv_enabled
-set jsv_enabled ""
-
 # -------- local test procedures: initialization------------------------------
 proc jsv_script_get_script_file {shell_basename basename extension} {
    global ts_config
@@ -106,18 +103,11 @@ proc jsv_script_setup {} {
    global jsv_enabled
 
    # check if jsv is available
-   if {$jsv_enabled == ""} {
-      set jsv_enabled [ge_has_feature "job-submission-verify"]
-      if {$jsv_enabled == false} {
-         ts_log_config "Cannot run this test, jsv is not available for this GE version!"
-      }
+   set jsv_enabled [ge_has_feature "job-submission-verify"]
+   if {!$jsv_enabled} {
+      ts_log_config "Cannot run this test, jsv is not available for this GE version!"
+      return 99
    }
-
-   # if jsv is not available return
-   if {$jsv_enabled == false} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    # initialize module global variables 
    set jsv_script_list {}
@@ -179,31 +169,25 @@ proc jsv_script_cleanup {} {
    global jsv_script_list
    global jsv_name_list
    global jsv_id_list
+   global jsv_expect_timeout
    global jsv_enter_list
    global jsv_enter2_list
    global jsv_enabled
 
-   if {$jsv_enabled == false} {
-      # nothing to setup, jsv not available
-      return 
+   if {$jsv_enabled} {
+      # terminate spawned process
+      foreach id $jsv_id_list {
+         set spawn_id [lindex $id 1]
+         ts_send $spawn_id "\003"
+         # without this after the test fails on fast linux hosts
+         after 1000 
+         close_spawn_process $id
+      }
+      set jsv_id_list {}
    }
-
-   # terminate spawned process
-   foreach id $jsv_id_list {
-      set spawn_id [lindex $id 1]
-      ts_send $spawn_id "\003"
-      # without this after the test fails on fast linux hosts
-      after 1000 
-      close_spawn_process $id
-   }
-   set jsv_id_list {}
 
    # unset our test's global variables
-   foreach var "jsv_script_list jsv_name_list jsv_id_list jsv_expect_timeout jsv_enter_list jsv_enter2_list" {
-      if {[info exists $var]} {
-         unset $var
-      }
-   }
+   unset -nocomplain jsv_script_list jsv_name_list jsv_id_list jsv_expect_timeout jsv_enter_list jsv_enter2_list jsv_enabled
 }
 
 # Scenario:
@@ -219,7 +203,7 @@ proc jsv_script_enter {} {
    global jsv_enter_list
    global jsv_enabled
 
-   if {$jsv_enabled == false} {
+   if {!$jsv_enabled} {
       # nothing to setup, jsv not available
       return 
    }     
@@ -285,7 +269,7 @@ proc jsv_script_quit {} {
    global jsv_enter_list
    global jsv_enabled
 
-   if {$jsv_enabled == false} {
+   if {!$jsv_enabled} {
       # nothing to setup, jsv not available
       return 
    }     
@@ -369,7 +353,7 @@ proc jsv_script_start_quit {} {
    global jsv_enabled
 
 
-   if {$jsv_enabled == false} {
+   if {!$jsv_enabled} {
       # nothing to setup, jsv not available
       return 
    }     
@@ -466,7 +450,7 @@ proc jsv_script_start_begin_param_accept_quit {} {
    global jsv_enter2_list
    global jsv_enabled
 
-   if {$jsv_enabled == false} {
+   if {!$jsv_enabled} {
       # nothing to setup, jsv not available
       return 
    }     
@@ -567,7 +551,7 @@ proc jsv_script_start_begin_param_reject_quit {} {
 
 
 
-   if {$jsv_enabled == false} {
+   if {!$jsv_enabled} {
       # nothing to setup, jsv not available
       return 
    }     
@@ -672,7 +656,7 @@ proc jsv_script_start_begin_param_rejectwait_quit {} {
    global jsv_enter2_list
    global jsv_enabled
 
-   if {$jsv_enabled == false} {
+   if {!$jsv_enabled} {
       # nothing to setup, jsv not available
       return 
    }     
@@ -788,7 +772,7 @@ proc jsv_script_start_begin_param_correct_quit {} {
    global jsv_enter2_list
    global jsv_enabled
 
-   if {$jsv_enabled == false} {
+   if {!$jsv_enabled} {
       # nothing to setup, jsv not available
       return 
    }     
@@ -902,7 +886,7 @@ proc jsv_script_start_begin_param_add_mod_del_accept_quit {} {
    global jsv_enter2_list
    global jsv_enabled
 
-   if {$jsv_enabled == false} {
+   if {!$jsv_enabled} {
       # nothing to setup, jsv not available
       return 
    }     
@@ -1030,7 +1014,7 @@ proc jsv_script_start_begin_env_send_nonprintable_receive_add {} {
    global jsv_enter2_list
    global jsv_enabled
 
-   if {$jsv_enabled == false} {
+   if {!$jsv_enabled} {
       # nothing to setup, jsv not available
       return 
    }     
@@ -1137,7 +1121,7 @@ proc jsv_script_start_begin_env_reveice_mod {} {
    global jsv_enter2_list
    global jsv_enabled
 
-   if {$jsv_enabled == false} {
+   if {!$jsv_enabled} {
       # nothing to setup, jsv not available
       return 
    }     
@@ -1250,7 +1234,7 @@ proc jsv_script_start_begin_env_reveice_del {} {
    global jsv_enter2_list
    global jsv_enabled
 
-   if {$jsv_enabled == false} {
+   if {!$jsv_enabled} {
       # nothing to setup, jsv not available
       return 
    }     

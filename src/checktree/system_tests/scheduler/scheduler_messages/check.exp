@@ -193,35 +193,35 @@ proc scheduler_messages_check {} {
    set errors "" 
 
    # no assignment due to queue pe_list missing PE association
-   append errors [scheduler_messages_single_check "PE" false "pe_slots20"]
-   append errors [scheduler_messages_single_check "PE" false "pe_slots1"]
-   append errors [scheduler_messages_single_check "PE" false "pe_slots"]
+   append errors [scheduler_messages_single_check "PE" 0 "pe_slots20"]
+   append errors [scheduler_messages_single_check "PE" 0 "pe_slots1"]
+   append errors [scheduler_messages_single_check "PE" 0 "pe_slots"]
 
    # no assignment due to queue/host/global h_rt limit
-   append errors [scheduler_messages_single_check "queue" false "h_rt"]
-   append errors [scheduler_messages_single_check "host" false "h_rt"]
-   append errors [scheduler_messages_single_check "global" false "h_rt"]
+   append errors [scheduler_messages_single_check "queue" 0 "h_rt"]
+   append errors [scheduler_messages_single_check "host" 0 "h_rt"]
+   append errors [scheduler_messages_single_check "global" 0 "h_rt"]
 
    # no assignment due to queue/host/global h_rt resource quota
    mod_attr "resource_quota" "enabled" "true" "queue_h_rt"
-   append errors [scheduler_messages_single_check "queue" true "h_rt"]
+   append errors [scheduler_messages_single_check "queue" 1 "h_rt"]
    mod_attr "resource_quota" "enabled" "false" "queue_h_rt"
 
    mod_attr "resource_quota" "enabled" "true" "host_h_rt"
-   append errors [scheduler_messages_single_check "host" true "h_rt"]
+   append errors [scheduler_messages_single_check "host" 1 "h_rt"]
    mod_attr "resource_quota" "enabled" "false" "host_h_rt"
 
    mod_attr "resource_quota" "enabled" "true" "global_h_rt"
-   append errors [scheduler_messages_single_check "global" true "h_rt"]
+   append errors [scheduler_messages_single_check "global" 1 "h_rt"]
    mod_attr "resource_quota" "enabled" "false" "global_h_rt"
 
    # no assignment due to queue/host/global project
-   append errors [scheduler_messages_single_check "queue" false "project"]
-   append errors [scheduler_messages_single_check "host" false "project"]
-   append errors [scheduler_messages_single_check "global" false "project"]
+   append errors [scheduler_messages_single_check "queue" 0 "project"]
+   append errors [scheduler_messages_single_check "host" 0 "project"]
+   append errors [scheduler_messages_single_check "global" 0 "project"]
 
    # no assignment due to queue ckpt
-   append errors [scheduler_messages_single_check "queue" false "checkpointing"]
+   append errors [scheduler_messages_single_check "queue" 0 "checkpointing"]
 
    if {$errors != ""} {
       ts_log_severe $errors
@@ -237,7 +237,7 @@ proc scheduler_messages_single_check {resource_container via_quotas resource} {
 
    set ret ""
 
-   if {$via_quotas == true} {
+   if {$via_quotas} {
       set h_rt "2:00:0"
    } else {
       switch -- $resource_container {

@@ -3618,8 +3618,7 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
    
    # split plain output on each new line
    set plain_split [ split $plainoutput "\n" ] 
-   #set has_binding [ge_has_feature "core-binding"]
-   set has_binding true
+   set has_binding [ge_has_feature "core-binding"]
 
    set inc 0
    set job 0
@@ -3639,7 +3638,7 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
                set plain(host$job,$nam) $value
             }
          }
-         if {$has_binding == true} {
+         if {$has_binding} {
             # if core binding is present then there are more lines for m_topology, m_core, m_socket, m_thread,m m_topology_inuse
             switch -- $line {
                22 - 23 - 24 - 25 - 26 {

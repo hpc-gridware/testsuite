@@ -63,7 +63,7 @@ proc core_binding_basic_setup {} {
    global hostlist
 
    # check if version is correct (62u5 and higher)
-   if {[ge_has_feature "core-binding"] == false} {
+   if {![ge_has_feature "core-binding"]} {
       ts_log_config "Core binding can be checked only with 62u5 and higher"
       return 99
    }

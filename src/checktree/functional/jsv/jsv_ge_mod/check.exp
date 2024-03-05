@@ -95,16 +95,6 @@ lappend check_functions "jsv_ge_mod_v"
 lappend check_functions "jsv_ge_mod_V"
 lappend check_functions "jsv_ge_mod_wd"               
 
-# global variables for this test. all of them are initiaized in the setup procedure
-global jsv_org_global_conf
-global jsv_enabled
-global jsv_job_id
-global jsv_hjob_id
-global jsv_enabled 
-global jsv_base_path 
-
-set jsv_enabled ""
-
 proc jsv_ge_mod_setup_level {} {
    global CHECK_ACT_LEVEL
    global ts_config
@@ -115,17 +105,11 @@ proc jsv_ge_mod_setup_level {} {
    global jsv_hjob_id
 
    # check if jsv is available
-   if {$jsv_enabled == ""} {
-      set jsv_enabled [ge_has_feature "job-submission-verify"]
-      if {$jsv_enabled == false} {
-         ts_log_config "Cannot run this test, jsv is not available for this GE version!"
-      }
+   set jsv_enabled [ge_has_feature "job-submission-verify"]
+   if {!$jsv_enabled} {
+      ts_log_config "Cannot run this test, jsv is not available for this GE version!"
+      return 99
    }
-
-   # if jsv is not available return
-   if {$jsv_enabled == false} {
-      return 
-   }     
 
    # get base path of scripts
    set jsv_base_path $ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_ge_mod
@@ -174,26 +158,21 @@ proc jsv_ge_mod_setup_level {} {
 proc jsv_ge_mod_cleanup_level {} {
    global ts_config
    global jsv_org_global_conf
-   global jsv_enabled
-   global jsv_job_id
-   global jsv_hjob_id
  
-   # if jsv is not available return
-   if {$jsv_enabled == false} {
-      return 
-   }     
+   if {$jsv_enabled} {
+      # trigger and wait for job termination
+      delete_all_jobs
+      wait_for_end_of_all_jobs 60
 
-   # trigger and wait for job termination
-   delete_all_jobs
-   wait_for_end_of_all_jobs 60
+      # reset configurations
+      reset_config_and_propagate jsv_org_global_conf
 
-   # reset configurations
-   reset_config_and_propagate jsv_org_global_conf
+      # delete pe and ckpt
+      del_pe "jsv_ge_mod_pe"
+      del_ckpt "jsv_ge_mod_ckpt"
+      del_project "jsv_ge_mod_prj"
+   }
 
-   # delete pe and ckpt
-   del_pe "jsv_ge_mod_pe"
-   del_ckpt "jsv_ge_mod_ckpt"
-   del_project "jsv_ge_mod_prj"
 }
 
 proc jsv_ge_mod_cleanup {} {
@@ -204,16 +183,12 @@ proc jsv_ge_mod_cleanup {} {
    global jsv_hjob_id
  
    # if jsv is not available return
-   if {$jsv_enabled == false} {
+   if {$jsv_enabled} {
       return 
    }     
 
    # unset our test's global variables
-   foreach var "org_global_conf jsv_enabled jsv_base_path jsv_job_id jsv_hjob_id" {
-      if {[info exists $var]} {
-         unset $var
-      }
-   }
+   unset -nocomplain jsv_org_global_conf jsv_base_path jsv_enabled jsv_job_id jsv_hjob_id
 }
 
 
@@ -245,7 +220,7 @@ proc jsv_ge_mod {param_name argument {reset_job_name ""}} {
    global jsv_job_id
 
    # if jsv is not available return
-   if {$jsv_enabled == false} {
+   if {!$jsv_enabled} {
       return 
    }     
 

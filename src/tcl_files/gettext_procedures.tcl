@@ -218,14 +218,14 @@ proc diff_macro_files { file_a file_b { ignore_backslash_at_end 1 } } {
 #     macro_name - name of the source code macro
 #
 #  RESULT
-#     true or false
+#     1 (true) or 0 (false)
 #*******************************************************************************
 proc is_macro_available { macro_name } {
    set result [sge_macro $macro_name 0]
    if {$result == -1 || $result == ""} {
-      return false
+      return 0
    }
-   return true
+   return 1
 }
 
 

@@ -344,31 +344,13 @@ proc set_java_classpath_according_to_runlevel {} {
    global CHECK_ACT_LEVEL 
    global ts_config 
 
-   # x02/x03 means jdrmaa 1.0 test
-   set jdrmaa_test_05 false
-
-
    # add to Java classpath the Java DRMAA library
    set classpath ""
-   if {$jdrmaa_test_05 == true} {
-      if {[file exists "$ts_config(product_root)/lib/drmaa-0.5.jar"]} {
-         # if there is a drmaa 0.5 lib in produect root, use it
-         set classpath "$ts_config(product_root)/lib/drmaa-0.5.jar"
-      } else {
-         # use modified testsuite drmaa-0.5 jar for GE versions if no jdramaa 05 is existing
-         set classpath "$ts_config(testsuite_root_dir)/lib/drmaa-0.5.jar"
-      }
-   } else {
-      set classpath "$ts_config(product_root)/lib/drmaa.jar"
-   }
+   set classpath "$ts_config(product_root)/lib/drmaa.jar"
 
    # add the drmaa-test.jar 
-   if {$jdrmaa_test_05 == true} {
-      # use modified testsuite drmaa-0.5 test jar, it contains fixes for GE >= 61
-      set classpath "$classpath:$ts_config(testsuite_root_dir)/lib/drmaa-0.5-test.jar"
-   } else {
-     set classpath "$classpath:[get_drmaa_test_jar]"
-   }
+   set classpath "$classpath:[get_drmaa_test_jar]"
+
    # add junit.jar: for every version the same path  
    set classpath "$classpath:$ts_config(testsuite_root_dir)/lib/junit.jar"
    ts_log_fine "Added the following Java classpath: $classpath"
@@ -413,7 +395,7 @@ proc drmaaj_check { } {
    global check_description
 
    # test the 32 bit lib on 64 bit virtual machine 
-   set do_an_additional_32_bit_test true
+   set do_an_additional_32_bit_test 1
 
    # make sure that we have a drmaa.jar, drmaa-test.jar and
    # suspendable_sleeper.sh
@@ -472,10 +454,10 @@ proc drmaaj_check { } {
          # check if the current JVM has 32 bit and 64 bit capabilities  
          # -----------------------------------------------------------
          set test_32bit_libs_on_64bit_jvm [has_JVM_d32_d64_flag $host $java]
-         if {$test_32bit_libs_on_64bit_jvm == true} {
+         if {$test_32bit_libs_on_64bit_jvm} {
 
             # check if we have to check 32 bit libs in case of 64 JVM
-            if {$do_an_additional_32_bit_test == "yes"} {
+            if {$do_an_additional_32_bit_test} {
                ts_log_fine "Test 32 bit library with -d32 option!"
 
                # set the 32 bit library path explicitly 
@@ -522,7 +504,7 @@ proc drmaaj_check { } {
          # special case: 64 bit OS --> 32 bit JVM --> it is loading 64 bit native lib!
          # try to use 32 bit lib
          # ---------------------------------------------------------------------------
-         if {[is_64_bit_OS $binary_arch] == true && [is_32_bit_jvm $host $java] == true} {
+         if {[is_64_bit_OS $binary_arch] && [is_32_bit_jvm $host $java]} {
             ts_log_fine "SPECIAL TEST BECAUSE 64 BIT OS AND 32 BIT JVM"
 
             # try to find the path to the 32 bit lib 
@@ -531,7 +513,7 @@ proc drmaaj_check { } {
 
             if {$java_lib_path == "" } { 
                 ts_log_fine "no native 32 bit lib found for the 32 bit JVM on a 64 bit arch" 
-                if {$test_32bit_libs_on_64bit_jvm == false} {
+                if {!$test_32bit_libs_on_64bit_jvm} {
                    ts_log_fine "cannot test host $host - no matching 32/64 bit combination of jvm and drmaa binaries found"
                 }
             } else {
@@ -612,7 +594,7 @@ proc get_drmaa_test_jar {} {
 #     jvm  - Path to the JVM on the host. 
 #
 #  RESULT
-#     "true" if the JVM is a 64 bit JVM; "false" if not 
+#     1 (true) if the JVM is a 64 bit JVM; 0 (false) if not 
 #
 #  EXAMPLE
 #     ??? 
@@ -637,19 +619,19 @@ proc is_32_bit_jvm {host jvm} {
    if {[string first "1.4" $test_output] != -1} {
       # java -version output contains 1.4
       if {[string first "64" $test_output] != -1} {
-         return false
+         return 0
       }
    }
 
    # procduces errors on with jdk14
-   if {[has_JVM_d32_d64_flag $host $jvm] == true} {
+   if {[has_JVM_d32_d64_flag $host $jvm]} {
       # it is likely a 64 bit JVM
       ts_log_fine "contains d32 d64 flag" 
-      return false
+      return 0
    } else {
       # it seems to be a 32 bit JVM 
       ts_log_fine "doesn't containt d32 d64 flag"
-      return true
+      return 1
    }
 }
 
@@ -668,7 +650,7 @@ proc is_32_bit_jvm {host jvm} {
 #     binary_arch - Arch string to check. 
 #
 #  RESULT
-#     "true" if the given arch string represents a 64 bit os otherwise false. 
+#     1 (true) if the given arch string represents a 64 bit os otherwise 0 (false). 
 #
 #  NOTES
 #     ??? 
@@ -681,16 +663,18 @@ proc is_32_bit_jvm {host jvm} {
 #*******************************************************************************
 proc is_64_bit_OS {binary_arch} {
    # check if it is a 64 bit OS
+   # @todo we have more 64bit platforms
    switch -- $binary_arch {
       "lx-amd64" -
+      "lx-arm64" -
       "sol-amd64" -
       "sol-sparc64" {
-         return true
+         return 1
       }
    }
 
    # is not a 64 bit OS
-   return false
+   return 0
 }
 
 
@@ -781,14 +765,14 @@ proc has_JVM_d32_d64_flag {host java_bin_path} {
   if {[string first $java_switch $test_output] == -1} {
       # output doesn't contain d32
       ts_log_finer "no d32 found!" 
-      return false 
+      return 0
   }  
 
   set java_switch_2 "d64"
   if {[string first $java_switch_2 $test_output] == -1} {
       # output doesn't contain d64 
       ts_log_finer "no d64 found!" 
-      return false
+      return 0
   }  
 
    # contains a -d32 switch 
@@ -804,10 +788,10 @@ proc has_JVM_d32_d64_flag {host java_bin_path} {
    if {[string first $is_not_supported_string $test_output] == -1} {
       # this Java version has a flag -d64 and it seems to be supported
       ts_log_finer "jvm does support -d64"
-      return true
+      return 1
    } else {   
       ts_log_finer "jvm does not support -d64"
-      return false
+      return 0
    }
 }
 

@@ -2536,7 +2536,7 @@ proc add_open_spawn_rlogin_session {hostname user win_local_user spawn_id \
    set rlogin_spawn_session_buffer($spawn_id,command_args)        $command_args
    set rlogin_spawn_session_buffer($spawn_id,alternate_sessions)  ""
    set rlogin_spawn_session_buffer($spawn_id,is_alternate_of)     ""
-   set rlogin_spawn_session_buffer($spawn_id,id_check_needed)     "true"
+   set rlogin_spawn_session_buffer($spawn_id,id_check_needed)     1
 
 
    # add session to index
@@ -2650,7 +2650,7 @@ proc remove_oldest_spawn_rlogin_session {} {
 #  FUNCTION
 #     The testsuite remote spawn session buffer can be modified with this setter
 #     procedure. It is possible to set the id_check_needed flag for the specified
-#     spawn id to "true" or "false".
+#     spawn id to 1 (true) or 0 (false).
 #
 #     If a connection is reused the id_check_needed flag is consulted. If it is
 #     set to "true" a check_identity script is executed when the connection
@@ -2662,16 +2662,16 @@ proc remove_oldest_spawn_rlogin_session {} {
 #
 #  INPUTS
 #     spawn_id - spawn id from open_remote_spawn_process()
-#     value    - "true" or "false"
+#     value    - 1 (true) or 0 (false)
 #
 #  SEE ALSO
 #     remote_procedures/open_remote_spawn_process()
 #     remote_procedures/close_spawn_id()
 #*******************************************************************************
-proc set_open_spawn_rlogin_session_check_id_flag { spawn_id value } {
+proc set_open_spawn_rlogin_session_check_id_flag {spawn_id value} {
    global rlogin_spawn_session_buffer
-   if {$value != "true" && $value != "false"} {
-      ts_log_severe "wrong parameter value ($value), expected true or false!"
+   if {$value != 1 && $value != 0} {
+      ts_log_severe "wrong parameter value ($value), expected 1 (true) or 0 (false)!"
    }
    if {[info exists rlogin_spawn_session_buffer($spawn_id,id_check_needed)]} {
       set rlogin_spawn_session_buffer($spawn_id,id_check_needed) $value
@@ -2934,7 +2934,7 @@ proc clear_open_spawn_rlogin_session {back_var} {
    set back(command_args)       ""
    set back(alternate_sessions) ""
    set back(is_alternate_of)    ""
-   set back(id_check_needed)    ""
+   set back(id_check_needed)    0
 }
 
 #****** remote_procedures/get_spawn_id_rlogin_session() ************************
@@ -3207,9 +3207,9 @@ proc check_rlogin_session { spawn_id pid hostname user nr_of_shells {only_check 
    # - wait for correct output
    # - expect that sends may fail, pass raise_error = 0 to ts_send
    set connection_ok 0
-   if {$con_data(id_check_needed) == "false"} {
+   if {!$con_data(id_check_needed)} {
       ts_log_finest "skipping identity test, last check was ok!"
-      set_open_spawn_rlogin_session_check_id_flag $spawn_id "true"
+      set_open_spawn_rlogin_session_check_id_flag $spawn_id 1
       set connection_ok 1
    } else {
       # Normally this branch should not be executed, as the id_check_needed is set to true in close_spawn_id()
@@ -3489,7 +3489,7 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
             }
             -i $spawn_id -- "TS_ID: ->*${con_data(real_user)}*\n" {
                ts_log_finest "logged in as ${con_data(real_user)} - fine"
-               set_open_spawn_rlogin_session_check_id_flag $spawn_id "false"
+               set_open_spawn_rlogin_session_check_id_flag $spawn_id 0
                set do_return -1
             }
          }

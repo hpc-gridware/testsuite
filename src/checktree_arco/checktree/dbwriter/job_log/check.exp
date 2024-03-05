@@ -135,10 +135,10 @@ proc arco_dbwriter_job_log_execute {} {
    ts_log_fine $check_description($CHECK_ACT_LEVEL)
    
    switch -- $CHECK_ACT_LEVEL {
-      "0" {
+      0 {
          set joblog "true"
       }
-      "1" {
+      1 {
          set joblog "false"
       }
       default {

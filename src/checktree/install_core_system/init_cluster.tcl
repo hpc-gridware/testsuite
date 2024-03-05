@@ -500,17 +500,17 @@ proc setup_execd_conf {} {
       }
 
       if {[lsearch -exact $ts_config(execd_nodes) $host] != -1} {
-         set is_execd_host true
+         set is_execd_host 1
          ts_log_fine "host \"$host\" is a execd host!"
       } else {
-         set is_execd_host false
+         set is_execd_host 0
       }
 
       if {[lsearch -exact $ts_config(shadowd_hosts) $host] != -1} {
-         set is_shadowd_host true
+         set is_shadowd_host 1
          ts_log_fine "host \"$host\" is a shadowd host!"
       } else {
-         set is_shadowd_host false
+         set is_shadowd_host 0
       }
 
       set elements [array names tmp_config]

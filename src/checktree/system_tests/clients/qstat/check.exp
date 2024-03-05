@@ -35,7 +35,6 @@
 # Define the global variables to give them back
 global check_name check_description check_needs check_functions
 global check_category check_root_access_needs
-global prj_exists
 
 set check_root_access_needs  "yes"
 
@@ -129,13 +128,13 @@ proc qstat_setup {} {
 
    set prj "qstat_j_project"
    set result0 [get_project_list]
-   set prj_exists "false"
+   set prj_exists 0
    foreach elem $result0 {
       if {[string compare $elem $prj] == 0} {
-         set prj_exists "true"
+         set prj_exists 1
       }
    }
-   if {$prj_exists == "false"} {
+   if {!$prj_exists} {
       set result [add_project $prj]
    }
 }
@@ -167,7 +166,7 @@ proc qstat_cleanup {} {
    }
 
    set prj "qstat_j_project"
-   if {$prj_exists == "false"} {
+   if {!$prj_exists} {
       set result [del_project $prj]
    }
 }
@@ -321,7 +320,7 @@ proc qstat_help {} {
    set qstat_help_lines 41
    
    # in 6.2u5 there is an additional "-cb" line
-   if { [ge_has_feature "core-binding"] } {
+   if {[ge_has_feature "core-binding"]} {
       set qstat_help_lines 42
    }
 

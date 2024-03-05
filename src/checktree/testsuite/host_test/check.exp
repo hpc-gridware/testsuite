@@ -114,17 +114,17 @@ proc host_test_test {} {
    set not_checked_params {}
    set checked_params {}
    set error_text ""
-   set is_first true
+   set is_first 1
    set expect_version ""
    foreach host $test_hosts {
       ts_log_fine "testing host $host"
       set params [host_config_get_host_parameters]
       foreach param $params {
-         set is_checked false
+         set is_checked 0
          ts_log_finer "parameter \"$param\" ..."
          switch -exact $param {
             "expect" {
-               set is_checked true
+               set is_checked 1
                if {[is_remote_file $host $CHECK_USER $ts_host_config($host,$param)] == 0} {
                   append error_text "host \"$host\" expect binary \"$ts_host_config($host,$param)\" not available!\n"
                } else {
@@ -145,7 +145,7 @@ proc host_test_test {} {
                }
             }
             "java14" {
-               set is_checked true
+               set is_checked 1
                if {$ts_host_config($host,$param) != ""} {
                   if {[is_remote_file $host $CHECK_USER $ts_host_config($host,$param)] == 0} {
                      append error_text "host \"$host\" java14 binary \"$ts_host_config($host,$param)\" not available!\n"
@@ -164,7 +164,7 @@ proc host_test_test {} {
                }
             }
             "java15" {
-               set is_checked true
+               set is_checked 1
                if {$ts_host_config($host,$param) != ""} {
                   if {[is_remote_file $host $CHECK_USER $ts_host_config($host,$param)] == 0} {
                      append error_text "host \"$host\" java15 binary \"$ts_host_config($host,$param)\" not available!\n"
@@ -183,7 +183,7 @@ proc host_test_test {} {
                }
             }
             "java16" {
-               set is_checked true
+               set is_checked 1
                if {$ts_host_config($host,$param) != ""} {
                   if {[is_remote_file $host $CHECK_USER $ts_host_config($host,$param)] == 0} {
                      append error_text "host \"$host\" java16 binary \"$ts_host_config($host,$param)\" not available!\n"
@@ -204,15 +204,15 @@ proc host_test_test {} {
             default {
             }
          }
-         if {$is_first == true} {
-            if {$is_checked == false} {
+         if {$is_first} {
+            if {!$is_checked} {
                lappend not_checked_params $param
             } else {
                lappend checked_params $param
             }
          }
       }
-      set is_first false
+      set is_first 0
    }
    ts_log_fine "checked params: $checked_params"
    ts_log_fine "not checked params: $not_checked_params"

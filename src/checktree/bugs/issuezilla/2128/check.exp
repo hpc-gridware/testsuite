@@ -100,7 +100,7 @@ proc xauthority_issue_test1 {} {
       set error_text ""
       set success_text ""
       foreach host $xauthority_issue_test_hosts {
-         set ok "true"
+         set ok 1
          ts_log_fine "checking for correct test setup on host $host ..."
          set output [start_sge_bin "qrsh" "-q all.q@$host env | grep MY_OWN_TESTSUITE_ENVIRONMENT" $ts_config(master_host)]
          if {[string match "*MY_OWN_TESTSUITE_ENVIRONMENT*" $output]} {
@@ -109,7 +109,7 @@ proc xauthority_issue_test1 {} {
             append error_text "host: $host\n"
             append error_text "===========\n"
             append error_text "in qrsh job output on host $host was no MY_OWN_TESTSUITE_ENVIRONMENT env set!"
-            set ok "false"
+            set ok 0
 
             # get additional information
             set output [start_sge_bin "qrsh" "-q all.q@$host hostname" $ts_config(master_host)]
@@ -123,9 +123,9 @@ proc xauthority_issue_test1 {} {
             append error_text "===========\n"
             append error_text "found XAUTHORITY environment setting in qrsh job output on host $host! issue 2128 detected!"
             append error_text "qrsh output:\n$output\n"
-            set ok "false"
+            set ok 0
          }
-         if {$ok == "true"} {
+         if {$ok} {
             append success_text "test was ok for host $host\n"
          }
       }

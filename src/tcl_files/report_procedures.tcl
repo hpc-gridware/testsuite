@@ -1401,9 +1401,6 @@ proc generate_html_report {report_array} {
    upvar $report_array report
    set filename $report(filename)
 
-   # we don't want to center report
-   set center false
-
    set content ""
    append content [generate_html_report_header report]
    append content [generate_html_report_table report]
@@ -1440,9 +1437,6 @@ proc generate_html_report {report_array} {
 proc generate_html_report_header {report_array} {
    global ts_config
    upvar $report_array report
-
-   # we don't want to center report
-   set center false
 
    set content ""
    set header_list ""
@@ -1503,7 +1497,7 @@ proc generate_html_report_formated_text {sge_info_list} {
    global ts_config
 
    # we don't want to center report
-   set center false
+   set center 0
 
    set content ""
    foreach sge_info $sge_info_list {
@@ -1546,9 +1540,6 @@ proc generate_html_report_formated_text {sge_info_list} {
 proc generate_html_report_table {report_array} {
    global ts_config
    upvar $report_array report
-
-   # we don't want to center report
-   set center false
 
    set content ""
 
@@ -1643,9 +1634,6 @@ proc generate_html_report_task {report_array} {
    upvar $report_array report
 
    set filename $report(filename)
-
-   # we don't want to center report
-   set center false
 
    set content ""
    # Test reports for each host

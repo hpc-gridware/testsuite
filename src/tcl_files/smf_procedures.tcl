@@ -130,13 +130,13 @@ proc is_smf_service_state { host service state {exit_var prg_exit_state} } {
    set fmri [get_sge_fmri $host $service]
    if {[string length $fmri] == 0} {
       set back_exit_state 1
-      return "false"
+      return 0
    }
    set output [get_smf_service_state $host $service back_exit_state]
    if {[string compare $state $output] == 0} {
-      return "true"
+      return 1
    }
-   return "false"
+   return 0
 }
 
 
@@ -240,8 +240,8 @@ proc smf_kill_and_restart { host service {signal 15} {timeout 30} {kill_restarts
          ts_log_severe "$service not restarted (has the same CTID)"
          return -1
       }
-      if {[string is false [is_smf_service_state $host $service "online"]] == 1} {
-	 ts_log_severe "$service service is in '[get_smf_service_state $host $service]' STATE, expected 'online' on host $host"
+      if {![is_smf_service_state $host $service "online"]} {
+         ts_log_severe "$service service is in '[get_smf_service_state $host $service]' STATE, expected 'online' on host $host"
          return -1
       }
       ts_log_fine "OK - SMF restarted $service"
@@ -288,7 +288,7 @@ proc smf_get_process_name { service } {
 proc smf_check_service_state {host service state {timeout 30}} {
    #Check service state
    set elapsed 0
-   while {[string is false [is_smf_service_state $host $service $state]] == 1} {
+   while {![is_smf_service_state $host $service $state]} {
       after 1000
       incr elapsed 1
       if {$elapsed >= $timeout} {
@@ -532,7 +532,7 @@ proc smf_start_svcadm {host service action {flags ""} {wait_for_new_process 0} {
    }
    #Wait for the transition to happen
    set elapsed 0
-   while {[string is false [is_smf_service_state $host $service "$expected_state"]] == 1} {
+   while {![is_smf_service_state $host $service "$expected_state"]} {
       after 1000
       incr elapsed 1
       if {$elapsed >= $timeout} {
@@ -582,7 +582,7 @@ proc smf_generic_test {host service {timeout 30} {kill_restarts 1}} {
 
    #Start over SMF
    start_smf_service $host $service
-   if { [string is false [is_smf_service_state $host $service "online"]] == 1 } {
+   if {![is_smf_service_state $host $service "online"]} {
       ts_log_severe "$service service is in '[get_smf_service_state $host $service]' STATE, expected 'online' on host $host"
       return -1
    }

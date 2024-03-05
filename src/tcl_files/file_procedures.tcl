@@ -624,7 +624,7 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
    upvar $data_array_name data
    upvar $row_array_name rows
 
-   set use_local_host true
+   set use_local_host 1
    set local_host [gethostname]
    set gnuplot_bin [get_binary_path $local_host "gnuplot" 0]
    if { $gnuplot_bin == "gnuplot" } {
@@ -636,7 +636,7 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
             break
          }
       }
-      set use_local_host false
+      set use_local_host 0
    }
 
    # generate data files
@@ -695,7 +695,7 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
    puts $test_file "set terminal gif" 
    flush $test_file
    close $test_file
-   if { !$use_local_host } {
+   if {!$use_local_host} {
       wait_for_remote_file $local_host $CHECK_USER $test_file_name
    }
    set result [start_remote_prog $local_host $CHECK_USER $gnuplot_bin $test_file_name prg_exit_state 60 0 "" "" 1 0 0]
@@ -726,7 +726,7 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
       puts -nonewline $cmd_file "'$filename' index 0 title \"$title\" with $drawmode"
    }
    close $cmd_file
-   if { !$use_local_host } {
+   if {!$use_local_host} {
       wait_for_remote_file $local_host $CHECK_USER $command_file
    }
    set result [start_remote_prog $local_host $CHECK_USER $gnuplot_bin $command_file prg_exit_state 60 0 "" "" 1 0 0]
@@ -1505,7 +1505,7 @@ proc get_file_names {path {ext "*"}} {
 #     file_procedures/create_html_link()
 #     file_procedures/create_html_text()
 #*******************************************************************************
-proc generate_html_file { file headliner content {return_text 0} {refresh_time 0} {center true}} {
+proc generate_html_file { file headliner content {return_text 0} {refresh_time 0} {center 1}} {
 
    global CHECK_USER
 
@@ -1611,7 +1611,7 @@ proc generate_html_file { file headliner content {return_text 0} {refresh_time 0
 #     file_procedures/create_html_link()
 #     file_procedures/create_html_text()
 #*******************************************************************************
-proc create_html_table {array_name {border 0} {align LEFT} {center true}} {
+proc create_html_table {array_name {border 0} {align LEFT} {center 1}} {
    upvar $array_name table
 
    set back "\n"
@@ -1766,7 +1766,7 @@ proc create_html_text {content {center 0}} {
    return $back
 }
 
-proc create_html_non_formated_text {content {center false} {color ""}} {
+proc create_html_non_formated_text {content {center 0} {color ""}} {
    set back ""
 
    if {$content == ""}  {

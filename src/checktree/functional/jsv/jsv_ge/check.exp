@@ -72,13 +72,6 @@ lappend check_functions "jsv_ge_receive_log_info"
 lappend check_functions "jsv_ge_receive_log_warning"
 lappend check_functions "jsv_ge_receive_log_error"
 
-# global variables for this test. all of them are initiaized in the setup procedure
-global jsv_org_global_conf
-global jsv_base_path
-global jsv_enabled
-set jsv_enabled ""
-set jsv_base_path ""
-
 proc file_touch {name} {
    global ts_config CHECK_USER
 
@@ -113,17 +106,11 @@ proc jsv_ge_setup {} {
    global jsv_enabled
 
    # check if jsv is available
-   if {$jsv_enabled == ""} {
-      set jsv_enabled [ge_has_feature "job-submission-verify"]
-      if {$jsv_enabled == false} {
-         ts_log_config "Cannot run this test, jsv is not available for this GE version!"
-      }
+   set jsv_enabled [ge_has_feature "job-submission-verify"]
+   if {!$jsv_enabled} {
+      ts_log_config "Cannot run this test, jsv is not available for this GE version!"
+      return 99
    }
-   # if jsv is not available return
-   if {$jsv_enabled == false} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    # get base path of scripts
    set jsv_base_path $ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_ge
@@ -149,28 +136,20 @@ proc jsv_ge_setup {} {
 proc jsv_ge_cleanup {} {
    global ts_config
    global jsv_org_global_conf
+   global jsv_base_path
    global jsv_enabled
  
-   # if jsv is not available return
-   if {$jsv_enabled == false} {
-      # nothing to setup, jsv not available
-      return 
-   }     
+   if {$jsv_enabled} {
+      # trigger and wait for job termination
+      delete_all_jobs
+      wait_for_end_of_all_jobs 60
 
-
-   # trigger and wait for job termination
-   delete_all_jobs
-   wait_for_end_of_all_jobs 60
-
-   # reset configurations
-   reset_config_and_propagate jsv_org_global_conf
+      # reset configurations
+      reset_config_and_propagate jsv_org_global_conf
+   }
 
    # unset our test's global variables
-   foreach var "org_global_conf jsv_enabled jsv_base_path" {
-      if {[info exists $var]} {
-         unset $var
-      }
-   }
+   unset -nocomplain jsv_org_global_conf jsv_base_path jsv_enabled
 }
 
 # This test will verify the parsing functionality which is used in clients
@@ -203,7 +182,7 @@ proc jsv_ge_parsing_in_client_or_master {} {
    global jsv_enabled
 
    # if jsv is not available return
-   if {$jsv_enabled == false} {
+   if {!$jsv_enabled} {
       # nothing to setup, jsv not available
       return 
    }     

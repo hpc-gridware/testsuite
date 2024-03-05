@@ -638,7 +638,7 @@ proc reschedule_qsh_qlogin_qrsh_qrlogin {} {
    }
    set qsh_id  [open_remote_spawn_process $host $CHECK_USER "$ts_config(product_root)/bin/$local_arch/qsh" "$args"]
 
-   if {[ge_has_feature "new-interactive-job-support"] == true} {
+   if {[ge_has_feature "new-interactive-job-support"]} {
       # new interactive job support
       set args "-now no -q [get_queue_instance $rerun_queue $rerun_host]"
       set qlogin_id [open_remote_spawn_process $host $CHECK_USER "$ts_config(product_root)/bin/$local_arch/qlogin" "$args"]

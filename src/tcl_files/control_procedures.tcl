@@ -90,7 +90,7 @@ proc dump_rqs_array_to_tmpfile { change_array } {
    #       before writing the file !!!
    if [info exists chgar] {
       set old_name ""
-      set first "true"
+      set first 1
 
       set tmpfile [get_tmp_file_name]
       set file [open $tmpfile "w"]
@@ -104,10 +104,10 @@ proc dump_rqs_array_to_tmpfile { change_array } {
          if { $old_name != $name} {
             # new rqs
             set old_name $name
-            if { $first == "false" } {
-               puts $file "\}"
+            if {$first} {
+               set first 0
             } else {
-               set first "false"
+               puts $file "\}"
             }
             puts $file "\{" 
             puts $file "name $name"
@@ -341,7 +341,6 @@ proc build_rqs_vi_array { change_array } {
    set vi_commands ""
 
    set old_name ""
-   set first "true"
 
    foreach elem [lsort [array names chgar]] {
       set help [split $elem ","]
@@ -2244,7 +2243,7 @@ proc resolve_build_arch { host } {
 #  INPUTS
 #     host - the name of the target host
 #     use_source_arch - forces the arch script from the source directory to be
-#                       used.  Defaults to false.
+#                       used.  Defaults to 0 (false).
 #
 #  RESULT
 #     the name of the shared library path name environment variable

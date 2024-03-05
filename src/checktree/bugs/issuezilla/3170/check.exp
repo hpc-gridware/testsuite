@@ -97,7 +97,7 @@ proc issue_3170_setup {} {
    lappend test_3170_config(queue_list) "3170_queue"
 
    # set execd down state
-   set test_3170_config(execd_down) false
+   set test_3170_config(execd_down) 0
 
    # set load report interval for test host
    set new_config(load_report_time) "00:00:03"
@@ -188,7 +188,7 @@ proc issue_3170_test {} {
       -i $sp_id "Here I am" {
          ts_log_fine "remote command started"
 
-         set test_3170_config(execd_down) true
+         set test_3170_config(execd_down) 1
          ts_log_fine "shutting down execd host $host ..."
          soft_execd_shutdown $host
 
@@ -203,7 +203,7 @@ proc issue_3170_test {} {
          
          # restart execd
          if {[startup_execd $host] == 0} {
-            set test_3170_config(execd_down) false
+            set test_3170_config(execd_down) 0
          }
          exp_continue
       }

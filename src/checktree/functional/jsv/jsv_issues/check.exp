@@ -64,14 +64,6 @@ lappend check_functions "jsv_issues_iz3088"
 lappend check_functions "jsv_A_comma_list"
 lappend check_functions "jsv_issues_GE-3311"
 
-
-# global variables for this test. all of them are initiaized in the setup procedure
-global jsv_org_global_conf
-global jsv_base_path
-global jsv_enabled
-set jsv_enabled ""
-set jsv_base_path ""
-
 proc file_touch {name} {
    global ts_config CHECK_USER
 
@@ -91,12 +83,10 @@ proc jsv_issues_setup {} {
    global jsv_enabled
 
    # check if jsv is available
-   if {$jsv_enabled == ""} {
-      set jsv_enabled [ge_has_feature "job-submission-verify"]
-      if {$jsv_enabled == false} {
-         ts_log_config "Cannot run this test, jsv is not available for this GE version!"
-         return 99
-      }
+   set jsv_enabled [ge_has_feature "job-submission-verify"]
+   if {!$jsv_enabled} {
+      ts_log_config "Cannot run this test, jsv is not available for this GE version!"
+      return 99
    }
 
    if {$ts_config(source_dir) == "none"} {
@@ -121,27 +111,20 @@ proc jsv_issues_setup {} {
 proc jsv_issues_cleanup {} {
    global ts_config
    global jsv_org_global_conf
+   global jsv_base_path
    global jsv_enabled
  
-   # if jsv is not available return
-   if {$jsv_enabled == false} {
-      # nothing to setup, jsv not available
-      return 
-   }     
+   if {$jsv_enabled} {
+      # trigger and wait for job termination
+      delete_all_jobs
+      wait_for_end_of_all_jobs 60
 
-   # trigger and wait for job termination
-   delete_all_jobs
-   wait_for_end_of_all_jobs 60
-
-   # reset configurations
-   reset_config_and_propagate jsv_org_global_conf
+      # reset configurations
+      reset_config_and_propagate jsv_org_global_conf
+   }
 
    # unset our test's global variables
-   foreach var "jsv_org_global_conf jsv_enabled jsv_base_path" {
-      if {[info exists $var]} {
-         unset $var
-      }
-   }
+   unset -nocomplain jsv_org_global_conf jsv_base_path jsv_enabled
 }
 
 # this test is related to the test jsv_issues_job_start_user_drmaa below

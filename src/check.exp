@@ -209,7 +209,7 @@ global define_daily_build_nr
 set define_daily_build_nr 0
 
 global create_csv_file
-set create_csv_file "false"
+set create_csv_file 0
 
 # if we know the config is ok, we don't want to check it,
 # e.g. we don't want to connect to all hosts during setup
@@ -432,7 +432,7 @@ set CHECK_TEST_RUNNING 0
 set CHECK_TESTS_RUNNING 0
 
 global CHECK_IS_INTERACTIVE
-set CHECK_IS_INTERACTIVE false
+set CHECK_IS_INTERACTIVE 0
 
 global CHECK_DURATIONS
 
@@ -2928,7 +2928,7 @@ proc build_checktree {} {
       }
    }
 
-   if {$create_csv_file == true} {
+   if {$create_csv_file} {
       set available_tests 0
       set available_test_levels 0
       set available_test_functions 0
@@ -7792,7 +7792,7 @@ for {set i 0} {$i < $argc} {incr i} {
    }
 
    if {([string compare [lindex $argv $i] "--create_csv_report"] == 0) || ([string compare [lindex $argv $i] "create_csv_report"] == 0) } {
-      set create_csv_file "true"
+      set create_csv_file 1
       continue
    }
 
