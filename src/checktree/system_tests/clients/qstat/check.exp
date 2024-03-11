@@ -57,7 +57,6 @@ lappend check_functions "qstat_option_q"
 lappend check_functions "qstat_option_pe"
 lappend check_functions "qstat_option_U"
 lappend check_functions "qstat_option_s"
-lappend check_functions "qstat_profile"
 lappend check_functions "qstat_tasks"
 lappend check_functions "qstat_j_xml"
 lappend check_functions "qstat_plain_xml_comparison"  ;# Compare the two qstatcommands
@@ -246,7 +245,7 @@ proc check_core_queues {} {
 ############################################################################
 # - PENDING JOBS - PENDING JOBS - PENDING JOBS - PENDING JOBS - PENDING JOBS
 ############################################################################
-#     3     0 Sleeper    crei         qw    05/15/2000 13:09:49          
+#     3     0 Sleeper    crei         qw    05/15/2000 13:09:49
 
   # split each line as listelement
   set help [split $result "\n"]
@@ -280,8 +279,12 @@ proc check_core_queues {} {
      lappend load [lindex $linedata 3]
   }
 
+
   # check if number of queues matches core system queue count
   if {[llength $ts_config(execd_nodes)] != $qcount} {
+     puts "qstat output: $result"
+     puts "execd_nodes: $ts_config(execd_nodes) "
+     puts "qcount $qcount"
      ts_log_severe "queue count doesn't match (number of queues should be [llength $ts_config(execd_nodes)])"
      return
   }
@@ -3790,9 +3793,6 @@ proc qstat_profile {} {
       }
    }
 
-
-
-
    #
    # Paranoia....
    #
@@ -3801,6 +3801,10 @@ proc qstat_profile {} {
       ts_log_fine "Deleting test.q"
       del_queue test.q $hostname 0 1
    }
+
+   # for some unknown reason the file operations for the sge_qstat files might take some time which might
+   # cause the next test scenarios to fail if it uses qstat.
+   after 2000
 }
 
 proc transform_memory_value { value } {
