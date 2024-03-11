@@ -127,7 +127,11 @@ proc qmaster_profiling_monitor {info_text id expected_prof {tail_timeout 70}} {
                if {[string length $line] > 0} {
                   #ts_log_fine "processing line: $line"
                   set split_line [split $line "|"]
-                  set message [lindex $split_line 4]
+                  if { $ts_config(gridengine_version) >= 90 } {
+                     set message [lindex $split_line 5];  # added thread ID col that causes message to be in col 5
+                  } else {
+                     set message [lindex $split_line 4]
+                  }
                   switch -glob -- $message {
                      "PROF*profiling summary:" {
                         # for profiling messages, store per thread info

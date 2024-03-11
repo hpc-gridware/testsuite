@@ -122,7 +122,7 @@ proc scheduler_queue_requests_cleanup  {} {
 
    # cleanup
    delete_all_jobs 0
-   wait_for_end_of_all_jobs 60
+   wait_for_end_of_all_jobs 6
 
    # delete pes
    for {set i 0} {$i < $pe_count} {incr i} {
@@ -139,17 +139,29 @@ proc scheduler_queue_requests_cleanup  {} {
 }
 
 proc scheduler_queue_requests_sched_time {} {
+   global ts_config
    set duration -1
 
    set pattern "*job dispatching took*"
-   set log_output [logfile_wait $pattern 60 0]
+   set log_output [logfile_wait $pattern 5 0]
+
+   # split log output lines
    set profile_lines [split $log_output "\n"]
    foreach line $profile_lines {
+
+      # find matching line
       if {[string match $pattern $line]} {
-#         ts_log_fine $line
-         set split_line [split $line]
-         set duration [lindex $split_line 5]
-#         ts_log_fine $duration
+
+         # find column with message
+         set split_line [split $line "|"]
+         if { $ts_config(gridengine_version) >= 90 } {
+            set message [lindex $split_line 5]
+         } else {
+            set message [lindex $split_line 4]
+         }
+
+         # find duration within the message
+         set duration [lindex $message 4]
          break
       }
    }
@@ -202,8 +214,8 @@ proc scheduler_queue_requests {scenario {parallel 0} {cq 0} {soft 0}} {
    init_logfile_wait $ts_config(master_host) [get_schedd_messages_file]
 
    # submit a job without requests and measure the time for scheduling
-   set job_id [submit_job "$options $ts_config(product_root)/examples/jobs/sleeper.sh 60"]
-   wait_for_jobstart $job_id "" 60
+   set job_id [submit_job "$options $ts_config(product_root)/examples/jobs/sleeper.sh 6"]
+   wait_for_jobstart $job_id "" 6
    set default_duration [scheduler_queue_requests_sched_time]
    if {$default_duration == 0.0} {
       set default_duration 0.01
@@ -237,10 +249,10 @@ proc scheduler_queue_requests {scenario {parallel 0} {cq 0} {soft 0}} {
          set q_options "-q $queue_request"
       }
    }
-   set job_id [submit_job "$options $q_options $ts_config(product_root)/examples/jobs/sleeper.sh 60"]
+   set job_id [submit_job "$options $q_options $ts_config(product_root)/examples/jobs/sleeper.sh 6"]
 
    # wait for the job to start and evaluate queue
-   wait_for_jobstart $job_id "" 60
+   wait_for_jobstart $job_id "" 6
    get_extended_job_info $job_id
    ts_log_fine "job is running in queue $job_info(queue)"
 
