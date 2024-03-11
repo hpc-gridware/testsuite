@@ -213,11 +213,12 @@ proc qstat_count_jobs {func_name qstat_options expected_jobs} {
 }
 
 proc check_core_queues {} {
-  global ts_config CHECK_USER
+   global ts_config CHECK_USER
 
-  set check_host [host_conf_get_suited_hosts]
+   set check_host [host_conf_get_suited_hosts]
 
-  set result [start_sge_bin "qstat" "-f -q all.q"]
+   set myenv(SGE_LONG_QNAMES) 50
+   set result [start_sge_bin "qstat" "-f -q all.q" "" "" exit_code 60 "" "bin" output_lines myenv]
 #
 #Original output of qstat -f looks like this for 6.0 and 6.1:
 #>qstat -f
