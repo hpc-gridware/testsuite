@@ -1,3 +1,6 @@
+#___INFO__MARK_BEGIN_NEW__
+#___INFO__MARK_END_NEW__
+
 proc check_display {} {
      global CHECK_DISPLAY_OUTPUT CHECK_USER
 

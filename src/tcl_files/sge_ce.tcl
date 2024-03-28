@@ -1,3 +1,6 @@
+#___INFO__MARK_BEGIN_NEW__
+#___INFO__MARK_END_NEW__
+
 proc ce_add {{change_array_name ""} {fast 1} {on_host ""} {as_user ""} {raise_error 1}} {
     upvar $change_array_name change_array
     ce_get_messages messages "add" "$change_array(name)" $on_host $as_user
