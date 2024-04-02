@@ -27,6 +27,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -149,7 +151,7 @@ proc issue_360_check { } {
    # -------------------------------------------------------------------------------
    
    # create two test departments 
-   #äcreate test user 
+   #Ã¤create test user 
 
    # add user to department one 
    # -> expect no error 

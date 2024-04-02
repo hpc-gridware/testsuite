@@ -1,4 +1,4 @@
-#___INFO__MARK_BEGIN__
+#___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
 #  The contents of this file are made available subject to the terms of the
@@ -9,8 +9,10 @@
 #
 #  Copyright (c) 2011 Univa Corporation.
 #
+#  Portions of this software are Copyright (c) 2024 HPC-Gridware GmbH
+#
 ###########################################################################
-#___INFO__MARK_END__
+#___INFO__MARK_END_NEW__
 
 #****** bugs/jira/3474 ******
 #  NAME

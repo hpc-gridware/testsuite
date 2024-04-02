@@ -27,6 +27,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#
 ##########################################################################
 #___INFO__MARK_END__
 ## Issue 2050: still used usersets can be removed under certain conditions
