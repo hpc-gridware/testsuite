@@ -45,14 +45,16 @@ set check_root_access_needs "no"
 
 # define test's name and run level descriptions
 set check_name            "qacct"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_description(0)  "test qacct functionality"
+set check_category        "ACCOUNTING VERIFIED"
+set check_description(0)  "test qacct functionality (old colon separated format)"
+set check_description(1)  "test qacct functionality (JSON format)"
 
 # define test's dependencies
 set check_needs           "init_core_system" 
 
 # setup and cleanup functions
 set check_setup_function qacct_setup
+set check_setup_level_function qacct_setup_level
 set check_cleanup_function qacct_cleanup
 
 # define test's procedure order
@@ -72,9 +74,35 @@ proc qacct_setup {} {
 
    # set the accounting_flush_time to 0 to speedup writing of accounting info
    get_config qacct_reporting_backup
-   set new_config(reporting_params) "accounting_flush_time=00:00:00"
+}
+
+proc qacct_setup_level {} {
+   global ts_config
+   global CHECK_ACT_LEVEL
+   global qacct_reporting_backup
+
+   # @todo replace 1 by [is_version_in_range "9.0.0"]
+   set format_config ""
+   if {1} {
+      if {$CHECK_ACT_LEVEL == 0} {
+         # testing old format
+         set format_config "old_accounting=true"
+      }
+   } else {
+      # we only have the old reporting and accounting file format
+      if {$CHECK_ACT_LEVEL == 1} {
+         ts_log_config "new JSON file format is not supported in this version"
+         return 99
+      }
+   }
+
+   # set the accounting_flush_time to 0 to speedup writing of accounting info
+   set new_config(reporting_params) "accounting_flush_time=00:00:00 $format_config"
    set_config new_config
+
+   # delete all accounting file formats
    delete_file "$ts_config(product_root)/$ts_config(cell)/common/accounting" 0
+   delete_file "$ts_config(product_root)/$ts_config(cell)/common/accounting.jsonl" 0
 }
 
 proc qacct_cleanup {} {

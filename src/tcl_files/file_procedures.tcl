@@ -3572,8 +3572,14 @@ proc delete_directory {path} {
 #     file_procedures/logfile_wait()
 #     file_procedures/close_logfile_wait()
 #*******************************************************************************
-proc init_logfile_wait {hostname logfile} {
+proc init_logfile_wait {hostname logfile {delete_touch 0}} {
    global file_procedure_logfile_wait_sp_id CHECK_USER CHECK_DEBUG_LEVEL
+
+   if {$delete_touch} {
+      ts_log_fine "clearing (delete + touch) file $logfile on host $hostname"
+      delete_remote_file $hostname $CHECK_USER $logfile
+      start_remote_prog $hostname $CHECK_USER "touch" $logfile
+   }
 
    set sid [open_remote_spawn_process $hostname $CHECK_USER "tail" "-f $logfile"]
    set sp_id [lindex $sid 1]
