@@ -81,9 +81,8 @@ proc qacct_setup_level {} {
    global CHECK_ACT_LEVEL
    global qacct_reporting_backup
 
-   # @todo replace 1 by [is_version_in_range "9.0.0"]
    set format_config ""
-   if {1} {
+   if {[is_version_in_range "9.0.0"]} {
       if {$CHECK_ACT_LEVEL == 0} {
          # testing old format
          set format_config "old_accounting=true"

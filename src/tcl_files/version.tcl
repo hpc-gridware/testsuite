@@ -162,6 +162,75 @@ proc clear_version_info {} {
    unset -nocomplain g_rel_info
 }
 
+proc parse_version_info {version_string {version_information_array_name ""}} {
+   upvar $version_information_array_name rel_info
+
+   # e.g. "GE 6.2u3beta"
+   set help [split $version_string "."]
+   set major_help [lindex $help 0]
+   set rel_info(major_release) "0"
+
+   # strip GE from major version
+   foreach str [split $major_help " "] {
+      if {[string is integer $str]} {
+         set rel_info(major_release) [string trim $str]
+      }
+   }
+
+   # distinguish old version scheme 6.2u5
+   # from new one 8.0.0
+   if {[llength $help] > 2} {
+      # new Univa versioning scheme
+      set rel_info(minor_release) [lindex $help 1]
+      set update_help [lindex $help 2]
+      set up_rel ""
+      for {set i 0} {$i < [string length $update_help]} {incr i 1} {
+         set char [string index $update_help $i]
+         if {[string is integer $char]} {
+            append up_rel $char
+         } else {
+            break
+         }
+         if {$up_rel == ""} {
+            set up_rel 0
+         }
+      }
+      set rel_info(update_release) $up_rel
+      set rel_info(full) $version_string
+      set rel_info(detected_version) "$rel_info(major_release).$rel_info(minor_release).$rel_info(update_release)"
+   } else {
+      # old Sun versioning scheme
+      # split minor version from patch number: "2u5"
+      set minor_help [lindex $help 1]
+      set help [split $minor_help "u"]
+      set rel_info(minor_release) [string trim [lindex $help 0]]
+      if {[llength $help] > 1} {
+         set update_help [lindex $help 1]  ;# "3beta"
+         set up_rel ""
+         for {set i 0} {$i < [string length $update_help]} {incr i 1} {
+            set char [string index $update_help $i]
+            if {[string is integer $char]} {
+               append up_rel $char
+            } else {
+               break
+            }
+         }
+         if {$up_rel == ""} {
+            set up_rel 0
+         }
+      } else {
+         set up_rel 0
+      }
+      set rel_info(update_release) $up_rel
+      set rel_info(full) $version_string
+      if { $up_rel == 0 } {
+         set rel_info(detected_version) "$rel_info(major_release).$rel_info(minor_release)"
+      } else {
+         set rel_info(detected_version) "$rel_info(major_release).$rel_info(minor_release)u$rel_info(update_release)"
+      }
+   }
+}
+
 proc get_version_info {{version_information_array_name ""}} {
    get_current_cluster_config_array ts_config
    global g_rel_info
@@ -216,70 +285,7 @@ proc get_version_info {{version_information_array_name ""}} {
          }
       }
 
-      # e.g. "GE 6.2u3beta"
-      set help [split $CHECK_PRODUCT_VERSION_NUMBER "."]
-      set major_help [lindex $help 0]
-      set g_rel_info(major_release) "0"
-
-      # strip GE from major version
-      foreach str [split $major_help " "] {
-         if {[string is integer $str]} {
-            set g_rel_info(major_release) [string trim $str]
-         }
-      }
-
-      # distinguish old version scheme 6.2u5
-      # from new one 8.0.0
-      if {[llength $help] > 2} {
-         # new Univa versioning scheme
-         set g_rel_info(minor_release) [lindex $help 1]
-         set update_help [lindex $help 2]
-         set up_rel ""
-         for {set i 0} {$i < [string length $update_help]} {incr i 1} {
-            set char [string index $update_help $i]
-            if {[string is integer $char]} {
-               append up_rel $char
-            } else {
-               break
-            }
-            if {$up_rel == ""} {
-               set up_rel 0
-            }
-         }
-         set g_rel_info(update_release) $up_rel
-         set g_rel_info(full) $CHECK_PRODUCT_VERSION_NUMBER
-         set g_rel_info(detected_version) "$g_rel_info(major_release).$g_rel_info(minor_release).$g_rel_info(update_release)"
-      } else {
-         # old Sun versioning scheme
-         # split minor version from patch number: "2u5"
-         set minor_help [lindex $help 1]
-         set help [split $minor_help "u"]
-         set g_rel_info(minor_release) [string trim [lindex $help 0]]
-         if {[llength $help] > 1} {
-            set update_help [lindex $help 1]  ;# "3beta"
-            set up_rel ""
-            for {set i 0} {$i < [string length $update_help]} {incr i 1} {
-               set char [string index $update_help $i]
-               if {[string is integer $char]} {
-                  append up_rel $char
-               } else {
-                  break
-               }
-            }
-            if {$up_rel == ""} {
-               set up_rel 0
-            }
-         } else {
-            set up_rel 0
-         }
-         set g_rel_info(update_release) $up_rel
-         set g_rel_info(full) $CHECK_PRODUCT_VERSION_NUMBER
-         if { $up_rel == 0 } {
-            set g_rel_info(detected_version) "$g_rel_info(major_release).$g_rel_info(minor_release)"
-         } else {
-            set g_rel_info(detected_version) "$g_rel_info(major_release).$g_rel_info(minor_release)u$g_rel_info(update_release)"
-         }
-      }
+      parse_version_info $CHECK_PRODUCT_VERSION_NUMBER g_rel_info
    }
 
    # caller requested detailed release info - copy from global cache
@@ -291,4 +297,96 @@ proc get_version_info {{version_information_array_name ""}} {
    }
 
    return $CHECK_PRODUCT_VERSION_NUMBER
+}
+
+###
+# @brief check if the current OGE version is in a given range
+#
+# The OGE version must be higher or equal the from_version
+# and (optionally) lower than the to_version.
+# @example if the current version is 9.0.0 then
+#          "is_version_in_range 8.0.0" will return 1
+# @see also test_version_in_range()
+#
+# @param[in] from_version
+# @param[in] optional to_version, if not given (value "") then
+#            the range is open to the right.
+# @return 1 if the version is in the given range, else 0
+##
+proc is_version_in_range {from_version {to_version ""}} {
+   # get the current product version
+   set current_version [get_version_info]
+   
+   # we put the following into a separate function for ease of testing
+   return [check_version_in_range $current_version $from_version $to_version]
+}
+
+
+###
+# @brief check if a given version is between a start version (inclusive)
+#        and an end version (exclusive)
+##
+proc check_version_in_range {current_version from_version to_version} {
+   set ret 1
+
+   parse_version_info $current_version current
+
+   if {$from_version != ""} {
+      parse_version_info $from_version from
+      if {$current(major_release) < $from(major_release)} {
+         set ret 0
+      } elseif {$current(major_release) == $from(major_release)} {
+          if {$current(minor_release) < $from(minor_release)} {
+            set ret 0
+         } elseif {$current(minor_release) == $from(minor_release)} {
+            if {$current(update_release) < $from(minor_release)} {
+               set ret 0
+            }
+         }
+      }
+   }
+
+   if {$ret && $to_version != ""} {
+      parse_version_info $to_version to
+      if {$current(major_release) > $to(major_release)} {
+         set ret 0
+      } elseif {$current(major_release) == $to(major_release)} {
+         if {$current(minor_release) > $to(minor_release)} {
+            set ret 0
+         } elseif {$current(minor_release) == $to(minor_release)} {  
+            if {$current(update_release) > $to(update_release)} {
+               set ret 0
+            }
+         }
+      }
+   }
+
+   # ts_log_fine "check_version_in_range $current_version $from_version $to_version returning $ret"
+
+   return $ret
+}
+
+###
+# @brief test function for is_version_in_range()
+##
+proc test_version_in_range {} {
+   set scenarios {}
+   lappend scenarios {"9.0.1" "8.0.0" "" 1}
+   lappend scenarios {"9.0.1" "9.0.1" "" 1}
+   lappend scenarios {"9.0.1" "9.1.0" "" 0}
+   lappend scenarios {"9.0.1" "" "8.7.0" 0}
+   lappend scenarios {"9.0.1" "9.0.0" "9.5.0" 1}
+
+   foreach scenario $scenarios {
+      set current [lindex $scenario 0]
+      set from [lindex $scenario 1]
+      set to [lindex $scenario 2]
+      set expected [lindex $scenario 3]
+
+      if {[check_version_in_range $current $from $to] != $expected} {
+         puts "ERROR: check_version_in_range $current $from $to should have reported $expected"
+      } else {
+         puts "OK:    check_version_in_range $current $from $to reported $expected"
+      }
+   }
 }

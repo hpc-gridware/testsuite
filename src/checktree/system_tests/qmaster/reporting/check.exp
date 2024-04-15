@@ -157,9 +157,8 @@ proc reporting_setup_level {} {
    file delete -force $reporting_acct_file
    file delete -force "$reporting_acct_file.jsonl"
 
-   # @todo replace 1 by [is_version_in_range "9.0.0"]
    set reporting_format_config ""
-   if {1} {
+   if {[is_version_in_range "9.0.0"]} {
       if {$CHECK_ACT_LEVEL == 0} {
          # testing old format
          set reporting_format_config "old_accounting=true old_reporting=true"
