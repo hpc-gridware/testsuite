@@ -63,7 +63,13 @@ proc set_queue_defaults { change_array } {
    set chgar(rerun)                "FALSE"
    set chgar(slots)                "1"
    set chgar(tmpdir)               "/tmp"
-   set chgar(shell)                "/bin/csh"
+   if {[is_version_in_range "9.0.0"]} {
+      set chgar(shell)                "/bin/sh"
+      set chgar(shell_start_mode)     "unix_behavior"
+   } else {
+      set chgar(shell)                "/bin/csh"
+      set chgar(shell_start_mode)     "posix_compliant"
+   }
    set chgar(prolog)               "NONE"
    set chgar(epilog)               "NONE"
    set chgar(starter_method)       "NONE"
@@ -99,7 +105,6 @@ proc set_queue_defaults { change_array } {
    set chgar(qtype)                "BATCH INTERACTIVE"
    set chgar(ckpt_list)            "NONE"
    set chgar(pe_list)              "make"
-   set chgar(shell_start_mode)     "posix_compliant"
 
    if {$ts_config(product_type) == "sgeee"} {
       set chgar(projects)           "NONE"

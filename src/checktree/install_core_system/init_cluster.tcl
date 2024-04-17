@@ -394,7 +394,11 @@ proc setup_conf {} {
   set params(load_sensor) "none"
   set params(prolog) "none"
   set params(epilog) "none"
-  set params(shell_start_mode) "posix_compliant"
+  if {[is_version_in_range "9.0.0"]} {
+    set params(shell_start_mode) "unix_behavior"
+  } else {
+    set params(shell_start_mode) "posix_compliant"
+  }
   set params(login_shells) "sh,bash,ksh,csh,tcsh"
   set params(min_uid) "0"
   set params(min_gid) "0"

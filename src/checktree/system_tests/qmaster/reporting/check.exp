@@ -124,6 +124,8 @@ proc reporting_setup  {} {
    set queue_conf(load_thresholds) NONE
    set queue_conf(slots) 1
    set queue_conf(complex_values) "F003=2"
+   # we rely on shell_start_mode posix_compliant when setting a queue into error state
+   set queue_conf(shell_start_mode) "posix_compliant"
    add_queue "reporting" $reporting_test_host queue_conf
    set queue_conf(complex_values) "NONE"
    set queue_conf(subordinate_list) "reporting"

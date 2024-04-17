@@ -105,6 +105,8 @@ proc issue_1803_setup {} {
    # set prolog and epilog in all.q
    set my_queue_conf(prolog) "/bin/true prolog"
    set my_queue_conf(epilog) "/bin/true epilog"
+   # test relies on (former default) shell_start_mode posix_compliant
+   set my_queue_conf(shell_start_mode) "posix_compliant"
    mod_queue all.q  "" my_queue_conf
 
    # set KEEP_ACTIVE and short load_report_time in execd params
@@ -158,9 +160,13 @@ proc issue_1803_cleanup {} {
 
    set my_queue_conf(prolog) $issue_1803_allq_conf(prolog)
    set my_queue_conf(epilog) $issue_1803_allq_conf(epilog)
+   set my_queue_conf(shell_start_mode) $issue_1803_allq_conf(shell_start_mode)
+   set my_queue_conf(starter_method) $issue_1803_allq_conf(starter_method)
    mod_queue all.q "" my_queue_conf
 
    switch_to_admin_user_system
+
+   unset -nocomplain issue_1803_global_conf issue_1803_host_conf issue_1803_allq_conf
 }
 
 

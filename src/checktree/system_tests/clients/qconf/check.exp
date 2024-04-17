@@ -141,10 +141,6 @@ lappend check_functions "qconf_ke"	                    ;# TS case for qconf -ke 
 
 lappend check_functions "qconf_issue_2960"
 
-global queue_names
-
-global submitjob_jobid
-
 proc qconf_setup {} {
    global ts_config CHECK_USER
    global qconf_original_host_groups qconf_original_usersets qconf_orig_queues qconf_project qconf_sched_config qconf_userlist
@@ -4654,11 +4650,16 @@ proc qconf_issue_2445 {} {
    }
 
    # Submit now job with -S NONE. Check that it goes in Error state.
-   set shell_param "-S NONE"
-   set t_io_parameter "-o /dev/null -e /dev/null"
+   # With OGE 9.0.0 we have shell_start_mode unix_behavior as default
+   # where the shell is read out of the script => submit the job as binary job
+   set job_opts "-o /dev/null -e /dev/null"
+   if {[is_version_in_range "9.0.0"]} {
+      append job_opts " -b y"
+   }
+   append job_opts " -S NONE"
    set sleep_t 30
    set t_cmd "$ts_config(product_root)/examples/jobs/sleeper.sh $sleep_t"
-   set t_qsub_arguments "$shell_param $t_io_parameter $t_cmd"
+   set t_qsub_arguments "$job_opts $t_cmd"
    set job_id [submit_job $t_qsub_arguments]
 
    wait_for_job_state $job_id "Eqw" 60
