@@ -3016,6 +3016,39 @@ proc build_checktree {} {
 }
 
 
+proc verify_version_range {check_version_range_var levels_in} {
+   upvar $check_version_range_var check_version_range
+
+   set levels $levels_in
+
+   if {[array exists check_version_range]} {
+      # we have per runlevel version info
+      foreach runlevel [array names check_version_range] {
+         set pos [lsearch -exact $levels $runlevel]
+         if {$pos >= 0} {
+            # the runlevel exists (in the check_description)
+            if {![is_version_in_range_list $check_version_range($runlevel)]} {
+               set levels [lreplace $levels $pos $pos]
+            }
+         }
+      }
+   } else {
+      # we have one version info for the whole test
+      set from [lindex $check_version_range 0]
+      if {[llength $check_version_range] > 1} {
+         set to [lindex $check_version_range 1]
+      } else {
+         set to ""
+      }
+
+      if {![is_version_in_range_list $check_version_range]} {
+         set levels {}
+      }
+   }
+
+   return $levels
+}
+
 proc read_checktree_nodes {path} {
    global ts_checktree CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
    global check_name check_needs
@@ -3038,9 +3071,8 @@ proc read_checktree_nodes {path} {
    set check_category "--"
    set check_source_files "--"
    set check_functions "--"
-   if {[info exists check_description]} {
-      unset check_description
-   }
+   unset -nocomplain check_description
+   unset -nocomplain check_version_range
 
    # try to find and source check files in this directory for the configured Grid Engine version
    set sourced_files [ts_source $path/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT]
@@ -3054,13 +3086,30 @@ proc read_checktree_nodes {path} {
    }
 
    # if there is a check in this directory, remember some information
-   if {$sourced_files > 0} {
-      # here is a test file
-      set ts_checktree($nr,test_available) 1
+   set test_available 1
 
+   # if we couldn't read a check.exp file then there is no test available
+   if {$sourced_files == 0} {
+      set test_available 0
+   }
+
+   if {$test_available} {
+      # get check levels
       set levels [lsort -integer [array names check_description]]
       set check_highest_level [lindex $levels end]
+   }
 
+   if {$test_available} {
+      # sort out the test or individual levels due to unsupported version
+      if {[info exists check_version_range]} {
+         set levels [verify_version_range check_version_range $levels]
+         if {[llength $levels] == 0} {
+            set test_available 0
+         }
+      }
+   }
+
+   if {$test_available} {
       foreach level $levels {
          if { [info exists check_description($level)] } {
             if { [string match "*\n*" $check_description($level)] } {
@@ -3100,9 +3149,10 @@ proc read_checktree_nodes {path} {
       set ts_checktree($nr,check_levels) $levels
       set ts_checktree($nr,check_category) $check_category
       set ts_checktree($nr,check_functions) $check_functions
-   } else {
-      set ts_checktree($nr,test_available) 0
    }
+
+   # now we know if the test shall be run at all
+   set ts_checktree($nr,test_available) $test_available
 
    if {![info exists ts_checktree($nr,children)]} {   ;# ts_checktree($nr,children) contains the
       set ts_checktree($nr,children) {}               ;# list of numbers of subdirectories checktree elements

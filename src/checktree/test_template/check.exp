@@ -26,7 +26,21 @@
 #
 # 2) set check_root_access_needs to "yes" or "no" (if you need root access)
 #
-# 3) set check_category
+# 3) optionally set the check_version_range
+#    It defines in which versions a test shall run.
+#    Usually it defines in which version a certain feature has been added or a fix has been done:
+#       set check_version_range "9.0.0
+#    It can also specify from which version on a test shall no longer be run
+#    (e.g. as a deprecated feature got removed):
+#       set check_version_range {"" "10.0.0"}
+#    Or combinations of both:
+#       set check_version_range {"9.0.0" "10.0.0"}
+#    It can also be set per run level, e.g. from the qacct test
+#       set check_description(0)  "test qacct functionality (old colon separated format)"
+#       set check_description(1)  "test qacct functionality (JSON format)"
+#       set check_version_range(1) "9.0.0"
+#
+# 4) set check_category
 #     - it is a list of categories, e.g.
 #        - <FEATURE> like CENTRY, EVENTCLIENT, INSTALL, RSMAP for all tests testing a certain feature
 #        - MODULE for module tests
@@ -36,16 +50,16 @@
 #     - feel free to create new categories
 #     - example: "OBJECT CENTRY QCONF VERIFIED"
 #
-# 4) set check_needs (e.g.: "init_core_system" this means that this test is not
+# 5) set check_needs (e.g.: "init_core_system" this means that this test is not
 #    started without succesfull run of "init_core_system" test
 #
-# 5) you can add any function name to check_functions (all function (no paramters allowed) are started
+# 6) you can add any function name to check_functions (all function (no paramters allowed) are started
 #    within each runlevel number
 #    PLEASE use ts_log_severe() to submit errors
 #    ts_log_severe() is used in many testsuite standard functions, so not every
 #    function call must check the return state.
 #
-# 6) set check_need_running_system != "yes" if you shutdown the qmaster in the setup(level)
+# 7) set check_need_running_system != "yes" if you shutdown the qmaster in the setup(level)
 #    procedures. This will skip the qmaster alive test before starting test procedures.
 
 
@@ -57,9 +71,12 @@ global check_needs
 global check_functions
 global check_root_access_needs
 global check_need_running_system
+global check_version_range
 
 #set check_root_access_needs "yes"
 #set check_need_running_system "no"
+#set check_version_range "9.0.0"
+#set check_version_range {"9.0.0" "10.0.0"}
 
 # define test's name and run level descriptions
 set check_name            "__TESTSUITE_TEST_NAME"

@@ -321,6 +321,30 @@ proc is_version_in_range {from_version {to_version ""}} {
    return [check_version_in_range $current_version $from_version $to_version]
 }
 
+###
+# @brief check if the current OGE version is in a range given as list
+#
+# Calls is_version_in_range with the one or two arguments given as list.
+# @example if the current version is 9.0.0 then
+#          is_version_in_range_list {"8.0.0"} or
+#          is_version_in_range_list {"8.0.0" ""} or
+#          is_version_in_range_list {"8.0.0" "10.0.0"}
+#          will all return 1
+#
+# @param[in] the version range as list
+# @return 1 if the version is in the given range, else 0
+##
+proc is_version_in_range_list {range_list} {
+   set from [lindex $range_list 0]
+   if {[llength $range_list] > 1} {
+      set to [lindex $range_list 1]
+   } else {
+      set to ""
+   }
+
+   return [is_version_in_range $from $to]
+}
+
 
 ###
 # @brief check if a given version is between a start version (inclusive)
@@ -339,7 +363,7 @@ proc check_version_in_range {current_version from_version to_version} {
           if {$current(minor_release) < $from(minor_release)} {
             set ret 0
          } elseif {$current(minor_release) == $from(minor_release)} {
-            if {$current(update_release) < $from(minor_release)} {
+            if {$current(update_release) < $from(update_release)} {
                set ret 0
             }
          }
@@ -361,8 +385,6 @@ proc check_version_in_range {current_version from_version to_version} {
       }
    }
 
-   # ts_log_fine "check_version_in_range $current_version $from_version $to_version returning $ret"
-
    return $ret
 }
 
@@ -371,6 +393,7 @@ proc check_version_in_range {current_version from_version to_version} {
 ##
 proc test_version_in_range {} {
    set scenarios {}
+   lappend scenarios {"GE 9.0.0prealpha" "9.0.1" "" 0}
    lappend scenarios {"9.0.1" "8.0.0" "" 1}
    lappend scenarios {"9.0.1" "9.0.1" "" 1}
    lappend scenarios {"9.0.1" "9.1.0" "" 0}

@@ -40,6 +40,7 @@ global check_description
 global check_needs
 global check_functions 
 global check_root_access_needs
+global check_version_range
 
 set check_root_access_needs "no"
 
@@ -48,6 +49,7 @@ set check_name            "qacct"
 set check_category        "ACCOUNTING VERIFIED"
 set check_description(0)  "test qacct functionality (old colon separated format)"
 set check_description(1)  "test qacct functionality (JSON format)"
+set check_version_range(1) "9.0.0"
 
 # define test's dependencies
 set check_needs           "init_core_system" 
@@ -86,12 +88,6 @@ proc qacct_setup_level {} {
       if {$CHECK_ACT_LEVEL == 0} {
          # testing old format
          set format_config "old_accounting=true"
-      }
-   } else {
-      # we only have the old reporting and accounting file format
-      if {$CHECK_ACT_LEVEL == 1} {
-         ts_log_config "new JSON file format is not supported in this version"
-         return 99
       }
    }
 
