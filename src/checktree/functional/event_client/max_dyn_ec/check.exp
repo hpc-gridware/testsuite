@@ -95,6 +95,7 @@ proc max_dyn_ec_default {} {
    shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
    init_logfile_wait $ts_config(master_host) [get_qmaster_messages_file]
    startup_qmaster
+
    set messages [logfile_wait $expected_message]
    # if we got the expected message then check for the actual maximal number of event clients
    # it should be 1000 unless the file descriptor limit enforces a lower value
@@ -110,7 +111,11 @@ proc max_dyn_ec_default {} {
 	   ts_log_fine "dynamic event client limit is set to $max_dyn"
 	   if {$exceeded} {
 	      set max_dyn_ec_clients $max_dyn
-	      ts_log_config "master host file descriptor limit allows only $max_dyn dynamic event clients"
+         set msg "master host file descriptor limit allows only $max_dyn dynamic event clients"
+         append msg "\ntry increasing it, on Linux edit /etc/security/limits.conf and add e.g. the lines"
+         append msg "\n*                -       nofile          8192"
+         append msg "\nroot             -       nofile          8192"
+         ts_log_config $msg
 	   } else {
 	      if {$max_dyn != $max_dyn_ec_clients} {
 	         ts_log_severe "invalid max dynamic event clients: expected $max_dyn_ec_clients, got $max_dyn"
