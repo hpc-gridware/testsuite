@@ -3845,6 +3845,7 @@ proc delete_tests {path state_to_delete {only_if_not_there 0}} {
    global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
    global check_setup_function check_cleanup_function
    global check_setup_level_function check_cleanup_level_function
+   global check_version_range
    global DISABLE_ADD_PROC_ERROR
    global CHECK_RESULT_DIRS
 
@@ -3861,6 +3862,7 @@ proc delete_tests {path state_to_delete {only_if_not_there 0}} {
       set check_highest_level 0
       set check_name ""
       set check_init_level_procedure "--"
+      unset -nocomplain check_version_range
 
       # sourcing the test modules sets the global variables check_name and check_needs
       if {[ts_source $elem/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT]} {
@@ -5109,6 +5111,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    global check_category CHECK_GROUP DISABLE_ADD_PROC_ERROR
    global check_setup_function check_cleanup_function
    global check_setup_level_function check_cleanup_level_function
+   global check_version_range
    global CHECK_TEST_RUNNING
    global CHECK_INTERRUPT check_source_files
    global CHECK_USE_HUDSON
@@ -5146,6 +5149,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    set check_root_access_needs   "no" 
    set check_need_running_system "yes"
    set check_source_files "--"
+   unset -nocomplain check_version_range
 
    set check_levels [checktree_get_check_levels_by_path $path]
 
@@ -5441,15 +5445,11 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
 proc clean_up_globals {} {
   global check_name check_description
   global check_needs check_functions check_category
+  global check_version_range
 
-  if { [ info exists check_category ] } {
-     unset check_category
-  }
-
-  if { [ info exists check_description] } {
-     unset check_description
-  }
-
+  unset -nocomplain check_category
+  unset -nocomplain check_description
+  unset -nocomplain check_version_range
 
   set check_name        ""                 ;# name of actual check module
   set check_needs       ""          ;# dependencies of this check (name of other check)
