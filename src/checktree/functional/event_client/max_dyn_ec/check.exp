@@ -272,13 +272,14 @@ proc max_dyn_ec_out_of_ids {} {
    # wait a moment for qsub to be deregistered as event client
    after 2000
    # negative test: try to start 2 event clients, 2nd one must fail
+   ts_log_fine "trying to start 2 jobs"
    set submit_script "$ts_config(testsuite_root_dir)/scripts/qsub_sync.sh"
    set id [open_remote_spawn_process $ts_config(master_host) $CHECK_USER $submit_script "2 1"]
    set spawn_id [lindex $id 1]
 
    set submitted 0
    set finished 0
-   set rejected 1
+   set rejected 0
    set unexpected_output ""
    set done 0
    set timeout 60
@@ -297,6 +298,7 @@ proc max_dyn_ec_out_of_ids {} {
          foreach line [split $expect_out(0,string) "\n"] {
             set line [string trim $line]
             if {$line != ""} {
+               # ts_log_fine "==> $line"
                switch -glob -- $line {
                   "Your job * has been submitted" {
                      incr submitted
@@ -304,14 +306,14 @@ proc max_dyn_ec_out_of_ids {} {
                   "Job * exited with exit code *." {
                      incr finished
                   }
-                  "cannot register event client. Only 1 event clients are allowed in the system" {
+                  "*cannot register event client. Only 1 event clients are allowed in the system" {
                      incr rejected
                   }
                   "qsub_sync.sh exiting" {
                      set done 1
                   }
                   "*_qsub_sync.sh_*_*.sh" -
-                  "_start_mark_:(0)" -
+                  "*_start_mark_:(0)" -
                   "script done. (_END_OF_FILE_)" -
                   "_exit_status_:(*)" -
                   "Unable to initialize environment*" -
@@ -338,10 +340,10 @@ proc max_dyn_ec_out_of_ids {} {
       append error "$submitted job(s) got submitted, but expected 1\n"
    }
    if {$finished != 1} {
-      append error "$finished job(s) got submitted, but expected 1\n"
+      append error "$finished job(s) finished, but expected 1\n"
    }
    if {$rejected != 1} {
-      append error "$rejected job(s) got submitted, but expected 1\n"
+      append error "$rejected job(s) got rejected, but expected 1\n"
    }
    if {$unexpected_output != ""} {
       append error "running the test produced unexpected output:\n"

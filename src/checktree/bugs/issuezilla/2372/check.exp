@@ -103,7 +103,6 @@ proc issue_2372_setup {} {
    set_config global_conf
    
    # shutdown qmaster & scheduler
-   shutdown_system_daemon $ts_config(master_host) sched
    shutdown_system_daemon $ts_config(master_host) qmaster
    
    
@@ -150,7 +149,7 @@ proc issue_2372 {} {
    global issue_2372_gdi_retries
 
    if {$CHECK_ACT_LEVEL == 0 || $CHECK_ACT_LEVEL == 1} {
-      set host [host_conf_get_suited_hosts 1 {lx-x86 lx-amd64 lx-ia64 lx24-x86 lx24-amd64 lx24-ia64 lx26-amd64 lx26-x86}]
+      set host [host_conf_get_suited_hosts 1 {lx-x86 lx-amd64 lx-arm64 lx-riscv64 lx-ppc64le ulx-x86 ulx-amd64}]
       set user $CHECK_USER
       set arch [resolve_arch $host]
       set binary "$ts_config(product_root)/bin/$arch/qsub"
@@ -161,7 +160,6 @@ proc issue_2372 {} {
       # start qping -dump client for qmaster
       # when qping -dump debug client is connected qmaster will sleep 80 seconds when doing spooling
       setup_qping_dump dump_handle
-      # qping output is out of interrest, but we call it (for expect reasons)
       get_qping_dump_output dump_handle
         
       ts_log_fine "doing qsub ..."
