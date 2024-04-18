@@ -3053,7 +3053,7 @@ proc read_checktree_nodes {path} {
    global ts_checktree CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
    global check_name check_needs
    global check_category CHECK_USER check_source_files check_functions
-   global CHECK_ACT_LEVEL sourced_commands  check_description
+   global CHECK_ACT_LEVEL sourced_commands check_description check_version_range
 
    # remember last check name - we'll reset to it on function exit
    set last_check_name $check_name
