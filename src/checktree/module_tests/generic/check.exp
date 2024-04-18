@@ -65,28 +65,48 @@ global generic_module_tests_test_hosts generic_module_tests
 
 # these are the currently existing and verified module tests
 set generic_module_tests ""
-lappend generic_module_tests "test_category"
+lappend generic_module_tests "test_commlib_issue"
+
+lappend generic_module_tests "test_common_heartbeat"
+lappend generic_module_tests "test_common_category"
+
 lappend generic_module_tests "test_cull_hash"
 lappend generic_module_tests "test_cull_list"
+lappend generic_module_tests "test_cull_observe"
 lappend generic_module_tests "test_cull_pack"
-lappend generic_module_tests "test_enumeration"
-lappend generic_module_tests "test_sge_calendar"
-lappend generic_module_tests "test_sge_object"
-lappend generic_module_tests "test_eval_expression"
-lappend generic_module_tests "test_eval_performance"
-lappend generic_module_tests "test_resource_utilization"
-lappend generic_module_tests "test_sge_resource_quota"
-lappend generic_module_tests "test_sge_load_formula"
-lappend generic_module_tests "test_sge_uidgid"
-lappend generic_module_tests "test_threads"
-lappend generic_module_tests "test_flatfile_spool"
-lappend generic_module_tests "test_commlib_issue"
-lappend generic_module_tests "test_sge_lock_fifo"
-lappend generic_module_tests "test_sge_err"
-lappend generic_module_tests "test_sge_sl"
-lappend generic_module_tests "test_sge_tq"
-lappend generic_module_tests "test_sge_string"
+lappend generic_module_tests "test_cull_enumeration"
 
+lappend generic_module_tests "test_qmaster_calendar"
+
+lappend generic_module_tests "test_sgeobj_attr"
+lappend generic_module_tests "test_sgeobj_object"
+lappend generic_module_tests "test_sgeobj_eval_expression"
+lappend generic_module_tests "test_sgeobj_fgl"
+lappend generic_module_tests "test_sgeobj_performance"
+lappend generic_module_tests "test_sgeobj_range"
+lappend generic_module_tests "test_sgeobj_resource_quota"
+lappend generic_module_tests "test_sgeobj_schedd_conf"
+lappend generic_module_tests "test_sgeobj_utility"
+
+lappend generic_module_tests "test_sched_eval_performance"
+lappend generic_module_tests "test_sched_resource_utilization"
+lappend generic_module_tests "test_sched_load_formula"
+
+lappend generic_module_tests "test_spool_flatfile"
+
+lappend generic_module_tests "test_uti_bitfield"
+lappend generic_module_tests "test_uti_deadlock"
+lappend generic_module_tests "test_uti_lock_fifo"
+lappend generic_module_tests "test_uti_lock_multiple"
+lappend generic_module_tests "test_uti_lock_simple"
+lappend generic_module_tests "test_uti_err"
+lappend generic_module_tests "test_uti_sl"
+lappend generic_module_tests "test_uti_tq"
+lappend generic_module_tests "test_uti_string"
+lappend generic_module_tests "test_uti_dstring"
+lappend generic_module_tests "test_uti_uidgid"
+lappend generic_module_tests "test_uti_threads"
+lappend generic_module_tests "test_uti_thread_local"
 
 proc generic_module_tests_setup {} {
    global ts_config
