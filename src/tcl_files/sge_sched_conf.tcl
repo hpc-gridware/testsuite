@@ -55,7 +55,7 @@
 #     SGE system:
 #    
 #     algorithm                   "default"
-#     schedule_interval           "0:0:15"
+#     schedule_interval           "0:0:10"
 #     maxujobs                    "0"
 #     queue_sort_method           "load"
 #     user_sort                   "false"
@@ -130,7 +130,7 @@ proc reset_schedd_config {} {
    return [set_schedd_config default_array]
 }
 
-# STUB for versiono dependent scheduler config settings
+# STUB for version dependent scheduler config settings
 # put it into sge_sched_conf.<version>.tcl
 proc vdep_set_sched_conf_defaults {change_array} {
 #   get_current_cluster_config_array ts_config
