@@ -96,7 +96,7 @@ proc issue_2372_setup {} {
    }
    
    if {$issue_2372_gdi_retries != 0} {
-      set global_conf(qmaster_params) "gdi_timeout=$issue_2372_gdi_timeout;gdi_retries=$issue_2372_gdi_retries;cl_ping=$issue_2372_cl_ping"
+      set global_conf(qmaster_params) "gdi_timeout=$issue_2372_gdi_timeout,gdi_retries=$issue_2372_gdi_retries,cl_ping=$issue_2372_cl_ping"
    } else {
       set global_conf(qmaster_params) "none"
    }
