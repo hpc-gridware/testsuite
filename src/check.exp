@@ -4838,8 +4838,10 @@ proc private_check_error_run_test_level { errorvar unsupvar } {
 proc check_root_access {path} {
   global check_root_access_needs
   global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
+  global check_version_range
 
   set check_root_access_needs "no"
+  unset -nocomplain check_version_range
   ts_source $path/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT
 
   if { [string compare -nocase "yes" $check_root_access_needs] == 0 } {
