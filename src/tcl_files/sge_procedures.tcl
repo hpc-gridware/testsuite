@@ -2683,6 +2683,8 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
                if {[string match "*$host*\|I\|*using \"$expected_value($host)\" for $name*" $line]} {
                   ts_log_fine "$host: Configuration changed: $name = \"$expected_value($host)\"" 
                   set is_host_ok($host) 1
+                  # send CTRL-C to end tail
+                  ts_send $spawn_id "\003"
                }
             }
 
