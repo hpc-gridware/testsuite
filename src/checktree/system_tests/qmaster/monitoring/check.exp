@@ -158,7 +158,7 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
                foreach line [ string trim [split $expect_out(0,string) "\n"]] {
                   set line [string trim $line]
                   if {[string length $line] > 0} {
-                     #ts_log_fine "processing line: $line"
+                     ts_log_fine "processing line: $line"
                      set split_line [split $line "|"]
                      set message [lindex $split_line 1]
                      switch -glob -- $message {
@@ -189,7 +189,7 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
                foreach line [ string trim [split $expect_out(0,string) "\n"]] {
                   set line [string trim $line]
                   if {[string length $line] > 0} {
-                     #ts_log_fine "processing line: $line"
+                     ts_log_fine "processing line: $line"
                      set split_line [split $line "|"]
                      set monitoring [lindex $split_line 3]   
                      set message [lindex $split_line 4]

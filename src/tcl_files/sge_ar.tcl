@@ -334,8 +334,9 @@ ts_log_fine "AR id: $ret"
 #
 #***************************************************************************
 #
-proc parse_qrstat {ar_id {output qrstat_info}} {
+proc parse_qrstat {ar_id {output qrstat_info} {plain_output qrstat_output}} {
    upvar $output out
+   upvar $plain_output result
 
    set result [start_sge_bin qrstat "-u '*' -ar $ar_id"]
    if {$prg_exit_state != 0} {
@@ -436,11 +437,12 @@ proc parse_qrstat_check { ar_id match_values } {
    parse_qrstat $ar_id arinfo
 
    set ret 0
+   set errors ""
    foreach name [array names val] {
       set pattern "$val($name)"
       set skip [catch { set value   "$arinfo($name)" }]
       if { $skip } {
-        ts_log_severe "The expected attribute $name is missing in the result"
+        append errors "The expected attribute $name is missing in the result\n"
         set ret -2
         continue
       }     
@@ -448,9 +450,13 @@ proc parse_qrstat_check { ar_id match_values } {
       if {[string match $pattern $value]} {
          ts_log_fine "SUCCESSFUL MATCH for attribute $name:\tvalue: $value"         
       } else {
-         ts_log_severe "Attribute: $name\tvalue: $value\t DOES NOT MATCH pattern: $pattern"
+         append errors "Attribute: $name\tvalue: $value\t DOES NOT MATCH pattern: $pattern\n"
          set ret -3
       } 
+   }
+
+   if {$errors != ""} {
+      ts_log_severe "$errors\n$qrstat_output"
    }
    return $ret 
 }

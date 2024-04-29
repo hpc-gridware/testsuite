@@ -219,7 +219,6 @@ proc issue_2895_run {} {
       init_logfile_wait $host_aliases_test_host $execd_messages_file
 
       # Shutdown the qmaster
-      shutdown_system_daemon $ts_config(master_host) "sched"
       shutdown_system_daemon $ts_config(master_host) "qmaster"
       ts_log_fine "qmaster should be down now"
 
@@ -288,7 +287,6 @@ proc issue_2895_run {} {
 
       ts_log_fine "now shutdown the master again ..."
       # Shutdown master again
-      shutdown_system_daemon $ts_config(master_host) "sched"
       shutdown_system_daemon $ts_config(master_host) "qmaster"
       
       # Fix alias file 
