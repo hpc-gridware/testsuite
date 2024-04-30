@@ -378,7 +378,7 @@ proc check_version_in_range {current_version from_version to_version} {
          if {$current(minor_release) > $to(minor_release)} {
             set ret 0
          } elseif {$current(minor_release) == $to(minor_release)} {  
-            if {$current(update_release) > $to(update_release)} {
+            if {$current(update_release) >= $to(update_release)} {
                set ret 0
             }
          }
@@ -399,6 +399,7 @@ proc test_version_in_range {} {
    lappend scenarios {"9.0.1" "9.1.0" "" 0}
    lappend scenarios {"9.0.1" "" "8.7.0" 0}
    lappend scenarios {"9.0.1" "9.0.0" "9.5.0" 1}
+   lappend scenarios {"9.0.0" "" "9.0.0" 0}
 
    foreach scenario $scenarios {
       set current [lindex $scenario 0]
