@@ -41,6 +41,9 @@ global check_needs
 global check_functions 
 global check_root_access_needs
 
+global check_version_range
+set check_version_range {"" "9.0.0"}
+
 # define test's name and run level descriptions
 set check_name            "issue_2022"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
