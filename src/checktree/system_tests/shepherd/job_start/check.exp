@@ -664,7 +664,7 @@ proc job_start_test {} {
                            }
                         }
                         default {
-                           # using rshd from gridengine source 
+                           # using rshd from Cluster Scheduler (Grid Engine) source 
                            set host_arch [resolve_arch $host]
                            set expected_trace_daemon "$ts_config(product_root)/utilbin/$host_arch/rshd"
                            set trace_daemon_split [split $trace_daemon " "]
@@ -899,7 +899,7 @@ proc job_start_test {} {
                         if { [string match "*$tight_jobs_dir*" $trace_job_dir] == 0 } {
                            ts_log_severe "$current_run_text shepherd trace file qlogin_starter output job dir \"$tight_jobs_dir\": $trace_job_dir"
                         }
-                        # using rshd from gridengine source 
+                        # using rshd from Cluster Scheduler (Grid Engine) source 
                         set host_arch [resolve_arch $host]
                         set expected_trace_daemon "$ts_config(product_root)/utilbin/$host_arch/rshd"
                         set trace_daemon_split [split $trace_daemon " "]

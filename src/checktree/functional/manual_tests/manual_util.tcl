@@ -196,13 +196,13 @@ proc sge_check_packages {report_var} {
 
 #****** manual_util/sge_check_version() ****************************************
 #  NAME
-#     sge_check_version() -- check the gridengine system version
+#     sge_check_version() -- check the Cluster Scheduler (Grid Engine) system version
 #
 #  SYNOPSIS
 #     sge_check_version { report_var }
 #
 #  FUNCTION
-#     Check the gridengine system version by calling ./inst_sge -v and write
+#     Check the Cluster Scheduler (Grid Engine) system version by calling ./inst_sge -v and write
 #     the results to the report array.
 #
 #  INPUTS
@@ -243,13 +243,13 @@ proc sge_check_version {report_var} {
 
 #****** manual_util/sge_check_system_running() *********************************
 #  NAME
-#     sge_check_system_running() -- check if the gridengine cluster is running
+#     sge_check_system_running() -- check if the Cluster Scheduler (Grid Engine) cluster is running
 #
 #  SYNOPSIS
 #     sge_check_system_running { report_var }
 #
 #  FUNCTION
-#     Check if the gridengine cluster is running and write the results to the
+#     Check if the Cluster Scheduler (Grid Engine) cluster is running and write the results to the
 #     report array.
 #
 #  INPUTS
@@ -298,13 +298,13 @@ proc sge_check_system_running {report_var} {
 
 #****** manual_util/sge_qconf_head() *******************************************
 #  NAME
-#     sge_qconf_head() -- check if the binaries report correct gridengine version
+#     sge_qconf_head() -- check if the binaries report correct Cluster Scheduler (Grid Engine) version
 #
 #  SYNOPSIS
 #     sge_qconf_head { report_var }
 #
 #  FUNCTION
-#     Check if the binaries report correct gridengine version and write the results
+#     Check if the binaries report correct Cluster Scheduler (Grid Engine) version and write the results
 #     to the report array.
 #
 #  INPUTS
@@ -1322,7 +1322,7 @@ proc sge_jdrmaa {report_var} {
    set host_arch [resolve_arch $host]
    # TODO: the path to the script is hard coded
    # in future we might compile the java drmaa test code and use it directly from
-   # the gridengine source code directory
+   # the Cluster Scheduler (Grid Engine) source code directory
    set jdrmaa_bin "/vol2/SW/$host_arch/bin/test_java_drmaa_perf.sh"
 
    if {[file isfile $jdrmaa_bin] != 1} {

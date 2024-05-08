@@ -71,7 +71,7 @@ proc set_ckpt_defaults {change_array} {
 #     add_ckpt {ckpt_name {change_array ""} {fast_add 1} {on_host ""} {as_user ""} {raise_error 1}}
 #
 #  FUNCTION
-#     Add a new ckpt (checkpoint interface) to the Grid Engine cluster.
+#     Add a new ckpt (checkpoint interface) to the Cluster Scheduler (Grid Engine) cluster.
 #     Supports fast (qconf -Ackpt) and slow (qconf -ackpt) mode.
 #
 #  INPUTS
@@ -163,7 +163,7 @@ proc get_ckpt {ckpt_name {output_var result} {on_host ""} {as_user ""} {raise_er
 #     {raise_error 1}}
 #
 #  FUNCTION
-#     Modify the checkpoint interface $ckpt_name in the Grid Engine cluster.
+#     Modify the checkpoint interface $ckpt_name in the Cluster Scheduler (Grid Engine) cluster.
 #     Supports fast (qconf -Mckpt) and slow (qconf -mckpt) mode.
 #
 #  INPUTS
@@ -401,7 +401,7 @@ proc validate_checkpointobj { change_array } {
 
   if { [info exists chgar(queue_list)] } {
      ts_log_fine "this qconf version doesn't support queue_list for ckpt objects"
-     ts_log_config "this Grid Engine version doesn't support a queue_list for ckpt objects,\nuse assign_queues_with_ckpt_object() after adding checkpoint\nobjects and don't use queue_list parameter."
+     ts_log_config "this Cluster Scheduler (Grid Engine) version doesn't support a queue_list for ckpt objects,\nuse assign_queues_with_ckpt_object() after adding checkpoint\nobjects and don't use queue_list parameter."
      unset chgar(queue_list)
   }
 }

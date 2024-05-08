@@ -67,7 +67,7 @@ proc set_user_defaults {change_array} {
 #     {raise_error 1}}
 #
 #  FUNCTION
-#     Add a user to the Grid Engine cluster.
+#     Add a user to the Cluster Scheduler (Grid Engine) cluster.
 #     Supports fast (qconf -Auser) and slow (qconf -auser) mode.
 #
 #  INPUTS

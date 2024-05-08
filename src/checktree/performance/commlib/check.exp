@@ -388,11 +388,11 @@ proc cl_throughput_analyze {} {
       }
       
       read_array_from_file $full_name "data" data
-      ts_log_fine "virtual master host: $data(test_host)"
-      ts_log_fine "client host list: $data(test_hostlist)"
-      ts_log_fine "date: $data(date)"
-      ts_log_fine "grid engine version: $data(gridengine_version)"
-      ts_log_fine "measured data lines: $data(lines)"
+      ts_log_fine "virtual master host:                     $data(test_host)"
+      ts_log_fine "client host list:                        $data(test_hostlist)"
+      ts_log_fine "date:                                    $data(date)"
+      ts_log_fine "Cluster Scheduler (Grid Engine) version: $data(gridengine_version)"
+      ts_log_fine "measured data lines:                     $data(lines)"
 
       if {$do_report == 0} {
          ts_log_fine "skipping chart creation for file $file (analyze directory already exists)"

@@ -236,7 +236,7 @@ proc add_queue {qname hostlist {change_array ""} {fast_add 1} {on_host ""} {as_u
 #    {as_user ""} {raise_error 1}}
 #
 #  FUNCTION
-#     Modify the queue $qname in the Grid Engine cluster.
+#     Modify the queue $qname in the Cluster Scheduler (Grid Engine) cluster.
 #     Supports fast (qconf -Mq) and slow (qconf -mq) mode.
 #
 #  INPUTS

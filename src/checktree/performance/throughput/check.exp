@@ -40,14 +40,14 @@
 #     throughput test -- test overall cluster throughput
 #
 #  FUNCTION
-#     Tests the overall throughput of a Grid Engine cluster.
+#     Tests the overall throughput of a Cluster Scheduler (Grid Engine) cluster.
 #
 #     Simple test jobs (sleeper) are submitted and run in a cluster,
 #     test data is gathered and a number of metrics are calculated from 
 #     this test data.
 #
 #     During the whole test, qstat -f is executed in regular intervals.
-#     In Grid Engine 6 systems, qmaster communication information is retrieved
+#     In Cluster Scheduler (Grid Engine) systems, qmaster communication information is retrieved
 #     using the qping command.
 #     Size and cpu usage of qmaster and scheduler are monitored.
 #
@@ -1837,15 +1837,15 @@ proc compare_dump_data_file { file1 file2 } {
 
    # ok, we can compare the two scenarios !!!
    set text ""
-   append text "The Grid Engine throughput test runs submits sleeper jobs to each execd host in the "
+   append text "The Cluster Scheduler (Grid Engine) throughput test runs submits sleeper jobs to each execd host in the "
    append text "cluster. No job is submitted from master host. This test report compares two testsuite "
-   append text "runs and shows only the divergent test values. Both testsuite Grid Engine clusters had "
+   append text "runs and shows only the divergent test values. Both testsuite Cluster Scheduler (Grid Engine) clusters had "
    append text "following settings:"
    append content [ create_html_text $text ]
 
-   set test "Grid Engine version A"
+   set test "Cluster Scheduler (Grid Engine) version A"
    set table($test) "$test_config1(gridengine_version)"
-   set test "Grid Engine version B"
+   set test "Cluster Scheduler (Grid Engine) version B"
    set table($test) "$test_config2(gridengine_version)"
 
    set test "Nr. of Execution daemons"
@@ -1876,13 +1876,13 @@ proc compare_dump_data_file { file1 file2 } {
    append content [ create_html_text "" ]
 
    set text ""
-   append text "The Grid Engine system A had $test_config1(nr_queues) queues with $test_config1(nr_slots_per_queue) "
+   append text "The Cluster Scheduler (Grid Engine) system A had $test_config1(nr_queues) queues with $test_config1(nr_slots_per_queue) "
    append text "slots on each host (=[ expr ( $test_config1(nr_queues) * $test_config1(nr_slots_per_queue) * [llength $execd_list1]  )] "
    append text "slots)." 
    append content [ create_html_text $text ]
    set text ""
    append content [ create_html_text "" ]
-   append text "The Grid Engine system B had $test_config2(nr_queues) queues with $test_config2(nr_slots_per_queue) "
+   append text "The Cluster Scheduler (Grid Engine) system B had $test_config2(nr_queues) queues with $test_config2(nr_slots_per_queue) "
    append text "slots on each host (=[ expr ( $test_config2(nr_queues) * $test_config2(nr_slots_per_queue) * [llength $execd_list2]  )] "
    append text "slots)." 
    append content [ create_html_text $text ]
@@ -2385,12 +2385,12 @@ proc analyse_dump_data_file { file { force 0 } } {
 
    set content ""
    set text ""
-   append text "The Grid Engine throughput test runs submits sleeper jobs to each execd host in the "
-   append text "cluster. No job is submitted from master host. The testsuite Grid Engine cluster had "
+   append text "The Cluster Scheduler (Grid Engine) throughput test runs submits sleeper jobs to each execd host in the "
+   append text "cluster. No job is submitted from master host. The testsuite Cluster Scheduler (Grid Engine) cluster had "
    append text "following settings:"
    append content [ create_html_text $text ]
 
-   set test "Grid Engine version"
+   set test "Cluster Scheduler (Grid Engine) version"
    set table($test) "$test_config(gridengine_version)"
    set test "Nr. of Execution daemons"
    set table($test) [create_html_link [llength $execd_list] "#Execd list"]
@@ -2416,7 +2416,7 @@ proc analyse_dump_data_file { file { force 0 } } {
    }
    append content [ create_html_text "" ]
    set text ""
-   append text "The Grid Engine system had $test_config(nr_queues) queues with $test_config(nr_slots_per_queue) "
+   append text "The Cluster Scheduler (Grid Engine) system had $test_config(nr_queues) queues with $test_config(nr_slots_per_queue) "
    append text "slots on each host (=[ expr ( $test_config(nr_queues) * $test_config(nr_slots_per_queue) * [llength $execd_list]  )] "
    append text "slots). The testsuite submitted $test_config(end_job_count) sleeper jobs " 
    if {$array_size > 1} {

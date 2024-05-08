@@ -1027,8 +1027,8 @@ proc translate_macro_if_possible {macro {par1 ""} {par2 ""} {par3 ""} {par4 ""} 
 
    set msg [sge_macro $macro 0]
    if {$msg == -1} {
-      ts_log_fine "$macro does not exist in Grid Engine $ts_config(gridengine_version)"
-      set ret "$macro does not exist in Grid Engine $ts_config(gridengine_version)"
+      ts_log_fine "$macro does not exist in Cluster Scheduler (Grid Engine) $ts_config(gridengine_version)"
+      set ret "$macro does not exist in Cluster Scheduler (Grid Engine) $ts_config(gridengine_version)"
    } else {
       set ret [translate $ts_config(master_host) 1 0 0 $msg $par1 $par2 $par3 $par4 $par5 $par6]
    }
@@ -1319,13 +1319,13 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_AUTO_BOOT_AT_STARTUP" { set value "Do you want to start execd automatically at machine boot?\nNOTE: If you select \"n\" SMF will be not used at all! (y/n) \[y\]" }
       "DISTINST_NOT_COMPILED_IN_SECURE_MODE" { set value "\n>sge_qmaster< binary is not compiled with >-secure< option!\n" }
       "DISTINST_ENTER_HOSTS" { set value "Host(s): " }
-      "DISTINST_VERIFY_FILE_PERMISSIONS1" { set value "\nWe may now verify and set the file permissions of your Grid Engine\ndistribution.\n\nThis may be useful since due to unpacking and copying of your distribution\nyour files may be unaccessible to other users.\n\nWe will set the permissions of directories and binaries to\n\n   755 - that means executable are accessible for the world\n\nand for ordinary files to\n\n   644 - that means readable for the world\n\nDo you want to verify and set your file permissions (y/n) \[y\] >> " }
+      "DISTINST_VERIFY_FILE_PERMISSIONS1" { set value "\nWe may now verify and set the file permissions of your *\ndistribution.\n\nThis may be useful since due to unpacking and copying of your distribution\nyour files may be unaccessible to other users.\n\nWe will set the permissions of directories and binaries to\n\n   755 - that means executable are accessible for the world\n\nand for ordinary files to\n\n   644 - that means readable for the world\n\nDo you want to verify and set your file permissions (y/n) \[y\] >> " }
       "DISTINST_VERIFY_FILE_PERMISSIONS2" { set value "\nDid you install this version with >pkgadd< or did you already\nverify and set the file permissions of your distribution *" }
       "DISTINST_WILL_NOT_VERIFY_FILE_PERMISSIONS" { set value "We will not verify your file permissions. Hit <RETURN> to continue >>" }
       "DISTINST_DO_NOT_VERIFY_FILE_PERMISSIONS" { set value "We do not verify file permissions. Hit <RETURN> to continue >> " }
-      "DISTINST_MASTER_INSTALLATION_COMPLETE" { set value "\nYour Grid Engine qmaster installation is now completed" }
+      "DISTINST_MASTER_INSTALLATION_COMPLETE" { set value "\nYour * qmaster installation is now completed" }
       "DISTINST_ENTER_A_RANGE" { set value "Please enter a range *>> " }
-      "DISTINST_PREVIOUS_SCREEN" { set value "Do you want to see previous screen about using Grid Engine again (y/n) \[n\] >> " }
+      "DISTINST_PREVIOUS_SCREEN" { set value "Do you want to see previous screen about using * again (y/n) \[n\] >> " }
       "DISTINST_FILE_FOR_HOSTLIST" { set value "Do you want to use a file which contains the list of hosts (y/n) \[n\] >> " }
       "DISTINST_FINISHED_ADDING_HOSTS" { set value "Finished adding hosts. Hit <RETURN> to continue >> " }
       "DISTINST_FILENAME_FOR_HOSTLIST" { set value "\nPlease enter the file name which contains the host list: " }
@@ -1337,13 +1337,13 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_CONFIGURE_DEFAULT_DOMAIN" { set value "Do you want to configure a default domain (y/n) \[y\] >> " }
       "DISTINST_PKGADD_QUESTION" { set value "Did you install this version with >pkgadd< or did you already\nverify and set the file permissions of your distribution (y/n) \[y\] >> " }
       "DISTINST_PKGADD_QUESTION_SINCE_U3" { set value "Did you install this version with >pkgadd< or did you already verify\nand set the file permissions of your distribution (enter: y) (y/n) \[y\] >> " }
-      "DISTINST_MESSAGES_LOGGING" { set value "Hit <RETURN> to see where Grid Engine logs messages >> " }
+      "DISTINST_MESSAGES_LOGGING" { set value "Hit <RETURN> to see where * logs messages >> " }
       "DISTINST_OTHER_SPOOL_DIR" { set value "Do you want to select another qmaster spool directory (y/n) \[n\] >> " }
-      "DISTINST_OTHER_USER_ID_THAN_ROOT" { set value "Do you want to install Grid Engine\nunder an user id other than >root< (y/n) \[y\] >> " }
-      "DISTINST_INSTALL_AS_ADMIN_USER" { set value "Do you want to install Grid Engine as admin user >%s< (y/n) \[y\] >> " }
+      "DISTINST_OTHER_USER_ID_THAN_ROOT" { set value "Do you want to install *\nunder an user id other than >root< (y/n) \[y\] >> " }
+      "DISTINST_INSTALL_AS_ADMIN_USER" { set value "Do you want to install * as admin user >%s< (y/n) \[y\] >> " }
       "DISTINST_ADMIN_USER_ACCOUNT" { set value "      admin user account = %s" }
       "DISTINST_USE_CONFIGURATION_PARAMS" { set value "\nDo you want to use these configuration parameters (y/n) \[y\] >> " }
-      "DISTINST_INSTALL_GE_NOT_AS_ROOT" { set value "Do you want to install Grid Engine\nunder an user id other than >root< (y/n) \[y\] >> " }
+      "DISTINST_INSTALL_GE_NOT_AS_ROOT" { set value "Do you want to install *\nunder an user id other than >root< (y/n) \[y\] >> " }
       "DISTINST_IF_NOT_OK_STOP_INSTALLATION" { set value "Hit <RETURN> if this is ok or stop the installation with Ctrl-C >> " }
       "DISTINST_DNS_DOMAIN_QUESTION" { set value "Are all hosts of your cluster in a single DNS domain (y/n) \[y\] >> " }
       "DISTINST_SERVICE_TAGS_SUPPORT" { set value "Are you going to enable Service Tags support? (y/n) \[y\] >> " }
@@ -1353,7 +1353,7 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_USING_GID_RANGE_HIT_RETURN" { set value "\nUsing >%s< as gid range. Hit <RETURN> to continue >> " }
       "DISTINST_EXECD_INSTALL_COMPLETE" { set value "Your execution daemon installation is now completed." }
       "DISTINST_LOCAL_CONFIG_FOR_HOST" { set value "Local configuration for host >%s< created." }
-      "DISTINST_CELL_NAME_FOR_QMASTER" { set value "\nGrid Engine supports multiple cells.\n\nIf you are not planning to run multiple Grid Engine clusters or if you don't\nknow yet what is a Grid Engine cell it is safe to keep the default cell name\n\n   default\n\nIf you want to install multiple cells you can enter a cell name now.\n\nThe environment variable\n\n   \\\$SGE_CELL=<your_cell_name>\n\nwill be set for all further Grid Engine commands.\n\nEnter cell name \[%s\] >> " }
+      "DISTINST_CELL_NAME_FOR_QMASTER" { set value "\n* supports multiple cells.\n\nIf you are not planning to run multiple * clusters or if you don't\nknow yet what is a * cell it is safe to keep the default cell name\n\n   default\n\nIf you want to install multiple cells you can enter a cell name now.\n\nThe environment variable\n\n   \\\$SGE_CELL=<your_cell_name>\n\nwill be set for all further * commands.\n\nEnter cell name \[%s\] >> " }
       "DISTINST_CELL_NAME_FOR_EXECD" { set value "\nPlease enter cell name which you used for the qmaster\ninstallation or press <RETURN> to use \[%s\] >> " }
       "DISTINST_CELL_NAME_FOR_EXECD_2" { set value "\nPlease enter cell name which you used for the qmaster\ninstallation or press <RETURN> to use default cell >default< >> " }
       "DISTINST_CELL_NAME_EXISTS" { set value "Do you want to select another cell name? (y/n) \[y\] >> " }
@@ -1369,27 +1369,27 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_DATABASE_DIR_NOT_ON_LOCAL_FS" { set value "The database directory >%s<\nis not on a local filesystem.\nPlease choose a local filesystem or configure the RPC Client/Server mechanism" }
       "DISTINST_STARTUP_RPC_SERVER" { set value "*is completed, continue with <RETURN>" }
       "DISTINST_DONT_KNOW_HOW_TO_TEST_FOR_LOCAL_FS" { set value "Don't know how to test for local filesystem. Exit." }
-      "DISTINST_CURRENT_GRID_ROOT_DIRECTORY" { set value "The Grid Engine root directory is:\n\n   \\\$SGE_ROOT = %s\n\nIf this directory is not correct (e.g. it may contain an automounter\nprefix) enter the correct path to this directory or hit <RETURN>\nto use default \[%s\] >> " }
+      "DISTINST_CURRENT_GRID_ROOT_DIRECTORY" { set value "The * root directory is:\n\n   \\\$SGE_ROOT = %s\n\nIf this directory is not correct (e.g. it may contain an automounter\nprefix) enter the correct path to this directory or hit <RETURN>\nto use default \[%s\] >> " }
       "DISTINST_INSTALL_FAIL" { set value "Uninstallation  failed after %s retries" }
       "DISTINST_DATABASE_LOCAL_SPOOLING" { set value "Do you want to use a Berkeley DB Spooling Server? (y/n) \[n\] >> " }
-      "DISTINST_EXECD_SPOOLING_DIR_NOROOT_NOADMINUSER" { set value "\nPlease give the basic configuration parameters of your Grid Engine\ninstallation:\n\n   <execd_spool_dir>\n\nThe pathname of the spool directory of the execution hosts. You\nmust have the right to create this directory and to write into it.\n" }
-      "DISTINST_EXECD_SPOOLING_DIR_NOROOT" { set value "\nPlease give the basic configuration parameters of your Grid Engine\ninstallation:\n\n   <execd_spool_dir>\n\nThe pathname of the spool directory of the execution hosts. User >%s<\nmust have the right to create this directory and to write into it.\n" }
+      "DISTINST_EXECD_SPOOLING_DIR_NOROOT_NOADMINUSER" { set value "\nPlease give the basic configuration parameters of your *\ninstallation:\n\n   <execd_spool_dir>\n\nThe pathname of the spool directory of the execution hosts. You\nmust have the right to create this directory and to write into it.\n" }
+      "DISTINST_EXECD_SPOOLING_DIR_NOROOT" { set value "\nPlease give the basic configuration parameters of your *\ninstallation:\n\n   <execd_spool_dir>\n\nThe pathname of the spool directory of the execution hosts. User >%s<\nmust have the right to create this directory and to write into it.\n" }
       "DISTINST_EXECD_SPOOLING_DIR_DEFAULT" { set value "Default: \[%s\] >> " }
       "DISTINST_ENTER_ADMIN_MAIL" { set value "\n<administrator_mail>\n\nThe email address of the administrator to whom problem reports are sent.\n\nIt's is recommended to configure this parameter. You may use >none<\nif you do not wish to receive administrator mail.\n\nPlease enter an email address in the form >user@foo.com<.\n\nDefault: \[*\] >> " }
       "DISTINST_ENTER_ADMIN_MAIL_SINCE_U3" { set value "\n<administrator_mail>\n\nThe email address of the administrator to whom problem reports are sent.\n\nIt is recommended to configure this parameter. You may use >none<\nif you do not wish to receive administrator mail.\n\nPlease enter an email address in the form >user@foo.com<.\n\nDefault: \[*\] >> " }
       "DISTINST_SHOW_CONFIGURATION" { set value "\nThe following parameters for the cluster configuration were configured:\n\n   execd_spool_dir        %s\n   administrator_mail     %s\n" }
       "DISTINST_ACCEPT_CONFIGURATION" { set value "Do you want to change the configuration parameters (y/n) \[n\] >> " }
-      "DISTINST_INSTALL_STARTUP_SCRIPT" { set value "\nWe can install the startup script that\nGrid Engine is started at machine boot (y/n) \[n\] >> " }
-      "DISTINST_CHECK_ADMINUSER_ACCOUNT" { set value "\nThe current directory\n\n   %s\n\nis owned by user\n\n   %s\n\nIf user >root< does not have write permissions in this directory on *all*\nof the machines where Grid Engine will be installed (NFS partitions not\nexported for user >root< with read/write permissions) it is recommended to\ninstall Grid Engine that all spool files will be created under the user id\nof user >%s<.\n\nIMPORTANT NOTE: The daemons still have to be started by user >root<. \n" }
-      "DISTINST_CHECK_ADMINUSER_ACCOUNT_ANSWER" { set value "Do you want to install Grid Engine as admin user" }
+      "DISTINST_INSTALL_STARTUP_SCRIPT" { set value "\nWe can install the startup script that\n* is started at machine boot (y/n) \[n\] >> " }
+      "DISTINST_CHECK_ADMINUSER_ACCOUNT" { set value "\nThe current directory\n\n   %s\n\nis owned by user\n\n   %s\n\nIf user >root< does not have write permissions in this directory on *all*\nof the machines where * will be installed (NFS partitions not\nexported for user >root< with read/write permissions) it is recommended to\ninstall * that all spool files will be created under the user id\nof user >%s<.\n\nIMPORTANT NOTE: The daemons still have to be started by user >root<. \n" }
+      "DISTINST_CHECK_ADMINUSER_ACCOUNT_ANSWER" { set value "Do you want to install * as admin user" }
       "DISTINST_ENTER_LOCAL_EXECD_SPOOL_DIR" { set value "During the qmaster installation you've already entered a global\nexecd spool directory. This is used, if no local spool directory is configured.\n\n Now you can enter a local spool directory for this host.\n" }
       "DISTINST_ENTER_LOCAL_EXECD_SPOOL_DIR_ASK" { set value "Do you want to configure a*spool directory\n for this host (y/n) \[n\] >> " }
       "DISTINST_ENTER_LOCAL_EXECD_SPOOL_DIR_ENTER" { set value "*nter the*spool directory now! >> " }
       "DISTINST_ENTER_SCHEDLUER_SETUP" { set value "Enter the number of your prefer* configuration and hit <RETURN>! \nDefault configuration is \[1\] >> " }
       "DISTINST_DELETE_DB_SPOOL_DIR" { set value "The spooling directory already exists! Do you want to delete it? \[n\] >> " }
-      "DISTINST_ADD_SHADOWHOST_HEADLINE" { set value "\nAdding Grid Engine shadow hosts" }
+      "DISTINST_ADD_SHADOWHOST_HEADLINE" { set value "\nAdding * shadow hosts" }
       "DISTINST_ADD_SHADOWHOST_INFO" { set value "\nIf you want to use a shadow host, it is recommended to add this host\n to the list of administrative hosts.\n\nIf you are not sure, it is also possible to add or remove hosts after the\ninstallation with <qconf -ah hostname> for adding and <qconf -dh hostname>\nfor removing this host\n\nAttention: This is not the shadow host installation* procedure.\n You still have to install the shadow host separately\n\n" }
-      "DISTINST_ADD_SHADOWHOST_INFO2" { set value "\nPlease now add the list of hosts, where you will later install your shadow\ndaemon.\n\nPlease enter a blank separated list of your execution hosts. You may\npress <RETURN> if the line is getting too long. Once you are finished\nsimply press <RETURN> without entering a name.\n\nYou also may prepare a file with the hostnames of the machines where you plan\nto install Grid Engine. This may be convenient if you are installing Grid\nEngine on many hosts.\n\n" }
+      "DISTINST_ADD_SHADOWHOST_INFO2" { set value "\nPlease now add the list of hosts, where you will later install your shadow\ndaemon.\n\nPlease enter a blank separated list of your execution hosts. You may\npress <RETURN> if the line is getting too long. Once you are finished\nsimply press <RETURN> without entering a name.\n\nYou also may prepare a file with the hostnames of the machines where you plan\nto install *. This may be convenient if you are installing Grid\nEngine on many hosts.\n\n" }
       "DISTINST_ADD_SHADOWHOST_ASK" { set value "Do you want to add your shadow host(s) now? (y/n) \[y\] >> " }
       "DISTINST_ADD_SHADOWHOST_FROM_FILE_ASK" { set value "Do you want to use a file which contains the list of hosts (y/n) \[n\] >> " }
       "DISTINST_SHADOW_HEADLINE" { set value "\nShadow Master Host Setup" }
@@ -1399,7 +1399,7 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_SHADOWD_INSTALL_COMPLETE" { set value "Shadowhost installation completed!" }
       "DISTINST_WE_CONFIGURE_WITH_X_SETTINGS" { set value "\nWe're configuring the scheduler with >%s< settings!\n Do you agree? (y/n) \[y\] >> " }
       "DISTINST_RPC_WELCOME" { set value "Hit <RETURN> if this is ok or stop the installation with Ctrl-C >> " }
-      "DISTINST_RPC_INSTALL_AS_ADMIN" { set value "Do you want to install Grid Engine as admin user >%s< (y/n) \[y\] >> " }
+      "DISTINST_RPC_INSTALL_AS_ADMIN" { set value "Do you want to install * as admin user >%s< (y/n) \[y\] >> " }
       "DISTINST_RPC_SGE_ROOT" { set value "If this directory is not correct (e.g. it may contain an automounter\nprefix) enter the correct path to this directory or hit <RETURN>\nto use default \[%s\] >> " }
       "DISTINST_RPC_HIT_RETURN_TO_CONTINUE" { set value "Hit <RETURN> to continue >> " }
       "DISTINST_RPC_SGE_CELL" { set value "Enter cell name \[%s\] >> " }
@@ -1408,7 +1408,7 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_RPC_DIRECTORY_EXISTS" { set value "The spooling directory already exists! Do you want to delete it? (y/n) \[n\] >> " }
       "DISTINST_RPC_START_SERVER" { set value "Shall the installation script try to start the RPC server? (y/n) \[y\] >>" }
       "DISTINST_RPC_SERVER_STARTED" { set value "Please remember these values, during Qmaster installation\n you will be asked for! Hit <RETURN> to continue!" }
-      "DISTINST_RPC_INSTALL_RC_SCRIPT" { set value "We can install the startup script that\nGrid Engine is started at machine boot (y/n) \[y\] >> " }
+      "DISTINST_RPC_INSTALL_RC_SCRIPT" { set value "We can install the startup script that\n* is started at machine boot (y/n) \[y\] >> " }
       "DISTINST_RPC_SERVER_COMPLETE" { set value "e.g. * * * * * <full path to scripts> <sge-root dir> <sge-cell> <bdb-dir>\n" }
       "DISTINST_CSP_COPY_CMD" { set value "Do you want to use rsh/rcp instead of ssh/scp? (y/n) \[n\] >>" }
       "DISTINST_CSP_COPY_CERTS" { set value "host? (y/n) \[y\] >>" }
@@ -1431,7 +1431,7 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINT_UPGRADE_BCKP_DIR" { set value "Backup directory  >> " }
       "DISTINT_UPGRADE_USE_BCKP_DIR" { set value "Continue with this backup directory (y/n) \[y\] >> " }
       "DISTINT_UPGRADE_NEW_BCKP_DIR" { set value "Enter a new backup directory or exit ('n') (y/n) \[y\] >> " }
-      "DISTINT_UPGRADE_COMMD_PORT_SETUP" { set value "*How do you want to configure the Grid Engine communication ports?\n\nUsing the >shell environment<:                           \[1\]\n\nUsing a network service like >/etc/service<, >NIS/NIS+<: \[2\]\n\n(default: 1) >> " }
+      "DISTINT_UPGRADE_COMMD_PORT_SETUP" { set value "*How do you want to configure the * communication ports?\n\nUsing the >shell environment<:                           \[1\]\n\nUsing a network service like >/etc/service<, >NIS/NIS+<: \[2\]\n\n(default: 1) >> " }
       "DISTINT_UPGRADE_IJS_SELECTION" { set value "\nThe backup configuration includes information for running \ninteractive jobs. Do you want to use the IJS information from \nthe backup ('y') or use new default values ('n') (y/n) \[y\] >> " }
       "DISTINCT_UPGRADE_NEXT_RANK_NUMBER" { set value "\nBackup contains last * ID *. As a suggested value, we added 1000 \nto that number and rounded it up to the nearest 1000.\nIncrease the value, if appropriate.\nChoose the new next * ID \[*\] >> " }
       "DISTINCT_UPGRADE_USE_EXISTING_SPOOLING" { set value "\nUse previous %s spooling method ('y') or use new spooling method *" }

@@ -1122,21 +1122,21 @@ proc setup_and_check_users {} {
    set minor_version [string index $ts_config(gridengine_version) 1]
 
    get_version_info version_info
-   ts_log_fine "Grid Engine version string: \"$version_info(full)\""
+   ts_log_fine "Cluster Scheduler (Grid Engine) version string: \"$version_info(full)\""
 
    if {$version_info(major_release) != $major_version} {
-      append error_text "Installed Grid Engine reports version string \"$version_info(full)\" which doesn't match major release string \"$major_version\"\n"
+      append error_text "Installed Cluster Scheduler (Grid Engine) reports version string \"$version_info(full)\" which doesn't match major release string \"$major_version\"\n"
       append error_text "Testsuite release parsing returned \"$version_info(major_release).$version_info(minor_release).$version_info(update_release)\"\n"
       append error_text "Testsuite configuration is set to test version \"$ts_config(gridengine_version)\"! Please check testsuite config!\n"
    }
 
    if {$version_info(minor_release) != $minor_version} {
-      append error_text "Installed Grid Engine reports version string \"$version_info(full)\" which doesn't match minor release string \"$minor_version\"\n"
+      append error_text "Installed Cluster Scheduler (Grid Engine) reports version string \"$version_info(full)\" which doesn't match minor release string \"$minor_version\"\n"
       append error_text "Testsuite release parsing returned \"$version_info(major_release).$version_info(minor_release).$version_info(update_release)\"\n"
       append error_text "Testsuite configuration is set to test version \"$ts_config(gridengine_version)\"! Please check testsuite config!\n"
    }
 
-   ts_log_fine "Testsuite parses this as Grid Engine Release \"$version_info(major_release).$version_info(minor_release)u$version_info(update_release)\""
+   ts_log_fine "Testsuite parses this as Cluster Scheduler (Grid Engine) Release \"$version_info(major_release).$version_info(minor_release)u$version_info(update_release)\""
 
    if {$error_text != ""} {
       ts_log_severe $error_text

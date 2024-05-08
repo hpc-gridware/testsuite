@@ -72,7 +72,7 @@ proc set_project_defaults {change_array} {
 #     {as_user ""} {raise_error 1}}
 #
 #  FUNCTION
-#     Add a project to the Grid Engine cluster.
+#     Add a project to the Cluster Scheduler (Grid Engine) cluster.
 #     Supports fast (qconf -Aprj) and slow (qconf -aprj) mode.
 #
 #  INPUTS
@@ -268,7 +268,7 @@ proc get_project_list {{output_var result} {on_host ""} {as_user ""} {raise_erro
 #     {raise_error 1}}
 #
 #  FUNCTION
-#     Modify the project $project in the Grid Engine cluster.
+#     Modify the project $project in the Cluster Scheduler (Grid Engine) cluster.
 #     Supports fast (qconf -Mprj) and slow (qconf -mprj) mode.
 #
 #  INPUTS

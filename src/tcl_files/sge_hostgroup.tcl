@@ -65,7 +65,7 @@ proc set_hostgroup_defaults {change_array} {
 #     {as_user ""} {raise_error 1}}
 #
 #  FUNCTION
-#     Add a host group to the Grid Engine cluster.
+#     Add a host group to the Cluster Scheduler (Grid Engine) cluster.
 #     Supports fast (qconf -Ahgrp) and slow (qconf -ahgrp) mode.
 #
 #  INPUTS
@@ -229,7 +229,7 @@ proc get_hostgroup_list {{output_var result} {on_host ""} {as_user ""} {raise_er
 #     {raise_error 1}}
 #
 #  FUNCTION
-#     Modify the host group $group in the Grid Engine cluster.
+#     Modify the host group $group in the Cluster Scheduler (Grid Engine) cluster.
 #     Supports fast (qconf -Mhgrp) and slow (qconf -mhgrp) mode.
 #
 #  INPUTS

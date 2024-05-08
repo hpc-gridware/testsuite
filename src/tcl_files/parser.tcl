@@ -3202,7 +3202,7 @@ proc parse_csv {output_var input_var delimiter index} {
 #     #
 #     #  Path to the SGE source tree
 #     #
-#     sge.srcdir=/cod_home/joga/devel/gridengine/source
+#     sge.srcdir=/cod_home/joga/devel/clusterscheduler/source
 #     
 #     #
 #     #  Compile options
@@ -3212,7 +3212,7 @@ proc parse_csv {output_var input_var delimiter index} {
 #     
 #     will be stored as
 #     out(sge.root)        /cod_home/joga/sys/arco
-#     out(sge.srcdir)      /cod_home/joga/devel/gridengine/source
+#     out(sge.srcdir)      /cod_home/joga/devel/clusterscheduler/source
 #     out(compile.debug)   true
 #     ...
 #

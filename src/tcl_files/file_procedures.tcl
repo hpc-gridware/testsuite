@@ -1528,7 +1528,7 @@ proc generate_html_file { file headliner content {return_text 0} {refresh_time 0
    if {$refresh_time != 0} {
       lappend output "   <meta http-equiv=\"refresh\" content=\"$refresh_time\">"
    }
-   lappend output "   <meta name=\"Author\" content=\"Grid Engine Testsuite - user ${CHECK_USER}\">"
+   lappend output "   <meta name=\"Author\" content=\"Cluster Scheduler (Grid Engine) Testsuite - user ${CHECK_USER}\">"
    lappend output "   <meta name=\"GENERATOR\" content=\"unknown\">"
    lappend output "</head>"
    lappend output "<body text=\"#000000\" bgcolor=\"#FFFFFF\" link=\"#CCCCCC\" vlink=\"#999999\" alink=\"#993300\">"
@@ -1946,7 +1946,7 @@ proc create_shell_script { scriptfile
 
    # script header
    append script_content "#!${script_path}\n"
-   append script_content "# Automatic generated script from Grid Engine Testsuite\n"
+   append script_content "# Automatic generated script from Cluster Scheduler (Grid Engine) Testsuite\n"
    if {$no_setup == 0} {
       # script command
       append script_content "trap 'echo \"\" ; echo \"_exit_status_:(91) script: $script_tail_name\" ; echo \"script done. (_END_OF_FILE_)\"' 0\n"
@@ -5096,19 +5096,19 @@ proc parse_testsuite_info_file { user uri info_file } {
 
 #****** file_procedures/get_release_packages() *********************************
 #  NAME
-#     get_release_packages() -- copy Grid Engine distribution to product root
+#     get_release_packages() -- copy Cluster Scheduler (Grid Engine) distribution to product root
 #
 #  SYNOPSIS
 #     get_release_packages { host user dest_path info_file nr } 
 #
 #  FUNCTION
-#     This function is used to copy and unpack the specified Grid Engine release
+#     This function is used to copy and unpack the specified Cluster Scheduler (Grid Engine) release
 #     to a destination directory.
 #
 #  INPUTS
 #     host      - hostname where the $dest_path is availabe 
 #     user      - user who is executing commands
-#     dest_path - absolut destination path on $host (Grid Engine SGE_ROOT dir)
+#     dest_path - absolut destination path on $host (Cluster Scheduler (Grid Engine) SGE_ROOT dir)
 #     info_file - array which contains testsuiten.info data
 #     nr        - running number of distribution
 #

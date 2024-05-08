@@ -888,7 +888,7 @@ proc current_version_upgrade_test {} {
                   }
 
 
-                  # After the update we should have the new grid engine version. Perform all test actions
+                  # After the update we should have the new Cluster Scheduler (Grid Engine) version. Perform all test actions
                   # in new (version upgraded) cloned config testsuite cluster
                   set clone_config_array(gridengine_version) $ts_config(gridengine_version)
                   set clone_config_array(package_release) $ts_config(package_release)

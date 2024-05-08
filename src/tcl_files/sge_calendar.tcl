@@ -65,7 +65,7 @@ proc set_calendar_defaults { change_array } {
 #     {as_user ""} {raise_error 1}} 
 #
 #  FUNCTION
-#     Add a calendar to the Grid Engine cluster.
+#     Add a calendar to the Cluster Scheduler (Grid Engine) cluster.
 #     Supports fast (qconf -Acal) and slow (qconf -acal) mode.
 #
 #  INPUTS
@@ -199,7 +199,7 @@ proc get_calendar_list {{output_var result} {on_host ""} {as_user ""} {raise_err
 #     mod_calendar {calendar change_array {fast_add 1} {on_host ""} {as_user ""} }
 #
 #  FUNCTION
-#     Modify the calendar $calendar in the Grid Engine cluster.
+#     Modify the calendar $calendar in the Cluster Scheduler (Grid Engine) cluster.
 #     Supports fast (qconf -Mcal) and slow (qconf -mcal) mode.
 #
 #  INPUTS

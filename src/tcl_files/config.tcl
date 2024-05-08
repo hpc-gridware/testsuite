@@ -700,7 +700,7 @@ proc modify_setup2 {} {
    ts_log_finest "change_level: \"$change_level\""
 
    if { [string length $change_level] != 0 } { 
-      puts "modification needs shutdown of old grid engine system"
+      puts "modification needs shutdown of old Cluster Scheduler (Grid Engine) system"
       set new_exed $ts_config(execd_hosts)
       set new_master $ts_config(master_host)
       set new_root $ts_config(product_root)
@@ -724,7 +724,7 @@ proc modify_setup2 {} {
          puts "modification needs reinstallation of packages"
          prepare_packages ;# reinstall tar binaries
       } else { 
-         puts "modification needs compilation of new grid engine system"
+         puts "modification needs compilation of new Cluster Scheduler (Grid Engine) system"
          compile_source
       }
    }
@@ -2054,7 +2054,7 @@ proc config_additional_config { only_check name config_array } {
    set config($name,onchange)   ""
 
    set help_text { "Enter the full pathname(s) of additional testsuite configuration(s)"
-                   "used for installing a secondary Grid Engine cluster(s)."
+                   "used for installing a secondary Cluster Scheduler (Grid Engine) cluster(s)."
                    "Multiple values separate by space."
                    "All configurations must use the same testsuite root directory,"
                    "and both global user and host configuration files."
@@ -2274,7 +2274,7 @@ proc config_source_dir { only_check name config_array } {
 
    upvar $config_array config
 
-   set help_text { "Enter the full pathname of the Grid Engine source directory, or"
+   set help_text { "Enter the full pathname of the Cluster Scheduler (Grid Engine) source directory, or"
                    "press >RETURN< to use the default value."
                    "The testsuite needs this directory to compile source code"
                    "and for resolving the host names (util scripts)." }
@@ -2294,7 +2294,7 @@ proc config_source_dir { only_check name config_array } {
    } else {
       if {!$fast_setup} {
          if {![file isfile "$value/aimk"] && ![file isfile "$value/CMakeLists.txt"]} {
-            puts "$value is not a valid Grid Engine source directory"
+            puts "$value is not a valid Cluster Scheduler (Grid Engine) source directory"
             puts "it needs to contain a build procedure, either aimk or CMakeLists.txt"
             return -1
          }
@@ -2527,7 +2527,7 @@ proc config_ge_packages_uri { only_check name config_array } {
                    "or press >RETURN< to use the default value."
                    ""
                    "A testsuite.info file contains information about"
-                   "available binary packages for Grid Engine installations."
+                   "available binary packages for Cluster Scheduler (Grid Engine) installations."
                    "Each line in the file is seperated by a \"|\" and the columns"
                    "have following meaning:"
                    "Release |CVS tag name |Description|enabled for testing| URI"
@@ -3049,9 +3049,9 @@ proc config_product_root { only_check name config_array } {
 
    upvar $config_array config
 
-   set help_text { "Enter the path where the testsuite should install Grid Engine,"
+   set help_text { "Enter the path where the testsuite should install Cluster Scheduler (Grid Engine),"
                    "or press >RETURN< to use the default value."
-                   "You can also specify a current installed Grid Engine system path."
+                   "You can also specify a current installed Cluster Scheduler (Grid Engine) system path."
                    "WARNING: The compile option will remove the content of this directory"
                    "or store it to \"testsuite_trash\" directory with testsuite_trash"
                    "commandline option!!!" }
@@ -3097,7 +3097,7 @@ proc config_product_type { only_check name config_array } {
    upvar $config_array config
 
    array set sge_types {
-      sgeee "Grid Engine Enterprise Edition"
+      sgeee "Cluster Scheduler (Grid Engine) Enterprise Edition"
    }
 
    set value [config_generic $only_check $name config "" "choice" 0 1 sge_types]
@@ -3225,7 +3225,7 @@ proc config_qmaster_install_options { only_check name config_array } {
 
    upvar $config_array config
 
-   set help_text { "Enter Grid Engine qmaster install options (use \"none\" for no options)"
+   set help_text { "Enter Cluster Scheduler (Grid Engine) qmaster install options (use \"none\" for no options)"
                    "or press >RETURN< to use the default value." }
 
    set value [config_generic $only_check $name config $help_text "string" 1 0]
@@ -3268,7 +3268,7 @@ proc config_execd_install_options { only_check name config_array } {
 
    upvar $config_array config
 
-   set help_text { "Enter Grid Engine execd install options (use \"none\" for no options)"
+   set help_text { "Enter Cluster Scheduler (Grid Engine) execd install options (use \"none\" for no options)"
                    "or press >RETURN< to use the default value." }
 
    set value [config_generic $only_check $name config $help_text "string" 1 0]
@@ -3311,7 +3311,7 @@ proc config_package_directory { only_check name config_array } {
 
    upvar $config_array config
 
-   set help_text { "Enter directory path to Grid Engine packages (pkgadd or zip),"
+   set help_text { "Enter directory path to Cluster Scheduler (Grid Engine) packages (pkgadd or zip),"
                    "(use \"none\" if there are no packages available)"
                    "or press >RETURN< to use the default value." }
 
@@ -3957,7 +3957,7 @@ proc config_testsuite_gridengine_version { only_check name config_array } {
    array set version_list {
       62 "SGE 6.2 systems"
       80 "UGE 8.0.* systems"
-      90 "OGE 9.0.* systems"
+      90 "GCS/OCS 9.0.* systems"
    }
 
    return [config_generic $only_check $name config "" "choice" 0 1 version_list]
@@ -4391,7 +4391,7 @@ proc config_build_ts_config {} {
 
    set parameter "source_dir"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Path to Grid Engine source directory"
+   set ts_config($parameter,desc)       "Path to Cluster Scheduler (Grid Engine) source directory"
    set ts_config($parameter,default)    ""   ;# depend on testsuite root dir
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "stop"
@@ -4436,7 +4436,7 @@ proc config_build_ts_config {} {
 
    set parameter "master_host"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Grid Engine master host"
+   set ts_config($parameter,desc)       "Cluster Scheduler (Grid Engine) master host"
    set ts_config($parameter,default)    ""
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "install"
@@ -4445,7 +4445,7 @@ proc config_build_ts_config {} {
 
    set parameter "execd_hosts"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Grid Engine execution daemon hosts"
+   set ts_config($parameter,desc)       "Cluster Scheduler (Grid Engine) execution daemon hosts"
    set ts_config($parameter,default)    ""
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "install"
@@ -4454,7 +4454,7 @@ proc config_build_ts_config {} {
 
    set parameter "submit_only_hosts"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Grid Engine submit only hosts"
+   set ts_config($parameter,desc)       "Cluster Scheduler (Grid Engine) submit only hosts"
    set ts_config($parameter,default)    ""
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "install"
@@ -4463,7 +4463,7 @@ proc config_build_ts_config {} {
 
    set parameter "commd_port"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Grid Engine COMMD_PORT"
+   set ts_config($parameter,desc)       "Cluster Scheduler (Grid Engine) COMMD_PORT"
    set ts_config($parameter,default)    "7778"
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "install"
@@ -4472,7 +4472,7 @@ proc config_build_ts_config {} {
 
    set parameter "product_root"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Grid Engine directory"
+   set ts_config($parameter,desc)       "Cluster Scheduler (Grid Engine) directory"
    set ts_config($parameter,default)    ""
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "install"
@@ -4482,7 +4482,7 @@ proc config_build_ts_config {} {
 
    set parameter "product_type"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Grid Engine product mode"
+   set ts_config($parameter,desc)       "Cluster Scheduler (Grid Engine) product mode"
    set ts_config($parameter,default)    "sgeee"
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "install"
@@ -4491,7 +4491,7 @@ proc config_build_ts_config {} {
 
    set parameter "product_feature"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Grid Engine features"
+   set ts_config($parameter,desc)       "Cluster Scheduler (Grid Engine) features"
    set ts_config($parameter,default)    "none"
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "install"
@@ -4518,7 +4518,7 @@ proc config_build_ts_config {} {
 
    set parameter "qmaster_install_options"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Grid Engine qmaster install options"
+   set ts_config($parameter,desc)       "Cluster Scheduler (Grid Engine) qmaster install options"
    set ts_config($parameter,default)    "none"
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "install"
@@ -4527,7 +4527,7 @@ proc config_build_ts_config {} {
 
    set parameter "execd_install_options"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Grid Engine execd install options"
+   set ts_config($parameter,desc)       "Cluster Scheduler (Grid Engine) execd install options"
    set ts_config($parameter,default)    "none"
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "install"
@@ -4536,7 +4536,7 @@ proc config_build_ts_config {} {
 
    set parameter "package_directory"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Directory with Grid Engine pkgadd or zip file packages"
+   set ts_config($parameter,desc)       "Directory with Cluster Scheduler (Grid Engine) pkgadd or zip file packages"
    set ts_config($parameter,default)    "none"
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "compile"
@@ -4563,7 +4563,7 @@ proc config_build_ts_config {} {
 
    set parameter "dns_for_install_script"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "DNS domain name used in Grid Engine installation procedure"
+   set ts_config($parameter,desc)       "DNS domain name used in Cluster Scheduler (Grid Engine) installation procedure"
    set ts_config($parameter,default)    "none"
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "install"
@@ -4682,7 +4682,7 @@ proc config_build_ts_config_1_3 {} {
    # new parameter gridengine_version
    set parameter "gridengine_version"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Gridengine Version"
+   set ts_config($parameter,desc)       "Cluster Scheduler (Grid Engine) Version"
    set ts_config($parameter,default)    "62"
    set ts_config($parameter,setup_func) "config_testsuite_gridengine_version"
    set ts_config($parameter,onchange)   "stop"
@@ -4831,7 +4831,7 @@ proc config_build_ts_config_1_8 {} {
 
    set parameter "shadowd_hosts"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Grid Engine shadow daemon hosts"
+   set ts_config($parameter,desc)       "Cluster Scheduler (Grid Engine) shadow daemon hosts"
    set ts_config($parameter,default)    ""
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "install"

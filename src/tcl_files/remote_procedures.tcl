@@ -961,8 +961,8 @@ proc sendmail_wrapper { address cc subject body } {
    ts_log_fine "starting $ts_config(mail_application) on host $$ts_config(mailx_host) to send mail ..."
    set tmp_file [get_tmp_file_name]
    set script [ open "$tmp_file" "w" "0755" ]
-   puts $script "Grid Engine Version: [get_version_info]"
-   puts $script "Subject            : $subject"
+   puts $script "Software Version: [get_version_info]"
+   puts $script "Subject         : $subject"
    puts $script ""
    puts $script $body
    puts $script ""

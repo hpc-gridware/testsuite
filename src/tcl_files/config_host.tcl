@@ -878,7 +878,7 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
             set input "arch,$ts_config(gridengine_version)"
             set help_text { "Enter a valid architecture name"
                             "or \"unsupported\", if the hosts architecture" }
-            lappend help_text "is not supported on Gridengine $ts_config(gridengine_version) systems:"
+            lappend help_text "is not supported on Cluster Scheduler (Grid Engine) $ts_config(gridengine_version) systems:"
          }
          "host" -
          "compile_time" -
@@ -1430,7 +1430,7 @@ wait_for_enter
          set ts_host_config($host,arch,60) [host_conf_60_arch $arch]
          set ts_host_config($host,arch,61) [host_conf_61_arch $arch]
 
-         # we now store compile host property depending on gridengine version
+         # we now store compile host property depending on Cluster Scheduler (Grid Engine) version
          # assume our current compile hosts compile for 53, 60, and 61
          if {$ts_host_config($host,compile) == 1} {
             set ts_host_config($host,compile,53) 1
@@ -1488,7 +1488,7 @@ wait_for_enter
       puts "\ntestsuite host configuration update from 1.7 to 1.8 ..."
 
       foreach host $ts_host_config(hostlist) {
-         # we now store java compile host property depending on gridengine version
+         # we now store java compile host property depending on Cluster Scheduler (Grid Engine) version
          set ts_host_config($host,java_compile,53) 0
          set ts_host_config($host,java_compile,60) 0
          set ts_host_config($host,java_compile,61) 0
@@ -2503,10 +2503,10 @@ proc host_conf_is_java_compile_host {host {config_var ""}} {
 #  FUNCTION
 #     Returns the architecture that is configured in the testsuite
 #     host configuration.
-#     The architecture string may be Grid Engine version dependent, that
+#     The architecture string may be Cluster Scheduler (Grid Engine) version dependent, that
 #     means, the function may return different architecture strings for
-#     different Grid Engine version (62, 80, ...).
-#     If a host is not supported platform for a certain Grid Engine version,
+#     different Cluster Scheduler (Grid Engine) version (62, 80, ...).
+#     If a host is not supported platform for a certain Cluster Scheduler (Grid Engine) version,
 #     "unsupported" is returned as archictecture name.
 #
 #  INPUTS
@@ -2591,9 +2591,9 @@ proc host_conf_is_known_host {host {config_var ""}} {
 #     host_conf_is_supported_host { host {config_var ""} } 
 #
 #  FUNCTION
-#     Checks if the given host is configured in the Grid Engine host
+#     Checks if the given host is configured in the Cluster Scheduler (Grid Engine) host
 #     configuration and if it has an architecture, that is supported by the
-#     given Grid Engine version.
+#     given Cluster Scheduler (Grid Engine) version.
 #
 #  INPUTS
 #     host            - the host
@@ -2620,7 +2620,7 @@ proc host_conf_is_supported_host {host {config_var ""}} {
 
    if {$ret} {
       if {[host_conf_get_arch $host config] == "unsupported"} {
-         ts_log_fine "Host \"$host\" is not supported with Grid Engine $ts_config(gridengine_version)"
+         ts_log_fine "Host \"$host\" is not supported with Cluster Scheduler (Grid Engine) $ts_config(gridengine_version)"
          set ret 0
       }
    }
@@ -2636,7 +2636,7 @@ proc host_conf_is_supported_host {host {config_var ""}} {
 #     host_conf_53_arch { arch } 
 #
 #  FUNCTION
-#     Takes an architecture string and tries to convert it to a Grid Engine
+#     Takes an architecture string and tries to convert it to a Cluster Scheduler (Grid Engine)
 #     5.3 architecture string.
 #
 #     If the given architecture string cannot be converted, "unknown" will
@@ -2681,7 +2681,7 @@ proc host_conf_53_arch {arch} {
 #     host_conf_60_arch { arch } 
 #
 #  FUNCTION
-#     Takes an architecture string and tries to convert it to a Grid Engine
+#     Takes an architecture string and tries to convert it to a Cluster Scheduler (Grid Engine)
 #     6.0 architecture string.
 #
 #     If the given architecture string cannot be converted, "unknown" will
@@ -2733,7 +2733,7 @@ proc host_conf_60_arch {arch} {
 #     host_conf_61_arch { arch } 
 #
 #  FUNCTION
-#     Takes an architecture string and tries to convert it to a Grid Engine
+#     Takes an architecture string and tries to convert it to a Cluster Scheduler (Grid Engine)
 #     6.1 architecture string.
 #
 #     If the given architecture string cannot be converted, "unknown" will
@@ -3104,7 +3104,7 @@ proc host_get_id_a_command {host} {
 #  FUNCTION
 #     Returns hosts from the exec node list, selected by certain criteria.
 #
-#     For many checks, or for operations like calling a Grid Engine binary
+#     For many checks, or for operations like calling a Cluster Scheduler (Grid Engine) binary
 #     (qstat, qconf, ...), we need to decide, on which host to do the check.
 #     This can be done by calling host_conf_get_suited_host.
 #     host_conf_get_suited_host allows filtering the host list following 

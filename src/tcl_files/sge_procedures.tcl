@@ -333,7 +333,7 @@ proc get_qmaster_spool_dir {} {
 }
 
 ###
-# @brief get feature information for tested Grid Engine release
+# @brief get feature information for tested Cluster Scheduler (Grid Engine) release
 #
 # This helper procedure is used to find out if the tested product supports
 # the specified feature or not.
@@ -1014,7 +1014,7 @@ proc get_source_path {bin host} {
 #     {timeout 60} {sub_path "bin"} } 
 #
 #  FUNCTION
-#     Starts a binary in the compile directory (gridengine/source/$buildarch).
+#     Starts a binary in the compile directory (clusterscheduler/source/$buildarch).
 #
 #  INPUTS
 #     bin                       - binary to start, e.g. test_drmaa
@@ -5701,7 +5701,7 @@ proc get_qstat_j_info {jobid {my_variable qstat_j_info} {add_switch ""}} {
 }
 
 proc get_qstat_j_attribute {name {task 1}} {
-   if {[ge_has_feature "resource-maps"]} {
+   if {[ge_has_feature "resource-maps" 1]} {
       return [format "%-12s %11d" $name $task]
    } else {
       return [format "%s %4d" $name $task]
@@ -8157,7 +8157,7 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
 
    check_for_core_files $ts_config(master_host) $ts_config(product_root)
 
-   # we might have secondary Grid Engine clusters
+   # we might have secondary Cluster Scheduler (Grid Engine) clusters
    # shut them down as well
    if {$with_additional_clusters} {
       operate_additional_clusters kill
@@ -10100,7 +10100,7 @@ proc startup_execd { hostname {envlist ""} {startup_user ""} } {
 #     startup_execd_with_fd_limit { host fd_limit {envlist ""} } 
 #
 #  FUNCTION
-#     This procedure is used to startup an execution daemon of grid engine 
+#     This procedure is used to startup an execution daemon of Cluster Scheduler (Grid Engine) 
 #     with special file descriptor limit settings.
 #
 #  INPUTS

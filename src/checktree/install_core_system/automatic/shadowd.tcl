@@ -57,7 +57,7 @@ proc install_shadowd {} {
       set feature_install_options ""
       set my_csp_host_list ""
 
-      # are we installing secure grid engine?
+      # are we installing secure Cluster Scheduler (Grid Engine)?
       if {$ts_config(product_feature) == "csp"} {
          set feature_install_options "-csp"
          set my_csp_host_list $shadowd_hosts

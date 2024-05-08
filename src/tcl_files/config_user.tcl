@@ -47,7 +47,7 @@ if {![info exists ts_user_config]} {
 
    set parameter "userlist"
    set ts_user_config($parameter)            ""
-   set ts_user_config($parameter,desc)       "Grid Engine cluster user list"
+   set ts_user_config($parameter,desc)       "Cluster Scheduler (Grid Engine) cluster user list"
    set ts_user_config($parameter,default)    ""
    set ts_user_config($parameter,setup_func) "user_config_$parameter"
    set ts_user_config($parameter,onchange)   ""

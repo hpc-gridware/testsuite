@@ -129,7 +129,7 @@ proc arco_dbwriter_job_log_reuse_cleanup  {} {
 #
 #  FUNCTION
 #
-#     This check submits two jobs into the gridengine. Before submitting a
+#     This check submits two jobs into the Cluster Scheduler (Grid Engine). Before submitting a
 #     job the jobseqnum is incremented, so that both jobs the same job_number.
 #     The dbwriter has two create two rows in the table sge_job. Each for one job.
 #     If CHECK_ACT_LEVEL is 0 this tests searches for the job_log entires in the

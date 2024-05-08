@@ -296,7 +296,7 @@ proc insure_initialize {{clean 0}} {
    foreach user $users {
       set tmp_psrc [get_tmp_file_name]
       set f [open $tmp_psrc "w"]
-      puts $f "# .psrc file created by Gridengine testsuite"
+      puts $f "# .psrc file created by Cluster Scheduler (Grid Engine) testsuite"
       puts $f "insure++.ReportFile insra"
       puts $f "insure++.suppress PARM_NULL"
       puts $f "insure++.suppress BAD_INTERFACE"

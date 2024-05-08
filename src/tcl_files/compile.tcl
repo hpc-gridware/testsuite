@@ -190,7 +190,7 @@ proc compile_host_list {{binaries_only 0}} {
       }
    }
 
-   # Beginning with OGE 9.0.0 we build documentation (man pages and manuals) from markdown
+   # Beginning with Cluster Scheduler 9.0.0 we build documentation (man pages and manuals) from markdown
    # Add the doc compile host to the host list
    # It can be one of the c/c++ compile hosts but can also be a separate host
    if {!$binaries_only} {

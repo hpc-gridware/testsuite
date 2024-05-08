@@ -74,7 +74,7 @@ proc set_pe_defaults {change_array} {
 #     add_pe { change_array { version_check 1 } }
 #
 #  FUNCTION
-#     Add a new pe (parallel environemnt) to the Grid Engine cluster.
+#     Add a new pe (parallel environemnt) to the Cluster Scheduler (Grid Engine) cluster.
 #     Supports fast (qconf -Ap) and slow (qconf -ap) mode. 
 #
 #  INPUTS
@@ -177,7 +177,7 @@ proc get_pe {pe_name {output_var result} {on_host ""} {as_user ""} {raise_error 
 #     {raise_error 1}}
 #
 #  FUNCTION
-#     Modify the parallel environment $pe_name in the Grid Engine cluster.
+#     Modify the parallel environment $pe_name in the Cluster Scheduler (Grid Engine) cluster.
 #     Supports fast (qconf -Mp) and slow (qconf -mp) mode.
 #
 #  INPUTS

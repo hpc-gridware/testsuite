@@ -300,9 +300,9 @@ proc get_version_info {{version_information_array_name ""}} {
 }
 
 ###
-# @brief check if the current OGE version is in a given range
+# @brief check if the current Cluster Scheduler (Grid Engine) version is in a given range
 #
-# The OGE version must be higher or equal the from_version
+# The Cluster Scheduler (Grid Engine) version must be higher or equal the from_version
 # and (optionally) lower than the to_version.
 # @example if the current version is 9.0.0 then
 #          "is_version_in_range 8.0.0" will return 1
@@ -322,7 +322,7 @@ proc is_version_in_range {from_version {to_version ""}} {
 }
 
 ###
-# @brief check if the current OGE version is in a range given as list
+# @brief check if the current Cluster Scheduler (Grid Engine) version is in a range given as list
 #
 # Calls is_version_in_range with the one or two arguments given as list.
 # @example if the current version is 9.0.0 then

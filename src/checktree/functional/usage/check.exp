@@ -219,6 +219,8 @@ proc usage_monitor_job {id started_var finished_var jobid_var info_var {my_timeo
    upvar $finished_var finished
    upvar $jobid_var    jobid
    upvar $info_var     info
+   unset -nocomplain info
+   set info(lines) {}
 
    set ret "unknown"
 
@@ -255,6 +257,7 @@ proc usage_monitor_job {id started_var finished_var jobid_var info_var {my_timeo
                continue
             }
             ts_log_fine "processing line: $line"
+            lappend info(lines) $line
             switch -glob -- $line {
                "starting with method *" {
                   incr started
@@ -425,7 +428,7 @@ proc max {a b} {
    }
 }
 
-proc usage_monitor_check {id test_name slots acct_slots wallclock} {
+proc usage_monitor_check {id test_name slots acct_slots wallclock master_host} {
    global CHECK_ACT_LEVEL
    global ts_config
    set started 0
@@ -453,28 +456,30 @@ proc usage_monitor_check {id test_name slots acct_slots wallclock} {
          set my_timeout 1
          set timeout_error 0
          if {![get_qstat_j_info $jobid]} {
-            ts_log_severe "job terminated abnormally (1)"
-            set job_finished 1
+            if {!$job_finished} {
+               set msg "job terminated abnormally (1), master host $master_host\n"
+               foreach line $info(lines) {
+                  append msg "$line\n"
+               }
+               ts_log_severe $msg
+               set job_finished 1
+            }
          } else {
             # get online usage
-            foreach name [array names qstat_j_info] {
-               if {[string compare [lindex $name 0] "usage"] == 0} {
-                  set usage_list [split $qstat_j_info($name) ","]
-                  set value_list [split [lindex $usage_list 0] "="]
-                  set online_cpu [parse_cpu_time [lindex $value_list 1]]
-                  set value_list [split [lindex $usage_list 1] "="]
-                  set online_mem [lindex [lindex $value_list 1] 0]
-                  set value_list [split [lindex $usage_list 4] "="]
-                  set online_maxvmem [lindex [lindex $value_list 1] 0]
-                  if {[string compare $online_maxvmem "N/A"] == 0} {
-                   set online_maxvmem 0
-                  }
-                  if {[transform_unit $online_info(maxvmem)] < [transform_unit $online_maxvmem]} {
-                     set online_info(maxvmem) $online_maxvmem
-                  }
-                  set online_info(cpu) [max $online_info(cpu) $online_cpu]
-                  set online_info(mem) [max $online_info(mem) $online_mem]
+            set usage_attr [get_qstat_j_attribute "usage"]
+            if {[info exists qstat_j_info($usage_attr)]} {
+               parse_name_value_list usage $qstat_j_info($usage_attr)
+               set online_cpu [parse_cpu_time $usage(cpu)]
+               set online_mem $usage(mem)
+               set online_maxvmem $usage(maxvmem)
+               if {[string compare $online_maxvmem "N/A"] == 0} {
+                set online_maxvmem 0
                }
+               if {[transform_unit $online_info(maxvmem)] < [transform_unit $online_maxvmem]} {
+                  set online_info(maxvmem) $online_maxvmem
+               }
+               set online_info(cpu) [max $online_info(cpu) $online_cpu]
+               set online_info(mem) [max $online_info(mem) $online_mem]
             }
             ts_log_fine "job state: $job_state, cpu: $online_info(cpu), mem: $online_info(mem), maxvmem: $online_info(maxvmem)"
          }
@@ -512,7 +517,7 @@ proc usage_monitor_check {id test_name slots acct_slots wallclock} {
    close_spawn_process $id
 
    if {$timeout_error} {
-      ts_log_severe "job didn't run as expected"
+      ts_log_severe "job didn't run as expected, master host $master_host"
       delete_all_jobs
    } else {
       wait_for_jobend $jobid usage 60 0 1
@@ -522,7 +527,7 @@ proc usage_monitor_check {id test_name slots acct_slots wallclock} {
 
       set online_info(maxvmem) [transform_unit $online_info(maxvmem)]
       if {!$job_finished} {
-         ts_log_severe "job terminated abnormally (2)"
+         ts_log_severe "job terminated abnormally (2), master host $master_host"
       } else {
          if {[string compare $test_name "usage_tight"] == 0 && $CHECK_ACT_LEVEL != 2} {
             set online_info(maxvmem) [expr $online_info(maxvmem) / $slots]
@@ -551,7 +556,7 @@ proc usage_single {} {
       set queue [get_queue_instance "usage.q" $master_host]
       set id [submit_with_method $submit_command "-N usage -q $queue" "$ts_config(testsuite_root_dir)/scripts/usage.sh" "sleep 60" $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER]
 
-      usage_monitor_check $id "usage_single" 1 1 60
+      usage_monitor_check $id "usage_single" 1 1 60 $master_host
    }
 }
 
@@ -582,7 +587,7 @@ proc usage_tight {} {
       # tasks will only sleep 100s, but RESERVED_USAGE should still be correct!
       set id [submit_with_method $submit_command "-pe tight 4 -N usage -masterq $queue" "$ts_config(testsuite_root_dir)/scripts/pe_job.sh" "$ts_config(testsuite_root_dir)/scripts/pe_task.sh 1 $task_runtime $sleep_after" $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER]
 
-      usage_monitor_check $id "usage_tight" 5 5 120
+      usage_monitor_check $id "usage_tight" 5 5 120 $master_host
    }
 }
 
@@ -598,7 +603,7 @@ proc usage_loose {pe expected_slots acct_slots} {
       set queue [get_queue_instance "usage.q" $master_host]
       set id [submit_with_method $submit_command "-N usage -pe $pe 4 -masterq $queue" "$ts_config(testsuite_root_dir)/scripts/usage.sh" "sleep 60" $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER]
 
-      usage_monitor_check $id "usage_loose" $expected_slots $acct_slots 60
+      usage_monitor_check $id "usage_loose" $expected_slots $acct_slots 60 $master_host
    }
 }
 

@@ -95,7 +95,7 @@ proc issue2754_test {} {
             ts_send $sp_id "\n"
             continue
          }
-         -i $sp_id "Do you want to install Grid Engine as admin user*" {
+         -i $sp_id "Do you want to install * as admin user*" {
             ts_log_fine "--> testsuite: sending >RETURN<"
             ts_send $sp_id "\n"
             continue;

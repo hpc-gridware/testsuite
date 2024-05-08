@@ -2015,7 +2015,7 @@ proc gethostname { { do_debug_puts 1} {source_dir_path ""} } {
 #     This is for example required when building new binaries:
 #     The installed arch script might return a different architecture than
 #     the source arch script, for example when a cluster was installed from
-#     Grid Engine packages <= 6.2u5, where we deliver lx-24-* packages also for
+#     Cluster Scheduler (Grid Engine) packages <= 6.2u5, where we deliver lx-24-* packages also for
 #     Linux kernel 2.6 machines (lx26-*).
 #
 #  INPUTS
