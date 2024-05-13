@@ -106,14 +106,27 @@ global job_output_dir
 
 proc qalter_setup {} {
    global qalter_host qalter_queue
+   global qalter_global_config
 
    set qalter_host  [host_conf_get_suited_hosts]
    set qalter_queue [get_queue_instance "all.q" $qalter_host]
+
+   # allow setting LD_LIBRARY_PATH
+   get_config qalter_global_config
+   set conf(qmaster_params) "ENABLE_SUBMIT_LIB_PATH=TRUE"
+   set_config conf
 }
 
 proc qalter_cleanup {} {
+   global qalter_host qalter_queue
+   global qalter_global_config
+
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   reset_config qalter_global_config
+
+   unset -nocomplain qalter_host qalter_queue qalter_global_config
 }
 
 #                                                             max. column:     |

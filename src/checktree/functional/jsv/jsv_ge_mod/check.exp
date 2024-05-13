@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "jsv_ge_mod"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "JSV VERIFIED"
 set check_description(0)  "test qalter jsv requests using job id of job to modify"
 set check_description(1)  "test qalter jsv requests using job name of job to modify"
 
@@ -146,6 +146,9 @@ proc jsv_ge_mod_setup_level {} {
    get_config jsv_org_global_conf
    set global_conf(load_report_time) "00:00:04"
    set global_conf(max_unheard) "00:00:15"
+   # allow setting LD_LIBRARY_PATH
+   # @todo only for Version > 8.0.1p3
+   set global_conf(qmaster_params) "ENABLE_SUBMIT_LIB_PATH=TRUE"
    set_config_and_propagate global_conf
 
    # submit one job which can be used for hold_jid test
@@ -160,6 +163,7 @@ proc jsv_ge_mod_setup_level {} {
 proc jsv_ge_mod_cleanup_level {} {
    global ts_config
    global jsv_org_global_conf
+   global jsv_enabled
  
    if {$jsv_enabled} {
       # trigger and wait for job termination

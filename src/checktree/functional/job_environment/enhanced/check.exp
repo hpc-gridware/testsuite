@@ -78,7 +78,8 @@ lappend check_functions "job_environment_enhanced_SET_LIB_PATH"
 ################################################################################
 proc job_environment_enhanced_setup {} {
    global ts_config
-   global job_environment_enhanced_exec_host job_environment_enhanced_config 
+   global job_environment_enhanced_exec_host job_environment_enhanced_config
+   global job_environment_enhanced_global_config
    global job_environment_enhanced_libpath job_environment_enhanced_queue
    global job_environment_enhanced_libvar ts_config CHECK_USER
 
@@ -88,7 +89,10 @@ proc job_environment_enhanced_setup {} {
 
    get_config job_environment_enhanced_config $job_environment_enhanced_exec_host
 
-
+   # allow setting LD_LIBRARY_PATH
+   get_config job_environment_enhanced_global_config
+   set conf(qmaster_params) "ENABLE_SUBMIT_LIB_PATH=TRUE"
+   set_config conf
 
    # Stop first execd
    shutdown_system_daemon $job_environment_enhanced_exec_host "execd"
@@ -142,6 +146,7 @@ proc job_environment_enhanced_setup {} {
 ################################################################################
 proc job_environment_enhanced_cleanup {} {
    global job_environment_enhanced_exec_host job_environment_enhanced_config
+   global job_environment_enhanced_global_config
 
    delete_all_jobs
    wait_for_end_of_all_jobs
@@ -153,6 +158,11 @@ proc job_environment_enhanced_cleanup {} {
    startup_execd $job_environment_enhanced_exec_host
 
    reset_config_and_propagate job_environment_enhanced_config $job_environment_enhanced_exec_host
+   reset_config job_environment_enhanced_global_config
+
+   unset -nocomplain job_environment_enhanced_exec_host job_environment_enhanced_config
+   unset -nocomplain job_environment_enhanced_libpath job_environment_enhanced_queue
+   unset -nocomplain job_environment_enhanced_global_config job_environment_enhanced_libvar
 }
 
 

@@ -82,6 +82,7 @@ lappend check_functions "job_environment_basic_JOB_NAME_uninherited"
 ################################################################################
 proc job_environment_basic_setup {} {
    global ts_config
+   global job_environment_basic_global_config
    global job_environment_basic_exec_host
    global job_environment_basic_queue
    global job_environment_basic_config
@@ -90,6 +91,11 @@ proc job_environment_basic_setup {} {
    set job_environment_basic_queue [get_queue_instance "all.q" $job_environment_basic_exec_host]
 
    get_config job_environment_basic_config $job_environment_basic_exec_host
+
+   # allow setting LD_LIBRARY_PATH
+   get_config job_environment_basic_global_config
+   set conf(qmaster_params) "ENABLE_SUBMIT_LIB_PATH=TRUE"
+   set_config conf
 }
 
 ####### job_environment_basic_cleanup() ##############################################
@@ -111,14 +117,21 @@ proc job_environment_basic_setup {} {
 ################################################################################
 proc job_environment_basic_cleanup {} {
    global ts_config
+   global job_environment_basic_global_config
    global job_environment_basic_config
    global job_environment_basic_exec_host
+   global job_environment_basic_queue
 
    ts_log_fine "cleanup ..."
    delete_all_jobs
    wait_for_end_of_all_jobs
 
    reset_config_and_propagate job_environment_basic_config $job_environment_basic_exec_host
+
+   reset_config job_environment_basic_global_config
+
+   unset -nocomplain job_environment_basic_global_config job_environment_basic_config
+   unset -nocomplain job_environment_basic_exec_host job_environment_basic_queue
 }
 
 ####### job_environment_basic_parse_env_test_output() ################################
@@ -450,7 +463,8 @@ proc job_environment_basic_var_test {missing {extra ""}} {
    lappend known_variables "SGE_O_HOME"
    lappend known_variables "SGE_O_HOST"
    lappend known_variables "SGE_O_LOGNAME"
-   lappend known_variables "SGE_O_MAIL"
+   # SGE_O_MAIL is only set when mail is correctly configured on the submit host
+   # lappend known_variables "SGE_O_MAIL"
    lappend known_variables "SGE_O_PATH"
    lappend known_variables "SGE_O_SHELL"
 
@@ -507,6 +521,7 @@ proc job_environment_basic_var_test {missing {extra ""}} {
    # the following might are set by many GE engineers shell rc files
    lappend allowed_variables "ARCH"
    lappend allowed_variables "TERM"
+   lappend allowed_variables "PWD"
 
    ts_log_fine "checking number of environment variables ..."
 
