@@ -9287,11 +9287,10 @@ proc test_help_and_usage {cmd} {
 }
 
 proc cleanup_tmpdirs {} {
+   get_current_cluster_config_array ts_config
    global CHECK_ADMIN_USER_SYSTEM CHECK_USER
 
-   global ts_config
-
-   set tmpdir "/tmp/testsuite_$ts_config(commd_port)"
+   set tmpdir [get_queue_tmpdir]
 
    # in an admin user system (no root password available)
    # we have to cleanup the tmpdir as CHECK_USER
@@ -10087,7 +10086,7 @@ proc startup_execd { hostname {envlist ""} {startup_user ""} } {
    }
 
    ts_log_fine "starting up execd on host \"$hostname\" as user \"$startup_user\""
-   set output [start_remote_prog "$hostname" "$startup_user" "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "start" prg_exit_state 60 0 "" my_envlist ]
+   set output [start_remote_prog "$hostname" "$startup_user" "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "start" prg_exit_state 60 0 "" my_envlist 1 0]
 
    return 0
 }

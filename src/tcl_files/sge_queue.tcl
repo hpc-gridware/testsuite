@@ -137,6 +137,12 @@ proc set_lab_defaults {change_array} {
 
 }
 
+proc get_queue_tmpdir {} {
+   get_current_cluster_config_array ts_config
+   
+   return "/tmp/testsuite_$ts_config(commd_port)"
+}
+
 #****** sge_queue/validate_queue() *********************************************
 #  NAME
 #     validate_queue() -- validate the queue settings
@@ -157,10 +163,9 @@ proc validate_queue {change_array} {
    upvar $change_array chgar
    
    # create cluster dependent tmpdir
-   set chgar(tmpdir)               "/tmp/testsuite_$ts_config(commd_port)"
+   set chgar(tmpdir) [get_queue_tmpdir]
 
    vdep_validate_queue chgar
-
 }
 
 #****** sge_queue/add_queue() **************************************************

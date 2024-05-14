@@ -67,7 +67,7 @@ global generic_module_tests_test_hosts generic_module_tests
 set generic_module_tests ""
 lappend generic_module_tests "test_commlib_issue"
 
-lappend generic_module_tests "test_common_heartbeat"
+#lappend generic_module_tests "test_common_heartbeat" ;# only used in shadowd_migrate test
 lappend generic_module_tests "test_common_category"
 
 lappend generic_module_tests "test_cull_hash"

@@ -1031,12 +1031,12 @@ proc tight_integration_check_tmpdir {} {
    global CHECK_USER ts_config
 
    set error ""
-   set tmpdir "/tmp/testsuite_$ts_config(commd_port)"
+   set tmpdir [get_queue_tmpdir]
 
    foreach host $ts_config(execd_nodes) {
-      set output [start_remote_prog $host $CHECK_USER ls "$tmpdir"]
+      set output [start_remote_prog $host $CHECK_USER ls $tmpdir]
       set output [string trim $output] 
-      if { $output != "" } {
+      if {$output != ""} {
          append error "Found IZ 2846: tmpdir was not cleaned on host $host for jobs: $output\n"
       }
    }

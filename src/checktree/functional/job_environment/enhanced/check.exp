@@ -83,7 +83,6 @@ proc job_environment_enhanced_setup {} {
    global job_environment_enhanced_libpath job_environment_enhanced_queue
    global job_environment_enhanced_libvar ts_config CHECK_USER
 
-
    set job_environment_enhanced_exec_host [host_conf_get_suited_hosts 1 {} {} {} 1]
    set job_environment_enhanced_queue [get_queue_instance "all.q" $job_environment_enhanced_exec_host]
 
@@ -113,6 +112,13 @@ proc job_environment_enhanced_setup {} {
    if {[string match "*lx*" $host_arch] && $ts_config(commd_port) >= 1024} {
       set log_text "this is a linux host - restarting execd as user $CHECK_USER. Most linux systems\n"
       append log_text "do not allow inherit environment from root processes started by root user."
+      # need to work around ownership of /tmp/testsuite_<commd_port>
+      # it belongs root, but we start execd as CHECK_USER
+      # esp. on newer Ubuntu sge_execd running as admin user may not create the job tmpdirs
+      # just delete it, it gets re-created by sge_execd
+      set tmpdir [get_queue_tmpdir]
+      start_remote_prog $job_environment_enhanced_exec_host "root" "rm" "-rf $tmpdir"
+
       startup_execd $job_environment_enhanced_exec_host my_environment $CHECK_USER
    } else {
       set log_text ""
@@ -145,14 +151,25 @@ proc job_environment_enhanced_setup {} {
 #     job_environment_enhanced_cleanup()
 ################################################################################
 proc job_environment_enhanced_cleanup {} {
+   global ts_config
    global job_environment_enhanced_exec_host job_environment_enhanced_config
    global job_environment_enhanced_global_config
+   global job_environment_enhanced_libpath job_environment_enhanced_queue
+   global job_environment_enhanced_libvar ts_config CHECK_USER
 
    delete_all_jobs
    wait_for_end_of_all_jobs
 
    # Stop execd
    shutdown_system_daemon $job_environment_enhanced_exec_host "execd"
+
+   set host_arch [resolve_arch $job_environment_enhanced_exec_host]
+   if {[string match "*lx*" $host_arch] && $ts_config(commd_port) >= 1024} {
+      # tmpdir got re-created as admin user
+      # we re-start sge_execd as root here, delete it and it will get re-created as root
+      set tmpdir [get_queue_tmpdir]
+      start_remote_prog $job_environment_enhanced_exec_host "root" "rm" "-rf $tmpdir"
+   }
 
    # Restart execd without marker variable
    startup_execd $job_environment_enhanced_exec_host
@@ -348,15 +365,20 @@ proc test_job_environment_enhanced_lib_path {error_var execd_params expected_lib
       }
    }
 
-   if {$expected_lib_path != $job_env($job_environment_enhanced_libvar)} {
-      # problem
-      append errors "\nShared library path is incorrectly set to \"$job_env($job_environment_enhanced_libvar)\", with $new_config(execd_params)"
-      append errors "\n   Should be set to \"$expected_lib_path\""
-   }
-
+   # the lib path can contain additional info, (e.g. be contained twice)
+   # see clusterscheduler/source/daemons/execd/exec_job.cc around line 960
+   # therefore we just make sure that it begins with what we expect
    ts_log_frame
-   ts_log_fine "libpath ($job_environment_enhanced_libvar) correctly set set to \"$expected_lib_path\""
-   ts_log_fine "for execd_params set to \"$execd_params\""
+   if {[string first $expected_lib_path $job_env($job_environment_enhanced_libvar)] < 0} {
+      # problem
+      set msg "\nShared library path is incorrectly set to \"$job_env($job_environment_enhanced_libvar)\", with $new_config(execd_params)"
+      append msg "\n   Should be set to \"$expected_lib_path\""
+      ts_log_fine $msg
+      append errors $msg
+   } else {
+      ts_log_fine "libpath ($job_environment_enhanced_libvar) correctly set set to \"$expected_lib_path\""
+      ts_log_fine "for execd_params set to \"$execd_params\""
+   }
    ts_log_frame
 }
 
