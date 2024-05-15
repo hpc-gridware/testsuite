@@ -4908,7 +4908,7 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1}} {
 #*******************************
 global g_submit_job_messages
 unset -nocomplain g_submit_job_messages
-proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {cd_dir ""} {show_args 1} {qcmd "qsub"} {dev_null 1} {the_output ""} {ignore_list {}}} {
+proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {cd_dir ""} {show_args 1} {qcmd "qsub"} {dev_null 1} {the_output "qsub_output"} {ignore_list {}}} {
    get_current_cluster_config_array ts_config
    global g_submit_job_messages
    global CHECK_USER
@@ -4961,7 +4961,7 @@ proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {c
       set messages(-19)    "*[translate_macro MSG_PARSE_DUPLICATEHOSTINFILESPEC]*"
       set messages(-20)    "*[translate_macro MSG_GDI_NEGATIVSTEP]*"
       set messages(-21)    "*[translate_macro MSG_GDI_INITIALPORTIONSTRINGNODECIMAL_S "*"] *"
-      set messages(-22)    "*[translate_macro MSG_JOB_NODEADLINEUSER_S $user]*"
+      set messages(-22)    "*[translate_macro MSG_JOB_NODEADLINEUSER_S "*"]*"
       set messages(-23)    "*[translate_macro MSG_CPLX_WRONGTYPE_SSS "*" "*" "*"]*"
       set messages(-27)    "*[translate_macro MSG_PARSE_INVALIDPRIORITYMUSTBEINNEG1023TO1024]*"
       set messages(-30)    "*[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC "*" "*"]*"

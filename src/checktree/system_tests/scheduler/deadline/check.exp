@@ -109,7 +109,7 @@ proc deadline_test_permission { } {
    global CHECK_ACT_LEVEL CHECK_USER
 
 
-   if { $CHECK_ACT_LEVEL != 2 } {
+   if {$CHECK_ACT_LEVEL != 2} {
       ts_log_fine "Skip permission test for run level $CHECK_ACT_LEVEL"
       return 0
    }
@@ -123,14 +123,14 @@ proc deadline_test_permission { } {
    set job_args "-e /dev/null -o /dev/null -q $deadline_queue_name -dl $deadline"
    append job_args " $ts_config(product_root)/examples/jobs/sleeper.sh 3600"
    
-   set result [ submit_job $job_args 0 60 "" $non_deadline_user ]
-   if { $result == -22 } {
+   set result [submit_job $job_args 0 60 "" $non_deadline_user]
+   if {$result == -22} {
       set result 0
    } elseif { $result == 0 } {
       ts_log_severe "user $non_deadline_user can submit jobs with deadline, despite it is not in the deadlineusers group"
       set result -1
    } else {
-      ts_log_severe "submit_job returns an unexpected error ($result)"
+      ts_log_severe "submit_job returns an unexpected error ($result):\n$qsub_output"
       set result -1
    }
 
