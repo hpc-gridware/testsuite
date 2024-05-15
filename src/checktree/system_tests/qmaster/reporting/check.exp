@@ -516,23 +516,33 @@ proc reporting_queue_state_test {} {
    replace_attr "queue" "prolog" "non_existing_prolog" "reporting"
    set job_id [submit_job "-o /dev/null -j y -q reporting -b y echo test"]
    trigger_scheduling
-   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "E" 60
-   reporting_wait_for_queue_state "E"
+   set qstate [wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "E" 60]
+   ts_log_fine $qstate
+   if {$qstate == "E"} {
+      reporting_wait_for_queue_state "E"
+   }
    delete_job $job_id
    replace_attr "queue" "prolog" "NONE" "reporting"
    start_sge_bin "qmod" "-c reporting"
-   reporting_wait_for_queue_state ""
+   if {$qstate == "E"} {
+      reporting_wait_for_queue_state ""
+   }
 
    # wrong epilog
    replace_attr "queue" "epilog" "non_existing_epilog" "reporting"
    set job_id [submit_job "-o /dev/null -j y -q reporting -b y echo test"]
    trigger_scheduling
-   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "E" 60
-   reporting_wait_for_queue_state "E"
+   set qstate [wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "E" 60]
+   ts_log_fine $qstate
+   if {$qstate == "E"} {
+      reporting_wait_for_queue_state "E"
+   }
    delete_job $job_id
    replace_attr "queue" "epilog" "NONE" "reporting"
    start_sge_bin "qmod" "-c reporting"
-   reporting_wait_for_queue_state ""
+   if {$qstate == "E"} {
+      reporting_wait_for_queue_state ""
+   }
 
    # wrong mailer (no error state)
    set new_config(mailer) "/bin/bla"
@@ -551,22 +561,30 @@ proc reporting_queue_state_test {} {
    start_remote_prog $reporting_test_host $CHECK_USER chmod "000 $execd_spool_dir/$reporting_test_host"
    set job_id [submit_job "-o /dev/null -j y -q reporting -b y echo test"]
    trigger_scheduling
-   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "E" 60
-   reporting_wait_for_queue_state "E"
+   set qstate [wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "E" 60]
+   if {$qstate == "E"} {
+      reporting_wait_for_queue_state "E"
+   }
    delete_job $job_id
    start_remote_prog $reporting_test_host $CHECK_USER chmod "755 $execd_spool_dir/$reporting_test_host"
    start_sge_bin "qmod" "-c reporting"
-   reporting_wait_for_queue_state ""
+   if {$qstate == "E"} {
+      reporting_wait_for_queue_state ""
+   }
 
    ###########################################
    # test queue suspended on subordinate state
    ###########################################
    set job_id [submit_job "-o /dev/null -j y -q reporting_super -b y sleep 60"]
    trigger_scheduling
-   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "S" 60
-   reporting_wait_for_queue_state "S"
+   set qstate [wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "S" 60]
+   if {$qstate == "S"} {
+      reporting_wait_for_queue_state "S"
+   }
    delete_job $job_id 1
-   reporting_wait_for_queue_state ""
+   if {$qstate == "S"} {
+      reporting_wait_for_queue_state ""
+   }
 
    ####################################
    # test queue calender disabled state 
@@ -587,11 +605,15 @@ proc reporting_queue_state_test {} {
    replace_attr "queue" "calendar" "reporting" "reporting"
    reporting_wait_for_queue_state ""
    # test queue calender disabled state (when calendar time reached)
-   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "D" 180
-   reporting_wait_for_queue_state "D"
+   set qstate [wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "D" 180]
+   if {$qstate == "D"} {
+      reporting_wait_for_queue_state "D"
+   }
    # test queue default state (after removing the calendar)
    replace_attr "queue" "calendar" "NONE" "reporting"
-   reporting_wait_for_queue_state ""
+   if {$qstate == "D"} {
+      reporting_wait_for_queue_state ""
+   }
 
    #####################################
    # test queue calender suspended state
@@ -612,21 +634,29 @@ proc reporting_queue_state_test {} {
    replace_attr "queue" "calendar" "reporting" "reporting"
    reporting_wait_for_queue_state ""
    # test queue calender suspended state (when calendar time reached)
-   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "C" 180
-   reporting_wait_for_queue_state "C"
+   set qstate [wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "C" 180]
+   if {$qstate == "C"} {
+      reporting_wait_for_queue_state "C"
+   }
    # test queue default state (after removing the calendar)
    replace_attr "queue" "calendar" "NONE" "reporting"
-   reporting_wait_for_queue_state ""
+   if {$qstate == "C"} {
+      reporting_wait_for_queue_state ""
+   }
 
    ###########################
    # test queue ambigous state
    ###########################
    replace_attr "queue" "load_thresholds" "NONE,\[@allhosts=load_avg=10\],\[@reporting=load_avg=20\]" "reporting"
-   wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "c" 60
-   reporting_wait_for_queue_state "c"
+   set qstate [wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "c" 60]
+   if {$qstate == "c"} {
+      reporting_wait_for_queue_state "c"
+   }
    purge_queue "reporting@@reporting" "load_thresholds"
    purge_queue "reporting@@allhosts" "load_thresholds"
-   reporting_wait_for_queue_state ""
+   if {$qstate == "c"} {
+      reporting_wait_for_queue_state ""
+   }
 
    ###########################
    # test queue orphaned state
