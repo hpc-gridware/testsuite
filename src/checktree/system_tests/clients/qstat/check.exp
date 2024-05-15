@@ -3805,9 +3805,9 @@ proc qstat_profile {} {
       del_queue test.q $hostname 0 1
    }
 
-   # for some unknown reason the file operations for the sge_qstat files might take some time which might
-   # cause the next test scenarios to fail if it uses qstat.
-   after 2000
+   # for some unknown reason (NFS issue?) the file operations for the sge_qstat files might take
+   # some time which might cause the next test scenarios to fail if it uses qstat.
+   after 5000
 }
 
 proc transform_memory_value { value } {
