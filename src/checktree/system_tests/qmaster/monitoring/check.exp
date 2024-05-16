@@ -137,6 +137,16 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
    set now [clock seconds]
    set end [expr $now + $tail_timeout]
 
+   # message format changed in 9.0.0 (thread number is an extra field)
+   if {[is_version_in_range "9.0.0"]} {
+      # 05/16/2024 11:59:10|    listener|01|ubuntu-22-amd64-1|P|listener: runs: 0.17r/s (in (
+      set level_idx 4
+      set message_idx 5
+   } else {
+      set level_idx 3
+      set message_idx 4
+   }
+
    # wait until timeout
    while {$now < $end} {
       set timeout 1
@@ -154,7 +164,7 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
          -i $sp_id "?*\n" {
             # parse new lines in messages file
             #ts_log_fine "received new line in messages file"
-            if { $qping == 1 } {
+            if {$qping} {
                foreach line [ string trim [split $expect_out(0,string) "\n"]] {
                   set line [string trim $line]
                   if {[string length $line] > 0} {
@@ -191,8 +201,8 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
                   if {[string length $line] > 0} {
                      ts_log_fine "processing line: $line"
                      set split_line [split $line "|"]
-                     set monitoring [lindex $split_line 3]   
-                     set message [lindex $split_line 4]
+                     set monitoring [lindex $split_line $level_idx]
+                     set message [lindex $split_line $message_idx]
                      switch -glob -- $monitoring {
                         "P" {
                            switch -glob -- $message {
@@ -485,8 +495,6 @@ proc qmaster_monitoring_restart {} {
    # no further message may appear
    qmaster_monitoring_monitor $id NONE 0
 
-
-   
    # stop the tail -f
    close_spawn_process $id
 }
