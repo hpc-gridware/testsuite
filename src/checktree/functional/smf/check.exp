@@ -49,7 +49,6 @@ set check_fuctions   ""
 lappend check_functions "smf_test_host_supported"
 lappend check_functions "smf_test_shadowd"
 lappend check_functions "smf_test_execd"
-lappend check_functions "smf_test_bdb"
 lappend check_functions "smf_test_dbwriter"
 
 # This test makes currently problems. This should be the last smf test.
@@ -159,25 +158,6 @@ proc smf_test_execd {} {
    if {$counter == 0} {
       ts_log_config "No smf capable execd hosts in your configuration"
    }
-}
-
-proc smf_test_bdb {} {
-   global ts_config
-   if {[llength $ts_config(bdb_server)] == 0} {
-      ts_log_config "bdb server host list has length 0"
-      return
-   }
-   set host $ts_config(bdb_server)
-   if {$host == "none"} {
-      ts_log_fine "No bdb server host in your configuration"
-      return
-   }
-   if {[is_smf_host $host] == 1} {
-      smf_generic_test  $host "bdb"
-   } else {
-      ts_log_config "BDB server host $host does not support SMF"  
-   }
-   wait_for_load_from_all_queues 60
 }
 
 proc smf_test_dbwriter {} {

@@ -144,22 +144,15 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
    set execd_port [expr $ts_config(commd_port) + 1]
    set gid_range [get_gid_range $CHECK_USER $ts_config(commd_port)]
 
-   set bdb_server $ts_config(bdb_server)
-   if {$bdb_server == "none"} {
-      set db_dir [get_bdb_spooldir $ts_config(master_host) 1]
+   set db_dir [get_bdb_spooldir $ts_config(master_host) 1]
 
-      # deleting berkeley db spool dir. autoinstall will stop, if
-      # bdb spooldir exists.
-      # db_dir might be empty if classic spooling is used, should skip removing such directory
-      if {$do_cleanup && $exechost == 0 && $shadowd == 0 && [string compare $ts_config(spooling_method) "classic"] != 0} {
-         if {[remote_file_isdirectory $ts_config(master_host) $db_dir]} {
-            remote_delete_directory $ts_config(master_host) $db_dir
-         }
+   # deleting berkeley db spool dir. autoinstall will stop, if
+   # bdb spooldir exists.
+   # db_dir might be empty if classic spooling is used, should skip removing such directory
+   if {$do_cleanup && $exechost == 0 && $shadowd == 0 && [string compare $ts_config(spooling_method) "classic"] != 0} {
+      if {[remote_file_isdirectory $ts_config(master_host) $db_dir]} {
+         remote_delete_directory $ts_config(master_host) $db_dir
       }
-   } else {
-      # in this case, the berkeley db rpc server spool dir will be removed,
-      # by rpc server install procedure
-      set db_dir [get_bdb_spooldir $bdb_server 1]
    }
    ts_log_fine "db_dir is \"$db_dir\""
 
@@ -196,7 +189,6 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
    append auto_config_content "EXECD_SPOOL_DIR=\"$ts_config(product_root)/$ts_config(cell)/spool\"\n"
    append auto_config_content "GID_RANGE=\"$gid_range\"\n"
    append auto_config_content "SPOOLING_METHOD=\"$ts_config(spooling_method)\"\n"
-   append auto_config_content "DB_SPOOLING_SERVER=\"$bdb_server\"\n"
    append auto_config_content "DB_SPOOLING_DIR=\"$db_dir\"\n"
    # exec/shadowd host install: only use the given host in the host lists
    if {$exechost || $shadowd} {

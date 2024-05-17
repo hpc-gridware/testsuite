@@ -935,7 +935,6 @@ proc get_supported_config_parameter_list {} {
    lappend clone_argument_list "cell"
    lappend clone_argument_list "cluster_name"
    lappend clone_argument_list "spooling_method"
-   lappend clone_argument_list "bdb_server"
    lappend clone_argument_list "bdb_dir"
    lappend clone_argument_list "l10n_test_locale"
    lappend clone_argument_list "aimk_compile_options"
@@ -2408,6 +2407,13 @@ proc update_ts_config_version {} {
    if {[string compare $ts_config(version) "1.22"] == 0} {
       puts "\ntestsuite configuration update from 1.22 to 1.23 ..."
       config_build_ts_config_1_23
+      show_config ts_config
+      wait_for_enter
+   }
+
+   if {[string compare $ts_config(version) "1.23"] == 0} {
+      puts "\ntestsuite configuration update from 1.23 to 1.24 ..."
+      config_build_ts_config_1_24
       show_config ts_config
       wait_for_enter
       return 0
@@ -6533,7 +6539,7 @@ proc menu {} {
 
             # shutdown possibly running system (and additional config clusters)
             shutdown_core_system 0 1
-            # compile hosts required for master, exec, shadow, submit_only, bdb_server hosts
+            # compile hosts required for master, exec, shadow, submit_only hosts
             set compile_hosts [compile_host_list]
             # eliminate duplicates
             set compile_hosts [compile_unify_host_list $compile_hosts]

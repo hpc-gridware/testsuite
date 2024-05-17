@@ -64,7 +64,6 @@ global CHECK_ACTUAL_TEST_PATH
 ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/init_cluster
 ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/interactive/qmaster
 ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/interactive/execd
-ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/interactive/bdb_rpc
 ts_source $CHECK_ACTUAL_TEST_PATH/../manual_util
 
 # define test's procedure order
@@ -178,14 +177,10 @@ proc basic_test_set {} {
    if {$ts_config(spooling_method) == "classic"} {
       set curr_case "classic"
    } else {
-      if {$ts_config(bdb_server) == "none"} {
-         set curr_case "bdb"
-      } else {
-         set curr_case "bdb_rpc"
-      }
+      set curr_case "bdb"
    }
 
-   foreach case "classic bdb bdb_rpc" {
+   foreach case "classic bdb" {
       foreach host $host_list {
          if {[lsearch -exact $basic_hosts $host] >= 0 && "$case" == "$curr_case"} {
             set task_nr [report_create_task report $basic_test_identificator $host "" $case]
@@ -272,14 +267,6 @@ proc basic_test {report_var} {
       set ts_host_config($host,spooldir) $spooldir_master
    }
 
-   if {"$ts_config(spooling_method)" == "classic"} {
-      set ts_config(bdb_server) "none"
-   }
-
-   if {[string compare $ts_config(bdb_server) "none"] != 0} {
-      set ts_config(bdb_dir) $spooldir/bdb
-      install_bdb_rpc
-   }
    install_qmaster
    install_execd
 
@@ -330,9 +317,6 @@ proc basic_test {report_var} {
    if {[string compare "$host" "$ts_config(master_host)"] != 0} {
       set ts_host_config($ts_config(master_host),spooldir) $spooldir_master_bckp
       remote_delete_directory $ts_config(master_host) $spooldir_master
-   }
-   if {[string compare "$ts_config(bdb_server)" "none"] != 0} {
-      remote_delete_directory $ts_config(bdb_server) $spooldir
    }
 
    return $result
@@ -475,7 +459,4 @@ proc get_cluster_configuration {} {
    lappend sge_info_list "Qmaster port: $ts_config(commd_port)"
    lappend sge_info_list  "Execd port: [expr $ts_config(commd_port) + 1]"
    lappend sge_info_list "Spooling method: $ts_config(spooling_method)"
-   if {[string compare $ts_config(bdb_server) "none"] !=0} {
-      lappend sge_info_list "BDB RPC server: $ts_config(bdb_server)"
-   }
 }

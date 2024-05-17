@@ -104,13 +104,9 @@ proc auto_backup_do_backup {} {
    set my_timeout 500
    set exit_val 0
 
-   if {$ts_config(bdb_server) == "none"} {
-      set output [start_remote_prog $ts_config(master_host) $CHECK_USER "./inst_sge" "-bup -auto $ts_config(product_root)/autobackup_config.conf" exit_val $my_timeout 0 $ts_config(product_root)]
-   } else {
-      set output [start_remote_prog $ts_config(bdb_server) $CHECK_USER "./inst_sge" "-bup -auto $ts_config(product_root)/autobackup_config.conf" exit_val $my_timeout 0 $ts_config(product_root)]
-   }
+   set output [start_remote_prog $ts_config(master_host) $CHECK_USER "./inst_sge" "-bup -auto $ts_config(product_root)/autobackup_config.conf" exit_val $my_timeout 0 $ts_config(product_root)]
 
    if {$exit_val != 0} {
-      ts_log_warning $output
+      ts_log_severe $output
    }
 }

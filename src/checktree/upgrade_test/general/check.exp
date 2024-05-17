@@ -154,13 +154,6 @@ proc upgrade_test_init_cluster {} {
 
    # shutdown the core system
    shutdown_core_system
-   if {$ts_config(bdb_server) != "none"} {
-      # start the bdb server
-      set spool_dir [get_bdb_spooldir $ts_config(bdb_server)]
-      remote_delete_directory $ts_config(bdb_server) $spool_dir
-      remote_file_mkdir $ts_config(bdb_server) $spool_dir
-      startup_bdb_rpc $ts_config(bdb_server)
-   }
 
    # upgrade the cluster with the initial configuration
    set result [upgrade_test_upgrade_run_script $CHECK_UPGRADE_INITIAL_CLUSTER_CONFIG_DIR]
@@ -215,13 +208,6 @@ proc upgrade_test_upgrade_additional_cluster {} {
       shutdown_core_system
 
       delete_file $ts_config(product_root)/$ts_config(cell)/common/bootstrap
-
-      if {$ts_config(bdb_server) != "none"} {
-         # start the bdb server
-         remote_delete_directory $ts_config(bdb_server) $ts_config(bdb_dir)
-         remote_file_mkdir $ts_config(bdb_server) $ts_config(bdb_dir)
-         startup_bdb_rpc $ts_config(bdb_server)
-      }
 
       upgrade_operate_add_cluster $filename "$config_dir" $ts_config(cell)
       incr index 1
@@ -860,29 +846,13 @@ proc upgrade_test_upgrade_run_script { bckp_dir } {
          }
 
          -i $sp_id $DATABASE_LOCAL_SPOOLING {
-            if { $ts_config(bdb_server) == "none" } {
-              ts_log_fine "\n -->testsuite: sending >$ANSWER_NO<"
-              set input "$ANSWER_NO\n"
-            } else {
-              ts_log_fine "\n -->testsuite: sending >$ANSWER_YES"
-              set input "$ANSWER_YES\n"
-            }
+            ts_log_fine "\n -->testsuite: sending >$ANSWER_NO<"
+            set input "$ANSWER_NO\n"
             if {$do_log_output == 1} {
                  puts "press RETURN"
                  set anykey [wait_for_enter 1]
             }
             ts_send $sp_id $input
-            continue
-         }
-
-         -i $sp_id $ENTER_DATABASE_SERVER {
-            ts_log_fine "\n -->testsuite: sending $ts_config(bdb_server)"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-
-            ts_send $sp_id "$ts_config(bdb_server)\n"
             continue
          }
 
@@ -915,21 +885,6 @@ proc upgrade_test_upgrade_run_script { bckp_dir } {
             }
 
             ts_send $sp_id "\n"
-            continue
-         }
-
-         -i $sp_id $ENTER_DATABASE_SERVER_DIRECTORY {
-            set spooldir [get_bdb_spooldir $ts_config(bdb_server) 1]
-            if { $spooldir == "" } {
-               ts_log_fine "\n -->testsuite: sending >RETURN<"
-            } else {
-               ts_log_fine "\n -->testsuite: sending $spooldir"
-            }
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "$spooldir\n"
             continue
          }
 

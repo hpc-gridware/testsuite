@@ -3763,11 +3763,6 @@ proc get_spooled_jobs {} {
       ts_log_finer "we have berkeleydb spooling ..."
       set supported 1
       set execute_host $ts_config(master_host)
-      if {$ts_config(bdb_server) != "none"} {
-         ts_log_finer "we have a bdb server host $ts_config(bdb_server) ..."
-         set execute_host [host_conf_get_suited_hosts]
-         ts_log_finer "bdb rpc spooling: calling spooledit on host $execute_host"
-      }
       start_sge_bin "spooledit" "list" $execute_host $CHECK_USER prg_exit_state 120 "" "utilbin" out ""
       for {set i 0} {$i <= $out(0)} {incr i 1} {
          if {[string match "*JOB*" $out($i)]} {
@@ -6887,13 +6882,6 @@ proc startup_daemon { host service } {
 	 }
 	 startup_execd $host
       }
-      "bdb" {
-         if { [string compare $host $ts_config(bdb_server)] != 0 } {
-	    ts_log_severe "Can't start $service. Host $host is not a $service host"
-	    return -1
-	 }
-	 startup_bdb_rpc $host
-      }
       "dbwriter" { 
          if { [string compare $host $arco_config(dbwriter_host)] != 0 } {
 	    ts_log_severe "Can't start $service. Host $host is not a $service host"
@@ -7995,17 +7983,6 @@ proc shutdown_daemon { host service } {
 	 }
 	 return [soft_execd_shutdown $host]
       }
-      "bdb" {
-         if { [string compare $host $ts_config(bdb_server)] != 0 } {
-	    ts_log_severe "Can't stop $service. Host $host is not a $service host"
-	    return -1
-	 }
-	 if { [shutdown_bdb_rpc $host] == -1 } {
-	    return -1
-	 } else {
-	    return 0
-	 }
-      }
       "dbwriter" { 
          if { [string compare $host $arco_config(dbwriter_host)] != 0 } {
 	    ts_log_severe "Can't stop $service. Host $host is not a $service host"
@@ -8138,12 +8115,6 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
       }
    }
 
-   if {$ts_config(bdb_server) != "none"} {
-      foreach rpc_host $ts_config(bdb_server) {
-         shutdown_bdb_rpc $rpc_host
-      }
-   }
-
    # check for core files
    # core file in qmaster spool directory
    set spooldir [get_spool_dir $ts_config(master_host) qmaster]
@@ -8194,13 +8165,8 @@ proc startup_core_system {{only_hooks 0} {with_additional_clusters 0} } {
    }
 
    if { $only_hooks == 0 } {
-
-      # startup of BDB RPC service
-      startup_bdb_rpc $ts_config(bdb_server)
-
       # startup of schedd and qmaster 
       startup_qmaster
-
       
       # startup all shadowds
       # 
@@ -9339,39 +9305,8 @@ proc switch_spooling {} {
                                   "ls" "-la $ts_config(product_root)/bin/$arch"]
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER \
                               "ls" "-la $ts_config(product_root)/utilbin/$arch"]
-
 }
 
-#****** sge_procedures/is_bdb_server_running() *********************************
-#  NAME
-#     is_bdb_server_running() -- indicate if the bdb server is running
-#
-#  SYNOPSIS
-#     is_bdb_server_running {hostname}
-#
-#  FUNCTION
-#     Indicate if the bdb server is running on the host $hostname.
-#
-#  INPUTS
-#     hostname                      - host name
-#
-#  RESULT
-#     1 - the server is running on the hostname*
-#     0 - the server is not running on the hostname
-#
-#  NOTE
-#     if the $ts_config(product_root) is too long the function doesn't
-#     necessarilly returns the correct result since the p result is cut off.
-#     This is dependent on the architecture of the host.
-#     To avoid this problem, choos the short path of the product root.
-#
-#  SEE ALSO
-#     control_procedures/ps_grep()
-#*******************************************************************************
-proc is_bdb_server_running {hostname} {
-   # no longer supported
-   return 0
-}
 
 #****** sge_procedures/get_short_hostname() ***************************************
 #  NAME
@@ -10010,17 +9945,12 @@ proc check_shadowd_settings { shadowd_host } {
          set spooling_ok 1
       } else {
          if {$ts_config(spooling_method) == "berkeleydb"} {
-            if {$ts_config(bdb_server) != "none"} {
-               ts_log_fine "We have \"berkeleydb\" spooling with RPC server." 
+            set bdb_spooldir [get_bdb_spooldir]
+            set fstype [fs_config_get_filesystem_type $bdb_spooldir $ts_config(master_host) 0]
+            if {$fstype == "nfs4"} {
+               ts_log_fine "We have \"berkeleydb\" spooling on NFS v4" 
                set spooling_ok 1
-            } else {
-               set bdb_spooldir [get_bdb_spooldir]
-               set fstype [fs_config_get_filesystem_type $bdb_spooldir $ts_config(master_host) 0]
-               if {$fstype == "nfs4"} {
-                  ts_log_fine "We have \"berkeleydb\" spooling on NFS v4" 
-                  set spooling_ok 1
 
-               }
             }
          }
       }
@@ -10159,77 +10089,6 @@ proc startup_execd_with_fd_limit { host fd_limit {envlist ""}} {
    ts_log_fine "execd started with fd soft limit set to \"$used_fd_limit\""
 
    return $used_fd_limit
-}
-
-#                                                             max. column:     |
-#****** sge_procedures/startup_bdb_rpc() ******
-# 
-#  NAME
-#     startup_bdb_rpc -- ??? 
-#
-#  SYNOPSIS
-#     startup_bdb_rpc { hostname } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#     hostname - ??? 
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     sge_procedures/shutdown_core_system()
-#     sge_procedures/shutdown_master_and_scheduler()
-#     sge_procedures/shutdown_all_shadowd()
-#     sge_procedures/shutdown_system_daemon()
-#     sge_procedures/startup_qmaster()
-#     sge_procedures/startup_execd()
-#     sge_procedures/startup_shadowd()
-#     sge_procedures/startup_bdb_rpc()
-#*******************************
-proc startup_bdb_rpc { hostname } {
-   global CHECK_ADMIN_USER_SYSTEM CHECK_USER
-   get_current_cluster_config_array ts_config
-
-   if { $hostname == "none" } {
-      return -1
-   }
-
-   if { $CHECK_ADMIN_USER_SYSTEM == 0 } {  
-      if { [have_root_passwd] != 0  } {
-         ts_log_warning "no root password set or ssh not available"
-         return -1
-      }
-      set startup_user "root"
-   } else {
-      set startup_user $CHECK_USER
-   }
- 
-
-   ts_log_fine "starting up BDB RPC Server on host \"$hostname\" as user \"$startup_user\""
-
-   set output [start_remote_prog "$hostname" "$startup_user" "$ts_config(product_root)/$ts_config(cell)/common/sgebdb" "start"]
-   ts_log_fine $output
-   # give the bdb server a few seconds to fully initialize
-   # starting sge_qmaster immediately after the bdb server can fail otherwise
-   after 5000
-
-   if { [string length $output] < 15  && $prg_exit_state == 0 } {
-       return 0
-   }
-   ts_log_severe "could not start berkeley_db_svc on host $hostname:\noutput:\"$output\""
-   return -1
 }
 
 #                                                             max. column:     |

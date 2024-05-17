@@ -88,20 +88,15 @@ proc current_version_upgrade_setup {} {
    # The following unsupported modes are only because of missing backup functionality
    # TODO: remove the limitations when the enhancements TODOs are implemented
 
-   if {$ts_config(bdb_server) == "none"} {
-      if {$ts_config(product_feature) != "none"} {
-         ts_log_config "Test currently works only for standard installation"
-         return 99
-      }
-      if {$check_do_not_use_spool_config_entries == 0} {
-         ts_log_config "Test currently only works for no local qmaster spool dir"
-         return 99
-      }
-      ts_log_fine "test should work!"
-   } else {
-      ts_log_config "Test does not work for RPC bdb_server installations"
+   if {$ts_config(product_feature) != "none"} {
+      ts_log_config "Test currently works only for standard installation"
       return 99
    }
+   if {$check_do_not_use_spool_config_entries == 0} {
+      ts_log_config "Test currently only works for no local qmaster spool dir"
+      return 99
+   }
+   ts_log_fine "test should work!"
 
 
    set user $CHECK_USER
@@ -130,7 +125,6 @@ proc current_version_upgrade_setup {} {
    set current_version_test_var(backup_file)      ""
    set current_version_test_var(backup_cell_file) ""
    set current_version_test_var(backup_host)      ""
-   set current_version_test_var(started_bdb_servers) {}
    set current_version_test_var(cloned_results)   {} 
    set current_version_test_var(cloned_default_files) {}
 
@@ -418,12 +412,6 @@ proc current_version_upgrade_cleanup {} {
       }
    }
 
-   foreach bdb_server $current_version_test_var(started_bdb_servers) {
-      ts_log_fine "shutdown started bdb rpc server on host $bdb_server ..."
-      shutdown_bdb_rpc $bdb_server
-   }
-
-
    if {$current_version_test_var(shutdown_done) == true} {
       startup_core_system
    }
@@ -595,13 +583,11 @@ proc current_version_upgrade_test {} {
                   switch -exact $rotate_spooling_method {
                      "classic_NFS" {
                         set clone_config_array(spooling_method) "classic"
-                        set clone_config_array(bdb_server)      "none"
                         set clone_config_array(bdb_dir)         "none"
                         set additional_switches "no_local_spool"
                      }
                      "classic_local" {
                         set clone_config_array(spooling_method) "classic"
-                        set clone_config_array(bdb_server)      "none"
                         set clone_config_array(bdb_dir)         "none"
                         set additional_switches ""
                         # we only can test one shadowd for local spooling
@@ -612,7 +598,6 @@ proc current_version_upgrade_test {} {
                         set nfs4_spool_dirs [fs_config_get_local_base_spool_dir_list_by_fstype "nfs4" $ts_config(master_host)]
                         if {[llength $nfs4_spool_dirs] >= 1} {
                            set clone_config_array(spooling_method) "berkeleydb"
-                           set clone_config_array(bdb_server)      "none"
                            set nfs4_spool_dir [lindex $nfs4_spool_dirs 0]
                            set clone_config_array(bdb_dir)         "$nfs4_spool_dir"
                            set additional_switches ""
@@ -639,7 +624,6 @@ proc current_version_upgrade_test {} {
                         set spooldir [get_local_spool_dir $ts_config(master_host) spooldb 1]
                         if {$spooldir != ""} {
                            set clone_config_array(spooling_method) "berkeleydb"
-                           set clone_config_array(bdb_server)      "none"
                            set clone_config_array(bdb_dir)         "$spooldir"
                            set additional_switches ""
                            # we only can test one shadowd for local spooling
@@ -656,8 +640,6 @@ proc current_version_upgrade_test {} {
                            set spooldir [get_local_spool_dir $ts_config(master_host) spooldb 1]
                            if {$spooldir != ""} {
                               set clone_config_array(spooling_method) "berkeleydb"
-                              set clone_config_array(bdb_server)      [lindex $pos_rps_hosts 0]
-                              lappend current_version_test_var(started_bdb_servers) $clone_config_array(bdb_server)
                               set clone_config_array(bdb_dir)         "$spooldir"
                               set additional_switches "no_local_qmaster_spool"
                            } else {
@@ -728,7 +710,6 @@ proc current_version_upgrade_test {} {
 
                   current_version_upgrade_log test_log " => spooling method \"$rotate_spooling_method\""
                   current_version_upgrade_log test_log "    config spooling_method: $clone_config_array(spooling_method)"
-                  current_version_upgrade_log test_log "    config bdb_server:      $clone_config_array(bdb_server)"
                   current_version_upgrade_log test_log "    config bdb_dir:         $clone_config_array(bdb_dir)"
                   current_version_upgrade_log test_log "    config shadowd_hosts:   $clone_config_array(shadowd_hosts)"
                   current_version_upgrade_log test_log "    additional switches:    $additional_switches"
@@ -1470,31 +1451,13 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
       }
 
       -i $sp_id -- $DATABASE_LOCAL_SPOOLING {
-         if { $ts_config(bdb_server) == "none" } {
-           ts_log_fine "\n -->testsuite: sending >$ANSWER_NO<"
-           set input "$ANSWER_NO\n"
-         } else {
-           ts_log_fine "\n -->testsuite: sending >$ANSWER_YES"
-           set input "$ANSWER_YES\n"
-         }
+         ts_log_fine "\n -->testsuite: sending >$ANSWER_NO<"
+         set input "$ANSWER_NO\n"
          if {$do_log_output == 1} {
               puts "press RETURN"
               set anykey [wait_for_enter 1]
          }
          ts_send $sp_id $input
-         append install_output $expect_out(buffer)
-         log_user 1
-         exp_continue
-      }
-
-      -i $sp_id -- $ENTER_DATABASE_SERVER {
-         ts_log_fine "\n -->testsuite: sending $ts_config(bdb_server)"
-         if {$do_log_output == 1} {
-            puts "press RETURN"
-            set anykey [wait_for_enter 1]
-         }
-
-         ts_send $sp_id "$ts_config(bdb_server)\n"
          append install_output $expect_out(buffer)
          log_user 1
          exp_continue
@@ -1520,42 +1483,6 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          }
 
          ts_send $sp_id "\n"
-         append install_output $expect_out(buffer)
-         log_user 1
-         exp_continue
-      }
-
-      -i $sp_id -- $INSTALL_BDB_AND_CONTINUE {
-         ts_log_fine "install bdb server on rpc host and continue ..."
-         if {$do_log_output == 1} {
-            puts "press RETURN"
-            set anykey [wait_for_enter 1]
-         }
-         if {[current_version_upgrade_install_rpc_bdb ts_config] != 0} { 
-            ts_log_severe "error installing rpc bdb server!"
-         } else { 
-            ts_log_fine "install bdb server on rpc host and continue ...DONE"
-            ts_log_fine "\n -->testsuite: sending >RETURN<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "\n"
-            log_user 1
-            append install_output $expect_out(buffer)
-            exp_continue
-         }
-      }
-
-      -i $sp_id -- $ENTER_DATABASE_SERVER_DIRECTORY {
-         # here we have to set the correct spooling dir
-         set spooldir $ts_config(bdb_dir)
-         ts_log_fine "\n -->testsuite: sending >$spooldir< (spooldir)"
-         if {$do_log_output == 1} {
-            puts "press RETURN"
-            set anykey [wait_for_enter 1]
-         }
-         ts_send $sp_id "$spooldir\n"
          append install_output $expect_out(buffer)
          log_user 1
          exp_continue
@@ -2030,7 +1957,6 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
 }
 
 proc current_version_upgrade_install_send_answer {sp_id answer {scenario ""} {do_debug 0}} {
-
    if {$scenario == ""} {
       ts_log_newline FINE ; ts_log_fine "--> testsuite: sending >$answer<"
    } else {
@@ -2044,290 +1970,6 @@ proc current_version_upgrade_install_send_answer {sp_id answer {scenario ""} {do
    ts_send $sp_id "$answer\n"
 }
 
-proc current_version_upgrade_install_rpc_bdb { ts_config_array } {
-   upvar $ts_config_array ts_config
-   global CHECK_DEBUG_LEVEL CHECK_ADMIN_USER_SYSTEM CHECK_USER
-
-   ts_log_fine "performing rpc bdb server installation ..."
-
-   set do_log_output 0 ;# _LOG
-   if { $CHECK_DEBUG_LEVEL == 2 } {
-     set do_log_output  1 ;# 1
-   }
-
-   if {$CHECK_ADMIN_USER_SYSTEM == 0} {
-      set install_user "root"
-   } else {
-      set install_user $CHECK_USER
-      ts_log_fine "--> install as user $CHECK_USER <--" 
-   }
-
-   set ANSWER_YES                     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ANSWER_YES] ]
-   set ANSWER_NO                      [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ANSWER_NO] ]
-   set RPC_HIT_RETURN_TO_CONTINUE     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_RPC_HIT_RETURN_TO_CONTINUE] ]
-   set RPC_WELCOME                    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_RPC_WELCOME] ]
-   set RPC_INSTALL_AS_ADMIN           [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_RPC_INSTALL_AS_ADMIN] "*" ]
-   set RPC_SGE_ROOT                   [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_RPC_SGE_ROOT] "*" ]
-   set RPC_SGE_CELL                   [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_RPC_SGE_CELL] "*"]
-   set RPC_SERVER                     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_RPC_SERVER] "*" ]
-   set RPC_DIRECTORY                  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_RPC_DIRECTORY] "*" ]
-   set RPC_DIRECTORY_EXISTS           [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_RPC_DIRECTORY_EXISTS] ]
-   set RPC_START_SERVER               [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_RPC_START_SERVER] ]
-   set RPC_SERVER_STARTED             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_RPC_SERVER_STARTED] ]
-   set RPC_INSTALL_RC_SCRIPT          [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_RPC_INSTALL_RC_SCRIPT] ]
-   set RPC_SERVER_COMPLETE            [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_RPC_SERVER_COMPLETE] ]
-   set HIT_RETURN_TO_CONTINUE         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_HIT_RETURN_TO_CONTINUE] ]
-   set INSTALL_SCRIPT                 [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_INSTALL_SCRIPT] "*" ]
-   set DNS_DOMAIN_QUESTION            [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DNS_DOMAIN_QUESTION] ]
-   set HIT_RETURN_TO_CONTINUE_BDB_RPC [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_HIT_RETURN_TO_CONTINUE_BDB_RPC] ]
-   set UNIQUE_CLUSTER_NAME            [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_UNIQUE_CLUSTER_NAME] ]
-   set DETECT_CHOOSE_NEW_NAME         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DETECT_CHOOSE_NEW_NAME] ]
-   set DETECT_REMOVE_OLD_CLUSTER      [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DETECT_REMOVE_OLD_CLUSTER] ]
-   set SMF_IMPORT_SERVICE             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_SMF_IMPORT_SERVICE] ]
-   set REMOVE_OLD_RC_SCRIPT           [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_REMOVE_OLD_RC_SCRIPT] ]
-
-   set id [open_remote_spawn_process $ts_config(bdb_server) $install_user "./inst_sge" "-db" 0 "$ts_config(product_root)"]
-   set sp_id [ lindex $id 1 ]
-   set return_value 0
-   set timeout 60
-   set old_log_user [log_user]
-   if {$do_log_output} {
-      log_user 1
-   }
-   set script_exit_0_found 0
-   set install_output ""
-
-   expect {
-      -i $sp_id full_buffer {
-         ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
-         set return_value 1
-      }
-
-      -i $sp_id eof { 
-         ts_log_severe "unexpected eof" 
-         set return_value 1
-      }
-
-      -i $sp_id timeout { 
-         if {[info exists expect_out(buffer)]} {
-            set buffer_output [format_array expect_out]
-         } else {
-            set buffer_output "n.a."
-         }
-         ts_log_severe "timeout while waiting for output\n$buffer_output" 
-         set return_value 1
-      }
-
-      -i $sp_id -- $RPC_HIT_RETURN_TO_CONTINUE {
-         current_version_upgrade_install_send_answer $sp_id "" "(A)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $RPC_WELCOME { 
-         current_version_upgrade_install_send_answer $sp_id "" "(B)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $RPC_INSTALL_AS_ADMIN { 
-         current_version_upgrade_install_send_answer $sp_id "" "(C)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $RPC_SGE_ROOT {
-         current_version_upgrade_install_send_answer $sp_id $ts_config(product_root) "(D)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $RPC_SGE_CELL {
-         current_version_upgrade_install_send_answer $sp_id $ts_config(cell) "(E)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $UNIQUE_CLUSTER_NAME {
-         current_version_upgrade_install_send_answer $sp_id $ts_config(cluster_name) "(F)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $DETECT_CHOOSE_NEW_NAME {
-         current_version_upgrade_install_send_answer $sp_id $ANSWER_YES "(G)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      # Delete detected services for chosen cluster_name
-      -i $sp_id -- $DETECT_REMOVE_OLD_CLUSTER {
-         current_version_upgrade_install_send_answer $sp_id $ANSWER_NO "(H)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      # Remove conflicting RC files/SMF service
-      -i $sp_id -- $REMOVE_OLD_RC_SCRIPT {
-         current_version_upgrade_install_send_answer $sp_id $ANSWER_YES "(I)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $RPC_SERVER {
-         current_version_upgrade_install_send_answer $sp_id $ts_config(bdb_server) "(J)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      } 
-
-      -i $sp_id -- $DNS_DOMAIN_QUESTION { 
-         current_version_upgrade_install_send_answer $sp_id $ANSWER_YES "(K)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $RPC_DIRECTORY {
-         set spooldir $ts_config(bdb_dir)
-         current_version_upgrade_install_send_answer $sp_id $spooldir "(L)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $RPC_DIRECTORY_EXISTS { 
-         current_version_upgrade_install_send_answer $sp_id $ANSWER_YES "(M)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $RPC_START_SERVER { 
-         current_version_upgrade_install_send_answer $sp_id "" "(N)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $RPC_SERVER_STARTED { 
-         current_version_upgrade_install_send_answer $sp_id "" "(O)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $RPC_INSTALL_RC_SCRIPT { 
-         current_version_upgrade_install_send_answer $sp_id $ANSWER_NO "(P)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-       
-      # SMF startup is always disabled in testsuite
-      -i $sp_id -- $SMF_IMPORT_SERVICE {
-         current_version_upgrade_install_send_answer $sp_id $ANSWER_NO "(Q)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $INSTALL_SCRIPT { 
-         current_version_upgrade_install_send_answer $sp_id $ANSWER_NO "(R)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $HIT_RETURN_TO_CONTINUE {
-         current_version_upgrade_install_send_answer $sp_id "" "(S)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- $HIT_RETURN_TO_CONTINUE_BDB_RPC {
-         current_version_upgrade_install_send_answer $sp_id "" "(T)" $do_log_output
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }
-
-      -i $sp_id -- "_exit_status_:(0)" {
-         set script_exit_0_found 1
-         append install_output $expect_out(buffer)
-         if {$do_log_output} {
-         log_user 1
-         }
-         exp_continue
-      }   
-
-      -i $sp_id -- "*(_END_OF_FILE_)" {
-         append install_output $expect_out(buffer)
-         ts_log_fine "install bdb rpc server done"
-      }
-      -i $sp_id default {
-         ts_log_severe "undefined behaviour: $expect_out(buffer)"
-         set return_value 1         
-      }
-   }
-   if {$script_exit_0_found != 1} {
-      ts_log_severe "the script exit status is not 0!:\noutput:\n$install_output"
-      set return_value 1
-   }
-   log_user $old_log_user
-   close_spawn_process $id 
-   return $return_value
-}
 
 
 

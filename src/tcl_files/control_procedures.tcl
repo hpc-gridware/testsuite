@@ -2680,23 +2680,18 @@ proc scale_timeout {timeout {does_computation 1} {does_spooling 1} {process_invo
 
    # respect spooling influence
    if {$does_spooling} {
-      # if we use a RPC server, assume 100% slower spooling
-      if {$ts_config(bdb_server) != "none"} {
+      # classic spooling is slower than BDB, assume 100% slower spooling
+      if {$ts_config(spooling_method) == "classic"} {
          set ret [expr $ret * 2.0]
+         set spool_dir [get_qmaster_spool_dir]
       } else {
-         # classic spooling is slower than BDB, assume 100% slower spooling
-         if {$ts_config(spooling_method) == "classic"} {
-            set ret [expr $ret * 2.0]
-            set spool_dir [get_qmaster_spool_dir]
-         } else {
-            set spool_dir [get_bdb_spooldir]
-         }
+         set spool_dir [get_bdb_spooldir]
+      }
 
-         # spooling on NFS mounted filesystem, assume 50% slower spooling
-         set fstype [fs_config_get_filesystem_type $spool_dir $ts_config(master_host) 0]
-         if {[string match "nfs*" $fstype]} {
-            set ret [expr $ret * 1.5]
-         }
+      # spooling on NFS mounted filesystem, assume 50% slower spooling
+      set fstype [fs_config_get_filesystem_type $spool_dir $ts_config(master_host) 0]
+      if {[string match "nfs*" $fstype]} {
+         set ret [expr $ret * 1.5]
       }
    }
 

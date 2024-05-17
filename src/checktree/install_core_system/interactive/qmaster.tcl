@@ -362,11 +362,7 @@ proc install_qmaster {{report_var report}} {
          }
 
          -i $sp_id $CELL_NAME_OVERWRITE { 
-            if {$ts_config(bdb_server) == "none"} {
-               install_send_answer $sp_id $ANSWER_NO "5.2.1"
-            } else {
-               install_send_answer $sp_id $ANSWER_YES "5.2.2"
-            }
+            install_send_answer $sp_id $ANSWER_NO "5.2.1"
             continue
          }
 
@@ -673,16 +669,7 @@ proc install_qmaster {{report_var report}} {
          # SGE 6.0 Berkeley DB Spooling
          #
          -i $sp_id $DATABASE_LOCAL_SPOOLING {
-            if {$ts_config(bdb_server) == "none"} {
-               install_send_answer $sp_id $ANSWER_NO "9"
-            } else {
-               install_send_answer $sp_id $ANSWER_YES "9"
-            }
-            continue
-         }
-
-         -i $sp_id $ENTER_DATABASE_SERVER {
-            install_send_answer $sp_id $ts_config(bdb_server)
+            install_send_answer $sp_id $ANSWER_NO "9"
             continue
          }
 
@@ -697,16 +684,6 @@ proc install_qmaster {{report_var report}} {
          }
 
 
-         -i $sp_id $ENTER_DATABASE_SERVER_DIRECTORY {
-            if {$ts_config(bdb_server) != "none"} {
-               set spooldir [get_bdb_spooldir $ts_config(bdb_server) 0]
-            } else {
-               set spooldir [get_bdb_spooldir $ts_config(bdb_server) 1]
-            }
-            install_send_answer $sp_id $spooldir "11"
-            continue
-         }
-   
          -i $sp_id $ENTER_DATABASE_DIRECTORY_LOCAL_SPOOLING {
             set spooldir [get_bdb_spooldir $ts_config(master_host) 0]
             install_send_answer $sp_id $spooldir "12"

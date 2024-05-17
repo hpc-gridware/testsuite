@@ -1712,7 +1712,7 @@ proc config_check_all_usages { check_list config_array type } {
 
    switch -- $type {
       "host" {
-         set main_list "master_host shadowd_hosts execd_hosts submit_only_hosts bdb_server"
+         set main_list "master_host shadowd_hosts execd_hosts submit_only_hosts"
          set arco_list "dbwriter_host"
       }
       "port" {
@@ -3996,42 +3996,7 @@ proc config_testsuite_spooling_method { only_check name config_array } {
       }
 
    return [config_generic $only_check $name config $help_text "choice" 0 1 spool_list]
-      }
-
-#****** config/config_testsuite_bdb_server() ***********************************
-#  NAME
-#     config_testsuite_bdb_server() -- bdb server setup
-#
-#  SYNOPSIS
-#     config_testsuite_bdb_server { only_check name config_array } 
-#
-#  FUNCTION
-#     Testsuite configuration setup - called from verify_config()
-#
-#  INPUTS
-#     only_check   - 0: expect user input
-#                    1: just verify user input
-#     name         - option name (in ts_config array)
-#     config_array - config array name (ts_config)
-#
-#  SEE ALSO
-#     check/setup2()
-#     check/verify_config()
-#*******************************************************************************
-proc config_testsuite_bdb_server { only_check name config_array } {
-
-   upvar $config_array config
-
-   set help_text { "Specify the host of a Berkeley DB RPC server\n"
-                   "A Berkeley DB RPC server is used, if you want to run"
-                   "the shadowd tests or if you don't want to configure"
-                   "a database directory on a local filesystem\n"
-                   "Enter \"none\" if you use local spooling,"
-                   "or press >RETURN< to use the default value." }
-
-   array set params { verify "compile" }
-   return [config_generic $only_check $name config $help_text "host" 1 1 "" params]
-      }
+}
 
 #****** config/config_testsuite_bdb_dir() **************************************
 #  NAME
@@ -4065,8 +4030,6 @@ proc config_testsuite_bdb_dir { only_check name config_array } {
                    "If no local spool directory is defined in the host"
                    "configuration, give the path to a local database"
                    "directory.\n"
-                   "If you configured a Berkeley DB RPC server, enter"
-                   "the database directory on the RPC server host.\n"
                    "Press >RETURN< to use the default value."  }
 
    set value [config_generic $only_check $name config $help_text "string"]
@@ -4080,11 +4043,6 @@ proc config_testsuite_bdb_dir { only_check name config_array } {
       set spooling_method [config_generic $only_check "spooling_method" config $help_text "string"]
    }
 
-   set bdb_server [config_generic 1 "bdb_server" config $help_text "string"]
-   if { $bdb_server == -1 } {
-      set bdb_server [config_generic $only_check "bdb_server" config $help_text "string"]
-   }
-
    if { $value != "none" } {
       if { [tail_directory_name $value] != $value } {
          puts "\nPath \"$value\" is not a valid directory name, try \"[tail_directory_name $value]\""
@@ -4093,8 +4051,7 @@ proc config_testsuite_bdb_dir { only_check name config_array } {
    }
 
    # when we have no_local_spool option set, berkeley db spooling only works on a local disk
-   # except for the BDB server - it works on any filesystem
-   if {$check_do_not_use_spool_config_entries != 0 && $spooling_method == "berkeleydb" && $bdb_server == "none"} {
+   if {$check_do_not_use_spool_config_entries != 0 && $spooling_method == "berkeleydb"} {
       if {$value == "none"} {
          if {$check_do_not_use_spool_config_entries == 1} {
             set used_param_name "no_local_spool"
@@ -4110,17 +4067,13 @@ proc config_testsuite_bdb_dir { only_check name config_array } {
          set spool_dir_ok 1
       } else {
          if {$spooling_method == "berkeleydb"} {
-            if {$bdb_server != "none"} {
+            set tmp_dir $value
+            while {[is_remote_path $master_host $CHECK_USER $tmp_dir] != 1} {
+               set tmp_dir [file dirname $tmp_dir]
+            }  
+            set fstype [fs_config_get_filesystem_type $tmp_dir $master_host]
+            if {$fstype == "nfs4"} {
                set spool_dir_ok 1
-            } else {
-               set tmp_dir $value
-               while {[is_remote_path $master_host $CHECK_USER $tmp_dir] != 1} {
-                  set tmp_dir [file dirname $tmp_dir]
-               }  
-               set fstype [fs_config_get_filesystem_type $tmp_dir $master_host]
-               if {$fstype == "nfs4"} {
-                  set spool_dir_ok 1
-               }
             }
          }
       }
@@ -5358,12 +5311,32 @@ proc config_build_ts_config_1_23 {} {
    set ts_config(version) "1.23"
 }
 
+proc config_build_ts_config_1_24 {} {
+   global ts_config
+
+   # we remove bdb_server
+   set remove_pos $ts_config(bdb_server,pos)
+
+   unset ts_config(bdb_server)
+   unset ts_config(bdb_server,desc)
+   unset ts_config(bdb_server,default)
+   unset ts_config(bdb_server,setup_func)
+   unset ts_config(bdb_server,onchange)
+   unset ts_config(bdb_server,pos)
+
+   # move positions of following parameters up
+   ts_config_move_up_params $remove_pos 1
+
+   # now we have a configuration version 1.24
+   set ts_config(version) "1.24"
+}
+
 ################################################################################
 #  MAIN                                                                        #
 ################################################################################
 
 global actual_ts_config_version      ;# actual config version number
-set actual_ts_config_version "1.23"
+set actual_ts_config_version "1.24"
 
 # first source of config.tcl: create ts_config
 if {![info exists ts_config]} {
@@ -5392,4 +5365,5 @@ if {![info exists ts_config]} {
    config_build_ts_config_1_21
    config_build_ts_config_1_22
    config_build_ts_config_1_23
+   config_build_ts_config_1_24
 }

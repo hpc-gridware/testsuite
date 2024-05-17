@@ -684,16 +684,6 @@ proc smf_advanced_restart_test {host service {timeout 30} {kill_restarts 1}} {
 proc enable_smf_in_cluster {} {
    global ts_config CHECK_USER arco_config
    
-   set host $ts_config(bdb_server)
-   set service "bdb"
-   if {[llength $ts_config(bdb_server)] != 0 && [is_smf_host $host] == 1} {
-      ts_log_fine "Registering $service:$ts_config(cluster_name) service ..."
-      set output [start_remote_prog $host "root" [get_binary_path $host "sh"] "-c [get_sge_smf_cmd] register $service $ts_config(cluster_name)" prg_exit_state]
-      if { [string length [string trim $output]] != 0 || $prg_exit_state != 0 } {
-         ts_log_severe "ERROR: Registering $service did not succeed!"
-         return -1
-      }
-   }
    set host $ts_config(master_host)
    set service "qmaster"
    if {[is_smf_host $host] == 1} {
@@ -758,15 +748,6 @@ proc remove_smf_from_cluster {} {
 
 proc smf_startup_cluster {} {
    global ts_config arco_config
-   #bdb
-   set host "$ts_config(bdb_server)"
-   if {[llength $host] != 0} {
-      if {[is_smf_host $host] == 1} {
-         start_smf_service $host "bdb"
-      } else {
-	 startup_daemon $host "bdb"
-      }
-   }
    #qmaster
    set host $ts_config(master_host)
    if {[is_smf_host $host] == 1} {
@@ -804,11 +785,6 @@ proc smf_startup_cluster {} {
 
 proc startup_cluster {} {
    global ts_config
-   #bdb
-   set host "$ts_config(bdb_server)"
-   if {[llength $host] != 0} {
-      startup_daemon $host "bdb"
-   }
    #qmaster
    set host $ts_config(master_host)
    startup_daemon $host "qmaster"
@@ -856,13 +832,5 @@ proc shutdown_whole_cluster {} {
    #qmaster
    set host $ts_config(master_host)
    shutdown_daemon $host "qmaster"
-   
-   #bdb
-   if {[llength $ts_config(bdb_server)] != 0} {
-      set host $ts_config(bdb_server)
-      if {$host != "none"} {
-         shutdown_daemon $host "bdb" 
-      }
-   }
 }
 

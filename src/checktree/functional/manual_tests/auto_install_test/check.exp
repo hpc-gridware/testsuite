@@ -65,7 +65,6 @@ ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/init_cluster
 ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/automatic/qmaster
 ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/automatic/execd
 ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/automatic/shadowd
-ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/interactive/bdb_rpc
 ts_source $CHECK_ACTUAL_TEST_PATH/../manual_util
 
 # define test's procedure order
@@ -78,7 +77,7 @@ proc auto_install_setup_level {} {
    global ts_config ts_config_backup
    global auto_install_hosts auto_install_host_set auto_install_host_select
    global auto_install_test_identificator
-   global auto_install_test_hosts auto_install_bdb
+   global auto_install_test_hosts
 
    switch -- $CHECK_ACT_LEVEL {
       0 {
@@ -106,25 +105,6 @@ proc auto_install_setup_level {} {
    set auto_install_hosts [manual_select_hosts $auto_install_host_set $auto_install_host_select]
    set auto_install_test_hosts [host_conf_get_suited_hosts 2 {sol-amd64 \
                                 sol-sparc64 lx-amd64 lx-x86 lx24-amd64 lx24-x86} {} {win32-x86}]
-   if {$ts_config(bdb_server) == "none"} {
-      set bdb_found false
-      for {set i 0} {$i < 5} {incr i 1} {
-         set auto_install_bdb [host_conf_get_suited_hosts 1 {sol-amd64 \
-                                sol-sparc64 lx-amd64 lx-x86 lx24-amd64 lx24-x86} {} {win32-x86}]
-         if {![is_bdb_server_running $auto_install_bdb]} {
-            set bdb_found true
-            break
-         }
-      }
-   } else {
-      set bdb_found true
-      set auto_install_bdb $ts_config(bdb_server)
-   }
-
-   if {!$bdb_found} {
-      ts_log_config "No bdb server found."
-      return
-   }
 
    set auto_install_test_identificator "AUTO_INSTALL"
 
@@ -144,7 +124,7 @@ proc auto_install_setup_level {} {
 proc auto_install_cleanup_level {} {
    global ts_config ts_config_backup
 #   global system_was_alive
-   global auto_install_hosts auto_install_test_hosts auto_install_bdb
+   global auto_install_hosts auto_install_test_hosts
 
    # restore ts_config parameters
    foreach param [array names ts_config_backup] {
@@ -156,7 +136,7 @@ proc auto_install_cleanup_level {} {
 #   }
 
    # unset our test's global variables
-   foreach var "ts_config_backup auto_install_hosts auto_install_test_hosts auto_install_bdb" {
+   foreach var "ts_config_backup auto_install_hosts auto_install_test_hosts" {
       if {[info exists $var]} {
          unset $var
       }
@@ -192,7 +172,7 @@ proc auto_install_test_set {} {
    report_set_html_parameters report generate_html_report "$dirname/index.html"
 
    foreach host $host_list {
-      foreach case "classic bdb bdb_rpc" {
+      foreach case "classic bdb" {
          if {[lsearch -exact $auto_install_hosts $host] >= 0} {
             set task_nr [report_create_task report $auto_install_test_identificator $host "" $case]
             set result [auto_install_test report]
@@ -215,11 +195,10 @@ proc auto_install_test_set {} {
 
 # case: classic
 #       bdb
-#       bdb_rpc
 proc auto_install_cluster_configure {host case} {
    global ts_config auto_install_host ts_config_backup
    global check_do_not_use_spool_config_entries
-   global auto_install_test_hosts auto_install_bdb
+   global auto_install_test_hosts
 
    set arch [resolve_arch $host]
    if {[string first "win" $arch] == 0} {
@@ -251,15 +230,9 @@ proc auto_install_cluster_configure {host case} {
    switch -- $case {
       "classic" {
          set ts_config(spooling_method) classic
-         set ts_config(bdb_server) none
       }
       "bdb" {
          set ts_config(spooling_method) berkeleydb
-         set ts_config(bdb_server) none
-      }
-      "bdb_rpc" {
-         set ts_config(spooling_method) berkeleydb
-         set ts_config(bdb_server) $auto_install_bdb
       }
    }
 }
@@ -292,9 +265,6 @@ proc auto_install_test {report_var} {
 #      start_remote_prog $host $CHECK_USER mkdir $spooldir
 #   }
    create_autoinst_config
-   if {$case == "bdb_rpc"} {
-      install_bdb_rpc
-   }
    install_qmaster
    install_wait_for_settings_file
    install_shadowd

@@ -301,7 +301,7 @@ proc get_all_hosts { } {
       foreach filename $ts_config(additional_config) {
          get_additional_config $filename add_config
 
-         set hosts "$add_config(master_host) $add_config(execd_hosts) $add_config(execd_nodes) $add_config(submit_only_hosts) $add_config(bdb_server) $add_config(shadowd_hosts)"
+         set hosts "$add_config(master_host) $add_config(execd_hosts) $add_config(execd_nodes) $add_config(submit_only_hosts) $add_config(shadowd_hosts)"
          set add_cluster_hosts [lsort -dictionary -unique $hosts]
          set none_elem [lsearch $add_cluster_hosts "none"]
          if {$none_elem >= 0} {

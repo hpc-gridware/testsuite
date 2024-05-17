@@ -1702,7 +1702,7 @@ proc sge_check_32bit_binaries {report_var} {
 
 proc manual_cluster_parameters {} {
    return "master_host shadowd_hosts execd_hosts commd_port jmx_port reserved_port \n
-   product_root product_feature cell cluster_name spooling_method bdb_server bdb_dir"
+   product_root product_feature cell cluster_name spooling_method bdb_dir"
 }
 
 proc manual_arch32_mapping {arch} {

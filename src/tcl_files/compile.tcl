@@ -138,7 +138,7 @@ proc compile_host_list {{binaries_only 0}} {
             ts_log_fine "adding hosts from additional cluster configuration file"
             ts_log_fine "$filename"
             ts_log_fine "to compile host list. This cluster will be installed as GE Cell!"
-            foreach param "master_host execd_hosts shadowd_hosts submit_only_hosts bdb_server" {
+            foreach param "master_host execd_hosts shadowd_hosts submit_only_hosts" {
                if { $add_config($param) != "none" } {
                   append host_list " $add_config($param)"
                   ts_log_fine "appending $param host \"$add_config($param)\""
