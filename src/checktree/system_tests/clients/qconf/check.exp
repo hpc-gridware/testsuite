@@ -124,7 +124,6 @@ lappend check_functions "qconf_shgrp_resolved_check"	;# List  hosts in a group
 lappend check_functions "qconf_modify_hostgroup"
 
 lappend check_functions "qconf_purge_queue"
-
 lappend check_functions "qconf_add_rqs"                 ;# add resource quota set
 lappend check_functions "qconf_modify_rqs"              ;# modify resource quota set
 lappend check_functions "qconf_modifyreplace_rqs"       ;# modify/replace resource quota set
@@ -4184,9 +4183,9 @@ proc qconf_add_rqs {} {
    set rqs_charray($rqs_name_cli,limit) "$rules"
    set result [add_rqs rqs_charray 0]
 
-   # Try to add invalid fast 
+   # Try to add invalid fast
    set rules ""
-   lappend rules "user bla to slots=10"
+   lappend rules "user bla to slots=10"; # user instead of users
    unset rqs_charray
    set rqs_charray($rqs_name_invalid,limit) "$rules"
    set result [add_rqs rqs_charray 1 "" "" 0]
@@ -4217,10 +4216,11 @@ proc qconf_add_rqs {} {
       ts_log_severe "qconf -Arqs should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
       del_rqs $rqs_name
    }
+
    set non_cluster_host [host_conf_get_non_cluster_host]
    if {$non_cluster_host != ""} {
       set ret [add_rqs rqs_charray  1 $non_cluster_host "" 0]
-      if {![check_for_non_cluster_host_error $ret "any"]} {
+      if {![check_for_non_cluster_host_error $ret "admin"]} {
          ts_log_severe "qconf -Arqs should have failed on host $non_cluster_host"
       }
    }
@@ -4312,7 +4312,7 @@ proc qconf_modify_rqs {} {
    set non_cluster_host [host_conf_get_non_cluster_host]
    if {$non_cluster_host != ""} {
       set ret [mod_rqs new_rqs_charray "$rqs_name_fast" 1 $non_cluster_host "" 0]
-      if {![check_for_non_cluster_host_error $ret "any"]} {
+      if {![check_for_non_cluster_host_error $ret "admin"]} {
          ts_log_severe "qconf -Mrqs should have failed on host $non_cluster_host"
       }
    }
@@ -4390,7 +4390,7 @@ proc qconf_modifyreplace_rqs {} {
    set non_cluster_host [host_conf_get_non_cluster_host]
    if {$non_cluster_host != ""} {
       set ret [mod_rqs old_rqs_config "" 1 $non_cluster_host "" 0]
-      if {![check_for_non_cluster_host_error $ret "any"]} {
+      if {![check_for_non_cluster_host_error $ret "admin"]} {
          ts_log_severe "qconf -Mrqs should have failed on host $non_cluster_host"
       }
    }
