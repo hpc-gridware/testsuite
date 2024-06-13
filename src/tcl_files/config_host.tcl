@@ -2372,10 +2372,13 @@ proc get_testsuite_java_version {{version "1.4"}} {
 #  RESULT
 #     hostlist
 #*******************************************************************************
-proc host_conf_get_cluster_hosts {} {
+proc host_conf_get_cluster_hosts {{with_non_cluster_hosts 0}} {
    global ts_config
 
    set hosts "$ts_config(master_host) $ts_config(execd_hosts) $ts_config(execd_nodes) $ts_config(admin_only_hosts) $ts_config(submit_only_hosts) $ts_config(shadowd_hosts)"
+   if {$with_non_cluster_hosts} {
+      set hosts [concat $hosts $ts_config(non_cluster_hosts)]
+   }
    set cluster_hosts [lsort -dictionary -unique $hosts]
    set none_elem [lsearch $cluster_hosts "none"]
    if {$none_elem >= 0} {

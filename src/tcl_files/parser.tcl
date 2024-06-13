@@ -956,6 +956,10 @@ proc transform_date_time {value {xml 0}} {
    # we parse both time stamps in the format 03/08/2007 16:45:02, and
    # xml date/time strings in the format 2007-03-08T16:31:38
    # the "T" makes problems when parsing with clock scan - remove it
+   # beginning with OCS 9.0.0 timestamps can contain the microseconds, e.g. 03/08/2007 16:45:02.384896
+   if {[is_version_in_range "9.0.0"]} {
+      set value [lindex [split $value "."] 0]
+   }
    if {$xml} {
       set value [join [split [string trim $value] "T"] " "]
    }
