@@ -110,7 +110,7 @@ proc issue_2372_setup {} {
    ts_log_fine "restarting qmaster (and scheduler) with slow spooling options enabled when qping -dump client is connected!"
 
    set envlist(SGE_TEST_SPOOLING_WAIT_TIME) "80"
-   startup_qmaster 1 envlist 
+   startup_qmaster 1 envlist
 }
 
 proc issue_2372_cleanup {} {

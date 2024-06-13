@@ -266,6 +266,7 @@ proc qrstat_option_explain {} {
    set msg [translate_macro MSG_AR_RESERVEDQUEUEHASERROR_SS $queue $qerror]
    set check_values(state)   "E"
    set check_values(message) "$msg"
+
    parse_qrstat_check $ar_id check_values; #qrstat -ar output
    parse_explain_option $msg; #qrstat -explain output
    delete_job $job_id

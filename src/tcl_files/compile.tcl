@@ -1182,6 +1182,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
    global ts_host_config ts_config
    global CHECK_USER CHECK_CMAKE_BUILD_TYPE
    global check_do_clean_compile
+   global CMAKE_BUILD_ID
 
    upvar $report_var report
 
@@ -1247,7 +1248,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
          } else {
             append args " -DINSTALL_SGE_DOC=OFF"
          }
-         append args " -DCMAKE_BUILD_TYPE=$CHECK_CMAKE_BUILD_TYPE -Wno-dev"
+         append args " -DCMAKE_BUILD_TYPE=$CHECK_CMAKE_BUILD_TYPE -DCMAKE_BUILD_ID=$CMAKE_BUILD_ID -Wno-dev"
          set options($host,args) $args
          set options($host,dir) [compile_source_cmake_get_build_dir $host]
       }
@@ -1338,9 +1339,16 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
       # call make install on every host
       unset -nocomplain options
       foreach host $compile_hosts {
-         set options($host,cmd) "make"
-         set options($host,args) "install VERBOSE=1"
-         set options($host,dir) [compile_source_cmake_get_build_dir $host]
+         set num_procs [node_get_processors $host]
+         if {$num_procs > 1} {
+            set options($host,cmd) "make"
+            set options($host,args) "-j $num_procs install VERBOSE=1"
+            set options($host,dir) [compile_source_cmake_get_build_dir $host]
+         } else {
+            set options($host,cmd) "make"
+            set options($host,args) "install VERBOSE=1"
+            set options($host,dir) [compile_source_cmake_get_build_dir $host]
+         }
       }
       incr error_count [compile_source_cmake_execute "install" $compile_hosts options report]
    }
