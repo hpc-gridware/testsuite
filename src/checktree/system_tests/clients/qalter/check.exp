@@ -102,11 +102,12 @@ global hold_job_T
 global hold_job_U
 global nonadmin_hold_job
 global nonadmin_user
-global job_output_dir
 
 proc qalter_setup {} {
+   global CHECK_JOB_OUTPUT_DIR
    global qalter_host qalter_queue
    global qalter_global_config
+   global job_output_dir
 
    set qalter_host  [host_conf_get_suited_hosts]
    set qalter_queue [get_queue_instance "all.q" $qalter_host]
@@ -115,6 +116,8 @@ proc qalter_setup {} {
    get_config qalter_global_config
    set conf(qmaster_params) "ENABLE_SUBMIT_LIB_PATH=TRUE"
    set_config conf
+
+   set job_output_dir $CHECK_JOB_OUTPUT_DIR
 }
 
 proc qalter_cleanup {} {
@@ -311,11 +314,10 @@ proc run_dummy_jobs {} {
 proc start_testjob {} {
    global ts_config
    global submitresult
-   global job_output_dir CHECK_JOB_OUTPUT_DIR
+   global job_output_dir
    global CHECK_ACTUAL_TEST_PATH CHECK_USER
    global qalter_queue
 
-   set job_output_dir $CHECK_JOB_OUTPUT_DIR
    set submitresult [submit_job "-h -q $qalter_queue -e $job_output_dir -o $job_output_dir $ts_config(product_root)/examples/jobs/sleeper.sh 15"]
    if {$submitresult < 0} {
       return
@@ -1744,7 +1746,7 @@ proc qalter_a {} {
    ts_log_fine "$option $job_id"
    set qalteroutput [start_sge_bin "qalter" "$option $job_id"]
    if {$prg_exit_state != 0} {
-     ts_log_severe "qalter $option failed - couldn't change starttime:\nqalteroutput$"
+     ts_log_severe "qalter $option failed - couldn't change starttime:\n$qalteroutput"
      delete_job $job_id
      return
    }

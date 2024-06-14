@@ -77,7 +77,7 @@ proc qmaster_spooling_cleanup {} {
    delete_all_ars
 }
 
-proc cmp_config { conf_a conf_b fields check} {
+proc cmp_config {conf_a conf_b fields check} {
    upvar $conf_a a
    upvar $conf_b b
 

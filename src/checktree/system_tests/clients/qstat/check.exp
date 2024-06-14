@@ -3867,7 +3867,7 @@ proc qstat_j_xml {} {
    while {[timestamp] < $my_timeout} {
       set plainoutput [start_sge_bin "qstat" "-j $job_id"]
       plain_j_parse plain $job_id $plainoutput
-      set cpu_value_plain [ expr [clock scan $plain(cpu)] - $help_seconds]
+      set cpu_value_plain [expr [clock scan $plain(cpu)] - $help_seconds]
       ts_log_fine "cpu usage: $cpu_value_plain"
       if {$cpu_value_plain > 20} {
          break

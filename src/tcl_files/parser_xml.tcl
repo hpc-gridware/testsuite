@@ -1665,7 +1665,7 @@ proc qhost_u_xml_parse { output_var {params ""} } {
    
    # capture xml output
    set xmloutput [start_sge_bin "qhost" "$params -xml"]
-   
+
    set doc [dom parse $xmloutput]
    set root [$doc documentElement]
    
@@ -2111,6 +2111,13 @@ proc qstat_j_xml_par { output job_id xmloutput} {
       set sched "scheduling info"
       set xml($sched) [[$message firstChild] nodeValue]
    }
-      
+
+   # beginning with OCS 9.0.0 JB_submission_time (and others which are not parsed here)
+   # have 64bit timestamps
+   if {[is_version_in_range "9.0.0"]} {
+      foreach name "submission_time" {
+         set xml($name) [expr $xml($name) / 1000000]
+      }
+   }
 }
 
