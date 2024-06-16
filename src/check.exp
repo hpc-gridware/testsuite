@@ -208,9 +208,13 @@ global do_wait_on_error
 set do_wait_on_error 0
 
 global define_daily_build_nr
-global CMAKE_BUILD_ID
 set define_daily_build_nr 0
+
+global CMAKE_BUILD_ID
 set CMAKE_BUILD_ID ""
+
+global CMAKE_COMPILE_INSTALL_SEPARATELY
+set CMAKE_COMPILE_INSTALL_SEPARATELY 0
 
 global create_csv_file
 set create_csv_file 0
@@ -7735,6 +7739,10 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "cmake_build_id        Define a build id for the cmake build."
       puts ""
+      puts "cmake_compile_install_separately   As default TS does \'cmake install\' which automatically"
+      puts "                      (re)compiles files that are not up to date. If both steps should be"
+      puts "                      done in two separate steps than this can be enabled by passing 1 as argument"
+      puts ""
       puts "all RUNLEVEL          run every test automatically up to runlevel RUNLEVEL"
       puts "                      (RUNLEVEL is a value from 0=short tests, up to 4=week tests)"
       puts ""
@@ -7858,6 +7866,12 @@ for {set i 0} {$i < $argc} {incr i} {
    if {([string compare [lindex $argv $i] "--cmake_build_id"] == 0) || ([string compare [lindex $argv $i] "cmake_build_id"] == 0) } {
       incr i
       set CMAKE_BUILD_ID [lindex $argv $i]
+      continue
+   }
+
+   if {([string compare [lindex $argv $i] "--cmake_compile_install_separately"] == 0) || ([string compare [lindex $argv $i] "cmake_compile_install_separately"] == 0) } {
+      incr i
+      set CMAKE_COMPILE_INSTALL_SEPARATELY [lindex $argv $i]
       continue
    }
 
