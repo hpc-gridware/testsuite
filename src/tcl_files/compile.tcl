@@ -574,6 +574,7 @@ proc compile_source { { do_only_hooks 0} {compile_only 0} } {
    global CHECK_DEFAULTS_FILE check_name
    global CHECK_JOB_OUTPUT_DIR
    global CHECK_PROTOCOL_DIR CHECK_USER check_do_clean_compile
+   global CMAKE_COMPILE_INSTALL_SEPARATELY
 
    # settings for mail
    set check_name "compile_source"
@@ -1183,6 +1184,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
    global CHECK_USER CHECK_CMAKE_BUILD_TYPE
    global check_do_clean_compile
    global CMAKE_BUILD_ID
+   global CMAKE_COMPILE_INSTALL_SEPARATELY
 
    upvar $report_var report
 
@@ -1209,14 +1211,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
       incr error_count [compile_source_cmake_make_build_dir $compile_hosts report build_3rdparty_hosts]
    }
    
-   # we'll pass a build number into aimk to distinguish our binaries
-   # from official builds.
-   # @todo what do we want here?
-   # @todo add this to the cmake build
-   # set build_number [get_build_number]
-
-   # no need to call cmake when compiling with 1t
-   # we will not change any configuration
+   # no need to call cmake when compiling with 1t. we will not change any configuration
    # while updates to the CMakeLists.txt files will be taken into account
    if {$error_count == 0 && !$compile_only} {
       # call cmake on every host
@@ -1267,6 +1262,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
                set options($host,args) "-j $num_procs VERBOSE=1 3rdparty"
             } else {
                set options($host,args) "VERBOSE=1 3rdparty"
+
             }
             set options($host,dir) [compile_source_cmake_get_build_dir $host]
          }
@@ -1274,7 +1270,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
       }
    }
 
-   if {$error_count == 0} {
+   if {$CMAKE_COMPILE_INSTALL_SEPARATELY == 1 && $error_count == 0} {
       # call make on every host
       unset -nocomplain options
       foreach host $compile_hosts {
