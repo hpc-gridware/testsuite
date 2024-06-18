@@ -90,7 +90,7 @@ proc issue_2344_setup {} {
    set schedconf(job_load_adjustments)       "NONE"
    set schedconf(load_adjustment_decay_time) "0:0:00"
    # set schedconf(params)                     "MONITOR=true"
-   set result [ set_schedd_config schedconf ]
+   set result [set_schedd_config schedconf]
 }
 
 proc issue_2344_cleanup {  } {
@@ -98,17 +98,23 @@ proc issue_2344_cleanup {  } {
    global ts_config
    global issue_2344_complex_backup
 
+   # reset the scheduler configuration
+   reset_schedd_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
    # restore global host and revert F001 complex definition
    set_exechost global_host_backup
 
    reset_complex issue_2344_complex_backup
    unset issue_2344_complex_backup
-   # reset the scheduler configuration
-   reset_schedd_config
 
    # remove the cqueues
    del_queue "A" "" 1 1
    del_queue "B" "" 1 1
+
+   unset -nocomplain global_host_backup issue_2344_complex_backup
 }
 
 
@@ -119,23 +125,29 @@ proc issue_2344_check { } {
    global ts_config
 
    # qsub -p 30 -q A -N RunInA -l h_rt=:3:30 -b y /bin/sleep 180
+   # this job will be scheduled
    set run_in_a [submit_job "-p 30 -q A -N RunInA -l h_rt=:3:30 $ts_config(product_root)/examples/jobs/sleeper.sh 180"]
 
    # qsub -p 20 -q A -N WaitForA -l F001=1,h_rt=:3:30 -R n -b y /bin/sleep 180
+   # this job cannot run as queue A is full, it doesn't do a reservation
    set wait_for_a [submit_job "-p 20 -q A -N WaitForA -l F001=1,h_rt=:3:30 -R n $ts_config(product_root)/examples/jobs/sleeper.sh 180"]
 
-   # qsub -p 10 -q A -N RsvForA -l F001=1,h_rt=:3:30 -R y -b y /bin/sleep 180 
+   # qsub -p 10 -q A -N RsvForA -l F001=1,h_rt=:3:30 -R y -b y /bin/sleep 180
+   # this job cannot run as queue A is full and should also get a reservation
    set rsv_for_a [submit_job "-p 10 -q A -N RsvForA -l F001=1,h_rt=:3:30 -R y $ts_config(product_root)/examples/jobs/sleeper.sh 180"]
 
    # qsub -p 0 -q B -N GrabF001 -l F001=1,h_rt=1::5 -b y /bin/sleep 3600
+   # could run in queue B but is blocked by the reservations on F001
+   # cannot be backfilled as F001 is only free for 3:30 and its runtime is one hour
    set grap_f001 [submit_job "-p 0 -q B -N GrabF001 -l F001=1,h_rt=1::5 $ts_config(product_root)/examples/jobs/sleeper.sh 3600"]
 
-   # no job other than 'run_in_a' may be in running state after qconf -tsm 
+   # no job other than 'run_in_a' may be in running state after qconf -tsm
    if {[wait_for_jobstart $run_in_a "" 45 1 1] == 0 } {
       if { [is_job_running $wait_for_a ""] || [is_job_running $rsv_for_a ""] || [is_job_running $grap_f001 ""] } {
          # ts_log_fine "no job other than $run_in_a may started"
          # wait_for_enter 1
-         ts_log_severe "no job other than $run_in_a may started"
+         set output [start_sge_bin "qstat" "-f -u '*'"]
+         ts_log_severe "no job other than $run_in_a may have started started but:\n$output"
       }
    } else {
       # ts_log_fine "job $run_in_a gets not started"
@@ -143,6 +155,8 @@ proc issue_2344_check { } {
       ts_log_severe "job $run_in_a gets not started"
    }
 
-   delete_all_jobs
-   wait_for_end_of_all_jobs 60
+   delete_job $run_in_a
+   delete_job $wait_for_a
+   delete_job $rsv_for_a
+   delete_job $grap_f001
 }
