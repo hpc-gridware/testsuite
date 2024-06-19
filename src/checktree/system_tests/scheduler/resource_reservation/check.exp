@@ -63,11 +63,6 @@ set check_cleanup_level_function resource_reservation_level_cleanup
 set check_functions ""
 lappend check_functions "resource_reservation_basic"
 
-global rr_queue_name
-global rr_cal_queue_name
-global rr_h_vmem_complex 
-global rr_host
-
 # -------- local test procedures: initialization ------------------------------
 
 proc resource_reservation_setup {} {
@@ -83,13 +78,9 @@ proc resource_reservation_setup {} {
    set rr_queue_name               "rr_queue.q"
    set rr_cal_queue_name           "rr_cal_queue.q"
 
-   foreach host $ts_config(execd_nodes) {
-      if {[resolve_arch $host] != "win32-x86"} {
-         # there must be at least one non-win32-x86-host
-         set rr_host $host
-         break
-      }
-   }
+   # we use the first exec host here
+   # and in runlevel 4 the second one for an additional queue
+   set rr_host [lindex $ts_config(execd_nodes) 0]
 
    # Setup the scheduler
    set schedconf(weight_tickets_functional)  "0"
@@ -128,11 +119,7 @@ proc resource_reservation_setup {} {
    set result [ set_complex tmp_complex ]
 
    # enable / disable queues needed for the test
-   set queue_list {}
-   foreach host $ts_config(execd_nodes) {
-      lappend queue_list [get_queue_instance "all.q" $host]
-   }
-   disable_queue $queue_list   
+   disable_queue "all.q"
 
 #-----  
   
@@ -146,27 +133,26 @@ proc resource_reservation_setup {} {
 }
 
 proc resource_reservation_level_setup {} {
-
-   global rr_queue_name rr_cal_queue_name rr_h_vmem_complex 
+   global rr_queue_name rr_cal_queue_name rr_h_vmem_complex
    global rr_host
    global ts_config
    global CHECK_ACT_LEVEL
 
    switch -- $CHECK_ACT_LEVEL {
-      "2" {
+      2 {
          # Tests resource_reservation
       }
-      "3" {
+      3 {
          # Tests resource_reservation with resource quota sets
       }
-      "4" {
+      4 {
          # Tests resource_reservation
          if {[llength $ts_config(execd_nodes)] < 2} {
             ts_log_config "Need 2 execd nodes for this test in runlevel $CHECK_ACT_LEVEL"
             return 99
          }
       }
-      "5" {
+      5 {
          # Tests resource_reservation with resource quota sets
       }
    }
@@ -196,7 +182,6 @@ proc resource_reservation_level_setup {} {
       }
 
       if {$CHECK_ACT_LEVEL == 4} {
-
          add_queue "$rr_cal_queue_name" "@allhosts" queue_conf
          set no_rr_host [lindex $ts_config(execd_nodes) 1]
 
@@ -213,10 +198,9 @@ proc resource_reservation_level_setup {} {
          add_calendar "$cal_name" new_cal
          set cal_queue_conf(calendar)   "$cal_name"
 
-         mod_queue "$rr_cal_queue_name" "@allhosts" cal_queue_conf 1
+         mod_queue $rr_cal_queue_name "@allhosts" cal_queue_conf 1
       }
-
-   } 
+   }
 
    if {$CHECK_ACT_LEVEL == 1 || $CHECK_ACT_LEVEL == 3} {
       # setup needed pe
@@ -293,16 +277,12 @@ proc resource_reservation_level_setup {} {
 
    ts_log_fine "Add queue $rr_queue_name"
    add_queue $rr_queue_name "@allhosts" queue_conf 1
- 
-   set queue_list {}
-   foreach host [lrange $ts_config(execd_nodes) 1 end] {
-      lappend queue_list [get_queue_instance $rr_queue_name $host]
-   }
-   disable_queue $queue_list  
+
+   disable_queue $rr_queue_name
+   enable_queue [get_queue_instance $rr_queue_name $rr_host]
 }
 
 proc resource_reservation_cleanup {  } {
-
    global rr_h_vmem_complex
    global ts_config
    global rr_host
@@ -324,22 +304,18 @@ proc resource_reservation_cleanup {  } {
    unset resource_reservation_complex_backup
 
    # enable queues
-    set queue_list {}
-    foreach host $ts_config(execd_nodes) {
-      lappend queue_list [get_queue_instance "all.q" $host]
-    }
-    enable_queue $queue_list
+    enable_queue "all.q"
+
+   unset -nocomplain rr_h_vmem_complex rr_host global resource_reservation_complex_backup
 }
 
 proc resource_reservation_level_cleanup {} {
-
-   global rr_queue_name rr_cal_queue_name rr_h_vmem_complex 
+   global rr_queue_name rr_cal_queue_name rr_h_vmem_complex
    global rr_host
    global ts_config
    global CHECK_ACT_LEVEL
 
    ts_log_fine "resource_reservation_level_cleanup"
-
 
    # remove jobs
    delete_all_jobs
@@ -481,7 +457,7 @@ proc drmaa_test { test_name arguments } {
 
    set user $CHECK_USER
 
-   set test_output [start_test_bin "test_drmaa" "$test_name $arguments" $rr_host $user prg_exit_state 500]
+   set test_output [start_test_bin "test_drmaa" "$test_name $arguments" $rr_host $user prg_exit_state 300]
 
    ts_log_fine "exit status was $prg_exit_state"
    ts_log_fine "output was\n$test_output"
@@ -489,6 +465,10 @@ proc drmaa_test { test_name arguments } {
    if { $prg_exit_state != 0 } {
       ts_log_severe "test_drmaa $test_name $arguments failed at host $rr_host\n$test_output"
    }
+
+   # @todo report an error if there are still jobs
+   delete_all_jobs
+   wait_for_end_of_all_jobs
 }
 
 proc resource_reservation_basic { } {
