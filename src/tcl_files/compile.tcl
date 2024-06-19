@@ -2341,6 +2341,13 @@ proc build_distribution {arch_list report_var} {
       append args " -doc"
    }
 
+   # derive mk_dist's product mode from the extensions directory
+   if {$ts_config(uge_ext_dir) == "none"} {
+      append args " -product ocs"
+   } else {
+      append args " -product gcs"
+   }
+
    # add mk_dist options specific to additional checktrees
    for {set i 0} {$i < $ts_checktree(next_free)} {incr i} {
       if {[info exists ts_checktree($i,mk_dist_options)]} {
