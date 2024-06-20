@@ -1225,6 +1225,11 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
          set args "-S $source_dir"
          append args " -DCMAKE_INSTALL_PREFIX=$ts_config(product_root)"
 
+	 if {$ts_config(uge_ext_dir) != "none"} {
+            append args " -DPROJECT_EXTENSIONS=$ts_config(uge_ext_dir)"
+            append args " -DPROJECT_FEATURES=\"gcs-extensions\""
+         }
+
          if {$host == $preferred_host} {
             append args " -DINSTALL_SGE_COMMON=ON"
          } else {
