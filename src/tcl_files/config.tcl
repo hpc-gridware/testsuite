@@ -3320,20 +3320,13 @@ proc config_package_directory { only_check name config_array } {
 
    # package dir configured?
    if {!$fast_setup } {
-      if { $config(package_type) == "tar" }    {
-            if { [check_packages_directory $value check_tar] != 0 } {
+      if { $config(package_type) == "tar" } {
+         if { [check_packages_directory $value check_tar] != 0 } {
             puts "error checking package_directory! are all package file installed?"
-               return -1
-            }
-         } else {
-         if { $config(package_type) == "tar" }    {
-               if { [check_packages_directory $value check_zip] != 0 } {
-               puts "error checking package_directory! are all package file installed?"
-                  return -1
-               }
-            }
+            return -1
          }
-      }
+      } 
+   }
 
    set CHECK_PACKAGE_DIRECTORY $value
 
