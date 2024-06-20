@@ -8481,16 +8481,27 @@ if { $check_reinit_on_tcl_error == 1 } {
    set_root_passwd
 }
 
-if { $do_compile } {
+if {$do_compile} {
    if { [have_root_passwd] == -1 } {
          puts "need root access ..."
          set_root_passwd
    }
 
-   if { [ compile_source ] != 0 } {
-      testsuite_shutdown 1
+   if {$ts_config(package_directory) == "none" || $ts_config(package_type) == "create_tar"} {
+      if {[ compile_source ] != 0} {
+         testsuite_shutdown 1
+      } else {
+         testsuite_shutdown 0
+      }
    } else {
-      testsuite_shutdown 0
+      # we have product packages
+      set back [prepare_packages]
+      if {$back != 0} {
+         testsuite_shutdown 1
+      } else {
+         testsuite_shutdown 0
+      }
+      wait_for_enter
    }
 }
 
