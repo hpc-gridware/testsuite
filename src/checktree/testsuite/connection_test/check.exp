@@ -46,7 +46,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "connection_test"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM TESTSUITE VERIFIED"
 set check_description(0)  "testsuite connection test to all hosts"
 set check_description(1)  "dummy test runlevel 1"
 set check_description(2)  "dummy test runlevel 2"

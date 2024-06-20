@@ -46,7 +46,7 @@ set check_root_access_needs "yes"
 
 # test's name and run level descriptions
 set check_name            "test_framework"
-set check_category        "FRAMEWORK VERIFIED"
+set check_category        "FRAMEWORK TESTSUITE VERIFIED"
 set check_description(0)  "check testsuite framework functions"
 
 # test's dependencies
