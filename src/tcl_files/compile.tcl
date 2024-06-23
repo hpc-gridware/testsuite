@@ -2205,8 +2205,8 @@ proc prepare_packages { } {
 proc check_packages_directory { path { mode "check_both" } { get_files "no" } } {
    global CHECK_PACKAGE_TYPE
 
-   set tar_bin_files [ get_file_names $path "*cs*-bin-*.tar.gz" ]
-   set zip_bin_files [ get_file_names $path "*cs*-bin-*.zip" ]
+   set tar_bin_files [ get_file_names $path "*cs*-*bin-*.tar.gz" ]
+   set zip_bin_files [ get_file_names $path "*cs*-*bin-*.zip" ]
    set tar_common_files [ get_file_names $path "*cs*-common*.tar.gz" ]
    set zip_common_files [ get_file_names $path "*cs*-common*.zip" ]
    set tar_doc_files [ get_file_names $path "*cs*-doc*.tar.gz" ]
