@@ -2339,7 +2339,7 @@ proc build_distribution {arch_list report_var} {
    append args "-vdir $ts_config(product_root)"             ;# find the distrib here
    append args " -version $ts_config(package_release)"      ;# for package names
    append args " -basedir $ts_config(package_directory)"    ;# destination dir
-   append args " -bin -common"                              ;# which packages
+   append args " -bin -testbin -common"                     ;# which packages
 
    # if we built documentation then also create a doc package
    if {[host_conf_get_doc_compile_host] != ""} {
