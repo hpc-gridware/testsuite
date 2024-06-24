@@ -1537,21 +1537,25 @@ proc config_verify_count { count_allowed { count_values "" } } {
 #*******************************************************************************
 proc config_verify_directory { value { create_new 0 } } {
 
-   if { [ string first "/" $value ] != 0 } {
-      puts "Path \"$value\" doesn't start with \"/\""
+   if {[string first "/" $value] != 0 && [string first "." $value] != 0} {
+      puts "Path \"$value\" doesn't start with / or ."
       return -1
    }
-            if { [tail_directory_name $value] != $value } {
+   if {[tail_directory_name $value] != $value} {
       puts "\nPath \"$value\" is not a valid directory name, try \"[tail_directory_name $value]\""
-               return -1
-            }
-   if { $create_new == 1 && [ file isdirectory $value ] != 1 } { file mkdir $value }
-            if { [ file isdirectory $value ] != 1 } {
-      puts "Directory \"$value\" not found"
-               return -1
-            }
+      return -1
+   }
+   if {[string first "/" $value] == 1} {
+      if {$create_new == 1 && [ file isdirectory $value ] != 1 } { 
+         file mkdir $value 
+      }
+      if {[file isdirectory $value] != 1} {
+         puts "Directory \"$value\" not found"
+         return -1
+      }
+   }
    return 0
-         }
+}
 
 proc config_verify_filename { value { allow_create_new 0 } } {
 
@@ -2315,7 +2319,7 @@ proc config_source_dir { only_check name config_array } {
 
 #****** config/config_uge_ext_dir() *********************************************
 #  NAME
-#     config_uge_ext_dir() -- source directory setup for Univa Extensions
+#     config_uge_ext_dir() -- source directory setup for HPC-Gridware Extensions
 #
 #  SYNOPSIS
 #     config_uge_ext_dir { only_check name config_array } 
@@ -2338,11 +2342,9 @@ proc config_uge_ext_dir { only_check name config_array } {
 
    upvar $config_array config
 
-   set help_text { "Enter the full pathname of the Univa extensions source directory, or"
-                   "press >RETURN< to use the default value."
-                   "The testsuite needs this directory to call aimk with the -uge-ext flag"
-                   " (to compile source code)." 
-                   "If you do not want to configure the Univa extenstions use \"none\"." }
+   set help_text { "Enter the relative path of the HPC-Gridware extensions source directory,"
+                   "relative to the OCS source directory or press >RETURN< to use the default value."
+                   "If you do not want to configure HPC-Gridware extenstions use \"none\"." }
  
    if { $config($name,default) == "" } {
       set pos [string first "/testsuite" $config(testsuite_root_dir)]
@@ -2355,15 +2357,8 @@ proc config_uge_ext_dir { only_check name config_array } {
    if { $value == -1 } { return -1 }
 
    if {$value == "none"} {
-      ts_log_fine "no Univa extensions dir specified - running without the extensions"
-   } else {
-      if {!$fast_setup} {
-         if { [ file isfile $value/Changelog ] != 1 } {
-            puts "File \"$value/Changelog\" not found"
-            return -1
-         }
-      }
-   }
+      ts_log_fine "no HPC-Gridware extensions dir specified - running without the extensions"
+   } 
  
    if { $old_value != $value } {
       set config($name) $value
@@ -3325,20 +3320,13 @@ proc config_package_directory { only_check name config_array } {
 
    # package dir configured?
    if {!$fast_setup } {
-      if { $config(package_type) == "tar" }    {
-            if { [check_packages_directory $value check_tar] != 0 } {
+      if { $config(package_type) == "tar" } {
+         if { [check_packages_directory $value check_tar] != 0 } {
             puts "error checking package_directory! are all package file installed?"
-               return -1
-            }
-         } else {
-         if { $config(package_type) == "tar" }    {
-               if { [check_packages_directory $value check_zip] != 0 } {
-               puts "error checking package_directory! are all package file installed?"
-                  return -1
-               }
-            }
+            return -1
          }
-      }
+      } 
+   }
 
    set CHECK_PACKAGE_DIRECTORY $value
 
@@ -5153,7 +5141,7 @@ proc config_build_ts_config_1_20 {} {
 
    set parameter "uge_ext_dir"
    set ts_config($parameter)            ""
-   set ts_config($parameter,desc)       "Path to Univa extensions source directory"
+   set ts_config($parameter,desc)       "Path to HPC-Gridware extensions source directory"
    set ts_config($parameter,default)    "none"   ;# depend on testsuite root dir
    set ts_config($parameter,setup_func) "config_$parameter"
    set ts_config($parameter,onchange)   "compile"

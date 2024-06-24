@@ -1225,6 +1225,11 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
          set args "-S $source_dir"
          append args " -DCMAKE_INSTALL_PREFIX=$ts_config(product_root)"
 
+	 if {$ts_config(uge_ext_dir) != "none"} {
+            append args " -DPROJECT_EXTENSIONS=$ts_config(uge_ext_dir)"
+            append args " -DPROJECT_FEATURES=\"gcs-extensions\""
+         }
+
          if {$host == $preferred_host} {
             append args " -DINSTALL_SGE_COMMON=ON"
          } else {
@@ -2200,12 +2205,12 @@ proc prepare_packages { } {
 proc check_packages_directory { path { mode "check_both" } { get_files "no" } } {
    global CHECK_PACKAGE_TYPE
 
-   set tar_bin_files [ get_file_names $path "*ge*-bin-*.tar.gz" ]
-   set zip_bin_files [ get_file_names $path "*ge*-bin-*.zip" ]
-   set tar_common_files [ get_file_names $path "*ge*-common*.tar.gz" ]
-   set zip_common_files [ get_file_names $path "*ge*-common*.zip" ]
-   set tar_doc_files [ get_file_names $path "*ge*-doc*.tar.gz" ]
-   set zip_doc_files [ get_file_names $path "*ge*-doc*.zip" ]
+   set tar_bin_files [ get_file_names $path "*cs*-*bin-*.tar.gz" ]
+   set zip_bin_files [ get_file_names $path "*cs*-*bin-*.zip" ]
+   set tar_common_files [ get_file_names $path "*cs*-common*.tar.gz" ]
+   set zip_common_files [ get_file_names $path "*cs*-common*.zip" ]
+   set tar_doc_files [ get_file_names $path "*cs*-doc*.tar.gz" ]
+   set zip_doc_files [ get_file_names $path "*cs*-doc*.zip" ]
 
    set tar_list "$tar_bin_files $tar_common_files $tar_doc_files"
    set zip_list "$zip_bin_files $zip_common_files $zip_doc_files"
@@ -2334,7 +2339,7 @@ proc build_distribution {arch_list report_var} {
    append args "-vdir $ts_config(product_root)"             ;# find the distrib here
    append args " -version $ts_config(package_release)"      ;# for package names
    append args " -basedir $ts_config(package_directory)"    ;# destination dir
-   append args " -bin -common"                              ;# which packages
+   append args " -bin -testbin -common"                     ;# which packages
 
    # if we built documentation then also create a doc package
    if {[host_conf_get_doc_compile_host] != ""} {

@@ -46,7 +46,7 @@ set check_root_access_needs "yes"
 
 # test's name and run level descriptions
 set check_name            "check_user_permissions"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM TESTSUITE VERIFIED"
 set check_description(0)  "check user permissions"
 
 # test's dependencies
