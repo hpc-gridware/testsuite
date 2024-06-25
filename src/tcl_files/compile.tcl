@@ -1295,7 +1295,8 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
       # now delete install directory
       set task_nr [report_create_task report "clear SGE_ROOT" $host]
       report_task_add_message report $task_nr "deleting directory \"$ts_config(product_root)\""
-      if {[delete_directory "$ts_config(product_root)"] != 0} {
+      if {[remote_file_isdirectory $ts_config(master_host) $ts_config(product_root)] &&
+          [delete_directory $ts_config(product_root)] != 0} {
          ts_log_severe "could not delete $ts_config(product_root) directory"
          report_task_add_message report $task_nr "could not delete $ts_config(product_root) directory"
          incr error_count

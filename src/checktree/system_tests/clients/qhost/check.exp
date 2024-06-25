@@ -75,6 +75,8 @@ proc qhost_setup {} {
 }
 
 proc qhost_cleanup {} {
+   delete_all_jobs
+   wait_for_end_of_all_jobs
 }
 
 proc qhost_issue1306 {} {

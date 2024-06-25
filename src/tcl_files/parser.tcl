@@ -3948,6 +3948,16 @@ proc plain_j_parse { output_var jobId plainoutput } {
       }
       set plain($key) $val
    }
+
+   # beginning with OCS 9.0.0 time values as well as wallclock and cpu have microseconds
+   if {[is_version_in_range "9.0.0"]} {
+      foreach key "submission_time deadline execution_time wallclock cpu" {
+         # some are optional
+         if {[info exists plain($key)]} {
+            set plain($key) [lindex [split $plain($key) "."] 0]
+         }
+      }
+   }
 }
 
 proc parse_name_value_list {target_array_var source_string {delimiter ", "}} {

@@ -58,13 +58,13 @@ set check_cleanup_level_function "generic_module_tests_cleanup"
 set check_setup_level_function "generic_module_tests_setup"
 
 # define test's procedure order
-set check_functions ""
+set check_functions {}
 lappend check_functions "generic_module_tests_run"
 
 global generic_module_tests_test_hosts generic_module_tests
 
 # these are the currently existing and verified module tests
-set generic_module_tests ""
+set generic_module_tests {}
 lappend generic_module_tests "test_commlib_issue"
 
 #lappend generic_module_tests "test_common_heartbeat" ;# only used in shadowd_migrate test
@@ -107,6 +107,7 @@ lappend generic_module_tests "test_uti_dstring"
 lappend generic_module_tests "test_uti_uidgid"
 lappend generic_module_tests "test_uti_threads"
 lappend generic_module_tests "test_uti_thread_local"
+lappend generic_module_tests "test_uti_time"
 
 proc generic_module_tests_setup {} {
    global ts_config
@@ -114,11 +115,11 @@ proc generic_module_tests_setup {} {
    global generic_module_tests_test_hosts
 
    switch -- $CHECK_ACT_LEVEL {
-      "0" {
+      0 {
          set generic_module_tests_test_hosts $ts_config(master_host)
       }
-      "100" {
-         set generic_module_tests_test_hosts $ts_config(unique_arch_nodes)
+      100 {
+         set generic_module_tests_test_hosts [host_conf_get_unique_arch_nodes [host_conf_get_cluster_hosts 1]]
       }
    }
 
@@ -163,11 +164,14 @@ proc generic_module_tests_run {} {
    set error_text ""
    set config_text ""
    foreach host $generic_module_tests_test_hosts {
+      ts_log_frame
+      ts_log_fine "host $host, arch [resolve_arch $host]"
       foreach module_test $generic_module_tests {
          ts_log_fine "starting $module_test ..."
          set output [start_test_bin $module_test "" $host $CHECK_USER ret 300]
          if {$ret == 0} {
             ts_log_fine "   => $module_test ok"
+            ts_log_fine $output
          } else {
             ts_log_fine "   => $module_test failed"
             append error_text "module test $module_test failed:\n$output\n\n"

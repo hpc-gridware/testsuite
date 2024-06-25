@@ -251,10 +251,33 @@ proc reporting_get_timestamp {{filename ""}} {
    } else {
       set tmstamp [start_remote_prog $ts_config(master_host) $CHECK_USER $expect_bin "-c \"puts \[file mtime $filename\]\""]
    }
-   return $tmstamp
+   return [string trim $tmstamp]
 }
 
-proc reporting_do_accounting_test {scenario} {
+proc reporting_wait_for_accounting_flush {scenario last_mtime} {
+   global reporting_acct_file
+
+   set done 0
+   set final_timeout [expr [clock seconds] + 30]
+   while {!$done} {
+      if {[clock seconds] > $final_timeout} {
+         ts_log_severe "$scenario: timeout while waiting for $reporting_acct_file to get updated"
+         break
+      }
+      set new_mtime [reporting_get_timestamp $reporting_acct_file]
+      if {$new_mtime > $last_mtime} {
+         set done 1
+         set diff [expr $new_mtime - $last_mtime]
+         ts_log_fine "$scenario: accounting file was flushed $diff seconds after the last write ($last_mtime)"
+         return $new_mtime
+      }
+      after 100
+   }
+
+   return -1
+}
+
+proc reporting_do_accounting_test {scenario flush_time} {
    global ts_config CHECK_USER
    global reporting_acct_file
 
@@ -278,46 +301,30 @@ proc reporting_do_accounting_test {scenario} {
 
    # Watch accounting file for updates.
    # Wait for the first accounting file update
-   set done 0
-   set final_timeout [expr [clock seconds] + 30]
-   while {!$done} {
-      if {[clock seconds] > $final_timeout} {
-         ts_log_severe "timeout while waiting for $reporting_acct_file to get updated"
-         delete_all_jobs
-         wait_for_end_of_all_jobs
-         return
+   set mtime [reporting_wait_for_accounting_flush $scenario $mtime]
+   if {$mtime < 0} {
+      #error raised in reporting_wait_for_accounting_flush
+      delete_all_jobs
+      wait_for_end_of_all_jobs
+      return
+   }
+
+   set new_mtime [reporting_wait_for_accounting_flush $scenario $mtime]
+   if {$new_mtime < 0} {
+      #error raised in reporting_wait_for_accounting_flush
+   } else {
+      # the flush should have been done after the given flush_time +- 1 s
+      set expected_flush [expr $mtime + $flush_time]
+      if {[expr abs($expected_flush - $new_mtime)] > 1} {
+         ts_log_severe "$scenario: accounting file was not flushed after $flush_time s, expected $expected_flush but got $new_mtime"
       }
-      set new_mtime [reporting_get_timestamp $reporting_acct_file]
-      if {$mtime != $new_mtime} {
-         set done 1
-      }
-      after 100
    }
 
    set failed 0
 
-   # Watch the accounting file for one flush interval
-   # The accounting file should not change between flush intervals
-   while {[reporting_get_timestamp] < [expr $new_mtime + 14]} {
-      set current_time [reporting_get_timestamp $reporting_acct_file]
-      if {$new_mtime != $current_time} {
-         ts_log_severe "$scenario: accounting file was flushed before flush interval\nexpected: $new_mtime \ngot: $current_time"
-         set failed 1
-         break
-      }
-      after 1000
-   }
-
-   if {$failed != 1} {
-      # The accounting file should change at flush intervals
-      after 2500
-      if {$new_mtime == [reporting_get_timestamp $reporting_acct_file]} {
-         ts_log_severe "$scenario: accounting file was not flushed at flush interval"
-      }
-   }
-
    # Delete any jobs that might be in the system
    delete_all_jobs
+   wait_for_end_of_all_jobs
 }
 
 proc reporting_periodic_accounting_test {} {
@@ -326,8 +333,12 @@ proc reporting_periodic_accounting_test {} {
    # Set accounting_flush_time to 00:00:15
    set new_config(reporting_params) "accounting=true reporting=false flush_time=00:00:15 joblog=false sharelog=00:00:00 accounting_flush_time=00:00:15 $reporting_format_config"
    set_config new_config
+   reporting_do_accounting_test reporting_periodic_accounting_test 15
 
-   reporting_do_accounting_test reporting_periodic_accounting_test
+   # Set a different accounting_flush_time: to 00:00:07
+   set new_config(reporting_params) "accounting=true reporting=false flush_time=00:00:15 joblog=false sharelog=00:00:00 accounting_flush_time=00:00:07 $reporting_format_config"
+   set_config new_config
+   reporting_do_accounting_test reporting_periodic_accounting_test 7
 }
 
 proc reporting_reporting_accounting_test {} {
@@ -336,8 +347,12 @@ proc reporting_reporting_accounting_test {} {
    # Do not set accounting_flush_time.  Set flush_time to 00:00:15
    set new_config(reporting_params) "accounting=true reporting=false flush_time=00:00:15 joblog=false sharelog=00:00:00 $reporting_format_config"
    set_config new_config
+   reporting_do_accounting_test reporting_reporting_accounting_test 15
 
-   reporting_do_accounting_test reporting_reporting_accounting_test
+   # Do not set accounting_flush_time.  Set flush_time to 00:00:05
+   set new_config(reporting_params) "accounting=true reporting=false flush_time=00:00:05 joblog=false sharelog=00:00:00 $reporting_format_config"
+   set_config new_config
+   reporting_do_accounting_test reporting_reporting_accounting_test 5
 }
 
 proc reporting_immediate_accounting_test {} {

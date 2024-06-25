@@ -87,6 +87,7 @@ proc qrsub_setup {} {
    global ts_config
    global actual_host 
    global qinstance 
+   global qrsub_output_format
 
    ts_log_fine "qrsub test setup"
 
@@ -100,10 +101,19 @@ proc qrsub_setup {} {
    assign_queues_with_pe_object "all.q" "" "qrsub_pe"
    add_ckpt "qrsub_ckpt"
    assign_queues_with_ckpt_object "all.q" "" "qrsub_ckpt"
+
+   if {[is_version_in_range "9.0.0"]} {
+      set qrsub_output_format "%Y-%m-%d %H:%M:%S"
+   } else {
+      set qrsub_output_format "%m/%d/%Y %H:%M:%S"
+   }
 }
 
 proc qrsub_cleanup {} {
    global ts_config
+   global actual_host 
+   global qinstance 
+   global qrsub_output_format
 
    delete_all_jobs
    delete_all_ars
@@ -113,6 +123,8 @@ proc qrsub_cleanup {} {
    unassign_queues_with_ckpt_object "qrsub_ckpt"
    del_ckpt "qrsub_ckpt"
    ts_log_fine "qrsub cleanup function"
+
+   unset -nocomplain actual_host qinstance qrsub_output_format
 }
 
 proc check_submit_ar {} {
@@ -161,11 +173,12 @@ proc check_submit_ar_invalid_option_arg {} {
 
 proc check_option_a {} {
    global ts_config
+   global qrsub_output_format
    
    set now [clock seconds]
    set then [expr $now + 10000]
    set start1 [clock format $then -format "%Y%m%d%H%M.%S"]
-   set starto [clock format $then -format "%m/%d/%Y %H:%M:%S"]
+   set starto [clock format $then -format $qrsub_output_format]
    set then2 [expr $now + 20000]
    set start2 [clock format $then2 -format "%Y%m%d%H%M.%S"]
    
@@ -315,11 +328,12 @@ proc check_option_d {} {
 
 proc check_option_e {} {
    global ts_config
+   global qrsub_output_format
 
    set now [clock seconds]
    set then [expr $now + 20000]
    set start1 [clock format $then -format "%Y%m%d%H%M.%S"]
-   set starto [clock format $then -format "%m/%d/%Y %H:%M:%S"]
+   set starto [clock format $then -format $qrsub_output_format]
  
    # positive tests
    set args "-e $start1 -d 1000"

@@ -378,6 +378,14 @@ proc parse_qrstat {ar_id {output qrstat_info} {plain_output qrstat_output}} {
          }  
       }
    }
+
+   # with OCS 9.0.0 time stamps contain .microseconds, trim them away
+   if {[is_version_in_range "9.0.0"]} {
+      foreach name "start_time end_time submission_time" {
+         set out($name) [lindex [split $out($name) "."] 0]
+      }
+   }
+
    return 0
 }
 

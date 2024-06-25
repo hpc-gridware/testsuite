@@ -63,10 +63,18 @@ lappend check_functions "qmaster_spooling_issue2442"
 # -------- local test procedures -----------------------------------------------
 
 proc qmaster_spooling_setup {} {
+   global qmaster_spooling_dateformat
+
+   if {[is_version_in_range "9.0.0"]} {
+      set qmaster_spooling_dateformat "%Y-%m-%d %H:%M:%S"
+   } else {
+      set qmaster_spooling_dateformat "%m/%d/%Y %H:%M:%S"
+   }
 }
 
 proc qmaster_spooling_cleanup {} {
    global ts_config
+   global qmaster_spooling_dateformat
 
    if {[get_rqs_list rqs_names "" "" 0] == 0} {
       foreach elem $rqs_names {
@@ -75,9 +83,11 @@ proc qmaster_spooling_cleanup {} {
       }
    }
    delete_all_ars
+
+   unset -nocomplain qmaster_spooling_dateformat
 }
 
-proc cmp_config { conf_a conf_b fields check} {
+proc cmp_config {conf_a conf_b fields check} {
    upvar $conf_a a
    upvar $conf_b b
 
@@ -158,7 +168,8 @@ proc qmaster_spooling_rqs_restart {} {
 
 proc qmaster_spooling_ar_restart {} {
    global ts_config
-   global actual_host  
+   global qmaster_spooling_dateformat
+   global actual_host
    global qinstance
    global CHECK_USER
    global CHECK_FIRST_FOREIGN_SYSTEM_USER
@@ -170,9 +181,9 @@ proc qmaster_spooling_ar_restart {} {
 
    set now [clock seconds]
    set start  [clock format [expr $now + 20000] -format "%Y%m%d%H%M.%S"]
-   set starto [clock format [expr $now + 20000] -format "%m/%d/%Y %H:%M:%S"]
+   set starto [clock format [expr $now + 20000] -format $qmaster_spooling_dateformat]
    set end    [clock format [expr $now + 23661] -format "%Y%m%d%H%M.%S"]
-   set endo   [clock format [expr $now + 23661] -format "%m/%d/%Y %H:%M:%S"]
+   set endo   [clock format [expr $now + 23661] -format $qmaster_spooling_dateformat]
 
 
    #  To be sure, no conflict exists
