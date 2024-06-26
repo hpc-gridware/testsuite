@@ -61,7 +61,7 @@
 #        -8   unknown resource - error
 #        -9   can't resolve hostname - error
 #       -10   resource not requestable - error
-#       -13   unkown option - error
+#       -13   unknown option - error
 #
 #      -100   on error 
 #     
@@ -82,7 +82,11 @@ proc submit_ar {args {on_host ""} {as_user ""} {raise_error 1}} {
       set messages(-10)      "[translate_macro MSG_SGETEXT_RESOURCE_NOT_REQUESTABLE_S "*"]"
 
       set messages(-12)      "[translate_macro MSG_SGETEXT_NO_ACCESS2PRJ4USER_SS "*" "*"]"
-      set messages(-13)      "[translate_macro MSG_ANSWER_UNKOWNOPTIONX_S "*"]"
+      if {[is_version_in_range "9.0.0"]} {
+         set messages(-13)      "[translate_macro MSG_ANSWER_UNKNOWNOPTIONX_S "*"]"
+      } else {
+         set messages(-13)      "[translate_macro MSG_ANSWER_UNKOWNOPTIONX_S "*"]"
+      }
       set messages(-16)      "[translate_macro MSG_FILE_ERROROPENINGXY_SS "*" "*"]"
       set messages(-17)      "[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC [translate_macro MSG_GDI_KEYSTR_COLON] ":"]"
       set messages(-18)      "[translate_macro MSG_QCONF_ONLYONERANGE]"

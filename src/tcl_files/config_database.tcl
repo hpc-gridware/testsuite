@@ -1060,7 +1060,7 @@ proc verify_db_config { config_array only_check parameter_error_list { force_par
              ts_log_finest "no procedure defined"
          } else {
             if { [info procs $procedure_name ] != $procedure_name } {
-               ts_log_warning "unkown procedure name: \"$procedure_name\" !!!"
+               ts_log_warning "unknown procedure name: \"$procedure_name\" !!!"
                lappend uninitalized $param
                if { $only_check == 0 } { wait_for_enter }
             } else {
@@ -1095,7 +1095,7 @@ proc verify_db_config { config_array only_check parameter_error_list { force_par
             continue
          } else {
             if { [info procs $procedure_name ] != $procedure_name } {
-               ts_log_warning "unkown procedure name: \"$procedure_name\" !!!"
+               ts_log_warning "unknown procedure name: \"$procedure_name\" !!!"
                if { $only_check == 0 } { wait_for_enter }
                set use_default 1
             }

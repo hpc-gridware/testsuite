@@ -831,7 +831,7 @@ proc check_execd_messages { hostname { show_mode 0 } } {
    }
 
    set output [ split $output "\n" ]
-   set spool_dir "unkown"
+   set spool_dir "unknown"
    foreach line $output {
       if { [ string first "execd_spool_dir" $line ] >= 0 } {
          set spool_dir [ lindex $line 1 ]
@@ -4883,7 +4883,7 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1}} {
 #       -10   resource not requestable - error
 #       -11   not allowed to submit jobs - error
 #       -12   no access to project - error
-#       -13   unkown option - error
+#       -13   unknown option - error
 #       -22   user tries to submit a job with a deadline, but the user is not in
 #             the deadline user access list
 #       -36   user tries to submit a job with same path for -i and -o
@@ -4949,7 +4949,11 @@ proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {c
       set messages(-10)    "*[translate_macro MSG_SGETEXT_RESOURCE_NOT_REQUESTABLE_S "*"]*"
       set messages(-11)    "*[translate_macro MSG_JOB_NOPERMS_SS "*" "*"]*"
       set messages(-12)    "*[translate_macro MSG_SGETEXT_NO_ACCESS2PRJ4USER_SS "*" "*"]*"
-      set messages(-13)    "*[translate_macro MSG_ANSWER_UNKOWNOPTIONX_S "*"]*"
+      if {[is_version_in_range "9.0.0"]} {
+         set messages(-13)    "*[translate_macro MSG_ANSWER_UNKNOWNOPTIONX_S "*"]*"
+      } else {
+         set messages(-13)    "*[translate_macro MSG_ANSWER_UNKOWNOPTIONX_S "*"]*"
+      }
       set messages(-16)    "*[translate_macro MSG_FILE_ERROROPENINGXY_SS "*" "*"]*"
       set messages(-17)    "*[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC [translate_macro MSG_GDI_KEYSTR_COLON] ":"]*"
       set messages(-18)    "*[translate_macro MSG_QCONF_ONLYONERANGE]*"

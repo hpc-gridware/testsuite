@@ -126,7 +126,7 @@ proc verify_config2 { config_array only_check parameter_error_list expected_vers
              set status "no check"
          } else {
             if { [info procs $procedure_name ] != $procedure_name } {
-               ts_log_warning "unkown procedure name: \"$procedure_name\" !!!"
+               ts_log_warning "unknown procedure name: \"$procedure_name\" !!!"
                lappend uninitalized $param
                set status "unknown check function"
                if { $only_check == 0 } { wait_for_enter }
@@ -165,7 +165,7 @@ proc verify_config2 { config_array only_check parameter_error_list expected_vers
             set use_default 1
          } else {
             if { [info procs $procedure_name ] != $procedure_name } {
-               ts_log_warning "unkown procedure name: \"$procedure_name\" !!!"
+               ts_log_warning "unknown procedure name: \"$procedure_name\" !!!"
                if { $only_check == 0 } { wait_for_enter }
                set use_default 1
             }

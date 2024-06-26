@@ -1905,7 +1905,7 @@ proc prepare_packages { } {
       set execd_archs ""
       foreach elem $ts_config(execd_hosts) {
          set host_arch [ resolve_arch $elem ]
-         if { [string compare $host_arch "unkown" ] == 0 } {
+         if { [string compare $host_arch "unknown" ] == 0 } {
             ts_log_severe "could not resolve host \"$elem\"!"
             return -1
          }
@@ -2160,7 +2160,7 @@ proc prepare_packages { } {
       set execd_archs ""
       foreach elem $ts_config(execd_hosts) {
          set host_arch [ resolve_arch $elem ]
-         if { [string compare $host_arch "unkown" ] == 0 } {
+         if { [string compare $host_arch "unknown" ] == 0 } {
             ts_log_severe "could not resolve host \"$elem\"!"
             return -1
          }

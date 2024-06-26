@@ -984,7 +984,7 @@ proc verify_user_config { config_array only_check parameter_error_list { force_p
              ts_log_finest "no procedure defined"
          } else {
             if { [info procs $procedure_name ] != $procedure_name } {
-               ts_log_warning "unkown procedure name: \"$procedure_name\" !!!"
+               ts_log_warning "unknown procedure name: \"$procedure_name\" !!!"
                lappend uninitalized $param
 
                if { $only_check == 0 } { wait_for_enter }
@@ -1022,7 +1022,7 @@ proc verify_user_config { config_array only_check parameter_error_list { force_p
             continue
          } else {
             if { [info procs $procedure_name ] != $procedure_name } {
-               ts_log_warning "unkown procedure name: \"$procedure_name\" !!!"
+               ts_log_warning "unknown procedure name: \"$procedure_name\" !!!"
                if { $only_check == 0 } { wait_for_enter }
                set use_default 1
             }
@@ -1090,7 +1090,7 @@ proc setup_user_config { file { force_params "" } } {
 
    if { [read_array_from_file $file "testsuite user configuration" ts_user_config ] == 0 } {
       if { $ts_user_config(version) != $actual_ts_user_config_version } {
-         puts "unkown user configuration file version: $ts_user_config(version)"
+         puts "unknown user configuration file version: $ts_user_config(version)"
          return -1
       }
 

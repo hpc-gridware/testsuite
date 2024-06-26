@@ -397,8 +397,8 @@ proc auto_reschedule_unknown_check_master {} {
    ts_log_fine "master and scheduler should be up again now"
 
    if {$global_resch != 0} {
-      # here we have global reschedule_unkown enabled
-      ts_log_fine "global reschedule_unkown enabled"
+      # here we have global reschedule_unknown enabled
+      ts_log_fine "global reschedule_unknown enabled"
       wait_for_jobpending $job_id2 "Sleeper" 100 
       ts_log_fine "reschedule_kill=$reschedule_kill"
       if {$reschedule_kill == 0} {
@@ -430,8 +430,8 @@ proc auto_reschedule_unknown_check_master {} {
          }
       }
    } else {
-      # here we have global reschedule_unkown set to 00:00:00
-      ts_log_fine "global reschedule_unkown set to 00:00:00"
+      # here we have global reschedule_unknown set to 00:00:00
+      ts_log_fine "global reschedule_unknown set to 00:00:00"
       set my_timeout [expr [timestamp] + 100]
       while {[timestamp] <= $my_timeout}  {
 
@@ -524,7 +524,7 @@ proc auto_reschedule_unknown_check {} {
    ts_log_fine "both execd should be down now"
 
    if {$global_resch != 0} {
-      # here we have global reshedule_unkown enabled
+      # here we have global reshedule_unknown enabled
       wait_for_jobpending $job_id1  "Sleeper" 80
       set j_state [ is_job_running $job_id2 "Sleeper" ]
       if {$j_state != 1} {
@@ -532,7 +532,7 @@ proc auto_reschedule_unknown_check {} {
       }
       wait_for_jobpending $job_id2  "Sleeper" 220
    } else {
-      # here we have global reshedule_unkown set to 00:00:00
+      # here we have global reshedule_unknown set to 00:00:00
       set my_timeout [expr [timestamp] + 250]
       wait_for_jobpending $job_id1  "Sleeper" 80
       while {[timestamp] <= $my_timeout}  {

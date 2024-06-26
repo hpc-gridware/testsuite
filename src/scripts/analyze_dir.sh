@@ -58,7 +58,7 @@ if [ "$2" = "" ]; then
 fi
 
 if [ "$2" != "dirs" -a "$2" != "files" -a "$2" != "fileperm" ]; then
-   echo "unkown mode: \"$2\", allowed values are dirs, files or fileperm"
+   echo "unknown mode: \"$2\", allowed values are dirs, files or fileperm"
    usage_and_exit
 fi 
 

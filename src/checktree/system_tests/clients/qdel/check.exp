@@ -399,7 +399,7 @@ proc submit_testjobs {{user ""} {additional_job_args ""} {testjob_count "4"} {ar
 #       test deletion of single job:
 #        a) job is pending
 #        b) job is running
-#        c) job is unkown ]
+#        c) job is unknown ]
 #
 #	see qdel/qdel_125_case_3()
 #

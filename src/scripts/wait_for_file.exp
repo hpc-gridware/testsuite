@@ -61,7 +61,7 @@ if { [llength $argv] != 4 } {
 switch  -exact -- [lindex $argv 0]  {
     "file"  { set mode "file" }
     "dir"   { set mode "dir"  }
-    default { usage "Error: Unkown mode [lindex $argv 0]" }
+    default { usage "Error: Unknown mode [lindex $argv 0]" }
 } 
 
 set path [lindex $argv 1]
