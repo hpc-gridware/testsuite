@@ -1040,7 +1040,7 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
    set done 0
    set status_time [clock seconds]
    set status_updated 0
-   set timeout 300
+   set timeout 400
    expect_user {
       -i $spawn_list full_buffer {
          set spawn_id $expect_out(spawn_id)
@@ -1225,6 +1225,10 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
          set args "-S $source_dir"
          append args " -DCMAKE_INSTALL_PREFIX=$ts_config(product_root)"
 
+	 if {[resolve_arch $host] == "sol-amd64"} {
+            append args " -DCMAKE_MAKE_PROGRAM=gmake"
+	 }
+
 	 if {$ts_config(uge_ext_dir) != "none"} {
             append args " -DPROJECT_EXTENSIONS=$ts_config(uge_ext_dir)"
             append args " -DPROJECT_FEATURES=\"gcs-extensions\""
@@ -1261,7 +1265,11 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
       if {[llength $build_3rdparty_hosts] > 0} {
          unset -nocomplain options
          foreach host $build_3rdparty_hosts {
-            set options($host,cmd) "make"
+	    if {[resolve_arch $host] == "sol-amd64"} {
+               set options($host,cmd) "gmake"
+	    } else {
+               set options($host,cmd) "make"
+            }
             set num_procs [node_get_processors $host]
             if {$num_procs > 1} {
                set options($host,args) "-j $num_procs VERBOSE=1 3rdparty"
@@ -1279,7 +1287,11 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
       # call make on every host
       unset -nocomplain options
       foreach host $compile_hosts {
-         set options($host,cmd) "make"
+	 if {[resolve_arch $host] == "sol-amd64"} {
+            set options($host,cmd) "gmake"
+	 } else {
+            set options($host,cmd) "make"
+         }
          set num_procs [node_get_processors $host]
          if {$num_procs > 1} {
             set options($host,args) "-j $num_procs VERBOSE=1"
@@ -1342,15 +1354,17 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
       unset -nocomplain options
       foreach host $compile_hosts {
          set num_procs [node_get_processors $host]
-         if {$num_procs > 1} {
+	 if {[resolve_arch $host] == "sol-amd64"} {
+            set options($host,cmd) "gmake"
+	 } else {
             set options($host,cmd) "make"
-            set options($host,args) "-j $num_procs install VERBOSE=1"
-            set options($host,dir) [compile_source_cmake_get_build_dir $host]
-         } else {
-            set options($host,cmd) "make"
-            set options($host,args) "install VERBOSE=1"
-            set options($host,dir) [compile_source_cmake_get_build_dir $host]
          }
+         if {$num_procs > 1} {
+            set options($host,args) "-j $num_procs install VERBOSE=1"
+         } else {
+            set options($host,args) "install VERBOSE=1"
+         }
+         set options($host,dir) [compile_source_cmake_get_build_dir $host]
       }
       incr error_count [compile_source_cmake_execute "install" $compile_hosts options report]
    }
