@@ -85,7 +85,7 @@ proc host_test_level_cleanup {} {
 #  INPUTS
 #
 #  NOTES
-#     Currently only expect and java14, java15 and java16 values are checked
+#     Currently only expect is checked
 #
 #  BUGS
 #     TODO: Test other host parameters also
@@ -142,63 +142,6 @@ proc host_test_test {} {
                      }
                      if {$expect_version != $version} {
                         ts_log_info "host \"$host\" \"$ts_host_config($host,$param) -version\" does not return version \"$expect_version\", but \"$version\"!"
-                     }
-                  }
-               }
-            }
-            "java14" {
-               set is_checked 1
-               if {$ts_host_config($host,$param) != ""} {
-                  if {[is_remote_file $host $CHECK_USER $ts_host_config($host,$param)] == 0} {
-                     append error_text "host \"$host\" java14 binary \"$ts_host_config($host,$param)\" not available!\n"
-                  } else {
-                     ts_log_fine "found java14 binary \"$ts_host_config($host,$param)\" on host \"$host\""
-                     set version [start_remote_prog $host $CHECK_USER $ts_host_config($host,$param) "-version"]
-                     if {$prg_exit_state != 0} {
-                        append error_text "host \"$host\" \"$ts_host_config($host,$param) -version\" exit code not 0!\n"
-                     } else {
-                        ts_log_fine "java14 version: $version"
-                        if {![string match "*1.4*" $version]} {
-                           append error_text "host \"$host\" \"$ts_host_config($host,$param)\" seems not to be Java 1.4:\n$version\n"
-                        }
-                     }
-                  }
-               }
-            }
-            "java15" {
-               set is_checked 1
-               if {$ts_host_config($host,$param) != ""} {
-                  if {[is_remote_file $host $CHECK_USER $ts_host_config($host,$param)] == 0} {
-                     append error_text "host \"$host\" java15 binary \"$ts_host_config($host,$param)\" not available!\n"
-                  } else {
-                     ts_log_fine "found java15 binary \"$ts_host_config($host,$param)\" on host \"$host\""
-                     set version [start_remote_prog $host $CHECK_USER $ts_host_config($host,$param) "-version"]
-                     if {$prg_exit_state != 0} {
-                        append error_text "host \"$host\" \"$ts_host_config($host,$param) -version\" exit code not 0!\n"
-                     } else {
-                        ts_log_fine "java15 version: $version"
-                        if {![string match "*1.5*" $version]} {
-                           append error_text "host \"$host\" \"$ts_host_config($host,$param)\" seems not to be Java 1.5:\n$version\n"
-                        }
-                     }
-                  }
-               }
-            }
-            "java16" {
-               set is_checked 1
-               if {$ts_host_config($host,$param) != ""} {
-                  if {[is_remote_file $host $CHECK_USER $ts_host_config($host,$param)] == 0} {
-                     append error_text "host \"$host\" java16 binary \"$ts_host_config($host,$param)\" not available!\n"
-                  } else {
-                     ts_log_fine "found java16 binary \"$ts_host_config($host,$param)\" on host \"$host\""
-                     set version [start_remote_prog $host $CHECK_USER $ts_host_config($host,$param) "-version"]
-                     if {$prg_exit_state != 0} {
-                        append error_text "host \"$host\" \"$ts_host_config($host,$param) -version\" exit code not 0!\n"
-                     } else {
-                        ts_log_fine "java16 version: $version"
-                        if {![string match "*1.6*" $version]} {
-                           append error_text "host \"$host\" \"$ts_host_config($host,$param)\" seems not to be Java 1.6:\n$version\n"
-                        }
                      }
                   }
                }

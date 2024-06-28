@@ -34,7 +34,7 @@
 
 global ts_host_config               ;# new testsuite host configuration array
 global actual_ts_host_config_version      ;# actual host config version number
-set    actual_ts_host_config_version "1.14"
+set    actual_ts_host_config_version "1.15"
 
 if {![info exists ts_host_config]} {
    # ts_host_config defaults
@@ -309,10 +309,6 @@ proc host_config_get_host_parameters { } {
    lappend params tar
    lappend params gzip
    lappend params ssh
-   lappend params java14
-   lappend params java15
-   lappend params java16
-   lappend params ant
    lappend params loadsensor
    lappend params processors
    lappend params spooldir
@@ -715,11 +711,6 @@ proc host_config_hostlist_add_host {array_name {have_host ""}} {
       set vars(${prg}_bin) $prg_bin
    }
    
-   set vars(java14_bin) [autodetect_java $new_host "1.4"]
-   set vars(java15_bin) [autodetect_java $new_host "1.5"]
-   set vars(java16_bin) [autodetect_java $new_host "1.6"]
-   set vars(ant_bin) [autodetect_ant $new_host]
-
    foreach param [host_config_get_host_parameters] {
       switch -glob $param {
          arch* {
@@ -818,8 +809,6 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
       set count 1
       set isfile 0
       set isdir 0
-      set check_valid_java ""
-      set check_ant 0
       set islocale 0
       set check_zones 0
       array set add_params { }
@@ -831,16 +820,6 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
          "ssh" -
          "loadsensor" { 
             set isfile 1
-         }
-         "java14" -
-         "java15" - 
-         "java16" {
-	    set isfile 1
-            set check_valid_java "[ string range $input 4 4 ].[ string range $input 5 5 ]"
-         }
-         "ant" {
-            set isfile 1
-	    set check_ant 1
          }
          "spooldir" {
             set isdir 1 
@@ -918,27 +897,6 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
          if {$prg_exit_state != 0} {
             puts $result
             puts "can't cd to directory $value on host $host"
-            wait_for_enter
-            continue
-         }
-      }
-
-      # check java
-      if { $check_valid_java != "" && [string trim $value] != "" } {
-         set result [check_java_version $host $value $check_valid_java]
-
-         if {$result != 0} {
-            puts "Not a java $check_valid_java"
-            wait_for_enter
-            continue
-         }
-      }
-
-      # check ant
-      if { $check_ant && [string trim $value] != "" } {
-         set result [check_ant_version $host $value]
-         if {$result != 0} {
-            puts "Not a valid ant for the testsuite"
             wait_for_enter
             continue
          }
@@ -1665,83 +1623,38 @@ wait_for_enter
       return 0
    }
 
+   if {[string compare $ts_host_config(version)  "1.14"] == 0} {
+      puts "\ntestsuite host configuration update from 1.14 to 1.15 ..."
+
+      # remove old java versions
+      # we auto-detect them now on demand
+      foreach host $ts_host_config(hostlist) {
+         puts $host
+         unset ts_host_config($host,java14)
+         unset ts_host_config($host,java15)
+         unset ts_host_config($host,java16)
+         unset ts_host_config($host,ant)
+      }
+
+      set ts_host_config(version) "1.15"
+
+      show_config ts_host_config
+      wait_for_enter
+      if {[save_host_configuration $filename] != 0} {
+         puts "Could not save host configuration"
+         wait_for_enter
+         return
+      }
+      return 0
+   }
+
    puts "\nunexpected version"
    return -1
 }
 
-#****** config_host/check_ant_version() ****************************************
-#  NAME
-#     check_ant_version() -- checks if ant is at least of version 1.6 and has 
-#                            junit.jar in it's lib directory
-#
-#  SYNOPSIS
-#      check_ant_version { host ant_bin }
-#
-#  FUNCTION
-#     This procedure is called when the the testsuite host configuration is 
-#     updated to 1.11. And each time ant location is modified in host 
-#     configuration.
-#
-#  INPUTS
-#     host - host where we expect the ant_bin
-#     ant_bin - whole path to ant binary
-#
-#  SEE ALSO
-#
-#*******************************************************************************
-proc check_ant_version { host ant_bin } {
-   global CHECK_USER
-   set output [start_remote_prog $host $CHECK_USER "$ant_bin" "-version" prg_exit_state 12 0 "" "" 1 0]
-   set act_version [string trim [string range [get_string_value_between " version " " compiled" $output] 0 2]]
-   if { [string length $act_version] != 3 } {
-      ts_log_severe "Error: 'ant -version' returned: \"$output\""
-      return -1
-   }
-   if { $act_version >= 1.6 } {
-      set input_len [ string length $ant_bin ]
-      set ant_len  [ string length "/bin/ant" ]
-      set last [ expr ( $input_len - $ant_len -1 ) ]
-      set res [ string range $ant_bin 0 $last]
-
-      set result [start_remote_prog $host $CHECK_USER "ls" "$res/lib/ant/junit.jar" prg_exit_state 12 0 "" "" 1 0]
-      if {$prg_exit_state == 0} {
-         return 0
-      }
-      ts_log_warning "This ant version seems to have missing $res/lib/ant/junit.jar. Copy it there or update the ant version in host configuration manually!"
-      return 0
-   }
-   return -1
-}
-
-#****** config_host/autodetect_ant() *******************************************
-#  NAME
-#     autodetect_ant() -- tries to find ant_bin
-#
-#  SYNOPSIS
-#      check_ant_version { host }
-#
-#  FUNCTION
-#     This procedure is called to autodetect ant
-#
-#  INPUTS
-#     host - host where we expect the ant_bin
-#
-#  SEE ALSO
-#
-#*******************************************************************************
+# keeping autodetect_ant as it might still be called in some update function
 proc autodetect_ant { host } {
-   global CHECK_USER ts_config ts_host_config
-   set ant_bin [start_remote_prog $host $CHECK_USER "$ts_config(testsuite_root_dir)/scripts/mywhich.sh" "ant" prg_exit_state 12 0 "" myenv 1 0]
-   set ant_bin [string trim $ant_bin]
-   if { $prg_exit_state != 0 } {
-      ts_log_fine "Unable to autodetect ant for host $host. Set it manually in host configuration! Ant should have junit.jar copied to it's lib directory"
-      set ant_bin ""
-   } elseif  { [check_ant_version $host $ant_bin] != 0 } {
-      ts_log_fine "Invalid ant: \"$ant_bin\""
-      set ant_bin ""
-   }
-   ts_log_fine "---setting ant for host $host to \"$ant_bin\""
-   return $ant_bin
+   return ""
 }
 
 #****** config_host/check_java_version() ***************************************
@@ -1762,59 +1675,28 @@ proc autodetect_ant { host } {
 #
 #  SEE ALSO
 #
+#  NOTE
+#     deprecated
+#
 #  TODO
 #     Having valid java_bin is not enough. We also need JAVA_HOME/include dir.
 #     E.g.: /usr/jdk/jre/bin/java is invalid, correct would be /usr/jdk/bin/java
 #*******************************************************************************
-proc check_java_version { host java_bin version } {
+proc check_java_version {host java_bin version} {
    global CHECK_USER
-   if { [string trim $java_bin] == "" } {
+   if {[string trim $java_bin] == ""} {
       return -1
    }
    set output [start_remote_prog $host $CHECK_USER "$java_bin" "-version" prg_exit_state 12 0 "" "" 1 0]
-   if { [string match "*java version \"$version.*\"*" $output] == 1 } {
+   if {[string match "*java version \"$version.*\"*" $output]} {
       return 0
    }
    return -1
 }
 
-#****** config_host/autodetect_java() ******************************************
-#  NAME
-#     autodetect_java() -- tries to find java_bin
-#
-#  SYNOPSIS
-#      check_java_version { host version }
-#
-#  FUNCTION
-#     This procedure is called to autodetect java14 java15 and java16
-#
-#  INPUTS
-#     host - host where we expect the java_bin
-#     version - expected java version of java_bin
-#
-#  SEE ALSO
-#
-#*******************************************************************************
+# keeping autodetect_java as it might still be called in some update function
 proc autodetect_java { host {version "1.4"} } {
-   global CHECK_USER ts_config
-   set ver [get_testsuite_java_version $version]
-   set output [start_remote_prog $host $CHECK_USER [get_binary_path $host "csh"] "-c \"source /vol2/resources/en_jdk$ver ; $ts_config(testsuite_root_dir)/scripts/mywhich.sh java\"" prg_exit_state 12 0 "" myenv 1 0]
-   if  { [string match "* NOT SUPPORTED *" $output] == 1 } {
-      ts_log_fine "Error: [lindex [split $output "\n"] 0]"
-      set bin ""
-   } else {
-      set output [split $output "\n"]
-      set bin [string trim [lindex $output [expr [llength $output] - 2]]]
-      if { $prg_exit_state != 0 } {
-         ts_log_fine "Error: Unable to autodetect java$ver  for host $host. Set it manually in host configuration!"
-         set bin "" 
-      } elseif { [check_java_version $host $bin $version] != 0 } {
-         ts_log_fine "Error: $bin does not point to valid java$ver"
-         set bin ""
-      }
-   }
-   ts_log_fine "---setting java$ver for host $host to \"$bin\""
-   return $bin
+   return ""
 }
 
 #****** config_host/setup_host_config() ****************************************
@@ -1846,6 +1728,7 @@ proc setup_host_config {file {force_params "" } } {
             wait_for_enter
          }
       }
+
       # got config
       if { [verify_host_config ts_host_config 1 err_list $force_params ] != 0 } {
          # configuration problems
@@ -2372,13 +2255,39 @@ proc get_testsuite_java_version {{version "1.4"}} {
 #  RESULT
 #     hostlist
 #*******************************************************************************
-proc host_conf_get_cluster_hosts {{with_non_cluster_hosts 0}} {
+proc host_conf_get_cluster_hosts {{with_non_cluster_hosts 0} {with_compile_hosts 0}} {
    global ts_config
 
    set hosts "$ts_config(master_host) $ts_config(execd_hosts) $ts_config(execd_nodes) $ts_config(admin_only_hosts) $ts_config(submit_only_hosts) $ts_config(shadowd_hosts)"
+
+   # we want the non cluster host as well
    if {$with_non_cluster_hosts} {
       set hosts [concat $hosts $ts_config(non_cluster_hosts)]
    }
+
+   # we want the compile hosts as well
+   if {$with_compile_hosts} {
+      set cluster_hosts [lsort -dictionary -unique $hosts]
+      set archs [host_conf_get_archs $cluster_hosts]
+      # compile host per architecture
+      foreach arch $archs {
+         set host [compile_search_compile_host $arch]
+         if {$host != "none"} {
+            lappend hosts $host
+         }
+      }
+      # doc and java compile host
+      set host [host_conf_get_doc_compile_host 0]
+      if {$host != ""} {
+         lappend hosts $host
+      }
+      set host [host_conf_get_java_compile_host 0]
+      if {$host != ""} {
+         lappend hosts $host
+      }
+   }
+
+   # make the list unique and remove "none"
    set cluster_hosts [lsort -dictionary -unique $hosts]
    set none_elem [lsearch $cluster_hosts "none"]
    if {$none_elem >= 0} {
@@ -3518,3 +3427,210 @@ proc private_test_host_conf_get_suited_host {} {
    set hosts [host_conf_get_suited_hosts 1 "" "sol-amd64 sol-sparc64" "sol-amd64"]
    puts "-> $hosts" ; wait_for_enter
 }
+
+# ============================= start JAVA ===============================
+# The cache of detected java versions per host has the following format
+# cache(hostlist) {host1 host2 host3 ...}
+# cache(<host>,versions)            list of versions found on this host
+# cache(<host>,<version>,path)      path to java installation
+# cache(<host>,<version>,major)     major version, e.g. 8, 11, 17, 21
+# cache(<host>,<version>,has_jni)   0|1, has include/jni.h
+global host_conf_java_cache
+unset -nocomplain host_conf_java_cache
+
+# detect java installations on cluster hosts as well as compile hosts
+# no need to call this function explicitly, it is called implicitly by
+# - host_conf_get_java
+# - host_conf_get_java_host
+proc host_conf_detect_java {} {
+   global host_conf_java_cache
+
+   ts_log_fine "searching java installations on all hosts - this can take some time"
+
+   # clear cache
+   unset -nocomplain host_conf_java_cache
+   set host_conf_java_cache(hosts) {}
+
+   # get a list of all hosts which might be used by this testsuite
+   # this includes non cluster hosts and compile hosts
+   set host_list [host_conf_get_cluster_hosts 1 1]
+
+   # search java on every host
+   foreach host $host_list {
+      ts_log_finer "looking for java on host $host"
+      host_conf_detect_java_on_host $host
+   }
+}
+
+# detect java installations on a specific host
+# private function
+proc host_conf_detect_java_on_host {host} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global host_conf_java_cache
+
+   # this is where we search
+   set arch [resolve_arch $host]
+   set default_locations {}
+   switch -glob $arch {
+      "lx-*" -
+      "ulx-*" {
+         lappend default_locations "/usr/lib/jvm"
+      }
+      "sol-*" {
+         lappend default_locations "/usr/jdk/instances"
+      }
+      default {
+         ts_log_config "don't know where to search for Java on host $host with arch $arch"
+      }
+   }
+
+   # initialize cache for this host
+   lappend host_conf_java_cache(hosts) $host
+   set host_conf_java_cache($host,versions) {}
+
+   foreach location $default_locations {
+      # check if location exists
+      if {![remote_file_isdirectory $host $location]} {
+         continue
+      }
+      # check for entries
+      #  - being a directory
+      #  - not being a link
+      #  - having bin/java
+      #  - optionally having include/jni.h
+      set cmd "$ts_config(testsuite_root_dir)/scripts/find_java.sh"
+      set output [start_remote_prog $host $CHECK_USER $cmd $location prg_exit_state 60 0 "" "" 1 0]
+      if {$prg_exit_state == 0} {
+         # output contains path, version, has_jni, e.g.
+         #    java-11-openjdk-amd64|"11.0.23"|0
+         #    java-17-openjdk-amd64|"17.0.11"|1
+         #    java-21-openjdk-amd64|"21.0.3"|1
+         #    java-8-openjdk-amd64|"1.8.0_412"|1
+         foreach line [split $output "\n"] {
+            if {[string trim $line] != ""} {
+               set split_line [split $line "|"]
+               set dir [lindex $split_line 0]
+               set version [string trim [lindex $split_line 1] "\""]
+               set has_jni [lindex $split_line 2]
+               ts_log_finest "$dir:$version:$has_jni"
+               set major_version [host_conf_get_major_java_version $version]
+
+               # store in cache
+               lappend host_conf_java_cache($host,versions) $version
+               set host_conf_java_cache($host,$version,path) "$location/$dir"
+               set host_conf_java_cache($host,$version,major) $major_version
+               set host_conf_java_cache($host,$version,has_jni) $has_jni
+            }
+         }
+      }
+   }
+}
+
+# return the major version of a specific java version
+proc host_conf_get_major_java_version {version} {
+   if {[string match "1.8.*" $version]} {
+      return 8
+   } else {
+      return [lindex [split $version "."] 0]
+   }
+}
+
+###
+# @brief returns path to java installation
+#
+# returns the path to a java installation on a specific host
+# having a specific major version (optionally: or a newer version)
+# 
+# @param[in] host
+# @param[in] major version
+# @param[in] optionally: require_jni: java must have include/jni.h, default 0(false)
+# @param[in] optionally: allow_newer: if the exact version is not found, return a newer one? default 0(false)
+##
+proc host_conf_get_java {host major {require_jni 0} {allow_newer 0}} {
+   global host_conf_java_cache
+   # detect java versions on demand
+   if {![info exists host_conf_java_cache(hosts)]} {
+      host_conf_detect_java
+   }
+   set ret ""
+   if {[info exists host_conf_java_cache($host,versions)]} {
+      # not exacly matching candidate versions
+      set candidates {}
+      foreach version $host_conf_java_cache($host,versions) {
+         if {$host_conf_java_cache($host,$version,major) == $major} {
+            if {$require_jni && $host_conf_java_cache($host,$version,has_jni) == 0} {
+               # cannot use this version
+               continue
+            }
+            set ret $host_conf_java_cache($host,$version,path)
+            # we found what we want and are done
+            break
+         } elseif {$allow_newer && $host_conf_java_cache($host,$version,major) > $major} {
+            if {$require_jni && $host_conf_java_cache($host,$version,has_jni) == 0} {
+               # cannot use this version
+               continue
+            }
+            # we found a possible newer candidate
+            lappend candidates $version
+         }
+      }
+
+      # if we didn't find the exact version but have newer candiates: find the oldest (nearest the expected)
+      if {$ret == ""} {
+         set min_major 99999
+         foreach version $candidates {
+            if {$host_conf_java_cache($host,$version,major) < $min_major} {
+               set min_major $host_conf_java_cache($host,$version,major)
+               set ret $host_conf_java_cache($host,$version,path)
+            }
+         }
+      }
+   }
+
+   return $ret
+}
+
+###
+# @brief returns a host having java installed
+#
+# returns the name of a host
+# having a specific major Java version installed (optionally: or a newer version)
+# 
+# @param[in] major version
+# @param[in] optionally: require_jni: java must have include/jni.h, default 0(false)
+# @param[in] optionally: allow_newer: if the exact version is not found, return a newer one? default 0(false)
+##
+proc host_conf_get_java_host {major {require_jni 0} {allow_newer 0}} {
+   global host_conf_java_cache
+   # detect java versions on demand
+   if {![info exists host_conf_java_cache(hosts)]} {
+      host_conf_detect_java
+   }
+
+   set ret ""
+   # try to find the exact version on any host
+   foreach host $host_conf_java_cache(hosts) {
+      set path [host_conf_get_java $host $major $require_jni 1]
+      if {$path != ""} {
+         set ret $host
+         break
+      }
+   }
+   # not found the exact version but a newer one is OK as well?
+   if {$ret == "" && $allow_newer} {
+      # try to find a newer version
+      foreach host $host_conf_java_cache(hosts) {
+         set path [host_conf_get_java $host $major $require_jni 0]
+         if {$path != ""} {
+            set ret $host
+            break
+         }
+      }
+   }
+
+   return $ret
+}
+
+# ============================== end JAVA ================================
+
