@@ -1936,19 +1936,6 @@ proc prepare_packages { } {
          }
       }
 
-      foreach elem $sys_archs {
-         set found_arch 0
-         foreach execd $execd_archs {
-            if { [ string compare $elem $execd] == 0 } {
-               set found_arch 1
-            }
-         }
-         if { $found_arch != 1 } {
-            ts_log_severe "found no host for tar architecture \"$elem\""
-            return -1
-         }
-      }
-
       # try to resolve hostnames in settings file
       set catch_return [ catch { eval exec "cp ${CHECK_DEFAULTS_FILE} ${CHECK_DEFAULTS_FILE}.[timestamp]" } ]
       if { $catch_return != 0 } {
@@ -2187,19 +2174,6 @@ proc prepare_packages { } {
          }
          if { $found_arch != 1 } {
             ts_log_severe "binaries for host \"$elem\" not in zip files, please add zip file"
-            return -1
-         }
-      }
-
-      foreach elem $sys_archs {
-         set found_arch 0
-         foreach execd $execd_archs {
-            if { [ string compare $elem $execd] == 0 } {
-               set found_arch 1
-            }
-         }
-         if { $found_arch != 1 } {
-            ts_log_severe "found no host for zip architecture \"$elem\""
             return -1
          }
       }
