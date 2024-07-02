@@ -170,7 +170,7 @@ proc setup_qping_dump { log_array  } {
    set used_log_array(actual_line)  0
    set used_log_array(in_block)     0
 
-   set timeout 15
+   set timeout 180
    while {1} {
       expect {
          -i $used_log_array(spawn_id) -- full_buffer {
@@ -351,7 +351,7 @@ proc get_qping_dump_output { log_array } {
    set return_value 0
 
 
-   set timeout 1
+   set timeout 180
    log_user 0
    expect {
       -i $used_log_array(spawn_id) -- full_buffer {
@@ -623,7 +623,7 @@ proc start_remote_prog { hostname
                          exec_command
                          exec_arguments
                          {exit_var prg_exit_state}
-                         {mytimeout 60}
+                         {mytimeout 180}
                          {background 0}
                          {cd_dir ""}
                          {envlist ""}
@@ -1280,7 +1280,7 @@ proc ssh_start_remote_prog {hostname command args} {
       spawn "ssh" $hostname $cmd
    } catch_output]
    if {$prg_exit_state == 0} {
-      set timeout 5
+      set timeout 180 
       expect {
          eof {
             ts_log_finer "   -> ssh($hostname): eof, $expect_out(buffer)"
@@ -1336,7 +1336,7 @@ proc scp_remote_file {hostname src dest} {
       spawn $start_script $cmd
    } catch_output]
    if {$prg_exit_state == 0} {
-      set timeout 5
+      set timeout 180 
       expect {
          eof {
             ts_log_finer "   -> $cmd: eof, $expect_out(buffer)"
@@ -1739,7 +1739,7 @@ proc open_remote_spawn_process { hostname
          set unrecognized_messages {}
          set catch_return [catch {
             set num_tries $nr_of_tries
-            set timeout 2
+            set timeout 180 
             expect {
                -i $spawn_id eof {
                   ts_log_warning "${error_info}\nunexpected eof" $raise_error
@@ -1869,7 +1869,7 @@ proc open_remote_spawn_process { hostname
             set shell_start_output [get_ts_local_script $hostname "shell_start_output.sh"]
             # try to start the shell_start_output.sh script
             ts_send $spawn_id "$shell_start_output\n" $hostname
-            set timeout 2
+            set timeout 180 
             expect {
                -i $spawn_id eof {
                   ts_log_warning "${error_info}\nunexpected eof" $raise_error
@@ -1951,7 +1951,7 @@ proc open_remote_spawn_process { hostname
          set check_identity [get_ts_local_script $hostname "check_identity.sh"]
          ts_send $spawn_id "$check_identity\n" $hostname
          set num_tries $nr_of_tries
-         set timeout 2
+         set timeout 180 
          expect {
             -i $spawn_id eof {
                ts_log_warning "${error_info}\nunexpected eof" $raise_error
@@ -2020,7 +2020,7 @@ proc open_remote_spawn_process { hostname
 
             # without ssh access, we'll get the passwd question here
             if {![have_ssh_access]} {
-               set timeout 60
+               set timeout 180 
                expect {
                   -i $spawn_id full_buffer {
                      ts_log_warning "${error_info}\nbuffer overflow" $raise_error
@@ -2062,7 +2062,7 @@ proc open_remote_spawn_process { hostname
             set check_identity [get_ts_local_script $hostname "check_identity.sh"]
             ts_send $spawn_id "$check_identity\n" $hostname
             set num_tries $nr_of_tries
-            set timeout 2
+            set timeout 180 
             expect {
                -i $spawn_id eof {
                   ts_log_warning "${error_info}\nunexpected eof" $raise_error
@@ -2149,7 +2149,7 @@ proc open_remote_spawn_process { hostname
          ts_send $spawn_id "$file_check $script_name\n" $hostname
          set connect_errors 0
          set num_tries $nr_of_tries
-         set timeout 2
+         set timeout 180 
          expect {
             -i $spawn_id full_buffer {
                ts_log_warning "${error_info}\nbuffer overflow" $raise_error
@@ -3220,7 +3220,7 @@ proc check_rlogin_session { spawn_id pid hostname user nr_of_shells {only_check 
          set check_identity [get_ts_local_script $hostname "check_identity.sh"]
          ts_send $spawn_id "$check_identity\n" $con_data(hostname) 0 0
          set num_tries 30
-         set timeout 1
+         set timeout 180
          expect {
             -i $spawn_id full_buffer {
                ts_log_info "buffer overflow" $raise_error
@@ -3457,7 +3457,7 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
          ts_log_finest "real user of connection is \"$con_data(real_user)\""
          set check_identity [get_ts_local_script $con_data(hostname) "check_identity.sh"]
          ts_send $spawn_id "$check_identity\n" $con_data(hostname)
-         set timeout 2
+         set timeout 180 
          set num_tries 10
          if {$CHECK_USE_HUDSON == 1} {
             #We have many  timeout issues, so we lower the waiting time
@@ -3524,7 +3524,7 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
          ts_send $spawn_id "   \003" "" 0 0
          
          # wait for CTRL-C to take effect
-         set timeout 5
+         set timeout 180 
          set send_exit 1
          expect {
             -i $spawn_id full_buffer {

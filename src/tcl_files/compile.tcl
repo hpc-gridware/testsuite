@@ -1040,7 +1040,7 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
    set done 0
    set status_time [clock seconds]
    set status_updated 0
-   set timeout 400
+   set timeout 600
    expect_user {
       -i $spawn_list full_buffer {
          set spawn_id $expect_out(spawn_id)
