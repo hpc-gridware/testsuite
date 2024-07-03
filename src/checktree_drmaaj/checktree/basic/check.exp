@@ -1,0 +1,301 @@
+#___INFO__MARK_BEGIN__
+##########################################################################
+#
+#  The Contents of this file are made available subject to the terms of
+#  the Sun Industry Standards Source License Version 1.2
+#
+#  Sun Microsystems Inc., March, 2001
+#
+#
+#  Sun Industry Standards Source License Version 1.2
+#  =================================================
+#  The contents of this file are subject to the Sun Industry Standards
+#  Source License Version 1.2 (the "License"); You may not use this file
+#  except in compliance with the License. You may obtain a copy of the
+#  License at http://gridengine.sunsource.net/Gridengine_SISSL_license.html
+#
+#  Software provided under this License is provided on an "AS IS" basis,
+#  WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING,
+#  WITHOUT LIMITATION, WARRANTIES THAT THE SOFTWARE IS FREE OF DEFECTS,
+#  MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE, OR NON-INFRINGING.
+#  See the License for the specific provisions governing your rights and
+#  obligations concerning the Software.
+#
+#  The Initial Developer of the Original Code is: Sun Microsystems, Inc.
+#
+#  Copyright: 2001 by Sun Microsystems, Inc.
+#
+#  All Rights Reserved.
+#
+#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#
+##########################################################################
+#___INFO__MARK_END__
+
+# define global variable in this namespace
+global check_name 
+global check_category
+global check_description 
+global check_needs
+global check_functions 
+global check_root_access_needs
+
+set check_root_access_needs "yes"
+
+# define test's name and run level descriptions
+set check_name            "drmaa-j"
+set check_category        "API DRMAA JAVA VERIFIED"
+set check_description(0)  "One host, lowest Java-version: tests to verify DRMAA-J 1.0 library with DRMAA-C 1.0 library"
+set check_description(100)  "One host, different Java-versions: tests to verify DRMAA-J 1.0 library with DRMAA-C 1.0 library"
+set check_description(200)  "Different hosts, different Java-versions: tests to verify DRMAA-J 1.0 library with DRMAA-C 1.0 library"
+
+# define test's dependencies
+set check_needs           "init_core_system" 
+
+# setup and cleanup functions
+set check_setup_function "drmaaj_setup"
+set check_cleanup_function "drmaaj_cleanup"
+set check_setup_level_function "drmaaj_setup_level"
+set check_cleanup_level_function "drmaaj_cleanup_level"
+
+# define test's procedure order
+set check_functions ""
+lappend check_functions "drmaaj_check"
+
+# -------- local test procedures -----------------------------------------------
+
+###
+# @brief sets the test hosts depending on runlevel
+#
+# @returns list of host names
+##
+proc set_hosts_for_runlevel {} {
+   global CHECK_ACT_LEVEL ts_config
+   set hosts_in_runlevel_local {} 
+
+   # sets the hosts array according to the runlevel
+   switch -- $CHECK_ACT_LEVEL {
+      0 {
+         set hosts_in_runlevel_local [lindex [drmaaj_basic_get_hosts] 0]
+      }
+      100 {
+         # find the host with most java installations
+         set max_javas 0
+         set hosts [drmaaj_basic_get_hosts]
+         foreach host $hosts {
+            set num_javas [llength [host_conf_get_all_java $host]]
+            if {$num_javas > $max_javas} {
+               set max_java $num_javas
+               set hosts_in_runlevel_local $host
+            }
+         }
+      }
+      200 {
+         set hosts_in_runlevel_local [drmaaj_basic_get_hosts]
+      }
+   }
+
+   # log the hosts 
+   ts_log_fine "The following hosts are used in runlevel $CHECK_ACT_LEVEL : " 
+   foreach hst $hosts_in_runlevel_local {
+      ts_log_fine "-> host: $hst " 
+   }
+
+   return $hosts_in_runlevel_local
+}
+
+###
+# @brief tries to find cluster host which have both Java and Maven installed
+#
+# @returns list of host names
+##
+proc drmaaj_basic_get_hosts {} {
+   global ts_config
+
+   set hosts "$ts_config(master_host) $ts_config(execd_nodes) $ts_config(submit_only_hosts)"
+   set hosts [lsort -unique $hosts]
+   set ret {}
+   foreach host $hosts {
+      if {[host_conf_get_java $host 8 0 1] != "" &&
+          [get_binary_path $host "mvn" 0] != "mvn"} {
+         # host has java and mvn
+         lappend ret $host
+      }
+   }
+
+   return $ret
+}
+
+###
+# @brief tries to find java installations on a given host depending on runlevel
+#
+# @param[in] host
+# @returns list java base directories which can be set as JAVA_HOME
+##
+proc set_java_list_according_to_runlevel {host} {
+   global CHECK_ACT_LEVEL
+
+   # set java list according to the runlevel
+   # each entry contains an absolute path 
+   # to an Java Virtual Machine 
+
+   switch -- $CHECK_ACT_LEVEL {
+      0 {
+         return [host_conf_get_lowest_java $host]
+      }
+      100 {
+         return [host_conf_get_all_java $host]
+      }
+      200 {
+         return [host_conf_get_all_java $host]
+      }
+   }
+}
+
+###
+# @brief returns the Java classpath required for running the tests
+# @note currently it is not depending on the runlevel
+# @returns classpath
+##
+proc set_java_classpath_according_to_runlevel {} {
+   global ts_config 
+
+   # add to Java classpath the Java DRMAA library
+   set classpath "$ts_config(product_root)/lib/drmaa.jar"
+
+   ts_log_fine "Added the following Java classpath: $classpath"
+
+   return $classpath 
+}
+
+
+proc drmaaj_check { } {
+   global ts_config env
+   global CHECK_ACTUAL_TEST_PATH
+   global CHECK_USER CHECK_ACT_LEVEL
+   global hosts_in_runlevel
+   global check_description
+
+   # make sure that we have a drmaa.jar and suspendable_sleeper.sh
+   set needed_files {}
+   lappend needed_files $ts_config(product_root)/lib/drmaa.jar
+   lappend needed_files $ts_config(testsuite_root_dir)/scripts/suspendable_sleeper.sh
+
+   set missing_files ""
+   foreach file $needed_files {
+      if {[file exists $file] == 0} {
+         append missing_files " $file"
+      }
+   }
+
+   if {$missing_files != ""} {
+      ts_log_severe "The following necessary files are missing: [string trim $missing_files]"
+      return
+   }
+
+   set source_dir [config_get_drmaaj_source_dir]
+
+   ts_log_fine "go through hosts.."
+
+
+   # test all hosts in host list - according to runlevel
+   foreach host $hosts_in_runlevel {
+      ts_log_fine "-> using host $host"
+      set binary_arch [resolve_arch $host]
+
+      # set classpath according to runlevel: this is static for each rl 
+      set classpath [set_java_classpath_according_to_runlevel]
+      
+      set compile_arch_mt "[resolve_build_arch $host]"
+      ts_log_fine "host $host has arch $compile_arch_mt with classpath $classpath"
+      set options [build_java_env_list $host $binary_arch]
+      set myenv(CLASSPATH) $classpath
+
+      # include the library path because environment variables 
+      # are different on different architectures
+      # set options "-Djava.library.path=$ts_config(product_root)/lib/$binary_arch $options" 
+      set java_lib_path "-Djava.library.path=$ts_config(product_root)/lib/$binary_arch" 
+      append options " $java_lib_path"
+      ts_log_fine "options: $options"
+
+      # go through all Java versions:
+      # get java path list depending from run level
+      set java_vms_in_runlevel [set_java_list_according_to_runlevel $host]
+
+      foreach java $java_vms_in_runlevel {
+         # @todo output (major) version
+         ts_log_fine "-> using java $java"
+         set myenv(JAVA_HOME) $java
+         set test_output [start_remote_prog $host $CHECK_USER "mvn" "$options test" prg_exit_state 600 0 $source_dir myenv 1 0 1]
+
+         if {$prg_exit_state == 0} {
+            ts_log_fine "test successfully finished"
+         } else {
+            set errors ""
+            append errors "---ERROR----------------------------------------------------\n"
+            append errors "$check_description($CHECK_ACT_LEVEL)\n"
+            append errors "Performed mvn test run as user $CHECK_USER on host $host (Run level: $CHECK_ACT_LEVEL)\n"
+            append errors "command: \"mvn $options test\"\n"
+            append errors "\n$test_output\n\n"
+            ts_log_severe $errors
+            if {[delete_all_jobs] == 0} {
+               return
+            }
+            if {[wait_for_end_of_all_jobs] != 0]} {
+               return
+            }
+         }
+      } ; # go through all Java versions
+   } ; # repeat: check all hosts from hostlist 
+}
+
+proc drmaaj_setup {} {
+}
+
+proc drmaaj_cleanup {} {
+}
+
+proc drmaaj_setup_level {} {
+   global ts_config
+   global drmaaj_config_backup current_drmaa_mode hosts_in_runlevel
+   
+   if {$ts_config(source_dir) == "none"} {
+      ts_log_config "source directory is set to \"none\" - cannot run test"
+      return 99
+   }
+
+   # get host list depending from run level
+   set hosts_in_runlevel [set_hosts_for_runlevel]
+
+   # must forbit reschedule on job exiting with 99 
+   # must forbit job error upon job exiting with 100
+   # otherwise drmaa_test ST_EXIT_STATUS never finishes
+
+   # backup old settings
+   get_config drmaaj_config_backup
+
+   # set new value
+   set new_config(qmaster_params) "FORBID_RESCHEDULE=TRUE,FORBID_APPERROR=TRUE"
+   set new_config(delegated_file_staging) true
+   set_config new_config
+
+   # setup file staging scripts
+   ts_log_fine "hosts in list [llength hosts_in_runlevel]"
+   foreach host $hosts_in_runlevel {
+      ts_log_fine "host --> $host"
+      set current_drmaa_mode($host) [get_current_drmaa_mode $host]
+   }
+}
+
+proc drmaaj_cleanup_level {} {
+   global ts_config
+   global drmaaj_config_backup current_drmaa_mode hosts_in_runlevel
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   # undo configuration changes that were made for this test
+   reset_config drmaaj_config_backup
+
+   unset -nocomplain drmaaj_config_backup current_drmaa_mode hosts_in_runlevel
+}

@@ -8,3 +8,5 @@ defaults.sav*
 pkg/*
 check_durations.txt*
 ._*
+*.swp
+*.log

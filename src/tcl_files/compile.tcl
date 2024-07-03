@@ -181,7 +181,9 @@ proc compile_host_list {{binaries_only 0}} {
    # The java compile host may not duplicate the build host for it's architecture, 
    # it must be also a c build host,
    # so it must be contained in the build host list.
-   if {$jc_host != ""} {
+   # With OCS/GCS >= 9.0.0 we separated core product and extensions like the drmaa-java,
+   # so there is no longer then need to build java and c++ code on the same host.
+   if {[is_version_in_range "" "9.0.0"] && $jc_host != ""} {
       set jc_arch [host_conf_get_arch $jc_host]
 
       if {$compile_host($jc_arch) != $jc_host} {
@@ -1018,7 +1020,17 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
       set cmd $options($host,cmd)
       set args $options($host,args)
       set dir $options($host,dir)
-      set open_spawn [open_remote_spawn_process $host $CHECK_USER $cmd $args 0 $dir "" 0]
+
+      # need to set JAVA_HOME
+      # if no Java (JDK, also having include/jni.h) is available then disable building with JNI
+      unset -nocomplain myenv
+      set java_home [host_conf_get_java $host 8 1 1]
+      if {$java_home != ""} {
+         set myenv(JAVA_HOME) $java_home
+      } elseif {$options($host,cmd) == "cmake"} {
+         append args " -DWITH_JNI=OFF"
+      }
+      set open_spawn [open_remote_spawn_process $host $CHECK_USER $cmd $args 0 $dir myenv 0]
       set spawn_id [lindex $open_spawn 1]
 
       set host_array($spawn_id,host) $host
@@ -1216,8 +1228,12 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
    if {$error_count == 0 && !$compile_only} {
       # call cmake on every host
       # we use the "preferred" host to install common files
+      # if there is no "preferred" host, use the first compile host as "preferred" host
       unset -nocomplain options
       set preferred_host [get_preferred_build_host $compile_hosts]
+      if {[lsearch -exact $compile_hosts $preferred_host] < 0} {
+         set preferred_host [lindex $compile_hosts 0]
+      }
 
       foreach host $compile_hosts {
          set options($host,cmd) "cmake"
@@ -1225,11 +1241,11 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
          set args "-S $source_dir"
          append args " -DCMAKE_INSTALL_PREFIX=$ts_config(product_root)"
 
-	 if {[resolve_arch $host] == "sol-amd64"} {
+         if {[resolve_arch $host] == "sol-amd64"} {
             append args " -DCMAKE_MAKE_PROGRAM=gmake"
-	 }
+         }
 
-	 if {$ts_config(uge_ext_dir) != "none"} {
+         if {$ts_config(uge_ext_dir) != "none"} {
             append args " -DPROJECT_EXTENSIONS=$ts_config(uge_ext_dir)"
             append args " -DPROJECT_FEATURES=\"gcs-extensions\""
          }

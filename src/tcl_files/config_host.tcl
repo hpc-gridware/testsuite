@@ -2121,6 +2121,7 @@ proc host_conf_get_non_cluster_host {{raise_error 1}} {
 #     Doesn't work for MAC OS X
 #  SEE ALSO
 #*******************************************************************************
+# @todo: replace by host_conf_get_java
 proc get_java_home_for_host { hosti {java_version "1.4"} {raise_error 1}} {
     global ts_host_config
     set version [get_testsuite_java_version $java_version]
@@ -3585,6 +3586,56 @@ proc host_conf_get_java {host major {require_jni 0} {allow_newer 0}} {
                set ret $host_conf_java_cache($host,$version,path)
             }
          }
+      }
+   }
+
+   return $ret
+}
+
+###
+# @brief return the lowest java version on a host
+#
+# @param[in] host
+#
+# @returns path of the lowest java version found on the host
+##
+proc host_conf_get_lowest_java {host} {
+   global host_conf_java_cache
+   # detect java versions on demand
+   if {![info exists host_conf_java_cache(hosts)]} {
+      host_conf_detect_java
+   }
+   set ret ""
+   if {[info exists host_conf_java_cache($host,versions)]} {
+      set lowest 99999
+      foreach version $host_conf_java_cache($host,versions) {
+         if {$host_conf_java_cache($host,$version,major) < $lowest} {
+            set lowest $host_conf_java_cache($host,$version,major)
+            set ret $host_conf_java_cache($host,$version,path)
+         }
+      }
+   }
+
+   return $ret
+}
+
+###
+# @brief return a list of all java installations on a host
+#
+# @param[in] host
+#
+# @returns list of the paths of all detected java versions on the host
+##
+proc host_conf_get_all_java {host} {
+   global host_conf_java_cache
+   # detect java versions on demand
+   if {![info exists host_conf_java_cache(hosts)]} {
+      host_conf_detect_java
+   }
+   set ret {}
+   if {[info exists host_conf_java_cache($host,versions)]} {
+      foreach version $host_conf_java_cache($host,versions) {
+         lappend ret $host_conf_java_cache($host,$version,path)
       }
    }
 
