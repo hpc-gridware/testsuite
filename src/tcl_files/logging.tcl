@@ -608,8 +608,9 @@ proc ts_log {level message {raise_error 1} {function ""} {do_output 1} {do_loggi
 proc ts_log_progress {{level FINE} {message "."} {isFinal 0}} {
    global ts_log_config be_quiet
    global CHECK_USE_HUDSON
+   global DISABLE_WASHING_MACHINE
 
-   if {$be_quiet || $CHECK_USE_HUDSON == 1} {
+   if {$be_quiet || $CHECK_USE_HUDSON == 1 || $DISABLE_WASHING_MACHINE == 1} {
       return
    }
 
@@ -1360,8 +1361,9 @@ proc ts_log_washing_machine {} {
    global ts_log_washing_machine_counter
    global ts_log_washing_machine_enabled
    global CHECK_USE_HUDSON
+   global DISABLE_WASHING_MACHINE
 
-   if {!$ts_log_washing_machine_enabled || $CHECK_USE_HUDSON == 1} {
+   if {!$ts_log_washing_machine_enabled || $CHECK_USE_HUDSON == 1 || $DISABLE_WASHING_MACHINE == 1} {
       return
    }
    set now [clock clicks -milliseconds]

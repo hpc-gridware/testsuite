@@ -77,7 +77,7 @@ proc file_parsing_setup {} {
   global file_parsing_option_file
   global file_parsing_job_host
   global CHECK_USE_HUDSON
-  
+
   if {$CHECK_USE_HUDSON == 1} {
      ts_log_config "Test is not supported in this parallel run due to the usage of \$HOME/.sgerequest file"
      return 99

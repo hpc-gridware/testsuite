@@ -355,6 +355,9 @@ set CHECK_HAVE_TDOM 0
 global CHECK_USE_HUDSON ;# instead of logging creates xml files in junit format for Hudson 
 set CHECK_USE_HUDSON 0
 
+global DISABLE_WASHING_MACHINE
+set DISABLE_WASHING_MACHINE 0
+
 global CHECK_HUDSON_OUTPUT ;# Used to hold output for since check_name
 set CHECK_HUDSON_OUTPUT ""
 global CHECK_HUDSON_STACKTRACE ;# Used to hold most recent stacktrace when failure occurred
@@ -5763,9 +5766,6 @@ proc get_checktree_categories {path} {
   return $back
 }
 
-
-
-
 # show test descriptons (of all subtests)
 proc show_tests {path full} {
    global ts_checktree
@@ -7639,6 +7639,7 @@ set do_start          0
 set do_compile        0
 set do_all            0
 set do_one_test       0
+set do_dump_test_list 0
 set do_category       0
 set do_nomain         0
 set do_prog_start     0
@@ -8170,6 +8171,12 @@ for {set i 0} {$i < $argc} {incr i} {
       continue
    }
 
+   if { ( [string compare [lindex $argv $i] "--disable_washing_machine"] == 0 ) || ([string compare [lindex $argv $i] "disable_washing_machine"] == 0 ) } {
+      set DISABLE_WASHING_MACHINE 1
+      puts " ---> disable_washing_machine is set <---"
+      continue
+   }
+
    if { ( [string compare [lindex $argv $i] "--reset_conf"] == 0 ) || ([string compare [lindex $argv $i] "reset_conf"] == 0 ) } {
       set do_only_reset_config 1
       set check_use_installed_system 1
@@ -8222,6 +8229,11 @@ for {set i 0} {$i < $argc} {incr i} {
       continue
    }
 
+   if { ( [string compare [lindex $argv $i] "--dump_test_list"] == 0 ) || ([string compare [lindex $argv $i] "dump_test_list"] == 0 ) } {
+      set do_dump_test_list 1
+      puts " ---> dumping test list <--- "
+      continue
+   }
 
    if { ( [string compare [lindex $argv $i] "--check"] == 0 ) || ([string compare [lindex $argv $i] "check"] == 0 ) } {
       set do_one_test 1
@@ -8505,6 +8517,78 @@ if {$do_compile} {
    }
 }
 
+if {$do_dump_test_list} {
+   foreach level_name [list "short" "medium" "long" "day" "week"] {
+
+      set test_group "Tests[string toupper $level_name 0 0]"
+      set test_list_file [open "jenkins_generate_${level_name}.groovy" w+]
+      puts $test_list_file "folder('GCS-CI-CD/$test_group') {"
+      puts $test_list_file "   displayName('$test_group')"
+      puts $test_list_file "   description('Tests in level $level_name of GCS-CI-CD environemnt')"
+      puts $test_list_file "}"
+      foreach key [array names ts_checktree] {\
+         # identify the node_id
+         if {[regexp "(.*),dir_name" $key match node_id] == 0} {
+            continue
+         }
+         # does the path start with a slash
+         if {[string match "/*" $ts_checktree(${node_id},dir_name)] == 0} {
+            puts "skipped $ts_checktree(${node_id},dir_name) because it is no absolute path"
+            continue
+         }
+         if {[info exists ts_checktree(${node_id},check_functions)] && $ts_checktree(${node_id},check_functions) == ""} {
+            puts "skipped $ts_checktree(${node_id},dir_name) because it has no check functions"
+            continue
+         }
+         if {[info exists ts_checktree(${node_id},children)] && $ts_checktree(${node_id},children) != ""} {
+            puts "skipped $ts_checktree(${node_id},dir_name) because it has children"
+            continue
+         }
+         foreach level [split $ts_checktree(${node_id},max_level_count) " "] {
+            if {$level_name == "short" && $level >= 100} {
+               continue
+            } elseif {$level_name == "medium" && ($level < 100 || $level >= 200)} {
+               continue
+            } elseif {$level_name == "long" && ($level < 200 || $level >= 300)} {
+               continue
+            } elseif {$level_name == "day" && ($level < 300 || $level >= 400)} {
+               continue
+            } elseif {$level_name == "day" && ($level < 400 || $level >= 500)} {
+               continue
+            }
+
+            set test_name_token [split $ts_checktree(${node_id},dir_name) "/"]
+            set test_name "[lindex $test_name_token end]"
+
+            if {$test_name == "auto_install_test" || $test_name == "basic_test"} {
+               puts "skipped $ts_checktree(${node_id},dir_name) because it is a manual test"
+               continue
+            }
+
+            puts $test_list_file "job('GCS-CI-CD/${test_group}/${test_name}') {"
+            puts $test_list_file "   lockableResources {"
+            puts $test_list_file "      label('gcs-ci-cd-cluster')"
+            puts $test_list_file "      resourcesVariable('GCS-CI-CD-CLUSTER')"
+            puts $test_list_file "      resourceNumber(1)"
+            puts $test_list_file "   }"
+            puts $test_list_file "   wrappers {"
+            puts $test_list_file "      sshAgent('tstusr-rsa-key')"
+            puts $test_list_file "   }"
+            puts $test_list_file "   steps {"
+            puts $test_list_file "      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd \${GCS-CI-CD-CLUSTER} check $ts_checktree(${node_id},dir_name) $level')"
+            puts $test_list_file "   }"
+            puts $test_list_file "}"
+            puts $test_list_file "queue('GCS-CI-CD/${test_group}/${test_name}')"
+
+            # even if there are multiple levels with the same level_name we generate the test only once
+            break
+         }
+      }
+      close $test_list_file
+   }
+   testsuite_shutdown 0
+}
+
 if { $do_one_test } {
    # ts_checktree ok
    if { [string first "/" $do_one_test_name] == 0 || [string first "\\" $do_one_test_name] == 0 } {
@@ -8522,7 +8606,7 @@ if { $do_one_test } {
    # print_menu_header
    ts_log_fine "run all tests ..."
 
-   run_tests $CHECK_ACT_PATH "uncompleted"
+   run_tests $CHECK_ACT_PATH "all"
    if { $do_kill } {
       set check_name "command line"
       shutdown_core_system 0 1
