@@ -4362,10 +4362,10 @@ proc run_tests {path state_to_run} {
 #     none
 #*******************************
 proc read_check_durations_spoolfile {durations_param} {
-   global ts_config
+   global CHECK_MAIN_RESULTS_DIR
    upvar $durations_param durations
    
-   set check_durations_spoolfile "$ts_config(testsuite_root_dir)/check_durations.txt"
+   set check_durations_spoolfile "$CHECK_MAIN_RESULTS_DIR/check_durations.txt"
 
    # read check durations from file
    if {[file isfile $check_durations_spoolfile] == 1} {
@@ -4394,10 +4394,10 @@ proc read_check_durations_spoolfile {durations_param} {
 #     none
 #*******************************
 proc write_check_durations_spoolfile {durations_param} {
-   global ts_config
+   global CHECK_MAIN_RESULTS_DIR
    upvar $durations_param durations
 
-   set check_durations_spoolfile "$ts_config(testsuite_root_dir)/check_durations.txt"
+   set check_durations_spoolfile "$CHECK_MAIN_RESULTS_DIR/check_durations.txt"
 
    # write check durations to file
    spool_array_to_file $check_durations_spoolfile "durations" durations
