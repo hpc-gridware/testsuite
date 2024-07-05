@@ -241,7 +241,7 @@ proc drmaaj_check { } {
             if {[delete_all_jobs] == 0} {
                return
             }
-            if {[wait_for_end_of_all_jobs] != 0]} {
+            if {[wait_for_end_of_all_jobs] != 0} {
                return
             }
          }
