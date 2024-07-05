@@ -3815,9 +3815,10 @@ proc close_logfile_wait { } {
 #*******************************************************************************
 proc washing_machine {time {small 0}} {
    global CHECK_USE_HUDSON
+   global DISABLE_WASHING_MACHINE
    
    #No washing machine when running for Hudson
-   if {$CHECK_USE_HUDSON == 1} {
+   if {$CHECK_USE_HUDSON == 1 || $DISABLE_WASHING_MACHINE == 1} {
       return
    }
    
