@@ -41,6 +41,8 @@ global check_functions
 global check_root_access_needs
 global check_need_running_system
 
+set check_root_access_needs "yes"
+
 # define test's name and run level descriptions
 set check_name            "jemalloc_test"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"

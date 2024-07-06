@@ -42,6 +42,8 @@ global check_needs
 global check_functions 
 global check_root_access_needs
 
+set check_root_access_needs "yes"
+
 # define test's name and run level descriptions
 set check_name            "xauthority_issue"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
