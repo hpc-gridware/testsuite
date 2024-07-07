@@ -4339,6 +4339,13 @@ proc run_tests {path state_to_run} {
    mail_report "$mail_subject" $mail_body
 
    set CHECK_TESTS_RUNNING 0
+
+   # return 1 if at least one test failed
+   if {[llength $check_error_name]} {
+      return 1
+   } else {
+      return 0
+   }
 }
 
 #                                                             max. column:     |
@@ -8606,13 +8613,18 @@ if { $do_one_test } {
    # print_menu_header
    ts_log_fine "run all tests ..."
 
-   run_tests $CHECK_ACT_PATH "all"
+   set at_least_one_failed [run_tests $CHECK_ACT_PATH "all"]
+
    if { $do_kill } {
       set check_name "command line"
       shutdown_core_system 0 1
    }
+
    set exit_value [print_errors]
-   testsuite_shutdown $exit_value
+
+   # exit_value might be 0 even if a test failed because the cluster might have been reinitialized
+   # here we want to return if at least one test failed therefore we use at_least_one_failed
+   testsuite_shutdown $at_least_one_failed
 }
 
 if { $do_all } {
