@@ -49,6 +49,7 @@ set check_name            "generic_module_tests"
 set check_category        "MODULE VERIFIED COMMLIB"
 set check_description(0)   "run all generic module tests on master host"
 set check_description(100) "run all generic module tests on all architectures"
+set check_description(200) "run all generic module tests on all hosts"
 
 # define test's dependencies
 set check_needs           "" 
@@ -120,6 +121,9 @@ proc generic_module_tests_setup {} {
       }
       100 {
          set generic_module_tests_test_hosts [host_conf_get_unique_arch_nodes [host_conf_get_cluster_hosts 1]]
+      }
+      200 {
+         set generic_module_tests_test_hosts [host_conf_get_cluster_hosts 1 1]
       }
    }
 
