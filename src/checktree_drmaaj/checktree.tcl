@@ -155,19 +155,21 @@ proc drmaaj_install_binaries { arch_list a_report } {
       return -1
    }
 
-   set cmd "ln"
-   set args "-s jdrmaa-1.0.jar drmaa.jar"
-   report_task_add_message report $task_nr "------------------------------------------"
-   report_task_add_message report $task_nr "-> $cmd $args"
-   set output [start_remote_prog $ts_config(master_host) $CHECK_USER $cmd $args prg_exit_state 60 0 "$ts_config(product_root)/lib"]
-   if {$prg_exit_state != 0} {
+   if {![is_remote_file $ts_config(master_host) $CHECK_USER "$ts_config(product_root)/lib/drmaa.jar"]} {
+      set cmd "ln"
+      set args "-s jdrmaa-1.0.jar drmaa.jar"
       report_task_add_message report $task_nr "------------------------------------------"
-      report_task_add_message report $task_nr "return state: $prg_exit_state"
-      report_task_add_message report $task_nr "------------------------------------------"
-      report_task_add_message report $task_nr "output:\n$output"
-      report_task_add_message report $task_nr "------------------------------------------"
-      report_finish_task report $task_nr -1
-      return -1
+      report_task_add_message report $task_nr "-> $cmd $args"
+      set output [start_remote_prog $ts_config(master_host) $CHECK_USER $cmd $args prg_exit_state 60 0 "$ts_config(product_root)/lib"]
+      if {$prg_exit_state != 0} {
+         report_task_add_message report $task_nr "------------------------------------------"
+         report_task_add_message report $task_nr "return state: $prg_exit_state"
+         report_task_add_message report $task_nr "------------------------------------------"
+         report_task_add_message report $task_nr "output:\n$output"
+         report_task_add_message report $task_nr "------------------------------------------"
+         report_finish_task report $task_nr -1
+         return -1
+      }
    }
 
 
