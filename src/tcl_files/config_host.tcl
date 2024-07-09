@@ -2277,6 +2277,12 @@ proc host_conf_get_cluster_hosts {{with_non_cluster_hosts 0} {with_compile_hosts
             lappend hosts $host
          }
       }
+      foreach arch $ts_config(add_compile_archs) {
+         set host [compile_search_compile_host $arch]
+         if {$host != "none"} {
+            lappend hosts $host
+         }
+      }
       # doc and java compile host
       set host [host_conf_get_doc_compile_host 0]
       if {$host != ""} {
@@ -3474,9 +3480,13 @@ proc host_conf_detect_java_on_host {host} {
    set arch [resolve_arch $host]
    set default_locations {}
    switch -glob $arch {
+      "fbsd-*" {
+         lappend default_locations "/usr/local"
+      }
       "lx-*" -
       "ulx-*" {
          lappend default_locations "/usr/lib/jvm"
+         lappend default_locations "/usr/lib64/jvm"
       }
       "sol-*" {
          lappend default_locations "/usr/jdk/instances"
