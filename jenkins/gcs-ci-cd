@@ -1,0 +1,262 @@
+#!/bin/bash
+
+# we need the short hostname where the script is executed
+uname_kernel_name=`uname`
+if [ "x$uname_kernel_name" = "xDarwin" -o "x$uname_kernel_name" = "xLinux" ]; then
+   HOSTNAME=`hostname -s`
+else
+   HOSTNAME=`hostname`
+fi
+
+#command line arguments
+cluster_id=$1
+action=$2
+test_unit=$3
+level=$4
+
+# check input parameter
+if [ $USER != tstusr ]; then
+   echo "ERROR: Build environments have to be started by ebablick"
+fi
+if [ $HOSTNAME != h007 ]; then
+   echo "ERROR: Build environments should be started on host h007"
+fi
+if ! [[ $cluster_id =~ ^[0-9]+$ ]]; then
+   echo "ERROR: expected cluster number as first argument but got '$cluster_id'" 
+   exit 1
+fi
+
+# Function to check if the local branch is behind the remote branch
+check_branch_status_and_pull() {
+    local repo_path="$1"
+
+    # Change to the specified repository directory
+    cd "$repo_path" || { echo "Repository path not found: $repo_path"; return 3; }
+
+    # Fetch remote changes
+    git fetch
+
+    # Get the upstream branch path
+    UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name @{u})
+    if [ $? -ne 0 ]; then
+        echo "No upstream branch configured for the repository $repo_path."
+        return 4
+    fi
+
+    LOCAL=$(git rev-parse @)
+    REMOTE=$(git rev-parse "$UPSTREAM")
+    BASE=$(git merge-base @ "$UPSTREAM")
+
+    if [ "$LOCAL" = "$REMOTE" ]; then
+        echo "Branch is up-to-date in repository $repo_path."
+        return 0
+    elif [ "$LOCAL" = "$BASE" ]; then
+        echo "Branch is behind the remote in repository $repo_path."
+	git pull
+        return 1
+    else
+        echo "Branch has diverged in repository $repo_path."
+        return 2
+    fi
+}
+
+# global parameter that depend on the cluster_id
+CS_BASEDIR0="gcs-ci-cd-0"
+CS_BASEDIR="gcs-ci-cd-${cluster_id}"
+CS_MASTER_PORT=`expr "10100 + $cluster_id * 2"`
+CS_HOME0="/home/tstusr/CS/$CS_BASEDIR0"
+CS_HOME="/home/tstusr/CS/$CS_BASEDIR"
+
+# source code related directories are shared between all clusters
+SGE_SOURCE="$CS_HOME0/clusterscheduler"
+SGE_EXT="$CS_HOME0/gcs-extensions"
+SGE_TEST="$CS_HOME0/testsuite"
+SGE_EXT_TEST="$CS_HOME0/ocs-testsuite"
+SGE_PKG="$CS_HOME0/pkg"
+
+# installation related parameters are different for each cluster
+export SGE_ROOT="$CS_HOME/inst"
+SGE_BUILD="/usr/local/testsuite/$SGE_QMASTER_PORT/build"
+SGE_QMASTER_PORT=$CS_MASTER_PORT
+SGE_EXECD_PORT=`expr $CS_QMASTER_PORT + 1`
+SGE_VERSION="unknown"
+SGE_ACT_QMASTER="unknown"
+SGE_SOURCE_BRANCH="unknown"
+SGE_EXT_BRANCH="unknown"
+SGE_PKG_FILES=0
+
+# fetch real values if we already have an installation
+if [ -e ${SGE_ROOT}/default/common/settings.csh ]; then
+   . ${SGE_ROOT}/default/common/settings.sh
+fi
+if [ -e ${SGE_ROOT}/util/dl.csh ]; then
+   . ${SGE_ROOT}/util/dl.sh
+fi
+if [ -e ${SGE_SOURCE} ]; then
+   SGE_ARCH=`${SGE_SOURCE}/source/dist/util/arch`
+   SGE_BUILDARCH=`${SGE_SOURCE}/source/scripts/compilearch -b $SGE_ARCH`
+   SGE_SOURCE_BRANCH=`cd $SGE_SOURCE; git rev-parse --abbrev-ref HEAD`
+fi
+if [ -e ${SGE_EXT} ]; then
+   SGE_EXT_BRANCH=`cd $SGE_EXT; git rev-parse --abbrev-ref HEAD`
+fi
+if [ -e ${SGE_TEST} ]; then
+   SGE_TEST_BRANCH=`cd $SGE_TEST; git rev-parse --abbrev-ref HEAD`
+fi
+if [ -e ${SGE_ROOT}/bin/${SGE_ARCH}/qstat ]; then
+   SGE_VERSION=`${SGE_ROOT}/bin/${SGE_ARCH}/qstat -help|head -1`
+fi
+if [ -e ${SGE_ROOT}/default/common/act_qmaster ]; then
+   SGE_ACT_QMASTER=`head -1 ${SGE_ROOT}/default/common/act_qmaster`
+fi
+if [ -e ${SGE_PKG} ]; then
+   SGE_PKG_FILES=`ls -l ${SGE_PKG}|wc -l`
+   SGE_PKG_FILES=`expr $SGE_PKG_FILES - 1`
+fi
+
+# find a build ID
+export TZ="UTC"
+CMAKE_BUILD_ID=`date +%d%m%y-%H%M`
+
+# show values
+echo "SGE_SOURCE       = $SGE_SOURCE ($SGE_SOURCE_BRANCH)"
+echo "SGE_TEST         = $SGE_TEST        ($SGE_TEST_BRANCH)"
+echo "SGE_EXT          = $SGE_EXT   ($SGE_EXT_BRANCH)"
+echo "SGE_EXT_TEST     = $SGE_EXT_TEST    ($SGE_EXT_BRANCH)"
+echo "SGE_PKG          = $SGE_PKG              ($SGE_PKG_FILES files)"
+echo "SGE_ROOT         = $SGE_ROOT             ($SGE_VERSION; $SGE_ACT_QMASTER)"
+echo "SGE_BUILD        = $SGE_BUILD"
+echo "SGE_QMASTER_PORT = $SGE_QMASTER_PORT"
+echo "SGE_EXECD_PORT   = $SGE_EXECD_PORT"
+echo "CMAKE_BUILD_ID   = $CMAKE_BUILD_ID"
+
+# global TS parameter
+args=""
+args="$args file $CS_HOME/config/defaults-${CS_BASEDIR}.sav"
+args="$args compile_clean"
+args="$args output_level FINE"
+args="$args disable_washing_machine"
+args="$args install_mode automatic"
+args="$args html_dir $CS_HOME/html"
+args="$args no_local_qmaster_spool"
+args="$args cmake_build_type Release"
+args="$args cmake_build_id $CMAKE_BUILD_ID"
+args="$args get_pw_command /tools/CS/bin/get_pwd.sh"
+# sections below might add additional arguments 
+
+case $action in
+   all)
+      echo -e "\n\nTRIGGER BUILD PIPLINE\n"	   
+      $0 git
+      ret=$?
+      if [ $ret -ne 0 ]; then
+         exit $ret
+      fi
+      $0 build
+      ret=$?
+      if [ $ret -ne 0 ]; then
+         exit $ret
+      fi
+      $0 install
+      ret=$?
+      if [ $ret -ne 0 ]; then
+         exit $ret
+      fi
+      $0 test
+      ret=$?
+      if [ $ret -ne 0 ]; then
+         exit $ret
+      fi
+      $0 shutdown
+      ret=$?
+      if [ $ret -ne 0 ]; then
+         exit $ret
+      fi
+      $0 upload
+      exit $?
+      ;;
+
+   git)
+      echo -e "\n\nGIT PULL OF REPOSITORIES\n"	   
+
+      while true; do
+         check_branch_status_and_pull "$SGE_SOURCE"
+         status1=$?
+         check_branch_status_and_pull "$SGE_TEST"
+         status2=$?
+         check_branch_status_and_pull "$SGE_EXT"
+         status3=$?
+         check_branch_status_and_pull "$SGE_EXT_TEST"
+         status4=$?
+
+         if [ $status1 -eq 0 -a $status2 -eq 0 -a $status3 -eq 0 -a $status4 -eq 0 ]; then
+            # all repos are up to date
+	    exit 1
+         elif [ $status1 -ge 2 -o $status2 -ge 2 -o $status3 -ge 2 -o $status4 -ge 2 ]; then
+	    # at least one repo doees not exist or had local changes
+	    exit 1 
+         elif [ $status1 -eq 1 -o $status2 -ne 1 -o $status3 -ne 1 -o $status4 -ne 1 ]; then
+            # at least one repo was updated. wait some time then retry
+	    sleep 300
+         fi
+      done
+      ;;
+
+   ts)
+      echo -e "\n\nSTARTING INTERACTIVE TS\n"	   
+      # start interactive TS 
+      cd $SGE_TEST/src
+      expect check.exp $args
+      exit $?
+      ;;
+
+   build)
+      echo -e "\n\nSTARTING BUILD AND PACKAGE CREATION WITH TS\n"	   
+      cd $SGE_TEST/src
+      expect check.exp $args compile
+      exit $?
+      ;;
+
+   install)
+      echo -e "\n\nSTARTING INSTALLATION OF CLUSTER WITH TS\n"	   
+      cd $SGE_TEST/src
+      expect check.exp $args install
+      exit $?
+      ;;
+
+   shutdown)
+      echo -e "\n\nSTARTING SHUTDOWN OF CLUSTER WITH TS\n"	   
+      cd $SGE_TEST/src
+      expect check.exp $args kill 
+      exit $?
+      ;;
+
+   test)
+      echo -e "\n\nSTARTING ALL TS TESTS OF PRODUCT CATEGORY\n"	   
+      cd $SGE_TEST/src
+      expect check.exp $args category "$test_unit" all 1000
+      exit $?
+      ;;
+
+   check)
+      echo -e "\n\nSTARTING SPECIFIC TEST\n"	   
+      args="$args re_init_on_tcl_error"
+      args="$args re_init"
+      cd $SGE_TEST/src
+      expect check.exp $args check "$test_unit" $level
+      exit $?
+      ;;
+
+   dump)
+      echo -e "\n\nSTARTING DUMP OF TEST LIST\n"	   
+      cd $SGE_TEST/src
+      expect check.exp $args dump_test_list 
+      exit $?
+      ;;
+
+   *)
+      # switch to source directory
+      cd $SGE_SOURCE
+      ;;
+esac
+

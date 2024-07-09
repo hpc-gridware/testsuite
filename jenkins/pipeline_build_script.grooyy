@@ -1,0 +1,149 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('gcs-ci-cd 0 git') {
+            steps {
+                script {
+                    // Initialize a variable to capture the script exit code
+                    def result = 0
+                    
+                    // Locking the resource '0' to ensure exclusive access
+                    lock(resource: '0') {
+                        // Setting up the SSH agent with the specified credentials
+                        sshagent(credentials: ['tstusr-rsa-key']) {
+                            // Running the shell command on the remote host
+                            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                                result = sh(
+                                    script: 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 0 git',
+                                    returnStatus: true // Capture the exit status
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Check the result and abort the pipeline if the script returns 1
+                    if (result == 1) {
+                        currentBuild.result = 'ABORTED'
+                        error("Aborting pipeline: Script returned 1")
+                    }
+                }
+            }
+        }
+        stage('gcs-ci-cd 0 dump') {
+            steps {
+                lock(resource: '0') {
+                    sshagent(credentials : ['tstusr-rsa-key']) {
+                        sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 0 dump'
+                    }
+                    sh 'cp /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/jenkins_generate_day.groovy /var/lib/jenkins/workspace/GCS-CI-CD/TriggerTestsDay/jenkins_generate_day.groovy'
+                    sh 'cp /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/jenkins_generate_long.groovy /var/lib/jenkins/workspace/GCS-CI-CD/TriggerTestsLong/jenkins_generate_long.groovy'
+                    sh 'cp /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/jenkins_generate_medium.groovy /var/lib/jenkins/workspace/GCS-CI-CD/TriggerTestsMedium/jenkins_generate_medium.groovy'
+                    sh 'cp /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/jenkins_generate_short.groovy /var/lib/jenkins/workspace/GCS-CI-CD/TriggerTestsShort/jenkins_generate_short.groovy'
+                    sh 'cp /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/jenkins_generate_week.groovy /var/lib/jenkins/workspace/GCS-CI-CD/TriggerTestsWeek/jenkins_generate_week.groovy'
+                }
+            }
+        }
+        stage('gcs-ci-cd 0 build+install') {
+            steps {
+                lock(resource: '0') {
+                    sshagent(credentials : ['tstusr-rsa-key']) {
+                        sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 0 build'
+                    }
+                    sshagent(credentials : ['tstusr-rsa-key']) {
+                        sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 0 install'
+                    }
+                }
+            }
+        }
+        stage('gcs-ci-cd 1-7 build+install') {
+            parallel {
+                stage('gcs-ci-cd 1 build+install') {
+                    steps {
+                        lock(resource: '1') {
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 1 build'
+                            }
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 1 install'
+                            }
+                        }
+                    }
+                }
+                stage('gcs-ci-cd 2 build+install') {
+                    steps {
+                        lock(resource: '2') {
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 2 build'
+                            }
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 2 install'
+                            }
+                        }
+                    }
+                }
+                stage('gcs-ci-cd 3 build+install') {
+                    steps {
+                        lock(resource: '3') {
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 3 build'
+                            }
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 3 install'
+                            }
+                        }
+                    }
+                }
+                stage('gcs-ci-cd 4 build+install') {
+                    steps {
+                        lock(resource: '4') {
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 4 build'
+                            }
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 4 install'
+                            }
+                        }
+                    }
+                }
+                stage('gcs-ci-cd 5 build+install') {
+                    steps {
+                        lock(resource: '5') {
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 5 build'
+                            }
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 5 install'
+                            }
+                        }
+                    }
+                }
+                stage('gcs-ci-cd 6 build+install') {
+                    steps {
+                        lock(resource: '6') {
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 6 build'
+                            }
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 6 install'
+                            }
+                        }
+                    }
+                }
+                stage('gcs-ci-cd 7 build+install') {
+                    steps {
+                        lock(resource: '7') {
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 7 build'
+                            }
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 7 install'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
