@@ -72,9 +72,23 @@ lappend check_functions "qhost_l_with_multiple_attributes"
 # -------- local test procedures: initialization------------------------------
 
 proc qhost_setup {} {
+   global qhost_config_old
+
+   # save old config
+   get_config qhost_config_old
+
+   # change load report time so that we will have a chance that regular plain qhost qnd xml-qhost will se the same load
+   set qhost_config(load_report_time) "00:03:00"
+   set qhost_config(max_unheard)      "00:10:00"
+   set_config_and_propagate qhost_config
 }
 
 proc qhost_cleanup {} {
+   global qhost_config_old
+
+   # restore the old config
+   reset_config qhost_config_old
+
    delete_all_jobs
    wait_for_end_of_all_jobs
 }
@@ -112,8 +126,27 @@ proc test_issue132 {} {
       }
 
       foreach attrib "arch_string num_proc mem_total mem_used swap_total swap_used" {
-         if {[string compare [string trim $xml(host$ind,$attrib)] [string trim $plain(host$ind,$attrib)]] != 0} {
-            ts_log_severe "outputs do not match from plain and xml for $attrib:\nxml: [string trim $xml(host$ind,$attrib)]\nplain: [string trim $plain(host$ind,$attrib)]"
+         set raw_value1 [string trim $xml(host$ind,$attrib)]
+         set raw_value2 [string trim $plain(host$ind,$attrib)]
+
+         if {$attrib == "mem_used"} {
+	    if {$raw_value1 != "-" && $raw_value2 != "-"} {
+               set value1 [transform_unit $raw_value1] 
+	       set value2 [transform_unit $raw_value2] 
+               set difference [expr abs ( $value1 - $value2 )]
+               set allowed_difference [expr 1024 * 1024 * 1024 * 0.1]
+
+	       # e.g: 1.4G and 1.5G will not be rejected
+               if {$difference > $allowed_difference} {
+                  ts_log_severe "outputs do not match from plain and xml for $attrib and difference is to big:\nxml: $raw_value1\nplain: $raw_value2"
+                  return
+               }
+            } elseif {[string compare $raw_value1 $raw_value2] != 0} {
+               ts_log_severe "outputs do not match from plain and xml for $attrib:\nxml: $raw_value1\nplain: $raw_value2"
+               return
+            }
+         } elseif {[string compare $raw_value1 $raw_value2] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for $attrib:\nxml: $raw_value1\nplain: $raw_value2"
             return
          }
       }
