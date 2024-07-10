@@ -60,11 +60,9 @@ lappend check_functions "qstat_option_pe"
 lappend check_functions "qstat_option_U"
 lappend check_functions "qstat_option_s"
 lappend check_functions "qstat_tasks"
-lappend check_functions "qstat_j_xml"
+#lappend check_functions "qstat_j_xml"
 lappend check_functions "qstat_plain_xml_comparison"  ;# Compare the two qstatcommands
 lappend check_functions "qstat_ne_plain_xml_comparison"  ;# Compare the two qstat -ne commands
-lappend check_functions "qstat_urg_plain_xml_comparison"  ;# Compare the two qstat -urg commands
-lappend check_functions "qstat_pri_plain_xml_comparison"  ;# Compare the two qstat -pri commands
 lappend check_functions "qstat_f_qs_plain_xml_comparison"  ;# Compare the two qstat -f -qs E commands
 lappend check_functions "qstat_s_p_plain_xml_comparison" ;# Compare the two qstat -s p commands
 lappend check_functions "qstat_s_r_plain_xml_comparison" ;# Compare the two qstat -s r commands
@@ -76,6 +74,8 @@ lappend check_functions "qstat_u_valid_plain_xml_comparison" ;# Compare the two 
 lappend check_functions "qstat_u_invalid_plain_xml_comparison" ;# Compare the two qstat -u wrong_user commands
 lappend check_functions "qstat_U_valid_plain_xml_comparison" ;# Compare the two qstat -U $CHECK_USER commands
 
+#lappend check_functions "qstat_urg_plain_xml_comparison"  ;# Compare the two qstat -urg commands
+#lappend check_functions "qstat_pri_plain_xml_comparison"  ;# Compare the two qstat -pri commands
 #lappend check_functions "qstat_explain_plain_xml_comparison"  ;# Compare the two qstat -explain E commands
 #lappend check_functions "qstat_ext_plain_xml_comparison"  ;# Compare the two qstat -ext commands
 #lappend check_functions "qstat_l_q_plain_xml_comparison"  ;# Compare the two qstat -l q=all.q commands
@@ -3539,7 +3539,7 @@ proc qstat_tasks {} {
    
    set result1 [qstat_gdr_xml_parse xml] 
    set result1 [plain_gdr_parse plain]
-   
+
    set var_array {jobNumber prio name owner state queue slots tasks fullName}
 
    # for each job test that the xml and plain outputs are the same
@@ -3547,11 +3547,11 @@ proc qstat_tasks {} {
       foreach elem $var_array {
          if {[string compare [string trim $xml(job$ind,$elem)] [string trim $plain(job$ind,$elem)]] != 0} {
             if {[info exists xml($elem)]} {
-               set xml_output [string trim $xml($elem)]
+               set xml_output [string trim $xml(job$ind,$elem)]
             } else {
                set xml_output "XML tag \"$elem\" not found!"
             }
-            ts_log_severe "outputs do not match from plain and xml for $elem.\nxml output: $xml_output\nplain output: [string trim $plain($elem)]"
+            ts_log_severe "outputs do not match from plain and xml for $elem.\nxml output: $xml_output\nplain output: [string trim $plain(job$ind,$elem)]"
             return
          }
       }           

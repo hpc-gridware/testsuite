@@ -3708,7 +3708,8 @@ proc plain_gdr_parse { output_var } {
    upvar $output_var plain
 
    # capture plain output
-   set plainoutput [start_sge_bin "qstat" "-g d -r"]
+   set myenv(SGE_LONG_QNAMES) 50
+   set plainoutput [start_sge_bin "qstat" "-g d -r" "" "" prg_exit_state 60 "" "bin" output_lines myenv]
    
    # split plain output on each new line
    set plain_split [ split $plainoutput "\n" ]   
@@ -3816,7 +3817,9 @@ proc plain_gdr_parse { output_var } {
 #*******************************
 proc plain_r_parse { output_var } {
    upvar $output_var plain
-   set plainoutput [start_sge_bin "qstat" "-r"]
+
+   set myenv(SGE_LONG_QNAMES) 50
+   set plainoutput [start_sge_bin "qstat" "-r" "" "" prg_exit_state 60 "" "bin" output_lines myenv]
    
    # split plain output based on each new line
    set plain_split [ split $plainoutput "\n" ]   
