@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "issue_126"
-set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM L10N"
 set check_description(0)  "check iz 126 on all hosts with 5 test loops with prolog"
 set check_description(1)  "check iz 126 on all hosts with 5 test loops without prolog"
 set check_description(200)  "check iz 126 on all hosts with 200 test loops with prolog"
