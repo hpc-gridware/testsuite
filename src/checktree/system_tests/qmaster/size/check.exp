@@ -172,6 +172,12 @@ proc qmaster_size_setup_level {} {
 
    get_config qmaster_size_config_backup
 
+   # delete interactive queue that might exist from a previous run
+   get_queue_list queue_list
+   if {[lsearch $queue_list "interactive"] != -1} {
+      del_queue interactive "" 0 1
+   }
+
    # create an additional interactive only queue
    # This verifies IZ 1087
    set queue_conf(qtype) INTERACTIVE

@@ -338,7 +338,7 @@ global CHECK_MAX_ERROR_MAILS              ;# max mails on run all test
 set CHECK_MAX_ERROR_MAILS 400
 
 global CHECK_EXPECT_MATCH_MAX_BUFFER   ;# read buffer for expect
-set CHECK_EXPECT_MATCH_MAX_BUFFER 1280000
+set CHECK_EXPECT_MATCH_MAX_BUFFER [expr 1024 * 1024]
 
 global CHECK_COVERAGE
 set CHECK_COVERAGE {} ;# list of code coverage methods (tcov, insure, or emma)
@@ -8560,7 +8560,7 @@ if {$do_dump_test_list} {
                continue
             } elseif {$level_name == "day" && ($level < 300 || $level >= 400)} {
                continue
-            } elseif {$level_name == "day" && ($level < 400 || $level >= 500)} {
+            } elseif {$level_name == "week" && ($level < 400 || $level >= 500)} {
                continue
             }
 
