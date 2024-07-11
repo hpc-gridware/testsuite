@@ -512,42 +512,47 @@ proc check_flood {} {
          }
       }
 
-      while { [llength $spawn_list] > 0 } {
-         if {[info exists spawn_id]} {
-            unset spawn_id
+      set timeout $qmaster_size_flood_interval
+      expect {
+         full_buffer {
+            ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
          }
-
-         set timeout $qmaster_size_flood_interval
-         expect {
-            full_buffer {
-               ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
-            }
-            timeout {
-               ts_log_fine "expect timeout during flood submit"
-            }
-            -i $spawn_list -- "finished submitting" {
-               set spawn_id $expect_out(spawn_id)
-               ts_log_fine "reaping (1) flood submitter with id $spawn_id"
-               close_spawn_process $flood_ids($spawn_id)
-               set index [lsearch -exact $spawn_list $spawn_id]
-               set spawn_list [lreplace $spawn_list $index $index]
-            }
-            -i $spawn_list -- "_exit_status_" {
-               set spawn_id $expect_out(spawn_id)
-               ts_log_fine "reaping (2) flood submitter with id $spawn_id"
-               close_spawn_process $flood_ids($spawn_id)
-               set index [lsearch -exact $spawn_list $spawn_id]
-               set spawn_list [lreplace $spawn_list $index $index]
-            }
-            -i $spawn_list default {
-               set spawn_id $expect_out(spawn_id)
-               ts_log_fine "reaping failed flood submitter with id $spawn_id"
-               close_spawn_process $flood_ids($spawn_id)
-               set index [lsearch -exact $spawn_list $spawn_id]
-               set spawn_list [lreplace $spawn_list $index $index]
+         timeout {
+            ts_log_fine "expect timeout during flood submit"
+         }
+         -i $spawn_list -- "finished submitting" {
+            set spawn_id $expect_out(spawn_id)
+            ts_log_fine "reaping (1) flood submitter with id $spawn_id"
+            close_spawn_process $flood_ids($spawn_id)
+            set index [lsearch -exact $spawn_list $spawn_id]
+            set spawn_list [lreplace $spawn_list $index $index]
+            if {[llength $spawn_list] > 0} {
+               monitor_size [get_job_count]
+               exp_continue
             }
          }
-         monitor_size [get_job_count]
+         -i $spawn_list -- "_exit_status_" {
+            set spawn_id $expect_out(spawn_id)
+            ts_log_fine "reaping (2) flood submitter with id $spawn_id"
+            close_spawn_process $flood_ids($spawn_id)
+            set index [lsearch -exact $spawn_list $spawn_id]
+            set spawn_list [lreplace $spawn_list $index $index]
+            if {[llength $spawn_list] > 0} {
+               monitor_size [get_job_count]
+               exp_continue
+            }
+         }
+         -i $spawn_list default {
+            set spawn_id $expect_out(spawn_id)
+            ts_log_fine "reaping failed flood submitter with id $spawn_id"
+            close_spawn_process $flood_ids($spawn_id)
+            set index [lsearch -exact $spawn_list $spawn_id]
+            set spawn_list [lreplace $spawn_list $index $index]
+            if {[llength $spawn_list] > 0} {
+               monitor_size [get_job_count]
+               exp_continue
+            }
+         }
       }
 
       set size [monitor_size [get_job_count] "check_flood submitted $jobs_total"]

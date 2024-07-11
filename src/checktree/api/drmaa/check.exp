@@ -255,13 +255,13 @@ proc set_hosts_for_runlevel {} {
    set hosts_in_runlevel {}
 
    switch -- $CHECK_ACT_LEVEL {
-      "0" {
+      0 {
         lappend hosts_in_runlevel [host_conf_get_suited_hosts]
       }
-      "101" {
+      101 {
         lappend hosts_in_runlevel [host_conf_get_suited_hosts]
       }
-      "201" {
+      201 {
         foreach host $ts_config(unique_arch_nodes) {
             lappend hosts_in_runlevel $host
         }
