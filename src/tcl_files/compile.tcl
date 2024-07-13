@@ -575,7 +575,7 @@ proc compile_source { { do_only_hooks 0} {compile_only 0} } {
    global CHECK_HTML_DIRECTORY
    global CHECK_DEFAULTS_FILE check_name
    global CHECK_JOB_OUTPUT_DIR
-   global CHECK_PROTOCOL_DIR CHECK_USER check_do_clean_compile
+   global CHECK_PROTOCOL_DIR CHECK_USER
    global CMAKE_COMPILE_INSTALL_SEPARATELY
 
    # settings for mail
@@ -919,6 +919,9 @@ proc compile_source_cmake_get_build_dir {host} {
 }
 
 proc compile_source_cmake_clean {compile_hosts report_var} {
+   global CHECK_USER
+   global check_do_3rdparty_build
+
    upvar $report_var report
 
    set error_count 0
@@ -936,12 +939,27 @@ proc compile_source_cmake_clean {compile_hosts report_var} {
     
       # delete the existing build directory
       if {[remote_file_isdirectory $host $build_dir]} {
-         if {[remote_delete_directory $host $build_dir] != 0} {
-            incr error_count
-            report_task_add_message report $task_nr "cannot delete $build_dir on host $host"
-            break
+         if {$check_do_3rdparty_build} {
+            # to trigger the 3rdparty build remove the build directory
+            if {[remote_delete_directory $host $build_dir] != 0} {
+               incr error_count
+               report_task_add_message report $task_nr "cannot delete $build_dir on host $host"
+               break
+            } else {
+               report_task_add_message report $task_nr "deleted $build_dir on host $host"
+            }
          } else {
-            report_task_add_message report $task_nr "deleted $build_dir on host $host"
+            # to do a clean build just remove *the contents of* the build directory
+            set cmd "rm"
+            set args "-rf *"
+            set output [start_remote_prog $host $CHECK_USER $cmd $args prg_exit_state 60 0 $build_dir]
+            if {$prg_exit_state != 0} {
+               incr error_count
+               report_task_add_message report $task_nr "cannot delete $build_dir contents on host $host"
+               break
+            } else {
+               report_task_add_message report $task_nr "deleted contents of $build_dir on host $host"
+            }
          }
       }
    }
@@ -1194,7 +1212,7 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
 proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 0}} {
    global ts_host_config ts_config
    global CHECK_USER CHECK_CMAKE_BUILD_TYPE
-   global check_do_clean_compile
+   global check_do_clean_compile check_do_3rdparty_build
    global CMAKE_BUILD_ID
    global CMAKE_COMPILE_INSTALL_SEPARATELY
 
@@ -1212,7 +1230,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
    set error_count 0
 
    # if clean build requested: simply delete the build directories
-   if {$check_do_clean_compile} {
+   if {$check_do_clean_compile || $check_do_3rdparty_build} {
       incr error_count [compile_source_cmake_clean $compile_hosts report]
    }
 

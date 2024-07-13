@@ -298,8 +298,13 @@ set check_use_installed_system 0    ;# set to 1 when installed system parameter 
 global check_do_not_use_spool_config_entries
 set check_do_not_use_spool_config_entries 0
 
+# from compile_clean option
 global check_do_clean_compile
 set check_do_clean_compile 0
+
+# from compile_clean_3rdparty option
+global check_do_3rdparty_build
+set check_do_3rdparty_build 0
 
 global check_set_ignore_dependencies
 set check_set_ignore_dependencies 0
@@ -7355,7 +7360,7 @@ proc operate_additional_clusters {operation} {
 proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {execute_func_return rpc_retval} {ignore_spool_switches 0} {additional_switches ""}} {
    global CHECK_USER CHECK_HTML_DIRECTORY CHECK_COMPILE_TOOL
    global check_use_installed_system fast_setup be_quiet
-   global check_do_clean_compile ts_config ts_log_config
+   global check_do_clean_compile check_do_3rdparty_build ts_config ts_log_config
    global CHECK_TESTSUITE_TRASH check_do_not_use_spool_config_entries ts_log_levels
    upvar $execute_func_return rpcret
 
@@ -7455,6 +7460,9 @@ proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {e
          append args " compile"
          if {$check_do_clean_compile } {      ;# inherit "compile_clean" command line param
             append args " compile_clean"
+         }
+         if {$check_do_3rdparty_build } {      ;# inherit "compile_clean_3rdparty" command line param
+            append args " compile_clean_3rdparty"
          }
       }
       "kill" {
@@ -7737,7 +7745,8 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "compile               checkout source code and recompile"
       puts ""
-      puts "compile_clean         call aimk clean before building."
+      puts "compile_clean         do a clean build (remove old build artifacts)"
+      puts "compile_clean_3rdparty do a clean build (remove old build artifacts) with re-building the 3rdparty tools"
       puts ""
       puts "compile_tool          choose between aimk (default) and cmake as build system"
       puts ""
@@ -7947,12 +7956,17 @@ for {set i 0} {$i < $argc} {incr i} {
       continue
    }
 
-   if { ( [string compare [lindex $argv $i] "--compile_clean"] == 0 ) || ([string compare [lindex $argv $i] "compile_clean"] == 0) } {
+   if {[string compare [lindex $argv $i] "--compile_clean"] == 0 || [string compare [lindex $argv $i] "compile_clean"] == 0} {
       set check_do_clean_compile 1
       continue
    }
 
-   if { ( [string compare [lindex $argv $i] "--compile_tool"] == 0 ) || ([string compare [lindex $argv $i] "compile_tool"] == 0) } {
+   if {[string compare [lindex $argv $i] "--compile_clean_3rdparty"] == 0 || [string compare [lindex $argv $i] "compile_clean_3rdparty"] == 0} {
+      set check_do_3rdparty_build 1
+      continue
+   }
+
+   if {[string compare [lindex $argv $i] "--compile_tool"] == 0 || [string compare [lindex $argv $i] "compile_tool"] == 0} {
       incr i
       set compile_tool [lindex $argv $i]
       switch -exact $compile_tool {
