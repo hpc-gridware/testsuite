@@ -91,6 +91,7 @@ lappend check_functions "reporting_complex_change_test"
 lappend check_functions "reporting_consumables_test"
 lappend check_functions "reporting_ar_error_state_test"
 lappend check_functions "reporting_ar_warning_state_test"
+lappend check_functions "reporting_no_comment_in_json"
 
 # -------- local test procedures -----------------------------------------------
 
@@ -1209,3 +1210,59 @@ proc reporting_ar_warning_state_test {} {
    # shutdown tail -f
    close_logfile_wait
 }
+
+proc reporting_file_head {filename} {
+   global ts_config
+   global CHECK_USER
+
+   set output [start_remote_prog $ts_config(master_host) $CHECK_USER "head" $filename]
+   return [string trim [lindex [split $output "\n"] 0]]
+}
+
+proc reporting_no_comment_in_json {} {
+   global CHECK_ACT_LEVEL
+   global reporting_file reporting_acct_file
+   global reporting_format_config
+
+   # activate reporting and set short reporting flush time
+   set new_config(reporting_params) "reporting=true flush_time=00:00:1 $reporting_format_config"
+   set_config new_config
+
+   # in runlevel 0 (old file formats) expect the comment lines to be there
+   # in runlevel 1 (new one line json format) expect them not to be there
+
+   # run a short job to make sure that reporting and accounting files exist
+   set opts "-o /dev/null -j y -b y"
+   set args "sleep 0"
+   set job_id [submit_job "$opts $args"]
+   wait_for_jobend $job_id "" 10 0
+   get_qacct $job_id
+
+   # wait a second to make sure also the reporting file is written
+   after 1000
+
+   set accounting_head [reporting_file_head $reporting_acct_file]
+   set reporting_head [reporting_file_head $reporting_file]
+
+   ts_log_fine $accounting_head
+   ts_log_fine $reporting_head
+   switch $CHECK_ACT_LEVEL {
+      0 {
+         if {[string index $accounting_head 0] != "#"} {
+            ts_log_severe "accounting file does not start with comment:\n$accounting_head"
+         }
+         if {[string index $reporting_head 0] != "#"} {
+            ts_log_severe "reporting file does not start with comment\n$accounting_head"
+         }
+      }
+      1 {
+         if {[string index $accounting_head 0] == "#"} {
+            ts_log_severe "accounting file starts with comment, this is issue CS-412:\n$reporting_head"
+         }
+         if {[string index $reporting_head 0] == "#"} {
+            ts_log_severe "reporting file starts with comment, this is issue CS-412:\n$reporting_head"
+         }
+      }
+   }
+}
+
