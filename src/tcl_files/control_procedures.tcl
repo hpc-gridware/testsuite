@@ -2490,6 +2490,14 @@ proc get_schedd_pid {} {
 }
 
 proc parse_cpu_time {s_cpu} {
+   # TODO: handling, if cpu > 1 day
+   set split_s_cpu [split $s_cpu "."]
+   if {[llength $split_s_cpu] > 1} {
+      set fractional [lindex $split_s_cpu 1]
+   } else {
+      set fractional 0
+   }
+   set s_cpu [lindex $split_s_cpu 0]
    set l_cpu [split $s_cpu ":"]
    set cpu 0
 
@@ -2514,7 +2522,7 @@ proc parse_cpu_time {s_cpu} {
       set l_cpu [lreplace $l_cpu 0 0]
    }
 
-   return $cpu
+   return "$cpu.$fractional"
 }
 
 #****** control_procedures/operational_lock() **********************************
