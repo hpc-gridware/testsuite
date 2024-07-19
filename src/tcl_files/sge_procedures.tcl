@@ -10341,12 +10341,12 @@ proc get_daemon_pid { host service } {
 #     sge_procedures/startup_qmaster()   
 #*******************************************************************************
 
-proc shutdown_and_restart_qmaster { } {
+proc shutdown_and_restart_qmaster {} {
    global ts_config
 
    shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
    # startup qmaster with scheduler (if possible) 
-   startup_qmaster 1       
+   startup_qmaster 1
 }
 
 
