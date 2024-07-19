@@ -1,0 +1,167 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#  
+#  Copyright 2024 HPC-Gridware GmbH
+#  
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#  
+#      http://www.apache.org/licenses/LICENSE-2.0
+#  
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#  
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range "9.0.0"
+
+# define test's name and run level descriptions
+set check_name            "simhosts"
+set check_category        "QMASTER SIMHOST VERIFIED"
+set check_description(0)  "test basic functionality with simulated hosts"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function simhosts_setup
+set check_cleanup_function simhosts_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "simhosts_sequential"
+lappend check_functions "simhosts_delete"
+
+# -------- local test procedures: initialization------------------------------
+
+proc simhosts_setup {} {
+   get_current_cluster_config_array ts_config
+   global simhosts_hosts simhosts_config_backup simhosts_complex_backup
+
+   # the simhost framework modifies complex and global config
+   get_config simhosts_config_backup
+   get_complex simhosts_complex_backup
+
+   # initialize the use of simulated hosts
+   if {![simhost_init]} {
+      # ts_log_config has been done in simhost_init
+      return
+   }
+
+   # add hosts and add them to host group and queue
+   set simhosts_hosts [simhost_add 100 "@simhosts"]
+   set q(slots) 10
+   add_queue "sim.q" "@simhosts" q
+
+   disable_queue "all.q"
+
+   shutdown_and_restart_qmaster
+}
+
+
+proc simhosts_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global simhosts_hosts simhosts_config_backup simhosts_complex_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   
+   del_queue "sim.q" "" 1 1
+   del_hostgroup "@simhosts"
+   simhost_delete $simhosts_hosts
+
+   # reset config
+   reset_config simhosts_config_backup
+   reset_complex simhosts_complex_backup
+   enable_queue "all.q"
+
+   unset -nocomplain simhosts_hosts simhosts_config_backup simhosts_complex_backup
+}
+
+proc simhosts_check_accounting {job_id now runtime expected_values_var} {
+   upvar $expected_values_var expected_values
+   get_qacct $job_id
+
+   set errors ""
+   if {[expr abs($qacct_info(qsub_time) - $now)] > 5} {
+      append errors "expected submit time to be about $now but got $qacct_info(qsub_time)\n"
+   }
+   if {[expr abs($qacct_info(start_time) - $now)] > 5} {
+      append errors "expected start time to be about $now but got $qacct_info(start_time)\n"
+   }
+   set expected_end [expr $qacct_info(start_time) + $runtime]
+   if {[expr abs($qacct_info(end_time) - $expected_end)] > 5} {
+      append errors "expected end time to be about $expected_end but got $qacct_info(end_time)\n"
+   }
+   if {[expr abs($qacct_info(wallclock) - $runtime)] > 5} {
+      append errors "expected wallclock to be about $runtime but got $qacct_info(wallclock)\n"
+   }
+   if {[expr abs($qacct_info(ru_wallclock) - $runtime)] > 5} {
+      append errors "expected ru_wallclock to be about $runtime but got $qacct_info(ru_wallclock)\n"
+   }
+   foreach attr [array names expected_values] {
+      if {$qacct_info($attr) != $expected_values($attr)} {
+         append errors "expected $attr to be $expected_values($attr) but got $qacct_info($attr)\n"
+      }
+   }
+
+   if {$errors != ""} {
+      ts_log_severe "incorrect accounting for job $job_id:\n$errors"
+   }
+}
+
+proc simhosts_sequential {} {
+   get_current_cluster_config_array ts_config
+   global simhosts_hosts
+
+   # submit a job, wait for its end and make sure that accounting has basic information
+   set job_opts "-b y"
+   set job_args "sleep 10"
+   set job_id [submit_job "$job_opts $job_args"]
+   set now [clock seconds]
+   wait_for_jobstart $job_id "" 10
+   wait_for_jobend $job_id "" 20
+
+   # check accounting
+   set expected_values(exit_status) 0
+   set expected_values(failed) 0
+   simhosts_check_accounting $job_id $now 10 expected_values
+}
+
+proc simhosts_delete {} {
+   get_current_cluster_config_array ts_config
+   global simhosts_hosts
+
+   # submit a job, wait for its end and make sure that accounting has basic information
+   set job_opts "-b y"
+   set job_args "sleep 100"
+   set job_id [submit_job "$job_opts $job_args"]
+   set now [clock seconds]
+   wait_for_jobstart $job_id "" 10
+
+   # delete the job after 5 seconds
+   after 5000
+   set runtime [expr [clock seconds] - $now]
+   delete_job $job_id 1
+
+   # check accounting
+   set expected_values(exit_status) 137
+   set expected_values(failed) "{100 : assumedly after job}"
+   simhosts_check_accounting $job_id $now $runtime expected_values
+}
