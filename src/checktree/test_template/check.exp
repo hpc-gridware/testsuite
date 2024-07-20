@@ -22,7 +22,7 @@
 #
 # 1) replace the following symbols by your test specific names
 #    o __TESTSUITE_TEST_NAME   name of your test (e.g. consumable_test)
-#      (vi: 21s)
+#      (vi: :%s/__TESTSUITE_TEST_NAME/new_name/g)
 #
 # 2) set check_root_access_needs to "yes" or "no" (if you need root access)
 #
