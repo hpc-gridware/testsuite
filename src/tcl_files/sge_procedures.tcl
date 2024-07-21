@@ -10404,3 +10404,34 @@ proc call_startup_script { host service {script_file ""} {args ""} { timeout 30 
    }
    return 0
 }
+
+###
+# @brief add a value to a configuration attribute
+#
+# The function can be used to add an attribute to a list in configurations, e.g.
+#    - complex_values in exec hosts
+#    - qmaster_params in the global config
+#    - ...
+#
+# @param[in] old_conf_var - configuration array of the current object (e.g. from get_exechost)
+# @param[in] new_conf_var - configuration array which will hold the modified object (to be passed e.g. to set_exechost)
+# @param[in] attrib - the name of the configuration attribute, e.g. "complex_values"
+# @param[in] value - the value to be set, e.g. "my_int_complex=4"
+# @param[in] delimiter - the delimiter within the config list, default is the comma (",")
+#
+# @todo also do an add_or_replace_config_attribute function
+# @todo also do a del_config_attribute function
+##
+proc add_to_config_attribute {old_conf_var new_conf_var attrib value {delimiter ","}} {
+   upvar $old_conf_var old_conf
+   upvar $new_conf_var new_conf
+
+   if {[string compare -nocase $old_conf($attrib) "none"] == 0} {
+      set new_conf($attrib) $value
+   } else {
+      set new_conf($attrib) $old_conf($attrib)
+      append new_conf($attrib) $delimiter
+      append new_conf($attrib) $value
+   }
+}
+
