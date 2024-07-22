@@ -37,8 +37,13 @@ set check_name            "per_host_consumable"
 set check_category        "CENTRY VERIFIED"
 set check_description(0)  "test per host consumables on global layer"
 set check_description(1)  "test per host consumables on exechost layer"
-# runlevel 2 is still disabled, see issue CS-428 make HOST consumables work with ARs
-#set check_description(2)  "test per host consumables on exechost layer granted to an AR"
+# runlevel 2 and 3 are still disabled,see issues
+#  - CS-428 make HOST consumables work with ARs
+#  - CS-430 booking of resources into advance reservations needs to distinguish between host and queue resources
+# set check_description(2)  "test per host consumables on global layer granted to an AR"
+# set check_description(3)  "test per host consumables on exechost layer granted to an AR"
+set check_description(4)  "test per host consumables on global layer limited by resource quota"
+set check_description(5)  "test per host consumables on exechost layer limited by resource quota"
 
 # define test's dependencies
 set check_needs           "init_core_system"
@@ -91,21 +96,38 @@ proc per_host_consumable_setup {} {
 proc per_host_consumable_setup_level {} {
    get_current_cluster_config_array ts_config
    global CHECK_ACT_LEVEL
-   global phc_host_backup phc_capacity_hosts phc_consumable_type phc_ar
+   global phc_host_backup phc_capacity_hosts phc_consumable_type phc_ar phc_is_rqs
 
    switch $CHECK_ACT_LEVEL {
       0 {
+         # set up consumables on global layer
          set phc_capacity_hosts "global"
          set phc_consumable_type "gc"
          set complex_values "phc_int=4,phc_rsmap=4(A B A B)"
          set test_hosts [host_conf_get_suited_hosts 2]
       }
-      1 -
-      2 {
+      2 -
+      4 {
+         # set up consumables on global layer, but we limit job execution by AR / RQS
+         set phc_capacity_hosts "global"
+         set phc_consumable_type "gc"
+         set complex_values "phc_int=5,phc_rsmap=5(A B A B C)"
+         set test_hosts [host_conf_get_suited_hosts 2]
+      }
+      1 {
+         # set up consumables on exechost layer
          set phc_capacity_hosts [host_conf_get_suited_hosts 2]
          set test_hosts $phc_capacity_hosts
          set phc_consumable_type "hc"
          set complex_values "phc_int=2,phc_rsmap=2(A B)"
+      }
+      3 - 
+      5 {
+         # set up consumables on exechost layer, but we limit job execution by AR / RQS
+         set phc_capacity_hosts [host_conf_get_suited_hosts 2]
+         set test_hosts $phc_capacity_hosts
+         set phc_consumable_type "hc"
+         set complex_values "phc_int=3,phc_rsmap=3(A B C)"
       }
    }
 
@@ -123,17 +145,30 @@ proc per_host_consumable_setup_level {} {
       enable_queue "test.q@$host"
    }
 
+   # AR runlevels
    set phc_ar 0
-   if {$CHECK_ACT_LEVEL == 2} {
+   if {$CHECK_ACT_LEVEL == 2 || $CHECK_ACT_LEVEL == 3} {
       # submit an AR which grabs all slots, all of phc_int and all of phc_rsmap
       set phc_ar [submit_ar "-d 3600 -pe test.pe 20 -l phc_int=2 -l phc_rsmap=2"]
+   }
+
+   # RQS runlevels
+   set phc_is_rqs 0
+   if {$CHECK_ACT_LEVEL == 4 || $CHECK_ACT_LEVEL == 5} {
+      # create a RQS limiting to 2 of each per host
+      set rules {}
+      lappend rules "hosts {*} to phc_int=2,phc_rsmap=2"
+      set rqs(test.rqs,limit) $rules
+      set rqs(test.rqs,enabled) "true"
+      add_rqs rqs
+      set phc_is_rqs 1
    }
 }
 
 proc per_host_consumable_cleanup_level {} {
    get_current_cluster_config_array ts_config
    global CHECK_ACT_LEVEL
-   global phc_host_backup phc_capacity_hosts phc_consumable_type phc_ar
+   global phc_host_backup phc_capacity_hosts phc_consumable_type phc_ar phc_is_rqs
 
    # restore exec host(s)
    foreach host $phc_capacity_hosts {
@@ -142,15 +177,21 @@ proc per_host_consumable_cleanup_level {} {
       set_exechost eh $host
    }
 
+   # delete AR, if we have one
    if {$phc_ar != 0} {
       delete_ar $phc_ar
+   }
+
+   # delete RQS, if we have one
+   if {$phc_is_rqs} {
+      del_rqs "test.rqs"
    }
 }
 
 proc per_host_consumable_cleanup {} {
    get_current_cluster_config_array ts_config
    global phc_complex_backup
-   global phc_host_backup phc_capacity_hosts phc_consumable_type phc_ar
+   global phc_host_backup phc_capacity_hosts phc_consumable_type phc_ar phc_is_rqs
 
    delete_all_jobs
    wait_for_end_of_all_jobs
@@ -163,13 +204,14 @@ proc per_host_consumable_cleanup {} {
    # restore complex
    reset_complex phc_complex_backup
 
-   unset -nocomplain phc_complex_backup phc_host_backup phc_capacity_hosts phc_ar
+   unset -nocomplain phc_complex_backup phc_host_backup phc_capacity_hosts phc_ar phc_is_rqs
 }
 
 proc per_host_consumable_check_remaining {type name expected_remaining} {
-   global phc_ar
+   global phc_ar phc_is_rqs
 
-   if {$phc_ar == 0} {
+   if {$phc_ar == 0 && $phc_is_rqs == 0} {
+      # it is the capacity configuration which limits job execution
       qstat_F_plain_parse qstat_info $name
       set remaining 0
       foreach attrib [array names qstat_info "test.q@*,$type:$name"] {
@@ -184,11 +226,23 @@ proc per_host_consumable_check_remaining {type name expected_remaining} {
          ts_log_severe "expected $expected_remaining remaining of $name but got $remaining"
       }
    } else {
-      # in runlevel 2 with resources being held by an AR we cannot do the check above,
+      # in runlevel 2 and 3 with resources being held by an AR we cannot do the check above,
       # as the AR holds *all* resources
       # instead, we'll have to look into the resource diagram of the AR, this will be available once
       # CS-364 add a way to print the resource diagram
       # has been done
+      #
+      # in runlevel 4 and 5 we have a RQS limiting job execution, need to use qquota
+      if {$phc_is_rqs} {
+         ts_log_fine [start_sge_bin "qquota" "-l $name"]
+         # @todo we could parse the output here, but lets assume for now that if the number of running
+         #       jobs is OK, the RQS are OK as well - this is not a RQS test
+         # output would be e.g.
+         #    test.rqs/1         phc_int=1/2          hosts ubuntu-22-amd64-2
+         # or
+         #    test.rqs/1         phc_int=2/2          hosts ubuntu-22-amd64-2
+         #    test.rqs/1         phc_int=2/2          hosts ubuntu-22-amd64-1
+      }
    }
 }
 
