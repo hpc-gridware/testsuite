@@ -37,11 +37,8 @@ set check_name            "per_host_consumable"
 set check_category        "CENTRY VERIFIED"
 set check_description(0)  "test per host consumables on global layer"
 set check_description(1)  "test per host consumables on exechost layer"
-# runlevel 2 and 3 are still disabled,see issues
-#  - CS-428 make HOST consumables work with ARs
-#  - CS-430 booking of resources into advance reservations needs to distinguish between host and queue resources
-# set check_description(2)  "test per host consumables on global layer granted to an AR"
-# set check_description(3)  "test per host consumables on exechost layer granted to an AR"
+set check_description(2)  "test per host consumables on global layer granted to an AR"
+set check_description(3)  "test per host consumables on exechost layer granted to an AR"
 set check_description(4)  "test per host consumables on global layer limited by resource quota"
 set check_description(5)  "test per host consumables on exechost layer limited by resource quota"
 
@@ -88,9 +85,7 @@ proc per_host_consumable_setup {} {
    set q(pe_list) "test.pe"
    add_queue "test.q" "@allhosts" q
 
-   # disable both queues, we enable 2 qinstances of test.q in the setup_level function
    disable_queue "all.q"
-   disable_queue "test.q"
 }
 
 proc per_host_consumable_setup_level {} {
@@ -141,15 +136,21 @@ proc per_host_consumable_setup_level {} {
       set_exechost new_eh $host
    }
 
+   set queues {}
+   # disable the whole test.q, we will then enable just the 2 qinstances we want to test on
+   disable_queue "test.q"
    foreach host $test_hosts {
-      enable_queue "test.q@$host"
+      set queue "test.q@$host"
+      lappend queues $queue
+      enable_queue $queue
    }
 
    # AR runlevels
    set phc_ar 0
    if {$CHECK_ACT_LEVEL == 2 || $CHECK_ACT_LEVEL == 3} {
       # submit an AR which grabs all slots, all of phc_int and all of phc_rsmap
-      set phc_ar [submit_ar "-d 3600 -pe test.pe 20 -l phc_int=2 -l phc_rsmap=2"]
+      set queue_request [join $queues ","]
+      set phc_ar [submit_ar "-d 36000 -pe test.pe 10 -l phc_int=2 -l phc_rsmap=2 -q $queue_request"]
    }
 
    # RQS runlevels
@@ -255,6 +256,7 @@ proc per_host_consumable_check_running_job_count {num_expected} {
       incr num -2
    }
    if {$num != $num_expected} {
+      set output [start_sge_bin "qstat" "-f"]
       ts_log_severe "$num_expected jobs should be running but got $num:\n$output"
    }
 }
@@ -293,10 +295,13 @@ proc per_host_consumable_int_sequential {} {
 
 proc per_host_consumable_rsmap_sequential {} {
    get_current_cluster_config_array ts_config
-   global phc_consumable_type
+   global phc_consumable_type phc_ar
    
    # submit a job requesting two of phc_rsmap, expect 3 to be left
    set job_opts "-o /dev/null -e /dev/null -b y -l phc_rsmap=2"
+   if {$phc_ar != 0} {
+      append job_opts " -ar $phc_ar"
+   }
    set job_args "sleep 300"
    set job_id [submit_job "$job_opts $job_args"]
    wait_for_jobstart $job_id "" 10
@@ -322,10 +327,13 @@ proc per_host_consumable_rsmap_sequential {} {
 
 proc per_host_consumable_int_array {} {
    get_current_cluster_config_array ts_config
-   global phc_consumable_type
+   global phc_consumable_type phc_ar
    
    # submit an array job requesting one of phc_int each
    set job_opts "-o /dev/null -e /dev/null -b y -t 1-10 -l phc_int=1"
+   if {$phc_ar != 0} {
+      append job_opts " -ar $phc_ar"
+   }
    set job_args "sleep 300"
    set job_id [submit_job "$job_opts $job_args"]
    wait_for_jobstart $job_id "" 10
@@ -342,10 +350,13 @@ proc per_host_consumable_int_array {} {
 
 proc per_host_consumable_rsmap_array {} {
    get_current_cluster_config_array ts_config
-   global phc_consumable_type
+   global phc_consumable_type phc_ar
    
    # submit an array job requesting two of phc_rsmap each
    set job_opts "-o /dev/null -e /dev/null -b y -t 1-10 -l phc_rsmap=2"
+   if {$phc_ar != 0} {
+      append job_opts " -ar $phc_ar"
+   }
    set job_args "sleep 300"
    set job_id [submit_job "$job_opts $job_args"]
    wait_for_jobstart $job_id "" 10
@@ -362,10 +373,13 @@ proc per_host_consumable_rsmap_array {} {
 
 proc per_host_consumable_int_parallel {} {
    get_current_cluster_config_array ts_config
-   global phc_consumable_type
+   global phc_consumable_type phc_ar
    
    # submit a parallel job requesting one of phc_int (per host)
    set job_opts "-o /dev/null -e /dev/null -b y -l phc_int=1 -pe test.pe 8"
+   if {$phc_ar != 0} {
+      append job_opts " -ar $phc_ar"
+   }
    set job_args "sleep 300"
    set job_id [submit_job "$job_opts $job_args"]
    wait_for_jobstart $job_id "" 10
@@ -382,10 +396,13 @@ proc per_host_consumable_int_parallel {} {
 
 proc per_host_consumable_rsmap_parallel {} {
    get_current_cluster_config_array ts_config
-   global phc_consumable_type
+   global phc_consumable_type phc_ar
    
    # submit a parallel job requesting two of phc_rsmap (per host)
    set job_opts "-o /dev/null -e /dev/null -b y -l phc_rsmap=2 -pe test.pe 8"
+   if {$phc_ar != 0} {
+      append job_opts " -ar $phc_ar"
+   }
    set job_args "sleep 300"
    set job_id [submit_job "$job_opts $job_args"]
    wait_for_jobstart $job_id "" 10
