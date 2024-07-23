@@ -21,7 +21,7 @@
 # Template for testsuite check
 #
 # 1) replace the following symbols by your test specific names
-#    o __TESTSUITE_TEST_NAME   name of your test (e.g. consumable_test)
+#    o __TESTSUITE_TEST_NAME   name of your test (e.g. consumable_test, or cs_123 for an issue test)
 #      (vi: :%s/__TESTSUITE_TEST_NAME/new_name/g)
 #
 # 2) set check_root_access_needs to "yes" or "no" (if you need root access)
