@@ -34,7 +34,7 @@
 
 global ts_host_config               ;# new testsuite host configuration array
 global actual_ts_host_config_version      ;# actual host config version number
-set    actual_ts_host_config_version "1.15"
+set    actual_ts_host_config_version "1.16"
 
 if {![info exists ts_host_config]} {
    # ts_host_config defaults
@@ -331,6 +331,7 @@ proc host_config_get_host_parameters { } {
    lappend params zh_locale
    lappend params zones
    lappend params send_speed
+   lappend params remote_timeout_factor
 
    return $params
 }
@@ -686,6 +687,7 @@ proc host_config_hostlist_add_host {array_name {have_host ""}} {
             puts "aborting ..."
             return -1
          }
+         set config($new_host,remote_timeout_factor) 5 ;# host might be slow, increase all timeouts by factor 5
          set result [start_remote_prog $new_host $CHECK_USER "echo" "\"hello $new_host\"" prg_exit_state $result 0 "" "" 1 0]
       }
    }
@@ -717,18 +719,19 @@ proc host_config_hostlist_add_host {array_name {have_host ""}} {
             set config($new_host,$param) "unsupported"
             if { [string compare $param "arch,$ts_config(gridengine_version)"] == 0 } {
                set config($new_host,$param) $arch
-   } 
-   }
+            } 
+         }
          *compile* { set config($new_host,$param) 0 }
          response_time { set config($new_host,$param) [ expr ( [timestamp] - $time ) ] }
          send_speed { set config($new_host,$param) 0.0 }
          processors { set config($new_host,$param) 1 }
+         remote_timeout_factor { set config($new_host,$param) 1 }
          default {
             if { [info exists vars(${param}_bin)] } {
                set config($new_host,$param) [string trim $vars(${param}_bin)]
             } else { set config($new_host,$param) "" }
-   }
-   }
+         }
+      }
    }
 
    wait_for_enter
@@ -852,6 +855,13 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
          }
          "processors" -
          "send_speed" {
+         }
+         "remote_timeout_factor" {
+            set help_text { "Enter a factor"
+                            "by which all timeouts in the remote procedures"
+                            "(e.g. open_remote_spawn_process() or start_remote_prog()"
+                            "are scaled. Default is 1 (no scaling)" }
+
          }
          "arch" {
             set input "arch,$ts_config(gridengine_version)"
@@ -1275,8 +1285,6 @@ proc update_ts_host_config_version { filename } {
 
    if { [string compare $ts_host_config(version)  "1.1"] == 0 } {
       puts "\ntestsuite host configuration update from 1.1 to 1.2 ..."
-wait_for_enter
-         return
 	
       foreach host $ts_host_config(hostlist) {
          set ts_host_config($host,ssh) ""
@@ -1647,6 +1655,28 @@ wait_for_enter
       }
       return 0
    }
+
+   if {[string compare $ts_host_config(version)  "1.15"] == 0} {
+      puts "\ntestsuite host configuration update from 1.15 to 1.16 ..."
+
+      # introduce remote timeout factor
+      foreach host $ts_host_config(hostlist) {
+         puts $host
+         set ts_host_config($host,remote_timeout_factor) 1
+      }
+
+      set ts_host_config(version) "1.16"
+
+      show_config ts_host_config
+      wait_for_enter
+      if {[save_host_configuration $filename] != 0} {
+         puts "Could not save host configuration"
+         wait_for_enter
+         return
+      }
+      return 0
+   }
+
 
    puts "\nunexpected version"
    return -1
@@ -3694,4 +3724,15 @@ proc host_conf_get_java_host {major {require_jni 0} {allow_newer 0}} {
 }
 
 # ============================== end JAVA ================================
+
+proc host_conf_scale_timeout {host timeout_value} {
+   global ts_host_config
+
+   set factor 1
+   if {[info exists ts_host_config($host,remote_timeout_factor)]} {
+      set factor $ts_host_config($host,remote_timeout_factor)
+   }
+
+   return [expr $timeout_value * $factor]
+}
 
