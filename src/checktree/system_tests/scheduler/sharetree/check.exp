@@ -186,7 +186,10 @@ proc wait_for_job_tickes {job_id} {
    }
    if {[timestamp] >= $my_timeout} {
       ts_log_severe "timeout while waiting for job tickets"
+      return 0
    }
+
+   return 1
 }
 
 proc get_job_tickets {job_list_prj1 job_list_prj2 job_list_prj3 array_name} {
@@ -463,7 +466,9 @@ proc share_tree_test {} {
             startup_qmaster
 
             trigger_scheduling
-            wait_for_job_tickes $last_job
+            if {![wait_for_job_tickes $last_job]} {
+               return
+            }
          }
       }
       after 2000
