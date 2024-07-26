@@ -42,7 +42,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "issue_2419"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "ISSUE USAGE VERIFIED"
 set check_description(0)  "compare usage output of qstat -ext, qstat -ext -g t, qstat -j"
 
 # define test's dependencies
@@ -145,8 +145,9 @@ proc issue_2419_test {} {
       return
    }
 
-   # now call qstat -j and qstat -ext -g t
+   # now call qstat -ext (again), and qstat -j, and qstat -ext -g t
    # we should get the data from the same job report
+   get_extended_job_info $job_id
    get_extended_job_info $job_id job_info_grouped 1 1
    get_qstat_j_info $job_id
 
@@ -160,7 +161,9 @@ proc issue_2419_test {} {
    set cpu_j [transform_cpu $usage(cpu)]
 
    # compare usage information shown by different flavors of qstat
-   if {$cpu_ext != $cpu_ext_gt || $cpu_ext != $cpu_j} {
+   # cpu is delivered as double but output in qstat -ext in seconds (once), in qstat-ext -g t in seconds (5 tasks)
+   # so we'll see rounding errors summing up to max 2.5
+   if {[expr abs($cpu_ext - $cpu_ext_gt)] > 3 || [expr abs($cpu_ext - $cpu_j)] > 3} {
       ts_log_severe "got different usage information from qstat:\n\
                             qstat -ext:      $cpu_ext\n\
                             qstat -ext -g t: $cpu_ext_gt\n\

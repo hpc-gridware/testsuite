@@ -5623,6 +5623,7 @@ proc get_extended_job_info {jobid {variable job_info} {do_replace_NA 1} {do_grou
       set result [start_sge_bin "qstat" "$qstat_options" "" "" exit_code 60 "" "bin" output_lines myenv]
       set ext 0
    }
+#   set jobinfo(output) $result
 
    if {$exit_code == 0} {
       parse_qstat result jobinfo $jobid $ext $do_replace_NA
@@ -5667,7 +5668,8 @@ proc get_qstat_j_info {jobid {my_variable qstat_j_info} {add_switch ""}} {
    }
 
    set result [start_sge_bin "qstat" "$add_switch -j $jobid"]
-   if { $prg_exit_state == 0 } {
+#   set jobinfo(output) $result
+   if {$prg_exit_state == 0} {
       set result "$result\n"
       set my_result ""
       set help [split $result "\n"]
