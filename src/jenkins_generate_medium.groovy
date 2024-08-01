@@ -16,7 +16,7 @@ job('GCS-CI-CD/TestsMedium/sharetree') {
    }
 }
 queue('GCS-CI-CD/TestsMedium/sharetree')
-job('GCS-CI-CD/TestsMedium/throughput') {
+job('GCS-CI-CD/TestsMedium/general') {
    lockableResources {
       label('gcs-ci-cd-cluster')
       resourcesVariable('CLUSTER')
@@ -26,10 +26,10 @@ job('GCS-CI-CD/TestsMedium/throughput') {
       sshAgent('tstusr-rsa-key')
    }
    steps {
-      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/performance/throughput 100')
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/functional/ssos/general 100')
    }
 }
-queue('GCS-CI-CD/TestsMedium/throughput')
+queue('GCS-CI-CD/TestsMedium/general')
 job('GCS-CI-CD/TestsMedium/drmaa') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -58,6 +58,20 @@ job('GCS-CI-CD/TestsMedium/generic') {
    }
 }
 queue('GCS-CI-CD/TestsMedium/generic')
+job('GCS-CI-CD/TestsMedium/throughput') {
+   lockableResources {
+      label('gcs-ci-cd-cluster')
+      resourcesVariable('CLUSTER')
+      resourceNumber(1)
+   }
+   wrappers {
+      sshAgent('tstusr-rsa-key')
+   }
+   steps {
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/performance/throughput 100')
+   }
+}
+queue('GCS-CI-CD/TestsMedium/throughput')
 job('GCS-CI-CD/TestsMedium/usage') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -86,17 +100,3 @@ job('GCS-CI-CD/TestsMedium/2411') {
    }
 }
 queue('GCS-CI-CD/TestsMedium/2411')
-job('GCS-CI-CD/TestsMedium/general') {
-   lockableResources {
-      label('gcs-ci-cd-cluster')
-      resourcesVariable('CLUSTER')
-      resourceNumber(1)
-   }
-   wrappers {
-      sshAgent('tstusr-rsa-key')
-   }
-   steps {
-      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/functional/ssos/general 100')
-   }
-}
-queue('GCS-CI-CD/TestsMedium/general')
