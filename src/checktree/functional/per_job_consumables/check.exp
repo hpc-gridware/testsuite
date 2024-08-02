@@ -42,7 +42,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "per_job_consumables"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "AR SCHEDULER VERIFIED"
 set check_description(0)  "Test per job consumable functionality"
 
 # define test's dependencies

@@ -44,8 +44,8 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "test_special_scheduler_config_attributes"
-set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_description(0)  "Check error handling concerning acls and departments"
+set check_category        "SCHEDULER VERIFIED"
+set check_description(0)  "Check options of the scheduler config (only maxujobs for now)"
 
 # define test's dependencies
 set check_needs           "init_core_system" 

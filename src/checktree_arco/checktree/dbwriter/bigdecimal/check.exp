@@ -45,7 +45,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "bigdecimal"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "VERIFIED"
 set check_description(0)  "Test the insertion of larger id numbers to the database"
 
 # define test's dependencies

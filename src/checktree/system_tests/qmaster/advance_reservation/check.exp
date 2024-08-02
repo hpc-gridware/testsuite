@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "advance_reservation"
-set check_category        "AR VERIFIED"
+set check_category        "AR RESERVATION SCHEDULER VERIFIED"
 set check_description(0)  "advance reservation constistancy checks"
 
 # define test's dependencies

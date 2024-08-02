@@ -48,7 +48,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "qrstat_test"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "AR VERIFIED"
 
 # define test's dependencies
 set check_needs           "init_core_system" 

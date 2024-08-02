@@ -44,7 +44,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "client_ar"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "AR RESERVATION VERIFIED"
 set check_description(0)  "common clients -ar switch checks (qsh, qrsh, qlogin)"
 
 # define test's dependencies

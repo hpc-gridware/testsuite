@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "project_access_lists"
-set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
+set check_category        "ACL PROJECT SCHEDULER VERIFIED"
 set check_description(0)  "Test project access for queue/cluster/pe"
 
 # define test's dependencies

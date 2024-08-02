@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "qrdel"
-set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
+set check_category        "AR VERIFIED"
 set check_description(0)  "qrdel test"
 
 # define test's dependencies

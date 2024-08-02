@@ -42,7 +42,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "deadline_calculation"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "SCHEDULER VERIFIED"
 set check_description(0)  "check deadline calculation of the scheduler with deadline in the future"
 set check_description(1)  "check deadline calculation of the scheduler with deadline in the past"
 set check_description(2)  "check deadline permissions"

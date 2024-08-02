@@ -46,7 +46,7 @@ set check_need_running_system "yes"
 
 # define test's name and run level descriptions
 set check_name            "issue_2967"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "AR VERIFIED"
 set check_description(0)  "qrsub should reject non existing checkpoint object"
 
 # define test's dependencies

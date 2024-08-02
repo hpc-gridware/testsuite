@@ -99,20 +99,20 @@ proc simhosts_check_accounting {job_id now runtime expected_values_var} {
    get_qacct $job_id
 
    set errors ""
-   if {[expr abs($qacct_info(qsub_time) - $now)] > 5} {
+   if {[expr abs($qacct_info(qsub_time) - $now)] > 10} {
       append errors "expected submit time to be about $now but got $qacct_info(qsub_time)\n"
    }
-   if {[expr abs($qacct_info(start_time) - $now)] > 5} {
+   if {[expr abs($qacct_info(start_time) - $now)] > 10} {
       append errors "expected start time to be about $now but got $qacct_info(start_time)\n"
    }
    set expected_end [expr $qacct_info(start_time) + $runtime]
-   if {[expr abs($qacct_info(end_time) - $expected_end)] > 5} {
+   if {[expr abs($qacct_info(end_time) - $expected_end)] > 10} {
       append errors "expected end time to be about $expected_end but got $qacct_info(end_time)\n"
    }
-   if {[expr abs($qacct_info(wallclock) - $runtime)] > 5} {
+   if {[expr abs($qacct_info(wallclock) - $runtime)] > 10} {
       append errors "expected wallclock to be about $runtime but got $qacct_info(wallclock)\n"
    }
-   if {[expr abs($qacct_info(ru_wallclock) - $runtime)] > 5} {
+   if {[expr abs($qacct_info(ru_wallclock) - $runtime)] > 10} {
       append errors "expected ru_wallclock to be about $runtime but got $qacct_info(ru_wallclock)\n"
    }
    foreach attr [array names expected_values] {

@@ -45,7 +45,7 @@ global check_root_access_needs
 # define test's name and run level descriptions
 set check_root_access_needs      "yes"        
 set check_name                   "core_binding_basic"
-set check_category               "COMPATIBILITY SYSTEM VERIFIED"
+set check_category               "SCHEDULER VERIFIED"
 set check_description(0)         "test core binding related functionality"
 
 # define test's dependencies

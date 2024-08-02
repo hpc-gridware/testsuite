@@ -43,7 +43,7 @@ global check_root_access_needs
 # define test's name and run level descriptions
 set check_name "qmaster_spooling"
 set check_root_access_needs  "yes"
-set check_category "COMPATIBILITY SYSTEM L10N VERIFIED"
+set check_category "AR VERIFIED"
 set check_description(0) "check qmaster spooling"
 
 # define test's dependencies

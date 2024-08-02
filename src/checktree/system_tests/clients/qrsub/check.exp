@@ -49,7 +49,7 @@ set check_root_access_needs "no"
 set check_description(0)  "check qrsub command and options"
 
 set check_name         "qrsub"
-set check_category     "COMPATIBILITY SYSTEM VERIFIED"
+set check_category     "AR VERIFIED"
 set check_needs        "init_core_system"       ;# dependencies of this check (name of other check)
 
 # setup and cleanup functions
