@@ -1,0 +1,290 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#  
+#  Copyright 2024 HPC-Gridware GmbH
+#  
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#  
+#      http://www.apache.org/licenses/LICENSE-2.0
+#  
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#  
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.0.0"
+
+# define test's name and run level descriptions
+set check_name            "submit_cmd"
+set check_category        "ACCOUNTING QSTAT VERIFIED"
+set check_description(0)  "check submit_cmd_line and effective_submit_cmd_line in qstat and qacct"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function submit_cmd_setup
+set check_cleanup_function submit_cmd_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "submit_cmd_clients"
+lappend check_functions "submit_cmd_options"
+
+# -------- local test procedures: initialization------------------------------
+
+proc submit_cmd_setup {} {
+   get_current_cluster_config_array ts_config
+   global submit_cmd_host
+
+   set submit_cmd_host [host_conf_get_suited_hosts]
+}
+
+proc submit_cmd_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global submit_cmd_host
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   unset -nocomplain submit_cmd_host
+}
+
+proc submit_cmd_check_item {data_var attribute expect_string errors_var} {
+   upvar $data_var data
+   upvar $errors_var errors
+
+   set ret 1
+
+   if {![info exists data($attribute)]} {
+      append errors "$attribute does not exist\n"
+      set ret 0
+   } else {
+      if {![string match "*$expect_string*" $data($attribute)]} {
+         append errors "$attribute does not contain $expect_string\n"
+         set ret 0
+      }
+   }
+
+   return $ret
+}
+
+proc submit_cmd_check {job_id scope data_var client {with_effective 0} {expect_string ""}} {
+   upvar $data_var data
+#   parray data
+
+   set errors ""
+
+   # submit_cmd_line must always exists
+   submit_cmd_check_item data "submit_cmd_line" "-N TEST_$client" errors
+   if {$expect_string != ""} {
+      submit_cmd_check_item data "submit_cmd_line" $expect_string errors
+   }
+   if {$with_effective} {
+      submit_cmd_check_item data "effective_submit_cmd_line" "-N TEST_$client" errors
+      if {$expect_string != ""} {
+         submit_cmd_check_item data "effective_submit_cmd_line" $expect_string errors
+      }
+   }
+
+   if {$errors != ""} {
+      ts_log_severe "job $job_id ($client job): $scope had errors:\n$errors"
+   }
+}
+
+# make sure that submit_cmd_line and effective_submit_cmd_line are reported for the various submit clients
+proc submit_cmd_clients {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH
+   global submit_cmd_host
+
+   # set clients "qsub qrsh qlogin qsh"
+   set clients "qsub qrsh"
+   set options(all) "-l h=$submit_cmd_host"
+   set options(qsub) "-N TEST_qsub"
+   set options(qrsh) "-N TEST_qrsh"
+   set cmd "$CHECK_ACTUAL_TEST_PATH/job.sh"
+   set args "5"
+   foreach client $clients {
+      set id [submit_with_method $client "$options(all) $options($client)" $cmd $args $submit_cmd_host]
+      if {$id == ""} {
+         # an error should have been printed in submit_with_method
+         continue
+      }
+      set sp_id [lindex $id 1]
+      set timeout 20
+      set done 0
+      set job_id 0
+      log_user 1
+      expect {
+         -i $sp_id timeout {
+            ts_log_severe "timeout waiting for job output"
+         }
+         -i $sp_id full_buffer {
+            ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
+         }
+         -i $sp_id eof {
+            ts_log_severe "got unexpected eof"
+         }
+         -i $sp_id -- "*\n" {
+            foreach line [split $expect_out(0,string) "\n"] {
+               set line [string trim $line]
+               if {$line == ""} {
+                  continue
+               }
+               ts_log_fine "processing line: $line"
+               switch -glob $line {
+                  "my job_id is *" {
+                     set job_id [lindex $line 3]
+                     ts_log_fine "got job_id $job_id"
+                     if {[get_qstat_j_info $job_id]} {
+                        submit_cmd_check $job_id "qstat" qstat_j_info $client 1 "-l h*=$submit_cmd_host"
+                     }
+                  }
+                  "exiting now" {
+                     ts_log_fine "got job exit"
+                     set done 1
+                  }
+                  default {
+                     ts_log_fine "unexpected output $line"
+                  }
+               }
+            }
+            if {!$done} {
+               exp_continue
+            }
+         }
+      }
+      close_spawn_process $id
+
+      # did we actually start the job?
+      if {$job_id > 0} {
+         if {[get_qacct $job_id] == 0} {
+            submit_cmd_check $job_id "qacct" qacct_info $client 0 "-l h*=$submit_cmd_host"
+         }
+      }
+   }
+}
+
+# make sure that all options are reported
+proc submit_cmd_options {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH
+   global submit_cmd_host
+
+   set ar_id [submit_ar "-d 3600"]
+
+   set options {}
+   lappend options "-A TEST"
+   lappend options "-a 202010101111.11"
+   lappend options "-ar $ar_id"
+   lappend options "-b yes"
+   lappend options "-binding set linear:1"
+   lappend options "-C XX"
+   lappend options "-ckpt testcheckpointobject -c s"
+   lappend options "-dl 202010101111.11"
+   # need separate test for -e, -hold_jid, -hold_jid_ad, -i, -j
+   lappend options "-js 100"
+   lappend options "-hard -l hostname=$submit_cmd_host,mem_total=1M -soft -l mem_total=100M"
+   lappend options "-m s -M user@example.com"
+   lappend options "-masterq all.q -pe mytestpe 2"
+   lappend options "-notify"
+   lappend options "-now yes"
+   lappend options "-P mytestproject"
+   lappend options "-p -10"
+   lappend options "-pty yes"
+   lappend options "-hard -q all.q -soft -q all.q@$submit_cmd_host"
+   lappend options "-r yes"
+   lappend options "-sc foo=bar"
+   # lappend options "-shell /bin/sh" ; # not a qsub option, would need to test it with qrsh
+   lappend options "-t 1-10:2 -tc 1"
+   lappend options "-v foo=bar"
+   lappend options "-wd /tmp"
+
+   set cmd "$CHECK_ACTUAL_TEST_PATH/job.sh"
+   set args "5"
+   foreach option $options {
+      ts_log_frame
+      ts_log_fine "testing option(s) $option"
+      set id [submit_with_method "qsub" "-N TEST_qsub -l h=$submit_cmd_host $option" $cmd $args $submit_cmd_host]
+      if {$id == ""} {
+         # an error should have been printed in submit_with_method
+         continue
+      }
+      set sp_id [lindex $id 1]
+      set timeout 20
+      set done 0
+      set job_id 0
+      log_user 1
+      expect {
+         -i $sp_id timeout {
+            ts_log_severe "timeout waiting for job output"
+         }
+         -i $sp_id full_buffer {
+            ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
+         }
+         -i $sp_id eof {
+            ts_log_severe "got unexpected eof"
+         }
+         -i $sp_id -- "*\n" {
+            foreach line [split $expect_out(0,string) "\n"] {
+               set line [string trim $line]
+               if {$line == ""} {
+                  continue
+               }
+               ts_log_fine "processing line: $line"
+               switch -glob $line {
+                  "my job_id is *" {
+                     set job_id [lindex $line 3]
+                     ts_log_fine "got job_id $job_id"
+                     if {[get_qstat_j_info $job_id]} {
+                        submit_cmd_check $job_id "qstat" qstat_j_info "qsub" 1 $option
+                     }
+                  }
+                  "exiting now" {
+                     ts_log_fine "got job exit"
+                     set done 1
+                  }
+                  default {
+                     ts_log_fine "unexpected output $line"
+                  }
+               }
+            }
+            if {!$done} {
+               exp_continue
+            }
+         }
+      }
+      close_spawn_process $id
+      if {[string first "-t" $option] == 0} {
+         # we ran only one task of an array job, delete the rest
+         delete_job $job_id 0 0 0
+      }
+
+      # did we actually start the job?
+      if {$job_id > 0} {
+         if {[get_qacct $job_id] == 0} {
+            submit_cmd_check $job_id "qacct" qacct_info "qsub" 0 $option
+         }
+      }
+   }
+
+   delete_ar $ar_id
+}
+
