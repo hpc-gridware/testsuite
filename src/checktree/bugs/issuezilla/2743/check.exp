@@ -78,9 +78,9 @@ proc issue_2743_test {} {
 
    # submit the pe job
    set qsub_params "-l h=$test_host,h_rt=30 -o /dev/null -j y -b y /bin/sleep 400"
-   set job_id [submit_job "$qsub_params"]
+   set job_id [submit_job $qsub_params]
 
-   wait_for_jobstart $job_id "sleep" 100 1 1
+   wait_for_jobstart $job_id "" 10
    set start_time [timestamp]   
 
    soft_execd_shutdown $test_host 
@@ -99,7 +99,7 @@ proc issue_2743_test {} {
    # wait for termination of job
    if {[wait_for_job_end $job_id 5 0] != 0} {
       # If the job is still in qstat the execd might not get
-      # the info that job has finised (sheperds are no child
+      # the info that job has finished (sheperds are no child
       # of execd anymore) 
       # at least after 70 seconds the job must be gone
       # (give execd time to check its spooled jobs. The execd cleanup
@@ -117,6 +117,7 @@ proc issue_2743_test {} {
       set error_text ""
       append error_text "Job accounting information of job $job_id does not reflect expected values!\n"
       append error_text "Expected values are: exit_status=137, failed=*100*, ru_wallclock <= 59\n"
+      append error_text "but got:             exit_status=$job_accounting(exit_status), failed=$job_accounting(failed), ru_wallclock <= $job_accounting(ru_wallclock)\n"
       append error_text "Job accounting looks as follows:\n[format_array job_accounting]\n"
       ts_log_severe $error_text
    }

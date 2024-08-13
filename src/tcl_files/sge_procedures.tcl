@@ -8299,8 +8299,11 @@ proc submit_with_method {submit_method options script args tail_host {user ""}} 
          set sid [init_logfile_wait $tail_host $job_output_file]
          # submit job
          submit_job "-o $job_output_file -j y $options $script $job_args" 1 60
-         start_sge_bin "qconf" "-tsm"
-         ts_log_fine "triggered scheduler run"
+         # no need to trigger scheduling from 9.0.0 on: we set flush_submit_sec 1
+         if {[is_version_in_range "" "9.0.0"]} {
+            start_sge_bin "qconf" "-tsm"
+            ts_log_fine "triggered scheduler run"
+         }
       }
 
       qrsh {
@@ -8310,7 +8313,7 @@ proc submit_with_method {submit_method options script args tail_host {user ""}} 
          set cmd_args "-noshell $options $script $job_args"
 #set command ls
 #set cmd_args "-la"
-         set sid [open_remote_spawn_process $ts_config(master_host) $user "$command" "$cmd_args"]
+         set sid [open_remote_spawn_process $ts_config(master_host) $user $command $cmd_args]
          set sp_id [lindex $sid 1]
 #         log_user 1
          set timeout 60
@@ -8328,8 +8331,9 @@ proc submit_with_method {submit_method options script args tail_host {user ""}} 
                ts_log_fine "remote command started"
             }
          }
-         start_sge_bin "qconf" "-tsm"
-         ts_log_fine "triggered scheduler run"
+         # no need to trigger scheduling for qrsh - it is an immediate job by default
+         # start_sge_bin "qconf" "-tsm"
+         # ts_log_fine "triggered scheduler run"
       }
       default {
          set sid ""
