@@ -177,7 +177,10 @@ proc wait_for_job_tickes {job_id} {
    
    set last_job_tickets 0
    while {$last_job_tickets == 0 && [timestamp] < $my_timeout} {
-      get_extended_job_info $job_id job_info_var
+      if {![get_extended_job_info $job_id job_info_var]} {
+         ts_log_severe "did not find job $job_id - this might be issue CS-xxx"
+         return 0
+      }
       if {[info exists job_info_var(tckts)]} {
          set last_job_tickets $job_info_var(tckts)
       }
