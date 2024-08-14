@@ -205,7 +205,7 @@ proc submit_cmd_options {} {
    lappend options "-js 100"
    lappend options "-hard -l hostname=$submit_cmd_host,mem_total=1M -soft -l mem_total=100M"
    lappend options "-m s -M user@example.com"
-   lappend options "-masterq all.q -pe mytestpe 2"
+#   lappend options "-masterq all.q -pe mytestpe 2" ;# we have a different order of arguments
    lappend options "-notify"
    lappend options "-now yes"
    lappend options "-P mytestproject"
