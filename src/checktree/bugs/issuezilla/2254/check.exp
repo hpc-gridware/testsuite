@@ -40,7 +40,7 @@ global check_functions
 
 # define test's name and run level descriptions
 set check_name            "issue_2254"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "BUG SCHEDULER VERIFIED"
 set check_description(0)  "Check for Issue 2254 - PE scope of resource quotas \
                            is not considered  when -pe wildcard requests are used"
 
