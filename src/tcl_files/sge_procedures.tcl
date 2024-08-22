@@ -5010,7 +5010,9 @@ proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {c
       if {$my_user == ""} {
          set my_user $CHECK_USER
       }
-      ts_log_fine "job \"$ret_code\" submitted as \"$my_user\" with args=\"$args\""
+      if {$ret_code > 0} {
+         ts_log_fine "job \"$ret_code\" submitted as \"$my_user\" with args=\"$args\""
+      }
    }
 
    # return job id or error code
@@ -5655,6 +5657,10 @@ proc get_extended_job_info {jobid {variable job_info} {do_replace_NA 1} {do_grou
 #  INPUTS
 #     jobid                   - job id of job
 #     {my_variable qstat_j_info} - array to store information
+#
+#  RESULT
+#     1 on success
+#     0 on failure (qstat exit code was not 0)
 #
 #  SEE ALSO
 #     parser/parse_qstat_j()

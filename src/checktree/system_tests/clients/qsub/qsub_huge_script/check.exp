@@ -45,7 +45,7 @@ set check_root_access_needs "yes"
 set check_description(0)  "check every qsub option"
 
 set check_name         "qsub_huge_script"
-set check_category     "COMPATIBILITY SYSTEM QSUB VERIFIED"
+set check_category     "SUBMISSION VERIFIED"
 set check_needs        "init_core_system"       ;# dependencies of this check (name of other check)
 
 # setup and cleanup functions
