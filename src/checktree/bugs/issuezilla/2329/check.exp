@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "issue_2329"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "ISSUE PARALLEL SCHEDULER VERIFIED"
 set check_description(0)  "make sure pe tasks are killed when the master task exits"
 
 # define test's dependencies

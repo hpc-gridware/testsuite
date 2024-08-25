@@ -46,7 +46,7 @@ set check_need_running_system "yes"
 
 # define test's name and run level descriptions
 set check_name            "issue_3223"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "ISSUE PARALLEL SCHEDULER VERIFIED"
 set check_description(0)  "execd does not verify the pe task start user in non CSP mode"
 
 # define test's dependencies
