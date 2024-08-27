@@ -66,6 +66,9 @@ global generic_module_tests_test_hosts generic_module_tests
 
 # these are the currently existing and verified module tests
 set generic_module_tests {}
+lappend generic_module_tests "test_qmaster_timed_event"
+lappend generic_module_tests "test_uti_profiling"
+
 lappend generic_module_tests "test_commlib_issue"
 
 #lappend generic_module_tests "test_common_heartbeat" ;# only used in shadowd_migrate test
