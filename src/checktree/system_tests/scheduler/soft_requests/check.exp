@@ -238,7 +238,7 @@ proc soft_requests_submit_pejobs_and_wait2 { } {
             set job_std_state [get_standard_job_info  $job_id ]
             foreach line $job_std_state {
                foreach host $host_list {
-                  set host [resolve_host $host 1]
+                  set host [get_short_hostname [resolve_host $host 1]]
                   ts_log_fine "host: $host queue: [lindex $line 7]"
                   if { [string match "*$host*" [lindex $line 7] ] == 1 } {
                      incr match 1
@@ -309,7 +309,7 @@ proc soft_requests_submit_jobs_and_wait2 { } {
             set job_std_state [get_standard_job_info  $job_id ]
             foreach line $job_std_state {
                foreach host $host_list {
-                  set host [resolve_host $host 1]
+                  set host [get_short_hostname [resolve_host $host 1]]
                   ts_log_fine "host: $host queue: [lindex $line 7]"
                   if { [string match "*$host*" [lindex $line 7] ] == 1 } {
                      incr match 1
