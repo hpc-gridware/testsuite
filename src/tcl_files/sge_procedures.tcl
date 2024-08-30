@@ -890,7 +890,7 @@ proc check_execd_messages { hostname { show_mode 0 } } {
 #     sge_procedures/start_sge_utilbin()
 #     remote_procedures/start_remote_prog()
 #*******************************************************************************
-proc start_sge_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {timeout 60} {cd_dir ""} {sub_path "bin"} {line_array output_lines} {env_list ""} } {
+proc start_sge_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {timeout 60} {cd_dir ""} {sub_path "bin"} {line_array output_lines} {env_list ""} {new_grp ""}} {
    global CHECK_USER
    global CHECK_DISPLAY_OUTPUT
    global check_category
@@ -943,7 +943,9 @@ proc start_sge_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {time
 
    ts_log_finest "executing $binary $args\nas user $user on host $host"
    # Add " around $args if there are more the 1 args....
-   set result [start_remote_prog $host $user $binary "$args" exit_state $timeout 0 $cd_dir envlist]
+   set result [start_remote_prog $host $user $binary "$args" exit_state $timeout 0 $cd_dir envlist \
+                                 1 1 0 1 0 0 0 $new_grp]
+
    ts_log_finer "result:\n\"$result\""
 
    if {[info exists line_buf]} {
@@ -4906,7 +4908,7 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}}
 #*******************************
 global g_submit_job_messages
 unset -nocomplain g_submit_job_messages
-proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {cd_dir ""} {show_args 1} {qcmd "qsub"} {dev_null 1} {the_output "qsub_output"} {ignore_list {}}} {
+proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {cd_dir ""} {show_args 1} {qcmd "qsub"} {dev_null 1} {the_output "qsub_output"} {ignore_list {}} {new_grp ""}} {
    get_current_cluster_config_array ts_config
    global g_submit_job_messages
    global CHECK_USER
@@ -4986,7 +4988,7 @@ proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {c
       }
    }
 
-   set output [start_sge_bin $qcmd $args $host $user prg_exit_state $submit_timeout $cd_dir]
+   set output [start_sge_bin $qcmd $args $host $user prg_exit_state $submit_timeout $cd_dir "bin" output_lines "" $new_grp]
 
    set ret [handle_sge_errors "submit_job" "$qcmd $args" $output messages $raise_error "" $ignore_list]
 
