@@ -288,3 +288,18 @@ proc max {arg1 arg2} {
    }
    return $ret
 }
+
+# returns the grp id for a given group name
+proc gname2gid {grp_name {host ""} {user ""}} {
+   global CHECK_USER
+
+   if {$host == ""} {
+      set host [host_conf_get_suited_hosts]
+   }
+   if {$user == ""} {
+      set user $CHECK_USER
+   }
+   set output_getent [start_remote_prog $host $user "getent" "group $grp_name"]
+   set token [split $output_getent ":"]
+   return [lindex $token 2]
+}

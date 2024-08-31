@@ -634,6 +634,7 @@ proc start_remote_prog { hostname
                          {win_local_user 0}
                          {without_start_output 0}
                          {without_sge_single_line 0}
+                         {new_grp ""}
                        } {
    global CHECK_MAIN_RESULTS_DIR CHECK_DEBUG_LEVEL CHECK_USE_HUDSON
    upvar $exit_var back_exit_state
@@ -660,7 +661,11 @@ proc start_remote_prog { hostname
    }
 
    # open connection
-   set id [open_remote_spawn_process "$hostname" "$user" "$exec_command" "$exec_arguments" $background $cd_dir users_env $source_settings_file 15 $set_shared_lib_path $raise_error $win_local_user $without_start_output $without_sge_single_line]
+   set id [open_remote_spawn_process "$hostname" "$user" "$exec_command" "$exec_arguments" $background $cd_dir \
+                                     users_env $source_settings_file 15 $set_shared_lib_path $raise_error \
+                                     $win_local_user $without_start_output $without_sge_single_line \
+                                     shell_script_name 0 0 $new_grp]
+
    if {$id == ""} {
       ts_log_severe "got no spawn id" $raise_error
       set back_exit_state -255
@@ -1538,6 +1543,7 @@ proc open_remote_spawn_process { hostname
                                  {shell_script_name_var shell_script_name}
                                  {disable_stty_echo 0}
                                  {no_final_enter 0}
+                                 {new_grp ""}
                                } {
 
    global CHECK_USER
@@ -1621,7 +1627,9 @@ proc open_remote_spawn_process { hostname
       # add script name to cache
       set open_remote_spawn_script_cache($spawn_command_arguments) $script_name
       set open_remote_spawn_script_cache($script_name) $spawn_command_arguments
-      create_shell_script "$script_name" $hostname "$exec_command" "$exec_arguments" $cd_dir users_env "/bin/sh" 0 $source_settings_file $set_shared_lib_path $without_start_output $without_sge_single_line $disable_stty_echo $no_final_enter
+      create_shell_script "$script_name" $hostname "$exec_command" "$exec_arguments" $cd_dir users_env "/bin/sh" 0 \
+                          $source_settings_file $set_shared_lib_path $without_start_output $without_sge_single_line \
+                          $disable_stty_echo $no_final_enter $new_grp
    }
    set used_script_name $script_name
 

@@ -1854,83 +1854,32 @@ proc del_job_files {jobid job_output_directory expected_file_count} {
    return $del_job_count
 }
 
-
-#****** file_procedures/create_shell_script() **********************************
-#  NAME
-#     create_shell_script() -- create a /bin/sh script file 
+##
+# \brief Creates a shell script for executing a command on a specified host.
 #
-#  SYNOPSIS
-#     create_shell_script { scriptfile host exec_command exec_arguments 
-#     {envlist ""} { script_path "/bin/sh" } { no_setup 0 } 
-#     { source_settings_file 1 } } 
+# This procedure generates a script which will execute the given command on the specified host.
+# The script will restore the testsuite and SGE environment first. It will also echo start and
+# end marks of the output, and handle environment variables and directory changes as specified.
 #
-#  FUNCTION
-#     This procedure generates a script which will execute the given command. 
-#     The script will restore the testsuite and SGE environment first. It will 
-#     also echo _start_mark_:(x) and _exit_status_:(x) where x is the exit 
-#     value from the started command. 
+# \param scriptfile Full path and name of the script file to generate.
+# \param host Host on which the script will run.
+# \param exec_command Command to execute.
+# \param exec_arguments Command parameters.
+# \param cd_dir Directory to change into before executing the command (default is "").
+# \param envlist Array with environment settings to export (default is "").
+# \param script_path Path to script binary (default is "/bin/sh").
+# \param no_setup If 0 (default), full testsuite framework script initialization is performed.
+# \param source_settings_file If 1 (default), sources the settings file.
+# \param set_shared_lib_path If 1, sets the shared library path (default is 0).
+# \param without_start_output If 0 (default), prints start/end marks of output.
+# \param without_sge_single_line If 0 (default), sets SGE_SINGLE_LINE=1 and exports it.
+# \param disable_stty_echo If not 0, disables stty echo before executing command and enables it after.
+# \param no_final_enter If not 0, does not print a final newline.
+# \param new_grp If specified, switches the primary group to this group.
 #
-#  INPUTS
-#     scriptfile                 - full path and name of scriptfile to generate
-#     host                       - host on which the script will run
-#     exec_command               - command to execute
-#     exec_arguments             - command parameters
-#     {cd_dir ""}                - change into this directory before executing command
-#     {envlist ""}               - array with environment settings to export
-#                                  Be aware that the specified environment is "added"
-#                                  ontop of the default environment of the user. 
-#                                  Variables of the users env can be redefined but not 
-#                                  directly unset! (the ""-string is a value!)
-#                                  
-#                                  The users env variables can be unset wirh the meta entry 
-#                                  UNSET_VARS in the envlist array. Lappend any env variable name
-#                                  that should be unsetted before execution of the command.
-#
-#                                  Example:
-#                                  lappend envlist (UNSET_VARS) SDM_SYSTEM     
-#
-#     { script_path "/bin/sh" }  - path to script binary (default "/bin/sh")
-#     { no_setup 0 }             - if 0 (default): full testsuite framework script
-#                                                  initialization
-#                                  if not 0:       no testsuite framework init.
-#
-#     { source_settings_file 1 } - if 1 (default): source the file
-#                                                  $SGE_ROOT/$SGE_CELL/settings.csh
-#                                  if not 1:       don't source settings file
-#     { set_shared_lib_path 1 }  - if 1:           set shared lib path
-#                                  if 0(default):  don't set shared lib path
-#     { without_start_output 0 } - if 0 (default): put out start/end mark of output
-#                                  if not 0:       don't print out start/end marks
-#     { without_sge_single_line 0} - if 0 (default): set SGE_SINGLE_LINE=1 and export it 
-#                                    if not 0:       unset SGE_SINGLE_LINE
-#     {disable_stty_echo 0}      - if 0 (default): no action
-#                                  if not 0: disalbe stty echo before executing command,
-#                                            enable again after command
-#
-#
-#  EXAMPLE
-#     set envlist(COLUMNS) 500
-#     create_shell_script "/tmp/script.sh" "ps" "-ef" "envlist" 
-#
-#  SEE ALSO
-#     file_procedures/get_dir_names
-#     file_procedures/create_path_aliasing_file()
-#*******************************************************************************
-proc create_shell_script { scriptfile
-                           host
-                           exec_command
-                           exec_arguments
-                           {cd_dir ""}
-                           {envlist ""}
-                           {script_path "/bin/sh"}
-                           {no_setup 0}
-                           {source_settings_file 1}
-                           {set_shared_lib_path 0}
-                           {without_start_output 0}
-                           {without_sge_single_line 0}
-                           {disable_stty_echo 0}
-                           {no_final_enter 0}
-                         } {
+proc create_shell_script {scriptfile host exec_command exec_arguments {cd_dir ""} {envlist ""} {script_path "/bin/sh"}
+                          {no_setup 0} {source_settings_file 1} {set_shared_lib_path 0} {without_start_output 0}
+                          {without_sge_single_line 0} {disable_stty_echo 0} {no_final_enter 0} {new_grp ""}} {
    global CHECK_DEBUG_LEVEL 
 
    get_current_cluster_config_array ts_config
@@ -1948,6 +1897,15 @@ proc create_shell_script { scriptfile
    append script_content "#!${script_path}\n"
    append script_content "# Automatic generated script from Cluster Scheduler (Grid Engine) Testsuite\n"
    if {$no_setup == 0} {
+
+      # switch the primary group if requested. this will succeed only without password question
+      # if the user has the specified groups already set as supplementary groups. Otherwise a
+      # password question will be shown (which we will not handle here)
+      set termination_string "NEWGRP_TERMINATE"
+      if {$new_grp != ""} {
+         append script_content "newgrp $new_grp << $termination_string\n"
+      }
+
       # script command
       append script_content "trap 'echo \"\" ; echo \"_exit_status_:(91) script: $script_tail_name\" ; echo \"script done. (_END_OF_FILE_)\"' 0\n"
       append script_content "umask 022\n"
@@ -2091,6 +2049,9 @@ proc create_shell_script { scriptfile
          append script_content "echo \"_exit_status_:(\$exit_val) script: $script_tail_name\"\n"
          append script_content "echo \"script done. (_END_OF_FILE_)\"\n"
       }
+      if {$new_grp != ""} {
+         append script_content "$termination_string\n"
+      }
    }
   
    set catch_return [catch {
@@ -2117,8 +2078,6 @@ proc create_shell_script { scriptfile
       }
    }
 }
-
-
 
 #****** file_procedures/get_file_content() *************************************
 #  NAME

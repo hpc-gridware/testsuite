@@ -596,3 +596,4 @@ proc get_userset_messages {msg_var action obj_attr {on_host ""} {as_user ""}} {
       }
    } 
 }
+
