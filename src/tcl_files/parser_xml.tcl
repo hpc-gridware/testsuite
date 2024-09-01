@@ -2076,6 +2076,7 @@ proc qstat_j_xml_par { output job_id xmloutput} {
    foreach elem $scriptSize {
       set xml(script_size) [[$elem firstChild] nodeValue]
    }
+   # @todo need to change this for the -scope changes
    # JB_hard_queue_list
    set hardQueue [$root getElementsByTagName JB_hard_queue_list]
    foreach elem $hardQueue {

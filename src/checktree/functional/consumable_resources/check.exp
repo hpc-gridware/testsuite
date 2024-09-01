@@ -308,6 +308,8 @@ proc consumable_resources_submit_pejobs_and_wait {job_arguments job_count run_jo
 
    set job_id [submit_job "-pe $pe_name 1-$job_count $job_arguments $ts_config(product_root)/examples/jobs/sleeper.sh 100"]
 
+   # @todo we will never exit the loop if the job does not get scheduled
+   #       the loop shouldn't be needed as all. Use wait_for_jobstart instead of is_job_running
    while {1} {
       trigger_scheduling
       set running_jobs 0
@@ -390,7 +392,7 @@ proc consumable_resources_submit_jobs_and_wait {job_arguments job_count run_job_
       } else {
          set sched_info_tries 10
          set ok 0
-         while {$sched_info_tries > 0} {      
+         while {$sched_info_tries > 0} {
             trigger_scheduling
             for {set i 0} {$i < $job_count} {incr i 1} {
                if {$job_id($i,running) == 0} {

@@ -426,6 +426,14 @@ proc ge_has_feature {feature {quiet 0}} {
                set result 0
             }
          }
+         "scope" {
+            set output [start_sge_bin "qsub" "-help"]
+            if {[string first "-scope" $output] >= 0} {
+               set result 1
+            } else {
+               set result 0
+            }
+         }
          default {
             ts_log_severe "testsuite error: Unsupported feature string \"$feature\""
             set result 0
@@ -3691,6 +3699,8 @@ proc wait_for_end_of_all_jobs {{seconds 60} {raise_error 1} {check_spool_dir 1}}
                } else {
                   ts_log_fine "Following jobs are still spooled: $spooled_jobs"
                   set result "Following jobs are still spooled: $spooled_jobs"
+                  # we might have a high scheduling interval but scheduler needs to send a delete order
+                  trigger_scheduling
                }
                # check timeout
                if {$seconds > 0} {
@@ -4822,6 +4832,8 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}}
       incr my_second_qdel_timeout 80
       incr my_timeout 160
       ts_log_fine "waiting for jobend (1) (qstat -j $jobid)"
+      # we might do scheduling on demand, trigger scheduling to make scheduler send delete order
+      trigger_scheduling
       after 500
       while { [get_qstat_j_info $jobid ] != 0 } {
           if { [timestamp] > $my_timeout } {
@@ -4835,7 +4847,9 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}}
              continue
           }
           ts_log_progress
-          after 1000
+          # we might do scheduling on demand, trigger scheduling to make scheduler send delete order
+          trigger_scheduling
+          after 500
       }
    }
    return $result
