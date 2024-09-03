@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "enforce_limits"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "LIMITS PARALLEL SCHEDULER VERIFIED"
 set check_description(0)  "verify that runtime limits are enforced by sge_qmaster (param ENABLE_ENFORCE_MASTER_LIMIT)"
 
 # define test's dependencies

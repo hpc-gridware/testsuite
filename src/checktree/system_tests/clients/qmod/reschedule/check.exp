@@ -45,7 +45,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "qmod_reschedule"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "PARALLEL RESCHEDULE SCHEDULER VERIFIED"
 set check_description(0)  "checking reschedule option of qmod"
 
 # define test's dependencies

@@ -47,7 +47,7 @@ set check_root_access_needs "no"
 
 # define test's name and run level descriptions
 set check_name            "scheduler_queue_requests"
-set check_category        "SCHEDULER VERIFIED"
+set check_category        "PARALLEL SCHEDULER VERIFIED"
 set check_description(0)  "check scheduling with -q and -masterq requests"
 
 # define test's dependencies

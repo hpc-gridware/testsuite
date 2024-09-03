@@ -113,6 +113,9 @@ proc ge_3479_test_scheduling {job_type expected_host} {
 
    ts_log_fine "testing $job_type jobs"
    for {set i 0} {$i < 10} {incr i} {
+      # get booked number of slots before starting our job
+      # should show our one blocker job and slot counts of 9 and 10
+      set qstat_output [start_sge_bin "qstat" "-q test -F slots"]
       set output [start_sge_bin "qrsh" "$job_opts $job_script"]
 
       # job script outputs "<job_id>:<hostname>"
@@ -126,7 +129,7 @@ proc ge_3479_test_scheduling {job_type expected_host} {
       # check if hostname was the expected one
       ts_log_fine "  $hostname"
       if {[string first $expected_host $hostname] < 0} {
-         ts_log_severe "job ran on host $hostname but should have run on $expected_host"
+         ts_log_severe "job ran on host $hostname but should have run on $expected_host:\n$qstat_output"
          break
       }
    }
@@ -141,12 +144,13 @@ proc ge_3479_test {} {
 
    # submit a long running job to our first queue
    set job_args "sleep 1000"
-   set job_opts "-b y -o /dev/null -j y -q test -l h=$host1"
+   set job_opts "-N BLOCKER -b y -o /dev/null -j y -q test -l h=$host1"
    set job_id [submit_job "$job_opts $job_args"]
    if {$job_id <= 0} {
       # error has been raised in submit_job
       return
    }
+   wait_for_jobstart $job_id "" 10
 
    # test sequential jobs
    ge_3479_test_scheduling "sequential" $host2

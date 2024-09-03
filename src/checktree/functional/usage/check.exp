@@ -82,7 +82,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "usage"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "PARALLEL SCHEDULER VERIFIED"
 set check_description(0)  "check reserved usage of jobs submitted with qsub (random host)"
 set check_description(1)  "check reserved usage of jobs submitted with qrsh (random host)"
 set check_description(2)  "check reserved usage of jobs submitted with qrsh (random host), accounting summary"

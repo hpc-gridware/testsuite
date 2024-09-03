@@ -203,7 +203,7 @@ proc do_exclusive_usage_test { first_is_exclusive {pe_name ""} {rqs_test 0} } {
    }
 
    if {[wait_for_jobstart $job_id "sleep" 60] != 0} {
-      ts_log_severe "first job did not start even cluster is empty"
+      ts_log_severe "first job $job_id did not start even cluster is empty"
       set ret 1
    }
 
@@ -212,7 +212,8 @@ proc do_exclusive_usage_test { first_is_exclusive {pe_name ""} {rqs_test 0} } {
       set job_id [submit_job "$job_request -l excl=true $job_script" 1 60 "" $user] 
       if {[wait_for_jobstart $job_id "sleep" 5 0] == 0} {
          # job has to run, error was generated in wait_for_jobstart
-         ts_log_severe "exclusive job was started even consumable is already in use"
+         ts_log_severe "exclusive job $job_id was started even consumable is already in use"
+
          set ret 1
       } else {
          # check scheduling message

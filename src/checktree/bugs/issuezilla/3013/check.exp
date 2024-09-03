@@ -42,7 +42,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "issue_3013"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "ISSUE PARALLEL SCHEDULER VERIFIED"
 set check_description(0)  "check issue 3013 is fixed"
 
 # define test's dependencies
@@ -69,7 +69,6 @@ lappend check_functions "issue_3013_check"
 #     Tests if scheduling is right when requesting -masterq and -q and 
 #     having an matching but not restricting resource quota rule. 
 #     The scheduling will fail when the specific regression bug is active.  
-#
 #*******************************************************************************
 proc issue_3013_setup {} {
    global ts_config
