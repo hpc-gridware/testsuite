@@ -40,11 +40,10 @@ global check_description
 global check_needs
 global check_functions 
 global check_root_access_needs
-global issue_2759_hostname
 
 # define test's name and run level descriptions
 set check_name            "issue_2759"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "EXECUTION VERIFIED"
 set check_description(0)  "stopping an execution daemon does not stop jobs"
 
 # define test's dependencies
@@ -63,16 +62,19 @@ lappend check_functions "issue_2759_test"
 
 proc issue_2759_setup {} {
    global ts_config
-
 }
 
 proc issue_2759_cleanup {} {
-   global ts_config issue_2759_hostname
+   global ts_config
    
-   # check if execd is alive, if not start it up   
-   if {[is_execd_alive $issue_2759_hostname] == 0} {
-      startup_execd $issue_2759_hostname
+   # check if execds are alive, if not start them up   
+   foreach host $ts_config(execd_nodes) {
+      if {[is_execd_alive $host] == 0} {
+         startup_execd $host
+         wait_for_load_from_all_queues 60
+      }
    }
+
    delete_all_jobs
    wait_for_end_of_all_jobs 60
 }
@@ -96,70 +98,79 @@ proc issue_2759_cleanup {} {
 #     
 #*******************************************************************************
 proc issue_2759_test {} {
-   global ts_config CHECK_USER issue_2759_hostname
+   global ts_config CHECK_USER
 
    # submit a job for each project and wait for them to be running
    set args "-o /dev/null -j y $ts_config(product_root)/examples/jobs/sleeper.sh 12345"
-   set issue_2759_hostname [host_conf_get_suited_hosts]
 
-   set job_1 [submit_job "-l h=$issue_2759_hostname $args"]
-   set job_2 [submit_job "-l h=$issue_2759_hostname $args"]
-   set job_3 [submit_job "-l h=$issue_2759_hostname $args"]
-   set job_4 [submit_job "-l h=$issue_2759_hostname $args"]
-   
-   if {$job_1 <= 0 || $job_2 <= 0 || $job_3 <= 0 || $job_4 <= 0} {
-      return   ;# error has been raised in submit_job
-   }
+   foreach host $ts_config(execd_nodes) {
+      ts_log_frame
+      ts_log_fine "Testing on host $host"
+      ts_log_frame
 
-   # wait for jobs to be running
-   trigger_scheduling
-   if {[wait_for_jobstart $job_1 "" 20] != 0 || 
-       [wait_for_jobstart $job_2 "" 20] != 0 || 
-       [wait_for_jobstart $job_3 "" 20] != 0 || 
-       [wait_for_jobstart $job_4 "" 20] != 0} {  
-      return   ;# error has been raised in wait_for_jobstart
-   }
-
-   # store the PIDs from the jobs 
-   set shep_pid_list [get_shepherd_pid_list $CHECK_USER $issue_2759_hostname]
-   set pid_list [get_job_pid_list $issue_2759_hostname $shep_pid_list]
+      set job_1 [submit_job "-l h=$host $args"]
+      set job_2 [submit_job "-l h=$host $args"]
+      set job_3 [submit_job "-l h=$host $args"]
+      set job_4 [submit_job "-l h=$host $args"]
       
-   ts_log_fine "Following pids have the jobs $pid_list" 
+      if {$job_1 <= 0 || $job_2 <= 0 || $job_3 <= 0 || $job_4 <= 0} {
+         return   ;# error has been raised in submit_job
+      }
 
-   # stop execd 
-   set output [start_remote_prog $issue_2759_hostname "root" "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "stop" "exit_val" 60]
+      # wait for jobs to be running
+      trigger_scheduling
+      if {[wait_for_jobstart $job_1 "" 20] != 0 || 
+          [wait_for_jobstart $job_2 "" 20] != 0 || 
+          [wait_for_jobstart $job_3 "" 20] != 0 || 
+          [wait_for_jobstart $job_4 "" 20] != 0} {  
+         return   ;# error has been raised in wait_for_jobstart
+      }
 
-   if {$exit_val != 0} {
-      ts_log_severe "Couldn't stop execution daemon!\n Output: \n $output"
-      return 
-   }
-   
-   # check if the shepherds are still running 
-   set starttime [timestamp]
-   foreach job_pid $pid_list {
-      set didntstart 1 
-      # waiting a maximum of 30 seconds
-      while {[expr [timestamp] - $starttime]< 30} {
-         get_ps_info $job_pid $issue_2759_hostname
-         if {$ps_info($job_pid,error) == 0} {
-            ts_log_fine "Not OK: waiting for job to die because of sgeexecd stop!"
-            set didntstart 1
-         } else {
-            set didntstart 0   
-            ts_log_fine "OK: job seems not to be running!"
-            break
+      # store the PIDs from the jobs 
+      set shep_pid_list [get_shepherd_pid_list $CHECK_USER $host]
+      set pid_list [get_job_pid_list $host $shep_pid_list]
+         
+      ts_log_fine "Following pids have the jobs $pid_list" 
+
+      # stop execd 
+      set output [start_remote_prog $host "root" "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "stop" "exit_val" 60]
+
+      if {$exit_val != 0} {
+         ts_log_severe "Couldn't stop execution daemon!\n Output: \n $output"
+         return 
+      }
+      
+      # check if the shepherds are still running 
+      set starttime [timestamp]
+      foreach job_pid $pid_list {
+         set didntstart 1 
+         # waiting a maximum of 30 seconds
+         while {[expr [timestamp] - $starttime]< 30} {
+            get_ps_info $job_pid $host
+            if {$ps_info($job_pid,error) == 0} {
+               ts_log_fine "Not OK: waiting for job to die because of sgeexecd stop!"
+               set didntstart 1
+            } else {
+               set didntstart 0   
+               ts_log_fine "OK: job seems not to be running!"
+               break
+            }
+            # we don't want to have the processor to use 100% CPU time 
+            after 1000
          }
-         # we don't want to have the processor to use 100% CPU time 
-         after 1000
+         if {$didntstart == 1} {
+            ts_log_severe "Job should have been killed!\nJob with PID $job_pid on host $host is still running!"
+            ts_log_fine "Kill it manually in order to cleanup."
+            set output [start_remote_prog $host "root" "kill" "9 $job_pid" "exit_val" 60]
+            ts_log_fine "Output: $output"
+         }
       }
-      if {$didntstart == 1} {
-         ts_log_severe "Job should have been killed!\nJob with PID $job_pid on host $issue_2759_hostname is still running!"
-         ts_log_fine "Kill it manually in order to cleanup."
-         set output [start_remote_prog $issue_2759_hostname "root" "kill" "9 $job_pid" "exit_val" 60]
-         ts_log_fine "Output: $output"
-      }
-   }
 
+      # restart execd, wait for it to be up, expect the jobs do vanish
+      startup_execd $host
+      wait_for_load_from_all_queues 60
+      wait_for_end_of_all_jobs 120
+   }
 }
 
 proc get_job_pid_list {host shepherdpid} {
