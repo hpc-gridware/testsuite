@@ -60,6 +60,8 @@ lappend check_functions "job_environment_basic_amount"
 lappend check_functions "job_environment_basic_JOB_NAME"
 lappend check_functions "job_environment_basic_amount_uninherited"
 lappend check_functions "job_environment_basic_JOB_NAME_uninherited"
+lappend check_functions "job_environment_basic_ld_preload"
+set check_functions "job_environment_basic_ld_preload"
 
 # -------- local test procedures -----------------------------------------------
 
@@ -758,3 +760,55 @@ proc job_environment_basic_amount_uninherited {} {
       ts_log_config [string trim $warnings]
    }
 }
+
+proc job_environment_basic_ld_preload {} {
+   global ts_config
+
+   # submit a job with LD_PRELOAD set, expect it to be rejected
+   # we submit it with hold, it will not be executed
+   set job_opts "-o /dev/null -j y -h -b y -v LD_PRELOAD=/tmp/my_bad_lib.so"
+   set job_args "sleep 100"
+   set job_id [submit_job "$job_opts $job_args" 0]
+   ts_log_fine $qsub_output
+   set pattern [translate_macro MSG_REMOVED_ENV_VAR_S "LD_PRELOAD"]
+   if {$job_id <= 0} {
+      ts_log_severe "job should have got submitted, but was rejected:\n$qsub_output"
+   } else {
+      if {[string first $pattern $qsub_output] < 0} {
+         ts_log_severe "LD_PRELOAD was accepted during job submission, but should have been removed:\n$qsub_output"
+      }
+   }
+   delete_job $job_id
+
+   # add ENABLE_SUBMIT_LD_PRELOAD=TRUE to the qmaster params
+   get_config global_conf_backup
+   set conf(qmaster_params) "$global_conf_backup(qmaster_params),ENABLE_SUBMIT_LD_PRELOAD=TRUE"
+   set_config conf
+   # submit a job with LD_PRELOAD set, expect it to be accepted
+   set job_id [submit_job "$job_opts $job_args" 0]
+   ts_log_fine $qsub_output
+   if {$job_id <= 0} {
+      ts_log_severe "job should have got submitted, but was rejected:\n$qsub_output"
+   } else {
+      if {[string first $pattern $qsub_output] >= 0} {
+         ts_log_severe "LD_PRELOAD was removed, but should have been accepted:\n$qsub_output"
+      }
+   }
+   delete_job $job_id
+
+   # start a job with LD_PRELOAD set, expect LD_PRELOAD to be set in the environment
+   # we set LD_PRELOAD to the libdrmaa.so, this should not cause any issues in the job execution
+   set host [lindex $ts_config(execd_nodes) 0]
+   set arch [resolve_arch $host]
+   set libdrmaa "$ts_config(product_root)/lib/$arch/libdrmaa.so"
+   set output [start_sge_bin "qrsh" "-l h=$host -v LD_PRELOAD=$libdrmaa env"]
+   if {[string first "LD_PRELOAD=$libdrmaa" $output] < 0} {
+      ts_log_severe "LD_PRELOAD was not set in the environment:\n$output"
+   } else {
+      ts_log_fine "LD_PRELOAD was set in the environment"
+   }
+
+   # restore global config
+   reset_config global_conf_backup
+}
+
