@@ -88,6 +88,7 @@ proc ge_3306_setup {} {
 
    # start a tail -f on the qmaster messages file
    init_logfile_wait $ts_config(master_host) "[get_qmaster_spool_dir]/messages"
+
 }
 
 proc ge_3306_cleanup {} {
@@ -118,8 +119,15 @@ proc ge_3306_cleanup {} {
    shutdown_and_restart_qmaster
 
    # unset our test's global variables
-   foreach var "ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host_backup ge_3306_host" {
-      unset -nocomplain $var
+   unset -nocomplain ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host_backup ge_3306_host
+}
+
+proc ge_3306_get_pattern {var host slots remaining} {
+   # set the pattern for the error message
+   if {[is_version_in_range "9.0.0"]} {
+      return [translate_macro MSG_CAPACITYEXCEEDED_FSSSIFF "1.0*" $var host $host $slots "0.0*" $remaining]
+   } else {
+      return [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" $var host $host $slots $remaining]
    }
 }
 
@@ -237,7 +245,7 @@ proc ge_3306_test {} {
       set params(value_start) "2"
       set params(value_change) "1"
       set params(job_running) 0
-      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" C1 host ${host}* 1 "0.0*"]
+      set params(message) [ge_3306_get_pattern "C1" $host 1 "0.0*"]
       if {![ge_3306_do_test params job_ids]} {
          return
       }
@@ -253,7 +261,7 @@ proc ge_3306_test {} {
       set params(value_start) 5
       set params(value_change) 4
       set params(job_running) 0
-      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" C1 host ${host}* 2 "1.0*"]
+      set params(message) [ge_3306_get_pattern "C1" $host 2 "1.0*"]
       if {![ge_3306_do_test params job_ids]} {
          return
       }
@@ -288,7 +296,7 @@ proc ge_3306_per_job {} {
       set params(value_start) "2"
       set params(value_change) "1"
       set params(job_running) 0
-      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" CJ host ${host}* 1 "0.0*"]
+      set params(message) [ge_3306_get_pattern "CJ" $host 1 "0.0*"]
       if {![ge_3306_do_test params job_ids]} {
          return
       }
@@ -304,7 +312,7 @@ proc ge_3306_per_job {} {
       set params(value_start) 3
       set params(value_change) 2
       set params(job_running) 0
-      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" CJ host ${host}* 1 "0.0*"]
+      set params(message) [ge_3306_get_pattern "CJ" $host 1 "0.0*"]
       if {![ge_3306_do_test params job_ids]} {
          return
       }
@@ -344,7 +352,7 @@ proc ge_3306_exclusive {} {
       set params(value_start) 1
       set params(value_change) 0
       set params(job_running) 0
-      set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" CX host ${host}* 1 "0.0*"]
+      set params(message) [ge_3306_get_pattern "CX" $host 1 "0.0*"]
       if {![ge_3306_do_test params job_ids]} {
          return
       }
@@ -373,7 +381,7 @@ proc ge_3306_pe_slots {} {
    set params(value_start) 2
    set params(value_change) 1
    set params(job_running) 0
-   set params(message) [translate_macro MSG_CAPACITYEXCEEDED_FSSSIF "1.0*" C1 host "global" 2 "1.0*"]
+   set params(message) [ge_3306_get_pattern "C1" "global" 2 "1.0*"]
    if {![ge_3306_do_test params job_ids]} {
       return
    }

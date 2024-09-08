@@ -981,10 +981,10 @@ proc replace_string { input_str what with {only_count 0}} {
 #     gettext_procedures/translate()
 #     gettext_procedures/sge_macro()
 #*******************************************************************************
-proc translate_macro {macro {par1 ""} {par2 ""} {par3 ""} {par4 ""} {par5 ""} {par6 ""}} {
+proc translate_macro {macro {par1 ""} {par2 ""} {par3 ""} {par4 ""} {par5 ""} {par6 ""} {par7 ""}} {
    get_current_cluster_config_array ts_config
    set msg [sge_macro $macro]
-   set ret [translate $ts_config(master_host) 0 0 0 $msg $par1 $par2 $par3 $par4 $par5 $par6]
+   set ret [translate $ts_config(master_host) 0 0 0 $msg $par1 $par2 $par3 $par4 $par5 $par6 $par7]
 
    return $ret
 }
@@ -1069,7 +1069,7 @@ proc translate_macro_if_possible {macro {par1 ""} {par2 ""} {par3 ""} {par4 ""} 
 #  SEE ALSO
 #     ???/???
 #*******************************************************************************
-proc translate { host remove_control_signs is_script no_input_parsing msg_txt { par1 "" } { par2 ""} { par3 "" } { par4 ""} { par5 ""} { par6 ""} } {
+proc translate {host remove_control_signs is_script no_input_parsing msg_txt {par1 ""} {par2 ""} {par3 ""} {par4 ""} {par5 ""} {par6 ""} {par7 ""}} {
 
    global CHECK_USER l10n_raw_cache l10n_install_cache
    get_current_cluster_config_array ts_config
@@ -1181,6 +1181,7 @@ proc translate { host remove_control_signs is_script no_input_parsing msg_txt { 
    set msg_text [replace_string $msg_text "PAR_4" $par4]
    set msg_text [replace_string $msg_text "PAR_5" $par5]
    set msg_text [replace_string $msg_text "PAR_6" $par6]
+   set msg_text [replace_string $msg_text "PAR_7" $par7]
 
    if { [string first "-" $msg_txt] < 0  } {
       if {[string first "-" $msg_text] >= 0} {
