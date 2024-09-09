@@ -343,12 +343,8 @@ proc get_qmaster_spool_dir {} {
 # @param[in] feature - name of the feature.
 #     Supported feature strings are:
 #     "new-interactive-job-support"
-#     "scheduler-thread"
 #     "core-binding"
-#     "job-submission-verify"
-#     "job-consumable"
 #     "exclusive-host-usage"
-#     "additional-jvm-arguments"
 #     "resource-maps"
 # @param[in] quiet - if false (0) then the function outputs if the feature is available, else it is quiet
 #
@@ -375,9 +371,6 @@ proc ge_has_feature {feature {quiet 0}} {
                set result 1
             }
          }
-         "scheduler-thread" {
-            set result 1
-         }
          "core-binding" {
             get_complex complex_array
 
@@ -385,34 +378,6 @@ proc ge_has_feature {feature {quiet 0}} {
                set result 1
             } else {
                set result 0 
-            }
-         }
-         "job-submission-verify" {
-            if {[get_config global_config] == 0} {
-               # check if there is a jsv_url in configuration
-               set result 0
-               foreach param [array names global_config] {
-                  if {$param == "jsv_url"} {
-                     set result 1
-                     break
-                  }
-               }
-            } else {
-               # no we don't have jsv!
-               set result 0
-            }
-         }
-         "job-consumable" {
-            set result 1
-         }
-         "exclusive-host-usage" {
-            set result 1
-         }
-         "additional-jvm-arguments" {
-            if {[is_version_in_range "6.2u3"]} {
-               set result 1
-            } else {
-               set result 0
             }
          }
          "resource-maps" {
@@ -7023,9 +6988,6 @@ proc are_master_and_scheduler_running { hostname qmaster_spool_dir } {
 proc shutdown_master_and_scheduler {hostname qmaster_spool_dir} {
    get_current_cluster_config_array ts_config
 
-   if {[ge_has_feature "scheduler-thread" 1] == false} {
-      shutdown_scheduler $hostname $qmaster_spool_dir
-   }
    shutdown_qmaster $hostname $qmaster_spool_dir
 }
 

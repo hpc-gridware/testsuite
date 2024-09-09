@@ -3922,7 +3922,10 @@ proc plain_j_parse { output_var jobId plainoutput } {
       foreach elemin $elem_split {
          if {[string length $elemin] > 0} {
             if {$count == 1} {
-               set key $elemin               
+               set key $elemin
+               #if {[string match "usage*" $key]} {
+               #   set key [regsub -all {\s+} $key " "]
+               #}
                incr count 1
             } else {
                append val [string trim $elemin]

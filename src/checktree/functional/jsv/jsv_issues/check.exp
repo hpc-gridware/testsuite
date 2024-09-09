@@ -82,14 +82,6 @@ proc jsv_issues_setup {} {
    global ts_config
    global jsv_org_global_conf
    global jsv_base_path
-   global jsv_enabled
-
-   # check if jsv is available
-   set jsv_enabled [ge_has_feature "job-submission-verify"]
-   if {!$jsv_enabled} {
-      ts_log_config "Cannot run this test, jsv is not available for this GE version!"
-      return 99
-   }
 
    if {$ts_config(source_dir) == "none"} {
       ts_log_config "source directory is set to \"none\" - cannot run test"
@@ -114,19 +106,16 @@ proc jsv_issues_cleanup {} {
    global ts_config
    global jsv_org_global_conf
    global jsv_base_path
-   global jsv_enabled
- 
-   if {$jsv_enabled} {
-      # trigger and wait for job termination
-      delete_all_jobs
-      wait_for_end_of_all_jobs 60
 
-      # reset configurations
-      reset_config_and_propagate jsv_org_global_conf
-   }
+   # trigger and wait for job termination
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   # reset configurations
+   reset_config_and_propagate jsv_org_global_conf
 
    # unset our test's global variables
-   unset -nocomplain jsv_org_global_conf jsv_base_path jsv_enabled
+   unset -nocomplain jsv_org_global_conf jsv_base_path
 }
 
 # this test is related to the test jsv_issues_job_start_user_drmaa below

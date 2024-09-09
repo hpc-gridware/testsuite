@@ -270,7 +270,18 @@ proc jsv_on_verify {} {
    lappend val_list ""
    append res "1"
 
-   # -l -hard -soft
+   # -scope GLOBAL -hard -l (global_l_hard)
+   lappend par_list "global_l_hard"
+   lappend val_list "a=troete"
+   append res "1"
+   lappend par_list "global_l_hard"
+   lappend val_list "h_vmem=5G,a=troete"
+   append res "1"
+   lappend par_list "global_l_hard"
+   lappend val_list ""
+   append res "1"
+
+   # -scope GLOBAL -hard -l (l_hard for compatibility with of old JSVs)
    lappend par_list "l_hard"
    lappend val_list "a=troete"
    append res "1"
@@ -280,16 +291,51 @@ proc jsv_on_verify {} {
    lappend par_list "l_hard"
    lappend val_list ""
    append res "1"
-   lappend par_list "l_soft"
+
+   # -scope GLOBAL -soft -l (global_l_soft)
+   lappend par_list "global_l_soft"
    lappend val_list "a=troete"
    append res "1"
-   lappend par_list "l_soft"
+   lappend par_list "global_l_soft"
    lappend val_list "h_vmem=5G,a=troete"
    append res "1"
-   lappend par_list "l_soft"
+   lappend par_list "global_l_soft"
    lappend val_list ""
    append res "1"
       
+   # -scope GLOBAL -soft -l (l_soft)
+   lappend par_list "l_soft"
+   lappend val_list "a=troete"
+   append res "1"
+   lappend par_list "l_soft"
+   lappend val_list "h_vmem=5G,a=troete"
+   append res "1"
+   lappend par_list "l_soft"
+   lappend val_list ""
+   append res "1"
+
+   # -scope MASTER -soft -l (master_l_hard)
+   lappend par_list "master_l_hard"
+   lappend val_list "a=troete"
+   append res "1"
+   lappend par_list "master_l_hard"
+   lappend val_list "h_vmem=5G,a=troete"
+   append res "1"
+   lappend par_list "master_l_hard"
+   lappend val_list ""
+   append res "1"
+
+   # -scope SLAVE -soft -l (slave_l_hard)
+   lappend par_list "slave_l_hard"
+   lappend val_list "a=troete"
+   append res "1"
+   lappend par_list "slave_l_hard"
+   lappend val_list "h_vmem=5G,a=troete"
+   append res "1"
+   lappend par_list "slave_l_hard"
+   lappend val_list ""
+   append res "1"
+
    # -m
    lappend par_list "m"
    lappend val_list "troete"
@@ -314,7 +360,7 @@ proc jsv_on_verify {} {
    lappend par_list "masterq"
    lappend val_list ""
    append res "1"
-   
+
    # -M
    lappend par_list "M"
    lappend val_list "root@es-ergb01-01.germany.sun.com,codadmin@localhost"
@@ -386,34 +432,51 @@ proc jsv_on_verify {} {
 
    # -pe .. n-m; u_long32 range 
    lappend par_list "pe_name"
-   lappend val_list "troete"
+   lappend val_list ""
+   append res "1"
+   lappend par_list "pe_min"
+   lappend val_list "2"
+   append res "1"
+   lappend par_list "pe_min"
+   lappend val_list "2"
+   append res "1"
+   lappend par_list "pe_min"
+   lappend val_list "0"
+   append res "1"
+   lappend par_list "pe_min"
+   lappend val_list ""
+   append res "1"
+   lappend par_list "pe_max"
+   lappend val_list "2"
+   append res "1"
+   lappend par_list "pe_max"
+   lappend val_list "0"
+   append res "1"
+   lappend par_list "pe_max"
+   lappend val_list ""
    append res "1"
    lappend par_list "pe_name"
-   lappend val_list ""
+   lappend val_list "mytestpe"
    append res "1"
    lappend par_list "pe_min"
-   lappend val_list "2"
-   append res "1"
-   lappend par_list "pe_min"
-   lappend val_list "2"
-   append res "1"
-   lappend par_list "pe_min"
-   lappend val_list "0"
-   append res "1"
-   lappend par_list "pe_min"
-   lappend val_list ""
+   lappend val_list "1"
    append res "1"
    lappend par_list "pe_max"
    lappend val_list "2"
    append res "1"
-   lappend par_list "pe_max"
-   lappend val_list "0"
+
+   # -scope GLOBAL -hard -q (global_q_hard)
+   lappend par_list "global_q_hard"
+   lappend val_list "all.q"
    append res "1"
-   lappend par_list "pe_max"
+   lappend par_list "global_q_hard"
+   lappend val_list "all.q,all2.q"
+   append res "1"
+   lappend par_list "global_q_hard"
    lappend val_list ""
    append res "1"
 
-   # -q -hard -soft
+   # -scope GLOBAL -hard -q (q_hard for compatibility with of old JSVs)
    lappend par_list "q_hard"
    lappend val_list "all.q"
    append res "1"
@@ -423,6 +486,19 @@ proc jsv_on_verify {} {
    lappend par_list "q_hard"
    lappend val_list ""
    append res "1"
+
+   # -scope GLOBAL -soft -q (global_q_soft)
+   lappend par_list "global_q_soft"
+   lappend val_list "all.q"
+   append res "1"
+   lappend par_list "global_q_soft"
+   lappend val_list "all.q,all2.q"
+   append res "1"
+   lappend par_list "global_q_soft"
+   lappend val_list ""
+   append res "1"
+
+   # -scope GLOBAL -soft -q (q_soft)
    lappend par_list "q_soft"
    lappend val_list "all.q"
    append res "1"
@@ -430,6 +506,28 @@ proc jsv_on_verify {} {
    lappend val_list "all.q,all2.q"
    append res "1"
    lappend par_list "q_soft"
+   lappend val_list ""
+   append res "1"
+
+   # -scope MASTER -hard -q (master_q_hard)
+   lappend par_list "master_q_hard"
+   lappend val_list "all.q"
+   append res "1"
+   lappend par_list "master_q_hard"
+   lappend val_list "all.q,all2.q"
+   append res "1"
+   lappend par_list "master_q_hard"
+   lappend val_list ""
+   append res "1"
+
+   # -scope SLAVE -hard -q (slave_q_hard)
+   lappend par_list "slave_q_hard"
+   lappend val_list "all.q"
+   append res "1"
+   lappend par_list "slave_q_hard"
+   lappend val_list "all.q,all2.q"
+   append res "1"
+   lappend par_list "slave_q_hard"
    lappend val_list ""
    append res "1"
 

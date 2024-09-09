@@ -76,11 +76,6 @@ proc exclusive_host_usage_setup {} {
    global exclusive_hosts
    global exclusive_host_usage_complex_backup
 
-   if {![ge_has_feature "exclusive-host-usage"]} {
-      ts_log_config "need \"exclusive-host-usage\" feature for this test"
-      return 99
-   }
-
    if {$ts_config(source_dir) == "none"} {
       ts_log_config "source directory is set to \"none\" - cannot run test"
       return 99

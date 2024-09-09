@@ -105,14 +105,10 @@ proc jsv_ge_setup {} {
    global ts_config
    global jsv_org_global_conf
    global jsv_base_path
-   global jsv_enabled
 
-   # check if jsv is available
-   set jsv_enabled [ge_has_feature "job-submission-verify"]
-   if {!$jsv_enabled} {
-      ts_log_config "Cannot run this test, jsv is not available for this GE version!"
-      return 99
-   }
+   # create queue
+   set q_param(load_thresholds) "np_load_avg=100.00"
+   set result [add_queue "all2.q" "@allhosts" q_param]
 
    # get base path of scripts
    set jsv_base_path $ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_ge
@@ -139,19 +135,19 @@ proc jsv_ge_cleanup {} {
    global ts_config
    global jsv_org_global_conf
    global jsv_base_path
-   global jsv_enabled
- 
-   if {$jsv_enabled} {
-      # trigger and wait for job termination
-      delete_all_jobs
-      wait_for_end_of_all_jobs 60
 
-      # reset configurations
-      reset_config_and_propagate jsv_org_global_conf
-   }
+   # trigger and wait for job termination
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   # reset configurations
+   reset_config_and_propagate jsv_org_global_conf
+
+   # remove the test queue
+   del_queue "all2.q" "@allhosts" 0 1
 
    # unset our test's global variables
-   unset -nocomplain jsv_org_global_conf jsv_base_path jsv_enabled
+   unset -nocomplain jsv_org_global_conf jsv_base_path
 }
 
 # This test will verify the parsing functionality which is used in clients
@@ -181,17 +177,10 @@ proc jsv_ge_cleanup {} {
 proc jsv_ge_parsing_in_client_or_master {} {
    global CHECK_ACT_LEVEL
    global ts_config
-   global jsv_enabled
-
-   # if jsv is not available return
-   if {!$jsv_enabled} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    if {$CHECK_ACT_LEVEL == 0} {
       set jsv_script [jsv_script_get_script_file "expect" tcl]
-      append submit_args "-jsv ${jsv_script}"
+      append submit_args "-jsv ${jsv_script} -pe mytestpe 2"
       append submit_args " $ts_config(product_root)/examples/jobs/sleeper.sh 3"
       set job_id [submit_job "$submit_args" 1 60 $ts_config(master_host)]
 

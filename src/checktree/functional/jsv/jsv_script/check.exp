@@ -102,16 +102,8 @@ proc jsv_script_setup {} {
    global jsv_expect_timeout
    global jsv_enter_list
    global jsv_enter2_list
-   global jsv_enabled
 
-   # check if jsv is available
-   set jsv_enabled [ge_has_feature "job-submission-verify"]
-   if {!$jsv_enabled} {
-      ts_log_config "Cannot run this test, jsv is not available for this GE version!"
-      return 99
-   }
-
-   # initialize module global variables 
+   # initialize module global variables
    set jsv_script_list {}
    set jsv_name_list {}
    set jsv_id_list {}
@@ -174,22 +166,19 @@ proc jsv_script_cleanup {} {
    global jsv_expect_timeout
    global jsv_enter_list
    global jsv_enter2_list
-   global jsv_enabled
 
-   if {$jsv_enabled} {
-      # terminate spawned process
-      foreach id $jsv_id_list {
-         set spawn_id [lindex $id 1]
-         ts_send $spawn_id "\003"
-         # without this after the test fails on fast linux hosts
-         after 1000 
-         close_spawn_process $id
-      }
-      set jsv_id_list {}
+   # terminate spawned process
+   foreach id $jsv_id_list {
+      set spawn_id [lindex $id 1]
+      ts_send $spawn_id "\003"
+      # without this after the test fails on fast linux hosts
+      after 1000
+      close_spawn_process $id
    }
+   set jsv_id_list {}
 
    # unset our test's global variables
-   unset -nocomplain jsv_script_list jsv_name_list jsv_id_list jsv_expect_timeout jsv_enter_list jsv_enter2_list jsv_enabled
+   unset -nocomplain jsv_script_list jsv_name_list jsv_id_list jsv_expect_timeout jsv_enter_list jsv_enter2_list
 }
 
 # Scenario:
@@ -203,12 +192,6 @@ proc jsv_script_enter {} {
    global jsv_id_list
    global jsv_expect_timeout
    global jsv_enter_list
-   global jsv_enabled
-
-   if {!$jsv_enabled} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    if {$CHECK_ACT_LEVEL == 0} {
       set i 0
@@ -269,12 +252,6 @@ proc jsv_script_quit {} {
    global jsv_id_list
    global jsv_expect_timeout
    global jsv_enter_list
-   global jsv_enabled
-
-   if {!$jsv_enabled} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    if {$CHECK_ACT_LEVEL == 0} {
       set i 0
@@ -352,13 +329,6 @@ proc jsv_script_start_quit {} {
    global jsv_expect_timeout
    global jsv_enter_list
    global jsv_enter2_list
-   global jsv_enabled
-
-
-   if {!$jsv_enabled} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    if {$CHECK_ACT_LEVEL == 0} {
       set i 0
@@ -450,12 +420,6 @@ proc jsv_script_start_begin_param_accept_quit {} {
    global jsv_expect_timeout
    global jsv_enter_list
    global jsv_enter2_list
-   global jsv_enabled
-
-   if {!$jsv_enabled} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    if {$CHECK_ACT_LEVEL == 0} {
       set i 0
@@ -549,14 +513,6 @@ proc jsv_script_start_begin_param_reject_quit {} {
    global jsv_expect_timeout
    global jsv_enter_list
    global jsv_enter2_list
-   global jsv_enabled
-
-
-
-   if {!$jsv_enabled} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    if {$CHECK_ACT_LEVEL == 0} {
       set i 0
@@ -656,12 +612,6 @@ proc jsv_script_start_begin_param_rejectwait_quit {} {
    global jsv_expect_timeout
    global jsv_enter_list
    global jsv_enter2_list
-   global jsv_enabled
-
-   if {!$jsv_enabled} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    if {$CHECK_ACT_LEVEL == 0} {
       set i 0
@@ -772,12 +722,6 @@ proc jsv_script_start_begin_param_correct_quit {} {
    global jsv_expect_timeout
    global jsv_enter_list
    global jsv_enter2_list
-   global jsv_enabled
-
-   if {!$jsv_enabled} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    if {$CHECK_ACT_LEVEL == 0} {
       set i 0
@@ -886,12 +830,6 @@ proc jsv_script_start_begin_param_add_mod_del_accept_quit {} {
    global jsv_expect_timeout
    global jsv_enter_list
    global jsv_enter2_list
-   global jsv_enabled
-
-   if {!$jsv_enabled} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    if {$CHECK_ACT_LEVEL == 0} {
       set i 0
@@ -1014,12 +952,6 @@ proc jsv_script_start_begin_env_send_nonprintable_receive_add {} {
    global jsv_expect_timeout
    global jsv_enter_list
    global jsv_enter2_list
-   global jsv_enabled
-
-   if {!$jsv_enabled} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    if {$CHECK_ACT_LEVEL == 0} {
       set i 0
@@ -1121,12 +1053,6 @@ proc jsv_script_start_begin_env_reveice_mod {} {
    global jsv_expect_timeout
    global jsv_enter_list
    global jsv_enter2_list
-   global jsv_enabled
-
-   if {!$jsv_enabled} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    if {$CHECK_ACT_LEVEL == 0} {
       set i 0
@@ -1234,12 +1160,6 @@ proc jsv_script_start_begin_env_reveice_del {} {
    global jsv_expect_timeout
    global jsv_enter_list
    global jsv_enter2_list
-   global jsv_enabled
-
-   if {!$jsv_enabled} {
-      # nothing to setup, jsv not available
-      return 
-   }     
 
    if {$CHECK_ACT_LEVEL == 0} {
       set i 0

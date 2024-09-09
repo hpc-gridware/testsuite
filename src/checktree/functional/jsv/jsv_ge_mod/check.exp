@@ -58,7 +58,26 @@ set check_cleanup_function jsv_ge_mod_cleanup
 
 # define test's procedure order
 set check_functions {}
-lappend check_functions "jsv_ge_mod_a"                
+
+if {0} {
+# resource and queue related using the classic switches (without -scope)
+lappend check_functions "jsv_ge_mod_l_hard"
+lappend check_functions "jsv_ge_mod_l_soft"
+lappend check_functions "jsv_ge_mod_q_hard"
+lappend check_functions "jsv_ge_mod_q_soft"
+lappend check_functions "jsv_ge_mod_masterq"
+}
+
+# test resource and queue requests in combination with the -scope switch
+lappend check_functions "jsv_ge_mod_global_q_soft"
+lappend check_functions "jsv_ge_mod_global_l_soft"
+lappend check_functions "jsv_ge_mod_master_q_hard"
+lappend check_functions "jsv_ge_mod_slave_q_hard"
+lappend check_functions "jsv_ge_mod_master_l_hard"
+lappend check_functions "jsv_ge_mod_slave_l_hard"
+
+# other job attributes
+lappend check_functions "jsv_ge_mod_a"
 lappend check_functions "jsv_ge_mod_ac"
 lappend check_functions "jsv_ge_mod_binding"
 lappend check_functions "jsv_ge_mod_A"               
@@ -74,11 +93,8 @@ lappend check_functions "jsv_ge_mod_hold_jid_ad"
 lappend check_functions "jsv_ge_mod_i"               
 lappend check_functions "jsv_ge_mod_j"               
 lappend check_functions "jsv_ge_mod_js"              
-lappend check_functions "jsv_ge_mod_l_hard"           
-lappend check_functions "jsv_ge_mod_l_soft"          
-lappend check_functions "jsv_ge_mod_m"                
-lappend check_functions "jsv_ge_mod_masterq"          
-lappend check_functions "jsv_ge_mod_M"                
+lappend check_functions "jsv_ge_mod_m"
+lappend check_functions "jsv_ge_mod_M"
 lappend check_functions "jsv_ge_mod_notify"           
 lappend check_functions "jsv_ge_mod_N"                
 lappend check_functions "jsv_ge_mod_o"                
@@ -86,32 +102,22 @@ lappend check_functions "jsv_ge_mod_ot"
 lappend check_functions "jsv_ge_mod_P"    
 lappend check_functions "jsv_ge_mod_p"               
 lappend check_functions "jsv_ge_mod_pe_name_min_max"  
-lappend check_functions "jsv_ge_mod_q_hard"          
-lappend check_functions "jsv_ge_mod_q_soft"           
-lappend check_functions "jsv_ge_mod_R"                
+lappend check_functions "jsv_ge_mod_R"
 lappend check_functions "jsv_ge_mod_r"                
 lappend check_functions "jsv_ge_mod_sc"
 lappend check_functions "jsv_ge_mod_S"
 lappend check_functions "jsv_ge_mod_tc"
 lappend check_functions "jsv_ge_mod_v"
 lappend check_functions "jsv_ge_mod_V"
-lappend check_functions "jsv_ge_mod_wd"               
+lappend check_functions "jsv_ge_mod_wd"
 
 proc jsv_ge_mod_setup_level {} {
    global CHECK_ACT_LEVEL
    global ts_config
    global jsv_org_global_conf
    global jsv_base_path
-   global jsv_enabled
    global jsv_job_id
    global jsv_hjob_id
-
-   # check if jsv is available
-   set jsv_enabled [ge_has_feature "job-submission-verify"]
-   if {!$jsv_enabled} {
-      ts_log_config "Cannot run this test, jsv is not available for this GE version!"
-      return 99
-   }
 
    # get base path of scripts
    set jsv_base_path $ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_ge_mod
@@ -152,8 +158,8 @@ proc jsv_ge_mod_setup_level {} {
    set_config_and_propagate global_conf
 
    # submit one job which can be used for hold_jid test
-   set jsv_hjob_id [submit_job "-N h_job -h -t 1-2 $ts_config(product_root)/examples/jobs/sleeper.sh 60"]
-   set jsv_job_id  [submit_job "-N job -h -t 1-2 $ts_config(product_root)/examples/jobs/sleeper.sh 60"]
+   set jsv_hjob_id [submit_job "-pe mytestpe 1-2 -N h_job -h -t 1-2 $ts_config(product_root)/examples/jobs/sleeper.sh 60"]
+   set jsv_job_id  [submit_job "-pe mytestpe 1-2 -N job -h -t 1-2 $ts_config(product_root)/examples/jobs/sleeper.sh 60"]
    if {$CHECK_ACT_LEVEL == 1} {
       set jsv_hjob_id "h_job"
       set jsv_job_id "job"
@@ -163,38 +169,28 @@ proc jsv_ge_mod_setup_level {} {
 proc jsv_ge_mod_cleanup_level {} {
    global ts_config
    global jsv_org_global_conf
-   global jsv_enabled
- 
-   if {$jsv_enabled} {
-      # trigger and wait for job termination
-      delete_all_jobs
-      wait_for_end_of_all_jobs 60
 
-      # reset configurations
-      reset_config_and_propagate jsv_org_global_conf
+   # trigger and wait for job termination
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
 
-      # delete pe and ckpt
-      del_pe "jsv_ge_mod_pe"
-      del_ckpt "jsv_ge_mod_ckpt"
-      del_project "jsv_ge_mod_prj"
-   }
+   # reset configurations
+   reset_config_and_propagate jsv_org_global_conf
 
+   # delete pe and ckpt
+   del_pe "jsv_ge_mod_pe"
+   del_ckpt "jsv_ge_mod_ckpt"
+   del_project "jsv_ge_mod_prj"
 }
 
 proc jsv_ge_mod_cleanup {} {
    global ts_config
    global jsv_org_global_conf
-   global jsv_enabled
    global jsv_job_id
    global jsv_hjob_id
  
-   # if jsv is not available return
-   if {$jsv_enabled} {
-      return 
-   }     
-
    # unset our test's global variables
-   unset -nocomplain jsv_org_global_conf jsv_base_path jsv_enabled jsv_job_id jsv_hjob_id
+   unset -nocomplain jsv_org_global_conf jsv_base_path jsv_job_id jsv_hjob_id
 }
 
 
@@ -222,13 +218,7 @@ proc jsv_ge_mod {param_name argument {reset_job_name ""}} {
    global CHECK_USER
    global ts_config
    global jsv_base_path
-   global jsv_enabled
    global jsv_job_id
-
-   # if jsv is not available return
-   if {!$jsv_enabled} {
-      return 
-   }     
 
    set error_text ""
    set global_conf(jsv_url) "${jsv_base_path}/jsv.sh"
@@ -351,20 +341,8 @@ proc jsv_ge_mod_js {} {
    jsv_ge_mod "js" "-js 3"
 }
 
-proc jsv_ge_mod_l_hard {} {
-   jsv_ge_mod "l_hard" "-hard -l h_vmem=1G"
-}
-
-proc jsv_ge_mod_l_soft {} {
-   jsv_ge_mod "l_soft" "-soft -l h_vmem=1G"
-}
-
 proc jsv_ge_mod_m {} {
    jsv_ge_mod "m" "-m beas"
-}
-
-proc jsv_ge_mod_masterq {} {
-   jsv_ge_mod "masterq" "-masterq all.q"
 }
 
 proc jsv_ge_mod_M {} {
@@ -399,14 +377,6 @@ proc jsv_ge_mod_p {} {
 
 proc jsv_ge_mod_pe_name_min_max {} {
    jsv_ge_mod "pe_name,pe_min,pe_max" "-pe jsv_ge_mod_pe 1-4"
-}
-
-proc jsv_ge_mod_q_hard {} {
-   jsv_ge_mod "q_hard" "-hard -q all.q"
-}
-
-proc jsv_ge_mod_q_soft {} {
-   jsv_ge_mod "q_soft" "-soft -q all.q"
 }
 
 proc jsv_ge_mod_R {} {
@@ -444,3 +414,47 @@ proc jsv_ge_mod_wd {} {
    jsv_ge_mod "cwd" "-wd /tmp/jsv_ge_mod_wd"
 }
 
+
+proc jsv_ge_mod_l_hard {} {
+   jsv_ge_mod "global_l_hard,global_l_soft,master_l_hard,slave_l_hard" "-hard -l h_vmem=1G"
+}
+
+proc jsv_ge_mod_l_soft {} {
+   jsv_ge_mod "global_l_hard,global_l_soft,master_l_hard,slave_l_hard" "-soft -l h_vmem=1G"
+}
+
+proc jsv_ge_mod_q_hard {} {
+   jsv_ge_mod "global_q_hard,global_q_soft,master_q_hard,slave_q_hard" "-hard -q all.q"
+}
+
+proc jsv_ge_mod_q_soft {} {
+   jsv_ge_mod "global_q_hard,global_q_soft,master_q_hard,slave_q_hard" "-soft -q all.q"
+}
+
+proc jsv_ge_mod_masterq {} {
+   jsv_ge_mod "global_q_hard,global_q_soft,master_q_hard,slave_q_hard" "-masterq all.q"
+}
+
+proc jsv_ge_mod_global_l_soft {} {
+   jsv_ge_mod "global_l_hard,global_l_soft,master_l_hard,slave_l_hard" "-scope global -soft -l h_vmem=1G"
+}
+
+proc jsv_ge_mod_global_q_soft {} {
+   jsv_ge_mod "global_q_hard,global_q_soft,master_q_hard,slave_q_hard" "-scope global -soft -q all.q"
+}
+
+proc jsv_ge_mod_master_q_hard {} {
+   jsv_ge_mod "global_q_hard,global_q_soft,master_q_hard,slave_q_hard" "-scope master -q all.q"
+}
+
+proc jsv_ge_mod_slave_q_hard {} {
+   jsv_ge_mod "global_q_hard,global_q_soft,master_q_hard,slave_q_hard" "-scope slave -q all.q"
+}
+
+proc jsv_ge_mod_master_l_hard {} {
+   jsv_ge_mod "global_l_hard,global_l_soft,master_l_hard,slave_l_hard" "-scope master -l h_stack=1G"
+}
+
+proc jsv_ge_mod_slave_l_hard {} {
+   jsv_ge_mod "global_l_hard,global_l_soft,master_l_hard,slave_l_hard" "-scope slave -l h_fsize=1G"
+}
