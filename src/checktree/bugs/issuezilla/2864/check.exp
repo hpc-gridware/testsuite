@@ -109,7 +109,8 @@ proc issue_2864_setup {} {
 proc issue_2864_wait_for_pattern {case_name pattern {timeout 10}} {
    set output [logfile_wait $pattern $timeout 0]
    if {$logfile_wait_error != 0} {
-      ts_log_severe "case '$case_name': there was no pattern '$pattern' in the reporting file, got only\n$output"
+      set qstat_output [start_sge_bin "qstat" "-f -g t"]
+      ts_log_severe "case '$case_name': there was no pattern '$pattern' in the reporting file, got only\n$output\n$qstat_output"
       return 1
    }
    return 0
@@ -155,6 +156,9 @@ proc issue_2864_check { } {
 
 proc issue_2864_single_check { submission diagnosis dispatching } {
    global ts_config
+
+   ts_log_frame
+   ts_log_fine "issue_2864_single_check: $submission $diagnosis"
 
    set SGE_ROOT $ts_config(product_root)
    set SGE_CELL $ts_config(cell)
