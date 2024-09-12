@@ -195,19 +195,27 @@ proc scheduler_ar_unlimited_runtime_job {} {
    set ar_args "$ar_job_args -d 1000"
 
    # Submit two sequential jobs with unlimited runtime and two sequential ARs
-   set job_id [submit_job "$job_args"]
-   trigger_scheduling
-   set job_state [wait_for_jobstart $job_id "leeper" 20]
-   if {$job_state == -1} {
-      ts_log_severe "error submitting job(1)"
+   set job_id [submit_job $job_args]
+   if {$job_id <= 0} {
       return
+   } else {
+      trigger_scheduling
+      set job_state [wait_for_jobstart $job_id "leeper" 20]
+      if {$job_state == -1} {
+         ts_log_severe "job $job_id did not start (1)"
+         return
+      }
    }
-   set job_id [submit_job "$job_args"]
-   trigger_scheduling
-   set job_state [wait_for_jobstart $job_id "leeper" 20]
-   if {$job_state == -1} {
-      ts_log_severe "error submitting job(2)"
+   set job_id [submit_job $job_args]
+   if {$job_id <= 0} {
       return
+   } else {
+      trigger_scheduling
+      set job_state [wait_for_jobstart $job_id "leeper" 20]
+      if {$job_state == -1} {
+         ts_log_severe "job $job_id did not start (2)"
+         return
+      }
    }
    set ar_id1 [submit_ar "$ar_args"]
    if {$ar_id1 <= 0} {
@@ -222,7 +230,7 @@ proc scheduler_ar_unlimited_runtime_job {} {
 
    # The queue is now full with slots and reservations
    # all other requests should be denied
-   set job_id [submit_job "$job_args"]
+   set job_id [submit_job $job_args]
    trigger_scheduling
    set job_state [wait_for_jobstart $job_id "leeper" 20 0]
    if {$job_state != -1} {
@@ -283,7 +291,7 @@ proc scheduler_ar_parallel_consuamble {} {
    set job_args "-ar $ar_id -o /dev/null -j y $ts_config(product_root)/examples/jobs/sleeper.sh 1000"
 
    # Positive Tests
-   set job_id [submit_job "$job_args"]
+   set job_id [submit_job $job_args]
    if {$job_id <= 0} {
       ts_log_severe "job submit was wrongly rejected (1)"
       return
@@ -465,12 +473,11 @@ proc scheduler_pending_ar_jobs {} {
          ts_log_severe "parallel job was wrongly scheduled"
          return
       }
-      delete_job $job_id
+      delete_job $job_id 1
    } else {
       ts_log_severe "parallel job submit was wrongly rejected"
    }
-   delete_job $job_id_r
-   delete_ar $ar_id
+   delete_ar $ar_id 1
 }
 
 proc scheduler_ar_non_reserved_complex_requests {} {
@@ -486,114 +493,129 @@ proc scheduler_ar_non_reserved_complex_requests {} {
    set job_args "-o /dev/null -j y $ts_config(product_root)/examples/jobs/sleeper.sh 1000"
 
    # 1a) reserve host with complex
-
+   ts_log_fine "1a: testing sequential AR with complex"
    set host [lindex $test_hosts 0]
    set ar_id [submit_ar "-l h=$host -q $complex_queue_name -d 3600"]
-   set job_id [submit_job "-ar $ar_id -l $host_complex=bla $job_args" 0]
-   if {$job_id <= 0} {
-      ts_log_severe "sequential job submit was wrongly rejected (1)"
-   } else {
-      delete_job $job_id
-   }
+   if {$ar_id > 0} {
+      set job_id [submit_job "-ar $ar_id -l $host_complex=bla $job_args" 0]
+      if {$job_id <= 0} {
+         ts_log_severe "sequential job submit was wrongly rejected (1)"
+      } else {
+         delete_job $job_id
+      }
 
-   set job_id [submit_job "-ar $ar_id -l $host_complex=nix $job_args" 0]
-   if {$job_id > 0} {
-      delete_job $job_id
-      ts_log_severe "sequential job submit was not rejected (1)"
-   }
+      set job_id [submit_job "-ar $ar_id -l $host_complex=nix $job_args" 0]
+      if {$job_id > 0} {
+         delete_job $job_id
+         ts_log_severe "sequential job submit was not rejected (1)"
+      }
 
-   delete_ar $ar_id
+      delete_ar $ar_id
+   }
 
    # 1b) reserve host without complex
+   ts_log_fine "1b: testing sequential AR submit with host complex"
    set host [lindex $test_hosts 1]
    set ar_id [submit_ar "-l h=$host -q $complex_queue_name -d 3600"]
-
-   set job_id [submit_job "-ar $ar_id -l $host_complex=bla $job_args" 0]
-   if {$job_id > 0} {
-      delete_job $job_id
-      ts_log_severe "sequential job submit was not rejected (2)"
+   if {$ar_id > 0} {
+      set job_id [submit_job "-ar $ar_id -l $host_complex=bla $job_args" 0]
+      if {$job_id > 0} {
+         delete_job $job_id
+         ts_log_severe "sequential job submit was not rejected (2)"
+      }
+      delete_ar $ar_id
    }
-   delete_ar $ar_id
 
    # 1c) reserve queue with complex 
+   ts_log_fine "1c: testing sequential AR, submit with queue ecomplex"
    set ar_id [submit_ar "-q $complex_queue_name -d 3600"]
-   set job_id [submit_job "-ar $ar_id -l $queue_complex=bla $job_args" 0]
-   if {$job_id <= 0} {
-      ts_log_severe "sequential job submit was wrongly rejected (2)"
-   } else {
-      delete_job $job_id
-   }
+   if {$ar_id > 0} {
+      set job_id [submit_job "-ar $ar_id -l $queue_complex=bla $job_args" 0]
+      if {$job_id <= 0} {
+         ts_log_severe "sequential job submit was wrongly rejected (2)"
+      } else {
+         delete_job $job_id
+      }
 
-   set job_id [submit_job "-ar $ar_id -l $queue_complex=nix $job_args" 0]
-   if {$job_id > 0} {
-      delete_job $job_id
-      ts_log_severe "sequential job submit was not rejected (3)"
-   }
+      set job_id [submit_job "-ar $ar_id -l $queue_complex=nix $job_args" 0]
+      if {$job_id > 0} {
+         delete_job $job_id
+         ts_log_severe "sequential job submit was not rejected (3)"
+      }
 
-   delete_ar $ar_id
+      delete_ar $ar_id
+   }
 
    # 1d) reserve queue without complex 
+   ts_log_fine "1d: testing sequential AR, submit with queue complex"
    set ar_id [submit_ar "-q $queue_name -d 3600"]
-   set job_id [submit_job "-ar $ar_id -l $queue_complex=bla $job_args" 0]
-   if {$job_id > 0} {
-      delete_job $job_id
-      ts_log_severe "sequential job submit was not rejected (4)"
-   }
+   if {$ar_id > 0} {
+      set job_id [submit_job "-ar $ar_id -l $queue_complex=bla $job_args" 0]
+      if {$job_id > 0} {
+         delete_job $job_id
+         ts_log_severe "sequential job submit was not rejected (4)"
+      }
 
-   delete_ar $ar_id
+      delete_ar $ar_id
+   }
 
    # 2) testing parallel jobs
    set job_args "-o /dev/null -j y $ts_config(product_root)/examples/jobs/sleeper.sh 1000"
 
    # 2a) test host complexes
-
+   ts_log_fine "2a: testing parallel AR with host complex"
    set host [lindex $test_hosts 0]
    set ar_id [submit_ar "-pe ar_pe 2 -q $complex_queue_name -d 3600"]
+   if {$ar_id > 0} {
+      set job_id [submit_job "-pe ar_pe 1 -ar $ar_id -l $host_complex=bla $job_args" 0]
+      if {$job_id <= 0} {
+         ts_log_severe "parallel job submit was wrongly rejected (1)"
+      } else {
+         delete_job $job_id
+      }
 
-   set job_id [submit_job "-pe ar_pe 1 -ar $ar_id -l $host_complex=bla $job_args" 0]
-   if {$job_id <= 0} {
-      ts_log_severe "parallel job submit was wrongly rejected (1)"
-   } else {
-      delete_job $job_id
+      set job_id [submit_job "-pe ar_pe 2 -ar $ar_id -l $host_complex=bla $job_args" 0]
+
+      if {$job_id > 0} {
+         delete_job $job_id
+         ts_log_severe "parallel job submit was not rejected (1)"
+      }
+
+      delete_ar $ar_id
    }
-
-   set job_id [submit_job "-pe ar_pe 2 -ar $ar_id -l $host_complex=bla $job_args" 0]
-
-   if {$job_id > 0} {
-      delete_job $job_id
-      ts_log_severe "parallel job submit was not rejected (1)"
-   }
-
-   delete_ar $ar_id
 
    # 2b) reserve queue with complex 
+   ts_log_fine "2b: testing parallel AR with queue complex"
    set ar_id [submit_ar "-pe ar_pe 2 -q $complex_queue_name -d 3600"]
+   if {$ar_id > 0} {
+      set job_id [submit_job "-pe ar_pe 2 -ar $ar_id -l $queue_complex=bla $job_args" 0]
+      if {$job_id <= 0} {
+         ts_log_severe "parallel job submit was wrongly rejected (2)"
+      } else {
+         delete_job $job_id
+      }
 
+      set job_id [submit_job "-pe ar_pe 2 -ar $ar_id -l $queue_complex=nix $job_args" 0]
+      if {$job_id > 0} {
+         delete_job $job_id
+         ts_log_severe "parallel job submit was not rejected (3)"
+      }
 
-   set job_id [submit_job "-pe ar_pe 2 -ar $ar_id -l $queue_complex=bla $job_args" 0]
-   if {$job_id <= 0} {
-      ts_log_severe "parallel job submit was wrongly rejected (2)"
-   } else {
-      delete_job $job_id
+      delete_ar $ar_id
    }
 
-   set job_id [submit_job "-pe ar_pe 2 -ar $ar_id -l $queue_complex=nix $job_args" 0]
-   if {$job_id > 0} {
-      delete_job $job_id
-      ts_log_severe "parallel job submit was not rejected (3)"
-   }
-
-   delete_ar $ar_id
-
-   # 1d) reserve queue without complex 
+   # 2c) reserve queue without complex
+   ts_log_fine "2c: testing parallel AR without complex"
    set ar_id [submit_ar "-pe ar_pe 2 -q $queue_name -d 3600"]
-   set job_id [submit_job "-pe ar_pe 2 -ar $ar_id -l $queue_complex=bla $job_args" 0]
-   if {$job_id > 0} {
-      delete_job $job_id
-      ts_log_severe "parallel job submit was not rejected (4)"
-   }
+   if {$ar_id > 0} {
+      set job_id [submit_job "-pe ar_pe 2 -ar $ar_id -l $queue_complex=bla $job_args" 0]
+      if {$job_id > 0} {
+         delete_job $job_id
+         ts_log_severe "parallel job submit was not rejected (4)"
+      }
 
-   delete_ar $ar_id
+      delete_ar $ar_id
+   }
 }
 
 proc scheduler_ar_soft_error_handling {} {
