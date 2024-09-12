@@ -2299,6 +2299,10 @@ proc host_conf_get_cluster_hosts {{with_non_cluster_hosts 0} {with_compile_hosts
    # we want the compile hosts as well
    if {$with_compile_hosts} {
       set cluster_hosts [lsort -dictionary -unique $hosts]
+
+      # remove "none" entries from the list
+      regsub "none" $cluster_hosts "" cluster_hosts
+
       set archs [host_conf_get_archs $cluster_hosts]
       # compile host per architecture
       foreach arch $archs {
