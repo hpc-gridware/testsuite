@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "qquota"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "RQS VERIFIED"
 set check_description(0)  "test qquota functionality"
 
 # define test's dependencies
@@ -98,9 +98,9 @@ proc qquota_setup {} {
 
    # Set for all user resource quota sets 
    unset rules
-   set rules ""
+   set rules {}
    lappend rules "users * to slots=10"
-   set rqs_charray($rqs_name2,limit) "$rules"
+   set rqs_charray($rqs_name2,limit) $rules
    set rqs_charray($rqs_name2,enabled) "true"
 
    # Add both resource quota sets
@@ -235,9 +235,9 @@ proc qquota_option_l {} {
 
    # Set per user resource quota sets 
    set rqs_name "option_l"
-   set rules ""
+   set rules {}
    lappend rules "users $CHECK_USER hosts {*} to tm=1000M,tt=1:0:0"
-   set rqs_charray($rqs_name,limit) "$rules"
+   set rqs_charray($rqs_name,limit) $rules
    set rqs_charray($rqs_name,enabled) "true"
    add_rqs rqs_charray
    

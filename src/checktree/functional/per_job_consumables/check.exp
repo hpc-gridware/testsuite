@@ -42,7 +42,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "per_job_consumables"
-set check_category        "AR SCHEDULER VERIFIED"
+set check_category        "AR RQS SCHEDULER VERIFIED"
 set check_description(0)  "Test per job consumable functionality"
 
 # define test's dependencies
@@ -287,7 +287,7 @@ proc per_job_consumables_rqs {} {
    set rqs_name "jobs_limit"
    set rules {}
    lappend rules "to jobs=2"
-   set rqs_charray($rqs_name,limit) "$rules"
+   set rqs_charray($rqs_name,limit) $rules
    set rqs_charray($rqs_name,enabled) "true"
    add_rqs rqs_charray
 

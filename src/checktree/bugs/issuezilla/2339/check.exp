@@ -42,7 +42,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "issue_2339"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "BUG RQS VERIFIED"
 set check_description(0)  "check issue 2339 is fixed"
 
 # define test's dependencies
@@ -60,9 +60,9 @@ lappend check_functions "issue_2339_check"
 
 proc add_rqs_single { name rule } {
    set rqs_name              $name
-   set rules                  ""
+   set rules                  {}
    lappend rules              $rule
-   set rqs_charray($rqs_name,limit)   "$rules"
+   set rqs_charray($rqs_name,limit)   $rules
    set rqs_charray($rqs_name,enabled) "true"
    add_rqs rqs_charray
 }

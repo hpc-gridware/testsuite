@@ -42,7 +42,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "scheduler_messages"
-set check_category        "SCHEDULER VERIFIED"
+set check_category        "RQS SCHEDULER VERIFIED"
 set check_description(0)  "check scheduler messages without schedd_job_info"
 set check_description(1)  "check scheduler messages with schedd_job_info"
 
@@ -110,21 +110,21 @@ proc scheduler_messages_setup {} {
    set_exechost host_conf "$second_host"
 
    set rqs_name "queue_h_rt"
-   set rules ""
+   set rules {}
    lappend rules "queues A,B to h_rt=1::"
-   set rqs_charray($rqs_name,limit) "$rules"
+   set rqs_charray($rqs_name,limit) $rules
    add_rqs rqs_charray
 
    set rqs_name "host_h_rt"
-   set rules ""
+   set rules {}
    lappend rules "hosts $first_host,$second_host to h_rt=1::"
-   set rqs_charray($rqs_name,limit) "$rules"
+   set rqs_charray($rqs_name,limit) $rules
    add_rqs rqs_charray
 
    set rqs_name "global_h_rt"
-   set rules ""
+   set rules {}
    lappend rules "to h_rt=1::"
-   set rqs_charray($rqs_name,limit) "$rules"
+   set rqs_charray($rqs_name,limit) $rules
    add_rqs rqs_charray
 }
 

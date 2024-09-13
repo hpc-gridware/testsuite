@@ -45,7 +45,7 @@ set check_root_access_needs "no"
 
 # define test's name and run level descriptions
 set check_name            "issue_2465"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "BUG RQS VERIFIED"
 set check_description(0)  "Testing of additional error message when job not running because of RQs"
 
 # define test's dependencies
@@ -65,11 +65,11 @@ proc issue_2465_setup {} {
    global ts_config CHECK_USER
    
    set rqs_name "issue_2465"
-   set rules ""
+   set rules {}
    lappend rules "users $CHECK_USER to slots=3"
 
    # Add resource quota sets 
-   set rqs_charray($rqs_name,limit) "$rules"
+   set rqs_charray($rqs_name,limit) $rules
    set rqs_charray($rqs_name,enabled) "true"
    add_rqs rqs_charray
 

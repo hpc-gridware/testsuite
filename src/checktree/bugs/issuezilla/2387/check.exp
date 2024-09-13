@@ -44,7 +44,7 @@ global check_root_access_needs
 # define test's name and run level descriptions
 set check_root_access_needs  "yes"
 set check_name            "issue_2387"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "BUG RQS VERIFIED"
 set check_description(0)  "Check for Issue 2387 - Multiple occurrence of a name in RQS limit definition break classic spooling"
 
 # define test's dependencies
@@ -71,9 +71,9 @@ proc issue_2387_setup {} {
    
    #  Add rqs another_new_rqs
    set rqs_name              "another_new_rqs"
-   set rules                  ""
+   set rules                  {}
    lappend rules "name A queues A to slots=10 "
-   set rqs_charray($rqs_name,limit)   "$rules"
+   set rqs_charray($rqs_name,limit)   $rules
    set rqs_charray($rqs_name,enabled) "true"
    set rqs_charray($rqs_name,description) "global"
    

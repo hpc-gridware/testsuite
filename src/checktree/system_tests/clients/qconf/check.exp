@@ -46,7 +46,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "qconf"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "RQS VERIFIED"
 set check_description(0)  "test all qconf options (test not complete)"
 
 # define test's dependencies
@@ -4175,19 +4175,19 @@ proc qconf_add_rqs {} {
    lappend rules "to slots=10"
 
    # Add resource quota sets fast
-   set rqs_charray($rqs_name_fast,limit) "$rules"
+   set rqs_charray($rqs_name_fast,limit) $rules
    set result [add_rqs rqs_charray]
 
    # Add resource quota set from CLI
    unset rqs_charray
-   set rqs_charray($rqs_name_cli,limit) "$rules"
+   set rqs_charray($rqs_name_cli,limit) $rules
    set result [add_rqs rqs_charray 0]
 
    # Try to add invalid fast
-   set rules ""
+   set rules {}
    lappend rules "user bla to slots=10"; # user instead of users
    unset rqs_charray
-   set rqs_charray($rqs_name_invalid,limit) "$rules"
+   set rqs_charray($rqs_name_invalid,limit) $rules
    set result [add_rqs rqs_charray 1 "" "" 0]
    if { $result != -2 } {
       ts_log_severe "qconf -Arqs with invalid RQS returned wrong message"
@@ -4208,7 +4208,7 @@ proc qconf_add_rqs {} {
    # - as non admin user
    # - from non admin host
    set rqs_name "non_admin_user_rqs"
-   set rules ""
+   set rules {}
    lappend rules "to slots=10"
 
    set ret [add_rqs rqs_charray  1 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER 0]
@@ -4434,11 +4434,11 @@ proc qconf_dynamic_limit {} {
 
    set rqs_name "dynamic_rqs"
 
-   set rules ""
+   set rules {}
    lappend rules "hosts {*} to slots=\$num_proc*2"
 
    # Add resource quota sets with dynamic limit
-   set rqs_charray($rqs_name,limit) "$rules"
+   set rqs_charray($rqs_name,limit) $rules
    set result [add_rqs rqs_charray]
 
    # Try to add invalid dynamic limit (1)
@@ -4473,17 +4473,17 @@ proc qconf_rqs_Xattr {} {
    set rqs_name1 "qconf_rqs_Xattr1"
    set rqs_name2 "qconf_rqs_Xattr2"
    set object_name "resource_quota"
-   set rules ""
+   set rules {}
    lappend rules "name rule_1 users $CHECK_USER to slots=0"
    lappend rules "name rule_2 users $CHECK_FIRST_FOREIGN_SYSTEM_USER to slots=0"
    lappend rules "name rule_3 to slots=0"
 
    set rqs_charray($rqs_name1,description) "none"
    set rqs_charray($rqs_name1,enabled) "false"
-   set rqs_charray($rqs_name1,limit) "$rules"
+   set rqs_charray($rqs_name1,limit) $rules
    set rqs_charray($rqs_name2,description) "none"
    set rqs_charray($rqs_name2,enabled) "false"
-   set rqs_charray($rqs_name2,limit) "$rules"
+   set rqs_charray($rqs_name2,limit) $rules
 
    set result [add_rqs rqs_charray]
 
@@ -4539,11 +4539,11 @@ proc qconf_rqs_rattr_qmaster_dump {} {
    set object_name "resource_quota"
 
    set rqs_name "qconf_rqs_Xattr_qmaster_dump"
-   set rules ""
+   set rules {}
    lappend rules "hosts {*} to slots=\$num_proc*2"
 
    set rqs_charray($rqs_name,enabled) "true"
-   set rqs_charray($rqs_name,limit) "$rules"
+   set rqs_charray($rqs_name,limit) $rules
 
    set result [add_rqs rqs_charray]
 

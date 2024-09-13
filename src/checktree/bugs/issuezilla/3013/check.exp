@@ -42,7 +42,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "issue_3013"
-set check_category        "ISSUE PARALLEL SCHEDULER VERIFIED"
+set check_category        "BUG PARALLEL RQS SCHEDULER VERIFIED"
 set check_description(0)  "check issue 3013 is fixed"
 
 # define test's dependencies
@@ -114,9 +114,9 @@ proc issue_3013_setup {} {
    #  Add rqs another_new_rqs
 
    set rqs_name_3013              "another_new_rqs"
-   set rules                      ""
+   set rules                      {}
    lappend rules "name A queues A to slots=10 "
-   set rqs_charray($rqs_name_3013,limit)   "$rules"
+   set rqs_charray($rqs_name_3013,limit)   $rules
    set rqs_charray($rqs_name_3013,enabled) "true"
    set rqs_charray($rqs_name_3013,description) "global"
    add_rqs rqs_charray

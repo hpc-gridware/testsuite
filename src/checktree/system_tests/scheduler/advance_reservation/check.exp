@@ -49,7 +49,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "scheduler_advance_reservation"
-set check_category        "AR RESERVATION SCHEDULER VERIFIED"
+set check_category        "AR RESERVATION RQS SCHEDULER VERIFIED"
 set check_description(0)  "check advance reservation"
 set check_description(1)  "check advance reservation with enabled resource reservation"
 
@@ -371,9 +371,9 @@ proc scheduler_ar_rqs {} {
 
    # add a resource quota that denies all
    set rqs_name "ar_schedd_test"
-   set rules ""
+   set rules {}
    lappend rules "to slots=0"
-   set rqs_charray($rqs_name,limit) "$rules"
+   set rqs_charray($rqs_name,limit) $rules
    set rqs_charray($rqs_name,enabled) "true"
    add_rqs rqs_charray
 

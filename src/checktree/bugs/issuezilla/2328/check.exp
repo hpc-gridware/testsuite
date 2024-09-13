@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "issue_2328"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "BUG RQS VERIFIED"
 set check_description(0)  "Check test for IZ 2328"
 
 # define test's dependencies
@@ -120,11 +120,11 @@ proc issue_2328_setup {} {
    }
 
    # 4. Add rqs a_new_rqs
-   set rqs_name              "perf_rqs"
-   set rules                  ""
+   set rqs_name               "perf_rqs"
+   set rules                  {}
    lappend rules              "projects {*} to F001=1,F002=1,F003=1,F004=1,F005=1, \
                               F006=1,F007=1,F008=1,F009=1,F0010=1"             
-   set rqs_charray($rqs_name,limit)   "$rules"
+   set rqs_charray($rqs_name,limit)   $rules
    set rqs_charray($rqs_name,enabled) "true"
    set rqs_charray($rqs_name,description) "global"
    add_rqs rqs_charray

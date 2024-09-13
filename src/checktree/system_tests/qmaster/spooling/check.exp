@@ -43,7 +43,7 @@ global check_root_access_needs
 # define test's name and run level descriptions
 set check_name "qmaster_spooling"
 set check_root_access_needs  "yes"
-set check_category "AR SPOOLING VERIFIED"
+set check_category "AR RQS SPOOLING VERIFIED"
 set check_description(0) "check qmaster spooling"
 
 # define test's dependencies
@@ -144,14 +144,14 @@ proc qmaster_spooling_rqs_restart {} {
 
    set rqs_name "test_spooling"
 
-   set rules ""
+   set rules {}
    lappend rules "users {*} to slots=10"
    lappend rules "hosts {*} to slots=10"
    lappend rules "queues {!*} to slots=10"
    lappend rules "hosts !* to slots=10,arch=sol-sparc64"
    lappend rules "pes pe1,pe2,pe3 to slots=10,arch=sol-sparc64"
    lappend rules "hosts {*} to slots=\$num_proc*2+\$num_proc*1"
-   set rqs_charray($rqs_name,limit)   "$rules"
+   set rqs_charray($rqs_name,limit)   $rules
    set rqs_charray($rqs_name,enabled) "TRUE"
    set rqs_charray($rqs_name,description) "test description for spooling \?+-:"
    add_rqs rqs_charray

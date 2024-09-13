@@ -36,7 +36,7 @@
 
 # define test's name and run level descriptions
 set check_name            "backup_restore"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "BACKUP RQS VERIFIED"
 set check_description(0)  "Tests the backup and restore functionality"
 
 set check_root_access_needs "yes"
@@ -58,7 +58,7 @@ proc backup_restore_setup {} {
    global test_ar
 
    # create a rqs
-   set rules ""
+   set rules {}
    lappend rules "to slots=10"
    set rqs(test,limit) $rules
    add_rqs rqs

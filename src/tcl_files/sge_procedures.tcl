@@ -6197,7 +6197,9 @@ proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
       set runtime [expr [timestamp] - $time]
       if {$runtime >= $seconds} {
          if {$do_errorcheck == 1} {
-            ts_log_severe "timeout waiting for job \"$jobid\" \"$jobname\""
+            set qstat_output [start_sge_bin "qstat" "-f -g t -u '*'"]
+            set qstat_wp_output [start_sge_bin "qstat" "-w p $jobid"]
+            ts_log_severe "timeout waiting for job $jobid \"$jobname\"\n$qstat_output\n$qstat_wp_output"
          }
          return -1
       }

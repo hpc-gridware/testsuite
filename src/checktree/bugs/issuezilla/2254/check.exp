@@ -40,7 +40,7 @@ global check_functions
 
 # define test's name and run level descriptions
 set check_name            "issue_2254"
-set check_category        "BUG SCHEDULER VERIFIED"
+set check_category        "BUG RQS SCHEDULER VERIFIED"
 set check_description(0)  "Check for Issue 2254 - PE scope of resource quotas \
                            is not considered  when -pe wildcard requests are used"
 
@@ -102,10 +102,10 @@ proc issue_2254_setup {} {
    
    # 4. Add rqs yet_another_rqs
    set rqs_name              "yet_another_rqs"
-   set rules                  ""
+   set rules                  {}
    lappend rules              "pes intelpvm to F001=1 "
    lappend rules              "pes intelmpi to F001=1 "
-   set rqs_charray($rqs_name,limit)   "$rules"
+   set rqs_charray($rqs_name,limit)   $rules
    set rqs_charray($rqs_name,enabled) "true"
    set rqs_charray($rqs_name,description) "global"
    add_rqs rqs_charray

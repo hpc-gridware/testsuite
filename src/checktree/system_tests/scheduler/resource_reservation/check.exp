@@ -42,7 +42,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "resource_reservation"
-set check_category        "AR RESERVATION SCHEDULER VERIFIED"
+set check_category        "AR RESERVATION RQS SCHEDULER VERIFIED"
 set check_description(2)  "check resource reservation (drmaa version 1.0)"
 set check_description(3)  "check resource reservation with resource quota sets (drmaa version 1.0)"
 set check_description(4)  "check resource reservation with calendar disabled queue (drmaa version 1.0)"
@@ -217,14 +217,16 @@ proc resource_reservation_level_setup {} {
       set queue_conf(complex_values)   "myslots=100,jobs=100"
 
       # setup needed resource quota sets
-      set rqs_name              "no_pe"
-      set rules                 "pes !* to myslots=10,jobs=2"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_name  "no_pe"
+      set rules {}
+      lappend rules "pes !* to myslots=10,jobs=2"
+      set rqs_charray($rqs_name,limit) $rules
       set rqs_charray($rqs_name,enabled) "true"
 
-      set rqs_name              "pe"
-      set rules                 "pes * to slots=10,jobs=2"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_name "pe"
+      set rules {}
+      lappend rules "pes * to slots=10,jobs=2"
+      set rqs_charray($rqs_name,limit) $rules
       set rqs_charray($rqs_name,enabled) "true"
  
       add_rqs rqs_charray

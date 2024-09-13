@@ -43,7 +43,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "pe_ranges"
-set check_category        "SCHEDULER VERIFIED"
+set check_category        "RQS SCHEDULER VERIFIED"
 set check_description(0)  "test pe-ranges"
 set check_description(1)  "test pe-ranges with resource quota sets"
 
@@ -223,9 +223,9 @@ proc pe_ranges_test {} {
 
       # add resource quota set
       set rqs_name              "pe_ranges_test"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "to test1=6"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       add_rqs rqs_charray

@@ -103,11 +103,11 @@ proc resource_quota_dynamic_limit {} {
 
    ts_log_fine "testing dynamic limit on host $resource_quota_test_host with num_proc=$host_num_proc"
 
-   set rules ""
+   set rules {}
    lappend rules "users $CHECK_USER hosts {*} queues $resource_quota_test_qname to slots=\$num_proc*2"
 
    # Add resource quota sets with dynamic limit
-   set rqs_charray($rqs_name,limit) "$rules"
+   set rqs_charray($rqs_name,limit) $rules
    set rqs_charray($rqs_name,enabled) "true"
    set result [add_rqs rqs_charray]
 
@@ -143,14 +143,14 @@ proc resource_quota_issue_2250 {} {
    set job_options "-o /dev/null -j y $ts_config(product_root)/examples/jobs/sleeper.sh 10000"
 
    set rqs_name "resource_quota_issue_2250"
-   set rules ""
+   set rules {}
    lappend rules "queues $resource_quota_test_qname hosts $resource_quota_test_host to slots=1"
    # Append two additional rules to cover Issue 2250
    lappend rules "projects mytestproject to slots=1"
    lappend rules "projects mytestproject to slots=1"
 
    # Add resource quota sets 
-   set rqs_charray($rqs_name,limit) "$rules"
+   set rqs_charray($rqs_name,limit) $rules
    set rqs_charray($rqs_name,enabled) "true"
    set result [add_rqs rqs_charray]
 
@@ -186,11 +186,11 @@ proc resource_quota_redebitation {} {
    set job_options "-o /dev/null -j y $ts_config(product_root)/examples/jobs/sleeper.sh 10000"
 
    set rqs_name "redebit_test"
-   set rules ""
+   set rules {}
    lappend rules "to slots=1"
 
    # Add resource quota sets 
-   set rqs_charray($rqs_name,limit) "$rules"
+   set rqs_charray($rqs_name,limit) $rules
    set rqs_charray($rqs_name,enabled) "false"
    set result [add_rqs rqs_charray]
 
@@ -220,11 +220,11 @@ proc resource_quota_issue_2762 {} {
    set job_options "-w v -pe mytestpe 1 -o /dev/null -j y -b y /bin/sleep 1000"
 
    set rqs_name "resource_quota_issue_2762"
-   set rules ""
+   set rules {}
    lappend rules "to arch=bla"
 
    # Add resource quota sets 
-   set rqs_charray($rqs_name,limit) "$rules"
+   set rqs_charray($rqs_name,limit) $rules
    set rqs_charray($rqs_name,enabled) "true"
    set result [add_rqs rqs_charray]
 

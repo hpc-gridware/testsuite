@@ -95,7 +95,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "complex"
-set check_category        "SCHEDULER VERIFIED"
+set check_category        "RQS SCHEDULER VERIFIED"
 set check_description(0)  "Test complex attributes and loadsensor"
 set check_description(1)  "Test complex attributes and loadsensor and resource quota sets"
 
@@ -446,39 +446,39 @@ proc complex_global_host {} {
 
       # set all tests attributes in resource quota sets
       set rqs_name              "test_integer"
-      set rules                  ""
+      set rules                  {}
       lappend rules                  "to test_integer=1"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_time"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "to tt=0:10:0"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_memory"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "to tm=100M"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_boolean"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "to tb=TRUE"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_cstring"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "to tc=GLobaL"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_restring"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "to tr=global"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
  
       add_rqs rqs_charray
@@ -743,39 +743,39 @@ proc complex_host {} {
 
       # set all tests attributes in resource quota sets
       set rqs_name              "test_integer"
-      set rules                  ""
+      set rules                  {}
       lappend rules                  "hosts $complex_host to test_integer=1"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_time"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "hosts $complex_host to tt=600"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_memory"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "hosts $complex_host to tm=104857600"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_boolean"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "hosts $complex_host to tb=FALSE"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_string"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "hosts $complex_host to ts=host"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_host"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "hosts $complex_host to th=$ts_config(master_host)"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
  
       add_rqs rqs_charray
@@ -865,33 +865,33 @@ proc complex_queue {} {
 
       # set all tests attributes in resource quota sets
       set rqs_name              "test_integer"
-      set rules                  ""
+      set rules                  {}
       lappend rules                  "queues complex to test_integer=1"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_time"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "queues complex to tt=0:10:0"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_memory"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "queues complex to tm=102400K"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_string"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "queues complex to ts=xxx"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       set rqs_name              "test_boolean"
-      set rules                  ""
+      set rules                  {}
       lappend rules              "queues complex to tb=1"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       add_rqs rqs_charray
@@ -947,9 +947,9 @@ proc complex_default_request {} {
       set_exechost config "global"
 
       set rqs_name              "test_integer"
-      set rules                  ""
+      set rules                  {}
       lappend rules                  "to test_integer=0"
-      set rqs_charray($rqs_name,limit)   "$rules"
+      set rqs_charray($rqs_name,limit)   $rules
       set rqs_charray($rqs_name,enabled) "true"
 
       add_rqs rqs_charray

@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "issue_2161"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "BUG RQS VERIFIED"
 set check_description(0) "check qmaster core dump with RQS and undefined project/userset"
 
 # define test's dependencies
@@ -59,7 +59,7 @@ proc issue_2161_userset {} {
    global ts_config
 
    set rqs_name "issue_2161"
-   set rules ""
+   set rules {}
    lappend rules "users @unknown_userset to slots=1"
 
    # Add resource quota sets 
@@ -80,7 +80,7 @@ proc issue_2161_project {} {
    global ts_config
 
    set rqs_name "issue_2161"
-   set rules ""
+   set rules {}
    lappend rules "projects unknown_project to slots=1"
 
    # Add resource quota sets 

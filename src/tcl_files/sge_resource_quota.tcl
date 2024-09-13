@@ -267,7 +267,7 @@ proc mod_rqs {change_array {name ""} {fast_add 1} {on_host ""} {as_user ""} {rai
    upvar $change_array chgar
 
    # Modify rqs from file?
-   if { $fast_add } {
+   if {$fast_add} {
       set tmpfile [dump_rqs_array_to_tmpfile chgar]
       set result [start_sge_bin "qconf" "-Mrqs $tmpfile $name" $on_host $as_user]
 
