@@ -106,12 +106,12 @@ proc backup_restore_do_backup_restore {} {
             ts_send $sp_id "\n"
             continue;
          }
-         -i $sp_id "Shall the backup function create a compressed tarpackage with your files?" {
+         -i $sp_id "Shall the backup function create a compressed ta*ackage with your files?" {
             ts_log_fine "--> testsuite: sending >RETURN<"
             ts_send $sp_id "\n"
             continue;
          }
-         -i $sp_id "Please enter a filename for your backupfile.*" {
+         -i $sp_id "Please enter a filename for your backu*ile.*" {
             ts_log_fine "--> testsuite: sending >RETURN<"
             ts_send $sp_id "\n"
             continue;
