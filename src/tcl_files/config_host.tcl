@@ -3281,7 +3281,7 @@ proc host_conf_get_suited_hosts_candidates {preferred selected excluded preferre
    }
 
    if {$nr_of_matches == 0 && [llength $selected] > 0} {
-      if { $as_config_error == 1 } {
+      if {$as_config_error == 1} {
          ts_log_config "none of the selected architectures is available in our cluster:\nselected:  $selected\navailable: $all_archs"
       } else {
          ts_log_severe "none of the selected architectures is available in our cluster:\nselected:  $selected\navailable: $all_archs"
@@ -3354,12 +3354,17 @@ proc host_conf_get_suited_hosts_candidates {preferred selected excluded preferre
 #*******************************************************************************
 proc host_conf_get_suited_hosts_select {num_hosts preferred_hosts remaining_hosts} {
    global suited_host_cache
+   global CHECK_DETERMINISTIC_HOST_SELECT
 
    set ret {}
 
    # first take hosts from the preferred host list
-   # sort the list by "not used for the longest time"
-   set hosts [lsort -command host_conf_sort_suited $preferred_hosts]
+   if {$CHECK_DETERMINISTIC_HOST_SELECT} {
+      set hosts $preferred_hosts
+   } else {
+      # sort the list by "not used for the longest time"
+      set hosts [lsort -command host_conf_sort_suited $preferred_hosts]
+   }
 
    foreach host $hosts {
       if {$num_hosts <= 0} {
@@ -3373,8 +3378,12 @@ proc host_conf_get_suited_hosts_select {num_hosts preferred_hosts remaining_host
    # if we need more hosts than available in the preferred hosts, 
    # take hosts from the remaining_hosts
    if {$num_hosts > 0} {
-      # sort the list by "not used for the longest time"
-      set hosts [lsort -command host_conf_sort_suited $remaining_hosts]
+      if {$CHECK_DETERMINISTIC_HOST_SELECT} {
+         set hosts $remaining_hosts
+      } else {
+         # sort the list by "not used for the longest time"
+         set hosts [lsort -command host_conf_sort_suited $remaining_hosts]
+      }
 
       foreach host $hosts {
          if {$num_hosts <= 0} {

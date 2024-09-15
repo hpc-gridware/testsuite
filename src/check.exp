@@ -354,6 +354,9 @@ set CHECK_COVERAGE_DIR ""
 global CHECK_PREFERRED_ARCHS ;# preferred architecture for testing
 set CHECK_PREFERRED_ARCHS {}
 
+global CHECK_DETERMINISTIC_HOST_SELECT ;# flag to select hosts in a deterministic way in host_conf_get_suited_hosts
+set CHECK_DETERMINISTIC_HOST_SELECT 1
+
 global CHECK_HAVE_TDOM ;# do we have the tdom tcl package installed?
 set CHECK_HAVE_TDOM 0
 
@@ -7829,7 +7832,9 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "preferred_archs <archs> specify architectures, that shall be used whenever possible"
       puts "                      please use quotes, when specifying multiple architectures, e.g."
-      puts "                      preferred_archs sol-sparc64, or preferred_archs \"lx-amd64 lx-arm64\""
+      puts "                      preferred_archs sol-amd64, or preferred_archs \"lx-amd64 lx-arm64\""
+      puts "ramdom_host_select    select hosts randomly for tests (function host_conf_get_suited_hosts)"
+      puts "                      default is to select hosts in the order they are defined in the host configuration file"
       puts ""
       puts "send_speed <value>    specify the used testsuite send speed. This value overwrites"
       puts "                      the settings from the host configurations. A send_speed value of"
@@ -8376,6 +8381,14 @@ for {set i 0} {$i < $argc} {incr i} {
       }
 
       puts " ---> using \"$CHECK_PREFERRED_ARCHS\" as preferred architectures <---"
+      continue
+   }
+
+   if {[string compare [lindex $argv $i] "--random_host_select"] == 0 || [string compare [lindex $argv $i] "random_host_select"] == 0} {
+      global CHECK_DETERMINISTIC_HOST_SELECT
+      set CHECK_DETERMINISTIC_HOST_SELECT 0
+
+      puts " ---> selecting hosts in ramdom order for tests (in host_conf_get_suited_hosts) <---"
       continue
    }
 
