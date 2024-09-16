@@ -293,14 +293,16 @@ proc compile_unify_host_list {host_list} {
 proc compile_search_compile_host {arch} {
    global ts_host_config
    
-   foreach host $ts_host_config(hostlist) {
-      if {[host_conf_get_arch $host] == $arch && [host_conf_is_compile_host $host]} {
-         return $host
+   if {$arch != "none"} {
+      foreach host $ts_host_config(hostlist) {
+         if {[host_conf_get_arch $host] == $arch && [host_conf_is_compile_host $host]} {
+            return $host
+         }
       }
-   }
 
-   # no compile host found for this arch
-   ts_log_warning "no compile host found for architecture $arch"
+      # no compile host found for this arch
+      ts_log_warning "no compile host found for architecture $arch"
+   }
    return "none"
 }
 
