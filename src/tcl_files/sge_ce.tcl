@@ -34,7 +34,10 @@ proc ce_add {{change_array_name ""} {fast 1} {on_host ""} {as_user ""} {raise_er
         update_change_array ce_array change_array
 
         # create a temp-file with the centry
-        set tmp_file [dump_array_to_tmpfile ce_array]
+        if {$on_host == ""} {
+           set on_host [config_get_best_suited_admin_host]
+        }
+        set tmp_file [dump_array_to_tmpfile ce_array $on_host]
 
         # trigger the change
         set result [start_sge_bin "qconf" "${option} ${tmp_file}" $on_host $as_user]
@@ -122,7 +125,10 @@ proc ce_mod {ce_array_name {fast 1} {on_host ""} {as_user ""} {raise_error 1}} {
         update_change_array old_ce_array ce_array
 
         # create a temp-file with the centry
-        set tmp_file [dump_array_to_tmpfile old_ce_array]
+        if {$on_host == ""} {
+            set on_host [config_get_best_suited_admin_host]
+        }
+        set tmp_file [dump_array_to_tmpfile old_ce_array $on_host]
 
         # trigger the change
         set result [start_sge_bin "qconf" "$option $tmp_file" $on_host $as_user]

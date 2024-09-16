@@ -105,9 +105,11 @@ proc add_user {user {change_array ""} {fast_add 1} {on_host ""} {as_user ""} {ra
       set option "-Auser"
       set_user_defaults old_config
       update_change_array old_config chgar
-      set tmpfile [dump_array_to_tmpfile old_config]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile old_config $on_host]
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
-     
    } else {
       ts_log_fine "Add user $user slow ..."
       set option "-auser"
@@ -288,7 +290,10 @@ proc mod_userlist {userlist array {fast_add 1} {on_host ""} {as_user ""} {raise_
          set old_ul($elem) "$current_ul($elem)"
       }
 
-      set tmpfile [dump_array_to_tmpfile old_ul]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile old_ul $on_host]
       set option "-Mu $tmpfile"
       set result [start_sge_bin "qconf" $option $on_host $as_user]
    } else {
@@ -354,7 +359,10 @@ proc mod_user {user change_array {fast_add 1} {on_host ""} {as_user ""} {raise_e
          set_user_defaults curr_user
       }
       update_change_array curr_user chgar
-      set tmpfile [dump_array_to_tmpfile curr_user]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile curr_user $on_host]
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
    } else {
       ts_log_fine "Modify user $user slow ..."
@@ -424,10 +432,8 @@ proc get_manager_list {{output_var result} {on_host ""} {as_user ""} {raise_erro
 #     sge_procedures/get_qconf_list()
 #*******************************************************************************
 proc add_manager {manager {on_host ""} {as_user ""} {raise_error 1}} {
-
    return [get_qconf_list "add_manager" "-am $manager" out $on_host $as_user $raise_error]
-
-      }
+}
 
 #****** sge_users/del_manager() *****************************************
 #  NAME

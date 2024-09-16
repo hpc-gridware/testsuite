@@ -106,7 +106,10 @@ proc add_ckpt {ckpt_name {change_array ""} {fast_add 1} {on_host ""} {as_user ""
       set option "-Ackpt"
       set_ckpt_defaults old_config
       update_change_array old_config chgar
-      set tmpfile [dump_array_to_tmpfile old_config]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile old_config $on_host]
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
 
    } else {
@@ -200,7 +203,10 @@ proc mod_ckpt {ckpt_name change_array {fast_add 1} {on_host ""} {as_user ""} {ra
          set_ckpt_defaults curr_ckpt
       }
       update_change_array curr_ckpt chgar
-      set tmpfile [dump_array_to_tmpfile curr_ckpt]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile curr_ckpt $on_host]
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
 
    } else {

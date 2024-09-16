@@ -210,20 +210,23 @@ proc add_queue {qname hostlist {change_array ""} {fast_add 1} {on_host ""} {as_u
 
    get_queue_messages messages "add" "$qname" $on_host $as_user
 
-   if { $fast_add } {
+   if {$fast_add} {
       ts_log_fine "Add queue $chgar(qname) for hostlist $chgar(hostlist) from file ..."
       set option "-Aq"
       set_queue_defaults default_array
       set_lab_defaults default_array
       update_change_array default_array chgar
-      set tmpfile [dump_array_to_tmpfile default_array]
-      set result [start_sge_bin "qconf" "-Aq ${tmpfile}" $on_host $as_user]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile default_array $on_host]
+      set result [start_sge_bin "qconf" "$option ${tmpfile}" $on_host $as_user]
 
    } else {
       ts_log_fine "Add queue $chgar(qname) for hostlist $chgar(hostlist) slow ..."
       set option "-aq"
       set vi_commands [build_vi_command chgar]
-      set result [start_vi_edit "qconf" "-aq" $vi_commands messages $on_host $as_user]
+      set result [start_vi_edit "qconf" $option $vi_commands messages $on_host $as_user]
 
    }
    unset chgar(qname)
@@ -271,7 +274,7 @@ proc mod_queue { qname hostlist change_array {fast_add 1} {on_host ""} {as_user 
 
    get_queue_messages messages "mod" "$qname" $on_host $as_user
      
-   if { $fast_add } {
+   if {$fast_add} {
       ts_log_fine "Modify queue $qname for hostlist $hostlist from file ..."
       # aja: TODO: suppress all messages coming from the procedure
       get_queue "$qname" curr_arr "" "" 0
@@ -279,7 +282,7 @@ proc mod_queue { qname hostlist change_array {fast_add 1} {on_host ""} {as_user 
          set_queue_defaults curr_arr
      }
       # aja: TODO: is this okay? procedures not checked
-      if { $ts_config(gridengine_version) >= 60 } {
+      if {$ts_config(gridengine_version) >= 60} {
          if {[llength $hostlist] == 0} {
             set_cqueue_default_values curr_arr chgar
          } else {
@@ -291,9 +294,12 @@ proc mod_queue { qname hostlist change_array {fast_add 1} {on_host ""} {as_user 
 
       update_change_array curr_arr chgar
 
-      set tmpfile [dump_array_to_tmpfile curr_arr]
-      set output [start_sge_bin "qconf" "-Mq $tmpfile" $on_host $as_user]
-      set ret [handle_sge_errors "mod_queue" "qconf -Mq $qname" $output messages $raise_error]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile curr_arr $on_host]
+      set option "-Mq"
+      set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
 
    } else {
       ts_log_fine "Modify queue $qname for hostlist $hostlist slow ..."
@@ -302,9 +308,10 @@ proc mod_queue { qname hostlist change_array {fast_add 1} {on_host ""} {as_user 
       # BUG: different message for "vi" from fastadd ...
       set NOT_EXISTS [translate_macro MSG_CQUEUE_DOESNOTEXIST_S "$qname"]
       add_message_to_container messages -1 $NOT_EXISTS
-      set result [start_vi_edit "qconf" "-mq $qname" $vi_commands messages $on_host $as_user]
-      set ret [handle_sge_errors "mod_queue" "qconf -mq $qname" $result messages $raise_error]
+      set option "-mq"
+      set result [start_vi_edit "qconf" "$option $qname" $vi_commands messages $on_host $as_user]
    }
+   set ret [handle_sge_errors "mod_queue" "qconf $option $qname" $result messages $raise_error]
    return $ret
 }
 

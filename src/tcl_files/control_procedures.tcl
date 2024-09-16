@@ -51,15 +51,25 @@ proc update_change_array { target_array change_array } {
    }
 }
 
-# dump an array to a temporary file, return filename
-proc dump_array_to_tmpfile { change_array } {
+###
+# @brief dump an array to a temporary file, return filename
+#
+# Dumps the contents of the given array to a temporary file.
+# Optionally the host on which the data will be needed (qconf calling a fast option)
+# can be given. If the host is the testsuite host, then the file will be written locally.
+# Otherwise it will be written remotely.
+#
+# @param change_array array to dump
+# @param hostname the host the command working on the file (qconf) will be executed on
+##
+proc dump_array_to_tmpfile {change_array {hostname ""}} {
    upvar $change_array chgar
-
-   set tmpfile [ get_tmp_file_name ]
-   set file [open $tmpfile "w"]
+   global CHECK_USER
 
    if [info exists chgar] {
       set ignored 0
+      # build a file data array, data(0) is the number of lines, data(n) are the lines
+      set idx 0
       foreach elem [array names chgar] {
          if {$elem == ""} {
             ts_log_fine "ignore empty elem"
@@ -68,23 +78,52 @@ proc dump_array_to_tmpfile { change_array } {
          set value $chgar($elem)
          if {$value != ""} {
             ts_log_finer "set \"$elem\" to \"$value\""
-            puts $file "$elem $value"
+            incr idx ; set data($idx) "$elem $value"
          } else {
-            ts_log_fine "skip array name \"$elem\""
+            ts_log_finer "skip array name \"$elem\""
             incr ignored
          }
       }
       if {$ignored != 0} {
-            ts_log_fine "ignored $ignored line(s) because value was empty"
+         ts_log_fine "ignored $ignored line(s) because value was empty"
+      }
+      set data(0) $idx
+
+      if {$hostname != ""} {
+         # write to a local tmp file (in the /tmp directory)
+         set tmpfile [get_tmp_file_name $hostname "default" "tmp" 1]
+         if {$hostname == [gethostname]} {
+            # we'll execute qconf on the local host, write it locally
+            #ts_log_fine "====> writing local file $tmpfile on host $hostname"
+            save_file $tmpfile data
+         } else {
+            # we'll execute qconf on a remote host, write it remotely
+            #ts_log_fine "====> writing remote file $tmpfile on host $hostname"
+            write_remote_file $hostname $CHECK_USER $tmpfile data
+         }
+      } else {
+         set tmpfile [get_tmp_file_name]
+         #ts_log_fine "====> writing remote file $tmpfile in results directory, as we have no hostname"
+         save_file $tmpfile data
       }
    }
-
-   close $file
 
    return $tmpfile
 }
 
-proc dump_rqs_array_to_tmpfile { change_array } {
+###
+# @brief dump an array (RQS) to a temporary file, return filename
+#
+# Dumps the contents of the given array to a temporary file.
+# Optionally the host on which the data will be needed (qconf calling a fast option)
+# can be given. If the host is the testsuite host, then the file will be written locally.
+# Otherwise it will be written remotely.
+#
+# @param change_array array to dump
+# @param hostname the host the command working on the file (qconf) will be executed on
+##
+proc dump_rqs_array_to_tmpfile {change_array hostname} {
+   global CHECK_USER
    upvar $change_array chgar
    set tmpfile ""
 
@@ -94,40 +133,52 @@ proc dump_rqs_array_to_tmpfile { change_array } {
       set old_name ""
       set first 1
 
-      set tmpfile [get_tmp_file_name]
-      set file [open $tmpfile "w"]
-
+      # build a file data array, data(0) is the number of lines, data(n) are the lines
+      set idx 0
       foreach elem [lsort [array names chgar]] {
          set help [split $elem ","]
          set name [lindex $help 0]
          set field [lindex $help 1]
          set value $chgar($elem)
 
-         if { $old_name != $name} {
+         if {$old_name != $name} {
             # new rqs
             set old_name $name
             if {$first} {
                set first 0
             } else {
-               puts $file "\}"
+               incr idx ; set data($idx) "\}"
             }
-            puts $file "\{" 
-            puts $file "name $name"
+            incr idx ; set data($idx) "\{" 
+            incr idx ; set data($idx) "   name $name"
          }
-         if { $field == "limit" } {
+         if {$field == "limit"} {
             foreach limit $value {
-               puts $file "limit  $limit"
+               incr idx ; set data($idx) "   limit $limit"
             }
          } else {
-            puts $file "$field  $value"
+            incr idx ; set data($idx) "   $field $value"
          }
       } 
 
-      puts $file "\}"
-      close $file
+      incr idx ; set data($idx) "\}"
+      set data(0) $idx
+
+      # write to a local tmp file (in the /tmp directory)
+      set tmpfile [get_tmp_file_name $hostname "default" "tmp" 1]
+      if {$hostname == [gethostname]} {
+         # we'll execute qconf on the local host, write it locally
+         #ts_log_finer "writing local file $tmpfile"
+         save_file $tmpfile data
+      } else {
+         # we'll execute qconf on a remote host, write it remotely
+         #ts_log_finer "writing remote file $tmpfile"
+         write_remote_file $hostname $CHECK_USER $tmpfile data
+      }
    } else {
       ts_log_fine "WARNING: got not charray!"
    }
+
    ts_log_fine "tmpfile: $tmpfile"
    return $tmpfile
 }

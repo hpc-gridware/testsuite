@@ -5355,3 +5355,55 @@ if {![info exists ts_config]} {
    config_build_ts_config_1_23
    config_build_ts_config_1_24
 }
+
+###
+# @brief check if the given host is admin host according to testsuite config
+#
+# @param[in] host the host to check
+# @return 1 if the host is an admin host, 0 otherwise
+##
+proc config_is_admin_host {host} {
+   global ts_config
+
+   if {[lsearch -exact $ts_config(admin_only_hosts) $host] >= 0} {
+      return 1
+   }
+   if {[lsearch -exact $ts_config(execd_nodes) $host] >= 0} {
+      return 1
+   }
+
+   return 0
+}
+
+###
+# @brief get the best suited admin host
+#
+# Returns the admin host which should be fastest for calling qconf commands.
+# This is either the testsuite host (where we can write the files for fast add locally)
+# or the master host (where we can call qconf commands with lowest network latency).
+#
+# @return the best suited admin host
+##
+proc config_get_best_suited_admin_host {} {
+   global ts_config
+   global CHECK_DETERMINISTIC_HOST_SELECT
+
+   if {$CHECK_DETERMINISTIC_HOST_SELECT} {
+      # ideally the testsuite host is an admin host, then we work on the local host
+      set testsuite_host [gethostname]
+      if {[config_is_admin_host $testsuite_host]} {
+         set admin_host $testsuite_host
+      } else {
+         # doing admin stuff on the master host has the lowest network latency
+         set admin_host $ts_config(master_host)
+      }
+      ts_log_finer "best suited admin host is $admin_host"
+   } else {
+      # we want random host selection
+      set admin_host [host_conf_get_suited_hosts]
+      ts_log_finer "using random admin host $admin_host"
+   }
+
+   return $admin_host
+}
+

@@ -210,7 +210,10 @@ proc add_rqs {change_array {fast_add 1} {on_host ""} {as_user ""} {raise_error 1
 
    # Add rqs from file?
    if {$fast_add} {
-      set tmpfile [dump_rqs_array_to_tmpfile chgar]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_rqs_array_to_tmpfile chgar $on_host]
       set qconf_args "-Arqs $tmpfile"
       set result [start_sge_bin "qconf" $qconf_args $on_host $as_user]
    } else {
@@ -268,7 +271,10 @@ proc mod_rqs {change_array {name ""} {fast_add 1} {on_host ""} {as_user ""} {rai
 
    # Modify rqs from file?
    if {$fast_add} {
-      set tmpfile [dump_rqs_array_to_tmpfile chgar]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_rqs_array_to_tmpfile chgar $on_host]
       set result [start_sge_bin "qconf" "-Mrqs $tmpfile $name" $on_host $as_user]
 
       set messages(index) "-1 0 1"

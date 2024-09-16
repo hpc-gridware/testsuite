@@ -225,7 +225,10 @@ proc set_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {ra
          set old_config($elem) "$chgar($elem)"
       }
 
-      set tmpfile [dump_array_to_tmpfile old_config]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile old_config $on_host]
       set ret [start_sge_bin "qconf" "-Msconf $tmpfile" $on_host $as_user ]
 
       if {$prg_exit_state == 0} {

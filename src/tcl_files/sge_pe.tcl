@@ -115,7 +115,10 @@ proc add_pe { pe_name {change_array ""} {fast_add 1} {on_host ""} {as_user ""} {
       set option "-Ap"
       set_pe_defaults old_config
       update_change_array old_config chgar
-      set tmpfile [dump_array_to_tmpfile old_config]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile old_config $on_host]
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
 
    } else {
@@ -212,7 +215,10 @@ proc mod_pe {pe_name change_array {fast_add 1} {on_host ""} {as_user ""} {raise_
          set_pe_defaults curr_pe
       }
       update_change_array curr_pe chgar
-      set tmpfile [dump_array_to_tmpfile curr_pe]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile curr_pe $on_host]
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
 
    } else {

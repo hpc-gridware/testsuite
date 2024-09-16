@@ -2789,51 +2789,51 @@ proc compare_complex {a b} {
 #     change_array(resource_capability_factor)  "0.000000"
 #*******************************
 proc add_exechost {change_array {fast_add 1}} {
-  get_current_cluster_config_array ts_config
+   get_current_cluster_config_array ts_config
 
-  upvar $change_array chgar
-  set values [array names chgar]
+   upvar $change_array chgar
+   set values [array names chgar]
 
-    if {$fast_add != 0} {
-     # add queue from file!
-     set default_array(hostname)          "template"
-     set default_array(load_scaling)      "NONE"
-     set default_array(complex_values)    "NONE"
-     set default_array(user_lists)        "NONE"
-     set default_array(xuser_lists)       "NONE"
+   if {$fast_add != 0} {
+      # add queue from file!
+      set default_array(hostname)          "template"
+      set default_array(load_scaling)      "NONE"
+      set default_array(complex_values)    "NONE"
+      set default_array(user_lists)        "NONE"
+      set default_array(xuser_lists)       "NONE"
   
-     if {$ts_config(product_type) == "sgeee"} {
-       set default_array(projects)                    "NONE"
-       set default_array(xprojects)                   "NONE"
-       set default_array(usage_scaling)               "NONE"
-       set default_array(report_variables)            "NONE"
-     }
+      if {$ts_config(product_type) == "sgeee"} {
+         set default_array(projects)                    "NONE"
+         set default_array(xprojects)                   "NONE"
+         set default_array(usage_scaling)               "NONE"
+         set default_array(report_variables)            "NONE"
+      }
   
-     foreach elem $values {
-        set value $chgar($elem)
-        ts_log_finest "--> setting \"$elem\" to \"$value\""
-        set default_array($elem) $value
-     }
+      foreach elem $values {
+         set value $chgar($elem)
+         ts_log_finest "--> setting \"$elem\" to \"$value\""
+         set default_array($elem) $value
+      }
 
-     set tmpfile [get_tmp_file_name]
-     set file [open $tmpfile "w"]
-     set values [array names default_array]
-     foreach elem $values {
-        set value $default_array($elem)
-        puts $file "$elem                   $value"
-     }
-     close $file
+      set tmpfile [get_tmp_file_name]
+      set file [open $tmpfile "w"]
+      set values [array names default_array]
+      foreach elem $values {
+         set value $default_array($elem)
+         puts $file "$elem                   $value"
+      }
+      close $file
 
-     set result [start_sge_bin "qconf" "-Ae ${tmpfile}"]
-     ts_log_finest $result
+      set result [start_sge_bin "qconf" "-Ae ${tmpfile}"]
+      ts_log_finest $result
 
-     set ADDED [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS "*" "*" "*" "*"]
+      set ADDED [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS "*" "*" "*" "*"]
 
-     if {[string match "*$ADDED*" $result] == 0} {
-        ts_log_severe "qconf -Ae $tmpfile failed:\n$result"
-        return
-     }
-     return
+      if {[string match "*$ADDED*" $result] == 0} {
+         ts_log_severe "qconf -Ae $tmpfile failed:\n$result"
+         return
+      }
+      return
   }
 
   set vi_commands [build_vi_command chgar]
@@ -3961,7 +3961,10 @@ proc mod_attr { object attribute value target {fast_add 1} {on_host ""} {as_user
    # add queue from file?
     if { $fast_add } {
       set default_array($attribute) "$value"
-      set tmpfile [dump_array_to_tmpfile default_array]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile default_array $on_host]
       set result [start_sge_bin "qconf" "-Mattr $object $tmpfile $target"  $on_host $as_user]
   
       if {$prg_exit_state == 0} {
@@ -4115,7 +4118,10 @@ proc del_attr { object attribute value target {fast_add 1} {on_host ""} {as_user
    # add queue from file?
     if { $fast_add } {
       set default_array($attribute) "$value"
-      set tmpfile [dump_array_to_tmpfile default_array]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile default_array $on_host]
       set result [start_sge_bin "qconf" "-Dattr $object $tmpfile $target" $on_host $as_user]
 
       if {$prg_exit_state == 0} {
@@ -4237,7 +4243,10 @@ proc add_attr { object attribute value target {fast_add 1} {on_host ""} {as_user
    # add queue from file?
     if { $fast_add } {
       set default_array($attribute) "$value"
-      set tmpfile [dump_array_to_tmpfile default_array]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile default_array $on_host]
       set result [start_sge_bin "qconf" "-Aattr $object $tmpfile $target" $on_host $as_user]
 
       if {$prg_exit_state == 0} {
@@ -4358,7 +4367,10 @@ proc replace_attr { object attribute value target {fast_add 1} {on_host ""} {as_
    # add queue from file?
     if { $fast_add } {
       set default_array($attribute) "$value"
-      set tmpfile [dump_array_to_tmpfile default_array]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile default_array $on_host]
       set result [start_sge_bin "qconf" "-Rattr $object $tmpfile $target" $on_host $as_user]
 
       if {$prg_exit_state == 0} {
@@ -6198,7 +6210,7 @@ proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
       if {$runtime >= $seconds} {
          if {$do_errorcheck == 1} {
             set qstat_output [start_sge_bin "qstat" "-f -g t -u '*'"]
-            set qstat_wp_output [start_sge_bin "qstat" "-w p $jobid"]
+            set qstat_wp_output [start_sge_bin "qalter" "-w p $jobid"]
             ts_log_severe "timeout waiting for job $jobid \"$jobname\"\n$qstat_output\n$qstat_wp_output"
          }
          return -1

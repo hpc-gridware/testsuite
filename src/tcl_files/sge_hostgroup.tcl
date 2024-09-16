@@ -97,7 +97,10 @@ proc add_hostgroup {group {change_array ""} {fast_add 1} {on_host ""} {as_user "
       set option "-Ahgrp"
       set_hostgroup_defaults old_config
       update_change_array old_config chgar
-      set tmpfile [dump_array_to_tmpfile old_config]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile old_config $on_host]
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
 
    } else {
@@ -261,7 +264,10 @@ proc mod_hostgroup { group change_array {fast_add 1} {on_host ""} {as_user ""}  
       set option "-Mhgrp"
       get_hostgroup $group curr_grp $on_host $as_user 0
       update_change_array curr_grp chgar
-      set tmpfile [dump_array_to_tmpfile curr_grp]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile curr_grp $on_host]
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
 
    } else {

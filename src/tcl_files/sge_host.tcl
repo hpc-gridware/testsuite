@@ -242,7 +242,10 @@ proc set_exechost { change_array {host global} {fast_add 1} {on_host ""} {as_use
 
    # Modify exechost from file?
    if {$fast_add} {
-      set tmpfile [dump_array_to_tmpfile old_values]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile old_values $on_host]
       set result [start_sge_bin "qconf" "-Me $tmpfile" $on_host $as_user]
 
       # parse output or raise error

@@ -110,7 +110,10 @@ proc add_project {project {change_array ""} {fast_add 1} {on_host ""} {as_user "
       set option "-Aprj"
       set_project_defaults old_config
       update_change_array old_config chgar
-      set tmpfile [dump_array_to_tmpfile old_config]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile old_config $on_host]
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
     } else {
       ts_log_fine "Add project $project slow ..."
@@ -309,7 +312,10 @@ proc mod_project {project change_array {fast_add 1} {on_host ""} {as_user ""} {r
          set_project_defaults curr_prj
       }
       update_change_array curr_prj chgar
-      set tmpfile [dump_array_to_tmpfile curr_prj]
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      set tmpfile [dump_array_to_tmpfile curr_prj $on_host]
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
 
    } else {
