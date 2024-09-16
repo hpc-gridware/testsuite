@@ -41,9 +41,10 @@ shift
 # get some information about the call
 hostname=`hostname`
 user=`whoami`
-timestamp=`date -Ins`
 name=`basename $binary`
-output_file="$protocol_dir/valgrind-$hostname-$user-$name-$timestamp.xml"
+# %s will be replaced by the pid of the process
+# %n will be replaced by a sequence number
+output_file="$protocol_dir/$name-$hostname-$user-%p-%n.xml"
 
 # Set the options for valgrind
 # we want to do memory leak checking for now but valgrid has many other options
@@ -58,8 +59,10 @@ OPTIONS="$OPTIONS --fullpath-after=$source_dir/"
 # do XML output - we can load that into clion
 OPTIONS="$OPTIONS --xml=yes --xml-file=$output_file"
 # follow children processes, e.g. when daemonizing
-# @todo in case of execd, will it follow shepherd, the job, jobs child processes? We wouldn't want that.
-#OPTIONS="$OPTIONS --trace-children=yes"
-
+# OPTIONS="$OPTIONS --trace-children=yes"
+# we don't need / want this:
+#   - valgrind by default follows forks, the %p placeholder in the output file will be replaced by the pid of
+#     the process and (most important) a separate file is written for every process
+#   - we actually don't want to follow the shepherd, the job, the jobs child processes
 
 valgrind $OPTIONS $binary "$@"
