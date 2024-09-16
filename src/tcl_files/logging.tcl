@@ -1122,11 +1122,13 @@ proc ts_private_log_do_output {level message raise_error function} {
             puts "----------------------------------------------------------------"
             puts ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
          } else {
-            puts "----------------------------------------------------------------"
-            puts "!!   The following message is an *expected* error condition   !!"
-            puts "procedure   : $function"
-            puts $message  
-            puts "----------------------------------------------------------------"
+            if {0} {
+               puts "----------------------------------------------------------------"
+               puts "!!   The following message is an *expected* error condition   !!"
+               puts "procedure   : $function"
+               puts $message
+               puts "----------------------------------------------------------------"
+            }
          }
       } else {
          puts $message

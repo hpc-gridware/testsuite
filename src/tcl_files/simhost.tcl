@@ -1,3 +1,22 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2024 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
 
 ###
 # @brief initialize the simhost framework
@@ -114,7 +133,11 @@ proc simhost_add {num_hosts {host_group ""}} {
       set_complex cplx
    }
 
-   ts_log_fine "adding $num_hosts hosts"
+   if {$host_group != ""} {
+      ts_log_fine "adding $num_hosts hosts"
+   } else {
+      ts_log_fine "adding $num_hosts hosts to host group $host_group"
+   }
    set num_real_hosts [llength $ts_config(execd_nodes)]
    set added_hosts {}
    for {set i 0} {$i < $num_hosts} {incr i} {
@@ -133,11 +156,17 @@ proc simhost_add {num_hosts {host_group ""}} {
    }
 
    # create a new host group with these hosts
-   # @todo check if the hgrp already exists, if yes, add to its hostlist
    if {$host_group != ""} {
-      ts_log_fine "creating host group $host_group"
+      set ret [get_hostgroup $host_group result "" "" 0]
+
       set hg(hostlist) $added_hosts
-      add_hostgroup $host_group hg
+      if {$ret == 0} {
+         ts_log_fine "adding host to host group $host_group"
+         mod_hostgroup $host_group hg
+      } else {
+         ts_log_fine "creating host group $host_group"
+         add_hostgroup $host_group hg
+      }
    }
 
    return $added_hosts

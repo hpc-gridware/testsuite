@@ -1217,6 +1217,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
    global check_do_clean_compile check_do_3rdparty_build
    global CMAKE_BUILD_ID
    global CMAKE_COMPILE_INSTALL_SEPARATELY
+   global WITH_GPERF
 
    upvar $report_var report
 
@@ -1281,6 +1282,11 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
          } else {
             append args " -DINSTALL_SGE_BIN=OFF"
             append args " -DINSTALL_SGE_TEST=OFF"
+         }
+         if {$WITH_GPERF} {
+            append args " -DWITH_GPERF=ON"
+         } else {
+            append args " -DWITH_GPERF=OFF"
          }
          # compile docs only on the doc compile host and not when just replacing binaries (menu 1t)
          if {[host_conf_is_doc_compile_host $host] && !$compile_only} {
