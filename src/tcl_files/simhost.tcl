@@ -90,6 +90,26 @@ proc simhost_init {} {
    return 1
 }
 
+proc init_object_attr {data_array attribute_array object_name host} {
+   upvar $data_array data
+   upvar $attribute_array attr
+
+   # find specific attribute keys for the given host, e.g. "exechost,host1,*"
+   set hostname [get_short_hostname $host]
+   set matching_keys [array names attr "$object_name,$hostname,*"]
+
+   # if there are no specific attributes for this host, use a wildcard e.g. "exechost,*,*"
+   if {[llength $matching_keys] == 0} {
+      set matching_keys [array names attr "$object_name,\\*,*"]
+   }
+
+   # copy values for matching keys to the data array
+   foreach key $matching_keys {
+      set attr_name [lindex [split $key ","] 2]
+      set data($attr_name) $attr($key)
+   }
+}
+
 ###
 # @brief add simulated hosts
 #
@@ -105,12 +125,21 @@ proc simhost_init {} {
 #
 # @param[in] num_hosts
 # @param[in] host_group, if != "" the host group will be created and holds the newly created simulated hosts
+# @param[in] attribute_array, optional, a list of attributes to be set for the new hosts
 # @returns a list of hostnames or "" in case of error
 ##
-proc simhost_add {num_hosts {host_group ""}} {
+proc simhost_add {num_hosts {host_group ""} {attribute_array ""}} {
    get_current_cluster_config_array ts_config
    global simhost_cache
- 
+
+   # if we get no attribute array then create an empty one to please the code further down
+   if {$attribute_array != ""} {
+      upvar $attribute_array attr
+   } else {
+      array set attr {}
+   }
+
+   # check if we have enough free hosts
    set num_hosts_free [llength $simhost_cache(free_hosts)]
    if {$num_hosts_free < $num_hosts} {
       ts_log_config "cannot add $num_hosts simulated hosts: We only have $num_hosts_free available"
@@ -143,16 +172,33 @@ proc simhost_add {num_hosts {host_group ""}} {
    for {set i 0} {$i < $num_hosts} {incr i} {
       # get the next free host
       set host [lindex $simhost_cache(free_hosts) 0]
-      set simhost_cache(free_hosts) [lrange $simhost_cache(free_hosts) 1 end]
+
+      # initialize the execution host object with the default attributes passed by caller
+      if {[info exists eh]} {
+         array unset eh
+      }
+      array set eh {}
+      init_object_attr eh attr "exechost" $host
+
+      # prepare the host attributes
       set eh(hostname) $host
 
-      # get its load_report_host
+      # get its load_report_host and add it to the complex_values
       set load_report_host [lindex $ts_config(execd_nodes) [expr $i % $num_real_hosts]]
-      set eh(complex_values) "load_report_host=$load_report_host"
+      set additional_attr "load_report_host=$load_report_host"
+      if {[info exists eh(complex_values)]} {
+         append eh(complex_values) ",$additional_attr"
+      } else {
+         set eh(complex_values) $additional_attr
+      }
+
       add_exechost eh
       # add_exechost doesn't return if it succeeded or not, just assume it did succeed
+
+      # remember the added host and remove it from the free hosts
       lappend added_hosts $host
       lappend simhost_cache(used_hosts) $host
+      set simhost_cache(free_hosts) [lrange $simhost_cache(free_hosts) 1 end]
    }
 
    # create a new host group with these hosts
