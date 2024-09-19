@@ -2113,11 +2113,13 @@ proc qstat_j_xml_par { output job_id xmloutput} {
       set xml($sched) [[$message firstChild] nodeValue]
    }
 
-   # beginning with OCS 9.0.0 JB_submission_time (and others which are not parsed here)
-   # have 64bit timestamps
+   # Beginning with OCS 9.0.0 JB_submission_time (and others which are not parsed here)
+   # have 64bit timestamps.
+   # And with CS-348 being fixed it is now a valid XML timestamp.
+   # We want to return a UNIX timestamp.
    if {[is_version_in_range "9.0.0"]} {
       foreach name "submission_time" {
-         set xml($name) [expr $xml($name) / 1000000]
+         set xml($name) [transform_date_time $xml($name)]
       }
    }
 }
