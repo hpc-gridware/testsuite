@@ -3196,6 +3196,9 @@ proc read_checktree_nodes {path} {
    # recursive call on subdirectories
    set dirs [get_dir_names $path]
    foreach element $dirs {
+      if {$element == "tcl_files"} {
+         continue
+      }
       read_checktree_nodes "$path/$element"
       lappend ts_checktree($nr,children) $ts_checktree($path/$element)
    }
