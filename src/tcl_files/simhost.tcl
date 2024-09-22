@@ -90,26 +90,6 @@ proc simhost_init {} {
    return 1
 }
 
-proc init_object_attr {data_array attribute_array object_name host} {
-   upvar $data_array data
-   upvar $attribute_array attr
-
-   # find specific attribute keys for the given host, e.g. "exechost,host1,*"
-   set hostname [get_short_hostname $host]
-   set matching_keys [array names attr "$object_name,$hostname,*"]
-
-   # if there are no specific attributes for this host, use a wildcard e.g. "exechost,*,*"
-   if {[llength $matching_keys] == 0} {
-      set matching_keys [array names attr "$object_name,\\*,*"]
-   }
-
-   # copy values for matching keys to the data array
-   foreach key $matching_keys {
-      set attr_name [lindex [split $key ","] 2]
-      set data($attr_name) $attr($key)
-   }
-}
-
 ###
 # @brief add simulated hosts
 #
@@ -139,6 +119,11 @@ proc simhost_add {num_hosts {host_group ""} {attribute_array ""}} {
       array set attr {}
    }
 
+   # Lazy initialization of the simhost framework
+   if {![simhost_init]} {
+      return {}
+   }
+
    # check if we have enough free hosts
    set num_hosts_free [llength $simhost_cache(free_hosts)]
    if {$num_hosts_free < $num_hosts} {
@@ -150,7 +135,9 @@ proc simhost_add {num_hosts {host_group ""} {attribute_array ""}} {
    get_config global_config
    if {[string first "SIMULATE_EXECDS" $global_config(qmaster_params)] < 0} {
       ts_log_fine "need to enable SIMULATE_EXECDS"
-      set gc(qmaster_params) "$global_config(qmaster_params) SIMULATE_EXECDS=TRUE"
+      set qmaster_params $global_config(qmaster_params)
+      set qmaster_params [add_or_replace_param $qmaster_params "SIMULATE_EXECDS" "SIMULATE_EXECDS=TRUE"]
+      set gc(qmaster_params) $qmaster_params
       set_config gc
    }
 
@@ -178,7 +165,7 @@ proc simhost_add {num_hosts {host_group ""} {attribute_array ""}} {
          array unset eh
       }
       array set eh {}
-      init_object_attr eh attr "exechost" $host
+      init_object_attr eh attr "exechost" $host 1
 
       # prepare the host attributes
       set eh(hostname) $host

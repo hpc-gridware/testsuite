@@ -303,3 +303,95 @@ proc gname2gid {grp_name {host ""} {user ""}} {
    set token [split $output_getent ":"]
    return [lindex $token 2]
 }
+
+## @brief add or replace a parameter in a string
+#
+# This procedure adds or replaces a parameter in a string. The parameter is
+# identified by its name. If the parameter is already present in the string,
+# it is replaced by the new value. If the parameter is not present, it is
+# added to the string. If the new value is empty, the parameter is removed.
+#
+# @param input the original string
+# @param name_only the name of the parameter
+# @param name_value the new value of the parameter
+# @param delimiter the delimiter used to separate the parameters
+#
+proc add_or_replace_param {input name_only name_value {delimiter ","}} {
+   # if the original parameter is empty, we can just return the new value
+   if {$input == "" || [string toupper $input] == "NONE"} {
+      return "$name_value"
+   }
+
+   # if there is already a value in there, we need to replace it
+   set params [split $input $delimiter]
+   set idx [lsearch -regexp $params "$name_only="]
+   if {$idx >= 0} {
+      if {$name_value == ""} {
+         set params [lreplace $params $idx $idx]
+      } else {
+         lset params $idx $name_value
+      }
+   } else {
+      lappend params $name_value
+   }
+   set output [join $params $delimiter]
+
+   # if the resulting string is empty, we return "NONE"
+   if {$output != ""} {
+      return $output
+   } else {
+      return "NONE"
+   }
+}
+
+## @grief copy name/value pairs from an attribute array to a data array for a given object
+#
+# This procedure copies name/value pairs from an attribute array to a data array. The
+# attribute array is indexed by object name and key, and the data array is indexed by
+# attribute name. The key can be a CS object name (also a hostname).
+#
+# @example
+#     set host_conf(hostname) "ce8-0-lx-amd64"
+#
+#     set data(host,ce8-0-lx-amd64,complex_value) "memfree=5"
+#     init_object_attr host_conf data host ce8-0-lx-amd64 1
+#
+#     add_exec_host host_conf
+#
+# @param data_array the name of the data array
+# @param attribute_array the name of the attribute array
+# @param object_name the name of the object
+# @param key the key for the object or a hostname
+# @param key_is_hostname if the key is a hostname, set this to 1
+#
+proc init_object_attr {data_array attribute_array object_name {key ""} {key_is_hostname 0}} {
+   upvar $data_array data
+   upvar $attribute_array attr
+
+   if {$key != ""} {
+      # find specific attribute keys for the given host, e.g. "exechost,host1,*"
+      # or "pe,pe_name,*" for a given PE ,...
+      if {$key_is_hostname} {
+         set key [get_short_hostname $key]
+      }
+      set matching_keys [array names attr "$object_name,$key,*"]
+   } else {
+      # certain attributes like configuration objects do not have a specific key
+      set matching_keys [array names attr "$object_name,*"]
+   }
+
+   # if there are no specific attributes for this host, use a wildcard e.g. "exechost,*,*"
+   if {[llength $matching_keys] == 0} {
+      if {$key != ""} {
+         set matching_keys [array names attr "$object_name,\\*,*"]
+      } else {
+         set matching_keys [array names attr "$object_name,*"]
+      }
+   }
+
+   # copy values for matching keys to the data array
+   foreach key $matching_keys {
+      set attr_name [lindex [split $key ","] 2]
+      set data($attr_name) $attr($key)
+   }
+}
