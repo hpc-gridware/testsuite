@@ -1902,6 +1902,7 @@ proc create_shell_script {scriptfile host exec_command exec_arguments {cd_dir ""
       # if the user has the specified groups already set as supplementary groups. Otherwise a
       # password question will be shown (which we will not handle here)
       set termination_string "NEWGRP_TERMINATE"
+
       if {$new_grp != ""} {
          append script_content "newgrp $new_grp << $termination_string\n"
       }

@@ -1552,7 +1552,7 @@ proc open_remote_spawn_process { hostname
    global open_remote_spawn_script_cache
    upvar $shell_script_name_var used_script_name
    get_current_cluster_config_array ts_config
-  
+
    set testsuite_root_dir $ts_config(testsuite_root_dir)
    if {$CHECK_DEBUG_LEVEL != 0} {
       ts_log_finest "open_remote_spawn_process on host \"$hostname\""
@@ -1604,7 +1604,7 @@ proc open_remote_spawn_process { hostname
    # if the same script is executed multiple times, don't recreate it
    set re_use_script 0
    # we check for a combination of all parameters
-   set spawn_command_arguments "$hostname$user$exec_command$exec_arguments$background$cd_dir$env_string$source_settings_file$set_shared_lib_path$win_local_user$without_start_output$without_sge_single_line"
+   set spawn_command_arguments "$hostname$user$exec_command$exec_arguments$background$cd_dir$env_string$source_settings_file$set_shared_lib_path$win_local_user$without_start_output$without_sge_single_line$new_grp"
    if {[info exists open_remote_spawn_script_cache($spawn_command_arguments)]} {
       set cached_script_file_name $open_remote_spawn_script_cache($spawn_command_arguments)
       if {[file isfile $cached_script_file_name]} {
