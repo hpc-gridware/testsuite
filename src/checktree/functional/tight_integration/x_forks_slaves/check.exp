@@ -64,7 +64,6 @@ proc x_forks_slaves_setup {} {
 
    # we need 2 test hosts: a master host and a slave host
    set x_forks_slaves_hosts [host_conf_get_suited_hosts 2]
-   set x_forks_slaves_hosts "ubuntu-20-amd64-1 ubuntu-22-amd64-1"
 
    # create a test pe and queue
    set pe(slots) 100
