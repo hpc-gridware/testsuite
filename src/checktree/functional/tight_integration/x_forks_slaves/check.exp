@@ -1,0 +1,291 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#  
+#  Copyright 2024 HPC-Gridware GmbH
+#  
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#  
+#      http://www.apache.org/licenses/LICENSE-2.0
+#  
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#  
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.0.0"
+
+# define test's name and run level descriptions
+set check_name            "x_forks_slaves"
+set check_category        "EXECUTION LIMITS PARALLEL VERIFIED"
+set check_description(0)  "check PE attributes master_forks_slaves and daemon_forks_slaves"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function x_forks_slaves_setup
+set check_cleanup_function x_forks_slaves_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "x_forks_slaves_basic"
+# @todo extend the test
+# add further check_functions, e.g.
+# create a real job using the work binary to burn cpu and/or use memory
+# - use different limits which are monitored by the sge_execd
+# - use different limits which are monitored by the sge_qmaster (IIRC we have this)
+# add runlevels:
+# - both false
+# - one true, one false
+# - one false, one true
+# - both true
+
+# -------- local test procedures: initialization------------------------------
+
+proc x_forks_slaves_setup {} {
+   get_current_cluster_config_array ts_config
+   global x_forks_slaves_hosts
+
+   # we need 2 test hosts: a master host and a slave host
+   set x_forks_slaves_hosts [host_conf_get_suited_hosts 2]
+   set x_forks_slaves_hosts "ubuntu-20-amd64-1 ubuntu-22-amd64-1"
+
+   # create a test pe and queue
+   set pe(slots) 100
+   set pe(allocation_rule) "4"
+   set pe(control_slaves) TRUE
+   set pe(job_is_first_task) TRUE
+   set pe(master_forks_slaves) TRUE
+   set pe(daemon_forks_slaves) TRUE
+   add_pe "test.pe" pe
+
+   set q(slots) 10
+   set q(pe_list) "test.pe"
+   add_queue "test.q" $x_forks_slaves_hosts q
+}
+
+proc x_forks_slaves_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global x_forks_slaves_hosts
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   del_queue "test.q" "" 1 1
+   del_pe "test.pe"
+
+   unset -nocomplain x_forks_slaves_hosts
+}
+
+proc x_forks_slaves_check_limits {job_id host host_type limit} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   # figure out path to config file
+   set spool_dir [get_spool_dir $host "execd"]
+   set config_file "$spool_dir/active_jobs/${job_id}.1"
+   if {$host_type == "slave"} {
+      append config_file "/1.$host"
+   }
+   append config_file "/config"
+   ts_log_fine "checking limits in config file $config_file on host $host"
+
+   # read config file and check limits
+   set config [start_remote_prog $host $CHECK_USER "cat" $config_file]
+   set limit_name [lindex [split $limit "="] 0]
+   set limit_value [lindex [split $limit "="] 1]
+
+   set found 0
+   foreach line [split $config "\n"] {
+      set line [string trim $line]
+      if {[regexp "^$limit_name" $line]} {
+         set found 1
+         set value [lindex [split $line "="] 1]
+         if {[transform_unit $value] != [transform_unit $limit_value]} {
+            ts_log_severe "limit $limit_name on $host_type host $host is $value, expected $limit_value"
+         }
+      }
+   }
+
+   if {!$found} {
+      ts_log_severe "limit $limit_name not found on $host_type host $host"
+   }
+}
+
+if {0} {
+proc x_forks_slaves_do_qrsh_inherit {job_id host} {
+   global CHECK_USER
+
+   set qrsh_args "-inherit $host sleep 10"
+
+   set myenv(JOB_ID) $job_id
+   set myenv(SGE_TASK_ID) "undefined"
+
+   set sp_id [open_remote_spawn_process $host $CHECK_USER "qrsh" $qrsh_args 0 "" myenv]
+
+   return $sp_id
+}
+}
+
+proc x_forks_slaves_check_qrsh_inherit {job_id host host_type num} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+if {0} {
+   # this is by far too complicated: The job is already running as many tasks as it can
+   # so already the first qrsh -inherit command should fail
+   set sp_ids {}
+   set spawn_ids {}
+   for {set i 0} {$i < $num} {incr i} {
+      set sp_id [x_forks_slaves_do_qrsh_inherit $job_id $host]
+      lappend sp_ids $sp_id
+      set spawn_id [lindex $sp_id 1]
+      lappend spawn_ids $spawn_id
+      set expected_result($spawn_id) 0
+   }
+   # try to start one more
+   set sp_id [x_forks_slaves_do_qrsh_inherit $job_id $host]
+   lappend sp_ids $sp_id
+   set spawn_id [lindex $sp_id 1]
+   lappend spawn_ids $spawn_id
+   set expected_result($spawn_id) 1
+
+#   ts_log_fine $sp_ids
+#   ts_log_fine $spawn_ids
+
+   # expect one of the qrsh commands to fail
+   set exit_ok 0
+   set exit_fail 0
+
+   set timeout 60
+   log_user 0
+   set final_timeout [expr [clock seconds] + 600]
+   expect_user {
+      -i $spawn_ids timeout {
+         ts_log_fine "timeout"
+      }
+      -i $spawn_ids eof {
+         ts_log_fine "eof"
+      }
+      -i $spawn_ids full_buffer {
+         ts_log_fine "full_buffer"
+      }
+      -i $spawn_ids "*\n" {
+         set output $expect_out(0,string)
+         #ts_log_fine "output: $output"
+         set split_output [split $output "\n"]
+         foreach line $split_output {
+            set line [string trim $line]
+            #ts_log_fine $line
+            if {[string length $line] > 0} {
+               #ts_log_fine "processing line: $line"
+               switch -glob -- $line {
+                  "script done. (_END_OF_FILE_)" {
+                     set spawn_id $expect_out(spawn_id)
+                     #ts_log_fine "script done for spawn_id $spawn_id"
+                     set pos [lsearch -exact $spawn_ids $spawn_id]
+                     if {$pos >= 0} {
+                        set spawn_ids [lreplace $spawn_ids $pos $pos]
+                     }
+                  }
+                  "_exit_status_:(*) *" {
+                     set exit_status [get_string_value_between "(" ")" $line]
+                     set spawn_id $expect_out(spawn_id)
+                     #ts_log_fine "exit_status $exit_status for spawn_id $spawn_id"
+                     if {$exit_status == 0} {
+                        incr exit_ok
+                     } else {
+                        incr exit_fail
+                     }
+                  }
+               }
+            }
+         }
+         if {[llength $spawn_ids] > 0 && [clock seconds] < $final_timeout} {
+            #ts_log_fine "doing exp_continue"
+            exp_continue
+         }
+      }
+   }
+
+   foreach sp_id $sp_ids {
+      close_spawn_process $sp_id
+   }
+
+   ts_log_fine "$host_type: exit_ok: $exit_ok, exit_fail: $exit_fail"
+   if {$exit_ok != $num || $exit_fail != 1} {
+      ts_log_severe "expected $num qrsh commands to succeed and 1 to fail, got $exit_ok and $exit_fail on $host_type host $host"
+   }
+}
+   
+   set qrsh_args "-inherit $host echo one task too many"
+
+   set myenv(JOB_ID) $job_id
+   set myenv(SGE_TASK_ID) "undefined"
+
+   set output [start_remote_prog $host $CHECK_USER "qrsh" $qrsh_args prg_exit_state 60 0 "" myenv]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "expected qrsh command to fail on $host_type host $host, output was:\n$output"
+   } else {
+      ts_log_fine "qrsh command failed on $host_type host $host as expected:\n$output"
+   }
+}
+
+proc x_forks_slaves_basic {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global x_forks_slaves_hosts
+
+   set master_host [lindex $x_forks_slaves_hosts 0]
+   set slave_host [lindex $x_forks_slaves_hosts 1]
+
+   # submit a job requesting our pe, spawning our 2 hosts, requesting limits
+   set output_file [get_tmp_file_name]
+   set job_opts "-pe test.pe 8 -l h_rss=1G -scope master -l h=$master_host"
+   append job_opts " -o $output_file -e $output_file"
+
+   # @todo CS-619 overwriting limits in master or slave requests does not yet work
+   # set job_opts "-pe test.pe 8 -scope master -l h_rss=1G -l h=$master_host -scope slave -l h_vmem=2G"
+
+   set job_script "$ts_config(testsuite_root_dir)/scripts/pe_job.sh"
+   set task_script "$ts_config(testsuite_root_dir)/scripts/pe_task.sh"
+   set job_args "$job_script $task_script 1 6000"
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0} {
+      return
+   }
+
+   wait_for_jobstart $job_id "" 10
+
+   # check the limits
+   x_forks_slaves_check_limits $job_id $master_host "master" "h_rss=4G"
+   x_forks_slaves_check_limits $job_id $slave_host "slave" "h_rss=4G"
+   #x_forks_slaves_check_limits $job_id $slave_host "h_vmem=8G"
+
+   # check how many slave tasks we can start
+   x_forks_slaves_check_qrsh_inherit $job_id $master_host "master" 0
+   x_forks_slaves_check_qrsh_inherit $job_id $slave_host "slave" 1
+
+   ts_log_fine [start_remote_prog $master_host $CHECK_USER "cat" $output_file]
+
+#   wait_for_enter
+
+   delete_job $job_id
+}
+
