@@ -63,6 +63,11 @@ proc set_pe_defaults {change_array} {
    set chgar(job_is_first_task) "TRUE"
    set chgar(urgency_slots) "min"
    set chgar(accounting_summary) "FALSE"
+   if {[is_version_in_range "9.0.0"]} {
+      set chgar(ign_sreq_on_mhost) "FALSE"
+      set chgar(master_forks_slaves) "FALSE"
+      set chgar(daemon_forks_slaves) "FALSE"
+   }
 }
 
 #****** sge_pe/add_pe() ********************************************************

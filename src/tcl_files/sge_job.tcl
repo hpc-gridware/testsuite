@@ -184,13 +184,18 @@ proc tight_integration_monitor {id master_node started_var finished_var jobid_va
                   "script done.*" {
                      ts_log_fine "got \"script done.\" from remote prog shell script"
                   }
+                  "job_is_first_task: *" -
+                  "master_forks_slaves: *" -
+                  "daemon_forks_slaves: *" {
+                     ts_log_fine "PE settings: $line"
+                  }
                   "master task received SIG*" {
                      set signal [lindex $line 3]
                      set ret "signalled"
                      ts_log_fine $line
                   }
                   "pe task received SIG*" -
-                  "User*ignal*" {
+                  "*User*ignal*" {
                      ts_log_fine $line
                      set ret "signalled"
                   }
