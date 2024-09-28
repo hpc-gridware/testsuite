@@ -54,6 +54,7 @@ proc submit_cmd_setup {} {
    global submit_cmd_host
 
    set submit_cmd_host [host_conf_get_suited_hosts]
+   set submit_cmd_host [resolve_host $submit_cmd_host 1]
 }
 
 proc submit_cmd_cleanup {} {
@@ -77,7 +78,7 @@ proc submit_cmd_check_item {data_var attribute expect_string errors_var} {
       set ret 0
    } else {
       if {![string match "*$expect_string*" $data($attribute)]} {
-         append errors "$attribute does not contain $expect_string\n"
+         append errors "$attribute does not contain $expect_string but is $data($attribute)\n"
          set ret 0
       }
    }
@@ -210,7 +211,10 @@ proc submit_cmd_options {} {
    lappend options "-now yes"
    lappend options "-P mytestproject"
    lappend options "-p -10"
-   lappend options "-pty yes"
+   # -pty fails on freebsd, this is CS-634
+   if {[string first "fbsd" [resolve_arch $submit_cmd_host]] < 0} {
+      lappend options "-pty yes"
+   }
    lappend options "-hard -q all.q -soft -q all.q@$submit_cmd_host"
    lappend options "-r yes"
    lappend options "-sc foo=bar"
