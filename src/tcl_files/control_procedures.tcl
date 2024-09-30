@@ -2486,6 +2486,20 @@ proc resolve_host {name {long 0}} {
    return $newname
 }
 
+###
+# @brief resolve a list of hosts
+#
+# @param hosts list of hosts
+# @param long 0 for short name, 1 for long name
+# @return list of resolved hosts
+##
+proc resolve_host_list {hosts {long 0}} {
+   set new_hosts {}
+   foreach host $hosts {
+      lappend new_hosts [resolve_host $host $long]
+   }
+   return $new_hosts
+}
 
 #****** control_procedures/resolve_queue() *************************************
 #  NAME
