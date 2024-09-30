@@ -4907,34 +4907,42 @@ proc check_root_access {path} {
 #                         remote cluster)
 #
 #*******************************************************************************
-proc delete_temp_script_files { { config_file ""} } {
+proc delete_temp_script_files {{config_file ""}} {
    global ts_config CHECK_USER
 
-   
-   # try to delete the temp files on the fileserver
+   ts_log_fine "deleting temporary used files ..."
+
    set local_host [gethostname]
+   set del_script "$ts_config(testsuite_root_dir)/scripts/delete_temp_files.sh"
 
    # first delete local files on the hosts
    set local_del_file_name [get_testsuite_delete_filename 1 $config_file]
    if {[is_remote_file $local_host $CHECK_USER $local_del_file_name]} {
       get_file_content $local_host $CHECK_USER $local_del_file_name local_del_files
-      for { set i 1} { $i <= $local_del_files(0) } { incr i 1 } {
+      set hosts {}
+      for {set i 1} {$i <= $local_del_files(0)} {incr i 1} {
          set help_str [split $local_del_files($i) ":"]
          set del_host [string trim [lindex $help_str 0]]
-         set del_file [string trim [lindex $help_str 1]]
-         if {[remote_file_isdirectory $del_host $del_file]} {
-            remote_delete_directory $del_host $del_file
+         if {[lsearch -exact $hosts $del_host] < 0} {
+            lappend hosts $del_host
+            set num_files($del_host) 1
          } else {
-            delete_remote_file $del_host $CHECK_USER $del_file
+            incr num_files($del_host)
          }
+      }
+      foreach host $hosts {
+         ts_log_fine "deleting $num_files($host) temp files on host $host"
+         set result [start_remote_prog $host $CHECK_USER $del_script "$local_del_file_name $host" prg_exit_state 120]
+         ts_log_fine $result
       }
       delete_remote_file $local_host $CHECK_USER $local_del_file_name
    }
 
-   ts_log_fine "deleting temporary used files ..."
+   # delete temp files in the results directory
    set del_file_name [get_testsuite_delete_filename 0 $config_file]
    set temp_del_file_name "${del_file_name}.old"
 
+   # try to delete the temp files on the fileserver
    set host [fs_config_get_server_for_path $del_file_name 0]
 
    if {$host == ""} {
@@ -5006,7 +5014,7 @@ proc delete_temp_script_files { { config_file ""} } {
 
    # This call makes new entry in new del_file_name and deletes
    # the renamed file on the file server
-   set result [start_remote_prog $host $CHECK_USER "$ts_config(testsuite_root_dir)/scripts/delete_temp_files.sh" $temp_del_file_name prg_exit_state 120]
+   set result [start_remote_prog $host $CHECK_USER $del_script $temp_del_file_name prg_exit_state 120]
    # Now delete the temp_del_file_name localy !!!
    file delete $temp_del_file_name
 }
