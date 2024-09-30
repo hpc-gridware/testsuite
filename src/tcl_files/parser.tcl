@@ -2879,7 +2879,8 @@ proc qstat_F_plain_parse {  output {params ""} } {
    # Transform the params list into a comma separated list
    regsub " " $params "," args ; 
    # Run usual command
-   set result [start_sge_bin "qstat" "-F $args"]
+   set myenv(SGE_LONG_QNAMES) 50
+   set result [start_sge_bin "qstat" "-F $args" "" "" prg_exit_state 60 "" "bin" output_lines myenv]
    parse_multiline_list result parsed_out
 
    set index 0
