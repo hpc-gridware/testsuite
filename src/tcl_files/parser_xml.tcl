@@ -2124,3 +2124,24 @@ proc qstat_j_xml_par { output job_id xmloutput} {
    }
 }
 
+###
+# @brief transform a unix timestamp to a XML date time string
+#
+# Formats a unix timestamp as a XML date time string.
+# Beginning with OCS 9.0.0 the XML date time string contains microseconds (.000000).
+# If the timestamp is 0, the string "0" is returned.
+#
+# @param[in] unixtime the unix timestamp
+# @return the XML date time string
+##
+proc xml_date_time {unixtime} {
+   if {$unixtime == 0} {
+      set date "0"
+   } else {
+      set date [clock format $unixtime -format "%Y-%m-%dT%H:%M:%S"]
+      if {[is_version_in_range "9.0.0"]} {
+         append date ".000000"
+      }
+   }
+   return $date
+}
