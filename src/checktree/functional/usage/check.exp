@@ -456,8 +456,13 @@ proc usage_monitor_check {id test_name slots acct_slots wallclock master_host} {
          set my_timeout 1
          set timeout_error 0
          if {![get_qstat_j_info $jobid]} {
+            # job might just have finished, check accounting if we find the job there
+            if {[get_qacct $jobid] == 0} {
+               ts_log_fine "we didn't see the job finish but qstat did no longer see it and it appeared in qacct"
+               set job_finished 1
+            }
             if {!$job_finished} {
-               set msg "job terminated abnormally (1), master host $master_host\n"
+               set msg "job $jobid terminated abnormally (1), master host $master_host\n"
                foreach line $info(lines) {
                   append msg "$line\n"
                }
@@ -527,16 +532,15 @@ proc usage_monitor_check {id test_name slots acct_slots wallclock master_host} {
 
       set online_info(maxvmem) [transform_unit $online_info(maxvmem)]
       if {!$job_finished} {
-         ts_log_severe "job terminated abnormally (2), master host $master_host"
+         ts_log_severe "job $jobid terminated abnormally (2), master host $master_host"
       } else {
          if {[string compare $test_name "usage_tight"] == 0 && $CHECK_ACT_LEVEL != 2} {
             set online_info(maxvmem) [expr $online_info(maxvmem) / $slots]
          }
 
          set error_list [usage_check $jobid online_info $slots $acct_slots $wallclock]
-
-         foreach error $error_list {
-            ts_log_severe $error
+         if {[llength $error_list] > 0} {
+            ts_log_severe "job $jobid had usage failures:\n[join $error_list "\n"]"
          }
       }
    }
