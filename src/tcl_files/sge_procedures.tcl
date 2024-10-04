@@ -3408,7 +3408,8 @@ proc wait_for_queue_state {queue state wait_timeout} {
          return $q_state
       }
       if {[timestamp] > $my_timeout} {
-         ts_log_severe "timeout waiting for queue $queue to get in \"${state}\" state"
+         set qstat_output [start_sge_bin "qstat" "-f -q $queue"]
+         ts_log_severe "timeout waiting for queue $queue to get in \"${state}\" state\n$qstat_output"
          return -1
       }
    }
