@@ -114,14 +114,20 @@ proc compile_host_list {{binaries_only 0}} {
    global ts_host_config
    global ts_config
   
-   set submit_hosts {}
-   if { $ts_config(submit_only_hosts) != "none" } {
-      set submit_hosts $ts_config(submit_only_hosts)
+   set other_hosts {}
+   if {$ts_config(submit_only_hosts) != "none"} {
+      set other_hosts [concat $other_hosts $ts_config(submit_only_hosts)]
+   }
+   if {$ts_config(admin_only_hosts) != "none"} {
+      set other_hosts [concat $other_hosts $ts_config(admin_only_hosts)]
+   }
+   if {$ts_config(non_cluster_hosts) != "none"} {
+      set other_hosts [concat $other_hosts $ts_config(non_cluster_hosts)]
    }
    
    # build host list according to cluster requirements
    set host_list [concat $ts_config(master_host) $ts_config(execd_hosts) \
-                         $ts_config(shadowd_hosts) $submit_hosts \
+                         $ts_config(shadowd_hosts) $other_hosts \
                          [checktree_get_required_hosts]]
 
    # for additional configurations, we might have different architectures
@@ -138,8 +144,8 @@ proc compile_host_list {{binaries_only 0}} {
             ts_log_fine "adding hosts from additional cluster configuration file"
             ts_log_fine "$filename"
             ts_log_fine "to compile host list. This cluster will be installed as GE Cell!"
-            foreach param "master_host execd_hosts shadowd_hosts submit_only_hosts" {
-               if { $add_config($param) != "none" } {
+            foreach param "master_host execd_hosts shadowd_hosts submit_only_hosts admin_only_hosts non_cluster_hosts" {
+               if {$add_config($param) != "none"} {
                   append host_list " $add_config($param)"
                   ts_log_fine "appending $param host \"$add_config($param)\""
                }
