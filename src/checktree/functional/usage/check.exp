@@ -188,7 +188,7 @@ proc usage_setup {} {
    set queue_conf(slots)           5
 
    # set memory limits
-   set queue_conf(h_vmem) "500M"
+   set queue_conf(h_vmem) "700M"
    add_queue "usage.q" "@allhosts" queue_conf
 }
 
@@ -376,7 +376,7 @@ proc usage_check {jobid qstat_j_info slots acct_slots expected_wallclock} {
    set wallclock $qacct_info(ru_wallclock)
    ts_log_fine "job runtime was reported as $wallclock, expected wallclock is $expected_wallclock"
    set expected_cpu [expr $wallclock * $slots]
-   set expected_mem [expr $wallclock * 500.0 * $slots / 1024]
+   set expected_mem [expr $wallclock * 700.0 * $slots / 1024]
    ts_log_fine "expected_cpu = $expected_cpu, expected_mem = $expected_mem"
 
    # compare usage
