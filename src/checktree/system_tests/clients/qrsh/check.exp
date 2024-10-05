@@ -131,7 +131,7 @@ proc qrsh_function {} {
    ts_log_fine "qrsh functional test"
    set arch [resolve_arch $qrsh_submithost]
    foreach host $qrsh_hostlist {
-      set qrsh_id [open_remote_spawn_process $qrsh_submithost $CHECK_USER $ts_config(product_root)/bin/$arch/qrsh "-l hostname=$host echo qrsh sucessfully started"]
+      set qrsh_id [open_remote_spawn_process $qrsh_submithost $CHECK_USER $ts_config(product_root)/bin/$arch/qrsh "-l hostname=$host echo qrsh successfully started"]
       set sp_id [lindex $qrsh_id 1]
 
       set timeout 60
@@ -139,7 +139,7 @@ proc qrsh_function {} {
          -i $sp_id full_buffer {
             ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
          }
-         -i $sp_id "qrsh sucessfully started" {
+         -i $sp_id "qrsh successfully started" {
             ts_log_fine "qrsh to host $host ok"
             exp_continue
          }
@@ -380,7 +380,7 @@ proc qrsh_h {} {
 
    incr job_id 1       ;# job id of next job !
    set arch [resolve_arch $qrsh_submithost]
-   set qrsh_id [open_remote_spawn_process $qrsh_submithost $CHECK_USER $ts_config(product_root)/bin/$arch/qrsh "-h echo qrsh sucessfully started"]
+   set qrsh_id [open_remote_spawn_process $qrsh_submithost $CHECK_USER $ts_config(product_root)/bin/$arch/qrsh "-h echo qrsh successfully started"]
    set sp_id [lindex $qrsh_id 1]
 
    trigger_scheduling
@@ -405,7 +405,7 @@ proc qrsh_h {} {
       -i $sp_id full_buffer {
          ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
       }
-      -i $sp_id "qrsh sucessfully started" {
+      -i $sp_id "qrsh successfully started" {
          ts_log_severe "qrsh -h failed"
       }
       -i $sp_id default {
@@ -421,7 +421,7 @@ proc qrsh_h {} {
       -i $sp_id full_buffer {
          ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
       }
-      -i $sp_id "qrsh sucessfully started" {
+      -i $sp_id "qrsh successfully started" {
          ts_log_fine "qrsh -h ok"
       }
       -i $sp_id default {
@@ -455,7 +455,7 @@ proc qrsh_hold_jid {} {
    set hold_job_id [submit_job $arguments]
    set job_id [expr $hold_job_id + 1]
    set arch [resolve_arch $qrsh_submithost]
-   set qrsh_id [open_remote_spawn_process $qrsh_submithost $CHECK_USER $ts_config(product_root)/bin/$arch/qrsh "-hold_jid $hold_job_id echo qrsh sucessfully started"]
+   set qrsh_id [open_remote_spawn_process $qrsh_submithost $CHECK_USER $ts_config(product_root)/bin/$arch/qrsh "-hold_jid $hold_job_id echo qrsh successfully started"]
    set sp_id [lindex $qrsh_id 1]
 
    trigger_scheduling
@@ -480,7 +480,7 @@ proc qrsh_hold_jid {} {
       -i $sp_id full_buffer {
          ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
       }
-      -i $sp_id "qrsh sucessfully started" {
+      -i $sp_id "qrsh successfully started" {
          ts_log_severe "qrsh -hold_jid failed"
       }
       -i $sp_id default {
@@ -496,7 +496,7 @@ proc qrsh_hold_jid {} {
       -i $sp_id full_buffer {
          ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
       }
-      -i $sp_id "qrsh sucessfully started" {
+      -i $sp_id "qrsh successfully started" {
          ts_log_fine "qrsh -hold_jid ok"
       }
       -i $sp_id default {
@@ -528,7 +528,7 @@ proc qrsh_alltoall {} {
    foreach source $qrsh_hostlist {
       set source_arch [resolve_arch $source]
       foreach dest $qrsh_hostlist {
-         set qrsh_id [open_remote_spawn_process "$source" $CHECK_USER "$ts_config(product_root)/bin/$source_arch/qrsh" "-l hostname=$dest echo qrsh sucessfully started"]
+         set qrsh_id [open_remote_spawn_process "$source" $CHECK_USER "$ts_config(product_root)/bin/$source_arch/qrsh" "-l hostname=$dest echo qrsh successfully started"]
          set sp_id [lindex $qrsh_id 1]
          set timeout 60
          expect {
@@ -538,7 +538,7 @@ proc qrsh_alltoall {} {
             -i $sp_id eof {
                ts_log_severe "open_remote_spawn_process closed connection (eof)"
             }
-            -i $sp_id "qrsh sucessfully started" {
+            -i $sp_id "qrsh successfully started" {
                ts_log_fine "qrsh from host $source to host $dest ok"
                exp_continue
             }
@@ -568,7 +568,7 @@ proc qrsh_starter_method {} {
 
    set arch [resolve_arch $qrsh_submithost]
    foreach host $qrsh_hostlist {
-      set qrsh_id [open_remote_spawn_process $qrsh_submithost $CHECK_USER $ts_config(product_root)/bin/$arch/qrsh "-l hostname=$host echo qrsh sucessfully started"]
+      set qrsh_id [open_remote_spawn_process $qrsh_submithost $CHECK_USER $ts_config(product_root)/bin/$arch/qrsh "-l hostname=$host echo qrsh successfully started"]
       set sp_id [lindex $qrsh_id 1]
 
       set timeout 60
@@ -581,7 +581,7 @@ proc qrsh_starter_method {} {
             set starter_method 1
             exp_continue
          }
-         -i $sp_id "qrsh sucessfully started" {
+         -i $sp_id "qrsh successfully started" {
             if {$starter_method == 0} {
                ts_log_severe "qrsh job started without starter_method on host $host"
             } else {

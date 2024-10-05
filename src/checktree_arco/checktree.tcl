@@ -193,7 +193,7 @@ proc arco_compile_clean { compile_hosts a_report } {
 #    a_report      -- the report object
 #
 #  RESULT
-#     0    -- succesfull build
+#     0    -- successful build
 #     else -- failure
 
 #  EXAMPLE

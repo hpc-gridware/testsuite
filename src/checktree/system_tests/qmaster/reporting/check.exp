@@ -288,7 +288,9 @@ proc reporting_do_accounting_test {scenario flush_time} {
       set f [open $reporting_acct_file w]
       puts $f "# new accounting file"
       close $f
+      wait_for_remote_file $ts_config(master_host) $CHECK_USER $reporting_acct_file
    }
+
    set mtime [reporting_get_timestamp $reporting_acct_file]
    # Submit job
    # we submit an array job of short running sleepers 
