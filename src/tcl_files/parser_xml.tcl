@@ -722,7 +722,7 @@ proc qstat_xml_jobid { node121 jobtype output} {
       lappend output_xml_qstat(jobid_list) $next_jobid
       
       set node121 $node13 ; # yes, node121, NOT node122...
-      
+
       foreach next_column $column_vars {
          set node22 [$node122 nextSibling] ;
          if { $node22 == "" } {
@@ -760,16 +760,16 @@ proc qstat_xml_jobid { node121 jobtype output} {
          }
          
          
-         if { ($next_column == "hard_req_queue") && ($jobtype == "r") && [regexp "lx" $next_xml_param] || \
-              [regexp "sol" $next_xml_param] } {
+         if { ($next_column == "hard_req_queue") && ($jobtype == "r") && ([regexp "lx" $next_xml_param] || \
+              [regexp "sol" $next_xml_param]) } {
            set output_xml_qstat($next_jobid,hard_resource) "arch=$next_xml_param"
            #set output_xml_qstat($next_jobid,$next_column) ""
            set node1211 $node21
            continue
          }
          
-         if { ($next_column == "hard_req_queue") && ($jobtype == "fr") && [regexp "lx" $next_xml_param] || \
-              [regexp "sol" $next_xml_param] } {
+         if { ($next_column == "hard_req_queue") && ($jobtype == "fr") && ([regexp "lx" $next_xml_param] || \
+              [regexp "sol" $next_xml_param]) } {
            set output_xml_qstat($next_jobid,hard_resource) "arch=$next_xml_param"
            #set output_xml_qstat($next_jobid,$next_column) ""
            set node1211 $node21
@@ -793,10 +793,8 @@ proc qstat_xml_jobid { node121 jobtype output} {
          if { ($next_column == "hard_resource") } {
             set output_xml_qstat($next_jobid,hard_resource) "arch=$next_xml_param"
          }
-         
-       }
-
-    }
+      }
+   }
 }
 
 

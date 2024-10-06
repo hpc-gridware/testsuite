@@ -649,28 +649,31 @@ proc qstat_plain_xml_comparison {} {
    # See IZ 2052 for details.
    set column_vars "prior name user state time queue master"
 
-   set error_flag 0
+   set errors ""
    foreach jobid $jobid_list {
       foreach column $column_vars {
          # For columns state, queue and master, trim the trailing blanks
          # For queue or master values, need to trim XML output to match
          # the plain output.
+         if {![info exists qstat_xml_output($jobid,$column)]} {
+            append errors "jobid $jobid, column $column not found in XML output\n"
+            continue
+         }
          if {$column == "state" || $column == "queue" || $column == "master"} {
             set qstat_xml_output($jobid,$column) [string trim $qstat_xml_output($jobid,$column)]
          }
 
          if {$qstat_plain_output($jobid,$column) != $qstat_xml_output($jobid,$column)} {
-            ts_log_fine "Plain output and XML output DO NOT agree for jobid $jobid ...\n"
-            ts_log_fine "and column $column... \n"
-            ts_log_fine "qstat_plain_output was $qstat_plain_output($jobid,$column)... \n"
-            ts_log_fine "while qstat_xml_output was $qstat_xml_output($jobid,$column)... \n"
-            incr error_flag 1
+            append errors "Plain output and XML output DO NOT agree for jobid $jobid ...\n"
+            append errors "and column $column... \n"
+            append errors "qstat_plain_output was $qstat_plain_output($jobid,$column)... \n"
+            append errors "while qstat_xml_output was $qstat_xml_output($jobid,$column)... \n"
          }
       }
    }
 
-   if {$error_flag != 0} {
-      ts_log_severe "error in plain, XML qstat"
+   if {$errors != ""} {
+      ts_log_severe "error in plain, XML qstat:\n$errors"
    }
 
    delete_all_jobs
