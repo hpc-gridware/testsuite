@@ -1397,7 +1397,7 @@ proc scp_remote_file {hostname src dest} {
 # @return path to the local script
 ##
 global get_ts_local_script_cache
-unset -nocomplain get_ts_local_script_cache
+#unset -nocomplain get_ts_local_script_cache
 proc get_ts_local_script {hostname script} {
    get_current_cluster_config_array ts_config
    global ts_host_config
