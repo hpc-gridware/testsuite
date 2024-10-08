@@ -23,13 +23,11 @@ global check_functions
 global check_root_access_needs
 global check_need_running_system
 
-#set check_root_access_needs "yes"
-#set check_need_running_system "no"
-
 # define test's name and run level descriptions
 set check_name            "max_dyn_ec"
 set check_category        "COMPATIBILITY SYSTEM EVENTCLIENT VERIFIED"
 set check_description(0)  "test setting of the maximum number of dynamic event clients"
+set check_description(1)  "test a high number of event clients (qsub -sync y) with simulated hosts"
 
 # define test's dependencies
 set check_needs           "init_core_system"
@@ -37,6 +35,8 @@ set check_root_access_needs "yes"
 
 # setup and cleanup functions
 set check_setup_function max_dyn_ec_setup
+set check_setup_level_function max_dyn_ec_setup_level
+set check_cleanup_level_function max_dyn_ec_cleanup_level
 set check_cleanup_function max_dyn_ec_cleanup
 
 # define test's procedure order
@@ -59,10 +59,54 @@ proc max_dyn_ec_setup {} {
    get_config max_dyn_ec_backup
 }
 
+proc max_dyn_ec_setup_level {} {
+   global ts_config
+   global CHECK_ACT_LEVEL
+   global max_dyn_ec_simhosts max_dyn_ec_jobs_per_host
+
+   # set the number of jobs per host
+   if {$CHECK_ACT_LEVEL == 0} {
+      set max_dyn_ec_jobs_per_host 50
+   } else {
+      # we use simulated hosts, so we do not have load on the hosts from job execution
+      # and can start more submit clients
+      set max_dyn_ec_jobs_per_host 100
+
+      # initialize the use of simulated hosts
+      if {![simhost_init]} {
+         # ts_log_config has been done in simhost_init
+         return
+      }
+
+      # add hosts and add them to host group and queue
+      set max_dyn_ec_simhosts [simhost_add 100 "@simhosts"]
+      set q(slots) 10
+      add_queue "sim.q" "@simhosts" q
+
+      disable_queue "all.q"
+
+      shutdown_and_restart_qmaster
+   }
+}
+
+proc max_dyn_ec_cleanup_level {} {
+   global ts_config
+   global CHECK_ACT_LEVEL
+   global max_dyn_ec_simhosts
+
+   if {$CHECK_ACT_LEVEL == 1} {
+      del_queue "sim.q" "" 1 1
+      enable_queue "all.q"
+
+      del_hostgroup "@simhosts"
+      simhost_delete $max_dyn_ec_simhosts
+   }
+}
+
 proc max_dyn_ec_cleanup {} {
    global ts_config
    global max_dyn_ec_backup
-   global max_dyn_ec_clients
+   global max_dyn_ec_clients max_dyn_ec_jobs_per_host max_dyn_ec_simhosts
 
    # cleanup jobs
    delete_all_jobs
@@ -72,7 +116,7 @@ proc max_dyn_ec_cleanup {} {
    reset_config max_dyn_ec_backup
 
    # unset our test's global variables
-   unset -nocomplain max_dyn_ec_backup max_dyn_ec_clients
+   unset -nocomplain max_dyn_ec_backup max_dyn_ec_clients max_dyn_ec_jobs_per_host max_dyn_ec_simhosts
 }
 
 #****** max_dyn_ec/max_dyn_ec_default() *************************************************
@@ -102,27 +146,27 @@ proc max_dyn_ec_default {} {
    if {$logfile_wait_error == 0} {
       set exceeded 0
       foreach msg [split $messages "\n"] {
-	if {[string match "*$exceeds_message*" $msg]} {
-      	   ts_log_fine "master host file descriptor limit restricts the number of event clients"
-	   set exceeded 1
-	}
-	if {[string match "*$expected_message*" $msg]} {
-	   set max_dyn [lindex $msg 9]
-	   ts_log_fine "dynamic event client limit is set to $max_dyn"
-	   if {$exceeded} {
-	      set max_dyn_ec_clients $max_dyn
-         set msg "master host file descriptor limit allows only $max_dyn dynamic event clients"
-         append msg "\ntry increasing it, on Linux edit /etc/security/limits.conf and add e.g. the lines"
-         append msg "\n*                -       nofile          8192"
-         append msg "\nroot             -       nofile          8192"
-         ts_log_config $msg
-	   } else {
-	      if {$max_dyn != $max_dyn_ec_clients} {
-	         ts_log_severe "invalid max dynamic event clients: expected $max_dyn_ec_clients, got $max_dyn"
-	         set max_dyn_ec_clients $max_dyn
-	      }
-	   }
-	}
+         if {[string match "*$exceeds_message*" $msg]} {
+            ts_log_fine "master host file descriptor limit restricts the number of event clients"
+            set exceeded 1
+         }
+         if {[string match "*$expected_message*" $msg]} {
+            set max_dyn [lindex $msg 9]
+            ts_log_fine "dynamic event client limit is set to $max_dyn"
+            if {$exceeded} {
+               set max_dyn_ec_clients $max_dyn
+                 set msg "master host file descriptor limit allows only $max_dyn dynamic event clients"
+                 append msg "\ntry increasing it, on Linux edit /etc/security/limits.conf and add e.g. the lines"
+                 append msg "\n*                -       nofile          8192"
+                 append msg "\nroot             -       nofile          8192"
+                 ts_log_config $msg
+            } else {
+               if {$max_dyn != $max_dyn_ec_clients} {
+                  ts_log_severe "invalid max dynamic event clients: expected $max_dyn_ec_clients, got $max_dyn"
+                  set max_dyn_ec_clients $max_dyn
+               }
+            }
+         }
       }
    }
 
@@ -143,27 +187,32 @@ proc max_dyn_ec_default {} {
 #*******************************************************************************
 proc max_dyn_ec_massive_qsub_sync {} {
    global ts_config CHECK_USER
-   global max_dyn_ec_clients
+   global max_dyn_ec_clients max_dyn_ec_jobs_per_host
+
+   ts_log_fine "starting max_dyn_ec_massive_qsub_sync at [clock format [clock seconds]]"
 
    # set high number of event clients
-   # set it to a higher value than the actual number of jobs we will submit,
-   # to avoid running into issue
-   # GE-3585: can only start one qsub -sync y less than configured with MAX_DYN_EC
-   set conf(qmaster_params) "MAX_DYN_EC=2000"
+   get_config conf_backup
+   set conf(qmaster_params) [add_or_replace_param $conf_backup(qmaster_params) "MAX_DYN_EC" "MAX_DYN_EC=2000"]
    set_config conf
 
    # maximum number of qsub -sync y to start
    set max_jobs $max_dyn_ec_clients
-   set max_jobs_per_host 50
 
    # on every host call scripts/qsub_sync.sh to submit a bunch of qsub -sync jobs
    set hosts $ts_config(execd_nodes)
    set num_hosts [llength $hosts]
 
    # compute job numbers
-   set max_jobs [min $max_jobs [expr $num_hosts * $max_jobs_per_host]]
+   set max_jobs [min $max_jobs [expr $num_hosts * $max_dyn_ec_jobs_per_host]]
    set jobs_per_host [expr $max_jobs / $num_hosts]
    set num_jobs [expr $jobs_per_host * $num_hosts]
+
+   # starting the submitter scripts might take some time, possibly we need to open the ssh connections one after another
+   # pass a start time to the submit scripts to start submitting at the same time
+   # to put maximum load on sge_qmaster / the event master thread
+   # delay by 10 seconds + 1 second per host
+   set delay [expr [clock seconds] + 10 + $num_hosts * 1]
 
    ts_log_fine "starting $num_jobs jobs on $num_hosts hosts"
 
@@ -171,40 +220,57 @@ proc max_dyn_ec_massive_qsub_sync {} {
    set spawn_list {}
    set submit_script "$ts_config(testsuite_root_dir)/scripts/qsub_sync.sh"
    foreach host $hosts {
-      set id [open_remote_spawn_process $host $CHECK_USER $submit_script "$jobs_per_host 10"]
+      # to reproduce CS-666 set a high job runtime
+      # it also makes sure that all event clients are registered at the same time
+      # and event master has to cope with all of them
+      set id [open_remote_spawn_process $host $CHECK_USER $submit_script "$jobs_per_host 120 $delay"]
       lappend id_list $id
       set spawn_id [lindex $id 1]
       lappend spawn_list $spawn_id
+      set spawn_map($spawn_id) $host
    }
 
    set submitted 0
    set finished 0
    set unexpected_output ""
    set timeout 60
-   #log_user 1
+   # we run into the delayed reporting of jobs by sge_execds, this takes 10 minutes
+   # @todo CS-662 why? It starts when we re-start sge_qmaster in the previous check_function, but there is not a single job running
+   #       at that time. Does it then have to enable the delayed reporting at all?
+   set final_timeout [expr [clock seconds] + 15 * 60]
+   # log_user 1
    expect_user {
       -i $spawn_list full_buffer {
          ts_log_severe "expect full_buffer error"
       }
       -i $spawn_list timeout {
-         ts_log_severe "timeout"
+         if {[clock seconds] > $final_timeout} {
+            ts_log_severe "timeout"
+         } else {
+            ts_log_fine "submitted: $submitted, finished: $finished"
+            exp_continue
+         }
       }
       -i $spawn_list eof {
          ts_log_severe "got eof"
       }
       -i $spawn_list  "?*\n" {
+         set spawn_id $expect_out(spawn_id)
+         set host $spawn_map($spawn_id)
          foreach line [split $expect_out(0,string) "\n"] {
             set line [string trim $line]
             if {$line != ""} {
                switch -glob -- $line {
                   "Your job * has been submitted" {
+                     ts_log_finer "$host: job submitted"
                      incr submitted
                   }
                   "Job * exited with exit code *." {
+                     ts_log_finer "$host: job finished"
                      incr finished
                   }
                   "qsub_sync.sh exiting" {
-                     set spawn_id $expect_out(spawn_id)
+                     ts_log_finer "$host: submit script done"
                      set pos [lsearch -exact $spawn_list $spawn_id]
                      if {$pos >= 0} {
                         set spawn_list [lreplace $spawn_list $pos $pos]
@@ -217,13 +283,20 @@ proc max_dyn_ec_massive_qsub_sync {} {
                      # ignore
                   }
                   default {
-                     ts_log_fine "max_dyn_ec_massive_qsub_sync: unexpected output: $line"
-                     append unexpected_output "\n$line"
+                     ts_log_fine "$host: max_dyn_ec_massive_qsub_sync: unexpected output: $line"
+                     append unexpected_output "\n$host: $line"
+                     # In error situations we see multiple messages in a line:
+                     # The qmaster has become unreachable.  Attempting to reconnect.Reconnected to qmaster.Job 1738 exited with exit code 0.
+                     # Try to recognize and count the exited message.
+                     if {[string match "*Job * exited with exit code *." $line]} {
+                        incr finished
+                     }
                   }
                }
             }
          }
-         if {[llength $spawn_list] > 0} {
+         ts_log_fine "submitted: $submitted, finished: $finished"
+         if {[llength $spawn_list] > 0 || $submitted > $finished} {
             exp_continue
          }
       }
@@ -241,17 +314,25 @@ proc max_dyn_ec_massive_qsub_sync {} {
    if {$unexpected_output != ""} {
       ts_log_severe "running qsub -sync y jobs produced unexpected output:$unexpected_output"
    }
+
+   set_config conf_backup
 }
 
 proc max_dyn_ec_out_of_ids {} {
-   global ts_config CHECK_USER
+   global ts_config CHECK_USER CHECK_ACT_LEVEL
+
+   # need to run this check only once
+   if {$CHECK_ACT_LEVEL > 0} {
+      return
+   }
 
    # this message gets written when qsub -sync y succeeded
    set msg_exited_0 [translate_macro MSG_QSUB_JOBEXITED_SI "*" "0"]
 
    # dynamic event clients disabled
    ts_log_fine "testing MAX_DYN_EC=0"
-   set conf(qmaster_params) "MAX_DYN_EC=0"
+   get_config conf_backup
+   set conf(qmaster_params) [add_or_replace_param $conf_backup(qmaster_params) "MAX_DYN_EC" "MAX_DYN_EC=0"]
    set_config conf
 
    set msg_out_of_ids [translate_macro MSG_TO_MANY_DYNAMIC_EC_U 0]
@@ -265,7 +346,7 @@ proc max_dyn_ec_out_of_ids {} {
 
    # 1 dynamic event client allowed
    ts_log_fine "testing MAX_DYN_EC=1"
-   set conf(qmaster_params) "MAX_DYN_EC=1"
+   set conf(qmaster_params) [add_or_replace_param $conf_backup(qmaster_params) "MAX_DYN_EC" "MAX_DYN_EC=1"]
    set_config conf
    set msg_out_of_ids [translate_macro MSG_TO_MANY_DYNAMIC_EC_U 1]
    # positive test: start one event client
@@ -358,4 +439,7 @@ proc max_dyn_ec_out_of_ids {} {
    if {$error != ""} {
       ts_log_severe $error
    }
+
+   # restore config
+   set_config conf_backup
 }
