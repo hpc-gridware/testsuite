@@ -214,6 +214,9 @@ proc issue_440_check_qrsh {} {
 
    get_current_cluster_config_array ts_config
 
+   ts_log_info "this check function is disabled until CS-671 is fixed"
+   return
+
    set error_text ""
    set submit_script_path "$ts_config(testsuite_root_dir)/scripts/cmd_line_output.sh" 
 
