@@ -179,6 +179,7 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
                            incr prof(LISTENERT)
                            #parse_monitor_tet $message
                         }
+                        "*event-master*" -
                         "*event_master*: runs*" {
                            incr prof(DELIVERERT)
                            set tmp [lindex $split_line 2]
@@ -215,6 +216,7 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
                                  #parse_monitor_tet $message
                               }
                               "event master*" -
+                              "event-master*" -
                               "event_master*" {
                                  incr prof(DELIVERERT)
                                  set tmp [lindex $split_line 5]
