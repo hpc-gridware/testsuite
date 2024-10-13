@@ -366,6 +366,9 @@ set CHECK_USE_HUDSON 0
 global DISABLE_WASHING_MACHINE
 set DISABLE_WASHING_MACHINE 0
 
+global DISABLE_MAIL
+set DISABLE_MAIL 0
+
 global CHECK_HUDSON_OUTPUT ;# Used to hold output for since check_name
 set CHECK_HUDSON_OUTPUT ""
 global CHECK_HUDSON_STACKTRACE ;# Used to hold most recent stacktrace when failure occurred
@@ -1323,10 +1326,11 @@ proc get_root_passwd {} {
 proc mail_report { subject body } {
    global CHECK_REPORT_EMAIL_TO CHECK_REPORT_EMAIL_CC
    global write_mail_to_file
-   global CHECK_USE_HUDSON
+I  global CHECK_USE_HUDSON
+   global DISABLE_MAIL
    
    #Do not send emails when in hudson_reports mode
-   if {$CHECK_USE_HUDSON == 1} {
+   if {$CHECK_USE_HUDSON == 1 || $DISABLE_MAIL == 1} {
       return
    }
 
@@ -1377,9 +1381,10 @@ proc send_mail { address cc subject body } {
    global write_mail_to_file CHECK_MAIL_OUTPUT_FILE CHECK_ENABLE_MAIL
    global ts_config
    global CHECK_USE_HUDSON
+   global DISABLE_MAIL
    
    #Do not send emails when in hudson_reports mode
-   if {$CHECK_USE_HUDSON == 1} {
+   if {$CHECK_USE_HUDSON == 1 || $DISABLE_MAIL == 1} {
       return
    }
 
@@ -2805,7 +2810,9 @@ proc build_checktree {} {
    global ts_checktree create_csv_file
    global ACT_CHECKTREE CHECK_CUR_CONFIG_FILE
    global ts_config CHECK_USER
-   global fast_setup custom_checktree CHECK_USE_HUDSON
+   global fast_setup custom_checktree
+   global CHECK_USE_HUDSON
+   global JENKINS_MODE
 
    if { [info exists ts_checktree] } {
       unset ts_checktree
@@ -2823,7 +2830,7 @@ proc build_checktree {} {
    ts_log_fine "reading checktree nodes ..."
    
    #Optimalization: With the fast_setup and check <check> set, we just read what we really need
-   if {$CHECK_USE_HUDSON == 1 && [llength $custom_checktree] > 0} {
+   if {($CHECK_USE_HUDSON == 1 || $JENKINS_MODE ==1) && [llength $custom_checktree] > 0} {
       set error ""
       append error [read_checktree_nodes $ts_config(checktree_root_dir)/install_core_system]
       foreach elem $custom_checktree {
@@ -4100,7 +4107,9 @@ proc run_tests {path state_to_run} {
    global CHECK_TESTS_RUNNING
    global CHECK_INTERRUPT
    global CHECK_ENABLED_CATEGORIES
-   global fast_setup custom_checktree CHECK_USE_HUDSON check_id
+   global fast_setup custom_checktree
+   global CHECK_USE_HUDSON
+   global check_id
 
    array unset exclude_array
 
@@ -7769,15 +7778,19 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "compile_tool          choose between aimk (default) and cmake as build system"
       puts ""
-      puts "cmake_build_type      choose between Debug (default) and Release"
-      puts ""
-      puts "daily_build_nr        Define a daily build number at compile time."
-      puts ""
       puts "cmake_build_id        Define a build id for the cmake build."
+      puts ""
+      puts "cmake_build_type      choose between Debug (default) and Release"
       puts ""
       puts "cmake_compile_install_separately   As default TS does \'cmake install\' which automatically"
       puts "                      (re)compiles files that are not up to date. If both steps should be"
       puts "                      done in two separate steps than this can be enabled by passing 1 as argument"
+      puts ""
+      puts "daily_build_nr        Define a daily build number at compile time."
+      puts ""
+      puts "disable_mail          Disabled mail reports."
+      puts ""
+      puts "diable_washing_machine Disables the washing-machine-output."
       puts ""
       puts "all RUNLEVEL          run every test automatically up to runlevel RUNLEVEL"
       puts "                      (RUNLEVEL is a value from 0=short tests, up to 4=week tests)"
@@ -8216,6 +8229,20 @@ for {set i 0} {$i < $argc} {incr i} {
    if { ( [string compare [lindex $argv $i] "--disable_washing_machine"] == 0 ) || ([string compare [lindex $argv $i] "disable_washing_machine"] == 0 ) } {
       set DISABLE_WASHING_MACHINE 1
       puts " ---> disable_washing_machine is set <---"
+      continue
+   }
+
+   if { ( [string compare [lindex $argv $i] "--disable_mail"] == 0 ) || ([string compare [lindex $argv $i] "disable_mail"] == 0 ) } {
+      set DISABLE_MAIL 1
+      puts " ---> disable_mail is set <---"
+      continue
+   }
+
+   if { ( [string compare [lindex $argv $i] "--jenkins_mode"] == 0 ) || ([string compare [lindex $argv $i] "jenkins_mode"] == 0 ) } {
+      set JENKINS_MODE 1
+      set DISABLE_WASHING_MACHINE 1
+      set DISABLE_MAIL 1
+      puts " ---> jenkins_mode is set <---"
       continue
    }
 
