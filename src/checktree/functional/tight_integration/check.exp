@@ -873,6 +873,7 @@ proc tight_integration_massive {} {
 
 proc tight_integration_massive_nfs_tmpdir {} {
    global ts_config
+   global ts_host_config
    global CHECK_USER
    global TIGHT_INTEGRATION_MASSIVE_DURATION
    global submit_command tight_masterq tight_master_node
@@ -882,7 +883,7 @@ proc tight_integration_massive_nfs_tmpdir {} {
    tight_integration_init_messages_check
 
    # count the number of slots in the cluster to check if tests can be run
-   set tmpdir "$ts_config(product_root)/tight_tmpdir"
+   set tmpdir "$ts_host_config(NFS-ROOT2ROOT)/tight_tmpdir_${CHECK_USER}_$ts_config(commd_port)"
    set fileserver [fs_config_get_server_for_path $tmpdir]
    remote_file_mkdir $fileserver $tmpdir
    set total_slots 0
