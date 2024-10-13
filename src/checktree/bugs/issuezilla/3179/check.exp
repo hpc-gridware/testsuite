@@ -233,9 +233,11 @@ proc issue_3179_usage {} {
    set qacct_cpu  $qacct_info(cpu)
    
    # compare the qstat output with the one of qacct
-   if { $qacct_info(cpu) < $qstat_info } {
+   set qacct_number [format "%.3f" $qacct_info(cpu)]
+   set qstat_number [format "%.3f" $qstat_info]
+   if { $qacct_number < $qstat_number } {
       ts_log_severe "qacct-output $qacct_info(cpu) is smaller then qstat online usage (cpu) $qstat_info"
-   } elseif { $qacct_info(cpu) > $qstat_info_limit } {
+   } elseif { $qacct_number > $qstat_info_limit } {
       ts_log_severe "qacct-output $qacct_info(cpu) is >10% bigger then qstat online usage (cpu) $qstat_info"
    } else {
       ts_log_fine "CPU usage of job $id: qacct: $qacct_info(cpu) qstat: $qstat_info"   
