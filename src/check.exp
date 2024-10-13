@@ -1326,7 +1326,7 @@ proc get_root_passwd {} {
 proc mail_report { subject body } {
    global CHECK_REPORT_EMAIL_TO CHECK_REPORT_EMAIL_CC
    global write_mail_to_file
-I  global CHECK_USE_HUDSON
+   global CHECK_USE_HUDSON
    global DISABLE_MAIL
    
    #Do not send emails when in hudson_reports mode
