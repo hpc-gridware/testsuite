@@ -857,9 +857,10 @@ proc start_remote_prog { hostname
 proc sendmail { to subject thebody { send_html 0 } { cc "" } { bcc "" } { from "" } { replyto "" } { organisation "" } { force_mail 0 } } {
    global CHECK_USER CHECK_ENABLE_MAIL CHECK_MAILS_SENT CHECK_MAX_ERROR_MAILS
    global CHECK_USE_HUDSON
+   global DISABLE_MAIL
    
-   #Do not send emails when in hudson_reports mode
-   if {$CHECK_USE_HUDSON == 1} {
+   # Do not send emails in hudson or jenkins mode
+   if {$CHECK_USE_HUDSON == 1 || $DISABLE_MAIL == 1} {
       return
    }
    

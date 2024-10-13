@@ -553,8 +553,14 @@ proc report_finish { report result } {
 #
 #*******************************************************************************
 proc report_send_mail { report } {
-   global CHECK_USE_HUDSON CHECK_HUDSON_OUTPUT
+   global CHECK_USE_HUDSON
+   global CHECK_HUDSON_OUTPUT
+   global DISABLE_MAIL
    upvar $report report_array
+
+   if {$DISABLE_MAIL == 1} {
+      return
+   }
    
    if {$CHECK_USE_HUDSON == 1} {
       report_hudson_xml $report
