@@ -32,7 +32,7 @@ set check_root_access_needs "yes"
 set check_version_range "9.0.0"
 
 # define test's name and run level descriptions
-set check_name            "simhosts"
+set check_name            "simhosts_basic"
 set check_category        "QMASTER SIMHOST VERIFIED"
 set check_description(0)  "test basic functionality with simulated hosts"
 
