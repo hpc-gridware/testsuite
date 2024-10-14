@@ -66,7 +66,11 @@ proc max_dyn_ec_setup_level {} {
 
    # set the number of jobs per host
    if {$CHECK_ACT_LEVEL == 0} {
-      set max_dyn_ec_jobs_per_host 50
+      # we have 40 slots per hosts, so we can start 40 jobs per host simultaneously
+      # multiple consecutive job starts on a host might cause this test to hit timeouts
+      # if you want to increase the number of jobs per host, you might need to increase
+      # the number of hosts, the number of slots per host or the timeouts values!
+      set max_dyn_ec_jobs_per_host 40
    } else {
       # we use simulated hosts, so we do not have load on the hosts from job execution
       # and can start more submit clients
