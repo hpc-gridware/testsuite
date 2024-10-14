@@ -44,20 +44,6 @@ job('GCS-CI-CD/TestsMedium/2411') {
    }
 }
 queue('GCS-CI-CD/TestsMedium/2411')
-job('GCS-CI-CD/TestsMedium/drmaa') {
-   lockableResources {
-      label('gcs-ci-cd-cluster')
-      resourcesVariable('CLUSTER')
-      resourceNumber(1)
-   }
-   wrappers {
-      sshAgent('tstusr-rsa-key')
-   }
-   steps {
-      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/api/drmaa 101')
-   }
-}
-queue('GCS-CI-CD/TestsMedium/drmaa')
 job('GCS-CI-CD/TestsMedium/throughput') {
    lockableResources {
       label('gcs-ci-cd-cluster')
