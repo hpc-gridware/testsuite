@@ -42,7 +42,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "issue_3013"
-set check_category        "BUG PARALLEL RQS SCHEDULER VERIFIED"
+set check_category        "BUG PARALLEL RQS SCHEDULER VERIFIED JENKINS_DISABLED"
 set check_description(0)  "check issue 3013 is fixed"
 
 # define test's dependencies

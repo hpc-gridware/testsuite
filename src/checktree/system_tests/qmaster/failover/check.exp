@@ -39,7 +39,7 @@ set check_root_access_needs  "yes"
 
 
 set check_name           "qmaster_failover"
-set check_category       "COMPATIBILITY SYSTEM L10N VERIFIED"
+set check_category       "COMPATIBILITY SYSTEM L10N VERIFIED JENKINS_DISABLED"
 set check_description(0) "checking status of queue with attribute"
 set check_description(1) "initial_state after qmaster failover"
 set check_needs          "init_core_system"

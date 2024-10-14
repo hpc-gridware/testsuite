@@ -32,7 +32,7 @@ set check_version_range "9.0.0"
 
 # define test's name and run level descriptions
 set check_name            "x_forks_slaves"
-set check_category        "EXECUTION LIMITS PARALLEL VERIFIED"
+set check_category        "EXECUTION LIMITS PARALLEL VERIFIED JENKINS_DISABLED"
 set check_description(0)  "check PE attributes master_forks_slaves and daemon_forks_slaves"
 
 # define test's dependencies

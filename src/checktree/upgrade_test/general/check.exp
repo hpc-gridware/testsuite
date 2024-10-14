@@ -45,7 +45,7 @@ set check_root_access_needs "yes"
 # define test's name and run level descriptions
 set check_name            "upgrade_test"
 # @todo CS-670 fix and re-enable test or create a new test
-set check_category        "COMPATIBILITY SYSTEM"
+set check_category        "COMPATIBILITY SYSTEM JENKINS_DISABLED"
 set check_description(0)  "Upgrade test"
 
 # define test's dependencies

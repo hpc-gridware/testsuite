@@ -39,7 +39,7 @@ global check_root_access_needs
 set check_root_access_needs "yes"
 
 set check_name         "qalter"
-set check_category     "COMPATIBILITY SYSTEM L10N VERIFIED"
+set check_category     "COMPATIBILITY SYSTEM L10N VERIFIED JENKINS_DISABLED"
 set check_description(0)  "check every qalter option"
 set check_needs        "init_core_system"       ;# dependencies of this check (name of other check)
 

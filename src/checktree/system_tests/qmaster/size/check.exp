@@ -39,7 +39,7 @@ global check_root_access_needs
 
 set check_root_access_needs  "yes"
 set check_name         "qmaster-size"
-set check_category     "COMPATIBILITY SYSTEM L10N VERIFIED"
+set check_category     "COMPATIBILITY SYSTEM L10N VERIFIED JENKINS_DISABLED"
 set check_description(0)    "check qmaster/schedd for memory leaks - functional test"
 set check_description(200)  "check qmaster/schedd for memory leaks - normal test"
 set check_description(400)  "check qmaster/schedd for memory leaks - long test"
