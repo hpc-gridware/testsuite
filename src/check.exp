@@ -369,6 +369,9 @@ set DISABLE_WASHING_MACHINE 0
 global DISABLE_MAIL
 set DISABLE_MAIL 0
 
+global JENKINS_MODE
+set JENKINS_MODE 0
+
 global CHECK_HUDSON_OUTPUT ;# Used to hold output for since check_name
 set CHECK_HUDSON_OUTPUT ""
 global CHECK_HUDSON_STACKTRACE ;# Used to hold most recent stacktrace when failure occurred
@@ -2830,7 +2833,7 @@ proc build_checktree {} {
    ts_log_fine "reading checktree nodes ..."
    
    #Optimalization: With the fast_setup and check <check> set, we just read what we really need
-   if {($CHECK_USE_HUDSON == 1 || $JENKINS_MODE ==1) && [llength $custom_checktree] > 0} {
+   if {$CHECK_USE_HUDSON == 1 && [llength $custom_checktree] > 0} {
       set error ""
       append error [read_checktree_nodes $ts_config(checktree_root_dir)/install_core_system]
       foreach elem $custom_checktree {
