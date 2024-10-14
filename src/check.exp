@@ -1655,7 +1655,7 @@ proc check_executable_files {  } {
    lappend filelist "$ts_config(checktree_root_dir)/functional/migration/checkpt_job.sh"
    lappend filelist "$ts_config(checktree_root_dir)/functional/migration/migrate.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qmake/echo_variable.sh"
-   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qmod/general/qmod_job.sh"
+   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qmod/qmod_general/qmod_job.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/qsub_gid.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/sleep_pid.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/starter.sh"
