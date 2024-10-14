@@ -639,6 +639,7 @@ proc mod_queue_state { queuelist state } {
      }
   }
 
+  set result_all ""
   if {$queue_nr != 0} {
      set result [start_sge_bin "qmod" "$command $queues"]
      ts_log_fine "$state queue(s) $queues"
@@ -648,12 +649,13 @@ proc mod_queue_state { queuelist state } {
         ts_log_fine "line: $elem"
         if {[string match "*${STATE}*" $elem] == 0} {
            incr failed 1
+           append result_all "$result\n"
         } 
      }
   }
 
   if {$failed != 0} {
-     ts_log_severe "could not $state all queues: $failed failed"
+     ts_log_severe "could not $state all queues: $failed failed: $result_all"
      return -1
   }
   return 0
