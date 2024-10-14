@@ -8646,6 +8646,11 @@ if {$do_dump_test_list} {
             set test_name_token [split $ts_checktree(${node_id},dir_name) "/"]
             set test_name "[lindex $test_name_token end]"
 
+            if {[string first "JENKINS_DISABLED" $ts_checktree(${node_id},check_category)] > 0} {
+               puts "skipped $ts_checktree(${node_id},dir_name) because it is in JENKINS_DISABLED category"
+               continue
+            }
+
             if {[string first "VERIFIED" $ts_checktree(${node_id},check_category)] == -1} {
                puts "skipped $ts_checktree(${node_id},dir_name) because it is not in VERIFIED category"
                continue

@@ -46,7 +46,7 @@ set check_need_running_system "no"
 
 # define test's name and run level descriptions
 set check_name             "basic"
-set check_category         "COMPATIBILITY SYSTEM INTERACTIVE"
+set check_category         "COMPATIBILITY SYSTEM INTERACTIVE JENKINS_DISABLED"
 set check_description(0)   "Basic test on selected hosts"
 set check_description(100) "Basic test on all cluster hosts"
 set check_description(200) "Basic test on all compiled hosts"

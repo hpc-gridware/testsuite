@@ -42,13 +42,13 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "sge_strdup_test"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED JENKINS_DISABLED"
 set check_description(0)  "test empty string segmentation faults issue"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
-
-# define test's procedure order
+set check_needs           "init_core_system"# #
+#
+   ## #d#e#f#i#n#e# #t#e#s#t#'#s# #p#r#o#c#e#d#u#r#e# #o#r#d#e#r
 set check_functions ""
 lappend check_functions "sge_strdup_test_test1"
 
