@@ -728,6 +728,7 @@ proc compile_source { { do_only_hooks 0} {compile_only 0} } {
 
    # shutdown possibly running system (and additional config clusters)
    shutdown_core_system $do_only_hooks 1
+   valgrind_analyse_copy_files
 
    if {$CHECK_COMPILE_TOOL == "aimk"} {
       incr error_count [compile_source_aimk $do_only_hooks $compile_hosts report $compile_only]

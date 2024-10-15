@@ -351,6 +351,12 @@ set CHECK_COVERAGE {} ;# list of code coverage methods (tcov, insure, or emma)
 global CHECK_COVERAGE_DIR ;# directory for test coverage profiles
 set CHECK_COVERAGE_DIR ""
 
+global CHECK_VALGRIND
+set CHECK_VALGRIND ""
+
+global CHECK_VALGRIND_HOST
+set CHECK_VALGRIND_HOST ""
+
 global CHECK_PREFERRED_ARCHS ;# preferred architecture for testing
 set CHECK_PREFERRED_ARCHS {}
 
@@ -5293,6 +5299,9 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       return 2
    }
    
+   # in case testsuite had been idle for a long time we might want to re-start valgrinded daemons
+   valgrind_restart_daemon_after_idle
+
    clear_all_check_errors $check_name
 
    # check the number of busy rlogin sessions
@@ -5352,12 +5361,12 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
          if {$do_only_one_test == 0} {
             set back [run_test_level $path $state_to_run $level 1 $nr_warnings]
             ts_log_finest "level $level return value: $back"
-            incr no_level_calls 1
          } else {
             set back [run_test_level $path $state_to_run $level 0 $nr_warnings]
             ts_log_finest "level $level return value of test $run_single_test: $back"
-            incr no_level_calls 1
          }
+
+         incr no_level_calls 1
 
          if {[string first "unknown" $CHECK_GROUP] >= 0} {
             ts_log_severe "CHECK_GROUP set to unknown, test was $path in level $level"
@@ -5398,6 +5407,14 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
             incr nr_already_done 1
          }
          ts_log_finest "calls=$no_level_calls, already done=$nr_already_done"
+
+         # do valgrind checks after each runlevel
+         # (except for the last one, where we do it after the cleanup function)
+         if {$no_level_calls < $possible_test_levels} {
+            if {![valgrind_check_after_runlevel]} {
+               incr nr_errors
+            }
+         }
       }
    }
 
@@ -5415,6 +5432,13 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
          }
       }
    }
+
+   # do another valgrind check after executing the cleanup function
+   # it has probably called some Cluster Scheduler binaries
+   if {![valgrind_check_after_runlevel]} {
+      incr nr_errors
+   }
+
 
    if {$was_check_abort} {
       ts_log_fine "******************************************************************"
@@ -6394,6 +6418,7 @@ proc restart_debug_daemons { { shutdown 0 } } {
    if { $shutdown == 0 } {
       set spooldir [get_qmaster_spool_dir]
       shutdown_master_and_scheduler $ts_config(master_host) $spooldir
+      valgrind_analyse_copy_files
    }
    startup_qmaster
    wait_for_load_from_all_queues 300
@@ -6424,11 +6449,15 @@ proc menu {} {
    global check_reinit_on_tcl_error ts_checktree ts_config
    global CHECK_INTERRUPT
    global check_use_installed_system
+   global CHECK_CUR_PROC_NAME
 
    set local_host [gethostname]
    delete_temp_script_files
 
    while {1} {
+      # we set CHECK_CUR_PROC_NAME here to get correct valgrind reporting
+      # and to make sure that valgrind is used e.g. when restarting qmaster via menu
+      set CHECK_CUR_PROC_NAME "main"
       print_menu_header
       puts "  (0) select runlevels/categories..."
       if {$CHECK_PACKAGE_DIRECTORY == "none" || $CHECK_PACKAGE_TYPE == "create_tar"} {
@@ -6619,6 +6648,7 @@ proc menu {} {
          }
          "22" {
             # start cluster
+            set CHECK_CUR_PROC_NAME "menu_22"
             if {[have_root_passwd] == -1} {
                 puts "need root access ..."
                 set_root_passwd
@@ -6628,19 +6658,23 @@ proc menu {} {
          }
          "23" {
             # shutdown cluster
+            set CHECK_CUR_PROC_NAME "menu_23"
             if {[have_root_passwd] == -1} {
                puts "need root access ..."
                set_root_passwd
             }
             shutdown_core_system 0 1
+            valgrind_analyse_copy_files
             wait_for_enter
          }
          "24" {
             # start master (and scheduler)
+            set CHECK_CUR_PROC_NAME "menu_24"
             restart_debug_daemons 1
          }
          "25" {
             # shutdown and restart master (and scheduler)
+            set CHECK_CUR_PROC_NAME "menu_25"
             restart_debug_daemons
          }
          "26" {
@@ -6720,6 +6754,7 @@ proc menu {} {
             # interactivley in the TS environment. When you know what you are
             # doing, this can be very helpful - also for exploring and debugging
             # the TS framework.
+            set CHECK_CUR_PROC_NAME "menu_60"
             do_eval_loop
          }
          default {
@@ -7209,6 +7244,7 @@ proc source_tcl_files {} {
    ts_source $libdir/control_procedures
    ts_source $libdir/cluster_procedures
    ts_source $libdir/coverage
+   ts_source $libdir/valgrind
    ts_source $libdir/parser
    ts_source $libdir/parser_xml
    ts_source $libdir/tcl_utils
@@ -7861,6 +7897,10 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "coverage <type(s)>    with code coverage analysis, type =\"tcov|insure|emma\""
       puts "coverage_dir <dir>    directory for test coverage profiles"
       puts ""
+      puts "valgrind <components> with valgrind memory testing"
+      puts "                      components are master|execution|clients|tests"
+      puts "valgrind_host <host>  host for valgrind memory testing"
+      puts ""
       puts "preferred_archs <archs> specify architectures, that shall be used whenever possible"
       puts "                      please use quotes, when specifying multiple architectures, e.g."
       puts "                      preferred_archs sol-amd64, or preferred_archs \"lx-amd64 lx-arm64\""
@@ -8284,6 +8324,35 @@ for {set i 0} {$i < $argc} {incr i} {
       continue
    }
 
+   if {[string compare [lindex $argv $i] "--valgrind"] == 0 || [string compare [lindex $argv $i] "valgrind"] == 0} {
+      incr i
+      set help_var [lindex $argv $i]
+      set CHECK_VALGRIND [string trim $help_var]
+
+      switch -exact $help_var {
+         "master" -
+         "execution" -
+         "clients" -
+         "tests" {
+            set CHECK_VALGRIND $help_var
+            puts " ---> doing memory testing with valgrind for \"$CHECK_VALGRIND\" <---"
+         }
+         default {
+            puts "invalid valgrind component $help_var, must be one of master, execution, clients, tests"
+            testsuite_shutdown 1
+         }
+      }
+
+      continue
+   }
+
+   if {[string compare [lindex $argv $i] "--valgrind_host"] == 0 || [string compare [lindex $argv $i] "valgrind_host"] == 0} {
+      incr i
+      set help_var [lindex $argv $i]
+      set CHECK_VALGRIND_HOST [string trim $help_var]
+      continue
+   }
+
    if { ( [string compare [lindex $argv $i] "--send_speed"] == 0 ) || ([string compare [lindex $argv $i] "send_speed"] == 0 ) } {
       incr i
       set help_var [lindex $argv $i]
@@ -8488,9 +8557,17 @@ if {$CHECK_COVERAGE != {} && $CHECK_COVERAGE_DIR == ""} {
    testsuite_shutdown 1
 }
 
+if {$CHECK_VALGRIND != "" && $CHECK_VALGRIND_HOST == ""} {
+   puts "please specify a host for valgrind with the option valgrind_host"
+   testsuite_shutdown 1
+}
+if {$CHECK_VALGRIND == "" && $CHECK_VALGRIND_HOST != ""} {
+   puts "please specify the valgrind option together with valgrind_host"
+   testsuite_shutdown 1
+}
+
 # load defaults file
 #__setup   ;# old setup
-
 
 # get all currently known commands
 global start_commands
@@ -8529,7 +8606,7 @@ set CHECK_CUR_CONFIG_FILE $CHECK_DEFAULTS_FILE
 setup2
 
 # set the DISPLAY environment variable
-if { $CHECK_SET_USER_ENV_DISPLAY == 1 } {
+if {$CHECK_SET_USER_ENV_DISPLAY == 1} {
    user_config_set_env "DISPLAY" "CHECK_DISPLAY_OUTPUT"
 }
 
@@ -8557,13 +8634,22 @@ set mail_body "$mail_body check is running on host \"$local_host\" architecture 
 set mail_body "$mail_body product root directory is \"$ts_config(product_root)\"\n-------\n"
 set mail_body "$mail_body SGE CELL is  \"$ts_config(cell)\"\n-------\n"
 
-if { $no_action == 1 } {
+if {$no_action == 1} {
   puts "CHECK_GROUP=$CHECK_GROUP"
   puts "No action flag is set -> exit 1"
   testsuite_shutdown 1
 }
 
-if { $do_prog_start == 1 } {
+# test if valgrind options are correct, valgrind is installed, ...
+if {$CHECK_VALGRIND != ""} {
+   if {![valgrind_check_settings]} {
+      testsuite_shutdown 1
+   }
+}
+# prepare testing with valgrind
+valgrind_init
+
+if {$do_prog_start == 1} {
    set check_name [lindex $exec_args" 0]
    ts_log_fine "starting $exec_args ..."
    set proc_return [eval $exec_args]
@@ -8680,7 +8766,7 @@ if {$do_dump_test_list} {
    testsuite_shutdown 0
 }
 
-if { $do_one_test } {
+if {$do_one_test} {
    # ts_checktree ok
    if { [string first "/" $do_one_test_name] == 0 || [string first "\\" $do_one_test_name] == 0 } {
       set CHECK_ACT_PATH "$do_one_test_name"
@@ -8699,7 +8785,7 @@ if { $do_one_test } {
 
    set at_least_one_failed [run_tests $CHECK_ACT_PATH "all"]
 
-   if { $do_kill } {
+   if {$do_kill} {
       set check_name "command line"
       shutdown_core_system 0 1
    }
@@ -8711,7 +8797,7 @@ if { $do_one_test } {
    testsuite_shutdown $at_least_one_failed
 }
 
-if { $do_all } {
+if {$do_all} {
    # ts_checktree ok
    set CHECK_ACT_PATH "root"
    delete_tests $CHECK_ACT_PATH "all"

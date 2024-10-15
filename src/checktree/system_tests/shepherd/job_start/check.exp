@@ -539,7 +539,7 @@ proc job_start_test {} {
                         ts_log_severe "$current_run_text shepherd trace file of job uid($trace_running_uid) != euid($trace_running_euid)"
                      }
                      if { $jobt == "qrsh" || $jobt == "qrlogin" || $jobt == "qlogin" } {
-                        # RD: qsh deamons must run as root because they open /dev/*
+                        # RD: qsh daemons must run as root because they open /dev/*
                         if { $trace_running_uid != $root_id } {
                            ts_log_severe "$current_run_text shepherd trace file doesn't start $jobt job with uid$root_id trace_running_uid = $trace_running_uid"
                         }
@@ -841,7 +841,7 @@ proc job_start_test {} {
                         if { $trace_running_uid != $trace_running_euid } {
                            ts_log_severe "$current_run_text shepherd trace file of job uid($trace_running_uid) != euid($trace_running_euid)"
                         }
-                        # RD: qsh deamons must run as root because they open /dev/*
+                        # RD: qsh daemons must run as root because they open /dev/*
                         if { $trace_running_uid != $root_id } {
                            ts_log_severe "$current_run_text shepherd trace file doesn't start $jobt job with uid($root_id) trace_running_uid = $trace_running_uid"
                         }

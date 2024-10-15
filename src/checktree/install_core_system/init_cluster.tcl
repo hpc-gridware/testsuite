@@ -672,6 +672,9 @@ proc setup_execd_conf {} {
          setup_execd_conf_ssh tmp_config $host
       }
 
+      # handle valgrind
+      valgrind_setup_execd_conf tmp_config $host
+
       # remove unexpected options
       foreach elem $removed {
          set tmp_config($elem) ""

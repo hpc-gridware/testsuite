@@ -114,7 +114,6 @@ set module_name "sge_procedures.tcl"
 # wait_for_jobend -- wait for end of job
 # startup_qmaster() -- startup qmaster (and scheduler) daemon
 # startup_scheduler() -- ??? 
-# startup_execd_raw() -- startup execd without using startup script
 # startup_daemon - starts the SGE daemon specified by the argument
 # are_master_and_scheduler_running -- ??? 
 # shutdown_master_and_scheduler -- ??? 
@@ -2674,7 +2673,7 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
                exp_continue
             } else {
                ts_log_fine "all configuration changed!"
-               # Once all deamons have logged their new config the config is valid !!!
+               # Once all daemons have logged their new config the config is valid !!!
             }
          }
       }
@@ -6725,6 +6724,12 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
       ts_log_severe "qmaster is not reachable timeout!"
       return -1
    }
+
+   global CHECK_VALGRIND CHECK_VALGRIND_LAST_DAEMON_RESTART
+   if {$CHECK_VALGRIND == "master"} {
+      set CHECK_VALGRIND_LAST_DAEMON_RESTART [clock seconds]
+   }
+
    return 0
 }
 
@@ -6784,67 +6789,6 @@ proc startup_scheduler {} {
    
    return 0
 }
-
-#****** sge_procedures/startup_execd_raw() *************************************
-#  NAME
-#     startup_execd_raw() -- startup execd without using startup script
-#
-#  SYNOPSIS
-#     startup_execd_raw { hostname } 
-#
-#  FUNCTION
-#     Startup execd on remote host
-#
-#  INPUTS
-#     hostname - host to start up execd
-#
-#  RESULT
-#     0 -> ok   1 -> error
-#
-#  SEE ALSO
-#     sge_procedures/startup_execd()
-#*******************************************************************************
-proc startup_execd_raw { hostname {envlist ""}} {
-   global CHECK_ADMIN_USER_SYSTEM CHECK_USER
-   get_current_cluster_config_array ts_config
-
-   if { $CHECK_ADMIN_USER_SYSTEM == 0 } { 
-      if { [have_root_passwd] != 0  } {
-         ts_log_warning "no root password set or ssh not available"
-         return -1
-      }
-      set startup_user "root"
-   } else {
-      set startup_user $CHECK_USER
-   }
-
-   ts_log_fine "starting up execd on host \"$hostname\" as user \"$startup_user\""
-   set remote_arch [ resolve_arch $hostname ]
-
-   # Setup environment
-   if {$envlist != ""} {
-      upvar $envlist my_envlist
-
-      set names [array names my_envlist]
-
-      foreach var $names {
-         set my_environment($var) $my_envlist($var)
-      }
-   }
-
-   set my_environment(COMMD_HOST) $ts_config(master_host)
-
-   set output [start_remote_prog "$hostname" "$startup_user" "$ts_config(product_root)/bin/$remote_arch/sge_execd" "-nostart-commd" prg_exit_state 60 0 "" my_environment]
-
-   set ALREADY_RUNNING [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SGETEXT_COMMPROC_ALREADY_STARTED_S] "*"]
-
-   if { [string match "*$ALREADY_RUNNING*" $output ] } {
-      ts_log_severe "execd on host $hostname is already running"
-      return -1
-   }
-   return 0
-}
-
 
 #********* sge_procedures/startup_daemon() *************************************
 #  NAME
@@ -7435,32 +7379,38 @@ proc get_pid_from_file {host pid_file} {
 #  SEE ALSO
 #     ???/???
 #*******************************************************************************
-proc shutdown_qmaster {hostname qmaster_spool_dir} {
-   global CHECK_USER CHECK_ADMIN_USER_SYSTEM
+proc shutdown_qmaster {hostname qmaster_spool_dir {timeout 60}} {
    get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ADMIN_USER_SYSTEM
+   global CHECK_VALGRIND
 
    ts_log_fine "shutdown_qmaster ..."
 
    ts_log_finer "killing qmaster on host $hostname ..."
    ts_log_finest "retrieving data from spool dir $qmaster_spool_dir"
 
+   if {$CHECK_VALGRIND == "master" && $timeout < 900} {
+      set timeout 900
+   }
+
    set qmaster_pid [get_qmaster_pid $hostname $qmaster_spool_dir]
    if {$qmaster_pid == 0} {
       return -1
    }
- 
+
    get_ps_info $qmaster_pid $hostname
-   if { ($ps_info($qmaster_pid,error) == 0) } {
-      if { [ is_pid_with_name_existing $hostname $qmaster_pid "sge_qmaster" ] == 0 } { 
+   if {$ps_info($qmaster_pid,error) == 0} {
+      # is_pid_with_name_existing does not work if qmaster is running under valgrind
+      if {[is_pid_with_name_existing $hostname $qmaster_pid "sge_qmaster"] == 0} { 
          ts_log_finest "killing qmaster with pid $qmaster_pid on host $hostname"
          ts_log_finest "do a qconf -km ..."
          set result [start_sge_bin "qconf" "-km" "" "" prg_exit_state 15]
          ts_log_finest $result
-         wait_till_qmaster_is_down $hostname
+         wait_till_qmaster_is_down $hostname $timeout
          shutdown_system_daemon $hostname qmaster
       } else {
          ts_log_severe "qmaster pid $qmaster_pid not found"
-	 return -1
+         return -1
       }
    } else {
       ts_log_severe "ps_info failed (2), pid=$qmaster_pid"
@@ -7764,19 +7714,30 @@ proc shutdown_bdb_rpc { hostname } {
 #     sge_procedures/is_pid_with_name_existing()
 #*******************************
 #
-proc is_pid_with_name_existing { host pid proc_name } {
-  global CHECK_USER
-  get_current_cluster_config_array ts_config
+proc is_pid_with_name_existing {host pid proc_name} {
+   global CHECK_USER CHECK_VALGRIND
+   get_current_cluster_config_array ts_config
 
-  ts_log_finer "$host: checkprog $pid $proc_name ..."
-  set my_arch [ resolve_arch $host ]
-  set output [start_remote_prog $host $CHECK_USER $ts_config(product_root)/utilbin/$my_arch/checkprog "$pid $proc_name"]
-  if { $prg_exit_state == 0} {
-     ts_log_finest "running"
-  } else {
-     ts_log_finest "not running"
-  }
-  return $prg_exit_state
+   if {$CHECK_VALGRIND != ""} {
+      get_ps_info $pid $host
+      if {$ps_info($pid,error) == 0 &&
+          [info exists ps_info($pid,command)] &&
+          [string first $proc_name $ps_info($pid,command)] >= 0} {
+         return 0
+      } else {
+         return 1
+      }
+   } else {
+      ts_log_finer "$host: checkprog $pid $proc_name ..."
+      set my_arch [ resolve_arch $host ]
+      set output [start_remote_prog $host $CHECK_USER $ts_config(product_root)/utilbin/$my_arch/checkprog "$pid $proc_name"]
+      if {$prg_exit_state == 0} {
+         ts_log_finest "running"
+      } else {
+         ts_log_finest "not running"
+      }
+   }
+   return $prg_exit_state
 }
 
 
@@ -7827,7 +7788,7 @@ proc is_pid_with_name_existing { host pid proc_name } {
 #*******************************
 #
 proc shutdown_system_daemon { host typelist { do_term_signal_kill_first 1 } } {
-   global CHECK_CORE_INSTALLED CHECK_USER 
+   global CHECK_CORE_INSTALLED CHECK_USER
    global CHECK_ADMIN_USER_SYSTEM
    get_current_cluster_config_array ts_config
 
@@ -8059,6 +8020,7 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
       shutdown_all_shadowd $sh_host
    }
 
+   # shutdown the execds
    set qconf_option "-ke all"
    ts_log_fine "do qconf $qconf_option ..."
    set result [start_sge_bin "qconf" $qconf_option]
@@ -8071,6 +8033,7 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
       ts_log_fine "shutdown_core_system - qconf $qconf_option failed:\n$result"
    }
 
+   # shutdown qmaster
    ts_log_fine "do qconf -km ..."
    set result [start_sge_bin "qconf" "-km"]
    ts_log_finest "qconf -km returned $prg_exit_state"
@@ -8205,22 +8168,22 @@ proc startup_core_system {{only_hooks 0} {with_additional_clusters 0} } {
    exec_startup_hooks
 }
 
-proc wait_till_qmaster_is_down { host } {
+proc wait_till_qmaster_is_down {host {timeout 60}} {
    get_current_cluster_config_array ts_config
 
    set process_names "sge_qmaster" 
-   set my_timeout [expr [timestamp] + 60] 
+   set my_timeout [expr [clock seconds] + $timeout]
 
-   while { 1 } {
-      set found_p [ ps_grep "$ts_config(product_root)/" $host ]
+   while {1} {
+      set found_p [ps_grep "$ts_config(product_root)/" $host]
       set nr_of_found_qmaster_processes_or_threads 0
 
       foreach process_name $process_names {
          ts_log_finer "looking for \"$process_name\" processes on host $host ..."
          foreach elem $found_p {
-            if { [ string first $process_name $ps_info(string,$elem) ] >= 0 } {
+            if {[string first $process_name $ps_info(string,$elem)] >= 0} {
                ts_log_finest "current ps info: $ps_info(string,$elem)"
-               if { [ is_pid_with_name_existing $host $ps_info(pid,$elem) $process_name ] == 0 } {
+               if {[is_pid_with_name_existing $host $ps_info(pid,$elem) $process_name] == 0} {
                   incr nr_of_found_qmaster_processes_or_threads 1
                   ts_log_finest "found running $process_name with pid $ps_info(pid,$elem) on host $host"
                   ts_log_finest $ps_info(string,$elem)
@@ -8228,11 +8191,11 @@ proc wait_till_qmaster_is_down { host } {
             }
          }
       }
-      if { [timestamp] > $my_timeout } {
+      if {[clock seconds] > $my_timeout} {
          ts_log_info "timeout while waiting for qmaster going down"
          return -1
       }
-      if { $nr_of_found_qmaster_processes_or_threads == 0 } {
+      if {$nr_of_found_qmaster_processes_or_threads == 0} {
          ts_log_finest "no qmaster processes running"
          return 0      
       } else {
@@ -10009,8 +9972,9 @@ proc check_shadowd_settings { shadowd_host } {
 #     sge_procedures/startup_execd()
 #     sge_procedures/startup_shadowd()
 #*******************************************************************************
-proc startup_execd { hostname {envlist ""} {startup_user ""} } {
+proc startup_execd {hostname {envlist ""} {startup_user ""}} {
    global CHECK_ADMIN_USER_SYSTEM CHECK_USER
+   global CHECK_VALGRIND CHECK_VALGRIND_HOST CHECK_VALGRIND_LAST_DAEMON_RESTART
    get_current_cluster_config_array ts_config
 
    upvar $envlist my_envlist
@@ -10028,7 +9992,17 @@ proc startup_execd { hostname {envlist ""} {startup_user ""} } {
    }
 
    ts_log_fine "starting up execd on host \"$hostname\" as user \"$startup_user\""
-   set output [start_remote_prog "$hostname" "$startup_user" "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "start" prg_exit_state 60 0 "" my_envlist 1 0]
+   if {$CHECK_VALGRIND == "execution" && $CHECK_VALGRIND_HOST == $hostname} {
+      set CHECK_VALGRIND_LAST_DAEMON_RESTART [clock seconds]
+      set arch [resolve_arch $hostname]
+      set execd_cmd "$ts_config(product_root)/bin/$arch/sge_execd"
+      set execd_args ""
+   } else {
+      set execd_cmd "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd"
+      set execd_args "start"
+   }
+
+   set output [start_remote_prog $hostname $startup_user $execd_cmd $execd_args prg_exit_state 60 0 "" my_envlist 1 0]
 
    return 0
 }

@@ -1904,6 +1904,15 @@ proc host_conf_get_unique_arch_nodes {host_list} {
    set node_list {}
    set covered_archs {}
 
+   # we have tests looping over the unique_arch_nodes
+   # in case we test with valgrind we want the valgrind host to be included
+   global CHECK_VALGRIND CHECK_VALGRIND_HOST
+   if {$CHECK_VALGRIND == "clients" || $CHECK_VALGRIND == "tests"} {
+      set valgrind_arch [host_conf_get_arch $CHECK_VALGRIND_HOST]
+      lappend covered_archs $valgrind_arch
+      lappend node_list $CHECK_VALGRIND_HOST
+   }
+
    foreach node $host_list {
       set host [node_get_host $node]
       set arch [host_conf_get_arch $host]
@@ -3141,6 +3150,7 @@ proc host_conf_get_suited_hosts {{num_hosts_param 1} {preferred_archs {}} {selec
    # build a list of candidates from parameters
    set return_error [host_conf_get_suited_hosts_candidates $preferred_archs $selected_archs $excluded_archs preferred_hosts remaining_hosts $as_config_error]
    if {$return_error == 1} {
+      ts_log_severe "host_conf_get_suited_hosts_candidates failed $return_error"
       return {} 
    }
 
@@ -3365,6 +3375,7 @@ proc host_conf_get_suited_hosts_select {num_hosts preferred_hosts remaining_host
       # sort the list by "not used for the longest time"
       set hosts [lsort -command host_conf_sort_suited $preferred_hosts]
    }
+   set hosts [valgrind_sort_hosts $hosts]
 
    foreach host $hosts {
       if {$num_hosts <= 0} {
@@ -3384,6 +3395,7 @@ proc host_conf_get_suited_hosts_select {num_hosts preferred_hosts remaining_host
          # sort the list by "not used for the longest time"
          set hosts [lsort -command host_conf_sort_suited $remaining_hosts]
       }
+      set hosts [valgrind_sort_hosts $hosts]
 
       foreach host $hosts {
          if {$num_hosts <= 0} {

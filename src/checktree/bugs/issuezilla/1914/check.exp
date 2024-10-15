@@ -272,7 +272,7 @@ proc issue_1914_submit_test_job {job_type host user test_path} {
                delete_job $job_id
                # leave loop - job successfully started
                # If we do not leave the while loop immediately it might happen that
-               # a "closed by foreign host will be catched and a deamon_error is set
+               # a "closed by foreign host will be catched and a daemon_error is set
             }
 
             -i $sp_id -- "qlogin_daemon \"$test_path\" is not executable" {

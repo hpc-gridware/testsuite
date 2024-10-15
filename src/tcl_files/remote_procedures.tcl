@@ -233,7 +233,7 @@ proc private_get_xterm_path { host } {
 
 #****** remote_procedures/check_all_system_times() **********************************
 #  NAME
-#     check_all_system_times() -- check clock synchronity on each cluster deamon host
+#     check_all_system_times() -- check clock synchronity on each cluster daemon host
 #
 #  SYNOPSIS
 #     check_all_system_times {} 
@@ -1601,6 +1601,11 @@ proc open_remote_spawn_process { hostname
    if {[coverage_enabled]} {
       coverage_per_process_setup $hostname $real_user users_env
    }
+
+   # check if we are testing with valgrind and
+   # modify command line + arguments in case this command shall run under valgrind
+   valgrind_set_command_and_arguments $hostname exec_command exec_arguments
+
 
    # if the same script is executed multiple times, don't recreate it
    set re_use_script 0

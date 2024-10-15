@@ -163,7 +163,7 @@ proc upgrade_test_init_cluster {} {
       return -1
    }
 
-   # start up execution deamons
+   # start up execution daemons
    foreach host $ts_config(execd_nodes) {
       if {![is_execd_alive $host]} {
          set result [startup_daemon $host "execd"]
@@ -229,7 +229,7 @@ proc upgrade_test_upgrade_additional_cluster {} {
 #     The test conducts the following steps:
 #        1) configure the old cluster
 #        2) back up the old cluster configuration
-#        3) shut downthe qmasterd and schedd deamons of the current cluster
+#        3) shut downthe qmasterd and schedd daemons of the current cluster
 #        4) upgrade the current cluster running the script (this will start the
 #           qmasterd and schedd)
 #        5) restore the configuration of the current cluster to the default one

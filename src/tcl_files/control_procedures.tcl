@@ -1415,19 +1415,17 @@ proc get_gid { user host } {
 #  SEE ALSO
 #     control_procedures/get_ps_info
 #*******************************
-proc ps_grep { forwhat { host "local" } { variable ps_info } } {
-
+proc ps_grep {forwhat {host "local"} {variable ps_info}} {
    upvar $variable psinfo
 
-   if {[info exists psinfo]} {
-      unset psinfo
-   }
+   unset -nocomplain psinfo
+
    get_ps_info 0 $host psinfo
 
    set index_list ""
 
    for {set i 0} {$i < $psinfo(proc_count) } {incr i 1} {
-      if { [string first $forwhat $psinfo(string,$i) ] >= 0 } {
+      if {[string first $forwhat $psinfo(string,$i) ] >= 0} {
          lappend index_list $i
       }
    }
@@ -1560,13 +1558,13 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
    #puts "arch on host $host is $host_arch"
    
    # ATTENTION: command_pos (args column) must be the last column !!!
-   # Testsuite needs at least 61 chars from that collum to detect the product root PATH
+   # Testsuite needs at least 61 chars from that column to detect the product root PATH
    # NOTE: On some archs the last column is not truncated, on some archs it is, so please be patient !
 
    switch -glob -- $host_arch {
       "sol*" -
       "usol-*" {
-         set myenvironment(COLUMNS) "500"
+         set myenvironment(COLUMNS) "1000"
          set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-e -o \"pid=_____pid\" -o \"pgid=_____pgid\" -o \"ppid=_____ppid\" -o \"uid=_____uid\" -o \"s=_____s\" -o \"stime=_____stime\" -o \"vsz=_____vsz\" -o \"time=_____time\" -o \"nice=_____nice\" -o \"args=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
          set index_names "_____pid _____pgid _____ppid _____uid _____s _____stime _____vsz _____time _____nice _____args"
          set pid_pos     0
@@ -1582,7 +1580,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       }
     
       "darwi*" {
-         set myenvironment(COLUMNS) "500"
+         set myenvironment(COLUMNS) "1000"
          set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-awwx -o \"pid=_____pid\" -o \"pgid=_____pgid\" -o \"ppid=_____ppid\" -o \"uid=_____uid\" -o \"state=_____s\" -o \"stime=_____stime\" -o \"vsz=_____vsz\" -o \"time=_____time\" -o \"nice=_____nice\" -o \"command=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
          set index_names "_____pid _____pgid _____ppid _____uid _____s _____stime _____vsz _____time _____nice _____args"
          set pid_pos     0
@@ -1598,7 +1596,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       }
 
       "fbsd*" {
-         set myenvironment(COLUMNS) "500"
+         set myenvironment(COLUMNS) "1000"
          #set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-eo \"pid pgid ppid uid state start vsz time args\"" prg_exit_state 60 0 "" myenvironment 1 0]
          #set index_names "  PID  PGID  PPID   UID STAT STARTED   VSZ      TIME COMMAND"
          set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-axww -o \"pid=_____pid\" -o \"pgid=_____pgid\" -o \"ppid=_____ppid\" -o \"uid=_____uid\" -o \"state=_____s\" -o \"start=_____stime\" -o \"vsz=_____vsz\" -o \"time=________time\" -o \"args=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
@@ -1619,7 +1617,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       "ulx24-*" -
       "lx-*" -
       "ulx-*" {
-         set myenvironment(COLUMNS) "500"
+         set myenvironment(COLUMNS) "1000"
          set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-weo \"pid pgid ppid uid=BIGGERUID s stime vsz time nice args=COMMANDCOMMANDCOMMANDCOMMANDCOMMAND\"" prg_exit_state 60 0 "" myenvironment 1 0]
          set index_names "  PID  PGID  PPID BIGGERUID S STIME   VSZ     TIME NI COMMANDCOMMANDCOMMANDCOMMANDCOMMAND"
          set pid_pos     0
@@ -1630,15 +1628,15 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
          set stime_pos   5
          set vsz_pos     6
          set time_pos    7
-         set command_pos 9
          set nice_pos    8
+         set command_pos 9
       }
 
       "lx22-alpha" -
       "lx24-alpha" {
          if { $additional_run == 0 } {
             # this is the first ps without any size position
-            set myenvironment(COLUMNS) "500"
+            set myenvironment(COLUMNS) "1000"
             set result [start_remote_prog "$host" "$CHECK_USER" "ps" "xajw" prg_exit_state 60 0 "" myenvironment 1 0]
             #                   0     1    2      3   4    5      6   7     8     9
             set index_names " PPID   PID  PGID   SID TTY TPGID  STAT  UID   TIME COMMAND"
@@ -1655,7 +1653,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
          } 
          if { $additional_run == 1 } {
             # this is the first ps without any size position
-            set myenvironment(COLUMNS) "500"
+            set myenvironment(COLUMNS) "1000"
             set result [start_remote_prog "$host" "$CHECK_USER" "ps" "waux" prg_exit_state 60 0 "" myenvironment 1 0]
             #                   0       1    2    3     4      5   6   7    8       9   10
             set index_names "{USER    }   PID %CPU %MEM  SIZE   RSS TTY STAT START   TIME COMMAND"
@@ -1753,7 +1751,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
 #      ts_log_fine "position1 is $position1"
       set last_position [expr ($position1 + [string length $index] - 1)]
       if {$indexcount == 0 } {
-         set last_position 200
+         set last_position [expr $myenvironment(COLUMNS) - 1]
       }
       set first_position $s_index 
       set s_index [ expr ($last_position + 1 )]
@@ -1881,8 +1879,8 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       } else {
          set value_str "unknown"
       }
-      set value [string trim $value_str] 
-      set psinfo($act_pid,command) $value 
+      set value [string trim $value_str]
+      set psinfo($act_pid,command) $value
       set psinfo(command,$process_count) $value
 
       incr process_count 1
@@ -2748,6 +2746,7 @@ proc operational_unlock {operation_name {host ""} {lock_location "/tmp"}} {
 #*******************************************************************************
 proc scale_timeout {timeout {does_computation 1} {does_spooling 1} {process_invocations 1}} {
    get_current_cluster_config_array ts_config
+   global CHECK_VALGRIND
 
    set ret $timeout
 
@@ -2779,6 +2778,11 @@ proc scale_timeout {timeout {does_computation 1} {does_spooling 1} {process_invo
       # coverage profiles are written per process invocation
       # add 1 second overhead per process invocation
       set ret [expr $ret + $process_invocations * 1]
+   }
+
+   if {$CHECK_VALGRIND == "master"} {
+      # valgrind sometimes makes sge_qmaster really slow
+      set ret [expr $ret * 2.0]
    }
 
    return [format "%.0f" [expr ceil($ret)]]

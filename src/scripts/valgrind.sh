@@ -64,5 +64,6 @@ OPTIONS="$OPTIONS --xml=yes --xml-file=$output_file"
 #   - valgrind by default follows forks, the %p placeholder in the output file will be replaced by the pid of
 #     the process and (most important) a separate file is written for every process
 #   - we actually don't want to follow the shepherd, the job, the jobs child processes
+# @todo we might want to use the --fair-sched option when running multithreaded applications like sge_qmaster
 
-valgrind $OPTIONS $binary "$@"
+exec valgrind $OPTIONS $binary "$@"

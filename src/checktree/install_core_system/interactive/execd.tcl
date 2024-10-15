@@ -521,7 +521,7 @@ proc install_execd {{report_var report}} {
       close_spawn_process $id
 
       # CR: 6609754
-      ts_log_fine "Check execd deamon startup on host $exec_host and port $execd_port ..."
+      ts_log_fine "Check execd daemon startup on host $exec_host and port $execd_port ..."
       set result [ping_daemon $exec_host $execd_port "execd"]
       if {$result == 0} {
          ts_log_fine "Startup of execd was successful!"

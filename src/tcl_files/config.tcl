@@ -5387,17 +5387,23 @@ proc config_is_admin_host {host} {
 proc config_get_best_suited_admin_host {} {
    global ts_config
    global CHECK_DETERMINISTIC_HOST_SELECT
+   global CHECK_VALGRIND CHECK_VALGRIND_HOST
 
    if {$CHECK_DETERMINISTIC_HOST_SELECT} {
-      # ideally the testsuite host is an admin host, then we work on the local host
-      set testsuite_host [gethostname]
-      if {[config_is_admin_host $testsuite_host]} {
-         set admin_host $testsuite_host
+      if {$CHECK_VALGRIND == "clients"} {
+         # when we do valgrind testing of clients we want to run all qconf commands on the valgrind host
+         set admin_host $CHECK_VALGRIND_HOST
       } else {
-         # doing admin stuff on the master host has the lowest network latency
-         set admin_host $ts_config(master_host)
+         # ideally the testsuite host is an admin host, then we work on the local host
+         set testsuite_host [gethostname]
+         if {[config_is_admin_host $testsuite_host]} {
+            set admin_host $testsuite_host
+         } else {
+            # doing admin stuff on the master host has the lowest network latency
+            set admin_host $ts_config(master_host)
+         }
+         ts_log_finer "best suited admin host is $admin_host"
       }
-      ts_log_finer "best suited admin host is $admin_host"
    } else {
       # we want random host selection
       set admin_host [host_conf_get_suited_hosts]
