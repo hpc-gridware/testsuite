@@ -16,7 +16,7 @@ job('GCS-CI-CD/TestsMedium/sharetree') {
    }
 }
 queue('GCS-CI-CD/TestsMedium/sharetree')
-job('GCS-CI-CD/TestsMedium/general') {
+job('GCS-CI-CD/TestsMedium/ssos_general') {
    lockableResources {
       label('gcs-ci-cd-cluster')
       resourcesVariable('CLUSTER')
@@ -26,10 +26,10 @@ job('GCS-CI-CD/TestsMedium/general') {
       sshAgent('tstusr-rsa-key')
    }
    steps {
-      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/functional/ssos/general 100')
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/functional/ssos/ssos_general 100')
    }
 }
-queue('GCS-CI-CD/TestsMedium/general')
+queue('GCS-CI-CD/TestsMedium/ssos_general')
 job('GCS-CI-CD/TestsMedium/2411') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -58,7 +58,7 @@ job('GCS-CI-CD/TestsMedium/throughput') {
    }
 }
 queue('GCS-CI-CD/TestsMedium/throughput')
-job('GCS-CI-CD/TestsMedium/generic') {
+job('GCS-CI-CD/TestsMedium/module_test_generic') {
    lockableResources {
       label('gcs-ci-cd-cluster')
       resourcesVariable('CLUSTER')
@@ -68,10 +68,10 @@ job('GCS-CI-CD/TestsMedium/generic') {
       sshAgent('tstusr-rsa-key')
    }
    steps {
-      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/module_tests/generic 100')
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/module_tests/module_test_generic 100')
    }
 }
-queue('GCS-CI-CD/TestsMedium/generic')
+queue('GCS-CI-CD/TestsMedium/module_test_generic')
 job('GCS-CI-CD/TestsMedium/usage') {
    lockableResources {
       label('gcs-ci-cd-cluster')

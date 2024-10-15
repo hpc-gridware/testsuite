@@ -30,7 +30,7 @@ job('GCS-CI-CD/TestsLong/throughput') {
    }
 }
 queue('GCS-CI-CD/TestsLong/throughput')
-job('GCS-CI-CD/TestsLong/generic') {
+job('GCS-CI-CD/TestsLong/module_test_generic') {
    lockableResources {
       label('gcs-ci-cd-cluster')
       resourcesVariable('CLUSTER')
@@ -40,10 +40,10 @@ job('GCS-CI-CD/TestsLong/generic') {
       sshAgent('tstusr-rsa-key')
    }
    steps {
-      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/module_tests/generic 200')
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/module_tests/module_test_generic 200')
    }
 }
-queue('GCS-CI-CD/TestsLong/generic')
+queue('GCS-CI-CD/TestsLong/module_test_generic')
 job('GCS-CI-CD/TestsLong/current_version_upgrade') {
    lockableResources {
       label('gcs-ci-cd-cluster')

@@ -74,7 +74,7 @@ proc issue_3216_setup {} {
    set queue(pe_list)   "tight"
    set queue(slots)     10
    set queue(rerun)     "TRUE"
-   add_queue "tight" "@allhosts" queue
+   add_queue "tight" "@allhosts" queue 1 "" "" 0
 }
 
 proc issue_3216_cleanup {} {
@@ -95,6 +95,8 @@ proc issue_3216_wait_for_tasks_running {job_id {timeout 60}} {
       # qstat -ext
       get_extended_job_info $job_id
 
+      ts_log_fine "job_info(state): $job_info(state)"
+
       # wait for 2 distinct states
       if {[llength $job_info(state)] == 2} {
          # both must be running
@@ -109,6 +111,7 @@ proc issue_3216_wait_for_tasks_running {job_id {timeout 60}} {
    }
 
    if {$ret == 0} {
+      parray job_info
       ts_log_severe "timeout waiting for both tasks being running"
    }
 
@@ -146,6 +149,7 @@ proc issue_3216_test {} {
    # restart qmaster
    shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
    startup_qmaster
+   wait_for_load_from_all_queues 60
 
    # wait for both tasks to finish - if we see them having finished,
    # qmaster is still responding - everything OK
@@ -183,8 +187,16 @@ proc issue_3216_test_array {} {
    # restart qmaster
    shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
    startup_qmaster
+   wait_for_load_from_all_queues 60
 
    # wait for both tasks to finish - if we see them having finished,
    # qmaster is still responding - everything OK
-   wait_for_end_of_all_jobs 180
+   set ret [wait_for_end_of_all_jobs 180]
+   if {$ret == -1} {
+
+      ts_log_fine "job did not terminate"
+
+      # forced deletion if regular delete did not help
+      delete_all_jobs 1 1
+   }
 }
