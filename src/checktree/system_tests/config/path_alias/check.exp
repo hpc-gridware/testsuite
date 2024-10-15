@@ -42,7 +42,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "path_alias"
-set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED JENKINS_DISABLED"
 set check_description(0)  "checking global path alias file"
 set check_description(1)  "checking user path alias file"
 

@@ -46,7 +46,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "jsv_ge_add"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED JENKINS_DISABLED"
 set check_description(0)  "jsv ge add parameter test"
 
 # define test's dependencies
