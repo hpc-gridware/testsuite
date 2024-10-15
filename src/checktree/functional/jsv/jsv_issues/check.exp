@@ -210,9 +210,9 @@ proc jsv_issues_job_start_user_drmaa {} {
    # if the issue is present the binary might return (null) as user or die 
    submit_drmaa_job $host job_id 
 
-   # restore safed file
+   # remove the sge_request file and optionally restore the original
+   file delete $global_file
    if {$did_copy == 1} {
-      file delete $global_file
       file copy $saved_global_file $global_file
    }
 
@@ -236,8 +236,7 @@ proc jsv_issues_wrong_w_flag {} {
    global ts_config
    global jsv_base_path
 
-   # Submit a job in that directory as a result the .sge_request file will be parsed and
-   # the contained switch will be used 
+   # Submit a job with -jsv script
    # The script will be started as client JSV and this will write the
    # passed -w flag as job context variable in the job 
    set qsub_flag "v"
@@ -265,8 +264,7 @@ proc jsv_issues_q_soft_selection {} {
    global ts_config
    global jsv_base_path
 
-   # Submit a job in that directory as a result the .sge_request file will be parsed and
-   # the contained switch will be used 
+   # Submit a job with -jsv script
    # The script will be started as client JSV and this will write the
    # passed -w flag as job context variable in the job 
    set qsub_flag "all.q"
@@ -294,8 +292,7 @@ proc jsv_issues_q_hard_selection {} {
    global ts_config
    global jsv_base_path
 
-   # Submit a job in that directory as a result the .sge_request file will be parsed and
-   # the contained switch will be used 
+   # Submit a job with -jsv script
    # The script will be started as client JSV and this will write the
    # passed -w flag as job context variable in the job 
    set qsub_flag "all.q"
