@@ -41,7 +41,7 @@ global check_category check_root_access_needs
 set check_root_access_needs  "yes"
 
 set check_name           "qstat"
-set check_category       "COMPATIBILITY SYSTEM QSTAT VERIFIED"
+set check_category       "COMPATIBILITY SYSTEM QSTAT VERIFIED JENKINS_DISABLED"
 set check_description(0) "checking qstat functionality (with and without -xml)"
 set check_needs          "init_core_system "      ;# dependencies of this check (name of other check)
 
