@@ -61,7 +61,6 @@ lappend check_functions "job_environment_basic_JOB_NAME"
 lappend check_functions "job_environment_basic_amount_uninherited"
 lappend check_functions "job_environment_basic_JOB_NAME_uninherited"
 lappend check_functions "job_environment_basic_ld_preload"
-set check_functions "job_environment_basic_ld_preload"
 
 # -------- local test procedures -----------------------------------------------
 
