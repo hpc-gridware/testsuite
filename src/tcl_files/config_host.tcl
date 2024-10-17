@@ -3150,12 +3150,22 @@ proc host_conf_get_suited_hosts {{num_hosts_param 1} {preferred_archs {}} {selec
    # build a list of candidates from parameters
    set return_error [host_conf_get_suited_hosts_candidates $preferred_archs $selected_archs $excluded_archs preferred_hosts remaining_hosts $as_config_error]
    if {$return_error == 1} {
-      ts_log_severe "host_conf_get_suited_hosts_candidates failed $return_error"
+      set msg "host_conf_get_suited_hosts_candidates failed $return_error"
+      if {$as_config_error} {
+         ts_log_config $msg
+      } else {
+         ts_log_severe $msg
+      }
       return {} 
    }
 
    if {[expr [llength $preferred_hosts] + [llength $remaining_hosts]] < $num_hosts} {
-      ts_log_severe "host_selection doesn't return the required number of hosts ($num_hosts):\npreferred_archs:    $preferred_archs\nselected_archs:     $selected_archs\nexcluded_archs:     $excluded_archs\nresulting hostlist: $preferred_hosts $remaining_hosts"
+      set msg  "host_selection doesn't return the required number of hosts ($num_hosts):\npreferred_archs:    $preferred_archs\nselected_archs:     $selected_archs\nexcluded_archs:     $excluded_archs\nresulting hostlist: $preferred_hosts $remaining_hosts"
+      if {$as_config_error} {
+         ts_log_config $msg
+      } else {
+         ts_log_severe $msg
+      }
       return {}
    }
 
