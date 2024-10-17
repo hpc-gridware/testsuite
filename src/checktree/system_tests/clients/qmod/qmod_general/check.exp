@@ -214,9 +214,6 @@ proc qmod_issue_1131 {} {
    }
 }
 
-
-
-
 #                                                             max. column:     |
 #****** qmod/qmod_issue_3071() ******
 # 
@@ -238,18 +235,12 @@ proc qmod_issue_3071 {} {
    # submit sleeper job
    set job_id [submit_job "$ts_config(product_root)/examples/jobs/sleeper.sh 3600" 1 60]  
 
- 	set elapsed 0
+   set elapsed 0
    set wait_till_running_timeout 60 
 
    # wait till job is running 
-   while {[is_job_running $job_id ""] != 1} {
-	    after 1000
-	    incr elapsed 1
-	    if {$elapsed >= $wait_till_running_timeout} {
-	       ts_log_severe "Timeout $wait_till_running_timeout: job is still not running"
-	       return -1
-	    }
-	 }
+   wait_for_job_state $job_id "r" 60
+
    # suspend job
    set output [start_sge_bin "qmod" "-sj $job_id"]
 
