@@ -1206,6 +1206,20 @@ job('GCS-CI-CD/TestsShort/509') {
    }
 }
 queue('GCS-CI-CD/TestsShort/509')
+job('GCS-CI-CD/TestsShort/project_user_xuser') {
+   lockableResources {
+      label('gcs-ci-cd-cluster')
+      resourcesVariable('CLUSTER')
+      resourceNumber(1)
+   }
+   wrappers {
+      sshAgent('tstusr-rsa-key')
+   }
+   steps {
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/ocs-testsuite/checktree_gcs/checktree/object/project/project_user_xuser 0')
+   }
+}
+queue('GCS-CI-CD/TestsShort/project_user_xuser')
 job('GCS-CI-CD/TestsShort/fork') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -1808,20 +1822,6 @@ job('GCS-CI-CD/TestsShort/framework') {
    }
 }
 queue('GCS-CI-CD/TestsShort/framework')
-job('GCS-CI-CD/TestsShort/qstat') {
-   lockableResources {
-      label('gcs-ci-cd-cluster')
-      resourcesVariable('CLUSTER')
-      resourceNumber(1)
-   }
-   wrappers {
-      sshAgent('tstusr-rsa-key')
-   }
-   steps {
-      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/system_tests/clients/qstat 0')
-   }
-}
-queue('GCS-CI-CD/TestsShort/qstat')
 job('GCS-CI-CD/TestsShort/1359') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -1892,20 +1892,6 @@ job('GCS-CI-CD/TestsShort/2864') {
    }
 }
 queue('GCS-CI-CD/TestsShort/2864')
-job('GCS-CI-CD/TestsShort/jsv_ge_add') {
-   lockableResources {
-      label('gcs-ci-cd-cluster')
-      resourcesVariable('CLUSTER')
-      resourceNumber(1)
-   }
-   wrappers {
-      sshAgent('tstusr-rsa-key')
-   }
-   steps {
-      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/functional/jsv/jsv_ge_add 0')
-   }
-}
-queue('GCS-CI-CD/TestsShort/jsv_ge_add')
 job('GCS-CI-CD/TestsShort/auto_reschedule') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -1934,20 +1920,6 @@ job('GCS-CI-CD/TestsShort/2202') {
    }
 }
 queue('GCS-CI-CD/TestsShort/2202')
-job('GCS-CI-CD/TestsShort/path_alias') {
-   lockableResources {
-      label('gcs-ci-cd-cluster')
-      resourcesVariable('CLUSTER')
-      resourceNumber(1)
-   }
-   wrappers {
-      sshAgent('tstusr-rsa-key')
-   }
-   steps {
-      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/system_tests/config/path_alias 0')
-   }
-}
-queue('GCS-CI-CD/TestsShort/path_alias')
 job('GCS-CI-CD/TestsShort/1161') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -1976,6 +1948,20 @@ job('GCS-CI-CD/TestsShort/1806') {
    }
 }
 queue('GCS-CI-CD/TestsShort/1806')
+job('GCS-CI-CD/TestsShort/host_user_xuser') {
+   lockableResources {
+      label('gcs-ci-cd-cluster')
+      resourcesVariable('CLUSTER')
+      resourceNumber(1)
+   }
+   wrappers {
+      sshAgent('tstusr-rsa-key')
+   }
+   steps {
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/ocs-testsuite/checktree_gcs/checktree/object/host/host_user_xuser 0')
+   }
+}
+queue('GCS-CI-CD/TestsShort/host_user_xuser')
 job('GCS-CI-CD/TestsShort/1146') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -2326,6 +2312,20 @@ job('GCS-CI-CD/TestsShort/reconnect') {
    }
 }
 queue('GCS-CI-CD/TestsShort/reconnect')
+job('GCS-CI-CD/TestsShort/queue_user_xuser') {
+   lockableResources {
+      label('gcs-ci-cd-cluster')
+      resourcesVariable('CLUSTER')
+      resourceNumber(1)
+   }
+   wrappers {
+      sshAgent('tstusr-rsa-key')
+   }
+   steps {
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/ocs-testsuite/checktree_gcs/checktree/object/queue/queue_user_xuser 0')
+   }
+}
+queue('GCS-CI-CD/TestsShort/queue_user_xuser')
 job('GCS-CI-CD/TestsShort/spooledit') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -2578,6 +2578,20 @@ job('GCS-CI-CD/TestsShort/queue_requests') {
    }
 }
 queue('GCS-CI-CD/TestsShort/queue_requests')
+job('GCS-CI-CD/TestsShort/rqs_user_xuser') {
+   lockableResources {
+      label('gcs-ci-cd-cluster')
+      resourcesVariable('CLUSTER')
+      resourceNumber(1)
+   }
+   wrappers {
+      sshAgent('tstusr-rsa-key')
+   }
+   steps {
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/ocs-testsuite/checktree_gcs/checktree/object/rqs/rqs_user_xuser 0')
+   }
+}
+queue('GCS-CI-CD/TestsShort/rqs_user_xuser')
 job('GCS-CI-CD/TestsShort/loadcheck') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -3362,6 +3376,20 @@ job('GCS-CI-CD/TestsShort/ign_sreq_on_mhost') {
    }
 }
 queue('GCS-CI-CD/TestsShort/ign_sreq_on_mhost')
+job('GCS-CI-CD/TestsShort/pe_user_xuser') {
+   lockableResources {
+      label('gcs-ci-cd-cluster')
+      resourcesVariable('CLUSTER')
+      resourceNumber(1)
+   }
+   wrappers {
+      sshAgent('tstusr-rsa-key')
+   }
+   steps {
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/ocs-testsuite/checktree_gcs/checktree/object/pe/pe_user_xuser 0')
+   }
+}
+queue('GCS-CI-CD/TestsShort/pe_user_xuser')
 job('GCS-CI-CD/TestsShort/project_access_lists') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -3530,6 +3558,20 @@ job('GCS-CI-CD/TestsShort/urgency') {
    }
 }
 queue('GCS-CI-CD/TestsShort/urgency')
+job('GCS-CI-CD/TestsShort/config_user_xuser') {
+   lockableResources {
+      label('gcs-ci-cd-cluster')
+      resourcesVariable('CLUSTER')
+      resourceNumber(1)
+   }
+   wrappers {
+      sshAgent('tstusr-rsa-key')
+   }
+   steps {
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/ocs-testsuite/checktree_gcs/checktree/object/config/config_user_xuser 0')
+   }
+}
+queue('GCS-CI-CD/TestsShort/config_user_xuser')
 job('GCS-CI-CD/TestsShort/complex') {
    lockableResources {
       label('gcs-ci-cd-cluster')
