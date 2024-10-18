@@ -100,7 +100,7 @@ job('GCS-CI-CD/TestsShort/1081') {
    }
 }
 queue('GCS-CI-CD/TestsShort/1081')
-job('GCS-CI-CD/TestsShort/x_forks_slaves') {
+job('GCS-CI-CD/TestsShort/pe_x_forks_slaves') {
    lockableResources {
       label('gcs-ci-cd-cluster')
       resourcesVariable('CLUSTER')
@@ -110,10 +110,10 @@ job('GCS-CI-CD/TestsShort/x_forks_slaves') {
       sshAgent('tstusr-rsa-key')
    }
    steps {
-      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/ocs-testsuite/checktree_gcs/checktree/object/pe/x_forks_slaves 0')
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/ocs-testsuite/checktree_gcs/checktree/object/pe/pe_x_forks_slaves 0')
    }
 }
-queue('GCS-CI-CD/TestsShort/x_forks_slaves')
+queue('GCS-CI-CD/TestsShort/pe_x_forks_slaves')
 job('GCS-CI-CD/TestsShort/issues') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -2354,6 +2354,20 @@ job('GCS-CI-CD/TestsShort/2161') {
    }
 }
 queue('GCS-CI-CD/TestsShort/2161')
+job('GCS-CI-CD/TestsShort/3013') {
+   lockableResources {
+      label('gcs-ci-cd-cluster')
+      resourcesVariable('CLUSTER')
+      resourceNumber(1)
+   }
+   wrappers {
+      sshAgent('tstusr-rsa-key')
+   }
+   steps {
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/bugs/issuezilla/3013 0')
+   }
+}
+queue('GCS-CI-CD/TestsShort/3013')
 job('GCS-CI-CD/TestsShort/2582') {
    lockableResources {
       label('gcs-ci-cd-cluster')
