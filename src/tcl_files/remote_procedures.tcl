@@ -1868,10 +1868,12 @@ proc open_remote_spawn_process { hostname
             return ""
          }
 
-         # switch off history recording
+         # switch off history recording and autologout
          set catch_return [catch {
-            ts_send $spawn_id "unset HISTFILE\n"  ;# bash
-            ts_send $spawn_id "unset history\n"   ;# csh
+            ts_send $spawn_id "unset HISTFILE\n"   ;# bash
+            ts_send $spawn_id "unset history\n"    ;# csh
+            ts_send $spawn_id "unset TMOUT\n"      ;# bash
+            ts_send $spawn_id "set autologout=0\n" ;# csh
          } catch_error_message ]
          if {$catch_return == 1} {
             ts_log_warning "${error_info}\n$catch_error_message"  $raise_error
