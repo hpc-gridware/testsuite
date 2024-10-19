@@ -259,7 +259,6 @@ proc backup_restore_do_backup_restore {} {
 
    # restart the restored cluster
    startup_core_system  
-   
    wait_for_load_from_all_queues 60
 
    set arch [resolve_arch $ts_config(master_host)]
@@ -339,6 +338,7 @@ proc backup_restore_cleanup {} {
        }
 
        startup_core_system
+       wait_for_load_from_all_queues 60
    } else {
       ts_log_fine "no need to restore the backup - load values from all execds available"
       ts_log_fine "removing $ts_config(product_root)/$ts_config(cell)_backup and other moved directories"

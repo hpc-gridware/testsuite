@@ -176,6 +176,7 @@ proc commlib_issues_run  {} {
 
 proc commlib_issues_cleanup {} {
    startup_core_system
+   wait_for_load_from_all_queues 60
 }
 
 

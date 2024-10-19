@@ -134,6 +134,7 @@ proc basic_cleanup_level {} {
 
    if {$system_was_alive} {
       startup_core_system
+      wait_for_load_from_all_queues 60
    }
 
    # unset our test's global variables

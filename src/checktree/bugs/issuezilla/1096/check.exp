@@ -111,12 +111,12 @@ proc issue_1096_run {} {
    }
 }
 
-
 proc issue_1096_cleanup {} {
    global ts_config
    if { $ts_config(product_feature) == "csp" } {
       ts_log_fine "nothing to cleanup"
    } else {
       startup_core_system
+      wait_for_load_from_all_queues 60
    }
 }
