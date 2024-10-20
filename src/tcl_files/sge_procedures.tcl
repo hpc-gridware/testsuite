@@ -2653,7 +2653,7 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
             set buffer [string trim $expect_out(0,string)]
             set splitline [split $buffer "\n"]
             foreach line $splitline {
-#               ts_log_fine "$host: $line"
+ts_log_fine "$host: $line"
                if {[string match "*$host*\|I\|*using \"$expected_value($host)\" for $name*" $line]} {
                   ts_log_fine "$host: Configuration changed: $name = \"$expected_value($host)\"" 
                   set is_host_ok($host) 1
