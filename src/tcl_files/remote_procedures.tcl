@@ -748,7 +748,7 @@ proc start_remote_prog { hostname
       append info_message_text "more information in next error message in 5 seconds!!!\n"
       append info_message_text ""
       ts_log_fine "$info_message_text"
-      set timeout 5
+      set timeout $mytimeout
       expect {
          -i $myspawn_id full_buffer {
             append info_message_text "buffer overflow! Increment CHECK_EXPECT_MATCH_MAX_BUFFER value\n"
