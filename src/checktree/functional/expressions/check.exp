@@ -81,12 +81,13 @@ proc qsub_queue_expression_test {} {
 
    set remote_host_arg "-q 'a*&!excluded@*'"
    set output_argument "-o /dev/null -e /dev/null"
-   set job_argument "$ts_config(product_root)/examples/jobs/sleeper.sh 5"
+   set job_argument "$ts_config(product_root)/examples/jobs/sleeper.sh 60"
 
    ts_log_fine "Submit job: $remote_host_arg $output_argument $job_argument"
 # qsub qinstance
    set job_id [submit_job "$remote_host_arg $output_argument $job_argument" 1 60 "" ""]
    wait_for_job_state $job_id "r" 60
+   delete_all_jobs
 }
 
 
@@ -96,12 +97,13 @@ proc qsub_host_expression_test {} {
 
    set remote_host_arg "-q '*@*&!excluded'"
    set output_argument "-o /dev/null -e /dev/null"
-   set job_argument "$ts_config(product_root)/examples/jobs/sleeper.sh 5"
+   set job_argument "$ts_config(product_root)/examples/jobs/sleeper.sh 60"
 
    ts_log_fine "Submit job: $remote_host_arg $output_argument $job_argument"
 # qsub qhost
    set job_id [submit_job "$remote_host_arg $output_argument $job_argument" 1 60 "" ""]
    wait_for_job_state $job_id "r" 60
+   delete_all_jobs
 }
 
 
@@ -111,12 +113,13 @@ proc qsub_group_expression_test {} {
 
    set remote_host_arg "-q '*@@*&!excluded'"
    set output_argument "-o /dev/null -e /dev/null"
-   set job_argument "$ts_config(product_root)/examples/jobs/sleeper.sh 5"
+   set job_argument "$ts_config(product_root)/examples/jobs/sleeper.sh 60"
 
    ts_log_fine "Submit job: $remote_host_arg $output_argument $job_argument"
 # qsub group
    set job_id [submit_job "$remote_host_arg $output_argument $job_argument" 1 60 "" ""]
    wait_for_job_state $job_id "r" 60
+   delete_all_jobs
 }
  
 proc qsub_complex_expression_test1 {} {
@@ -125,12 +128,13 @@ proc qsub_complex_expression_test1 {} {
 
    set remote_host_arg "-l 'h=*&!excluded'"
    set output_argument "-o /dev/null -e /dev/null"
-   set job_argument "$ts_config(product_root)/examples/jobs/sleeper.sh 5"
+   set job_argument "$ts_config(product_root)/examples/jobs/sleeper.sh 60"
 
    ts_log_fine "Submit job: $remote_host_arg $output_argument $job_argument"
 # qsub comlex host
    set job_id [submit_job "$remote_host_arg $output_argument $job_argument" 1 60 "" ""]
    wait_for_job_state $job_id "r" 60
+   delete_all_jobs
 }
     
     
@@ -140,12 +144,13 @@ proc qsub_complex_expression_test2 {} {
 
    set remote_host_arg "-l 'arch=*&!excluded'"
    set output_argument "-o /dev/null -e /dev/null"
-   set job_argument "$ts_config(product_root)/examples/jobs/sleeper.sh 5"
+   set job_argument "$ts_config(product_root)/examples/jobs/sleeper.sh 60"
 
    ts_log_fine "Submit job: $remote_host_arg $output_argument $job_argument"
 # qsub comlex host
    set job_id [submit_job "$remote_host_arg $output_argument $job_argument" 1 60 "" ""]
    wait_for_job_state $job_id "r" 60
+   delete_all_jobs
 }
     
     
