@@ -3193,7 +3193,7 @@ proc wait_for_load_from_all_queues { seconds {raise_error 1} } {
 
       set runtime [expr ( [timestamp] - $time) ]
       if { $runtime >= $seconds } {
-          ts_log_severe "timeout waiting for load values < 99" $raise_error
+          ts_log_severe "timeout waiting for load values < 99. last qstat output was: $result" $raise_error
           return -1
       }
    }
