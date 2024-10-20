@@ -814,6 +814,20 @@ job('GCS-CI-CD/TestsShort/2717') {
    }
 }
 queue('GCS-CI-CD/TestsShort/2717')
+job('GCS-CI-CD/TestsShort/config_execd_params_keep_active') {
+   lockableResources {
+      label('gcs-ci-cd-cluster')
+      resourcesVariable('CLUSTER')
+      resourceNumber(1)
+   }
+   wrappers {
+      sshAgent('tstusr-rsa-key')
+   }
+   steps {
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/ocs-testsuite/checktree_gcs/checktree/object/config/config_execd_params/config_execd_params_keep_active 0')
+   }
+}
+queue('GCS-CI-CD/TestsShort/config_execd_params_keep_active')
 job('GCS-CI-CD/TestsShort/spooling') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -1850,6 +1864,20 @@ job('GCS-CI-CD/TestsShort/job_groups') {
    }
 }
 queue('GCS-CI-CD/TestsShort/job_groups')
+job('GCS-CI-CD/TestsShort/1741') {
+   lockableResources {
+      label('gcs-ci-cd-cluster')
+      resourcesVariable('CLUSTER')
+      resourceNumber(1)
+   }
+   wrappers {
+      sshAgent('tstusr-rsa-key')
+   }
+   steps {
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/bugs/issuezilla/1741 0')
+   }
+}
+queue('GCS-CI-CD/TestsShort/1741')
 job('GCS-CI-CD/TestsShort/360') {
    lockableResources {
       label('gcs-ci-cd-cluster')
@@ -3222,6 +3250,20 @@ job('GCS-CI-CD/TestsShort/qresub') {
    }
 }
 queue('GCS-CI-CD/TestsShort/qresub')
+job('GCS-CI-CD/TestsShort/1473') {
+   lockableResources {
+      label('gcs-ci-cd-cluster')
+      resourcesVariable('CLUSTER')
+      resourceNumber(1)
+   }
+   wrappers {
+      sshAgent('tstusr-rsa-key')
+   }
+   steps {
+      shell('ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd ${CLUSTER} check /home/tstusr/CS/gcs-ci-cd-0/testsuite/src/checktree/bugs/issuezilla/1473 0')
+   }
+}
+queue('GCS-CI-CD/TestsShort/1473')
 job('GCS-CI-CD/TestsShort/deadline') {
    lockableResources {
       label('gcs-ci-cd-cluster')
