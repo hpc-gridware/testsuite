@@ -776,7 +776,7 @@ proc start_remote_prog { hostname
          set preprelast [expr $found_end -1]
          if {$preprelast >= 0} {
             # output is >= 2 characters
-            # this might be the additonal echo "\n" from generated script
+            # this might be the additional echo "\n" from generated script
             # we have to remove this additional line (but only the last one)
             set last2chars [string range $output $preprelast $found_end]
             set output [string range $output 0 [expr $preprelast - 1]] 

@@ -2765,8 +2765,8 @@ proc remote_delete_directory {hostname path {win_local_user 0}} {
       return -1     
    }
 
-   # we want to be carefull not to delete system directories
-   # therefore we only accept pathes longer than 10 bytes
+   # we want to be careful not to delete system directories
+   # therefore we only accept paths longer than 10 bytes
    if {[string length $path] > 10} {
 
       # If we have no admin user system and we have a root password then do a chown
