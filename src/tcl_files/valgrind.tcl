@@ -304,7 +304,7 @@ proc valgrind_restart_daemon_after_idle {} {
 
    # restart the daemon if no tests have been run for more than 15 minutes
    # unless we are starting a cluster installation which will restart the daemon anyway
-   if {$CHECK_VALGRIND == "master" || $CHECK_VALGRIND == "execution" && $check_name != "init_core_system"} {
+   if {($CHECK_VALGRIND == "master" || $CHECK_VALGRIND == "execution") && $check_name != "init_core_system"} {
       set now [clock seconds]
       set idle_time [expr $now - $CHECK_VALGRIND_LAST_DAEMON_RESTART]
       if {$idle_time > 900} {
