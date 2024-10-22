@@ -1122,6 +1122,60 @@ proc start_test_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {tim
 #*******************************************************************************
 global g_generic_messages
 unset -nocomplain g_generic_messages
+
+proc init_global_generic_messages {} {
+   get_current_cluster_config_array ts_config
+
+   global g_generic_messages
+   unset -nocomplain g_generic_messages
+
+   upvar 0 g_generic_messages messages
+   ts_log_fine "get_sge_error_generic: translating messages"
+
+   # CSP errors
+   lappend messages(index) "-100"
+   set messages(-100) "*[translate_macro MSG_CL_RETVAL_SSL_COULD_NOT_SET_CA_CHAIN_FILE]*"
+
+   # generic communication errors
+   lappend messages(index) "-120"
+   set messages(-120) "*[translate_macro MSG_GDI_UNABLE_TO_CONNECT_SUS "qmaster" "*" "*"]*"
+   set messages(-120,description) "probably sge_qmaster is down"
+
+   lappend messages(index) "-121"
+   set messages(-121) "*[translate_macro MSG_GDI_CANT_SEND_MSG_TO_PORT_ON_HOST_SUSS "qmaster" "*" "*" "*"]*"
+   set messages(-121,description) "probably sge_qmaster is down"
+
+   # messages indicating insufficient host privileges
+   lappend messages(index) -200
+   lappend messages(index) -201
+   lappend messages(index) -202
+   set messages(-200) "*[translate_macro MSG_SGETEXT_NOSUBMITORADMINHOST_S "*"]"
+   set messages(-201) "*[translate_macro MSG_SGETEXT_NOADMINHOST_S "*"]"
+   set messages(-202) "*[translate_macro MSG_SGETEXT_NOSUBMITHOST_S "*"]"
+
+   # messages indicating insufficient user privileges
+   lappend messages(index) -210
+   lappend messages(index) -211
+   set messages(-210) "*[translate_macro MSG_SGETEXT_MUSTBEMANAGER_S "*"]"
+   set messages(-211) "*[translate_macro MSG_SGETEXT_MUSTBEOPERATOR_S "*"]"
+
+   # file io problems
+   lappend messages(index) -300
+   set bootstrap "$ts_config(product_root)/$ts_config(cell)/common/bootstrap"
+   set messages(-300) "*[translate_macro MSG_FILE_FOPENFAILED_SS $bootstrap "*"]"
+
+   lappend messages(index) -301
+   set act_qmaster "$ts_config(product_root)/$ts_config(cell)/common/act_qmaster"
+   set messages(-301) "*[translate_macro MSG_FILE_FOPENFAILED_SS $act_qmaster "*"]"
+
+   lappend messages(index) -900
+   lappend messages(index) -901
+   set messages(-900) "*?egmentation ?ault*"
+   set messages(-901) "*?ore ?umped*"
+
+   get_sge_error_generic_vdep messages
+}
+
 proc get_sge_error_generic {messages_var} {
    get_current_cluster_config_array ts_config
    global g_generic_messages
@@ -1129,50 +1183,7 @@ proc get_sge_error_generic {messages_var} {
    upvar 0 g_generic_messages messages
 
    if {![info exists messages(index)]} {
-      ts_log_fine "get_sge_error_generic: translating messages"
-
-      # CSP errors
-      lappend messages(index) "-100"
-      set messages(-100) "*[translate_macro MSG_CL_RETVAL_SSL_COULD_NOT_SET_CA_CHAIN_FILE]*"
-
-      # generic communication errors
-      lappend messages(index) "-120"
-      set messages(-120) "*[translate_macro MSG_GDI_UNABLE_TO_CONNECT_SUS "qmaster" "*" "*"]*"
-      set messages(-120,description) "probably sge_qmaster is down"
-
-      lappend messages(index) "-121"
-      set messages(-121) "*[translate_macro MSG_GDI_CANT_SEND_MSG_TO_PORT_ON_HOST_SUSS "qmaster" "*" "*" "*"]*"
-      set messages(-121,description) "probably sge_qmaster is down"
-
-      # messages indicating insufficient host privileges
-      lappend messages(index) -200
-      lappend messages(index) -201
-      lappend messages(index) -202
-      set messages(-200) "*[translate_macro MSG_SGETEXT_NOSUBMITORADMINHOST_S "*"]"
-      set messages(-201) "*[translate_macro MSG_SGETEXT_NOADMINHOST_S "*"]"
-      set messages(-202) "*[translate_macro MSG_SGETEXT_NOSUBMITHOST_S "*"]"
-
-      # messages indicating insufficient user privileges
-      lappend messages(index) -210
-      lappend messages(index) -211
-      set messages(-210) "*[translate_macro MSG_SGETEXT_MUSTBEMANAGER_S "*"]"
-      set messages(-211) "*[translate_macro MSG_SGETEXT_MUSTBEOPERATOR_S "*"]"
-
-      # file io problems
-      lappend messages(index) -300
-      set bootstrap "$ts_config(product_root)/$ts_config(cell)/common/bootstrap"
-      set messages(-300) "*[translate_macro MSG_FILE_FOPENFAILED_SS $bootstrap "*"]"
-
-      lappend messages(index) -301
-      set act_qmaster "$ts_config(product_root)/$ts_config(cell)/common/act_qmaster"
-      set messages(-301) "*[translate_macro MSG_FILE_FOPENFAILED_SS $act_qmaster "*"]"
-
-      lappend messages(index) -900
-      lappend messages(index) -901
-      set messages(-900) "*?egmentation ?ault*"
-      set messages(-901) "*?ore ?umped*"
-
-      get_sge_error_generic_vdep messages
+      init_global_generic_messages
    }
 
    # copy the messages to the target array
@@ -4899,6 +4910,67 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}}
 #*******************************
 global g_submit_job_messages
 unset -nocomplain g_submit_job_messages
+proc init_global_submit_job_messages {} {
+   global g_submit_job_messages
+   unset -nocomplain g_submit_job_messages
+
+   upvar 0 g_submit_job_messages messages
+
+   ts_log_fine "init_global_submit_job_messages: translating and caching messages"
+   # we first want to parse errors first, then the positive messages, 
+   # as e.g. an immediate job might be correctly submitted, but then cannot be scheduled
+   set messages(index) "-3 -6 -7 -8 -9 -10 -11 -12 -13 -14 -15 -16 -17 -18 -19 -20 -21 -22 -23 -24 -25 -26 -27 -28 -29 -30 -31 -32 -33 -34 -35 -36 -37 -38"
+   append messages(index) " 0 1 2"
+
+   # success messages:
+   set messages(0)      "*[translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]*"
+   set messages(1)      "*[translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_S "*"]*"
+   set messages(2)      "*[translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUS "*" "*" "*" "*" "*"]*"
+
+   # failure messages:
+   set messages(-14)   "TODO: jobnet handling changed, old message NON_AMBIGUOUS"
+   set messages(-15)   "TODO: jobnet handling changed, old message UNAMBIGUOUSNESS"
+   set messages(-24)   "*[translate_macro MSG_JOB_NAMETOOLONG_I "*"]*"
+   set messages(-25)   "*[translate_macro MSG_JOB_JOBALREADYEXISTS_S "*"]*"
+   set messages(-26)   "*[translate_macro MSG_INVALIDJOB_REQUEST_S "*"]*"
+   set messages(-28)   "*[translate_macro MSG_QREF_QUNKNOWN_S "*"]*"
+
+   set messages(-29)    "*[translate_macro MSG_JOB_NONADMINPRIO]*"
+   set messages(-37)    "*[translate_macro MSG_EVAL_EXPRESSION_LONG_EXPRESSION "*"]*"
+   set messages(-36)   "*[translate_macro MSG_JOB_SAMEPATHSFORINPUTANDOUTPUT_SSS "*" "*" "*"]"
+
+   set messages(-35)    "*[translate_macro MSG_JOB_HRTLIMITTOOLONG_U "*"]*"
+
+   set messages(-3)     "*[translate_macro MSG_GDI_USAGE_USAGESTRING] qsub*"
+   set messages(-6)     "*[translate_macro MSG_QSUB_YOURQSUBREQUESTCOULDNOTBESCHEDULEDDTRYLATER]*"
+   set messages(-7)     "*[translate_macro MSG_JOB_MORETASKSTHAN_U "*"]*"
+   set messages(-8)     "*[translate_macro MSG_SGETEXT_UNKNOWN_RESOURCE_S "*"]*"
+   set messages(-9)     "*[translate_macro MSG_SGETEXT_CANTRESOLVEHOST_S "*"]*"
+   set messages(-10)    "*[translate_macro MSG_SGETEXT_RESOURCE_NOT_REQUESTABLE_S "*"]*"
+   set messages(-11)    "*[translate_macro MSG_JOB_NOPERMS_SS "*" "*"]*"
+   set messages(-12)    "*[translate_macro MSG_SGETEXT_NO_ACCESS2PRJ4USER_SS "*" "*"]*"
+   if {[is_version_in_range "9.0.0"]} {
+      set messages(-13)    "*[translate_macro MSG_ANSWER_UNKNOWNOPTIONX_S "*"]*"
+   } else {
+      set messages(-13)    "*[translate_macro MSG_ANSWER_UNKOWNOPTIONX_S "*"]*"
+   }
+   set messages(-16)    "*[translate_macro MSG_FILE_ERROROPENINGXY_SS "*" "*"]*"
+   set messages(-17)    "*[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC [translate_macro MSG_GDI_KEYSTR_COLON] ":"]*"
+   set messages(-18)    "*[translate_macro MSG_QCONF_ONLYONERANGE]*"
+   set messages(-19)    "*[translate_macro MSG_PARSE_DUPLICATEHOSTINFILESPEC]*"
+   set messages(-20)    "*[translate_macro MSG_GDI_NEGATIVSTEP]*"
+   set messages(-21)    "*[translate_macro MSG_GDI_INITIALPORTIONSTRINGNODECIMAL_S "*"] *"
+   set messages(-22)    "*[translate_macro MSG_JOB_NODEADLINEUSER_S "*"]*"
+   set messages(-23)    "*[translate_macro MSG_CPLX_WRONGTYPE_SSS "*" "*" "*"]*"
+   set messages(-27)    "*[translate_macro MSG_PARSE_INVALIDPRIORITYMUSTBEINNEG1023TO1024]*"
+   set messages(-30)    "*[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC "*" "*"]*"
+   set messages(-31)    "*[translate_macro MSG_ANSWER_INVALIDOPTIONARGX_S "*"]*"
+   set messages(-32)    "*[translate_macro MSG_JOB_PRJNOSUBMITPERMS_S "*"]*"
+   set messages(-33)    "*[translate_macro MSG_STREE_USERTNOACCESS2PRJ_SS "*" "*"]*"
+   set messages(-34)    "*[translate_macro MSG_JOB_NOSUITABLEQ_S "*"]*"
+   set messages(-38)    "*[translate_macro MSG_QSUB_COULDNOTRUNJOB_S "*"]*"
+}
+
 proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {cd_dir ""} {show_args 1} {qcmd "qsub"} {dev_null 1} {the_output "qsub_output"} {ignore_list {}} {new_grp ""}} {
    get_current_cluster_config_array ts_config
    global g_submit_job_messages
@@ -4912,59 +4984,7 @@ proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {c
    # cache the messages in a global variable, map it to our local messages variable
    upvar 0 g_submit_job_messages messages
    if {![info exists messages(index)]} {
-      ts_log_fine "submit_job: translating messages"
-      # we first want to parse errors first, then the positive messages, 
-      # as e.g. an immediate job might be correctly submitted, but then cannot be scheduled
-      set messages(index) "-3 -6 -7 -8 -9 -10 -11 -12 -13 -14 -15 -16 -17 -18 -19 -20 -21 -22 -23 -24 -25 -26 -27 -28 -29 -30 -31 -32 -33 -34 -35 -36 -37 -38"
-      append messages(index) " 0 1 2"
-
-      # success messages:
-      set messages(0)      "*[translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]*"
-      set messages(1)      "*[translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_S "*"]*"
-      set messages(2)      "*[translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUS "*" "*" "*" "*" "*"]*"
-
-      # failure messages:
-      set messages(-14)   "TODO: jobnet handling changed, old message NON_AMBIGUOUS"
-      set messages(-15)   "TODO: jobnet handling changed, old message UNAMBIGUOUSNESS"
-      set messages(-24)   "*[translate_macro MSG_JOB_NAMETOOLONG_I "*"]*"
-      set messages(-25)   "*[translate_macro MSG_JOB_JOBALREADYEXISTS_S "*"]*"
-      set messages(-26)   "*[translate_macro MSG_INVALIDJOB_REQUEST_S "*"]*"
-      set messages(-28)   "*[translate_macro MSG_QREF_QUNKNOWN_S "*"]*"
-
-      set messages(-29)    "*[translate_macro MSG_JOB_NONADMINPRIO]*"
-      set messages(-37)    "*[translate_macro MSG_EVAL_EXPRESSION_LONG_EXPRESSION "*"]*"
-      set messages(-36)   "*[translate_macro MSG_JOB_SAMEPATHSFORINPUTANDOUTPUT_SSS "*" "*" "*"]"
-
-      set messages(-35)    "*[translate_macro MSG_JOB_HRTLIMITTOOLONG_U "*"]*"
-
-      set messages(-3)     "*[translate_macro MSG_GDI_USAGE_USAGESTRING] qsub*"
-      set messages(-6)     "*[translate_macro MSG_QSUB_YOURQSUBREQUESTCOULDNOTBESCHEDULEDDTRYLATER]*"
-      set messages(-7)     "*[translate_macro MSG_JOB_MORETASKSTHAN_U "*"]*"
-      set messages(-8)     "*[translate_macro MSG_SGETEXT_UNKNOWN_RESOURCE_S "*"]*"
-      set messages(-9)     "*[translate_macro MSG_SGETEXT_CANTRESOLVEHOST_S "*"]*"
-      set messages(-10)    "*[translate_macro MSG_SGETEXT_RESOURCE_NOT_REQUESTABLE_S "*"]*"
-      set messages(-11)    "*[translate_macro MSG_JOB_NOPERMS_SS "*" "*"]*"
-      set messages(-12)    "*[translate_macro MSG_SGETEXT_NO_ACCESS2PRJ4USER_SS "*" "*"]*"
-      if {[is_version_in_range "9.0.0"]} {
-         set messages(-13)    "*[translate_macro MSG_ANSWER_UNKNOWNOPTIONX_S "*"]*"
-      } else {
-         set messages(-13)    "*[translate_macro MSG_ANSWER_UNKOWNOPTIONX_S "*"]*"
-      }
-      set messages(-16)    "*[translate_macro MSG_FILE_ERROROPENINGXY_SS "*" "*"]*"
-      set messages(-17)    "*[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC [translate_macro MSG_GDI_KEYSTR_COLON] ":"]*"
-      set messages(-18)    "*[translate_macro MSG_QCONF_ONLYONERANGE]*"
-      set messages(-19)    "*[translate_macro MSG_PARSE_DUPLICATEHOSTINFILESPEC]*"
-      set messages(-20)    "*[translate_macro MSG_GDI_NEGATIVSTEP]*"
-      set messages(-21)    "*[translate_macro MSG_GDI_INITIALPORTIONSTRINGNODECIMAL_S "*"] *"
-      set messages(-22)    "*[translate_macro MSG_JOB_NODEADLINEUSER_S "*"]*"
-      set messages(-23)    "*[translate_macro MSG_CPLX_WRONGTYPE_SSS "*" "*" "*"]*"
-      set messages(-27)    "*[translate_macro MSG_PARSE_INVALIDPRIORITYMUSTBEINNEG1023TO1024]*"
-      set messages(-30)    "*[translate_macro MSG_GDI_KEYSTR_MIDCHAR_SC "*" "*"]*"
-      set messages(-31)    "*[translate_macro MSG_ANSWER_INVALIDOPTIONARGX_S "*"]*"
-      set messages(-32)    "*[translate_macro MSG_JOB_PRJNOSUBMITPERMS_S "*"]*"
-      set messages(-33)    "*[translate_macro MSG_STREE_USERTNOACCESS2PRJ_SS "*" "*"]*"
-      set messages(-34)    "*[translate_macro MSG_JOB_NOSUITABLEQ_S "*"]*"
-      set messages(-38)    "*[translate_macro MSG_QSUB_COULDNOTRUNJOB_S "*"]*"
+      init_global_submit_job_messages
    }
 
    # add the standard/error output options if necessary
@@ -5172,6 +5192,23 @@ proc resubmit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} 
 #*******************************************************************************
 global g_submit_job_parse_pos
 unset -nocomplain g_submit_job_parse_pos
+
+proc init_global_submit_job_parse_job_id_messages {} {
+   global g_submit_job_parse_pos
+   unset -nocomplain g_submit_job_parse_pos
+
+   ts_log_fine "submit_job_parse_job_id: translating messages"
+   set JOB_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOB_US "__JOB_ID__" "__JOB_NAME__"]
+   set g_submit_job_parse_pos(0) [lsearch -exact $JOB_SUBMITTED_DUMMY "__JOB_ID__"]
+
+   # 6.0 and higher
+   set JOB_IMMEDIATE_DUMMY [translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_S "__JOB_ID__"]
+   set g_submit_job_parse_pos(1) [lsearch -exact $JOB_IMMEDIATE_DUMMY "__JOB_ID__"]
+
+   set JOB_ARRAY_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUS "__JOB_ID__" "" "" "" "__JOB_NAME__"]
+   set g_submit_job_parse_pos(2) [lsearch -exact $JOB_ARRAY_SUBMITTED_DUMMY "__JOB_ID__.-:"]
+}
+
 proc submit_job_parse_job_id {output_var type message} {
    get_current_cluster_config_array ts_config
    global g_submit_job_parse_pos
@@ -5182,16 +5219,7 @@ proc submit_job_parse_job_id {output_var type message} {
 
    # we need to determine the position of the job id in the output message
    if {![info exists g_submit_job_parse_pos(0)]} {
-      ts_log_fine "submit_job_parse_job_id: translating messages"
-      set JOB_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOB_US "__JOB_ID__" "__JOB_NAME__"]
-      set g_submit_job_parse_pos(0) [lsearch -exact $JOB_SUBMITTED_DUMMY "__JOB_ID__"]
-
-      # 6.0 and higher
-      set JOB_IMMEDIATE_DUMMY [translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_S "__JOB_ID__"]
-      set g_submit_job_parse_pos(1) [lsearch -exact $JOB_IMMEDIATE_DUMMY "__JOB_ID__"]
-
-      set JOB_ARRAY_SUBMITTED_DUMMY [translate_macro MSG_JOB_SUBMITJOBARRAY_UUUUS "__JOB_ID__" "" "" "" "__JOB_NAME__"]
-      set g_submit_job_parse_pos(2) [lsearch -exact $JOB_ARRAY_SUBMITTED_DUMMY "__JOB_ID__.-:"]
+      init_global_submit_job_parse_job_id_messages
    }
 
    set pos $g_submit_job_parse_pos($type)
@@ -7404,7 +7432,7 @@ proc shutdown_qmaster {hostname qmaster_spool_dir {timeout 60}} {
       if {[is_pid_with_name_existing $hostname $qmaster_pid "sge_qmaster"] == 0} { 
          ts_log_finest "killing qmaster with pid $qmaster_pid on host $hostname"
          ts_log_finest "do a qconf -km ..."
-         set result [start_sge_bin "qconf" "-km" "" "" prg_exit_state 15]
+         set result [start_sge_bin "qconf" "-km"]
          ts_log_finest $result
          wait_till_qmaster_is_down $hostname $timeout
          shutdown_system_daemon $hostname qmaster

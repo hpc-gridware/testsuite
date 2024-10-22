@@ -6707,6 +6707,7 @@ proc menu {} {
             # re-read checktree and re-source tcl files
             source_tcl_files
             build_checktree
+            init_messages_caches
             wait_for_enter
          }
          "34" {
@@ -8594,8 +8595,6 @@ foreach elem $after_source_commands {
    }
 }
 
-
-
 if { $do_only_diff_macros == 1 } {
    testsuite_shutdown [diff_macro_files $global_macro_file1 $global_macro_file2 $global_macro_ignore_flag]
 }
@@ -8619,6 +8618,9 @@ source_tcl_files
 
 # try load TCL packages like TDOM
 load_additional_packages
+
+# initialize caches for translated product messages
+init_messages_caches
 
 if { $do_category == 1 } {
    set CHECK_ENABLED_CATEGORIES $do_category_list

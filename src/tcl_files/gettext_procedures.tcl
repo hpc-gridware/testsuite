@@ -1483,4 +1483,8 @@ proc sge_macro { macro_name {raise_error 1} } {
    return $value
 }
 
-
+proc init_messages_caches {} {
+   init_global_generic_messages
+   init_global_submit_job_messages
+   init_global_submit_job_parse_job_id_messages
+}
