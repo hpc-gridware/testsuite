@@ -159,6 +159,7 @@ proc issue_2759_test {} {
             after 1000
          }
          if {$didntstart == 1} {
+            parray ps_info
             ts_log_severe "Job should have been killed!\nJob with PID $job_pid on host $host is still running!"
             ts_log_fine "Kill it manually in order to cleanup."
             set output [start_remote_prog $host "root" "kill" "9 $job_pid" "exit_val" 60]
