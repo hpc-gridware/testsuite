@@ -44,20 +44,26 @@ pipeline {
                 }
             }
         }
-        stage('gcs-ci-cd 0 build+install') {
+        stage('gcs-ci-cd 0 build') {
             steps {
                 lock(resource: '0') {
                     sshagent(credentials : ['tstusr-rsa-key']) {
                         //sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 0 build'
                     }
-                    sshagent(credentials : ['tstusr-rsa-key']) {
-                        sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 0 install'
-                    }
                 }
             }
         }
-        stage('gcs-ci-cd 1-11 build+install') {
+        stage('gcs-ci-cd 0 install + 1-7 build+install') {
             parallel {
+                stage('gcs-ci-cd 0 install') {
+                    steps {
+                        lock(resource: '0') {
+                            sshagent(credentials : ['tstusr-rsa-key']) {
+                                sh 'ssh tstusr@h007 /tools/CS/bin/gcs-ci-cd 0 install'
+                            }
+                        }
+                    }
+                }
                 stage('gcs-ci-cd 1 build+install') {
                     steps {
                         lock(resource: '1') {
@@ -142,6 +148,10 @@ pipeline {
                         }
                     }
                 }
+            }
+        }
+        stage('gcs-ci-cd 8-11 build+install') {
+            parallel {
                 stage('gcs-ci-cd 8 build+install') {
                     steps {
                         lock(resource: '8') {
