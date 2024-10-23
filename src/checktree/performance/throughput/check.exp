@@ -927,6 +927,8 @@ proc run_throughput_test {} {
    }
 
    # start submitter (expect script) on all execd hosts, not no master host
+   set total_timeout 0
+   set max_timeout 0
    foreach host $submit_hosts {
       set expect_bin [get_binary_path $host "expect"]
       ts_log_fine "starting submitter process on host $host"
@@ -936,9 +938,16 @@ proc run_throughput_test {} {
       lappend remote_spawn_list $id
       set spawn_host_map($spawn_id) $host
       set host_spawn_map($host) $spawn_id
+
+      # we need to find the maximum timout value to be used (that depends on the slowest host)
+      # and we need the total time that we are allowed to spend for the whole communication
+      set delta_timout [host_conf_scale_timeout $host 60]
+      set total_timeout [expr $total_timeout + $delta_timout]
+      set max_timeout [expr { $delta_timout > $max_timeout ? $delta_timout : $max_timeout }]
+      ts_log_fine "increasing timeout for host $host by $delta_timout to $total_timeout (max_timeout=$max_timeout)"
    }
    
-   set timeout 60
+   set timeout $max_timeout
    set error 0
    set num_submitters 0
    set next_submitter_list {}
@@ -964,7 +973,7 @@ proc run_throughput_test {} {
    # then set script file
    # if everything succeeded, accept this submitter
    log_user 0
-   set my_timeout [expr [timestamp] + 300]
+   set my_timeout [expr [timestamp] + $total_timeout]
    set time_output 0
    expect_user {
       -i $spawn_list full_buffer {
