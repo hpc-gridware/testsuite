@@ -72,6 +72,7 @@ proc core_binding_basic_setup {} {
 
    # get list of supported hosts
    set hostlist [get_test_host_list]
+   #set hostlist "ro8-0-lx-amd64"
 
    # check if there are some supported hosts there
    if {[llength $hostlist] <= 0} {
@@ -150,7 +151,6 @@ proc core_binding_basic {} {
      ts_log_fine "-----------------------------"
 
      do_stress_testing $host
-
      ts_log_fine "---------------------------------------"
      ts_log_fine "----> do oversubscription testing <----"
      ts_log_fine "---------------------------------------"
@@ -171,14 +171,13 @@ proc core_binding_basic {} {
         project_spooling_bug $host
      }
 
-      incr runs
+     incr runs
 
       if {$CHECK_ACT_LEVEL == 0} {
          # we need to test just one host
          break
       }
    }
-
 }
 
 #****** check.62/get_test_host_list() ******************************************
@@ -270,9 +269,9 @@ proc test_oversubscription { lhost } {
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   # -------------------------------
-   # check striding oversubscription
-   # -------------------------------
+   # --------------------------------
+   # check striding over subscription
+   # --------------------------------
 
    if { $aoc < 2 } {
       return
@@ -294,7 +293,7 @@ proc test_oversubscription { lhost } {
    }
 
    # TODO
-   # check explicict obversubscription
+   # check explicit over subscription
 
    # clean up 
    delete_all_jobs
@@ -377,14 +376,14 @@ proc core_binding_basic_set { lhost } {
    set amount 1 
    set stepsize 1
 
-   while { $amount <= $max_amount } { 
+   while { $amount <= $max_amount } {
       # test "set striding"
       set jobid [submit_striding $lhost $amount $stepsize "set"] 
       check_binding $lhost $jobid $amount $threads_per_core $stepsize "no" "set" 
       check_qstat_reporting $lhost $jobid "striding" $amount $threads_per_core $stepsize "no" "set"
       delete_all_jobs
       wait_for_end_of_all_jobs
-     
+
       # test "striding" (which is equal to "set striding")
       set jobid [submit_striding $lhost $amount $stepsize ""] 
       check_binding $lhost $jobid $amount $threads_per_core $stepsize "no" "set" 
@@ -454,20 +453,11 @@ proc core_binding_basic_set { lhost } {
    # ---------------
 
    set amount 1
-   set sockets 2
-
    set explicit_string ""
-
-   while { $amount <= $max_amount } {
-      # set socket to place on
-      # TODO works only on max. 2 socket machine
-      if { $amount <= $cores_per_socket } {
-         set socket_no 0
-      } else {
-         set socket_no 1
-      }
+   while {$amount <= $max_amount} {
       # set core to place on (cores per socket is 2)
-      set core_no [expr [expr $amount - 1] % $cores_per_socket]
+      set socket_no [expr $amount / $cores_per_socket - 1]
+      set core_no [expr $amount % $cores_per_socket]
       
       if { $amount > 1 } {
          append explicit_string ":"
@@ -476,7 +466,7 @@ proc core_binding_basic_set { lhost } {
       append explicit_string "$socket_no,$core_no"
 
       ts_log_fine "explicit request is: $explicit_string"
-     
+
       # test "set explicit"
       set jobid [submit_explicit $lhost $explicit_string "set"]
       check_binding $lhost $jobid $amount $threads_per_core 
@@ -508,7 +498,6 @@ proc core_binding_basic_set { lhost } {
 
       incr amount
    }
-
 }
 
 
@@ -1097,7 +1086,7 @@ proc check_binding_solaris { host jobid { amount 1 } { threads_per_core 1 } { st
       if { [count_socket_core_list $bounded_to] == $final_amount } {
          ts_log_fine "amount of cores in pe_hostfile seems to be ok"
       } else {
-         ts_log_severe "The amount of core in pe_hostfile seems to be wrong ([count_socket_core_list $bounded_to] instead of $final_amount)"
+         ts_log_severe "The amount of core in pe_hostfile seems to be wrong ([count_socket_core_list $bounded_to] instead of $final_amount). pe_hostfile: $pe_hostfile"
       }
 
       return 1
