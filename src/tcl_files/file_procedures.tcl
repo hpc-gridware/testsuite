@@ -2774,7 +2774,7 @@ proc remote_delete_directory {hostname path {win_local_user 0}} {
          # make sure we actually can delete the directory with all its contents.
          map_special_users $hostname $CHECK_USER $win_local_user
          ts_log_fine "doing chown -R $connect_full_user $path on $hostname as user root ..."
-         start_remote_prog $hostname "root" chown "-R $connect_full_user $path" prg_exit_state 60 0 "" "" 1 0 0 1 $win_local_user
+         start_remote_prog $hostname "root" chown "-R $connect_full_user $path" prg_exit_state 180 0 "" "" 1 0 0 1 $win_local_user
       }
 
       # we move the directory as CHECK_USER (admin user)
