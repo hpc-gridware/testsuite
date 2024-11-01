@@ -378,6 +378,9 @@ set DISABLE_MAIL 0
 global JENKINS_MODE
 set JENKINS_MODE 0
 
+global ONLY_ONE_LEVEL
+set ONLY_ONE_LEVEL ""
+
 global CHECK_HUDSON_OUTPUT ;# Used to hold output for since check_name
 set CHECK_HUDSON_OUTPUT ""
 global CHECK_HUDSON_STACKTRACE ;# Used to hold most recent stacktrace when failure occurred
