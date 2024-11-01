@@ -5181,6 +5181,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    global CHECK_USE_HUDSON
    global exclude_array
    global check_set_ignore_dependencies
+   global ONLY_ONE_LEVEL
 
    # check if the state_to_run is valid
    if {$state_to_run != "all" &&
@@ -5215,7 +5216,11 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    set check_source_files "--"
    unset -nocomplain check_version_range
 
-   set check_levels [checktree_get_check_levels_by_path $path]
+   if {$ONLY_ONE_LEVEL != ""} {
+      set check_levels $ONLY_ONE_LEVEL
+   } else {
+      set check_levels [checktree_get_check_levels_by_path $path]
+   }
 
    ts_source $path/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT
  
@@ -8718,7 +8723,21 @@ if {$do_dump_test_list} {
             puts "skipped $ts_checktree(${node_id},dir_name) because it has children"
             continue
          }
-         foreach level [split $ts_checktree(${node_id},max_level_count) " "] {
+         if {[info exists ts_checktree(${node_id},check_category)] == 0} {
+            puts "skipped $ts_checktree(${node_id},dir_name) because it has no category variable"
+            continue
+         }
+         if {[string first "JENKINS_DISABLED" $ts_checktree(${node_id},check_category)] > 0} {
+            puts "skipped $ts_checktree(${node_id},dir_name) because it is in JENKINS_DISABLED category"
+            continue
+         }
+         if {[string first "VERIFIED" $ts_checktree(${node_id},check_category)] == -1} {
+            puts "skipped $ts_checktree(${node_id},dir_name) because it is not in VERIFIED category"
+            continue
+         }
+
+         # make one jenkins test for eeach supportet level of the test
+         foreach level [split [checktree_get_check_levels_by_path $ts_checktree(${node_id},dir_name)] " "] {
             if {$level_name == "short" && $level >= 100} {
                continue
             } elseif {$level_name == "medium" && ($level < 100 || $level >= 200)} {
@@ -8732,17 +8751,7 @@ if {$do_dump_test_list} {
             }
 
             set test_name_token [split $ts_checktree(${node_id},dir_name) "/"]
-            set test_name "[lindex $test_name_token end]"
-
-            if {[string first "JENKINS_DISABLED" $ts_checktree(${node_id},check_category)] > 0} {
-               puts "skipped $ts_checktree(${node_id},dir_name) because it is in JENKINS_DISABLED category"
-               continue
-            }
-
-            if {[string first "VERIFIED" $ts_checktree(${node_id},check_category)] == -1} {
-               puts "skipped $ts_checktree(${node_id},dir_name) because it is not in VERIFIED category"
-               continue
-            }
+            set test_name "[lindex $test_name_token end]_$level"
 
             puts $test_list_file "job('GCS-CI-CD/${test_group}/${test_name}') {"
             puts $test_list_file "   lockableResources {"
@@ -8758,9 +8767,6 @@ if {$do_dump_test_list} {
             puts $test_list_file "   }"
             puts $test_list_file "}"
             puts $test_list_file "queue('GCS-CI-CD/${test_group}/${test_name}')"
-
-            # even if there are multiple levels with the same level_name we generate the test only once
-            break
          }
       }
       close $test_list_file
@@ -8776,11 +8782,8 @@ if {$do_one_test} {
       set CHECK_ACT_PATH "$ts_config(checktree_root_dir)/$do_one_test_name"
    }
 
+   set ONLY_ONE_LEVEL $do_one_test_level
    set selected_levels ""
-   set CHECK_ENABLED_RUNLEVELS ""
-   for {set i 0} {$i<= $do_one_test_level} {incr i 1} {
-      lappend CHECK_ENABLED_RUNLEVELS [ expr ( $i * 100 )  ]
-   }
 
    # print_menu_header
    ts_log_fine "run all tests ..."
