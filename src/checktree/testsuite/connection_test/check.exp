@@ -59,8 +59,8 @@ set check_needs           ""
 set check_setup_function connection_test_setup
 set check_cleanup_function connection_test_cleanup
 
-set check_setup_level_function connection_test_setup2
-set check_cleanup_level_function connection_test_cleanup2
+#set check_setup_level_function connection_test_setup2
+#set check_cleanup_level_function connection_test_cleanup2
 
 
 # define test's procedure order
