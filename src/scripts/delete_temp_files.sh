@@ -13,7 +13,8 @@ fi
 # if the file doesn't exist - nothing to do
 orig=$1
 if [ ! -f $orig ]; then
-   exit 0
+   echo "file $orig doesn't exist"
+   exit 1
 fi
 
 hostname="NONE"
@@ -23,7 +24,7 @@ fi
 
 # delete the files
 for line in `cat $orig`; do
-   if [ "$host" = "NONE" ]; then
+   if [ "$hostname" = "NONE" ]; then
       file=$line
    else
       host=`echo $line | cut -f 1 -d :`
