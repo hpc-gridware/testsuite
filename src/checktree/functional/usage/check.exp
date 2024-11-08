@@ -420,14 +420,6 @@ proc usage_check {jobid qstat_j_info slots acct_slots expected_wallclock} {
    return $result
 }
 
-proc max {a b} {
-   if {$a >= $b} {
-      return $a
-   } else {
-      return $b
-   }
-}
-
 proc usage_monitor_check {id test_name slots acct_slots wallclock master_host} {
    global CHECK_ACT_LEVEL
    global ts_config

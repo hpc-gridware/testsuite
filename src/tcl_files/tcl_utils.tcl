@@ -244,15 +244,12 @@ proc double_backslashes {original_string} {
 #
 #     3
 #*******************************************************************************
-proc min {arg1 arg2} {
-   set ret 0
-
-   if {$arg1 < $arg2} {
-      set ret $arg1
+proc min {a b} {
+   if {$a < $b} {
+      return $a
    } else {
-      set ret $arg2
+      return $b
    }
-   return $ret
 }
 
 #****** tcl_utils/max() **************************************************
@@ -278,15 +275,12 @@ proc min {arg1 arg2} {
 #
 #     17
 #*******************************************************************************
-proc max {arg1 arg2} {
-   set ret 0
-
-   if {$arg1 > $arg2} {
-      set ret $arg1
+proc max {a b} {
+   if {$a >= $b} {
+      return $a
    } else {
-      set ret $arg2
+      return $b
    }
-   return $ret
 }
 
 # returns the grp id for a given group name
