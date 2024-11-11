@@ -204,7 +204,7 @@ proc host_config_NFS-ROOT2NOBODY { only_check name config_array } {
                     "use the default value." }
 
    return [config_generic $only_check $name config $help_text "directory" 0]
-   }
+}
 
 #****** config_host/host_config_NFS-ROOT2ROOT() ********************************
 #  NAME
@@ -236,7 +236,7 @@ proc host_config_NFS-ROOT2ROOT { only_check name config_array } {
                     "or press >RETURN< to use the default value." }
 
    return [config_generic $only_check $name config $help_text "directory" 0]
-   }
+}
 
 #****** config_host/host_config_hostlist_show_hosts() **************************
 #  NAME
@@ -281,10 +281,10 @@ proc host_config_hostlist_show_hosts {array_name} {
    set hosts ""
    foreach ind [lsort -integer [array names indexes]] {
       lappend hosts $indexes($ind)
-      }
+   }
 
    return $hosts
-   }  
+}  
 
 #****** config_host/host_config_get_host_parameters() **************************
 #  NAME
@@ -334,6 +334,38 @@ proc host_config_get_host_parameters { } {
    lappend params remote_timeout_factor
 
    return $params
+}
+
+proc host_conf_get_host_defaults {varname} {
+   upvar $varname conf
+   set conf(host)                   "hostname"
+   set conf(arch,62)                "unsupported"
+   set conf(arch,80)                "unsupported"
+   set conf(arch,90)                "unsupported"
+   set conf(compile,62)             0
+   set conf(compile,80)             0
+   set conf(compile,90)             0
+   set conf(doc_compile,62)         0
+   set conf(doc_compile,80)         0
+   set conf(doc_compile,90)         0
+   set conf(java_compile,62)        0
+   set conf(java_compile,80)        0
+   set conf(java_compile,90)        0
+   set conf(expect)                 "/usr/bin/expect"
+   set conf(vim)                    "/usr/bin/vim"
+   set conf(tar)                    "/usr/bin/tar"
+   set conf(gzip)                   "/usr/bin/gzip"
+   set conf(ssh)                    "/usr/bin/ssh"
+   set conf(loadsensor)             ""
+   set conf(processors)             "1"
+   set conf(spooldir)               "/usr/local/testsuite"
+   set conf(response_time)          "1"
+   set conf(fr_locale)              ""
+   set conf(ja_locale)              ""
+   set conf(zh_locale)              ""
+   set conf(zones)                  ""
+   set conf(send_speed)             "0.0"
+   set conf(remote_timeout_factor)  "1"
 }
 
 #****** config_host/host_config_display_host_params() **************************
@@ -3771,3 +3803,26 @@ proc host_conf_scale_timeout {host timeout_value} {
    return [expr $timeout_value * $factor]
 }
 
+proc host_conf_add_host_from_template {host_template_var} {
+   global ts_host_config
+   upvar $host_template_var host_template
+
+   set ret 1
+   set host $host_template(host)
+   unset -nocomplain ts_host_config(host)
+
+   if {[lsearch -exact $ts_host_config(hostlist) $host] >= 0} {
+      puts "host $host already exists in host configuration"
+      set ret 0
+   }
+
+   if {$ret} {
+      lappend ts_host_config(hostlist) $host
+
+      foreach attrib [array names host_template] {
+         set ts_host_config($host,$attrib) $host_template($attrib)
+      }
+   }
+
+   return $ret
+}

@@ -145,7 +145,7 @@
 #     output(load_scaling) NONE
 #     ...
 #*******************************************************************************
-proc parse_simple_record {input_var output_var} {
+proc parse_simple_record {input_var output_var {ignore_comments 0}} {
    upvar $input_var  in
    upvar $output_var out
 
@@ -153,6 +153,13 @@ proc parse_simple_record {input_var output_var} {
    set help [split $in "\n"]
 
    foreach elem $help {
+      set elem [string trim $elem]
+      if {$elem == ""} {
+         continue
+      }
+      if {$ignore_comments && [string match "#*" $elem]} {
+         continue
+      }
       set id [lindex $elem 0]
       set value [join [lrange $elem 1 end] " "]
       set out($id) $value
