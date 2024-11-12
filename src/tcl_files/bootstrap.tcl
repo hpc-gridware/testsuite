@@ -163,6 +163,9 @@ proc bootstrap_create_host_config_file {gridengine_version bootstrap_var localho
    set host_config(compile,$gridengine_version) 1
    set host_config(java_compile,$gridengine_version) 1
    set host_config(doc_compile,$gridengine_version) 1
+   # @todo the host template has reasonable defaults for expect, vim, tar, ...
+   #       (/usr/bin) - to be 100% sure we would have to call which <bin> for every
+   #       binary on every host - this would take by far too long
    set ret [host_conf_add_host_from_template host_config]
 
    spool_array_to_file "$basedir/testsuite_host.conf" "testsuite host configuration" ts_host_config
@@ -185,6 +188,13 @@ proc bootstrap_add_hosts_to_host_config_file {gridengine_version bootstrap_var b
    # we already have the local host in the host config file
    set archs $ts_host_config($localhost,arch,$gridengine_version)
    foreach host $host_list {
+      # there might be an entry "none", e.g. if there are no submit_only_hosts
+      if {$host == "none"} {
+         continue
+      }
+      # testsuite uses short host names in the configuration
+      set host [bootstrap_get_short_hostname $host bootstrap]
+
       # we need to skip the local host - it is already in the host config file
       if {$host == $localhost} {
          continue
@@ -266,7 +276,8 @@ proc bootstrap_create_fs_config_file {gridengine_version bootstrap_var basedir} 
       if {[lsearch -exact $ts_fs_config(fsname_list) $fsname] < 0} {
          lappend ts_fs_config(fsname_list) $fsname
          set server_entry [split [lindex $split_line 0] ":"]
-         set ts_fs_config($fsname,fsserver) [lindex $server_entry 0]
+         set ts_fs_config($fsname,fsserver) [bootstrap_get_short_hostname [lindex $server_entry 0] bootstrap]
+         # @todo need to figure out the following 2 parameters in case we want to do full testsuite runs
          set ts_fs_config($fsname,fssulogin) "y"
          set ts_fs_config($fsname,fssuwrite) "y"
          set ts_fs_config($fsname,fstype) [lindex $split_line 4]
@@ -276,6 +287,23 @@ proc bootstrap_create_fs_config_file {gridengine_version bootstrap_var basedir} 
    spool_array_to_file "$basedir/testsuite_fs.conf" "testsuite filesystem configuration" ts_fs_config
 
    return $ret
+}
+
+proc bootstrap_get_short_hostname {host bootstrap_var} {
+   upvar $bootstrap_var bootstrap
+
+   # strip domain
+   set short_host [lindex [split $host "."] 0]
+
+   # if we got an ip address (e.g. from mount) try to resolve it
+   if {[string is integer $short_host]} {
+      set arch [string trim [exec $bootstrap(product_root)/util/arch]]
+      set bin "$bootstrap(product_root)/utilbin/$arch/gethostbyaddr"
+      set host [exec $bin "-name" $host]
+      set short_host [lindex [split $host "."] 0]
+   }
+
+   return $short_host
 }
 
 proc bootstrap_create_testsuite_info_file {gridengine_version basedir} {
@@ -353,6 +381,7 @@ proc bootstrap_create_config_file {gridengine_version bootstrap_var basedir} {
    set ts_config(package_release) "unknown"
    set ts_config(dns_domain) [string trim [exec hostname -d]]
    if {$ts_config(dns_domain) == ""} {
+      # @todo make it configurable (optionally)?
       set ts_config(dns_domain) "fritz.box"
    }
    set ts_config(dns_for_install_script) "none"
@@ -381,10 +410,13 @@ proc bootstrap_create_config_file {gridengine_version bootstrap_var basedir} {
 
 proc bootstrap_get_spooldir {cs_bootstrap_var} {
    upvar $cs_bootstrap_var cs_bootstrap
+
    set ret "none"
    if {$cs_bootstrap(spooling_method) == "berkeleydb"} {
       set ret $cs_bootstrap(spooling_params)
    }
+
+   return $ret
 }
 
 proc bootstrap_exec {bootstrap_var args} {
@@ -394,13 +426,14 @@ proc bootstrap_exec {bootstrap_var args} {
    set sge_root $bootstrap(product_root)
    set cell $bootstrap(cell)
    set ret [string trim [eval exec $script $sge_root $cell $args]]
+
    return $ret
 }
 
 proc bootstrap_get_master_host {bootstrap_var} {
    upvar $bootstrap_var bootstrap
 
-   set ret [string trim [exec cat $bootstrap(product_root)/$bootstrap(cell)/common/act_qmaster]]
+   set ret [bootstrap_get_short_hostname [string trim [exec cat $bootstrap(product_root)/$bootstrap(cell)/common/act_qmaster]] bootstrap]
 
    return $ret
 }
@@ -409,7 +442,10 @@ proc bootstrap_get_shadowd_hosts {bootstrap_var} {
    upvar $bootstrap_var bootstrap
 
    set output [string trim [exec cat $bootstrap(product_root)/$bootstrap(cell)/common/shadow_masters]]
-   set ret [join [split $output "\n"]]
+   set ret {}
+   foreach host [split $output "\n"] {
+      lappend ret [bootstrap_get_short_hostname $host bootstrap]
+   }
 
    return $ret
 }
@@ -418,7 +454,10 @@ proc bootstrap_get_execd_hosts {bootstrap_var} {
    upvar $bootstrap_var bootstrap
 
    set output [bootstrap_exec bootstrap "qconf" "-sel"]
-   set ret [join [split $output "\n"]]
+   set ret {}
+   foreach host [split $output "\n"] {
+      lappend ret [bootstrap_get_short_hostname $host bootstrap]
+   }
 
    return $ret
 }
@@ -430,9 +469,14 @@ proc bootstrap_get_submit_only_hosts {bootstrap_var} {
    set output [bootstrap_exec bootstrap "qconf" "-ss"]
    set ret {}
    foreach host [split $output "\n"] {
+      set host [bootstrap_get_short_hostname $host bootstrap]
       if {[lsearch -exact $ts_config(execd_hosts) $host] < 0} {
          lappend ret $host
       }
+   }
+
+   if {$ret == {}} {
+      set ret "none"
    }
 
    return $ret
@@ -445,9 +489,14 @@ proc bootstrap_get_admin_only_hosts {bootstrap_var} {
    set output [bootstrap_exec bootstrap "qconf" "-sh"]
    set ret {}
    foreach host [split $output "\n"] {
+      set host [bootstrap_get_short_hostname $host bootstrap]
       if {[lsearch -exact $ts_config(execd_hosts) $host] < 0} {
          lappend ret $host
       }
+   }
+
+   if {$ret == {}} {
+      set ret "none"
    }
 
    return $ret
