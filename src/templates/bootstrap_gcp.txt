@@ -1,0 +1,54 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2024 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+#
+# This file is used to bootstrap a testsuite configuration from a cluster
+# set up with the terraform scripts from the deployments repository
+# (https://github.com/hpc-gridware/deployments.git).
+#
+# The following cluster specific attributes have to be given:
+# - product_root: the SGE_ROOT directory of the cluster
+# - cell: the cell name of the cluster
+product_root      /shared/ocs
+cell              default
+#
+# The following testsuite specific attributes have to be given:
+# - connection_type: ssh|@todo add types
+# - source_dir: the directory where the product root is located
+# - NFS-ROOT2NOBODY shared directory where root is mapped to nobody
+# - NFS-ROOT2ROOT   shared directory with full root access
+# - spooldir        the directory which is used as local spool directory
+# - test-user-1     the name of the first test user and his 2 group2
+# - test-user-2     the name of the second test user and his groups
+connection_type   ssh
+source_dir        /shared_home/sgetest/master/clusterscheduler/source
+NFS-ROOT2NOBODY   /shared_home/all_users
+NFS-ROOT2ROOT     /shared/all_users
+spooldir          /var/spool/ocs
+test-user-1       sgetest1 sgegroup sgegroup1
+test-user-2       sgetest2 sgegroup2
+#
+# The following testsuite attributes are optional:
+# - mailx_host       the host where mailx can be called to send mails
+# - report_mail_to   the mail address where the reports are sent to
+# - report_mail_cc   the mail address where the reports are sent to as cc
+# - uge_ext_dir the directory where the source code of extensions is located
+#uge_ext_dir       path/gcs-extensions
+#mailx_host        gridware-headnode
+#report_mail_to    email.address
