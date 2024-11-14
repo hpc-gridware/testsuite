@@ -281,6 +281,10 @@ set CHECK_PRODUCT_VERSION_NUMBER "unknown"
 global CHECK_PRODUCT_TYPE           ;# "sgeee" or "sge"
 global CHECK_COMMD_PORT            ;# commd port
 global CHECK_USER                  ;# user who start test
+if {[catch {set CHECK_USER [set env(USER)] }] != 0} {
+   set CHECK_USER [file attributes check.exp -owner]
+} 
+
 global CHECK_GROUP                 ;# group of user who start test
 global CHECK_ACT_LEVEL             ;# actual check level ( value from 0 up to xxx )
 global CHECK_CUR_PREPARATION_PROCEDURE
@@ -1603,12 +1607,12 @@ proc get_local_hostname {} {
    if {$catch_return == 0} {
       set result [split $result "."]
       set newname [lindex $result 0]
-      ts_log_fine "got hostname: \"$newname\""
+      ts_log_finer "got hostname: \"$newname\""
       return $newname
    } else {
-      ts_log_fine "local hostname call failed"
-      ts_log_fine "error: $result"
-      ts_log_fine "trying local HOST environment variable ..."
+      ts_log_finer "local hostname call failed"
+      ts_log_finer "error: $result"
+      ts_log_finer "trying local HOST environment variable ..."
       if {[info exists env(HOST)]} {
          set result [split $env(HOST) "."]
          set newname [lindex $result 0]
@@ -2507,7 +2511,7 @@ proc setup2 { } {
    global CHECK_DEFAULTS_FILE do_nomain
    global env be_quiet fast_setup
    global check_name CHECK_ACT_LEVEL have_defaults
-   global CHECK_USER CHECK_CURRENT_WORKING_DIR
+   global CHECK_CURRENT_WORKING_DIR
    global CHECK_PRODUCT_TYPE
    global CHECK_PRODUCT_VERSION_NUMBER
    global CHECK_COMMD_PORT
@@ -2515,7 +2519,6 @@ proc setup2 { } {
    global CHECK_MAIN_RESULTS_DIR
    global CHECK_JOB_OUTPUT_DIR
    global CHECK_PROTOCOL_DIR
-   global CHECK_USER
    global CHECK_GROUP
    global CHECK_CURRENT_WORKING_DIR
    global CHECK_PACKAGE_DIRECTORY
@@ -5903,7 +5906,7 @@ proc print_menu_header {} {
   global CHECK_USER CHECK_REPORT_FILE
   global CHECK_MAIN_RESULTS_DIR
   global CHECK_ENABLED_RUNLEVELS CHECK_PRODUCT_VERSION_NUMBER
-  global CHECK_ENABLED_CATEGORIES CHECK_USER CHECK_GROUP
+  global CHECK_ENABLED_CATEGORIES CHECK_GROUP
   global ts_checktree
   global ts_config
 
@@ -6317,7 +6320,7 @@ proc ask_user_yes_or_no { question } {
 
 proc menu {} {
    global CHECK_ACT_PATH CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
-   global CHECK_USER CHECK_REPORT_FILE
+   global CHECK_REPORT_FILE
    global CHECK_MAIN_RESULTS_DIR
    global CHECK_PRODUCT_VERSION_NUMBER CHECK_SETUP_NAMES
    global daemon_debug CHECK_DEBUG_LEVEL CHECK_DEFAULTS_FILE CHECK_DO_SETUP
@@ -7109,6 +7112,7 @@ proc source_tcl_files {} {
    # now we have a ts_config (before reading config file with "" as version)
    # and can use the ts_source command
    # all the following library files may be version dependent
+   ts_source $libdir/bootstrap
    ts_source $libdir/config_user
    ts_source $libdir/config_host
    ts_source $libdir/config_database
@@ -7250,7 +7254,6 @@ proc load_additional_packages {} {
 #     check/operate_add_cluster()
 #*******************************************************************************
 proc operate_additional_clusters {operation} {
-   global CHECK_USER
    global check_use_installed_system
    global ts_config
 
@@ -7595,6 +7598,7 @@ proc testsuite_shutdown {exit_code} {
 set do_kill           0
 set do_install        0
 set do_start          0
+set do_bootstrap      0
 set do_compile        0
 set do_all            0
 set do_one_test       0
@@ -7677,6 +7681,11 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "kill                  shutdown cluster"
       puts ""
       puts "start                 startup cluster"
+      puts ""
+      puts "bootstrap FILE        Create testsuite config from scratch based on an existing cluster."
+      puts "                      FILE is the path to a file containing name/value pairs with testsuite"
+      puts "                      configuration values."
+      puts "                      A template bootstrap file can be found in testsuite/src/templates/bootstrap."
       puts ""
       puts "setup                 run setup"
       puts ""
@@ -7998,6 +8007,12 @@ for {set i 0} {$i < $argc} {incr i} {
       continue
    }
 
+   if {[string compare [lindex $argv $i] "--bootstrap"] == 0 || [string compare [lindex $argv $i] "bootstrap"] == 0} {
+      set do_bootstrap 1
+      incr i
+      set bootstrap_file [lindex $argv $i]
+      continue
+   }
 
    if { ( [string compare [lindex $argv $i] "--mfile"] == 0 ) || ([string compare [lindex $argv $i] "mfile"] == 0) } {
       incr i
@@ -8477,6 +8492,13 @@ if { $do_only_diff_macros == 1 } {
 
 # set the current configuration file to the default one
 set CHECK_CUR_CONFIG_FILE $CHECK_DEFAULTS_FILE
+
+# bootstrap from an existing cluster
+if {$do_bootstrap} {
+   if {![bootstrap_from_cluster $bootstrap_file]} {
+      testsuite_shutdown 1
+   }
+}
 
 setup2
 
