@@ -159,6 +159,7 @@ proc bootstrap_create_host_config_file {gridengine_version bootstrap_var localho
    host_conf_get_host_defaults host_config
    set host_config(host) $localhost
    set host_config(arch,$gridengine_version) [string trim [exec "$bootstrap(product_root)/util/arch"]]
+   set host_config(spooldir) $bootstrap(spooldir)
    # lets assume that we can compile on the testsuite host
    set host_config(compile,$gridengine_version) 1
    set host_config(java_compile,$gridengine_version) 1
@@ -274,13 +275,16 @@ proc bootstrap_create_fs_config_file {gridengine_version bootstrap_var basedir} 
       set split_line [split [string trim $line]]
       set fsname [lindex $split_line 2]
       if {[lsearch -exact $ts_fs_config(fsname_list) $fsname] < 0} {
-         lappend ts_fs_config(fsname_list) $fsname
-         set server_entry [split [lindex $split_line 0] ":"]
-         set ts_fs_config($fsname,fsserver) [bootstrap_get_short_hostname [lindex $server_entry 0] bootstrap]
-         # @todo need to figure out the following 2 parameters in case we want to do full testsuite runs
-         set ts_fs_config($fsname,fssulogin) "y"
-         set ts_fs_config($fsname,fssuwrite) "y"
-         set ts_fs_config($fsname,fstype) [lindex $split_line 4]
+         set fstype [lindex $split_line 4]
+         if {$fstype == "nfs" || $fstype == "nfs4"} {
+            lappend ts_fs_config(fsname_list) $fsname
+            set server_entry [split [lindex $split_line 0] ":"]
+            set ts_fs_config($fsname,fsserver) [bootstrap_get_short_hostname [lindex $server_entry 0] bootstrap]
+            # @todo need to figure out the following 2 parameters in case we want to do full testsuite runs
+            set ts_fs_config($fsname,fssulogin) "y"
+            set ts_fs_config($fsname,fssuwrite) "y"
+            set ts_fs_config($fsname,fstype) $fstype
+         }
       }
    }
 
@@ -439,12 +443,20 @@ proc bootstrap_get_master_host {bootstrap_var} {
 }
 
 proc bootstrap_get_shadowd_hosts {bootstrap_var} {
+   global ts_config
    upvar $bootstrap_var bootstrap
 
-   set output [string trim [exec cat $bootstrap(product_root)/$bootstrap(cell)/common/shadow_masters]]
    set ret {}
-   foreach host [split $output "\n"] {
-      lappend ret [bootstrap_get_short_hostname $host bootstrap]
+   set shadow_masters "$bootstrap(product_root)/$bootstrap(cell)/common/shadow_masters"
+   if {[file exists $shadow_masters]} {
+      set output [string trim [exec cat $shadow_masters]]
+      foreach host [split $output "\n"] {
+         lappend ret [bootstrap_get_short_hostname $host bootstrap]
+      }
+   }
+
+   if {$ret == {}} {
+      set ret $ts_config(master_host)
    }
 
    return $ret
@@ -470,7 +482,8 @@ proc bootstrap_get_submit_only_hosts {bootstrap_var} {
    set ret {}
    foreach host [split $output "\n"] {
       set host [bootstrap_get_short_hostname $host bootstrap]
-      if {[lsearch -exact $ts_config(execd_hosts) $host] < 0} {
+      # testsuite expects execd hosts and the master host to be submit hosts
+      if {[lsearch -exact $ts_config(execd_hosts) $host] < 0 && $host != $ts_config(master_host)} {
          lappend ret $host
       }
    }
@@ -490,7 +503,8 @@ proc bootstrap_get_admin_only_hosts {bootstrap_var} {
    set ret {}
    foreach host [split $output "\n"] {
       set host [bootstrap_get_short_hostname $host bootstrap]
-      if {[lsearch -exact $ts_config(execd_hosts) $host] < 0} {
+      # testsuite expects execd hosts and the master host to be admin hosts
+      if {[lsearch -exact $ts_config(execd_hosts) $host] < 0 && $host != $ts_config(master_host)} {
          lappend ret $host
       }
    }
