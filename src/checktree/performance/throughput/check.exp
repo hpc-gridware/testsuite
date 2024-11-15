@@ -743,7 +743,11 @@ proc throughput_setup_level {} {
    }
 
    # clean accounting file to improve qacct run time
-   delete_remote_file $ts_config(master_host) $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/accounting"
+   set accounting_file "$ts_config(product_root)/$ts_config(cell)/common/accounting"
+   if {[is_version_in_range "9.0.0"]} {
+      append accounting_file ".jsonl"
+   }
+   delete_remote_file $ts_config(master_host) $CHECK_USER $accounting_file
 }
 
 proc throughput_cleanup_level {} {
@@ -797,7 +801,13 @@ proc get_event_client_time {line} {
    set pos [string first "ECL_TIME=" $line]
    if {$pos >= 0} {
       incr pos 9
-      return [string range $line $pos end-1]
+      set ecl_time [string range $line $pos end-1]
+      # @todo better have a global timestamp factor, we probably call this function very often
+      if {[is_version_in_range "9.0.0"]} {
+         # timestamp is in microseconds instead of seconds
+         set ecl_time [expr $ecl_time / 1000000]
+      }
+      return $ecl_time
    }
    return -1
 }
@@ -879,7 +889,7 @@ proc run_throughput_test {} {
   
    # open shell on each execd host, used for submitting jobs and process info
    set spawn_list ""
-   set remote_spawn_list ""
+   set remote_spawn_list {}
    if {[info exists spawn_host_map]} {
       unset spawn_host_map
    }
@@ -1324,7 +1334,10 @@ proc run_throughput_test {} {
 
                   set sub_id [get_submit_id_from_job_id job_data $job_id]
                   if {$sub_id >= 0} {
-                     set job_data($sub_id,run_end_time) [get_event_client_time $line]
+                     # @todo CS-780 the event client time seems to be incorrect in some cases
+                     # for now use the end_time from accounting
+                     #set job_data($sub_id,run_end_time) [get_event_client_time $line]
+                     #ts_log_fine "job $job_id ($sub_id) finished at $job_data($sub_id,run_end_time)"
                      set job_data($sub_id,state) "done"
                   }
                }
@@ -1414,6 +1427,8 @@ proc run_throughput_test {} {
                if { ! $are_enabled && $result(jobs_submitted) >= $enable_queues_job_count } {
                   set are_enabled 1
                   enable_queue $queue_list
+                  # trigger a scheduling run - we do not want to wait for the next scheduling interval (15s)
+                  trigger_scheduling
                }
             }
             set result(test_run_time) $time_now
@@ -1450,8 +1465,7 @@ proc run_throughput_test {} {
    delete_all_jobs
    wait_for_jobend $last_job_id leeper 60 0 1
    
-   #If error we can stop, otherwise we wait until timeout is reached for each 
-   #qacct call below
+   # If error we can stop, otherwise we wait until timeout is reached for each qacct call below
    if {$error} {
       return
    }
@@ -1481,25 +1495,37 @@ proc fill_job_list_from_accounting {job_array_name} {
 
    upvar $job_array_name job_data
 
+   # run qacct on the file server if possible
+   set host [fs_config_get_server_for_path $ts_config(product_root) 0]
+   if {$host == ""} {
+      set host $ts_config(master_host)
+   }
+   ts_log_fine "calling qacct on host $host"
+
    set index_size $job_data(index_size)
+   set start_time [clock seconds]
    for {set job 0} {$job <= $index_size} {incr job} {
       if {[info exists job_data($job,job_id)]} {
          set job_index $job_data($job,job_id)
          if {$array_size == 1} {
             set job_index [lindex [split $job_index "."] 0]
          }
-         if {[get_qacct $job_index qacct_info $ts_config(master_host)] == 0} {
+         if {[get_qacct $job_index qacct_info $host] == 0} {
             set job_data($job,project) [string index $qacct_info(project) 7]
             set job_data($job,run_start_time) $qacct_info(start_time)
-            # We still parse the job end from qevent because otherwiese we would
+            # We still parse the job end from qevent because otherwise we would
             # loose the qmaster overhead
-            # set job_data($job,run_end_time) $qacct_info(end_time)
+            # @todo CS-780 the event time seems to be incorrect in some cases
+            # use the accounting time for now
+            set job_data($job,run_end_time) $qacct_info(end_time)
             set job_data($job,state) "done"
          } else {
             set job_data($job,state) "unknown"
          }
       }
    }
+   set end_time [clock seconds]
+   ts_log_info "fill_job_list_from_accounting took [expr $end_time - $start_time] seconds"
 }
 
 proc fill_sched_from_messages {start_time end_time schedd_data_name} {
@@ -1512,6 +1538,13 @@ proc fill_sched_from_messages {start_time end_time schedd_data_name} {
    set messages_file "$qmaster_spool_dir/messages"
 
    set schedd_nr -1    ;# number of stored scheduler data
+
+   # data_pos is the position of the actual message in the qmaster messages file
+   if {[is_version_in_range "9.0.0"]} {
+      set data_pos 5
+   } else {
+      set data_pos 4
+   }
 
    get_file_content $qmaster_host $CHECK_USER $messages_file file_content
    set nr_of_lines $file_content(0)
@@ -1538,7 +1571,9 @@ proc fill_sched_from_messages {start_time end_time schedd_data_name} {
          # latest and greatest
          # 07/20/2005 14:11:36|schedd|dain|P|PROF: scheduled in 0.010 (u 0.020 + s 0.000 = 0.020): 0 sequential, 0 parallel, 34 orders, 34 H, 33 Q, 386 QA, 31 J(qw), 0 J(r), 0 J(s), 0 J(h), 0 J(e), 0 J(x), 31 J(all), 46 C, 1 ACL, 1 PE, 1 U, 1 D, 1 PRJ, 0 ST, 1 CKPT, 0 RU, 1 gMes, 0 jMes
 
-         set schedd_string [lindex $tokens 4]
+         # CS 9.0.0
+         # 2024-11-07 13:07:43.040289|   scheduler|00|ubuntu-24-amd64-1|P|PROF: scheduled in 0.020 (u 0.030 + s 0.000 = 0.030): 200 sequential, 0 parallel, 304 orders, 6 H, 5 Q, 50 QA, 0 J(qw), 200 J(r), 0 J(s), 0 J(h), 0 J(e), 0 J(x), 300 J(all), 52 C, 1 ACL, 1 PE, 3 U, 1 D, 1 PRJ, 0 ST, 1 CKPT, 0 RU, 1 gMes, 0 jMes, 304/4 pre-send, 0/0/0 pe-alg
+         set schedd_string [lindex $tokens $data_pos]
 
          # if it is "new" output prefixed by PROF: - trim it
          if {[string first "PROF:" $schedd_string] >= 0} {
@@ -1551,12 +1586,7 @@ proc fill_sched_from_messages {start_time end_time schedd_data_name} {
          # find number of orders
          set orders_index [lsearch -exact $schedd_string "orders,"]
          if {$orders_index < 0} {
-            foreach elem $remote_spawn_list {
-               close_spawn_process $elem
-            }
-            close_spawn_process $event_client_sid
-            ts_log_severe "format error for orders (2):\n$line"
-            close $unexpected_out
+            ts_log_severe "format error for orders (2):\n$line\n$schedd_string"
             return -1
          }
 
@@ -1573,7 +1603,7 @@ proc fill_sched_from_messages {start_time end_time schedd_data_name} {
          set schedd_data($schedd_nr,schedd_total_time) 0
          set schedd_data(count) $schedd_nr
       } elseif {[string match "*schedd run took: *" $line]} {
-         set prof [lindex $tokens 4]
+         set prof [lindex $tokens $data_pos]
          set run_time [lindex $prof 4]
          set schedd_data($schedd_nr,schedd_total_time) $run_time
       }
@@ -2774,33 +2804,44 @@ proc analyse_dump_data_file { file { force 0 } } {
    }
    generate_html_file $output_dir/all_charts.html "$test_config(gridengine_version) from $test_config(test_date)" $content
 
+   ts_log_fine "preparing data for charts"
    # plot diagrams
    # get functions for test run  and schedd data
    # 1) test run
+   ts_log_fine "- calculate test run xy rows"
    calculate_test_run_xy_rows results xy_rows 0
    # 2) schedd run
    set test_start $results(0,test_run_time)
+   ts_log_fine "- calculate schedd run xy rows"
    calculate_schedd_run_xy_rows schedd xy_rows $test_start 0
    # 3) job submit times and job run times
+   ts_log_fine "- calculate submit run xy rows"
    calculate_submit_run_xy_rows jobs xy_rows $test_start 0
 
+   ts_log_fine "- calculate monitoring xy rows"
    calculate_monitoring_xy_rows monitoring xy_rows $test_start 0
 
+   ts_log_fine "- calculate qstat xy rows"
    set test_start $results(0,test_run_time)
    calculate_qstat_xy_rows qstat_data xy_rows $test_start 0
 
+   ts_log_fine "- calculate event xy rows"
    calculate_event_xy_rows event_data xy_rows $test_start 0
 
+   ts_log_fine "- calculate qping xy rows"
    calculate_qping_xy_rows qping_data xy_rows $test_start 0
 
    # 5) optional: calculate project times 
    if { ($throughput_sharetree == 1 && $throughput_sharetree_ext == 0) || $functional_policy == 1 }  {
+      ts_log_fine "- calculate project run xy rows"
       calculate_project_run_xy_rows results jobs xy_rows 0
    }
 
    set plot_data(xlabel) "time\[s\]"
    set plot_data(ylabel) "values"
 
+   ts_log_fine "generating charts"
+   ts_log_fine "- running jobs"
    set plot_data(title) "Throughput test results - running jobs"
    set plot_data(output_file) "$output_dir/running_jobs.gif"
    clear_xy_rows_show xy_rows
@@ -2809,6 +2850,7 @@ proc analyse_dump_data_file { file { force 0 } } {
    set xy_rows(5,show)  1     ;# free system slots
    create_gnuplot_xy_gif plot_data xy_rows
 
+   ts_log_fine "- pending jobs"
    set plot_data(title) "Throughput test results - pending jobs"
    set plot_data(output_file) "$output_dir/pending_jobs.gif"
    clear_xy_rows_show xy_rows
@@ -2817,6 +2859,7 @@ proc analyse_dump_data_file { file { force 0 } } {
    set_xy_rows_show xy_rows 3
    create_gnuplot_xy_gif plot_data xy_rows
 
+   ts_log_fine "- schedd calculation time"
    set plot_data(title) "Throughput test results - schedd calculation time"
    set plot_data(output_file) "$output_dir/schedd_calc_time.gif"
    clear_xy_rows_show xy_rows
@@ -2824,12 +2867,14 @@ proc analyse_dump_data_file { file { force 0 } } {
    set_xy_rows_show xy_rows 7
    create_gnuplot_xy_gif plot_data xy_rows
 
+   ts_log_fine "- schedd orders"
    set plot_data(title) "Throughput test results - schedd orders"
    set plot_data(output_file) "$output_dir/schedd_orders.gif"
    clear_xy_rows_show xy_rows
    set_xy_rows_show xy_rows 8
    create_gnuplot_xy_gif plot_data xy_rows
 
+   ts_log_fine "- job times"
    set plot_data(title) "Throughput test results - job times"
    set plot_data(output_file) "$output_dir/job_times.gif"
    clear_xy_rows_show xy_rows
@@ -2837,6 +2882,7 @@ proc analyse_dump_data_file { file { force 0 } } {
    set_xy_rows_show xy_rows 10
    create_gnuplot_xy_gif plot_data xy_rows
 
+   ts_log_fine "- job distribution"
    set plot_data(title) "Throughput test results - job distribution"
    set plot_data(output_file) "$output_dir/job_distribution.gif"
    set plot_data(xlabel) "job time\[s\]"
@@ -2845,6 +2891,7 @@ proc analyse_dump_data_file { file { force 0 } } {
    set_xy_rows_show xy_rows 11
    create_gnuplot_xy_gif plot_data xy_rows
 
+   ts_log_fine "- size of daemons"
    set plot_data(title) "Throughput test results - size of daemons"
    set plot_data(output_file) "$output_dir/daemon_size.gif"
    set plot_data(xlabel) "time\[s\]"
@@ -2853,6 +2900,7 @@ proc analyse_dump_data_file { file { force 0 } } {
    set_xy_rows_show xy_rows 12
    create_gnuplot_xy_gif plot_data xy_rows
 
+   ts_log_fine "- CPU load of daemons"
    set plot_data(title) "Throughput test results - CPU load of daemons"
    set plot_data(output_file) "$output_dir/daemon_cpu.gif"
    set plot_data(xlabel) "time\[s\]"
@@ -2862,6 +2910,7 @@ proc analyse_dump_data_file { file { force 0 } } {
    create_gnuplot_xy_gif plot_data xy_rows
 
    if { $event_data(count) > 0 } {
+      ts_log_fine "- event client update interval"
       set plot_data(title) "Throughput test results - event client update interval"
       set plot_data(output_file) "$output_dir/event_interval.gif"
       set plot_data(xlabel) "time\[s\]"
@@ -2870,6 +2919,7 @@ proc analyse_dump_data_file { file { force 0 } } {
       set_xy_rows_show xy_rows 24
       create_gnuplot_xy_gif plot_data xy_rows
 
+      ts_log_fine "- event client number of events"
       set plot_data(title) "Throughput test results - number of events"
       set plot_data(output_file) "$output_dir/events.gif"
       set plot_data(xlabel) "time\[s\]"
@@ -2880,6 +2930,7 @@ proc analyse_dump_data_file { file { force 0 } } {
    }
 
    if { $qping_data(count) > 0 } {
+      ts_log_fine "- qping information"
       set plot_data(title) "Throughput test results - qping information"
       set plot_data(output_file) "$output_dir/qping.gif"
       set plot_data(xlabel) "time\[s\]"
@@ -2892,6 +2943,7 @@ proc analyse_dump_data_file { file { force 0 } } {
    }
 
    if {$qstat_data(count) > 0} {
+      ts_log_fine "- qstat performance"
       set plot_data(title) "Throughput test results - qstat performance"
       set plot_data(output_file) "$output_dir/qstat.gif"
       set plot_data(xlabel) "time\[s\]"
@@ -2903,7 +2955,8 @@ proc analyse_dump_data_file { file { force 0 } } {
       create_gnuplot_xy_gif plot_data xy_rows
    }
 
-   if { $throughput_sharetree == 1 || $functional_policy == 1 }  {
+   if {$throughput_sharetree == 1 || $functional_policy == 1} {
+      ts_log_fine "- project jobs"
       set plot_data(xlabel) "time\[s\]"
       set plot_data(ylabel) "jobs done\[%\]"
       set plot_data(title) "Throughput test results - project jobs"
@@ -2979,7 +3032,6 @@ proc calculate_submit_run_xy_rows { results_array_name row_array_name test_start
       set add_info " B"
    }
 
-
     #  3) job submit times and job run times
     set xy_rows($pos1,drawmode) "points"
     set xy_rows($pos1,title) "job submit time $add_info"
@@ -2991,7 +3043,7 @@ proc calculate_submit_run_xy_rows { results_array_name row_array_name test_start
     set xy_rows($pos3,title) "job run time distribution $add_info"
 
 
-    set min_run_time 100000
+    set min_run_time 99999999
     set max_run_time 0
     if { [info exists run_time_values ] } {
        unset run_time_values
@@ -3004,7 +3056,7 @@ proc calculate_submit_run_xy_rows { results_array_name row_array_name test_start
           set normalized_submit_end_time [expr ($submit_end_time - $test_start)]
           set normalized_run_end_time    [expr ($jobs($job,run_end_time) - $test_start)]
 
-          set run_time [expr ($jobs($job,run_end_time) - $jobs($job,run_start_time))]                    
+          set run_time [expr $jobs($job,run_end_time) - $jobs($job,run_start_time)]
 
           #   x->time y->submit_time
           set xy_rows($pos1,$job,x) $normalized_submit_end_time
@@ -3013,14 +3065,10 @@ proc calculate_submit_run_xy_rows { results_array_name row_array_name test_start
           #   x->time y->run_time
           set xy_rows($pos2,$job,x) $normalized_run_end_time
           set xy_rows($pos2,$job,y) $run_time
-          if {$min_run_time > $run_time} {
-             set min_run_time $run_time
-          }
-          if {$max_run_time < $run_time} {
-             set max_run_time $run_time
-          }
+          set min_run_time [min $min_run_time $run_time]
+          set max_run_time [max $max_run_time $run_time]
           if {[info exists run_time_values($run_time)]} {
-             incr run_time_values($run_time) 1
+             incr run_time_values($run_time)
           } else {
              set run_time_values($run_time) 1
           }
@@ -3028,7 +3076,7 @@ proc calculate_submit_run_xy_rows { results_array_name row_array_name test_start
     }
 
     set counter 0
-    for {set i $min_run_time} {$i <= $max_run_time} {incr i 1} {
+    for {set i $min_run_time} {$i <= $max_run_time} {incr i} {
        if {[info exists run_time_values($i)]} {
           #   x->job time y->number of jobs with that runtime
           set xy_rows($pos3,$counter,x) $i
@@ -3511,14 +3559,10 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
    }
    set qmaster_spool_dir [get_spool_dir $ts_config(master_host) qmaster]
    set qmaster_messages "$qmaster_spool_dir/messages"
-   set schedd_messages "$qmaster_spool_dir/schedd/messages"
    ts_log_fine "-> $qmaster_spool_dir"
    ts_log_fine "-> $qmaster_messages"
-   ts_log_fine "-> $schedd_messages"
    ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "mv" "$qmaster_messages $results_dir/qmaster_messages"]
    ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "touch" "$qmaster_messages"]
-   ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "mv" "$schedd_messages $results_dir/schedd_messages"]
-   ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "touch" "$schedd_messages"]
    ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "mv" "$unexpected_out_filename $results_dir/unexpected_output"]
    ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "cp" "$ts_config(product_root)/$ts_config(cell)/common/bootstrap $results_dir/bootstrap"]
 
@@ -3799,14 +3843,14 @@ proc calculate_average_schedd_times { schedd_array_name schedd_results_array { d
       puts $dump_file "nr|system_time|schedd_time|schedd_total_time|schedd_orders"
    }
 
-   while { [info exists schedd_array($schedd,schedd_time) ] } {
+   while {[info exists schedd_array($schedd,schedd_time)]} {
       set schedd_id_run_time $schedd_array($schedd,schedd_time)
 
       # add schedd times
-      set schedd_time_sum [ expr ( $schedd_time_sum + $schedd_array($schedd,schedd_time) ) ]
-      set schedd_total_time_sum [ expr ( $schedd_total_time_sum + $schedd_array($schedd,schedd_total_time) ) ]
+      set schedd_time_sum [expr $schedd_time_sum + $schedd_array($schedd,schedd_time)]
+      set schedd_total_time_sum [expr $schedd_total_time_sum + $schedd_array($schedd,schedd_total_time)]
 
-      if { $dump_file != "" } {
+      if {$dump_file != ""} {
          set line "$schedd|$schedd_array($schedd,system_time)|$schedd_array($schedd,schedd_time)|$schedd_array($schedd,schedd_total_time)|$schedd_array($schedd,schedd_orders)"
          puts $dump_file $line
       }
@@ -3814,7 +3858,7 @@ proc calculate_average_schedd_times { schedd_array_name schedd_results_array { d
       incr schedd 1
    }
 
-   if { $dump_file != "" } {
+   if {$dump_file != ""} {
       close $dump_file
    }
 
@@ -3822,9 +3866,9 @@ proc calculate_average_schedd_times { schedd_array_name schedd_results_array { d
    set result(avg_schedd_time) 0
    set result(avg_schedd_total_time) 0
    set result(nr_of_schedd_runs) $schedd
-   if { $schedd > 0 } {
-      set result(avg_schedd_time) [ expr (  ( ($schedd_time_sum + 0.00 ) ) / $schedd ) ]
-      set result(avg_schedd_total_time) [ expr (  ( ($schedd_total_time_sum + 0.00 ) ) / $schedd ) ]
+   if {$schedd > 0} {
+      set result(avg_schedd_time) [expr $schedd_time_sum * 1.0 / $schedd]
+      set result(avg_schedd_total_time) [expr $schedd_total_time_sum * 1.0 / $schedd]
    }
 }
 
@@ -3837,7 +3881,7 @@ proc show_and_check_current_system_status {start_time array_name schedd_array_na
    upvar $schedd_array_name schedd
    upvar $monitoring_name monitoring
 
-   set ret 1
+   set error 0
 
    # string for queue status
    if {$data(queues_enabled)} {
@@ -3868,14 +3912,14 @@ proc show_and_check_current_system_status {start_time array_name schedd_array_na
    # check data
    if {$data(jobs_pending) < 0} {
       ts_log_severe "negative pending job count $data(jobs_pending)"
-      set ret 0
+      set error 1
    }
    if {[expr $data(jobs_done) + $data(jobs_running) + $data(jobs_pending)] != $data(jobs_submitted)} {
       ts_log_severe "unexpected job count error"
-      set ret 0
+      set error 1
    }
 
-   return $ret
+   return $error
 }
 
 proc clean_current_system_status { results_array array_name job_array_name schedd_array_name monitoring_name qstat_name qping_name event_name} {
