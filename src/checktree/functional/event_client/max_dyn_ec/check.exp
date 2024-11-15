@@ -79,7 +79,7 @@ proc max_dyn_ec_setup_level {} {
       # initialize the use of simulated hosts
       if {![simhost_init]} {
          # ts_log_config has been done in simhost_init
-         return
+         return 99
       }
 
       # add hosts and add them to host group and queue
