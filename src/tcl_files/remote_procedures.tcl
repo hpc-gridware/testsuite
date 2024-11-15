@@ -2184,7 +2184,7 @@ proc open_remote_spawn_process { hostname
                   increase_timeout
                   exp_continue
                } else {
-                  ts_log_warning "${error_info}\ntimeout waiting for file_check.sh script" $raise_error
+                  ts_log_warning "${error_info}\ntimeout waiting for file_check.sh $script_name on host $hostname" $raise_error
                   set connect_errors 1
                }
             }
