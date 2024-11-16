@@ -48,9 +48,6 @@ set check_root_access_needs "yes"
 set check_name            "connection_test"
 set check_category        "COMPATIBILITY SYSTEM TESTSUITE VERIFIED"
 set check_description(0)  "testsuite connection test to all hosts"
-set check_description(1)  "dummy test runlevel 1"
-set check_description(2)  "dummy test runlevel 2"
-
 
 # define test's dependencies
 set check_needs           "" 
@@ -59,19 +56,9 @@ set check_needs           ""
 set check_setup_function connection_test_setup
 set check_cleanup_function connection_test_cleanup
 
-#set check_setup_level_function connection_test_setup2
-#set check_cleanup_level_function connection_test_cleanup2
-
-
 # define test's procedure order
 set check_functions "connection_test_test"
 
-
-global connection_test_dummy_act_level_counter
-set connection_test_dummy_act_level_counter 0
-
-global connection_test_dummy_act_level_counter2
-set connection_test_dummy_act_level_counter2 0
 
 global connection_test_test_hosts
 global connection_test_saved_slot_count
@@ -83,40 +70,11 @@ proc connection_test_setup  {} {
    ts_log_fine "this is a dummy setup function"
 }
 
-proc connection_test_setup2  {} {
-   global ts_config 
-   global CHECK_ACT_LEVEL
-   global connection_test_dummy_act_level_counter2
-
-   ts_log_fine "CHECK_ACT_LEVEL=$CHECK_ACT_LEVEL"
-   if { $CHECK_ACT_LEVEL != $connection_test_dummy_act_level_counter2 } {
-      ts_log_severe "CHECK_ACT_LEVEL is not set correctly"
-   }
-
-   incr connection_test_dummy_act_level_counter2 1
-
-
-   ts_log_fine "this is a dummy level setup function"
-}
-
-
 proc connection_test_cleanup  {} {
    global ts_config CHECK_ACT_LEVEL
    ts_log_fine "CHECK_ACT_LEVEL=$CHECK_ACT_LEVEL"
    ts_log_fine "this is a dummy cleanup function"
 }
-
-
-proc connection_test_cleanup2  {} {
-   global CHECK_ACT_LEVEL CHECK_ACT_LEVEL 
-   global ts_config connection_test_dummy_act_level_counter
-   if { $CHECK_ACT_LEVEL != $connection_test_dummy_act_level_counter } {
-      ts_log_severe "CHECK_ACT_LEVEL is not set correctly"
-   }
-   incr connection_test_dummy_act_level_counter 1
-   ts_log_fine "this is a dummy level cleanup function"
-}
-
 
 proc connection_test_test {} {
    global connection_test_test_hosts check_description CHECK_USER
@@ -124,44 +82,42 @@ proc connection_test_test {} {
    global ts_user_config
 
    ts_log_fine $check_description($CHECK_ACT_LEVEL)
-   if { $CHECK_ACT_LEVEL == 0} {
-      set host_list_short [get_all_hosts]
-      set java_compile_host [host_conf_get_java_compile_host]
-      if { [lsearch $host_list_short $java_compile_host] } {
-         ts_log_fine "java compile host \"$java_compile_host\" is already in host list"
-      } else {
-         ts_log_fine "adding java compile host \"$java_compile_host\""
-         lappend host_list_short $java_compile_host
-      }
-
-      set host_list {}
-      foreach host $host_list_short {
-         lappend host_list "$host.$ts_config(dns_domain)"
-         lappend host_list $host
-      }
-
-      set user_list [user_conf_get_cluster_users]
-      set sessions  [get_open_rlogin_sessions]
-      # examine all open sessions
-      foreach session $sessions {
-         # get detailed session information
-         get_spawn_id_rlogin_session $session connection
-         lappend host_list $connection(hostname)
-         if { [lsearch $user_list $connection(user)] < 0 } {
-            lappend user_list $connection(user)
-         }
-      }
-
-      ts_log_newline
-      ts_log_fine "starting remote echo calls ..."
-      foreach user $user_list {
-         foreach host $host_list {
-            ts_log_fine "Testing login from host \"[gethostname]\" to host \"$host\" as user \"$user\" ..."
-            set result [start_remote_prog $host $user "echo" "hallo"]
-         }
-      }
-      dump_spawn_rlogin_sessions
+   set host_list_short [get_all_hosts]
+   set java_compile_host [host_conf_get_java_compile_host]
+   if { [lsearch $host_list_short $java_compile_host] } {
+      ts_log_fine "java compile host \"$java_compile_host\" is already in host list"
+   } else {
+      ts_log_fine "adding java compile host \"$java_compile_host\""
+      lappend host_list_short $java_compile_host
    }
+
+   set host_list {}
+   foreach host $host_list_short {
+      lappend host_list "$host.$ts_config(dns_domain)"
+      lappend host_list $host
+   }
+
+   set user_list [user_conf_get_cluster_users]
+   set sessions  [get_open_rlogin_sessions]
+   # examine all open sessions
+   foreach session $sessions {
+      # get detailed session information
+      get_spawn_id_rlogin_session $session connection
+      lappend host_list $connection(hostname)
+      if { [lsearch $user_list $connection(user)] < 0 } {
+         lappend user_list $connection(user)
+      }
+   }
+
+   ts_log_newline
+   ts_log_fine "starting remote echo calls ..."
+   foreach user $user_list {
+      foreach host $host_list {
+         ts_log_fine "Testing login from host \"[gethostname]\" to host \"$host\" as user \"$user\" ..."
+         set result [start_remote_prog $host $user "echo" "hallo"]
+      }
+   }
+   dump_spawn_rlogin_sessions
 }
 
 
