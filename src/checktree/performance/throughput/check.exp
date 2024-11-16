@@ -673,6 +673,8 @@ proc throughput_setup_level {} {
    set myconfig(execd_params) $my_execd_params
 
    # switch on monitoring
+   # @todo why in the setup_level_function and not in the setup function?
+   #       same for other settings done below, scheduler config, ...
    set monitoring [format "%02d:%02d:%02d" [expr $ps_interval / 3600] [expr $ps_interval / 60] [expr $ps_interval % 60]]
    set myconfig(qmaster_params) "MONITOR_TIME=$monitoring"
    set_config myconfig
@@ -776,7 +778,7 @@ proc throughput_cleanup_level {} {
 
    # reset configurations
    reset_schedd_config
-   reset_config_and_propagate stored_configuration
+   reset_config stored_configuration
 
    # remove pe
    if {$parallel_jobs || $reservation} {
@@ -1495,37 +1497,42 @@ proc fill_job_list_from_accounting {job_array_name} {
 
    upvar $job_array_name job_data
 
-   # run qacct on the file server if possible
-   set host [fs_config_get_server_for_path $ts_config(product_root) 0]
-   if {$host == ""} {
-      set host $ts_config(master_host)
-   }
-   ts_log_fine "calling qacct on host $host"
-
    set index_size $job_data(index_size)
+   set first_job_id [lindex [split $job_data(0,job_id) "."] 0]
+   set last_index [expr $index_size - 1]
+   set last_job_id [lindex [split $job_data($last_index,job_id) "."] 0]
+
    set start_time [clock seconds]
-   for {set job 0} {$job <= $index_size} {incr job} {
+   get_qacct_multi $first_job_id $last_job_id qacct_info "" "" 1 "jobnumber taskid project start_time end_time"
+   set qacct_time [expr [clock seconds] - $start_time]
+
+   for {set job 0} {$job <= $last_index} {incr job} {
       if {[info exists job_data($job,job_id)]} {
-         set job_index $job_data($job,job_id)
-         if {$array_size == 1} {
-            set job_index [lindex [split $job_index "."] 0]
+         # $job_data($job,job_id) can be
+         # - job_id.1 for a sequential job
+         # - job_id.1-n for an array job
+         set job_id [lindex [split $job_data($job,job_id) "."] 0]
+         set task_id [lindex [split $job_data($job,job_id) "."] 1]
+         if {$task_id == 1} {
+            set pos [lsearch -glob $qacct_info(index) "$job_id,1"]
+            if {$pos < 0} {
+               set task_id "undefined"
+            }
          }
-         if {[get_qacct $job_index qacct_info $host] == 0} {
-            set job_data($job,project) [string index $qacct_info(project) 7]
-            set job_data($job,run_start_time) $qacct_info(start_time)
-            # We still parse the job end from qevent because otherwise we would
-            # loose the qmaster overhead
-            # @todo CS-780 the event time seems to be incorrect in some cases
-            # use the accounting time for now
-            set job_data($job,run_end_time) $qacct_info(end_time)
+         set pos [lsearch -glob $qacct_info(index) "$job_id,$task_id"]
+         if {$pos >= 0} {
+            set index [lindex $qacct_info(index) $pos]
+            set job_data($job,project) $qacct_info($index,project)
+            set job_data($job,run_start_time) $qacct_info($index,start_time)
+            set job_data($job,run_end_time) $qacct_info($index,end_time)
             set job_data($job,state) "done"
          } else {
             set job_data($job,state) "unknown"
          }
       }
    }
-   set end_time [clock seconds]
-   ts_log_info "fill_job_list_from_accounting took [expr $end_time - $start_time] seconds"
+   set total_time [expr [clock seconds] - $start_time]
+   ts_log_info "fill_job_list_from_accounting: $qacct_time seconds for qacct, $total_time seconds total"
 }
 
 proc fill_sched_from_messages {start_time end_time schedd_data_name} {

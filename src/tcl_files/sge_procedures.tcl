@@ -5973,6 +5973,161 @@ proc get_qacct {job_id {my_variable "qacct_info"} {on_host ""} {as_user ""} {rai
    return $ret
 }
 
+###
+# @brief get multiple accounting records with qacct -j *
+#
+# This function calls qacct -j * and processes the output from the qacct output stream.
+# Accounting records are filtered by job id range (first_job_id to last_job_id).
+# The function returns the accounting information in an array variable with the following structure:
+# qacct_info(index) = list of job_id,task_id pairs
+# qacct_info(job_id,task_id,attribute) = value for all attributes of the accounting record
+#
+# @param first_job_id    - first job id to get accounting information for
+# @param last_job_id     - last job id to get accounting information for
+# @param qacct_info_var  - variable name to store the accounting information, default: qacct_info
+# @param on_host         - host to run qacct on, default: "" = file server or master host
+# @param as_user         - user to run qacct as, default: "" = CHECK_USER
+# @param raise_error     - do ts_log_severe in case of errors, default: 1
+# @param attrib_list     - optionally list of attributes to store in the accounting information, default: "" = all attributes
+# @return 0 on success, -1 on error
+##
+proc get_qacct_multi {first_job_id last_job_id {qacct_info_var "qacct_info"} {on_host ""} {as_user ""} {raise_error 1} {attrib_list ""}} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   upvar $qacct_info_var qacct_info
+   unset -nocomplain qacct_info
+   set qacct_info(index) {}
+
+   # if no host is given run qacct on the file server if possible, else on the master host
+   if {$on_host == ""} {
+      set on_host [fs_config_get_server_for_path $ts_config(product_root) 0]
+      if {$on_host == ""} {
+         set on_host $ts_config(master_host)
+      }
+   }
+   if {$as_user == ""} {
+      set as_user $CHECK_USER
+   }
+
+   # wait for the last job id to appear in the accounting file
+   if {[get_qacct $last_job_id last_qacct_info $on_host $as_user $raise_error] != 0} {
+      return -1
+   }
+
+   # call qacct -j "*" and process the records as they come in
+   set id [open_remote_spawn_process $on_host $as_user "qacct" "-j '*'"]
+   if {$id == ""} {
+      ts_log_severe "could not start qacct -j * on $on_host as user $as_user"
+      return -1
+   }
+
+   set sp_id [lindex $id 1]
+   set record_buffer ""
+   set job_id 0
+   set task_id 0
+   log_user 0
+   set done 0
+   set timeout 60
+   expect_user {
+      -i $sp_id timeout {
+         ts_log_severe "timeout while processing qacct data" $raise_error
+      }
+      -i $sp_id eof {
+         ts_log_severe "eof while processing qacct data" $raise_error
+      }
+      -i $sp_id full_buffer {
+         ts_log_severe "full_buffer while processing qacct data" $raise_error
+      }
+      -i $sp_id  "?*\n" {
+         foreach line [split $expect_out(buffer) "\n"] {
+            set line [string trim $line]
+            if {[string length $line] > 0} {
+               switch -glob $line {
+                  "=================*" {
+                     # a new record starts here, parse the last one (unless it is the first one)
+                     if {[string length $record_buffer] > 80 &&
+                         $job_id >= $first_job_id && $job_id <= $last_job_id} {
+                        get_qacct_multi_append_record $job_id $task_id record_buffer qacct_info $attrib_list
+                     }
+                     set record_buffer "$line\n"
+                  }
+                  "jobnumber*" {
+                     set job_id [string trim [lindex $line 1]]
+                     append record_buffer "$line\n"
+                  }
+                  "taskid*" {
+                     set task_id [string trim [lindex $line 1]]
+                     append record_buffer "$line\n"
+                  }
+                  "_start_mark_:*" {
+                     # ignore
+                  }
+                  "_exit_status_:(*)*" {
+                     set done 1
+                  }
+                  "script done. (_END_OF_FILE_)" {
+                     set done 1
+                  }
+                  default {
+                     append record_buffer "$line\n"
+                  }
+               }
+            }
+         }
+         if {!$done} {
+            exp_continue
+         }
+      }
+   }
+
+   close_spawn_process $id
+
+   # there might be a final record in the buffer, parse it
+   if {[string length $record_buffer] > 80 &&
+       $job_id >= $first_job_id && $job_id <= $last_job_id} {
+      get_qacct_multi_append_record $job_id $task_id record_buffer qacct_info $attrib_list
+   }
+
+   return 0
+}
+
+###
+# @brief append one accounting record to a get_qacct_multi result
+#
+# (internal function, called only from get_qacct_multi)
+#
+# @param job_id         - job id
+# @param task_id        - task id
+# @param input_var      - qacct -j * output for one accounting record
+# @param qacct_info_var - variable name to store the accounting information, default: qacct_info
+# @param attrib_list    - optionally list of attributes to store in the accounting information, default: "" = all attributes
+##
+proc get_qacct_multi_append_record {job_id task_id input_var {qacct_info_var "qacct_info"} {attrib_list ""}} {
+   upvar $input_var input
+   upvar $qacct_info_var qacct_info
+
+   set data [string trim $input]
+   parse_qacct data one_record $job_id 0
+   if {$attrib_list == ""} {
+      foreach attrib [array names one_record] {
+         if {$attrib == "index"} {
+            continue
+         }
+         set qacct_info($job_id,$task_id,$attrib) $one_record($attrib)
+      }
+   } else {
+      foreach attrib $attrib_list {
+         if {$attrib == "index"} {
+            continue
+         }
+         if {[info exists one_record($attrib)]} {
+            set qacct_info($job_id,$task_id,$attrib) $one_record($attrib)
+         }
+      }
+   }
+   lappend qacct_info(index) "$job_id,$task_id"
+}
 
 #                                                             max. column:     |
 #****** sge_procedures/is_job_running() ******
