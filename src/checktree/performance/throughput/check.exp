@@ -1464,6 +1464,8 @@ proc run_throughput_test {} {
    close_spawn_process $event_client_sid
 
    # cleanup jobs
+   # @todo why do we delete jobs? There shouldn't be any left!
+   ts_log_fine [start_sge_bin "qstat" "-u '*' -f"]
    delete_all_jobs
    wait_for_jobend $last_job_id leeper 60 0 1
    
@@ -1522,7 +1524,7 @@ proc fill_job_list_from_accounting {job_array_name} {
          set pos [lsearch -glob $qacct_info(index) "$job_id,$task_id"]
          if {$pos >= 0} {
             set index [lindex $qacct_info(index) $pos]
-            set job_data($job,project) $qacct_info($index,project)
+            set job_data($job,project) [string index $qacct_info($index,project) 7]
             set job_data($job,run_start_time) $qacct_info($index,start_time)
             set job_data($job,run_end_time) $qacct_info($index,end_time)
             set job_data($job,state) "done"
@@ -3266,24 +3268,24 @@ proc calculate_qping_xy_rows { results_array_name row_array_name test_start star
 
 
 
-proc calculate_project_run_xy_rows { results_array_name job_array_name row_array_name start_numb } {
+proc calculate_project_run_xy_rows {results_array_name job_array_name row_array_name start_numb} {
    global ts_config
 
    upvar $results_array_name results
    upvar $job_array_name jobs
    upvar $row_array_name xy_rows
 
-   set pos1 [ expr ( $start_numb + 18 ) ]
-   set pos2 [ expr ( $start_numb + 19 ) ]
-   set pos3 [ expr ( $start_numb + 20 ) ]
+   set pos1 [expr $start_numb + 18]
+   set pos2 [expr $start_numb + 19]
+   set pos3 [expr $start_numb + 20]
 
    set add_info " A"
-   if { $start_numb != 0 } {
+   if {$start_numb != 0} {
       set add_info " B"
    }
 
 
-   if { $results(count) > 0 } {
+   if {$results(count) > 0} {
       set xy_rows($pos1,drawmode) "lines"
       set xy_rows($pos1,title) "running jobs project0 (32 %) $add_info"
 
@@ -3297,7 +3299,6 @@ proc calculate_project_run_xy_rows { results_array_name job_array_name row_array
       incr last -1
 
       set test_start $results(0,test_run_time)
-
       set help_list ""
 
       # calculate the number of jobs finishing per project for each time 
@@ -3348,6 +3349,12 @@ proc calculate_project_run_xy_rows { results_array_name job_array_name row_array
          set current_job_count [expr ($jobs_p0 + $jobs_p1 + $jobs_p2)]
 
          set one_percent [expr ($current_job_count / 100.00)]
+         if {$one_percent == 0} {
+            ts_log_fine $help_sort
+            parray help
+            # the test will fail due to division by zero, but the output above will help to find the problem
+         }
+
          set p0_p [expr ($jobs_p0 / $one_percent)]
          set p1_p [expr ($jobs_p1 / $one_percent)]
          set p2_p [expr ($jobs_p2 / $one_percent)]
@@ -3758,20 +3765,28 @@ proc trash_incomplete_job_records {job_array_name} {
    upvar $job_array_name jobs
 
    set job 0
-   set errors 0
+   set errors ""
    set index_size $jobs(index_size)
    for {set job 0} {$job <= $index_size} {incr job} {
       if {[info exists jobs($job,job_id)] && 
           (![info exists jobs($job,submit_start_time)] || 
            ![info exists jobs($job,run_start_time)] ||
            ![info exists jobs($job,run_end_time)])} {
+         if {![info exists jobs($job,submit_start_time)]} {
+            append errors "job $job: missing submit_start_time\n"
+         }
+         if {![info exists jobs($job,run_start_time)]} {
+            append errors "job $job: missing run_start_time\n"
+         }
+         if {![info exists jobs($job,run_end_time)]} {
+            append errors "job $job: missing run_end_time\n"
+         }
          unset jobs($job,job_id)
-         incr errors
       }
    }
 
-   if {$errors > 0} {
-      ts_log_severe "we had job submission errors - job got submitted, but qsub reported an error"
+   if {$errors != ""} {
+      ts_log_severe "we had job submission errors - job(s) got submitted, but qsub reported an error:\n$errors"
    }
 
    return $errors
