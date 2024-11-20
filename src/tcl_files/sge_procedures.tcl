@@ -6010,11 +6010,6 @@ proc get_qacct_multi {first_job_id last_job_id {qacct_info_var "qacct_info"} {on
       set as_user $CHECK_USER
    }
 
-   # wait for the last job id to appear in the accounting file
-   if {[get_qacct $last_job_id last_qacct_info $on_host $as_user $raise_error] != 0} {
-      return -1
-   }
-
    # call qacct -j "*" and process the records as they come in
    set id [open_remote_spawn_process $on_host $as_user "qacct" "-j '*'"]
    if {$id == ""} {
@@ -9664,7 +9659,7 @@ proc set_complex {change_array {raise_error 1} {fast_add 1} {do_reset 0} } {
 
       set tmpfile [dump_array_to_tmpfile current_values]
       set result [start_sge_bin "qconf" "-Mc $tmpfile"]
-      ts_log_fine "output of qconf -Mc $tmpfile:\n$result"
+      ts_log_finer "output of qconf -Mc $tmpfile:\n$result"
 
       # parse output or raise error
       add_message_to_container messages 4 [translate_macro MSG_CENTRY_NOTCHANGED]

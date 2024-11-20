@@ -151,7 +151,7 @@ set check_description(10)     "Functional test with 300 jobs, 2000 complexes, sh
 set check_description(100)    "submit 3000 jobs with enabled queues"
 set check_description(101)    "submit 3000 jobs with disabled queues"
 set check_description(102)    "submit 1500 of 3000 jobs with disabled queues"
-set check_description(103)    "submit 1500 of 3000 jobs with disabled queues, no qstats"
+#set check_description(103)    "submit 1500 of 3000 jobs with disabled queues, with qstats"
 set check_description(104)    "submit 1500 of 3000 jobs with disabled queues, requests"
 set check_description(105)    "submit 1500 of 3000 jobs with disabled queues, requests and parallel jobs"
 set check_description(106)    "submit 1500 of 3000 jobs with disabled queues, array jobs"
@@ -162,7 +162,7 @@ set check_description(110)     "with 3000 jobs, 2000 complexes, sharetree and 30
 set check_description(200)    "submit 30000 jobs with enabled queues"
 set check_description(201)    "submit 30000 jobs with disabled queues"
 set check_description(202)    "submit 15000 of 30000 jobs with disabled queues"
-set check_description(203)    "submit 15000 of 30000 jobs with disabled queues, no qstats"
+set check_description(203)    "submit 15000 of 30000 jobs with disabled queues, with qstats"
 set check_description(204)    "submit 15000 of 30000 jobs with disabled queues, requests"
 set check_description(205)    "submit 15000 of 30000 jobs with disabled queues, requests and parallel jobs"
 set check_description(206)    "submit 15000 of 30000 jobs with disabled queues, array jobs"
@@ -173,7 +173,7 @@ set check_description(210)     "with 30000 jobs, 2000 complexes, sharetree and 3
 set check_description(300)    "submit 300000 jobs with enabled queues"
 set check_description(301)    "submit 300000 jobs with disabled queues"
 set check_description(302)    "submit 150000 of 300000 jobs with disabled queues"
-set check_description(303)    "submit 150000 of 300000 jobs with disabled queues, no qstats"
+set check_description(303)    "submit 150000 of 300000 jobs with disabled queues, with qstats"
 set check_description(304)    "submit 150000 of 300000 jobs with disabled queues, requests"
 set check_description(305)    "submit 150000 of 300000 jobs with disabled queues, requests and parallel jobs"
 set check_description(306)    "submit 150000 of 300000 jobs with disabled queues, array jobs"
@@ -677,6 +677,9 @@ proc throughput_setup_level {} {
    #       same for other settings done below, scheduler config, ...
    set monitoring [format "%02d:%02d:%02d" [expr $ps_interval / 3600] [expr $ps_interval / 60] [expr $ps_interval % 60]]
    set myconfig(qmaster_params) "MONITOR_TIME=$monitoring"
+   # write accounting / reporting every 2 seconds - we don't want to wait the default 15s for the last records to appear
+   # and every 2 seconds will provide the performance benefit without buffering huge amounts of data (as we might see with the default 15s flush_time)
+   set myconfig(reporting_params) [add_or_replace_param $stored_configuration(reporting_params) "flush_time" "flush_time=00:00:02"]
    set_config myconfig
  
    # setup scheduler configuration
@@ -1463,11 +1466,14 @@ proc run_throughput_test {} {
    # close qevent and tail to schedd messages file
    close_spawn_process $event_client_sid
 
-   # cleanup jobs
-   # @todo why do we delete jobs? There shouldn't be any left!
-   ts_log_fine [start_sge_bin "qstat" "-u '*' -f"]
-   delete_all_jobs
-   wait_for_jobend $last_job_id leeper 60 0 1
+   # cleanup jobs (there shouldn't be any left)
+   if {[wait_for_end_of_all_jobs 60 0 1] != 0} {
+      set output [start_sge_bin "qstat" "-u '*'"]
+      ts_log_severe "not all jobs finished:\n$output"
+      set error 1
+      delete_all_jobs
+      wait_for_end_of_all_jobs
+   }
    
    # If error we can stop, otherwise we wait until timeout is reached for each qacct call below
    if {$error} {
@@ -1493,6 +1499,22 @@ proc run_throughput_test {} {
    }
 }
 
+proc throughput_wait_for_accounting_flush {} {
+   global ts_config
+
+   # submit a sleep 0 job
+   set job_id [submit_job "-b y sleep 0"]
+   # wait for it to finish
+   wait_for_jobend $job_id "" 10 0 1
+   # wait for it to be written to accounting file
+   # wait on the fileserver if available, otherwise the master host - this is what get_qacct_multi called later will do
+   set on_host [fs_config_get_server_for_path $ts_config(product_root) 0]
+   if {$on_host == ""} {
+      set on_host $ts_config(master_host)
+   }
+   get_qacct $job_id qacct_info $on_host
+}
+
 proc fill_job_list_from_accounting {job_array_name} {
    global ts_config
    global array_size
@@ -1504,6 +1526,10 @@ proc fill_job_list_from_accounting {job_array_name} {
    set last_index [expr $index_size - 1]
    set last_job_id [lindex [split $job_data($last_index,job_id) "."] 0]
 
+   # wait for accounting data to be written
+   throughput_wait_for_accounting_flush
+
+   # add accounting data to job information array
    set start_time [clock seconds]
    get_qacct_multi $first_job_id $last_job_id qacct_info "" "" 1 "jobnumber taskid project start_time end_time"
    set qacct_time [expr [clock seconds] - $start_time]
@@ -3769,17 +3795,17 @@ proc trash_incomplete_job_records {job_array_name} {
    set index_size $jobs(index_size)
    for {set job 0} {$job <= $index_size} {incr job} {
       if {[info exists jobs($job,job_id)] && 
-          (![info exists jobs($job,submit_start_time)] || 
-           ![info exists jobs($job,run_start_time)] ||
-           ![info exists jobs($job,run_end_time)])} {
-         if {![info exists jobs($job,submit_start_time)]} {
-            append errors "job $job: missing submit_start_time\n"
+          (![info exists jobs($job,submit_start_time)] || $jobs($job,submit_start_time) == "" ||
+           ![info exists jobs($job,run_start_time)] || $jobs($job,run_start_time) == "" ||
+           ![info exists jobs($job,run_end_time)] || $jobs($job,run_end_time) == "")} {
+         if {![info exists jobs($job,submit_start_time)] || $jobs($job,submit_start_time) == ""} {
+            append errors "job $job: $jobs($job,job_id): missing or empty submit_start_time\n"
          }
-         if {![info exists jobs($job,run_start_time)]} {
-            append errors "job $job: missing run_start_time\n"
+         if {![info exists jobs($job,run_start_time)] || $jobs($job,run_start_time) == ""} {
+            append errors "job $job: $jobs($job,job_id): missing or empty run_start_time\n"
          }
-         if {![info exists jobs($job,run_end_time)]} {
-            append errors "job $job: missing run_end_time\n"
+         if {![info exists jobs($job,run_end_time)] || $jobs($job,run_end_time) == ""} {
+            append errors "job $job: $jobs($job,job_id): missing or empty run_end_time\n"
          }
          unset jobs($job,job_id)
       }
@@ -3813,12 +3839,12 @@ proc calculate_average_job_times { job_array_name job_results_array { dump_file 
          set run_time 0
          set submit_time [expr $jobs($job,submit_time) / 1000.0]
          set submit_end_time [expr $jobs($job,submit_start_time) + $submit_time]
-         if { $submit_end_time > 0 && $jobs($job,submit_start_time) > 0 } {
+         if {$submit_end_time > 0 && $jobs($job,submit_start_time) > 0} {
             incr submit_job_count 1
          }
-         if { $jobs($job,run_end_time) > 0 && $jobs($job,run_start_time) > 0 } {
+         if {$jobs($job,run_end_time) > 0 && $jobs($job,run_start_time) > 0} {
             incr run_job_count 1
-            set run_time [expr ($jobs($job,run_end_time) - $jobs($job,run_start_time))]
+            set run_time [expr $jobs($job,run_end_time) - $jobs($job,run_start_time)]
          }
          set job_id $jobs($job,job_id)
 
