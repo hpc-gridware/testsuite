@@ -87,6 +87,11 @@ proc valgrind_analyse_copy_files {} {
    set tmp_dir [valgrind_get_tmp_path]
    set prot_dir [valgrind_get_protocol_path]
 
+   # if the protocol directory does not yet exist, create it
+   if {[remote_file_isdirectory $CHECK_VALGRIND_HOST $prot_dir]} {
+      remote_file_mkdir $CHECK_VALGRIND_HOST $prot_dir
+   }
+
    # loop over the list of files in the tmp directory
    set error_files {}
    set output [start_remote_prog $CHECK_VALGRIND_HOST $CHECK_USER "ls" "-1 $tmp_dir"]
