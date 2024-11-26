@@ -151,7 +151,7 @@ set check_description(10)     "Functional test with 300 jobs, 2000 complexes, sh
 set check_description(100)    "submit 3000 jobs with enabled queues"
 set check_description(101)    "submit 3000 jobs with disabled queues"
 set check_description(102)    "submit 1500 of 3000 jobs with disabled queues"
-#set check_description(103)    "submit 1500 of 3000 jobs with disabled queues, with qstats"
+set check_description(103)    "submit 1500 of 3000 jobs with disabled queues, with qstats"
 set check_description(104)    "submit 1500 of 3000 jobs with disabled queues, requests"
 set check_description(105)    "submit 1500 of 3000 jobs with disabled queues, requests and parallel jobs"
 set check_description(106)    "submit 1500 of 3000 jobs with disabled queues, array jobs"
@@ -566,7 +566,7 @@ proc throughput_setup_level {} {
 
          set end_job_count            $job_count
          set enable_queues_job_count  [expr $job_count / 2]
-         set qstat_interval 1 
+         set qstat_interval 1
       }
       4 {
          # enable queues after half of the jobs have been submitted
@@ -676,7 +676,7 @@ proc throughput_setup_level {} {
    # @todo why in the setup_level_function and not in the setup function?
    #       same for other settings done below, scheduler config, ...
    set monitoring [format "%02d:%02d:%02d" [expr $ps_interval / 3600] [expr $ps_interval / 60] [expr $ps_interval % 60]]
-   set myconfig(qmaster_params) "MONITOR_TIME=$monitoring"
+   set myconfig(qmaster_params) [add_or_replace_param $stored_configuration(qmaster_params) "MONITOR_TIME" "MONITOR_TIME=$monitoring"]
    # write accounting / reporting every 2 seconds - we don't want to wait the default 15s for the last records to appear
    # and every 2 seconds will provide the performance benefit without buffering huge amounts of data (as we might see with the default 15s flush_time)
    set myconfig(reporting_params) [add_or_replace_param $stored_configuration(reporting_params) "flush_time" "flush_time=00:00:02"]
@@ -1426,7 +1426,7 @@ proc run_throughput_test {} {
             
             # tasks to be done once a second
             if {$result(test_run_time) != $time_now} {
-               set error [show_and_check_current_system_status $start_time result schedd_data monitoring]
+               set error [show_and_check_current_system_status $start_time result schedd_data monitoring qstat_data]
 
                # enable queues when $enable_queues_job_count is reached
                if { ! $are_enabled && $result(jobs_submitted) >= $enable_queues_job_count } {
@@ -1446,6 +1446,7 @@ proc run_throughput_test {} {
          }
       } ;# received data ("*\n")
    } ;# expect_loop
+   set error [show_and_check_current_system_status $start_time result schedd_data monitoring qstat_data]
 
    set end_time [timestamp]
 
@@ -1512,6 +1513,7 @@ proc throughput_wait_for_accounting_flush {} {
    if {$on_host == ""} {
       set on_host $ts_config(master_host)
    }
+   ts_log_fine "calling qacct (waiting for accounting to be written) on host $on_host"
    get_qacct $job_id qacct_info $on_host
 }
 
@@ -1521,10 +1523,20 @@ proc fill_job_list_from_accounting {job_array_name} {
 
    upvar $job_array_name job_data
 
+   # the first job id is not necessarily the first one in the job_data array
+   # and the last one not at array end
+   # the order in the array is just how job ids were reported by submitter scripts
+   # so we need to build min and max
    set index_size $job_data(index_size)
-   set first_job_id [lindex [split $job_data(0,job_id) "."] 0]
-   set last_index [expr $index_size - 1]
-   set last_job_id [lindex [split $job_data($last_index,job_id) "."] 0]
+   set first_job_id 4294967295 ;# U_LONG32_MAX
+   set last_job_id 0
+   for {set i 0} {$i < $index_size} {incr i} {
+      if {[info exists job_data($i,job_id)]} {
+         set first_job_id [min $first_job_id [lindex [split $job_data($i,job_id) "."] 0]]
+         set last_job_id [max $last_job_id [lindex [split $job_data($i,job_id) "."] 0]]
+      }
+   }
+   ts_log_fine "first_job_id: $first_job_id, last_job_id: $last_job_id"
 
    # wait for accounting data to be written
    throughput_wait_for_accounting_flush
@@ -1534,7 +1546,7 @@ proc fill_job_list_from_accounting {job_array_name} {
    get_qacct_multi $first_job_id $last_job_id qacct_info "" "" 1 "jobnumber taskid project start_time end_time"
    set qacct_time [expr [clock seconds] - $start_time]
 
-   for {set job 0} {$job <= $last_index} {incr job} {
+   for {set job 0} {$job < $index_size} {incr job} {
       if {[info exists job_data($job,job_id)]} {
          # $job_data($job,job_id) can be
          # - job_id.1 for a sequential job
@@ -3921,13 +3933,15 @@ proc calculate_average_schedd_times { schedd_array_name schedd_results_array { d
 }
 
 
-proc show_and_check_current_system_status {start_time array_name schedd_array_name monitoring_name} {
+proc show_and_check_current_system_status {start_time array_name schedd_array_name monitoring_name qstat_name} {
    global ts_config
    global test_scenario
+   global qstat_interval
 
    upvar $array_name data
    upvar $schedd_array_name schedd
    upvar $monitoring_name monitoring
+   upvar $qstat_name qstat_data
 
    set error 0
 
@@ -3953,7 +3967,9 @@ proc show_and_check_current_system_status {start_time array_name schedd_array_na
    puts "scheduling time  : $schedd($schedd(count),schedd_time)"
    puts "schedd total time: $schedd($schedd(count),schedd_total_time)"
    puts "qmaster size     : $monitoring(qmaster,$monitoring(qmaster,count),size)"
-   puts "schedd size      : $monitoring(schedd,$monitoring(schedd,count),size)"
+   if {$qstat_interval > 0} {
+      puts "qstat count      : $qstat_data(count)"
+   }
    puts ""
    flush stdout
 

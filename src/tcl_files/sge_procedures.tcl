@@ -6009,6 +6009,7 @@ proc get_qacct_multi {first_job_id last_job_id {qacct_info_var "qacct_info"} {on
    if {$as_user == ""} {
       set as_user $CHECK_USER
    }
+   ts_log_fine "calling qacct -j * on host $on_host as user $as_user"
 
    # call qacct -j "*" and process the records as they come in
    set id [open_remote_spawn_process $on_host $as_user "qacct" "-j '*'"]
