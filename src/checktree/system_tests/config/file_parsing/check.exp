@@ -217,7 +217,7 @@ proc prepare_file_and_start_job { request_file_name option_parameter job_script 
 #     ex_name               - expected job-name after submission 
 #     script_option1        - line which is pasted into the to be executed script
 #     { script_option2 "" } - line which is pasted into the to be executed script
-#     { c_option "" }       - paramter for job submission
+#     { c_option "" }       - parameter for job submission
 #
 #  RESULT
 #     the job-id of the submitted job 

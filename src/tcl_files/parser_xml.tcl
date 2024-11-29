@@ -1154,7 +1154,7 @@ proc qstat_xml_queue { node1 output {param ""} } {
             set output_xml_qstat($queue,$column) [format "%3.2f" $output_xml_qstat($queue,$column)]
       }
 
-      set node11 $node12  ; # Shift to next paramter in the list
+      set node11 $node12  ; # Shift to next parameter in the list
 
    }
 
@@ -1208,7 +1208,7 @@ proc qstat_xml_queue { node1 output {param ""} } {
             set output_xml_qstat($queue,$column) [format "%3.2f" $output_xml_qstat($queue,$column)]
          }
 
-         set node222 $node2 ; # move to the next paramter
+         set node222 $node2 ; # move to the next parameter
 
       }
 
@@ -1308,7 +1308,7 @@ proc qstat_F_xml_queue { node1 output {params ""} } {
             set output_xml_qstat($queue,$column) [format "%3.2f" $output_xml_qstat($queue,$column)]
          }           
 
-      set node11 $node12  ; # Shift to next paramter in the list
+      set node11 $node12  ; # Shift to next parameter in the list
       
    }
    
@@ -1369,7 +1369,7 @@ proc qstat_F_xml_queue { node1 output {params ""} } {
             set output_xml_qstat($queue,$column) [format "%3.2f" $output_xml_qstat($queue,$column)]
          }           
 
-         set node222 $node2 ; # move to the next paramter
+         set node222 $node2 ; # move to the next parameter
 
       }
       
@@ -1487,7 +1487,7 @@ proc qstat_g_c_xml_queue { node output } {
          set output_xml_qstat($queue,$column) [format "%3.2f" $output_xml_qstat($queue,$column)]
       }
 
-      set node1 $node12  ; # Shift to next paramter in the list
+      set node1 $node12  ; # Shift to next parameter in the list
 
    }
 
@@ -1520,7 +1520,7 @@ proc qstat_g_c_xml_queue { node output } {
             set output_xml_qstat($queue,$column) [format "%3.2f" $output_xml_qstat($queue,$column)]
          }
 
-         set node222 $node2 ; # move to the next paramter
+         set node222 $node2 ; # move to the next parameter
       }
 
    }

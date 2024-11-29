@@ -2398,7 +2398,7 @@ proc copy_directory {source target} {
 #
 #  INPUTS
 #     topleveldir - path to spool toplevel directory ( updir of qmaster and execd ) 
-#     subdir      - this paramter is master or execd 
+#     subdir      - this parameter is master or execd 
 #
 #  RESULT
 #     if ok the procedure returns the correct spool directory. It returns  on 
@@ -2480,7 +2480,7 @@ proc cleanup_spool_dir {topleveldir subdir} {
 #  INPUTS
 #     hostname    - remote host where to cleanup spooldir
 #     topleveldir - path to spool toplevel directory ( updir of qmaster and execd )
-#     subdir      - this paramter is master or execd
+#     subdir      - this parameter is master or execd
 #
 #  RESULT
 #     if ok the procedure returns the correct spool directory. It returns  on 

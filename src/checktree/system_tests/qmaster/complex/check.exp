@@ -513,7 +513,7 @@ proc complex_global_host {} {
    # For tr (test_restring), we will check all possible combinations genex
    # for "global" for both "tr" and "test_restring" for the complex' name. We also vary
    # whether the resource is pending (1) or not (0). For broken tests, we add the
-   # runnuble paramter with value 1.
+   # runnuble parameter with value 1.
 
    complex_run_job "global" "tr"           "global"  1           0
    complex_run_job "global" "tr"           "*lobal"  1           0

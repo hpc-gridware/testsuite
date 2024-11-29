@@ -475,12 +475,12 @@ proc setup_conf {} {
   } else {
       foreach elem $arrays_old {
          if { [string first $elem $arrays_new] < 0 } {
-            ts_log_severe "paramter $elem not in new configuration"
+            ts_log_severe "parameter $elem not in new configuration"
          }
       }
       foreach elem $arrays_new { 
          if { [string first $elem $arrays_old] < 0 } {
-           ts_log_severe "paramter $elem not in old configuration"
+           ts_log_severe "parameter $elem not in old configuration"
          }
       }
 
@@ -520,6 +520,13 @@ proc setup_execd_conf {} {
    global CHECK_INTERACTIVE_TRANSPORT check_use_installed_system
    global ts_config
    global CHECK_USER
+   global check_do_not_create_local_config
+
+   # has testsuite has been started with --no_local_config?
+   if {$check_do_not_create_local_config} {
+      ts_log_fine "not creating local config"
+      return
+   }
 
    set host_list $ts_config(execd_nodes)
    foreach sh_host $ts_config(shadowd_hosts) {

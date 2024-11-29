@@ -1053,12 +1053,12 @@ proc translate_macro_if_possible {macro {par1 ""} {par2 ""} {par3 ""} {par4 ""} 
 #     is_script            - if 1: text is from install script ( not in c source )
 #     no_input_parsing     - if 1: don't try to parse input string
 #     msg_txt              - text to translate
-#     { par1 "" }          - paramter 1 in msg_txt
-#     { par2 ""}           - paramter 2 in msg_txt
-#     { par3 "" }          - paramter 3 in msg_txt
-#     { par4 ""}           - paramter 4 in msg_txt
-#     { par5 ""}           - paramter 5 in msg_txt
-#     { par6 ""}           - paramter 6 in msg_txt
+#     { par1 "" }          - parameter 1 in msg_txt
+#     { par2 ""}           - parameter 2 in msg_txt
+#     { par3 "" }          - parameter 3 in msg_txt
+#     { par4 ""}           - parameter 4 in msg_txt
+#     { par5 ""}           - parameter 5 in msg_txt
+#     { par6 ""}           - parameter 6 in msg_txt
 #
 #  RESULT
 #     localized string with optional parameters

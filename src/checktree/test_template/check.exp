@@ -53,7 +53,7 @@
 # 5) set check_needs (e.g.: "init_core_system" this means that this test is not
 #    started without successful run of "init_core_system" test
 #
-# 6) you can add any function name to check_functions (all function (no paramters allowed) are started
+# 6) you can add any function name to check_functions (all function (no parameters allowed) are started
 #    within each runlevel number
 #    PLEASE use ts_log_severe() to submit errors
 #    ts_log_severe() is used in many testsuite standard functions, so not every

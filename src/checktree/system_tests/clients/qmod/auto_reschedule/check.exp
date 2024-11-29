@@ -70,7 +70,7 @@ lappend check_functions "auto_reschedule_GE-3331"
 # 
 # disable all queues (but not auto_reschedule_host1.q and auto_reschedule_host2.q )
 # 
-# paramters
+# parameters
 #
 #  scheduler:
 #  schedule_interval 00:00:04

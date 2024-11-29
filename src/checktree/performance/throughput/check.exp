@@ -502,7 +502,7 @@ proc throughput_setup_level {} {
    global throughput_max_job_categories
    global throughput_max_consumable_per_job
 
-   # paramters for all tests
+   # parameters for all tests
    set enable_queues_job_count  0   ;# after witch job, enable queues
    set ps_interval              5   ;# ps every 5 seconds
    set qstat_interval           0   ;# don't do qstats

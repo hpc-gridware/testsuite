@@ -78,7 +78,7 @@ puts "    *********************************************"
 #     Calls the expect function send, with some optional parameters:
 #     1. Sends are slowed down, when the send_slow parameter of a host in the
 #        testsuite host configuration is set != 0
-#     2. Human like typing, when the paramter passwd is != 0.
+#     2. Human like typing, when the parameter passwd is != 0.
 #        Some operating systems will reject password input, when it is sent
 #        at full speed.
 #

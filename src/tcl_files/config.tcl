@@ -989,7 +989,7 @@ proc config_generic { only_check name config_array help_text check_type
       if { [info exists params(exclude_list)] } {
          set exclude $params(exclude_list)
       }
-      # set the verification paramteres
+      # set the verification parameters
       set verify_params ""
       if { [info exists params(verify)] } {
          set verify_params $params(verify)
