@@ -6367,6 +6367,7 @@ proc menu {} {
       puts "==============================================================================="
       puts " (20) run distinst (without compiling before)"
       puts " (21) install cluster"
+      puts " (21c) reset cluster configuration to defaults"
       puts " (22) start cluster"
       puts " (23) shutdown cluster"
       puts " (24) start master (and scheduler)"
@@ -6523,6 +6524,13 @@ proc menu {} {
          }
          "21" {
             menu_item_install_cluster
+            wait_for_enter
+         }
+         "21c" {
+            set save_use_inst_sys $check_use_installed_system
+            set check_use_installed_system 1
+            menu_item_install_cluster
+            set check_use_installed_system $save_use_inst_sys
             wait_for_enter
          }
          "22" {
