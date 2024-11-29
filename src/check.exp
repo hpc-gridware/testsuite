@@ -302,6 +302,10 @@ set check_use_installed_system 0    ;# set to 1 when installed system parameter 
 global check_do_not_use_spool_config_entries
 set check_do_not_use_spool_config_entries 0
 
+# whether to create local configurations (qconf -aconf <hostname>) for every exec host or not
+global check_do_not_create_local_config
+set check_do_not_create_local_config 0
+
 # from compile_clean option
 global check_do_clean_compile
 set check_do_clean_compile 0
@@ -7315,7 +7319,7 @@ proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {e
    global CHECK_USER CHECK_HTML_DIRECTORY CHECK_COMPILE_TOOL
    global check_use_installed_system fast_setup be_quiet
    global check_do_clean_compile check_do_3rdparty_build ts_config ts_log_config
-   global CHECK_TESTSUITE_TRASH check_do_not_use_spool_config_entries ts_log_levels
+   global CHECK_TESTSUITE_TRASH check_do_not_use_spool_config_entries check_do_not_create_local_config ts_log_levels
    global WITH_GPERF
    upvar $execute_func_return rpcret
 
@@ -7388,6 +7392,11 @@ proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {e
       # inherit "no_local_qmaster_spool" command line param
       if {$check_do_not_use_spool_config_entries == 2} {
          append args " no_local_qmaster_spool"
+      }
+
+      # inherit "no_local_config" command line param
+      if {$check_do_not_create_local_config == 1} {
+         append args " no_local_config"
       }
    }
 
@@ -7761,6 +7770,8 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "no_local_qmaster_spool ignore local spool directory only for the qmaster host"
       puts ""
+      puts "no_local_config       do not create / re-set local host configurations"
+      puts ""
       puts "interactive <type>    use <type> as transport for interactive jobs, type = "
       puts "                      rtools (use rsh/rlogin/telnet, default for < 6.2)"
       puts "                      ssh (use ssh as transport)"
@@ -7898,6 +7909,11 @@ for {set i 0} {$i < $argc} {incr i} {
 
    if {[string compare [lindex $argv $i] "--no_local_qmaster_spool"] == 0 || [string compare [lindex $argv $i] "no_local_qmaster_spool"] == 0} {
       set check_do_not_use_spool_config_entries 2
+      continue
+   }
+
+   if {[string compare [lindex $argv $i] "--no_local_config"] == 0 || [string compare [lindex $argv $i] "no_local_config"] == 0} {
+      set check_do_not_create_local_config 1
       continue
    }
 

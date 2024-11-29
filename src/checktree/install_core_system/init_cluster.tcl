@@ -486,6 +486,39 @@ proc setup_conf {} {
 
      ts_log_severe "config parameter count new/old configuration error"
   }
+
+   # if we have no local configurations, set a few parameters here
+   # based on what the qmaster host needs
+   global check_do_not_create_local_config
+   if {$check_do_not_create_local_config} {
+      set change_config 1
+      set xterm [get_binary_path $ts_config(master_host) "xterm"]
+      if {$xterm != "xterm"} {
+         set add_params(xterm) $xterm
+      }
+      set mailer [get_binary_path $ts_config(master_host) "mailx"]
+      if {$mailer != "mailx"} {
+         set add_params(mailer) $mailer
+      }
+      set execd_spooldir [get_local_spool_dir $ts_config(master_host) execd 0]
+      if {$execd_spooldir != ""} {
+         set add_params(execd_spool_dir) $execd_spooldir
+         set errors ""
+         foreach host $ts_config(execd_nodes) {
+            set host_spooldir [get_local_spool_dir $host execd 0]
+            if {$host_spooldir != $execd_spooldir} {
+               append errors "host $host has different spooldir: $host_spooldir, expected $execd_spooldir\n"
+            }
+         }
+         if {$errors != ""} {
+            ts_log_severe $errors
+            set change_config 0
+         }
+      }
+      if {$change_config} {
+         set_config add_params
+      }
+   }
 }
 
 #****** check/setup_execd_conf() ***********************************************
@@ -522,24 +555,32 @@ proc setup_execd_conf {} {
    global CHECK_USER
    global check_do_not_create_local_config
 
-   # has testsuite has been started with --no_local_config?
-   if {$check_do_not_create_local_config} {
-      ts_log_fine "not creating local config"
-      return
-   }
-
    set host_list $ts_config(execd_nodes)
    foreach sh_host $ts_config(shadowd_hosts) {
       if {[lsearch -exact $host_list $sh_host] == -1} {
          lappend host_list $sh_host
       }
    }
+
+   # has testsuite has been started with --no_local_config?
+   if {$check_do_not_create_local_config} {
+      ts_log_fine "not creating local config - deleting existing ones"
+      foreach host $host_list {
+         ts_log_fine [start_sge_bin "qconf" "-dconf $host" $ts_config(master_host)]
+      }
+      return
+   }
+
    foreach host $host_list {
       ts_log_fine "get configuration for host $host ..."
-      get_config tmp_config $host
+      get_config tmp_config $host 60 0
       if {![info exists tmp_config]} {
-         ts_log_severe "couldn't get conf - skipping $host"
-         continue
+         ts_log_info "couldn't get conf - adding new local config for host $host"
+         set elements "qlogin_command qlogin_daemon rlogin_command rlogin_daemon rsh_command rsh_daemon xterm load_sensor execd_params execd_spool_dir"
+         set existing_config 0
+      } else {
+         set elements [array names tmp_config]
+         set existing_config 1
       }
 
       if {[lsearch -exact $ts_config(execd_nodes) $host] != -1} {
@@ -549,14 +590,6 @@ proc setup_execd_conf {} {
          set is_execd_host 0
       }
 
-      if {[lsearch -exact $ts_config(shadowd_hosts) $host] != -1} {
-         set is_shadowd_host 1
-         ts_log_fine "host \"$host\" is a shadowd host!"
-      } else {
-         set is_shadowd_host 0
-      }
-
-      set elements [array names tmp_config]
       set counter 0
       set output ""
       set removed ""
@@ -579,7 +612,9 @@ proc setup_execd_conf {} {
       set spool_dir_found 0
       set win_execd_params_found 0
       foreach elem $elements {
-         append output "$elem is set to $tmp_config($elem)\n"
+         if {$existing_config} {
+            append output "$elem is set to $tmp_config($elem)\n"
+         }
          incr counter 1
          switch $elem {
             "mailer" -
@@ -598,42 +633,22 @@ proc setup_execd_conf {} {
                }
             }
             "xterm" {
-               ts_log_fine "host $host has xterm setting to \"$tmp_config($elem)\""
-               if {![is_remote_file $host $CHECK_USER $tmp_config($elem)]} {
+               if {!$existing_config || ![is_remote_file $host $CHECK_USER $tmp_config($elem)]} {
                   set config_xterm_path [get_binary_path $host "xterm"]
-                  set tmp_log_text "Host \"$host\" xterm path \"$tmp_config($elem)\" not found!\n"
-                  append tmp_log_text "The install script should check if the default xterm path is available during installation!\n"
-                  append tmp_log_text "Testsuite is setting xterm for host \"$host\" to \"$config_xterm_path\"!\n"
-                  ts_log_fine $tmp_log_text
-                  set tmp_config($elem) $config_xterm_path
-               }
-               set config_xterm_path [get_binary_path $host "xterm"]
-               if {[string trim $tmp_config($elem)] != [string trim $config_xterm_path] } {
-                  ts_log_fine "host \"$host\": xterm path \"$tmp_config($elem)\" is not set to configured xterm path \"$config_xterm_path\"\nSetting xterm to \"$config_xterm_path\""
+                  if {$config_xterm_path == "xterm"} {
+                     ts_log_config "xterm seems not to be installed on host $host"
+                  }
                   set tmp_config($elem) $config_xterm_path
                }
             }
             "load_sensor" {
-               # on windows, we have a load sensor, on other platforms not
-               if {[host_conf_get_arch $host] == "win32-x86"} {
-                  incr expected_entries 1
-               } else {
-                  lappend removed $elem
-               }
+               lappend removed $elem
             }
             "execd_params" {
-               # on windows, we need a special execd param for use of domain users
-               if {[host_conf_get_arch $host] == "win32-x86"} {
-                  incr expected_entries 1
-                  if {$tmp_config(execd_params) == "enable_windomacc=true"} {
-                     set win_execd_params_found 1
-                  }
-               } else {
-                  lappend removed $elem
-               }
+               lappend removed $elem
             }
             "execd_spool_dir" {
-               if {[string compare $have_exec_spool_dir $tmp_config(execd_spool_dir)] == 0} {
+               if {$existing_config && [string compare $have_exec_spool_dir $tmp_config(execd_spool_dir)] == 0} {
                   set spool_dir_found 1
                }
                if {$spool_dir == 0} {
@@ -648,7 +663,9 @@ proc setup_execd_conf {} {
 
       # execd_spool_dir has to be set correctly (depending on testsuite configuration)
       if {$spool_dir == 1 && $spool_dir_found == 0 && $is_execd_host} {
-         ts_log_config "host $host should have spool dir entry \"$have_exec_spool_dir\"\nADDING: execd_spool_dir $have_exec_spool_dir"
+         if {$existing_config} {
+            ts_log_config "host $host should have spool dir entry \"$have_exec_spool_dir\"\nADDING: execd_spool_dir $have_exec_spool_dir"
+         }
          if {[info exists tmp_config(execd_spool_dir)]} {
             ts_log_fine "spooldir (old): $tmp_config(execd_spool_dir)"
          } else {
@@ -659,15 +676,16 @@ proc setup_execd_conf {} {
       }
       ts_log_finer $output
 
-      if {$CHECK_INTERACTIVE_TRANSPORT == "default" || $check_use_installed_system} {
-         if {$counter != $expected_entries} {
-            ts_log_severe "host $host has $counter from $expected_entries expected entries:\n$output"
+      if {$existing_config} {
+         if {$CHECK_INTERACTIVE_TRANSPORT == "default" || $check_use_installed_system} {
+            if {$counter != $expected_entries} {
+               ts_log_severe "host $host has $counter from $expected_entries expected entries:\n$output"
+            }
          }
-      }
-
-      # we need execd params for windows hosts
-      if {[host_conf_get_arch $host] == "win32-x86" && !$win_execd_params_found} {
-         set tmp_config(execd_params) "enable_windomacc=true"
+         # remove unexpected options
+         foreach elem $removed {
+            set tmp_config($elem) ""
+         }
       }
 
       # handle interactive job transport
@@ -682,13 +700,12 @@ proc setup_execd_conf {} {
       # handle valgrind
       valgrind_setup_execd_conf tmp_config $host
 
-      # remove unexpected options
-      foreach elem $removed {
-         set tmp_config($elem) ""
-      }
-
       # now set the new config
-      set_config tmp_config $host
+      if {$existing_config} {
+         set_config tmp_config $host
+      } else {
+         set_config tmp_config $host 1
+      }
    }
 }
 

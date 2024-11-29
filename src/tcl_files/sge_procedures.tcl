@@ -2297,7 +2297,7 @@ proc get_gid_range { user port } {
 #  SEE ALSO
 #     sge_procedures/set_config()
 #*******************************
-proc get_config { change_array {host global} {atimeout 60}} {
+proc get_config {change_array {host global} {atimeout 60} {raise_error 1}} {
   get_current_cluster_config_array ts_config
   upvar $change_array chgar
 
@@ -2307,7 +2307,7 @@ proc get_config { change_array {host global} {atimeout 60}} {
 
   set result [start_sge_bin "qconf" "-sconf $host" "" "" prg_exit_state $atimeout] 
   if {$prg_exit_state != 0} {
-     ts_log_severe "qconf -sconf $host failed:\n$result"
+     ts_log_severe "qconf -sconf $host failed:\n$result" $raise_error
      return -1
   }
 
