@@ -78,7 +78,8 @@ proc get_ps_cmd {pid} {
       "lx-x86" -
       "lx-amd64" -
       "ulx-x86" -
-      "ulx-amd64" {
+      "ulx-amd64" -
+      "xlx-amd64" {
          set cmd "/bin/ps -p $pid --no-heading -o vsz,time"
       }
       default {

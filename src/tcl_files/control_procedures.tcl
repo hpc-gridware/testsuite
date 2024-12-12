@@ -1616,7 +1616,8 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       "lx2?-*" -
       "ulx24-*" -
       "lx-*" -
-      "ulx-*" {
+      "ulx-*" -
+      "xlx-*" {
          set myenvironment(COLUMNS) "1000"
          set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-weo \"pid pgid ppid uid=BIGGERUID s stime vsz time nice args=COMMANDCOMMANDCOMMANDCOMMANDCOMMAND\"" prg_exit_state 60 0 "" myenvironment 1 0]
          set index_names "  PID  PGID  PPID BIGGERUID S STIME   VSZ     TIME NI COMMANDCOMMANDCOMMANDCOMMANDCOMMAND"
@@ -1686,7 +1687,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       }
 	
       default {
-         set result "unknown architecture"
+         set result "unknown architecture $host_arch"
          set prg_exit_state 1
          set index_names "  PID   GID  PPID   UID S    STIME  VSZ        TIME NICE COMMAND"
          set pid_pos     0

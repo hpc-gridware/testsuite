@@ -3581,7 +3581,8 @@ proc host_conf_detect_java_on_host {host} {
          lappend default_locations "/usr/local"
       }
       "lx-*" -
-      "ulx-*" {
+      "ulx-*" - 
+      "xlx-*" {
          lappend default_locations "/usr/lib/jvm"
          lappend default_locations "/usr/lib64/jvm"
       }
