@@ -728,7 +728,7 @@ proc print_errors {} {
 proc have_ssh_access {} {
   global have_ssh_access_state ts_config
 
-  if { $have_ssh_access_state != -1 } {
+  if {$have_ssh_access_state != -1} {
      return $have_ssh_access_state
   }
 
@@ -741,7 +741,7 @@ proc have_ssh_access {} {
 
   set local_host [gethostname]
   set run_again 0
-  if { [ info exists ts_config(execd_hosts) ] != 1 } {
+  if {[info exists ts_config(execd_hosts)] != 1} {
      ts_log_fine "no execd hosts defined, checking only local ssh connection"
      set run_again 1
      set host_array $local_host
@@ -750,7 +750,7 @@ proc have_ssh_access {} {
   }
 
   set ssh_binary [get_binary_path $local_host "ssh"]
-  if { $ssh_binary == "" } {
+  if {$ssh_binary == ""} {
      ts_log_severe "--> no ssh binary configured for host $local_host - please update your testsuite host configuration"
      return 0
   }
@@ -759,17 +759,17 @@ proc have_ssh_access {} {
   set have_complete_access 1
 
   foreach elem $host_array {
-     set catch_state [ catch {
+     set catch_state [catch {
 
         ts_log_finer "trying $ssh_binary -l root $elem id"
 
-        set id [ open_spawn_process "$ssh_binary" "-l" "root" "$elem" "id"]
-        set sp_id [ lindex $id 1 ]
+        set id [open_spawn_process "$ssh_binary" "-l" "root" "$elem" "id"]
+        set sp_id [lindex $id 1]
 
         set timeout 30
         set end_val 0
         set have_access 0
-        while { $end_val == 0} {
+        while {$end_val == 0} {
            log_user 0
            expect {
                -i $sp_id full_buffer {
@@ -778,7 +778,7 @@ proc have_ssh_access {} {
 
                -i $sp_id "uid*0*root" {
                   log_user 1
-                  ts_log_fine "--> having ssh access to host $elem"
+                  ts_log_finer "--> having ssh access to host $elem"
                   set end_val 1
                   set have_access 1
                }
@@ -797,21 +797,24 @@ proc have_ssh_access {} {
                }
            }
         }
-        if { $have_access != 1 } {
+        if {$have_access != 1} {
             log_user 1
             set have_complete_access 0
             ts_log_severe "no ssh access to host $elem"
         }
-     } ] ;# end of chatch
-     if { $catch_state != 0} {
+        # the connection is *not* remembered, therefore we cannot call close_spawn_process
+        close -i $sp_id
+     }] ;# end of chatch
+     if {$catch_state != 0} {
         ts_log_severe "no ssh access to host $elem (maybe no ssh installed)"
         set have_complete_access 0
      }
   }
   log_user 1
-  if { $run_again == 0 } {
+  if {$run_again == 0} {
      set have_ssh_access_state $have_complete_access
   }
+
   return $have_complete_access
 }
 
@@ -1517,80 +1520,6 @@ proc get_testsuite_root_dir_from_file { filename } {
    }
    close $file
    return "testsuite_root_dir_not_found"
-}
-
-proc edit_defaults {} {
-  global CHECK_DEFAULTS_FILE CHECK_CONFIG_DIR
-  global env
-
-  load_defaults
-  set return_value -1
-  if { [ write_edit_defaults_file "/tmp/testsuite_tmp_defaults_file" ] != 0 } {
-     ts_log_fine "error open file \"$def_edit_file\" for writing"
-     return -1
-  }
-  set local_host [gethostname]
-
-  puts $def_edit_file
-  set exit_edit_loop 0
-  while { $exit_edit_loop == 0 } {
-     if { $CHECK_CONFIG_DIR != "" } {
-        set vim_binary [get_binary_path $local_host "vim"]
-     } else {
-        ts_log_fine "config directory path not set ..."
-        set env_variable "EDITOR"
-        ts_log_fine "checking for $env_variable environment setting..."
-        if { [info exists env($env_variable)] } {
-           ts_log_fine "$env_variable=$env($env_variable)"
-           set vim_binary $env($env_variable)
-           ts_log_fine "using environment $env_variable"
-        } else {
-           ts_log_fine "environment $env_variable not set, using default"
-           set vim_binary "vim"
-        }
-        set catch_return [ catch { eval exec which $vim_binary } catch_value ]
-        ts_log_fine "exec \"which $vim_binary\" returns: $catch_return"
-        if { $catch_return != 0 } {
-           ts_log_fine "error executing \"which $vim_binary\"!!!"
-        } else {
-           set vim_binary $catch_value
-        }
-        if { [file exists $vim_binary] != 1 } {
-           ts_log_fine "could not find binary"
-           ts_log_fine "$vim_binary"
-           testsuite_shutdown 1
-        }
-        ts_log_fine "using \"$vim_binary\" as editor"
-     }
-     set env(EDITOR) $vim_binary
-     set id [ open_spawn_process $vim_binary "$def_edit_file" ]
-     interact -o -i [lindex $id 1]
-     set exit_state [ close_spawn_process $id ]
-
-     if { $exit_state == 0 } {
-        set read_return [ read_edit_defaults_file "$def_edit_file" ]
-        if { $read_return >= 0 } {
-           if { $read_return == 0 } {
-              ts_log_fine "no changes"
-              set return_value 1
-              set exit_edit_loop 1
-           } else {
-              ts_log_fine "$read_return changes in defaults file \"$CHECK_DEFAULTS_FILE\""
-              set return_value 0
-              set exit_edit_loop 1
-           }
-        } else {
-           ts_log_fine "error reading file \"$def_edit_file\""
-           ts_log_fine "\n>> press CTRL-C to abort setup configuration!"
-           wait_for_enter
-        }
-     }
-  }
-  if { [ string first "/tmp/testsuite_tmp_defaults_file" $def_edit_file ] >= 0 } {
-     file delete $def_edit_file
-     ts_log_fine "file \"$def_edit_file\" deleted!"
-  }
-  return $return_value
 }
 
 proc calc_space {space name} {
