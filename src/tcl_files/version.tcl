@@ -250,7 +250,7 @@ proc get_version_info {{version_information_array_name ""}} {
 
    # if we do not yet know the version, try to get it via qconf -help
    if {$CHECK_PRODUCT_VERSION_NUMBER == "n.a."} {
-      set qconf_host [host_conf_get_suited_hosts]
+      set qconf_host $ts_config(master_host)
       set qconf_host_arch [resolve_arch $qconf_host]
       set qconf_bin $ts_config(product_root)/bin/$qconf_host_arch/qconf
 

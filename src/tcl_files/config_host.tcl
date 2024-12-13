@@ -3268,7 +3268,7 @@ proc host_conf_get_suited_hosts_rebuild_cache {} {
    if {![info exists suited_host_cache]} {
       foreach host $ts_config(execd_nodes) {
          set suited_host_cache($host) 0
-         set arch [resolve_arch $host]
+         set arch [host_conf_get_arch $host]
          if {![info exists suited_arch_cache($arch)]} {
             set suited_arch_cache($arch) {}
          }

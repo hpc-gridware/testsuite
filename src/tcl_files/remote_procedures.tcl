@@ -1606,7 +1606,6 @@ proc open_remote_spawn_process { hostname
    # modify command line + arguments in case this command shall run under valgrind
    valgrind_set_command_and_arguments $hostname exec_command exec_arguments
 
-
    # if the same script is executed multiple times, don't recreate it
    set re_use_script 0
    # we check for a combination of all parameters
@@ -1644,7 +1643,7 @@ proc open_remote_spawn_process { hostname
    set create_alternate_connection 0
    set open_new_connection 1
    if {[get_open_spawn_rlogin_session $hostname $user $win_local_user con_data]} {
-      if { $con_data(in_use) } {
+      if {$con_data(in_use)} {
          set found_alternative 0
          if {$CHECK_DEBUG_LEVEL != 0} {
             set info_text "connection to host \"$con_data(hostname)\" as user \"$con_data(user)\" is in use by script:\n"
@@ -2343,17 +2342,18 @@ proc open_spawn_process {args} {
 
    ts_log_finest "starting spawn process ..."
 
-   set pid   [ eval spawn $open_spawn_arguments ]
-   set sp_id [ set spawn_id ]
+   set pid   [eval spawn $open_spawn_arguments]
+   set sp_id [set spawn_id]
    set back $pid
    lappend back $sp_id
    ts_log_finest "open_spawn_process:  arguments: $args"
-      match_max -i $spawn_id $CHECK_EXPECT_MATCH_MAX_BUFFER
-      ts_log_finest "open_spawn_process -> buffer size is: [match_max]"
+   match_max -i $spawn_id $CHECK_EXPECT_MATCH_MAX_BUFFER
+   ts_log_finest "open_spawn_process -> buffer size is: [match_max]"
 
-   if {$pid == 0 } {
+   if {$pid == 0} {
      ts_log_severe "could not spawn! (ret_pid = $pid)" 
    }
+
    return $back
 }
 
@@ -2660,12 +2660,12 @@ proc remove_oldest_spawn_rlogin_session {} {
    }
 }
 
-#****** remote_procedures/set_open_spawn_rlogin_session_check_id_flag() ********
+#****** remote_procedures/set_open_spawn_session_id_check_needed() ********
 #  NAME
-#     set_open_spawn_rlogin_session_check_id_flag() -- set flag for session buffer
+#     set_open_spawn_session_id_check_needed() -- set flag for session buffer
 #
 #  SYNOPSIS
-#     set_open_spawn_rlogin_session_check_id_flag { spawn_id value } 
+#     set_open_spawn_session_id_check_needed { spawn_id value } 
 #
 #  FUNCTION
 #     The testsuite remote spawn session buffer can be modified with this setter
@@ -2688,7 +2688,7 @@ proc remove_oldest_spawn_rlogin_session {} {
 #     remote_procedures/open_remote_spawn_process()
 #     remote_procedures/close_spawn_id()
 #*******************************************************************************
-proc set_open_spawn_rlogin_session_check_id_flag {spawn_id value} {
+proc set_open_spawn_session_id_check_needed {spawn_id value} {
    global rlogin_spawn_session_buffer
    if {$value != 1 && $value != 0} {
       ts_log_severe "wrong parameter value ($value), expected 1 (true) or 0 (false)!"
@@ -3229,7 +3229,7 @@ proc check_rlogin_session { spawn_id pid hostname user nr_of_shells {only_check 
    set connection_ok 0
    if {!$con_data(id_check_needed)} {
       ts_log_finest "skipping identity test, last check was ok!"
-      set_open_spawn_rlogin_session_check_id_flag $spawn_id 1
+      set_open_spawn_session_id_check_needed $spawn_id 1
       set connection_ok 1
    } else {
       # Normally this branch should not be executed, as the id_check_needed is set to true in close_spawn_id()
@@ -3429,7 +3429,7 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
    global CHECK_DEBUG_LEVEL
    global CHECK_SHELL_PROMPT CHECK_USE_HUDSON
    get_current_cluster_config_array ts_config
- 
+
    set pid      [lindex $id 0]
    set spawn_id [lindex $id 1]
    if {[llength $id] > 2} {
@@ -3509,7 +3509,7 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
             }
             -i $spawn_id -- "TS_ID: ->*${con_data(real_user)}*\n" {
                ts_log_finest "logged in as ${con_data(real_user)} - fine"
-               set_open_spawn_rlogin_session_check_id_flag $spawn_id 0
+               set_open_spawn_session_id_check_needed $spawn_id 0
                set do_return -1
             }
          }

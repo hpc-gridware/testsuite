@@ -2090,7 +2090,7 @@ proc resolve_arch {{node "none"} {use_source_arch 0} {source_dir_value ""}} {
       return $arch_cache($nr,$host,$use_source_arch,$source_dir_value)
    }
 
-   if { [ info exists CHECK_USER ] == 0 } {
+   if {![info exists CHECK_USER]} {
       ts_log_severe "user not set, aborting"
       return "unknown"
    }

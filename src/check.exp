@@ -2686,7 +2686,6 @@ proc enhanced_setup {} {
       testsuite_shutdown 1
    }
 
-
    set CHECK_ENABLED_RUNLEVELS "0" ;# 100 200 300 400" ;# max level is 400
    # JG: changed default categories to VERIFIED, reset to SYSTEM, once we get
    #     rid of the VERFIED category (when all tests are verified).
@@ -3092,8 +3091,8 @@ proc read_checktree_nodes {path} {
 
    if {$test_available} {
       foreach level $levels {
-         if { [info exists check_description($level)] } {
-            if { [string match "*\n*" $check_description($level)] } {
+         if {[info exists check_description($level)]} {
+            if {[string match "*\n*" $check_description($level)]} {
                puts "--------------------------------------------------------------"
                puts "check directory: $path"
                puts "description($level): \"$check_description($level)\""
