@@ -57,12 +57,20 @@ set CHECK_SHELL_PROMPT ".*\[#@~>$%\]+"
 # NOTE: CHECK_LOGIN_LINE is glob matching !!!
 set CHECK_LOGIN_LINE "\[A-Za-z\]*\n"
 
+# figure out the maximum number of remote connections we can open
+# depends on the file descriptor limit
+# and a process has a bunch of filedescriptors open in any case, e.g. for a testsuite
+# without open remote connections
+# lsof -a -p pid-of-the-expect-process
+# shows 91 open files on ubuntu 24.04. Lets reserve 120 for testsuite internal use.
+#
+# for every remote connection we need 3 file descriptors (stdin, stdout, stderr)
 set descriptors [exec "/bin/sh" "-c" "ulimit -n"]
 puts "    *********************************************"
 puts "    * CONNECTION SETUP (remote_procedures.tcl)"
 puts "    *********************************************"
 puts "    * descriptors = $descriptors"
-set rlogin_max_open_connections [expr ($descriptors - 15) / 3]
+set rlogin_max_open_connections [expr ($descriptors - 120) / 3]
 puts "    * rlogin_max_open_connections = $rlogin_max_open_connections"
 puts "    *********************************************"
 
@@ -2535,6 +2543,7 @@ proc add_open_spawn_rlogin_session {hostname user win_local_user spawn_id \
    if {[info exists rlogin_spawn_session_buffer(index)]} {
       set num_connections [llength $rlogin_spawn_session_buffer(index)]
    }
+   ts_log_finest "we have $num_connections out of $rlogin_max_open_connections in use"
    if {$num_connections >= $rlogin_max_open_connections} {
       ts_log_finest "number of open connections($num_connections) > rlogin_max_open_connections($rlogin_max_open_connections)"
       remove_oldest_spawn_rlogin_session
@@ -2649,7 +2658,7 @@ proc remove_oldest_spawn_rlogin_session {} {
    if {$remove_spawn_id == ""} {
       ts_log_warning "all [llength $rlogin_spawn_session_buffer(index)] sessions are in use - no oldest one to close.\nPlease check your file descriptor limit vs. cluster size.\nThis problem may also be caused by missing close_spawn_process calls."
    } else {
-      ts_log_finest "longest not used element: $remove_spawn_id"
+      ts_log_fine "closing longest not used session: $remove_spawn_id as we are running out of filedescriptors"
 
       # close the connection. We are not intested in the exit code of the 
       # previously executed command, so don't make close_spawn_process check
@@ -3788,4 +3797,22 @@ proc get_remote_env_value {remote_host env_variable} {
       }
    }
    return $value
+}
+
+# set filedescriptor limit to a low value, e.g. 150
+# (will allow 10 remote connections as we reserve 120 fds for internal use)
+# ulimit -n 150
+proc test_session_close_on_filedescriptor_shortage {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
+
+   dump_spawn_rlogin_sessions 1
+   foreach host $ts_config(execd_nodes) {
+      foreach user "$CHECK_USER $CHECK_FIRST_FOREIGN_SYSTEM_USER $CHECK_SECOND_FOREIGN_SYSTEM_USER root" {
+         ts_log_fine "opening a connection to host $host as user $user"
+         ts_log_fine [start_remote_prog $host $user "hostname" ""]
+         ts_log_fine [start_remote_prog $host $user "id" ""]
+      }
+   }
+   dump_spawn_rlogin_sessions 1
 }
