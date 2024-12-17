@@ -1321,6 +1321,7 @@ proc ssh_start_remote_prog {hostname command args} {
             ts_log_finer "   -> ssh($hostname) returned $prg_exit_state"
          }
       }
+      close_spawn_id $spawn_id
    }
 
    # if such a basic operation failes, then exit
@@ -1377,6 +1378,7 @@ proc scp_remote_file {hostname src dest} {
             ts_log_finer "   -> $cmd returned $prg_exit_state"
          }
       }
+      close_spawn_id $spawn_id
    }
 
    # if such a basic operation failes, then exit

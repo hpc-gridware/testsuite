@@ -803,7 +803,7 @@ proc have_ssh_access {} {
             ts_log_severe "no ssh access to host $elem"
         }
         # the connection is *not* remembered, therefore we cannot call close_spawn_process
-        close -i $sp_id
+        close_spawn_id $sp_id
      }] ;# end of chatch
      if {$catch_state != 0} {
         ts_log_severe "no ssh access to host $elem (maybe no ssh installed)"

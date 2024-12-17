@@ -959,7 +959,7 @@ proc run_throughput_test {} {
       set delta_timout [host_conf_scale_timeout $host 60]
       set total_timeout [expr $total_timeout + $delta_timout]
       set max_timeout [expr { $delta_timout > $max_timeout ? $delta_timout : $max_timeout }]
-      ts_log_fine "increasing timeout for host $host by $delta_timout to $total_timeout (max_timeout=$max_timeout)"
+      ts_log_finer "increasing timeout for host $host by $delta_timout to $total_timeout (max_timeout=$max_timeout)"
    }
    
    set timeout $max_timeout
