@@ -89,8 +89,9 @@ set sge_root [lindex $argv 0]
 set gridengine_version [lindex $argv 1]
 set arch     [get_arch]
 
-set qstat_command "$sge_root/bin/$arch/qstat -f"
-append qstat_command " -u '*'"
+#set qstat_command "$sge_root/bin/$arch/qstat -f"
+#append qstat_command " -u '*'"
+set qstat_command "$sge_root/bin/$arch/qstat -g c"
 
 set active 0            ;# do measurements
 set interval 1000       ;# default info interval: 1000 milliseconds
