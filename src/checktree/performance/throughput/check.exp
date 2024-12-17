@@ -374,11 +374,13 @@ proc throughput_setup {} {
    global queue_list
    global throughput_complex_backup
 
-# we can only run with more than one host
-   if {[llength $ts_config(execd_nodes)] < 2} {
-      ts_log_config "at least 2 exec hosts are needed to perform the test"
+   # we need at least 3 hosts (1 submit host and 1 qstat host != master host)
+   if {[llength $ts_config(execd_nodes)] < 3} {
+      ts_log_config "at least 3 exec hosts are needed to perform the test"
       return 99
    }
+
+   throughput_get_host_info
 
    get_complex throughput_complex_backup
 
@@ -449,7 +451,8 @@ proc throughput_setup {} {
 
 proc throughput_cleanup {} {
    global nr_queues host_list
-   global throughput_complex_backup
+   global throughput_complex_backup throughput_bootstrap_backup
+   global throughput_host_info
 
    # enable all default queues
    enable_queue "all.q"
@@ -464,7 +467,9 @@ proc throughput_cleanup {} {
    del_queue "interactive" "@allhosts" 1 1
 
    reset_complex throughput_complex_backup
-   unset throughput_complex_backup
+
+   unset -nocomplain throughput_complex_backup throughput_bootstrap_backup
+   unset -nocomplain throughput_host_info
 }
 
 proc throughput_setup_level {} {
@@ -488,6 +493,7 @@ proc throughput_setup_level {} {
    global queue_list stored_configuration
    global throughput_max_job_categories
    global throughput_max_consumable_per_job
+   global throughput_bootstrap_backup
 
    # parameters for all tests
    set enable_queues_job_count  0   ;# after witch job, enable queues
@@ -554,6 +560,18 @@ proc throughput_setup_level {} {
          set end_job_count            $job_count
          set enable_queues_job_count  [expr $job_count / 2]
          set qstat_interval 1
+
+         # increase the number of reader threads
+         # reserve at least 6 cores for listener, worker, scheduler, timed_event, commlib, ...
+         # we re-start sge_qmaster at the beginning of the test, so no need to do it here
+         if {[bootstrap_file_read throughput_bootstrap_backup]} {
+            global throughput_host_info
+            set reader_threads [expr $throughput_host_info($ts_config(master_host),num_proc) - 6]
+            if {$reader_threads > $throughput_bootstrap_backup(reader_threads)} {
+               set bootstrap(reader_threads) $reader_threads
+               bootstrap_file_write
+            }
+         }
       }
       4 {
          # enable queues after half of the jobs have been submitted
@@ -743,15 +761,26 @@ proc throughput_setup_level {} {
 }
 
 proc throughput_cleanup_level {} {
+   global CHECK_ACT_LEVEL
    global nr_queues default_nr_slots stored_configuration
    global throughput_sharetree functional_policy parallel_jobs reservation
    global consumables throughput_sharetree_ext
+   global throughput_bootstrap_backup
 
+   # setup levels
+   set major_level [expr $CHECK_ACT_LEVEL / 100]
+   set minor_level [expr $CHECK_ACT_LEVEL % 100]
+  
    # delete all jobs
    delete_all_jobs
 
    # after this we can cleanup the system (no jobs registered at qmaster)
    wait_for_end_of_all_jobs 120
+
+   if {$minor_level == 3} {
+      # reset reader threads
+      bootstrap_file_write throughput_bootstrap_backup
+   }
 
    # remove sharetree
    if {$throughput_sharetree} {
@@ -782,6 +811,25 @@ proc throughput_cleanup_level {} {
       for {set i 0} {$i < $nr_queues} {incr i} {
          set qname "tp_${i}"
          mqattr "slots" $default_nr_slots $qname
+      }
+   }
+}
+
+proc throughput_get_host_info {} {
+   global throughput_host_info
+
+   # we fetch the following load values via qstat -F
+   set variables "arch num_proc mem_total m_topology"
+   qstat_F_plain_parse output $variables
+
+   set throughput_host_info(hosts) {}
+   foreach queue $output(queue_list) {
+      set host [lindex [split $queue "@"] 1]
+      if {[lsearch -exact $throughput_host_info(hosts) $host] == -1} {
+         lappend throughput_host_info(hosts) $host
+         foreach var $variables {
+            set throughput_host_info($host,$var) $output($queue,hl:$var)
+         }
       }
    }
 }
@@ -2625,6 +2673,10 @@ proc analyse_dump_data_file { file { force 0 } } {
    set table($test) $cluster_results(qstat_errors)
    set test_data(qstat_errors)  $cluster_results(qstat_errors)
 
+   set test "Qstat number total"
+   set table($test) $cluster_results(qstat_total)
+   set test_data(qstat_total)  $cluster_results(qstat_total)
+
    set tmp_file [get_tmp_file_name]
    spool_array_to_file $tmp_file "table" table
    append content [convert_spool_file_to_html $tmp_file $output_dir/index.html 1]
@@ -3646,6 +3698,7 @@ proc calculate_average_cluster_times { results_array monitoring_array qstat_arra
    set result(max_schedd_size) 0
    set result(avg_qstat_time) 0.0
    set result(qstat_errors) 0
+   set result(qstat_total) 0
 
    if { $cluster(count) > 0 } {
       set result(avg_slots_free)    $cluster(0,total_slots)  ;# avg_slots_free
@@ -3758,6 +3811,7 @@ proc calculate_average_cluster_times { results_array monitoring_array qstat_arra
    }
 
    # calculate qstat data
+   set result(qstat_total) $qstat_data(count)
    set count 0
    set sum_qstat_time 0.0
    for {set i 0} {$i < $qstat_data(count)} {incr i} {
