@@ -70,8 +70,7 @@ proc bootstrap_file_write {{array_var "bootstrap"}} {
       foreach name [array names new_bootstrap] {
          set bootstrap($name) $new_bootstrap($name)
       }
-puts "writing bootstrap file:"
-parray bootstrap
+
       # write the new values to the file
       set idx 0
       incr idx ; set data($idx) "# Version: [get_version_info]"

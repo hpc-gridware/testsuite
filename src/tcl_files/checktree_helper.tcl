@@ -67,23 +67,23 @@ proc exec_compile_hooks { compile_hosts a_report } {
    upvar $a_report report
    
    set error_count 0
-   for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
+   for {set i 0} {$i < $ts_checktree(next_free)} {incr i 1} {
       for {set ii 0} {[info exists ts_checktree($i,compile_hooks_${ii})]} {incr ii 1} {
-         
          set compile_proc $ts_checktree($i,compile_hooks_${ii})
          
-         if { [info procs $compile_proc ] != $compile_proc } {
+         if {[info procs $compile_proc] != $compile_proc} {
             report_add_message report "Can not execute compile hook ${ii} of checktree $ts_checktree($i,dir_name), compile proc not found"
             return -1
          } else {
             set res [$compile_proc $compile_hosts report]
-            if { $res != 0 } {
+            if {$res != 0} {
                report_add_message report "compile hook ${ii}  of checktree  $ts_checktree($i,dir_name) failed, $compile_proc returned $res\n"
                incr error_count
             }
          }
       }
    }
+
    return $error_count
 }
 

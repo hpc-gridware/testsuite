@@ -68,7 +68,7 @@ proc drmaaj_build {build_host target a_report {options ""} {drmaaj_build_timeout
    global CHECK_USER
    
    upvar $a_report report
- 
+
    set task_nr [report_create_task report "drmaaj_build_$target" $build_host]
    ts_log_fine "creating target \"$target\" on compile host \"$build_host\""
    
