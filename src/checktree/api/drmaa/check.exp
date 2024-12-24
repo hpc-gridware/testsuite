@@ -417,7 +417,7 @@ proc drmaa_check_single_threaded_part_04 { } {
       lappend test_scenario "ST_EXIT_STATUS"
       lappend test_scenario "ST_USAGE_CHECK"
       foreach ste_test $test_scenario {
-         ts_log_fine "starting single threaded test $ste_test"
+         ts_log_fine "starting single threaded test $ste_test on host $host"
          drmaa_test $host $ste_test $ts_config(testsuite_root_dir)/scripts/exit.sh
       }
 
@@ -558,16 +558,15 @@ proc drmaa_test { host test_name arguments {user ""} } {
    append add_info "test_drmaa binary: $drmaa_binary_name\n"
    append add_info "test_drmaa arguments: $test_name $arguments\n"
 
-   ts_log_fine "starting ..."
-
    set time_start [clock seconds]
+   ts_log_fine "starting at [clock format $time_start] ..."
+
    #set test_output [start_remote_prog $host $user "cd" ".\n$drmaa_preamble$binary_path/$drmaa_binary_name $test_name $arguments" prg_exit_state 650 0 "" "" 1 0 1]
    set test_output [start_test_bin $drmaa_binary_name "$test_name $arguments" $host $user prg_exit_state 650]
    set time_end [clock seconds]
    set run_time [expr $time_end - $time_start]
-
-   ts_log_fine "$test_output"
-   #ts_log_fine "exit status was $prg_exit_state"
+   ts_log_fine "test took $run_time seconds, exited $prg_exit_state, output:"
+   ts_log_fine $test_output
 
    if {$run_time > 0} {
       ts_log_fine "test took $run_time seconds on host $host."

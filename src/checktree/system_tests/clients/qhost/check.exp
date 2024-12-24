@@ -87,7 +87,7 @@ proc qhost_cleanup {} {
    global qhost_config_old
 
    # restore the old config
-   reset_config qhost_config_old
+   reset_config_and_propagate qhost_config_old
 
    delete_all_jobs
    wait_for_end_of_all_jobs
@@ -361,38 +361,18 @@ proc test_issue132_l {} {
    set results1 [qhost_parse plain job $args]
    
    # for each host test that the xml and plain outpus are the same
+   set errors ""
    for {set ind 0} {$ind < $job} {incr ind 1} {
-      if {[string compare [string trim $xml(host$ind,name)] [string trim $plain(host$ind,name)]] != 0} {
-         ts_log_info "outputs do not match from plain and xml for name.\nThis is issue #2948"      
+      foreach attrib "name arch_string num_proc load_avg mem_total mem_used swap_total swap_used" {
+         set raw_value1 [string trim $xml(host$ind,$attrib)]
+         set raw_value2 [string trim $plain(host$ind,$attrib)]
+         if {[string compare $raw_value1 $raw_value2] != 0} {
+            append errors "outputs do not match from plain and xml for $attrib:\n   xml:   $raw_value1\n   plain: $raw_value2\n"
+         }
       }
-      if {[string compare [string trim $xml(host$ind,arch_string)] [string trim $plain(host$ind,arch_string)]] != 0} {
-         ts_log_severe "outputs do not match from plain and xml for arch_string."      
-         return
-      }
-      if {[string compare [string trim $xml(host$ind,num_proc)] [string trim $plain(host$ind,num_proc)]] != 0} {
-         ts_log_severe "outputs do not match from plain and xml for num_proc."      
-         return
-      }
-      if {[string compare [string trim $xml(host$ind,load_avg)] [string trim $plain(host$ind,load_avg)]] != 0} {
-         ts_log_severe "outputs do not match from plain and xml for load_avg."      
-         return
-      }
-      if {[string compare [string trim $xml(host$ind,mem_total)] [string trim $plain(host$ind,mem_total)]] != 0} {
-         ts_log_severe "outputs do not match from plain and xml for mem_total."      
-         return
-      }      
-      if {[string compare [string trim $xml(host$ind,mem_used)] [string trim $plain(host$ind,mem_used)]] != 0} {
-         ts_log_severe "outputs do not match from plain and xml for mem_used."      
-         return
-      }
-      if {[string compare [string trim $xml(host$ind,swap_total)] [string trim $plain(host$ind,swap_total)]] != 0} {
-         ts_log_severe "outputs do not match from plain and xml for swap_total."      
-         return
-      }
-      if {[string compare [string trim $xml(host$ind,swap_used)] [string trim $plain(host$ind,swap_used)]] != 0} {
-         ts_log_severe "outputs do not match from plain and xml for swap_used."      
-         return
-      }      
+   }
+   if {$errors != ""} {
+      ts_log_severe $errors
    }
 }
 

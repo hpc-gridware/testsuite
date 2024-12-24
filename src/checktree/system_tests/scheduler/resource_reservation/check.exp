@@ -407,12 +407,12 @@ proc get_job_descriptions { test1 test2 {ar_id 0} } {
    set job_desc "$drmaa_mode $job_script \"$job_desc1\" \"$job_desc2\" \"$job_desc3\"" 
 }
 
-#****** resource_reservation/drmaa_test() ******
+#****** resource_reservation/resource_reservation_drmaa_test() ******
 #  NAME
-#     drmaa_test() -- generic drmaa test
+#     resource_reservation_drmaa_test() -- generic drmaa test
 #
 #  SYNOPSIS
-#     drmaa_test { test_name host arguments }
+#     resource_reservation_drmaa_test { test_name host arguments }
 #
 #  FUNCTION
 #     This procedure starts test_drmaa with the corresponding arguemnts.
@@ -424,10 +424,10 @@ proc get_job_descriptions { test1 test2 {ar_id 0} } {
 #     arguments                  - Additional arguments needed for the test case.
 #
 #  EXAMPLE
-#     drmaa_test ST_SUBMIT_WAIT ori <source-path>/SOLARIS86/ $SGE_ROOT/examples/jobs/sleeper.sh
+#     resource_reservation_drmaa_test ST_SUBMIT_WAIT ori <source-path>/SOLARIS86/ $SGE_ROOT/examples/jobs/sleeper.sh
 #*******************************
 #
-proc drmaa_test { test_name arguments } {
+proc resource_reservation_drmaa_test { test_name arguments } {
    global CHECK_USER
    global rr_host
 
@@ -467,20 +467,20 @@ proc resource_reservation_basic { } {
       }
    }
    get_job_descriptions "license" "backfill" $ar_id
-   drmaa_test "" $job_desc 
+   resource_reservation_drmaa_test "" $job_desc 
    get_job_descriptions "memory" "backfill" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
    get_job_descriptions "myslots" "backfill" $ar_id
-   drmaa_test "" $job_desc 
+   resource_reservation_drmaa_test "" $job_desc 
 
    get_job_descriptions "jobs" "backfill" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "round_robin" "backfill" $ar_id
-   drmaa_test "" $job_desc 
+   resource_reservation_drmaa_test "" $job_desc 
 
    get_job_descriptions "rr_jobs" "backfill" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    if {$CHECK_ACT_LEVEL == 5} {
       delete_ar $ar_id 1
@@ -491,10 +491,10 @@ proc resource_reservation_basic { } {
       }
    }
    get_job_descriptions "fill_up" "backfill" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "fu_jobs" "backfill" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    if {$CHECK_ACT_LEVEL == 5} {
       delete_ar $ar_id 1
@@ -506,25 +506,25 @@ proc resource_reservation_basic { } {
    }
 
    get_job_descriptions "pe_slots" "backfill" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "ps_jobs" "backfill" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "array" "backfill" $ar_id
-   drmaa_test "" $job_desc 
+   resource_reservation_drmaa_test "" $job_desc 
   
    get_job_descriptions "license" "reservation" $ar_id
-   drmaa_test "" $job_desc 
+   resource_reservation_drmaa_test "" $job_desc 
 
    get_job_descriptions "memory" "reservation" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "myslots" "reservation" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "jobs" "reservation" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    if {$CHECK_ACT_LEVEL == 5} {
       delete_ar $ar_id 1
@@ -535,10 +535,10 @@ proc resource_reservation_basic { } {
       }
    }
    get_job_descriptions "round_robin" "reservation" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "rr_jobs" "reservation" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    if {$CHECK_ACT_LEVEL == 5} {
       delete_ar $ar_id 1
@@ -549,10 +549,10 @@ proc resource_reservation_basic { } {
       }
    }
    get_job_descriptions "fill_up" "reservation" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "fu_jobs" "reservation" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    if {$CHECK_ACT_LEVEL == 5} {
       delete_ar $ar_id 1
@@ -563,13 +563,13 @@ proc resource_reservation_basic { } {
       }
    }
    get_job_descriptions "pe_slots" "reservation" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "ps_jobs" "reservation" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "array" "reservation" $ar_id
-   drmaa_test "" $job_desc
+   resource_reservation_drmaa_test "" $job_desc
 
    if {$CHECK_ACT_LEVEL == 5} {
       delete_ar $ar_id 1
