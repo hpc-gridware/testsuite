@@ -691,6 +691,7 @@ proc start_remote_prog { hostname
    }
 
    set timeout $mytimeout
+   set final_timeout [expr [clock seconds] + $mytimeout]
    set real_end_found 0
    set real_start_found 0
    set nr_of_lines 0
@@ -742,7 +743,11 @@ proc start_remote_prog { hostname
            }
         }
         if {!$do_stop} {
-           exp_continue
+           if {[clock seconds] > $final_timeout} {
+             ts_log_severe "timeout after $mytimeout seconds for \"$exec_command $exec_arguments\""
+           } else {
+             exp_continue
+           }
         }
      }
    }
