@@ -1484,6 +1484,16 @@ proc sge_macro { macro_name {raise_error 1} } {
 }
 
 proc init_messages_caches {} {
+   global ts_config
+   global CHECK_USER
+
+   # check if infotext is available at all
+   set arch [host_conf_get_arch $ts_config(master_host)]
+   set infotext_bin "$ts_config(product_root)/utilbin/$arch/infotext"
+   if {![is_remote_file $ts_config(master_host) $CHECK_USER $infotext_bin]} {
+      return
+   }
+
    init_global_generic_messages
    init_global_submit_job_messages
    init_global_submit_job_parse_job_id_messages
