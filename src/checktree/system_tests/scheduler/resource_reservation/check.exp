@@ -110,7 +110,7 @@ proc resource_reservation_setup {} {
    # set complex attributes
    set tmp_complex(license)   "lic        INT      <=    YES         YES        0       100"
    set tmp_complex(license2)  "lic2       double   <=    YES         YES        0       100"   
-   set tmp_complex(h_vmem)    "h_vmem     MEMORY   <=    YES         YES        100M    0.0000001"
+   set tmp_complex(h_vmem)    "h_vmem     MEMORY   <=    YES         YES        200M    0.0000001"
    set tmp_complex(myslots)   "ms         INT      <=    YES         YES        0       100"
    set tmp_complex(jobs)      "j          INT      <=    YES         JOB        0       0"
 
@@ -126,7 +126,7 @@ proc resource_reservation_setup {} {
    set_exechost my_host_config "global"
 
    # set host variable 
-   set my_host_config(complex_values) "h_vmem=10G"
+   set my_host_config(complex_values) "h_vmem=20G"
    set_exechost my_host_config $rr_host
 }
 
@@ -190,7 +190,7 @@ proc resource_reservation_level_setup {} {
          set new_cal(week)           "mon-sun=0-24=suspended"
 
          add_calendar "$cal_name" new_cal
-         set cal_queue_conf(calendar)   "$cal_name"
+         set cal_queue_conf(calendar)   $cal_name
 
          mod_queue $rr_cal_queue_name "@allhosts" cal_queue_conf 1
       }
@@ -356,9 +356,9 @@ proc get_job_descriptions { test1 test2 {ar_id 0} } {
          set job_desc3 "$args -N L1_BF -p 0 -l h_rt=$runtime_long,license=2"
       }
       "memory" {
-         set job_desc1 "$args -N L4_BF -p 100 -l h_rt=$runtime_def,h_vmem=8G"
-         set job_desc2 "$args -N L5_BF -p 0 -l h_rt=$runtime_def,h_vmem=10G" 
-         set job_desc3 "$args -N L1_BF -p 0 -l h_rt=$runtime_long,h_vmem=2G"
+         set job_desc1 "$args -N L4_BF -p 100 -l h_rt=$runtime_def,h_vmem=16G"
+         set job_desc2 "$args -N L5_BF -p 0 -l h_rt=$runtime_def,h_vmem=20G" 
+         set job_desc3 "$args -N L1_BF -p 0 -l h_rt=$runtime_long,h_vmem=4G"
       }
       "myslots" {
          set job_desc1 "$args -N L4_BF -p 100 -l h_rt=$runtime_def,myslots=8"
@@ -458,7 +458,7 @@ proc resource_reservation_basic { } {
       delete_all_ars
 
       set qname [get_queue_instance $rr_queue_name $rr_host]
-      set ar_args "-q $qname -l myslots=1,license=1,license2=1,h_vmem=1G,jobs=2 -d 360000"
+      set ar_args "-q $qname -l myslots=1,license=1,license2=1,h_vmem=2G,jobs=2 -d 360000"
 
       set ar_id [submit_ar "$ar_args -pe round_robin 10"]
       if { $ar_id <= 0} {
