@@ -59,7 +59,7 @@ proc simhost_init {} {
       return 0
    }
    set args "hosts | awk '{print \$2}' | grep '^sim-eh-'"
-   set output [start_remote_prog $ts_config(master_host) $CHECK_USER $cmd $args]
+   set output [start_remote_prog $ts_config(master_host) $CHECK_USER $cmd $args prg_exit_state 300]
    if {$prg_exit_state != 0} {
       ts_log_config "cannot initialize simhost: getent failed:\n$output"
       return 0
