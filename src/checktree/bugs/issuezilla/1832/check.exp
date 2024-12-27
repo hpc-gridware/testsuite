@@ -70,8 +70,8 @@ proc issue_1832_run_simple  {} {
 
    set host $ts_config(master_host)
 
-   # use only drmaa_wait() for task status information 
-   set output [start_test_bin "test_drmaa_issue1832" "$ts_config(product_root)/examples/jobs/sleeper.sh" $host]
+   # use only drmaa_wait() for task status information
+   set output [start_test_bin "test_drmaa_issue1832" "$ts_config(product_root)/examples/jobs/sleeper.sh" $host "" prg_exit_state 600]
    ts_log_fine "output:\n$output"
 
    # If we segfault on any architecture, the bug still exists.
@@ -80,7 +80,7 @@ proc issue_1832_run_simple  {} {
    }
 
    # retrieve task status via drmaa_job_ps() during run
-   set output [start_test_bin "test_drmaa_issue1832" "-ps $ts_config(product_root)/examples/jobs/sleeper.sh" $host]
+   set output [start_test_bin "test_drmaa_issue1832" "-ps $ts_config(product_root)/examples/jobs/sleeper.sh" $host "" prg_exit_state 600]
    ts_log_fine "output:\n$output"
 
    # If we segfault on any architecture, the bug still exists.
