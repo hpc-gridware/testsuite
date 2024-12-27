@@ -226,7 +226,11 @@ proc drmaaj_check { } {
          # @todo output (major) version
          ts_log_fine "-> using java $java"
          set myenv(JAVA_HOME) $java
-         set test_output [start_remote_prog $host $CHECK_USER "mvn" "$options test" prg_exit_state 600 0 $source_dir myenv 1 0 1]
+         set start_time [clock seconds]
+         # The test takes quite some time.
+         # @todo we should probably better use open_remote_spawn_process and report test output as it comes in
+         set test_output [start_remote_prog $host $CHECK_USER "mvn" "$options test" prg_exit_state 1200 0 $source_dir myenv 1 0 1]
+         ts_log_fine "test took [expr [clock seconds] - $start_time] seconds"
 
          if {$prg_exit_state == 0} {
             ts_log_fine "test successfully finished"
