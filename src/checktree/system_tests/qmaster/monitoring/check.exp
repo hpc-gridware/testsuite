@@ -75,6 +75,8 @@ lappend check_functions "qmaster_monitoring_dynamic"
 lappend check_functions "qmaster_monitoring_restart"
 lappend check_functions "qmaster_monitoring_dynamic_qping"
 lappend check_functions "qmaster_monitoring_restart_qping"
+lappend check_functions "qmaster_monitoring_dynamic_file"
+lappend check_functions "qmaster_monitoring_restart_file"
 
 # -------- local test procedures: initialization------------------------------
 proc parse_monitor_tet { line } {
@@ -108,7 +110,7 @@ proc qmaster_monitoring_cleanup  {} {
 
 
 
-proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
+proc qmaster_monitoring_monitor {id expected_prof type {tail_timeout 20}} {
    global ts_config
 
    # some information output
@@ -129,6 +131,7 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
    set prof(LISTENERT) 0
    set prof(DELIVERERT) 0
    set prof(TIMERT) 0
+   set prof(MIRRORT) 0
 
    # this is the spawn id of our tail to qmaster messages file
    set sp_id [lindex $id 1]
@@ -164,7 +167,7 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
          -i $sp_id "?*\n" {
             # parse new lines in messages file
             #ts_log_fine "received new line in messages file"
-            if {$qping} {
+            if {$type == "qping"} {
                foreach line [ string trim [split $expect_out(0,string) "\n"]] {
                   set line [string trim $line]
                   if {[string length $line] > 0} {
@@ -196,7 +199,7 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
                      }
                   } ;# if
                } ;# foreach
-            } else {
+            } elseif {$type == "messages"} {
                foreach line [ string trim [split $expect_out(0,string) "\n"]] {
                   set line [string trim $line]
                   if {[string length $line] > 0} {
@@ -239,6 +242,40 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
                      } ;# switch
                   } ;# valid line
                } ;# foreach line  
+            } else { ;# monitoring file
+               foreach line [string trim [split $expect_out(0,string) "\n"]] {
+                  set line [string trim $line]
+                  if {[string length $line] > 0} {
+                     ts_log_fine "processing line: $line"
+                     # {"time":1735318822702240,"type":"thread","name":"reader-00","duration":...}
+                     set pos [string first ",\"type\":\"thread\"," $line 20]
+                     if {$pos > 0} {
+                        set thread_line [string range $line [expr $pos + 25] end]
+                        #ts_log_fine "thread_line: $thread_line"
+
+                        switch -glob -- $thread_line {
+                           "signal*" {
+                              incr prof(SIGNALERT)
+                           }
+                           "listener-*" {
+                              incr prof(LISTENERT)
+                           }
+                           "event-master-*" {
+                              incr prof(DELIVERERT)
+                           }
+                           "timer-*" {
+                              incr prof(TIMERT)
+                           }
+                           "mirror-*" {
+                              incr prof(MIRRORT)
+                           }
+                           default {
+                              # ts_log_fine "unknown monitoring message $message"
+                           }
+                        }
+                     }
+                  } ;# valid line
+               } ;# foreach line  
             } ;
          } ;# data
       } ;# switch
@@ -251,6 +288,7 @@ proc qmaster_monitoring_monitor {id expected_prof qping {tail_timeout 20}} {
    ts_log_fine "LISTENERT:  $prof(LISTENERT)"
    ts_log_fine "DELIVERERT: $prof(DELIVERERT)"
    ts_log_fine "TIMERT:     $prof(TIMERT)"
+   ts_log_fine "MIRRORT:    $prof(MIRRORT)"
 
    # now check for the expected result
    ts_log_fine "verifying results"
@@ -306,14 +344,14 @@ proc qmaster_monitoring_dynamic_qping {} {
    set id [open_remote_spawn_process $qping_host $CHECK_FIRST_FOREIGN_SYSTEM_USER "$ts_config(product_root)/bin/$qping_arch/qping" "-i $ps_interval -f $ts_config(master_host) $ts_config(commd_port) qmaster 1"]
    
    # wait for monitoring messages - no such messages may show up
-   qmaster_monitoring_monitor $id NONE 1
+   qmaster_monitoring_monitor $id NONE "qping"
 
    set prof "MONITOR_TIME"
    
    ts_log_fine "testing monitoring $prof"
 
 # 1)
-# check, wether the monitoring works
+# check, whether the monitoring works
 #
 
    # switch on monitoring
@@ -321,38 +359,38 @@ proc qmaster_monitoring_dynamic_qping {} {
    set_config global_conf
 
    # wait for monitoring messages for this thread
-   qmaster_monitoring_monitor $id $prof 1
+   qmaster_monitoring_monitor $id $prof "qping"
 
 # 3)
-# check, wether the log monitoring messages has no effect on qping output
+# check, whether the log monitoring messages has no effect on qping output
 #
 
    set global_conf(qmaster_params) "$prof=0:0:1,LOG_MONITOR_MESSAGE=false"
    set_config global_conf
    # consume monitoring messages that may have shown up while we switched monitoring off
-   qmaster_monitoring_monitor $id $prof 1
+   qmaster_monitoring_monitor $id $prof "qping"
 
    set global_conf(qmaster_params) "$prof=0:0:1,LOG_MONITOR_MESSAGE=true"
    set_config global_conf
 
    # wait for monitoring messages for this thread
-   qmaster_monitoring_monitor $id $prof 1
+   qmaster_monitoring_monitor $id $prof "qping"
    
 # 4)
-# check, wether the set to 0 turns the monitoring off
+# check, whether the set to 0 turns the monitoring off
 #
    
    # switch off monitoring
    set global_conf(qmaster_params) "$prof=0:0:0"
    set_config global_conf
    # consume monitoring messages that may have shown up while we switched monitoring off
-   qmaster_monitoring_monitor $id CONSUME  1 10
+   qmaster_monitoring_monitor $id CONSUME "qping" 10
 
    # no further message may appear
-   qmaster_monitoring_monitor $id NONE 1
+   qmaster_monitoring_monitor $id NONE "qping"
 
 # 5)
-# check, wether the NONE switch turns the monitoring off
+# check, whether the NONE switch turns the monitoring off
 #
 
    # switch on monitoring
@@ -360,18 +398,16 @@ proc qmaster_monitoring_dynamic_qping {} {
    set_config global_conf
 
    # wait for monitoring messages for this thread
-   qmaster_monitoring_monitor $id $prof 1
+   qmaster_monitoring_monitor $id $prof "qping"
 
    set global_conf(qmaster_params) "NONE"
    set_config global_conf
    # consume monitoring messages that may have shown up while we switched monitoring off
-   qmaster_monitoring_monitor $id CONSUME 1 10
+   qmaster_monitoring_monitor $id CONSUME "qping" 10
 
    # no further message may appear
-   qmaster_monitoring_monitor $id NONE 1
+   qmaster_monitoring_monitor $id NONE "qping"
 
-
-   
    # stop the tail -f
    close_spawn_process $id
 }
@@ -386,59 +422,59 @@ proc qmaster_monitoring_dynamic {} {
 
    
    # wait for monitoring messages - no such messages may show up
-   qmaster_monitoring_monitor $id NONE 0
+   qmaster_monitoring_monitor $id NONE "messages"
 
    set prof "MONITOR_TIME"
    
    ts_log_fine "testing monitoring $prof"
 
 # 1)
-# check, wether the monitoring works
+# check, whether the monitoring works
 #
    # switch on monitoring
    set global_conf(qmaster_params) "$prof=0:0:1"
    set_config global_conf
 
    # wait for monitoring messages for this thread
-   qmaster_monitoring_monitor $id $prof 0
+   qmaster_monitoring_monitor $id $prof "messages"
 
 # 2)
-# check, wether the log monitoring message to false turns the messages off
+# check, whether the log monitoring message to false turns the messages off
 #
 
    set global_conf(qmaster_params) "$prof=0:0:1,LOG_MONITOR_MESSAGE=false"
    set_config global_conf
    # consume monitoring messages that may have shown up while we switched monitoring off
-   qmaster_monitoring_monitor $id CONSUME  0 10
+   qmaster_monitoring_monitor $id CONSUME "messages" 10
 
    # no further message may appear
-   qmaster_monitoring_monitor $id NONE 0
+   qmaster_monitoring_monitor $id NONE "messages"
 
 # 3)
-# check, wether the log monitoring messages to true turns the messages on
+# check, whether the log monitoring messages to true turns the messages on
 #
 
    set global_conf(qmaster_params) "$prof=0:0:1,LOG_MONITOR_MESSAGE=true"
    set_config global_conf
 
    # wait for monitoring messages for this thread
-   qmaster_monitoring_monitor $id $prof 0
+   qmaster_monitoring_monitor $id $prof "messages"
 
 # 4)
-# check, wether the set to 0 turns the monitoring off
+# check, whether the set to 0 turns the monitoring off
 #
 
    # switch off monitoring
    set global_conf(qmaster_params) "$prof=0:0:0"
    set_config global_conf
    # consume monitoring messages that may have shown up while we switched monitoring off
-   qmaster_monitoring_monitor $id CONSUME  0 10
+   qmaster_monitoring_monitor $id CONSUME "messages" 10
 
    # no further message may appear
-   qmaster_monitoring_monitor $id NONE 0
+   qmaster_monitoring_monitor $id NONE "messages"
 
 # 5)
-# check, wether the NONE switch turns the monitoring off
+# check, whether the NONE switch turns the monitoring off
 #
 
    # switch on monitoring
@@ -446,15 +482,15 @@ proc qmaster_monitoring_dynamic {} {
    set_config global_conf
 
    # wait for monitoring messages for this thread
-   qmaster_monitoring_monitor $id $prof 0
+   qmaster_monitoring_monitor $id $prof "messages"
 
    set global_conf(qmaster_params) "NONE"
    set_config global_conf
    # consume monitoring messages that may have shown up while we switched monitoring off
-   qmaster_monitoring_monitor $id CONSUME  0 10
+   qmaster_monitoring_monitor $id CONSUME "messages" 10
 
    # no further message may appear
-   qmaster_monitoring_monitor $id NONE 0
+   qmaster_monitoring_monitor $id NONE "messages"
    
 # done, shutdown test
 
@@ -477,7 +513,7 @@ proc qmaster_monitoring_restart {} {
    set_config global_conf
 
    # wait for monitoring messages to show up
-   qmaster_monitoring_monitor $id LISTENERT 0
+   qmaster_monitoring_monitor $id LISTENERT "messages"
 
    # shutdown qmaster
    shutdown_qmaster $ts_config(master_host) $spooldir
@@ -486,16 +522,16 @@ proc qmaster_monitoring_restart {} {
    startup_qmaster 0
 
    # wait for monitoring messages
-   qmaster_monitoring_monitor $id LISTENERT 0
+   qmaster_monitoring_monitor $id LISTENERT "messages"
    
    # switch off monitoring
    set global_conf(qmaster_params) "MONITOR_TIME=0:0:0"
    set_config global_conf
    # consume monitoring messages that may have shown up while we switched monitoring off
-   qmaster_monitoring_monitor $id CONSUME 0 10
+   qmaster_monitoring_monitor $id CONSUME "messages" 10
 
    # no further message may appear
-   qmaster_monitoring_monitor $id NONE 0
+   qmaster_monitoring_monitor $id NONE "messages"
 
    # stop the tail -f
    close_spawn_process $id
@@ -518,7 +554,7 @@ proc qmaster_monitoring_restart_qping {} {
    set_config global_conf
 
    # wait for monitoring messages to show up
-   qmaster_monitoring_monitor $id LISTENERT 1
+   qmaster_monitoring_monitor $id LISTENERT "qping"
 
    # shutdown qmaster
    shutdown_qmaster $ts_config(master_host) $spooldir
@@ -527,16 +563,149 @@ proc qmaster_monitoring_restart_qping {} {
    startup_qmaster 0
 
    # wait for monitoring messages
-   qmaster_monitoring_monitor $id LISTENERT 1
+   qmaster_monitoring_monitor $id LISTENERT "qping"
 
    # switch off monitoring
    set global_conf(qmaster_params) "MONITOR_TIME=0:0:0"
    set_config global_conf
    # consume monitoring messages that may have shown up while we switched monitoring off
-   qmaster_monitoring_monitor $id CONSUME 1 10
+   qmaster_monitoring_monitor $id CONSUME "qping" 10
 
    # no further message may appear
-   qmaster_monitoring_monitor $id NONE 1
+   qmaster_monitoring_monitor $id NONE "qping"
+
+   # stop the tail -f
+   close_spawn_process $id
+}
+
+proc qmaster_monitoring_dynamic_file {} {
+   global ts_config
+
+   if {![is_version_in_range "9.0.2"]} {
+      ts_log_fine "the monitoring file only has been introduced in OCS/GCS 9.0.2"
+      return
+   }
+
+   # tail -f to the monitoring file (and delete + touch it before)
+   set monitoring_file [monitoring_get_filename]
+   ts_log_fine "tail -f to the monitoring file: $monitoring_file"
+   set id [init_logfile_wait $ts_config(master_host) $monitoring_file 1]
+
+   # wait for monitoring messages - no such messages may show up
+   qmaster_monitoring_monitor $id NONE "file"
+
+
+   # 1)
+   # when we enable monitoring, but not the monitoring file, no output may show up
+   #
+   set prof "MONITOR_TIME"
+   ts_log_fine "testing monitoring $prof without monitoring file enabled"
+   set global_conf(qmaster_params) "$prof=0:0:1"
+   set_config global_conf
+   qmaster_monitoring_monitor $id NONE "file"
+
+   # 2)
+# check, whether the monitoring works
+   #
+   # switch on monitoring
+   get_config config_backup
+   set global_conf(reporting_params) [add_or_replace_param $config_backup(reporting_params) "monitoring" "monitoring=true" " "]
+   set_config global_conf
+
+   # wait for monitoring messages for this thread
+   qmaster_monitoring_monitor $id $prof "file"
+
+   # 3)
+   # check, whether we can switch if off again
+   #
+   set global_conf(reporting_params) [add_or_replace_param $config_backup(reporting_params) "monitoring" "monitoring=false" " "]
+   set_config global_conf
+   # consume monitoring messages that may have shown up while we switched monitoring off
+   qmaster_monitoring_monitor $id CONSUME "file" 10
+
+   # no further message may appear
+   qmaster_monitoring_monitor $id NONE "file"
+
+   # 4)
+   # switch if on again
+   #
+   set global_conf(reporting_params) [add_or_replace_param $config_backup(reporting_params) "monitoring" "monitoring=true" " "]
+   set_config global_conf
+
+   # wait for monitoring messages for this thread
+   qmaster_monitoring_monitor $id $prof "file"
+
+   # 5)
+   # check, whether the set to 0 turns the monitoring off
+   #
+   # switch off monitoring
+   set global_conf(qmaster_params) "$prof=0:0:0"
+   set_config global_conf
+   # consume monitoring messages that may have shown up while we switched monitoring off
+   qmaster_monitoring_monitor $id CONSUME "file" 10
+
+   # no further message may appear
+   qmaster_monitoring_monitor $id NONE "file"
+
+   # 6)
+   # check, whether the NONE switch turns the monitoring off
+   #
+   # switch on monitoring
+   set global_conf(qmaster_params) "$prof=0:0:1"
+   set_config global_conf
+
+   # wait for monitoring messages for this thread
+   qmaster_monitoring_monitor $id $prof "file"
+
+   set global_conf(qmaster_params) "NONE"
+   set_config global_conf
+   # consume monitoring messages that may have shown up while we switched monitoring off
+   qmaster_monitoring_monitor $id CONSUME "file" 10
+
+   # no further message may appear
+   qmaster_monitoring_monitor $id NONE "file"
+   
+   # done, shutdown test
+   # stop the tail -f
+   close_spawn_process $id
+}
+
+proc qmaster_monitoring_restart_file {} {
+   global ts_config
+
+   if {![is_version_in_range "9.0.2"]} {
+      ts_log_fine "the monitoring file only has been introduced in OCS/GCS 9.0.2"
+      return
+   }
+
+   # tail -f to the monitoring file (and delete + touch it before)
+   set monitoring_file [monitoring_get_filename]
+   ts_log_fine "tail -f to the monitoring file: $monitoring_file"
+   set id [init_logfile_wait $ts_config(master_host) $monitoring_file 1]
+
+   # enable some monitoring level
+   get_config config_backup
+   set global_conf(qmaster_params) "MONITOR_TIME=0:0:1"
+   set global_conf(reporting_params) [add_or_replace_param $config_backup(reporting_params) "monitoring" "monitoring=true" " "]
+   set_config global_conf
+
+   # wait for monitoring messages to show up
+   qmaster_monitoring_monitor $id LISTENERT "file"
+
+   # restart qmaster
+   shutdown_and_restart_qmaster
+
+   # wait for monitoring messages
+   qmaster_monitoring_monitor $id LISTENERT "file"
+   
+   # switch off monitoring
+   set global_conf(qmaster_params) "MONITOR_TIME=0:0:0"
+   set_config global_conf
+   # consume monitoring messages that may have shown up while we switched monitoring off
+   qmaster_monitoring_monitor $id CONSUME "file" 10
+
+   # no further message may appear
+   qmaster_monitoring_monitor $id NONE "file"
 
    # stop the tail -f
    close_spawn_process $id
