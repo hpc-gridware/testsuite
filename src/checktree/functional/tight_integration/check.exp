@@ -413,12 +413,12 @@ proc tight_integration_wait_for_delete_state {jobid timeout} {
    set end [expr $now + $timeout]
    while {$now < $end} {
       set state [lindex [get_job_state $jobid 1] 0]
-      ts_log_fine "job $jobid is in state $state"
+      ts_log_fine "job $jobid is in state $state, [expr $end - $now] seconds to go"
       if {[string compare $state "dr"] == 0} {
          return 1
       } else {
          if {$state == -1} {
-             ts_log_info "expected to see job $jobid in dr state, but job vanished. OK !?"
+            ts_log_info "expected to see job $jobid in dr state, but job vanished. OK !?"
             return 1
          }
       }
@@ -619,8 +619,8 @@ proc tight_integration_iz_575 {} {
 
    # if startup was ok
    if {$job_finished == 0} {
-      # job has to go into deleted state after rt limit - allow for 5s delay
-      if {![tight_integration_wait_for_delete_state $jobid 35]} {
+      # job has to go into deleted state after rt limit - allow for 10s delay as it depends on clocks being accurate
+      if {![tight_integration_wait_for_delete_state $jobid 40]} {
          ts_log_severe "slave tasks should have been killed due to runtime limit and set the job into dr state - issue 575 present"
          delete_job $jobid
       }
