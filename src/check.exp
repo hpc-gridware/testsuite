@@ -3933,13 +3933,10 @@ proc sort_tests_by_duration {list} {
       set check_level [lindex [split $duration_key ","] 1]
       set check_duration $CHECK_DURATIONS($check_name,$check_level)
 
-      # take into account currently selected runlevels only
-      if {[is_level_enabled $check_level]} {
-         if {[info exists uniq_check_name($check_name)] == 1} {
-            set uniq_check_name($check_name) [expr $uniq_check_name($check_name) + $check_duration]
-         } else {
-            set uniq_check_name($check_name) $check_duration
-         }
+      if {[info exists uniq_check_name($check_name)] == 1} {
+         set uniq_check_name($check_name) [expr $uniq_check_name($check_name) + $check_duration]
+      } else {
+         set uniq_check_name($check_name) $check_duration
       }
    }
 
@@ -4769,6 +4766,7 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
    set duration [expr $end_time - $start_time - [expr $total_check_duration / 1000.0]]
 
    read_check_durations_spoolfile CHECK_DURATIONS
+
    set CHECK_DURATIONS($path,$level) [expr $end_time - $start_time]
    write_check_durations_spoolfile CHECK_DURATIONS
 
