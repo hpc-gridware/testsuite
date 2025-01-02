@@ -330,6 +330,11 @@ proc qstat_help {} {
       set qstat_help_lines 42
    }
 
+   # in 9.0.0 the -sdv switch was added
+   if {[is_version_in_range "9.0.2"]} {
+      set qstat_help_lines 43
+   }
+
    delete_all_jobs
    wait_for_end_of_all_jobs
 
