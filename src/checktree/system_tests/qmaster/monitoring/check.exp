@@ -246,27 +246,27 @@ proc qmaster_monitoring_monitor {id expected_prof type {tail_timeout 20}} {
                foreach line [string trim [split $expect_out(0,string) "\n"]] {
                   set line [string trim $line]
                   if {[string length $line] > 0} {
-                     ts_log_fine "processing line: $line"
-                     # {"time":1735318822702240,"type":"thread","name":"reader-00","duration":...}
-                     set pos [string first ",\"type\":\"thread\"," $line 20]
+                     #ts_log_fine "processing line: $line"
+                     # {"time":1735318822702240,"type":"reader-thread","name":"reader-00","duration":...}
+                     set pos [string first ",\"type\":" $line 20]
                      if {$pos > 0} {
-                        set thread_line [string range $line [expr $pos + 25] end]
-                        #ts_log_fine "thread_line: $thread_line"
+                        set type_line [string range $line [expr $pos + 9] end]
+                        #ts_log_fine "thread_line: $type_line"
 
-                        switch -glob -- $thread_line {
-                           "signal*" {
+                        switch -glob -- $type_line {
+                           "signal-thread*" {
                               incr prof(SIGNALERT)
                            }
-                           "listener-*" {
+                           "listener-thread*" {
                               incr prof(LISTENERT)
                            }
-                           "event-master-*" {
+                           "event-master-thread*" {
                               incr prof(DELIVERERT)
                            }
-                           "timer-*" {
+                           "timer-thread*" {
                               incr prof(TIMERT)
                            }
-                           "mirror-*" {
+                           "mirror-thread*" {
                               incr prof(MIRRORT)
                            }
                            default {
