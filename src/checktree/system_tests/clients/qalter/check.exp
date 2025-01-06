@@ -92,17 +92,6 @@ lappend check_functions "qalter_help"
 lappend check_functions "qhold_help"
 lappend check_functions "qrls_help"
 
-global submitresult
-global normal_job_id
-global hold_job_A
-global hold_job_B
-global hold_job_C
-global hold_job_D
-global hold_job_T
-global hold_job_U
-global nonadmin_hold_job
-global nonadmin_user
-
 proc qalter_setup {} {
    global CHECK_JOB_OUTPUT_DIR
    global qalter_host qalter_queue
@@ -377,7 +366,7 @@ proc qalter_ac {} {
    }
 
    if {[regexp {context:[ \t]+([^ \t\r\n]+)\r\n} $qstatoutput context vars] != 1} {
-      ts_log_severe "qalter $option - qalter error: context variables were not set (1)"
+      ts_log_severe "qalter $option - qalter error: context variables were not set (1):\n$qstatoutput"
       return
    }
 
