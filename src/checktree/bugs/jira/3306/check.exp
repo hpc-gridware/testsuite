@@ -98,6 +98,9 @@ proc ge_3306_cleanup {} {
    # close our tail -f <qmaster_messages_file>
    close_logfile_wait
 
+   # restart qmaster (scheduler) to get rid of instrumentation
+   shutdown_and_restart_qmaster
+
    # reset the scheduler config
    reset_schedd_config
 
@@ -115,9 +118,6 @@ proc ge_3306_cleanup {} {
 
    # reset the complex
    reset_complex ge_3306_complex_backup
-
-   # restart qmaster (scheduler) to get rid of instrumentation
-   shutdown_and_restart_qmaster
 
    # unset our test's global variables
    unset -nocomplain ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host_backup ge_3306_host
@@ -139,13 +139,8 @@ proc ge_3306_delete_jobs {job_ids_var} {
 
    # delete all jobs
    foreach job_id $job_ids {
-      delete_job $job_id
-      wait_for_jobend $job_id "" 60 0
+      delete_job $job_id 1
    }
-
-   # trigger scheduling to make sure jobs leave qmaster
-   after 1000
-   trigger_scheduling
 
    # all jobs gone
    set job_ids {}
