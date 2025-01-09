@@ -1997,12 +1997,12 @@ proc submit_wait_type_job {job_type host user {variable qacct_info}} {
 
    
    ts_log_finer "waiting for job $job_id to disapear "
-   set my_timeout [timestamp]
+   set my_timeout [clock seconds]
    incr my_timeout 30
    while { [is_job_running $job_id "" ] != -1 } {
       after 500
       ts_log_progress
-      if { [timestamp] > $my_timeout } {
+      if {[clock seconds] > $my_timeout } {
          break
       }
    }
@@ -2016,20 +2016,20 @@ proc submit_wait_type_job {job_type host user {variable qacct_info}} {
    }
    
 
-   set my_timeout [timestamp]
+   set my_timeout [clock seconds]
    incr my_timeout 60
    ts_log_finer "waiting for accounting file to have information about job $job_id"
    while {[get_qacct $job_id qacctinfo "" "" 0] != 0 } {
       after 500
       ts_log_progress
-      if { [timestamp] > $my_timeout } {
+      if {[clock seconds] > $my_timeout} {
          break
       }
    }
 
    ts_log_fine "waiting for accounting file to have information about job $job_id slave"
    if { $job_type == "tight_integrated" } {
-      set my_timeout [timestamp]
+      set my_timeout [clock seconds]
       incr my_timeout 60
       while { 1 } {
          get_qacct $job_id qacctinfo
@@ -2038,7 +2038,7 @@ proc submit_wait_type_job {job_type host user {variable qacct_info}} {
          } 
          after 500
          ts_log_progress
-         if { [timestamp] > $my_timeout } {
+         if {[clock seconds] > $my_timeout} {
             break
          }
       }
@@ -2895,7 +2895,7 @@ proc get_scheduling_info { job_id { check_pending 1 }} {
    }
    trigger_scheduling
 
-   set my_timeout [ expr ( [timestamp] + 30 ) ] 
+   set my_timeout [expr [clock seconds] + 30] 
    ts_log_finer "waiting for scheduling info information ..."
    while { 1 } {
       if { [get_qstat_j_info $job_id ] } {
@@ -2922,7 +2922,7 @@ proc get_scheduling_info { job_id { check_pending 1 }} {
       }
       ts_log_progress
       after 500
-      if { [timestamp] > $my_timeout } {
+      if {[clock seconds] > $my_timeout} {
          return "timeout"
       }
    }   
@@ -3147,7 +3147,7 @@ proc master_queue_of { job_id {qlist {}}} {
 proc wait_for_load_from_all_queues { seconds {raise_error 1} } {
    get_current_cluster_config_array ts_config
 
-   set time [timestamp]
+   set time [clock seconds]
 
    ts_log_fine "waiting for load value report from all queues ..."
    while {1} {
@@ -3202,7 +3202,7 @@ proc wait_for_load_from_all_queues { seconds {raise_error 1} } {
         ts_log_fine "qstat -f failed:\n$result"
       }
 
-      set runtime [expr ( [timestamp] - $time) ]
+      set runtime [expr [clock seconds] - $time]
       if { $runtime >= $seconds } {
           ts_log_severe "timeout waiting for load values < 99. last qstat output was: $result" $raise_error
           return -1
@@ -3239,7 +3239,7 @@ proc wait_for_online_usage {job_id {mytimeout 60}} {
    # the spaces, have to use it in a variable
    set usage_name [get_qstat_j_attribute "usage" 1]
    set ret        1
-   set time       [timestamp]
+   set time       [clock seconds]
 
    while {1} {
       set usage ""
@@ -3256,7 +3256,7 @@ proc wait_for_online_usage {job_id {mytimeout 60}} {
       if {[string length $usage] > 0} {
          set cpu_index [string first "cpu=" $usage]
          set cpu_usage [string range $usage $cpu_index+4 $cpu_index+11]
-         set remaining_time [expr $time + $mytimeout - [timestamp]]
+         set remaining_time [expr $time + $mytimeout - [clock seconds]]
          ts_log_fine "cpu_usage is $cpu_usage, remaining time is $remaining_time s"
 
          # transform format 00:01:17 in 77 seconds
@@ -3274,7 +3274,7 @@ proc wait_for_online_usage {job_id {mytimeout 60}} {
          }
       }
       # check if timeout time span is already reached
-      set runtime [expr [timestamp] - $time]
+      set runtime [expr [clock seconds] - $time]
       if {$runtime > 60} {
          ts_log_fine "got no online usage after 60 s!"
          set ret 0
@@ -3306,14 +3306,14 @@ proc wait_for_online_usage {job_id {mytimeout 60}} {
 #*******************************************************************************
 proc wait_for_connected_scheduler { {seconds 90} {raise_error 1} } {
    get_current_cluster_config_array ts_config
-   set mytimeout [timestamp]
+   set mytimeout [clock seconds]
    incr mytimeout $seconds
    set error_text ""
    set result1 "unknown"   
 
    while {1} {
       after 1000
-      if {[timestamp] > $mytimeout} {
+      if {[clock seconds] > $mytimeout} {
          append error_text "Timeout waiting for scheduler event client status information!\n"
          break
       }
@@ -3324,7 +3324,7 @@ proc wait_for_connected_scheduler { {seconds 90} {raise_error 1} } {
             break
          }
       }
-      set timeout_in [ expr $mytimeout - [timestamp]]
+      set timeout_in [expr $mytimeout - [clock seconds]]
       ts_log_fine "waiting for connected scheduler event client (timeout in $timeout_in seconds) ..."
       after 4000
    }
@@ -3366,7 +3366,7 @@ proc wait_for_connected_scheduler { {seconds 90} {raise_error 1} } {
 proc wait_for_job_state {jobid state wait_timeout} {
    get_current_cluster_config_array ts_config
 
-   set my_timeout [expr [timestamp] + $wait_timeout]
+   set my_timeout [expr [clock seconds] + $wait_timeout]
    ts_log_fine "waiting for job $jobid to become job state ${state} ..."
    while {1} {
       ts_log_progress
@@ -3374,7 +3374,7 @@ proc wait_for_job_state {jobid state wait_timeout} {
       if {[string first $state $job_state] >= 0} {
          return $job_state
       }
-      if {[timestamp] > $my_timeout} {
+      if {[clock seconds] > $my_timeout} {
          ts_log_severe "timeout waiting for job $jobid to get in \"$state\" state"
          return -1
       }
@@ -3409,7 +3409,7 @@ proc wait_for_queue_state {queue state wait_timeout} {
    get_current_cluster_config_array ts_config
 
    ts_log_fine "waiting for queue $queue to get in \"${state}\" state "
-   set my_timeout [expr [timestamp] + $wait_timeout]
+   set my_timeout [expr [clock seconds] + $wait_timeout]
    while {1} {
       ts_log_progress
       after 500
@@ -3417,7 +3417,7 @@ proc wait_for_queue_state {queue state wait_timeout} {
       if {[string first $state $q_state] >= 0} {
          return $q_state
       }
-      if {[timestamp] > $my_timeout} {
+      if {[clock seconds] > $my_timeout} {
          set qstat_output [start_sge_bin "qstat" "-f -q $queue"]
          ts_log_severe "timeout waiting for queue $queue to get in \"${state}\" state\n$qstat_output"
          return -1
@@ -3538,7 +3538,7 @@ proc soft_execd_shutdown {host_list {timeout 60}} {
 #*******************************************************************************
 proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
    get_current_cluster_config_array ts_config
-   set time [timestamp]
+   set time [clock seconds]
 
 
    ts_log_fine "wait_for_unknown_load - waiting for queues \"$queue_array\" to get unknown load state (timeout=${seconds}s) ..."
@@ -3613,7 +3613,7 @@ proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
         return -1
       }
 
-      set runtime [expr [timestamp] - $time]
+      set runtime [expr [clock seconds] - $time]
       if {$runtime >= $seconds} {
           if {$do_error_check == 1} {
              ts_log_severe "timeout waiting for load values >= 99 (timeout was $seconds)"
@@ -3656,7 +3656,7 @@ proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
 proc wait_for_end_of_all_jobs {{seconds 60} {raise_error 1} {check_spool_dir 1}} {
    get_current_cluster_config_array ts_config
 
-   set time [timestamp]
+   set time [clock seconds]
    ts_log_fine "waiting for end of all jobs (qstat -s pr)"
    while {1} {
       set result [start_sge_bin "qstat" "-s pr"]
@@ -3680,7 +3680,7 @@ proc wait_for_end_of_all_jobs {{seconds 60} {raise_error 1} {check_spool_dir 1}}
                }
                # check timeout
                if {$seconds > 0} {
-                  set runtime [expr [timestamp] - $time]
+                  set runtime [expr [clock seconds] - $time]
                   if {$runtime >= $seconds} {
                       ts_log_severe "timeout (= $seconds seconds) waiting for end of all jobs (spooled):\n\"$result\"" $raise_error
                       return -1
@@ -3707,7 +3707,7 @@ proc wait_for_end_of_all_jobs {{seconds 60} {raise_error 1} {check_spool_dir 1}}
       
       # check timeout
       if {$seconds > 0} {
-         set runtime [expr [timestamp] - $time]
+         set runtime [expr [clock seconds] - $time]
          if {$runtime >= $seconds} {
              ts_log_severe "timeout (= $seconds seconds) waiting for end of all jobs (spooled):\n\"$result\"" $raise_error
              return -1
@@ -4740,22 +4740,22 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}}
    }
 
    set result -100
-   if { [is_job_id $jobid] } {
+   if {[is_job_id $jobid]} {
       # spawn process
       set program "$ts_config(product_root)/bin/[resolve_arch $ts_config(master_host)]/qdel"
 
       # beginning with SGE 6.0 we need to specify if we want to delete jobs from
       # other users (as admin user)
       set args ""
-      if { $all_users } {
+      if {$all_users} {
          set args "-u '*'"
       }
-      set id [open_remote_spawn_process $ts_config(master_host) $user "$program" "$args $jobid"]
+      set id [open_remote_spawn_process $ts_config(master_host) $user $program "$args $jobid"]
       set sp_id [ lindex $id 1 ]
       set timeout 60 	
-      log_user 0
+      log_user 1
    
-      while { $result == -100 } {
+      while {$result == -100} {
       expect {
           -i $sp_id timeout {
              ts_log_severe "timeout waiting for qdel" $raise_error
@@ -4799,7 +4799,7 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}}
             set result -1
           }
           -i default {
-             if { [info exists expect_out(buffer)] } {
+             if {[info exists expect_out(buffer)]} {
                 ts_log_severe "expect default switch\noutput was:\n>$expect_out(buffer)<"
              }
              set result -4 
@@ -4811,11 +4811,11 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}}
    } else {
       ts_log_severe "job id is no integer" $raise_error
    }
-   if { $result != 0 } {
+   if {$result != 0} {
       ts_log_severe "could not delete job $jobid\nresult=$result" $raise_error
    }
-   if { $wait_for_end != 0 && $result == 0 } {
-      set my_timeout [timestamp]
+   if {$wait_for_end != 0 && $result == 0} {
+      set my_timeout [clock seconds]
       set my_second_qdel_timeout $my_timeout
       incr my_second_qdel_timeout 80
       incr my_timeout 160
@@ -4823,12 +4823,12 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}}
       # we might do scheduling on demand, trigger scheduling to make scheduler send delete order
       trigger_scheduling
       after 500
-      while { [get_qstat_j_info $jobid ] != 0 } {
-          if { [timestamp] > $my_timeout } {
+      while {[get_qstat_j_info $jobid ] != 0} {
+          if {[clock seconds] > $my_timeout} {
              ts_log_severe "timeout while waiting for jobend" $raise_error
              break
           }
-          if { [timestamp] > $my_second_qdel_timeout } {
+          if {[clock seconds] > $my_second_qdel_timeout} {
              ts_log_fine "timeout - deleting job!"
              set my_second_qdel_timeout $my_timeout
              delete_job $jobid
@@ -5355,11 +5355,11 @@ proc get_suspend_state_of_job { jobid {host ""} { pidlist pid_list } {do_error_c
    ts_log_fine "grpid is \"$real_pid\" on host \"$host\""
 
 
-   set time_now [timestamp]
-   set time_out [ expr ($time_now + 60 )  ]   ;# timeout is 60 seconds
+   set time_now [clock seconds]
+   set time_out [expr $time_now + 60]   ;# timeout is 60 seconds
 
    set have_errors 0
-   while { [timestamp] < $time_out } {
+   while {[clock seconds] < $time_out} {
       # get current process list (ps)
       get_ps_info $real_pid $host ps_list
 
@@ -5681,6 +5681,9 @@ proc get_extended_job_info {jobid {variable job_info} {do_replace_NA 1} {do_grou
 #  INPUTS
 #     jobid                   - job id of job
 #     {my_variable qstat_j_info} - array to store information
+#     {add_switch ""}         - additional switch for qstat -j
+#     {host ""}               - host on which to execute qstat -j (default: any host)
+#     {user ""}               - user who shall execute qstat -j (default: CHECK_USER)
 #
 #  RESULT
 #     1 on success
@@ -5689,7 +5692,7 @@ proc get_extended_job_info {jobid {variable job_info} {do_replace_NA 1} {do_grou
 #  SEE ALSO
 #     parser/parse_qstat_j()
 #*******************************************************************************
-proc get_qstat_j_info {jobid {my_variable qstat_j_info} {add_switch ""}} {
+proc get_qstat_j_info {jobid {my_variable qstat_j_info} {add_switch ""} {host ""} {user ""}} {
    get_current_cluster_config_array ts_config
    upvar $my_variable jobinfo
 
@@ -5697,7 +5700,7 @@ proc get_qstat_j_info {jobid {my_variable qstat_j_info} {add_switch ""}} {
       unset jobinfo
    }
 
-   set result [start_sge_bin "qstat" "$add_switch -j $jobid"]
+   set result [start_sge_bin "qstat" "$add_switch -j $jobid" $host $user]
 #   set jobinfo(output) $result
    if {$prg_exit_state == 0} {
       set result "$result\n"
@@ -5926,7 +5929,7 @@ proc get_qacct {job_id {my_variable "qacct_info"} {on_host ""} {as_user ""} {rai
    }
 
    set ret 0
-   set my_timeout [timestamp]
+   set my_timeout [clock seconds]
    incr my_timeout $timeout_value
    while {1} {
       # clear output variable
@@ -5953,7 +5956,7 @@ proc get_qacct {job_id {my_variable "qacct_info"} {on_host ""} {as_user ""} {rai
          }
       }
       # check timeout
-      if {[timestamp] > $my_timeout} {
+      if {[clock seconds] > $my_timeout} {
          if {$expected_amount == -1} {
             ts_log_severe "timeout while waiting for qacct info for job $job_id! Timeout was $timeout_value" $raise_error
          } else {
@@ -5961,7 +5964,7 @@ proc get_qacct {job_id {my_variable "qacct_info"} {on_host ""} {as_user ""} {rai
          }
          break
       }
-      ts_log_finer "timeout in [expr $my_timeout - [timestamp]] seconds!"
+      ts_log_finer "timeout in [expr $my_timeout - [clock seconds]] seconds!"
       after 1000
    }
 
@@ -6156,8 +6159,8 @@ proc get_qacct_multi_append_record {job_id task_id input_var {qacct_info_var "qa
 #     sge_procedures/is_pid_with_name_existing()
 #*******************************
 proc is_job_running {jobid jobname} {
-   global CHECK_USER check_timestamp
    get_current_cluster_config_array ts_config
+   global CHECK_USER
 
    if {$jobname == ""} {
       set check_job_name 0
@@ -6165,14 +6168,7 @@ proc is_job_running {jobid jobname} {
       set check_job_name 1
    }
 
-   set result [start_sge_bin "qstat" "-u '*' -f" "" "" catch_state ]
-
-   set mytime [timestamp]
-   while {$mytime == $check_timestamp} { 
-      after 500
-      set mytime [timestamp]
-   }
-   set check_timestamp $mytime
+   set result [start_sge_bin "qstat" "-u '*' -f" "" "" catch_state]
 
    if {$catch_state != 0} {
       ts_log_severe "qstat returned error:\n$result"
@@ -6242,24 +6238,17 @@ proc is_job_running {jobid jobname} {
 #
 #*******************************************************************************
 proc get_job_state {jobid {not_all_equal 0} {taskid task_id}} {
-   global check_timestamp CHECK_USER
    get_current_cluster_config_array ts_config
+   global CHECK_USER
    upvar $taskid r_task_id
 
    if {[info exists r_task_id]} {
       unset r_task_id
    }
-   set mytime [timestamp]
-   while { $mytime == $check_timestamp } { 
-      after 500
-      set mytime [timestamp]
-   }
 
-   set check_timestamp $mytime
-
-   set my_timeout [expr $mytime + 100]
+   set my_timeout [expr [clock seconds] + 100]
    set states_all_equal 0
-   while {$my_timeout > [timestamp] && $states_all_equal == 0} {
+   while {$my_timeout > [clock seconds] && $states_all_equal == 0} {
       set states_all_equal 1
 
       set result [start_sge_bin "qstat" "-f -g t -u '*'" "" $CHECK_USER]
@@ -6379,13 +6368,13 @@ proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
    }
  
    ts_log_fine "Waiting for start of job $jobid ($jobname)"
-   set time [timestamp]
+   set time [clock seconds]
    while {1} {
       set is_job_running_result [is_job_running $jobid $jobname]
       if {$is_job_running_result == 1} {
          break
       }
-      set runtime [expr [timestamp] - $time]
+      set runtime [expr [clock seconds] - $time]
       if {$runtime >= $seconds} {
          if {$do_errorcheck == 1} {
             set qstat_output [start_sge_bin "qstat" "-f -g t -u '*'"]
@@ -6455,7 +6444,7 @@ proc wait_for_end_of_transfer { jobid seconds } {
    ts_log_fine "Waiting for job $jobid to finish transfer state"
 
    set result 0
-   set time [timestamp]
+   set time [clock seconds]
    while {$result == 0} {
       set qstat_result [get_standard_job_info $jobid ]
 
@@ -6497,7 +6486,7 @@ proc wait_for_end_of_transfer { jobid seconds } {
          }
       }
 
-      set runtime [expr ([timestamp] - $time)]
+      set runtime [expr [clock seconds] - $time]
       if { $runtime >= $seconds } {
          ts_log_severe "timeout waiting for job \"$jobid\""
          set result -1
@@ -6556,16 +6545,16 @@ proc wait_for_jobpending {jobid jobname seconds {or_running 0}} {
      return -1
   }
   after 500
-  set time [timestamp] 
+  set time [clock seconds] 
   while {1} {
     set run_result [is_job_running $jobid $jobname]
     if {$run_result == 0} {
        break
     }
-    if {$run_result == 1 && $or_running == 1  } {
+    if {$run_result == 1 && $or_running == 1} {
        break
     }
-    set runtime [expr ( [timestamp] - $time) ]
+    set runtime [expr [clock seconds] - $time]
     if { $runtime >= $seconds } {
        ts_log_severe "timeout waiting for job \"$jobid\" \"$jobname\" (timeout was $seconds sec)"
        return -1
@@ -6745,6 +6734,7 @@ proc release_job { jobid } {
 #                                        internal list
 #     {raise_error 1}  - shall an error condition be raised, in case it is a
 #                        SEVERE, WARNING, or CONFIG message
+#     {trigger_scheduler 0} - trigger schedling runs while waiting for the job to end
 #
 #  RESULT
 #      0 - job stops running
@@ -6769,11 +6759,11 @@ proc release_job { jobid } {
 #     sge_procedures/wait_for_jobpending()
 #     sge_procedures/wait_for_jobend()
 #*******************************
-proc wait_for_jobend { jobid jobname seconds {runcheck 1} { wait_for_end 0 } { raise_err 1 } } {
+proc wait_for_jobend {jobid jobname seconds {runcheck 1} {wait_for_end 0} {raise_err 1}} {
    get_current_cluster_config_array ts_config
  
-   if { $runcheck == 1 } {
-      if { [is_job_running $jobid $jobname] != 1 } {
+   if {$runcheck == 1} {
+      if {[is_job_running $jobid $jobname] != 1} {
          ts_log_severe "job \"$jobid\" \"$jobname\" is not running" $raise_err 
          return -2
       }
@@ -6781,13 +6771,13 @@ proc wait_for_jobend { jobid jobname seconds {runcheck 1} { wait_for_end 0 } { r
 
    ts_log_fine "Waiting for end of job $jobid ($jobname)"
    after 500
-   set time [timestamp]
+   set time [clock seconds]
    while {1} {
      set run_result [is_job_running $jobid $jobname]
      if {$run_result == -1} {
         break
      } 
-     set runtime [expr ( [timestamp] - $time) ]
+     set runtime [expr [clock seconds] - $time]
      if { $runtime >= $seconds } {
         ts_log_severe "timeout waiting for job \"$jobid\" \"$jobname\":\nis_job_running returned $run_result" $raise_err
         return -1
@@ -6796,12 +6786,12 @@ proc wait_for_jobend { jobid jobname seconds {runcheck 1} { wait_for_end 0 } { r
      after 500
    }
  
-   if { $wait_for_end != 0 } {
-       set my_timeout [timestamp]
+   if {$wait_for_end != 0} {
+       set my_timeout [clock seconds]
        incr my_timeout 90
        ts_log_fine "waiting for jobend (2) (qstat -j $jobid)"
        while { [get_qstat_j_info $jobid ] != 0 } {
-           if { [timestamp] > $my_timeout } {
+           if {[clock seconds] > $my_timeout} {
               ts_log_severe "timeout while waiting for jobend" $raise_err
               return -1
            }
@@ -6885,10 +6875,10 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
    }
 
    # now wait until qmaster is availabe
-   set my_timeout [timestamp]
+   set my_timeout [clock seconds]
    incr my_timeout 60
    set is_reachable 0
-   while {[timestamp] < $my_timeout} {
+   while {[clock seconds] < $my_timeout} {
       start_sge_bin qstat "" $ts_config(master_host)
       if {$prg_exit_state == 0} {
          set is_reachable 1
@@ -8594,7 +8584,7 @@ proc copy_certificates { host { sync 1 } } {
 
       # check for syncron clock times
       if { $sync == 1 } {
-         set my_timeout [timestamp]
+         set my_timeout [clock seconds]
          incr my_timeout 600
          ts_log_fine "waiting for qstat -f to work ..."
          while {1} {
@@ -8609,7 +8599,7 @@ proc copy_certificates { host { sync 1 } } {
                return 1
             }
             after 3000
-            if {[timestamp] > $my_timeout} {
+            if {[clock seconds] > $my_timeout} {
                ts_log_warning "$host: timeout while waiting for qstat to work (please check hosts for synchron clock times)"
                break
             }
@@ -9110,9 +9100,9 @@ proc get_detached_settings {{output_var result} {on_host ""} {as_user ""} {raise
 #     none
 #*******************************************************************************
 proc wait_for_event_client { evc_name {to_go_away 0}} {
-   set my_timeout [timestamp]
+   set my_timeout [clock seconds]
    incr my_timeout 60
-   while {[timestamp] < $my_timeout} {
+   while {[clock seconds] < $my_timeout} {
       set back [get_event_client_list "" "" 1 result]
       if {$back == 0} {
          set found_event_client 0
@@ -9187,7 +9177,7 @@ proc wait_for_job_end {job_id {timeout 60} {raise_error 1}} {
    set result 0
 
    # we wait until now + timeout
-   set my_timeout [expr [timestamp] + $timeout]
+   set my_timeout [expr [clock seconds] + $timeout]
 
    # if the job is still in qmaster, wait until it leaves qmaster
    if {[get_qstat_j_info $job_id] != 0} {
@@ -9196,7 +9186,7 @@ proc wait_for_job_end {job_id {timeout 60} {raise_error 1}} {
       after 500
       while {[get_qstat_j_info $job_id] != 0} {
          ts_log_progress
-         if {[timestamp] > $my_timeout} {
+         if {[clock seconds] > $my_timeout} {
             set result -1
             ts_log_severe "timeout while waiting for job $job_id leave qmaster" $raise_error
             break

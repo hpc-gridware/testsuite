@@ -440,7 +440,6 @@ global build_arch_cache            ;# cache for architecture names (upper case) 
 global l10n_raw_cache              ;# chche for l10n translation strings
 global l10n_install_cache          ;# cache for l10n installation script strings
 global have_ssh_access_state       ;# global variable for have_ssh_access procedure (remember state)
-global check_timestamp             ;# for use in is_job_running
 global CHECK_SGE_DEBUG_LEVEL       ;# SGE_DEBUG_LEVEL for starting qmaster and scheduler in debug mode
 set CHECK_SGE_DEBUG_LEVEL "2 0 0 0 0 0 0 0"
 global CHECK_MAILS_SENT            ;# counter for send mails
@@ -449,7 +448,6 @@ global CHECK_ENABLE_MAIL           ;# is mail sending enabled
 set CHECK_ENABLE_MAIL 1
 global CHECK_ADMIN_USER_SYSTEM     ;# if no root account is possible
 set CHECK_ADMIN_USER_SYSTEM 0
-set check_timestamp [timestamp]
 set have_ssh_access_state -1
 set pe_for_version_check_result "undefined"
 set CHECK_ENABLED_RUNLEVELS "0"
