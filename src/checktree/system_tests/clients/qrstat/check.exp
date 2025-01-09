@@ -179,8 +179,12 @@ proc qrstat_option_u {} {
 
    # submit 1 AR for every user
    submit_ar "-d 3600" 
-   submit_ar "-d 3600" "" "$CHECK_FIRST_FOREIGN_SYSTEM_USER"
-   submit_ar "-d 3600" "" "$CHECK_SECOND_FOREIGN_SYSTEM_USER"
+   submit_ar "-d 3600" "" $CHECK_FIRST_FOREIGN_SYSTEM_USER
+   submit_ar "-d 3600" "" $CHECK_SECOND_FOREIGN_SYSTEM_USER
+
+   # wait for reader threads to have the last AR (via auto-session)
+   start_sge_bin "qrstat" "" "" $CHECK_SECOND_FOREIGN_SYSTEM_USER
+
    qrstat_count_entries "" 1
    qrstat_count_entries "-u $CHECK_FIRST_FOREIGN_SYSTEM_USER" 1
    qrstat_count_entries "-u $CHECK_SECOND_FOREIGN_SYSTEM_USER" 1
@@ -190,8 +194,12 @@ proc qrstat_option_u {} {
 
    # submit in addition 1 for every user
    submit_ar "-d 3600" 
-   submit_ar "-d 3600" "" "$CHECK_FIRST_FOREIGN_SYSTEM_USER"
-   submit_ar "-d 3600" "" "$CHECK_SECOND_FOREIGN_SYSTEM_USER"
+   submit_ar "-d 3600" "" $CHECK_FIRST_FOREIGN_SYSTEM_USER
+   submit_ar "-d 3600" "" $CHECK_SECOND_FOREIGN_SYSTEM_USER
+
+   # wait for reader threads to have the last AR (via auto-session)
+   start_sge_bin "qrstat" "" "" $CHECK_SECOND_FOREIGN_SYSTEM_USER
+
    qrstat_count_entries "" 2
    qrstat_count_entries "-u $CHECK_FIRST_FOREIGN_SYSTEM_USER" 2 
    qrstat_count_entries "-u $CHECK_SECOND_FOREIGN_SYSTEM_USER" 2 
@@ -282,6 +290,9 @@ proc qrstat_option_ar {} {
    # submit 1 AR for every user
    set ar_id1 [submit_ar "-d 3600"]
    set ar_id2 [submit_ar "-d 3600" "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
+
+   # wait for reader threads to have the last AR (via auto-session)
+   start_sge_bin "qrstat" "" "" $CHECK_FIRST_FOREIGN_SYSTEM_USER
 
    start_sge_bin "qrstat" "-ar $ar_id1"
    if {$prg_exit_state != 0} {
