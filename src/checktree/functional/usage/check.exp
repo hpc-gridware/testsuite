@@ -39,7 +39,7 @@
 #     function -- test if usage is reported correctly
 #
 #  FUNCTION
-#     This test monitors and checks the job usage reported by SGE 
+#     This test monitors and checks the job usage reported by SGE
 #    (cpu and mem).
 #
 #     The following job types are run:
@@ -51,7 +51,7 @@
 #
 #     The following usage related settings are tested:
 #     - "normal" usage reporting
-#     - reserved usage (execd_params acct_reserved_usage and 
+#     - reserved usage (execd_params acct_reserved_usage and
 #                       sharetree_reserved_usage)
 #
 #     The following submit commands are used:
@@ -61,7 +61,7 @@
 #  NOTES
 #     - we should also check array jobs
 #     - we should also check parallel array jobs
-#     - we should have additional submit methods (qsh, qlogin, qrsh without 
+#     - we should have additional submit methods (qsh, qlogin, qrsh without
 #       command)
 #
 #  BUGS
@@ -69,11 +69,11 @@
 #***************************************************************************
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global ts_config
 global submit_command
@@ -91,7 +91,7 @@ set check_description(101)  "check reserved usage of jobs submitted with qrsh (a
 set check_description(102)  "check reserved usage of jobs submitted with qrsh (all architectures), accounting summary"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function "usage_setup"
@@ -162,7 +162,7 @@ proc usage_setup {} {
    get_config saved_config
 
    # set global config params
-   set new_config(load_report_time) "0:0:5"
+   set new_config(load_report_time) "0:0:2"
    set new_config(execd_params) "$saved_config(execd_params) acct_reserved_usage=1 sharetree_reserved_usage=1"
    set_config_and_propagate new_config
 
@@ -226,8 +226,8 @@ proc usage_monitor_job {id started_var finished_var jobid_var info_var {my_timeo
 
    set sp_id [lindex $id 1]
    set timeout $my_timeout
- 
-#   log_user 1  
+
+#   log_user 1
    expect {
       -i $sp_id timeout {
          if {$timeout_error} {
@@ -326,7 +326,7 @@ proc usage_job_finished {job_state} {
       "error" {
          set job_finished 1
       }
-      
+
       "unknown" -
       "task started" -
       "task running" -
@@ -370,7 +370,7 @@ proc usage_check {jobid qstat_j_info slots acct_slots expected_wallclock} {
    ts_log_fine "acct_cpu = $acct_cpu, acct_mem = $acct_mem, acct_count = $acct_count, acct_maxvmem = $qacct_info(maxvmem)"
 
    # calculate expected usage
-   # JG: TODO: not yet perfect for parallel jobs: we have to check the 
+   # JG: TODO: not yet perfect for parallel jobs: we have to check the
    #           memory limit for each queue we have jobs running in
    #           and set different memory limits for different queues
    set wallclock $qacct_info(ru_wallclock)
@@ -420,15 +420,21 @@ proc usage_check {jobid qstat_j_info slots acct_slots expected_wallclock} {
    return $result
 }
 
-proc usage_monitor_check {id test_name slots acct_slots wallclock master_host} {
-   global CHECK_ACT_LEVEL
+proc usage_monitor_check {id test_name slots acct_slots wallclock master_host {job_user ""}} {
+   global CHECK_ACT_LEVEL CHECK_USER
    global ts_config
+
+   if {$job_user == ""} {
+      set job_user $CHECK_USER
+   }
+
    set started 0
    set finished 0
    set jobid 0
    set job_finished 0
    set my_timeout 180
    set timeout_error 1
+   set online_info(wallclock) 0
    set online_info(cpu) 0
    set online_info(mem) 0
    set online_info(maxvmem) 0
@@ -447,7 +453,7 @@ proc usage_monitor_check {id test_name slots acct_slots wallclock master_host} {
          }
          set my_timeout 1
          set timeout_error 0
-         if {![get_qstat_j_info $jobid]} {
+         if {![get_qstat_j_info $jobid qstat_j_info "" "" $job_user]} {
             # job might just have finished, check accounting if we find the job there
             if {[get_qacct $jobid] == 0} {
                ts_log_fine "we didn't see the job finish but qstat did no longer see it and it appeared in qacct"
@@ -477,8 +483,11 @@ proc usage_monitor_check {id test_name slots acct_slots wallclock master_host} {
                }
                set online_info(cpu) [max $online_info(cpu) $online_cpu]
                set online_info(mem) [max $online_info(mem) $online_mem]
+               if {[info exists usage(wallclock)]} {
+                  set online_info(wallclock) $usage(wallclock)
+               }
             }
-            ts_log_fine "job state: $job_state, cpu: $online_info(cpu), mem: $online_info(mem), maxvmem: $online_info(maxvmem)"
+            ts_log_fine "job state: $job_state, wallclock: $online_info(wallclock), cpu: $online_info(cpu), mem: $online_info(mem), maxvmem: $online_info(maxvmem)"
          }
       }
       set now [clock seconds]
@@ -486,7 +495,7 @@ proc usage_monitor_check {id test_name slots acct_slots wallclock master_host} {
 
    set sp_id [lindex $id 1]
    set timeout 5
-#   log_user 1  
+#   log_user 1
    expect {
       -i $sp_id timeout {
          ts_log_fine "got final timeout"
@@ -552,7 +561,7 @@ proc usage_single {} {
       set queue [get_queue_instance "usage.q" $master_host]
       set id [submit_with_method $submit_command "-N usage -q $queue" "$ts_config(testsuite_root_dir)/scripts/usage.sh" "sleep 60" $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER]
 
-      usage_monitor_check $id "usage_single" 1 1 60 $master_host
+      usage_monitor_check $id "usage_single" 1 1 60 $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER
    }
 }
 
@@ -565,7 +574,7 @@ proc usage_tight {} {
    # for SGE versions where CR 6746750 / IZ 2977 is fixed
    # we expect to get the correct usage (slots x time)
    # in runlevel 2/102 with accounting_summary enabled
-   # even if the job slots are not occupied by tasks 
+   # even if the job slots are not occupied by tasks
    # for the whole job runtime
    set task_runtime 120
    set sleep_after 0
@@ -573,7 +582,7 @@ proc usage_tight {} {
       set task_runtime 100
       set sleep_after 20
    }
-  
+
    wait_for_end_of_all_jobs
    foreach master_host $usage_master_hosts {
       ts_log_fine "usage: tightly integrated parallel job submitted with $submit_command, master_host is $master_host"
@@ -583,7 +592,7 @@ proc usage_tight {} {
       # tasks will only sleep 100s, but RESERVED_USAGE should still be correct!
       set id [submit_with_method $submit_command "-pe tight 4 -N usage -masterq $queue" "$ts_config(testsuite_root_dir)/scripts/pe_job.sh" "$ts_config(testsuite_root_dir)/scripts/pe_task.sh 1 $task_runtime $sleep_after" $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER]
 
-      usage_monitor_check $id "usage_tight" 5 5 120 $master_host
+      usage_monitor_check $id "usage_tight" 5 5 120 $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER
    }
 }
 
@@ -599,7 +608,7 @@ proc usage_loose {pe expected_slots acct_slots} {
       set queue [get_queue_instance "usage.q" $master_host]
       set id [submit_with_method $submit_command "-N usage -pe $pe 4 -masterq $queue" "$ts_config(testsuite_root_dir)/scripts/usage.sh" "sleep 60" $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER]
 
-      usage_monitor_check $id "usage_loose" $expected_slots $acct_slots 60 $master_host
+      usage_monitor_check $id "usage_loose" $expected_slots $acct_slots 60 $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER
    }
 }
 
