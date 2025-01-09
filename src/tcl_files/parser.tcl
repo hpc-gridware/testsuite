@@ -3914,16 +3914,16 @@ proc plain_r_parse { output_var } {
    }
 }
 
-proc plain_j_parse { output_var jobId plainoutput } {
+proc plain_j_parse {output_var jobId plainoutput} {
    upvar $output_var plain
-   
+
    if {[info exists plain]} {
       unset plain
    }
    # split plain output based on each new line
-   set plain_split [ split $plainoutput "\n" ]   
-   
-   foreach elem $plain_split {             
+   set plain_split [split $plainoutput "\n"]
+
+   foreach elem $plain_split {
       set elem_split [ split $elem ":" ]
       set count 1
       set key ""
@@ -3941,27 +3941,30 @@ proc plain_j_parse { output_var jobId plainoutput } {
                append val :
             }
          }
-      }       
+      }
       set len [string length $val]
       incr len -2
       set plain($key) [string range $val 0 $len]
    }
 
    set usage_attrib [get_qstat_j_attribute "usage" 1]
-   set usage_split [ split $plain($usage_attrib) "," ]
-   foreach usgElem $usage_split {
-      set param_split [ split $usgElem "=" ]
-      set cnt 0
-      foreach param $param_split {
-         if {$cnt == 0} {
-            set key [string trim $param]
-            incr cnt 1
-         } else {
-            set val [lindex [string trim $param] 0]  ;# remove GBs from mem 
-            incr cnt -1
+   # usage only exists for running jobs
+   if {[info exists plain($usage_attrib)]} {
+      set usage_split [split $plain($usage_attrib) ","]
+      foreach usgElem $usage_split {
+         set param_split [split $usgElem "="]
+         set cnt 0
+         foreach param $param_split {
+            if {$cnt == 0} {
+               set key [string trim $param]
+               incr cnt 1
+            } else {
+               set val [lindex [string trim $param] 0]  ;# remove GBs from mem
+               incr cnt -1
+            }
          }
+         set plain($key) $val
       }
-      set plain($key) $val
    }
 
    # beginning with OCS 9.0.0 time values as well as wallclock and cpu have microseconds
