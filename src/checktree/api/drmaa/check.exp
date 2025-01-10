@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -45,12 +45,12 @@ set check_root_access_needs "yes"
 # define test's name and run level descriptions
 set check_name            "drmaa"
 set check_category        "API DRMAA VERIFIED JENKINS_DISABLED"
-set check_description(0)    "tests available DMRAA lib on one arbitrary host" 
+set check_description(0)    "tests available DMRAA lib on one arbitrary host"
 set check_description(101)  "tests to verify DRMAA 1.0 library on one host"
 set check_description(201)  "tests to verify DRMAA 1.0 library on one host of each architecture available"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function "drmaa_setup"
@@ -75,7 +75,7 @@ global drmaa_binary_name
 proc drmaa_setup {} {
    global drmaa_config current_drmaa_mode ts_config host_list
 
-   # must forbit reschedule on job exiting with 99 
+   # must forbit reschedule on job exiting with 99
    # must forbit job error upon job exiting with 100
    # otherwise drmaa_test ST_EXIT_STATUS never finishes
 
@@ -109,27 +109,25 @@ proc drmaa_cleanup  {} {
    }
 }
 
-   
-
 #****** check.60/drmaa_setup_level() *******************************************
 #  NAME
-#     drmaa_setup_level() -- ??? 
+#     drmaa_setup_level() -- ???
 #
 #  SYNOPSIS
-#     drmaa_setup_level { } 
+#     drmaa_setup_level { }
 #
 #  FUNCTION
-#     Setup runlevel. 
+#     Setup runlevel.
 #
 #  INPUTS
 #
 #  RESULT
-#      
+#
 #  NOTES
-#     Setup of the level host list and store current drmaa mode for backup. 
+#     Setup of the level host list and store current drmaa mode for backup.
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -139,18 +137,18 @@ proc drmaa_setup_level {} {
    global CHECK_ACT_LEVEL check_description ts_config
    # global list with all hosts to test in this runlevel
    global level_host_list
-   # save the current drmaa lib mode 
-   global current_drmaa_mode 
+   # save the current drmaa lib mode
+   global current_drmaa_mode
 
    ts_log_fine "setup level $CHECK_ACT_LEVEL: $check_description($CHECK_ACT_LEVEL)"
 
    set drmaa_test_scenario_settings(level) $CHECK_ACT_LEVEL
    set drmaa_test_scenario_settings(level_name) $check_description($CHECK_ACT_LEVEL)
 
-   # generate host list according to level 
+   # generate host list according to level
    set level_host_list [set_hosts_for_runlevel]
-   
-   # store drmaa mode of the hosts use in this level 
+
+   # store drmaa mode of the hosts use in this level
    foreach host $level_host_list {
       set current_drmaa_mode($host) [get_current_drmaa_mode $host]
    }
@@ -183,10 +181,10 @@ if {0} {
 
 #****** check.60/drmaa_cleanup_level() *****************************************
 #  NAME
-#     drmaa_cleanup_level() -- ??? 
+#     drmaa_cleanup_level() -- ???
 #
 #  SYNOPSIS
-#     drmaa_cleanup_level { } 
+#     drmaa_cleanup_level { }
 #
 #  FUNCTION
 #     Do cleanup for current runlevel. Unset links to the library.
@@ -194,19 +192,19 @@ if {0} {
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
 #*******************************************************************************
 proc drmaa_cleanup_level {} {
-   global CHECK_ACT_LEVEL check_description 
+   global CHECK_ACT_LEVEL check_description
    # list with all hosts used in this runlevel
    global level_host_list
    # list with drmaa versions stored at the beginning of the test
@@ -215,13 +213,13 @@ proc drmaa_cleanup_level {} {
    ts_log_fine "cleanup level $CHECK_ACT_LEVEL: $check_description($CHECK_ACT_LEVEL)"
 
 if {0} {
-   # go through level host list and restore test_drmaa again 
+   # go through level host list and restore test_drmaa again
    foreach host $level_host_list {
       drmaa_redirect_lib $current_drmaa_mode($host) $host
    }
 }
 
-   # clear level host list to avoid redirection of old hosts 
+   # clear level host list to avoid redirection of old hosts
    unset level_host_list
 }
 
@@ -230,27 +228,27 @@ if {0} {
 
 #****** check.60/set_hosts_for_runlevel() **************************************
 #  NAME
-#     set_hosts_for_runlevel() -- ??? 
+#     set_hosts_for_runlevel() -- ???
 #
 #  SYNOPSIS
-#     set_hosts_for_runlevel { } 
+#     set_hosts_for_runlevel { }
 #
 #  FUNCTION
-#     Sets a list of hosts to perform tests on depending from the current runlevel. 
+#     Sets a list of hosts to perform tests on depending from the current runlevel.
 #
 #  INPUTS
 #
 #  RESULT
-#     List of hosts which can used in the current runlevel. 
+#     List of hosts which can used in the current runlevel.
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
 #*******************************************************************************
 proc set_hosts_for_runlevel {} {
-   global CHECK_ACT_LEVEL ts_config 
+   global CHECK_ACT_LEVEL ts_config
 
    set hosts_in_runlevel {}
 
@@ -273,14 +271,14 @@ proc set_hosts_for_runlevel {} {
 
 #****** check.60/drmaa_check_single_threaded_part_01() *************************
 #  NAME
-#     drmaa_check_single_threaded_part_01() -- ??? 
+#     drmaa_check_single_threaded_part_01() -- ???
 #
 #  SYNOPSIS
-#     drmaa_check_single_threaded_part_01 { hostlist } 
+#     drmaa_check_single_threaded_part_01 { hostlist }
 #*******************************************************************************
 proc drmaa_check_single_threaded_part_01 { } {
    global ts_config CHECK_ACT_LEVEL
-   global CHECK_USER drmaa_binary_name level_host_list 
+   global CHECK_USER drmaa_binary_name level_host_list
 
    foreach host $level_host_list {
       set myenv(UNSET_VARS) "SGE_ROOT"
@@ -298,10 +296,10 @@ proc drmaa_check_single_threaded_part_01 { } {
 
 #****** check.60/drmaa_check_single_threaded_part_02() *************************
 #  NAME
-#     drmaa_check_single_threaded_part_02() -- ??? 
+#     drmaa_check_single_threaded_part_02() -- ???
 #
 #  SYNOPSIS
-#     drmaa_check_single_threaded_part_02 { hostlist } 
+#     drmaa_check_single_threaded_part_02 { hostlist }
 #*******************************************************************************
 proc drmaa_check_single_threaded_part_02 { } {
    global ts_config CHECK_USER level_host_list
@@ -328,8 +326,8 @@ proc drmaa_check_single_threaded_part_02 { } {
          ts_log_fine "starting single threaded test $st_test"
          drmaa_test $host $st_test ""
       }
-    
-      # -- tests to ensure control operations on session without jobs result in DRMAA_ERRNO_SUCCESS 
+
+      # -- tests to ensure control operations on session without jobs result in DRMAA_ERRNO_SUCCESS
       set test_scenario {}
       lappend test_scenario "DRMAA_CONTROL_SUSPEND"
       lappend test_scenario "DRMAA_CONTROL_RESUME"
@@ -346,10 +344,10 @@ proc drmaa_check_single_threaded_part_02 { } {
 
 #****** check.60/drmaa_check_single_threaded_part_03() *************************
 #  NAME
-#     drmaa_check_single_threaded_part_03() -- ??? 
+#     drmaa_check_single_threaded_part_03() -- ???
 #
 #  SYNOPSIS
-#     drmaa_check_single_threaded_part_03 { hostlist } 
+#     drmaa_check_single_threaded_part_03 { hostlist }
 #*******************************************************************************
 proc drmaa_check_single_threaded_part_03 { } {
    global ts_config CHECK_USER level_host_list
@@ -387,7 +385,7 @@ proc drmaa_check_single_threaded_part_03 { } {
          drmaa_test $host $st_test $ts_config(testsuite_root_dir)/scripts/suspendable_sleeper.sh
       }
 
-      # -- tests with a <sleeper_job> argument repeatedly 
+      # -- tests with a <sleeper_job> argument repeatedly
       set test_scenario {}
       lappend test_scenario "ST_SUBMIT_NO_RUN_WAIT"
       foreach st_test $test_scenario {
@@ -403,10 +401,10 @@ proc drmaa_check_single_threaded_part_03 { } {
 
 #****** check.60/drmaa_check_single_threaded_part_04() *************************
 #  NAME
-#     drmaa_check_single_threaded_part_04() -- ??? 
+#     drmaa_check_single_threaded_part_04() -- ???
 #
 #  SYNOPSIS
-#     drmaa_check_single_threaded_part_04 { hostlist } 
+#     drmaa_check_single_threaded_part_04 { hostlist }
 #*******************************************************************************
 proc drmaa_check_single_threaded_part_04 { } {
    global ts_config CHECK_USER level_host_list
@@ -423,33 +421,33 @@ proc drmaa_check_single_threaded_part_04 { } {
 
       # -- tests with <exit_arg_job> and <email_addr> arguments
       # need to add the entry "test.cat -N ExitTest -h" to qtask file
-      # need to add "-m a" to sge_request file 
+      # need to add "-m a" to sge_request file
       # test assumes job do run at submission host
       # ts_log_fine "starting single threaded test ST_ATTRIBUTE_CHECK"
       # drmaa_test $host ST_ATTRIBUTE_CHECK $ts_config(testsuite_root_dir)/scripts/exit.sh "$CHECK_USER@localhost"
-      # need to remove "-m a" from sge_request file 
+      # need to remove "-m a" from sge_request file
       # need to move entry "test.cat -N ExitTest -h" to users .qtask file
-      # -- 
+      # --
    }
 }
 
 #****** check.60/drmaa_check_multi_threaded() **********************************
 #  NAME
-#     drmaa_check_multi_threaded() -- ??? 
+#     drmaa_check_multi_threaded() -- ???
 #
 #  SYNOPSIS
-#     drmaa_check_multi_threaded { hostlist } 
+#     drmaa_check_multi_threaded { hostlist }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -475,21 +473,21 @@ proc drmaa_check_multi_threaded { } {
 
 #****** check.60/drmaa_check_additional_interfaces() ***************************
 #  NAME
-#     drmaa_check_additional_interfaces() -- ??? 
+#     drmaa_check_additional_interfaces() -- ???
 #
 #  SYNOPSIS
-#     drmaa_check_additional_interfaces { hostlist } 
+#     drmaa_check_additional_interfaces { hostlist }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -499,7 +497,7 @@ proc drmaa_check_additional_interfaces { } {
    global CHECK_USER drmaa_binary_name level_host_list
 
    # shutdown qmaster
-   shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir] 
+   shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
 
    foreach host $level_host_list {
       # this test must fail when qmaster is down
@@ -513,7 +511,7 @@ proc drmaa_check_additional_interfaces { } {
       }
    }
    # restart qmaster
-   startup_qmaster 
+   startup_qmaster
 }
 
 
@@ -536,7 +534,7 @@ proc drmaa_check_additional_interfaces { } {
 #     test_name                  - The name of a test. To get a complete list
 #                                  of all test cases run 'test_drmaa' without args
 #     arguments                  - Additional arguments needed for the test case.
-#     user                       - Optional argument if test shall be run as user 
+#     user                       - Optional argument if test shall be run as user
 #                                  other than CHECK_USER
 #
 #  EXAMPLE
@@ -547,7 +545,7 @@ proc drmaa_test { host test_name arguments {user ""} } {
    global CHECK_USER drmaa_test_scenario_settings
    global drmaa_binary_name CHECK_ACT_LEVEL
 
-   if {$user == ""} { 
+   if {$user == ""} {
       set user $CHECK_USER
    }
    set add_info "\n----------------------------------------------\n"
@@ -575,7 +573,7 @@ proc drmaa_test { host test_name arguments {user ""} } {
       ts_log_info "test $test_name $arguments on host $host took more than 550 seconds! (testsuite timeout=650)\n$add_info"
    }
    if {$prg_exit_state != 0} {
-      ts_log_severe "$drmaa_binary_name $test_name $arguments failed at host $host (runtime: $run_time)\n$add_info"
+      ts_log_severe "$drmaa_binary_name $test_name $arguments failed $prg_exit_state at host $host (runtime: $run_time)\n$add_info:\n$test_output"
    }
 }
 
@@ -584,7 +582,7 @@ proc drmaa_test { host test_name arguments {user ""} } {
 #
 #****** drmaa_test/drmaa_test_st_input_becomes_output() ******
 #  NAME
-#     drmaa_test_st_input_becomes_output() -- Test to ensure 
+#     drmaa_test_st_input_becomes_output() -- Test to ensure
 #      input/output is treated correctly by DRMAA
 #
 #  SYNOPSIS
@@ -604,7 +602,7 @@ proc drmaa_test_st_input_becomes_output { host } {
 
    # prepare input file
    set input_file [get_tmp_file_name]
-  
+
    # prepare output file name
    set output_file [get_tmp_file_name]
 
@@ -634,8 +632,8 @@ proc drmaa_test_st_input_becomes_output { host } {
 #
 #****** drmaa_test/drmaa_test_failing_control_operations() ******
 #  NAME
-#     drmaa_test_failing_control_operations() -- Test to ensure 
-#      DRMAA operations behave correctly when they operate on other 
+#     drmaa_test_failing_control_operations() -- Test to ensure
+#      DRMAA operations behave correctly when they operate on other
 #      users jobs trying input/output is treated correctly by DRMAA
 #
 #  SYNOPSIS
@@ -653,17 +651,17 @@ proc drmaa_test_st_input_becomes_output { host } {
 #
 proc drmaa_test_failing_control_operations { host binary_path } {
    global ts_config
-   global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER 
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
 
    #
-   # submit sequential job in hold state as user1 
+   # submit sequential job in hold state as user1
    #
 
    ts_log_fine "going to submit a job as user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    set job_id [ submit_job "-o /dev/null -j y -h $ts_config(product_root)/examples/jobs/sleeper.sh 15" 1 60 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER ]
    ts_log_fine "submitted job $job_id as user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
 
-   # ensure control operations forbidden for user2 result in a DRMAA_ERRNO_AUTH_FAILURE 
+   # ensure control operations forbidden for user2 result in a DRMAA_ERRNO_AUTH_FAILURE
    # test broken for DRMAA_CONTROL_TERMINATE operation due to #979
    foreach control_op "DRMAA_CONTROL_SUSPEND DRMAA_CONTROL_RESUME DRMAA_CONTROL_HOLD DRMAA_CONTROL_RELEASE" {
       ts_log_fine "starting single threaded test ST_DRMAA_CONTROL $control_op DRMAA_ERRNO_AUTH_FAILURE"
@@ -677,8 +675,8 @@ proc drmaa_test_failing_control_operations { host binary_path } {
    # delete job as user1
    set result [start_sge_bin "qdel" $job_id "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
    ts_log_fine "qdel_output = \n$result"
-    
-   # ensure control operation isused as user1 on no longer existing job results in a DRMAA_ERRNO_INVALID_JOB 
+
+   # ensure control operation isused as user1 on no longer existing job results in a DRMAA_ERRNO_INVALID_JOB
    foreach control_op "DRMAA_CONTROL_SUSPEND DRMAA_CONTROL_RESUME DRMAA_CONTROL_HOLD \
          DRMAA_CONTROL_RELEASE DRMAA_CONTROL_TERMINATE" {
       ts_log_fine "starting single threaded test ST_DRMAA_CONTROL $control_op DRMAA_ERRNO_INVALID_JOB"
@@ -686,14 +684,14 @@ proc drmaa_test_failing_control_operations { host binary_path } {
    }
 
    #
-   # submit job array in hold state as user1 
+   # submit job array in hold state as user1
    #
 
    ts_log_fine "going to submit a job as user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    set job_id [ submit_job "-t 1-2 -o /dev/null -j y -h $ts_config(product_root)/examples/jobs/sleeper.sh 15" 1 60 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER ]
    ts_log_fine "submitted job $job_id as user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
 
-   # ensure control operations forbidden for user2 result in a DRMAA_ERRNO_AUTH_FAILURE 
+   # ensure control operations forbidden for user2 result in a DRMAA_ERRNO_AUTH_FAILURE
    # test broken for DRMAA_CONTROL_TERMINATE operation due to #979
    foreach control_op "DRMAA_CONTROL_SUSPEND DRMAA_CONTROL_RESUME DRMAA_CONTROL_HOLD \
          DRMAA_CONTROL_RELEASE" {
@@ -711,8 +709,8 @@ proc drmaa_test_failing_control_operations { host binary_path } {
    # delete job as user1
    set result [start_sge_bin "qdel" $job_id "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
    ts_log_fine "qdel_output = \n$result"
-    
-   # ensure control operation isused as user1 on no longer existing job results in a DRMAA_ERRNO_INVALID_JOB 
+
+   # ensure control operation isused as user1 on no longer existing job results in a DRMAA_ERRNO_INVALID_JOB
    foreach control_op "DRMAA_CONTROL_SUSPEND DRMAA_CONTROL_RESUME DRMAA_CONTROL_HOLD \
          DRMAA_CONTROL_RELEASE DRMAA_CONTROL_TERMINATE" {
       ts_log_fine "starting single threaded test ST_DRMAA_CONTROL $control_op DRMAA_ERRNO_INVALID_JOB"
