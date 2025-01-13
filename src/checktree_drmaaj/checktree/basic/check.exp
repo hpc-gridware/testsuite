@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -50,7 +50,7 @@ set check_description(100)  "One host, different Java-versions: tests to verify 
 set check_description(200)  "Different hosts, different Java-versions: tests to verify DRMAA-J 1.0 library with DRMAA-C 1.0 library"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function "drmaaj_setup"
@@ -71,7 +71,7 @@ lappend check_functions "drmaaj_check"
 ##
 proc set_hosts_for_runlevel {} {
    global CHECK_ACT_LEVEL ts_config
-   set hosts_in_runlevel_local {} 
+   set hosts_in_runlevel_local {}
 
    # sets the hosts array according to the runlevel
    switch -- $CHECK_ACT_LEVEL {
@@ -95,10 +95,10 @@ proc set_hosts_for_runlevel {} {
       }
    }
 
-   # log the hosts 
-   ts_log_fine "The following hosts are used in runlevel $CHECK_ACT_LEVEL : " 
+   # log the hosts
+   ts_log_fine "The following hosts are used in runlevel $CHECK_ACT_LEVEL : "
    foreach hst $hosts_in_runlevel_local {
-      ts_log_fine "-> host: $hst " 
+      ts_log_fine "-> host: $hst "
    }
 
    return $hosts_in_runlevel_local
@@ -136,8 +136,8 @@ proc set_java_list_according_to_runlevel {host} {
    global CHECK_ACT_LEVEL
 
    # set java list according to the runlevel
-   # each entry contains an absolute path 
-   # to an Java Virtual Machine 
+   # each entry contains an absolute path
+   # to an Java Virtual Machine
 
    switch -- $CHECK_ACT_LEVEL {
       0 {
@@ -158,14 +158,14 @@ proc set_java_list_according_to_runlevel {host} {
 # @returns classpath
 ##
 proc set_java_classpath_according_to_runlevel {} {
-   global ts_config 
+   global ts_config
 
    # add to Java classpath the Java DRMAA library
    set classpath "$ts_config(product_root)/lib/drmaa.jar"
 
    ts_log_fine "Added the following Java classpath: $classpath"
 
-   return $classpath 
+   return $classpath
 }
 
 
@@ -203,18 +203,18 @@ proc drmaaj_check { } {
       ts_log_fine "-> using host $host"
       set binary_arch [resolve_arch $host]
 
-      # set classpath according to runlevel: this is static for each rl 
+      # set classpath according to runlevel: this is static for each rl
       set classpath [set_java_classpath_according_to_runlevel]
-      
+
       set compile_arch_mt "[resolve_build_arch $host]"
       ts_log_fine "host $host has arch $compile_arch_mt with classpath $classpath"
       set options [build_java_env_list $host $binary_arch]
       set myenv(CLASSPATH) $classpath
 
-      # include the library path because environment variables 
+      # include the library path because environment variables
       # are different on different architectures
-      # set options "-Djava.library.path=$ts_config(product_root)/lib/$binary_arch $options" 
-      set java_lib_path "-Djava.library.path=$ts_config(product_root)/lib/$binary_arch" 
+      # set options "-Djava.library.path=$ts_config(product_root)/lib/$binary_arch $options"
+      set java_lib_path "-Djava.library.path=$ts_config(product_root)/lib/$binary_arch"
       append options " $java_lib_path"
       ts_log_fine "options: $options"
 
@@ -250,7 +250,7 @@ proc drmaaj_check { } {
             }
          }
       } ; # go through all Java versions
-   } ; # repeat: check all hosts from hostlist 
+   } ; # repeat: check all hosts from hostlist
 }
 
 proc drmaaj_setup {} {
@@ -262,7 +262,7 @@ proc drmaaj_cleanup {} {
 proc drmaaj_setup_level {} {
    global ts_config
    global drmaaj_config_backup current_drmaa_mode hosts_in_runlevel
-   
+
    if {$ts_config(source_dir) == "none"} {
       ts_log_config "source directory is set to \"none\" - cannot run test"
       return 99
@@ -271,7 +271,7 @@ proc drmaaj_setup_level {} {
    # get host list depending from run level
    set hosts_in_runlevel [set_hosts_for_runlevel]
 
-   # must forbit reschedule on job exiting with 99 
+   # must forbit reschedule on job exiting with 99
    # must forbit job error upon job exiting with 100
    # otherwise drmaa_test ST_EXIT_STATUS never finishes
 

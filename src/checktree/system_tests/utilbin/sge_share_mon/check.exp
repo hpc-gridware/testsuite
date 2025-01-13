@@ -35,11 +35,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -70,23 +70,14 @@ proc sge_share_mon_setup  {} {
    global CHECK_ACT_LEVEL
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
    global have_share_tree submitted_jobs
-   global non_cluster_host
 
    switch -- $CHECK_ACT_LEVEL {
       0 {
          set have_share_tree 0
-      } 
+      }
       1 {
          set have_share_tree 1
       }
-   } 
-
-   # check if we have an unused host, otherwise the test will fail anyway
-   set non_cluster_host [host_conf_get_non_cluster_host]
-   if {$non_cluster_host == ""} {
-      # we have no non_cluster_host - skip this test
-      # config error was already risen in host_conf_get_non_cluster_host()
-      return 99
    }
 
    # here we remember the job ids of submitted jobs to be able
@@ -101,7 +92,7 @@ proc sge_share_mon_setup  {} {
       # we want to reference the CHECK_USER in a sharetree
       del_user $CHECK_USER "" "" 0
       add_user $CHECK_USER
-      
+
       # first and second foreign user will be created after submitting jobs under default nodes
       del_user $CHECK_FIRST_FOREIGN_SYSTEM_USER "" "" 0
       del_user $CHECK_SECOND_FOREIGN_SYSTEM_USER "" "" 0
@@ -146,7 +137,7 @@ proc sge_share_mon_cleanup  {} {
 #     share_mon_sharetree_check_node() -- check modes delivered by sge_share_mon
 #
 #  SYNOPSIS
-#     share_mon_sharetree_check_node { sharetree_var node exists {shares -1} } 
+#     share_mon_sharetree_check_node { sharetree_var node exists {shares -1} }
 #
 #  FUNCTION
 #     Checks if certain nodes exist / do not exist in sge_share_mon output.
@@ -162,11 +153,11 @@ proc sge_share_mon_cleanup  {} {
 #     No return code. Errors are reported via ts_log_severe
 #     sge_sharetree/sge_share_mon()
 #*******************************************************************************
-proc share_mon_sharetree_check_node {sharetree_var node exists {shares -1}} {
+proc share_mon_sharetree_check_node {sharetree_var node exists {shares -1} {expect_actual_share 0}} {
    global ts_config
 
    upvar $sharetree_var sharetree
-   
+
    set pos [lsearch -exact $sharetree(index) $node]
 
    # expect that node exists, but didn't find it?
@@ -182,7 +173,14 @@ proc share_mon_sharetree_check_node {sharetree_var node exists {shares -1}} {
    # verify if the shares are reported correctly
    if {$exists && $pos >= 0 && $shares >= 0} {
       if {$sharetree($node,shares) != $shares} {
-         ts_log_severe "node $node in sge_share_mon output contains incorrect shares:\nexpected $shares, but sge_share_mon reported $sharetree($node,shares)" 
+         ts_log_severe "node $node in sge_share_mon output contains incorrect shares:\nexpected $shares, but sge_share_mon reported $sharetree($node,shares)"
+      }
+   }
+
+   # verify if the actual share is reported correctly
+   if {$exists && $pos >= 0 && $expect_actual_share} {
+      if {$sharetree($node,actual_share) == 0.0} {
+         ts_log_severe "node $node in sge_share_mon output contains incorrect actual share:\nexpected a value > 0, but sge_share_mon reported $sharetree($node,actual_share)"
       }
    }
 }
@@ -192,7 +190,7 @@ proc share_mon_sharetree_check_node {sharetree_var node exists {shares -1}} {
 #     share_mon_sharetree() -- test if sge_share_mon deliveres correct data
 #
 #  SYNOPSIS
-#     share_mon_sharetree { } 
+#     share_mon_sharetree { }
 #
 #  FUNCTION
 #     Tests, if the sharetree setup in the check setup function is reported correctly
@@ -255,12 +253,18 @@ proc share_mon_sharetree {} {
       set job_id [submit_job $args 1 60 "" $CHECK_SECOND_FOREIGN_SYSTEM_USER]
       lappend submitted_jobs $job_id
 
+      # wait for all jobs to finish
+      # we want to see usage to be booked into the sharetree
+      foreach job_id $submitted_jobs {
+         wait_for_jobend $job_id "" 60 0
+      }
+
       # again verify checktree
       sge_share_mon sharetree
-      share_mon_sharetree_check_node sharetree "/default/$CHECK_FIRST_FOREIGN_SYSTEM_USER" 1 10
-      share_mon_sharetree_check_node sharetree "/default/$CHECK_SECOND_FOREIGN_SYSTEM_USER" 1 10
-      share_mon_sharetree_check_node sharetree "/mytestproject/default/$CHECK_FIRST_FOREIGN_SYSTEM_USER" 1 40
-      share_mon_sharetree_check_node sharetree "/mytestproject/default/$CHECK_SECOND_FOREIGN_SYSTEM_USER" 1 40
+      share_mon_sharetree_check_node sharetree "/default/$CHECK_FIRST_FOREIGN_SYSTEM_USER" 1 10 1
+      share_mon_sharetree_check_node sharetree "/default/$CHECK_SECOND_FOREIGN_SYSTEM_USER" 1 10 1
+      share_mon_sharetree_check_node sharetree "/mytestproject/default/$CHECK_FIRST_FOREIGN_SYSTEM_USER" 1 40 1
+      share_mon_sharetree_check_node sharetree "/mytestproject/default/$CHECK_SECOND_FOREIGN_SYSTEM_USER" 1 40 1
    }
 }
 
@@ -270,7 +274,7 @@ proc share_mon_sharetree {} {
 #     share_mon_permissions() -- checks sge_share_mon qmaster access
 #
 #  SYNOPSIS
-#     share_mon_permissions { } 
+#     share_mon_permissions { }
 #
 #  FUNCTION
 #     Verifies that sge_qmaster correctly handles access permissions
@@ -282,7 +286,14 @@ proc share_mon_permissions {} {
    global ts_config
    global CHECK_FIRST_FOREIGN_SYSTEM_USER
    global have_share_tree
-   global non_cluster_host
+
+   # check if we have an unused host, otherwise the test will fail anyway
+   set non_cluster_host [host_conf_get_non_cluster_host]
+   if {$non_cluster_host == ""} {
+      # we have no non_cluster_host - skip this test
+      # config error was already risen in host_conf_get_non_cluster_host()
+      return
+   }
 
    if {$have_share_tree} {
       # sge_share_mon must also work as non admin user user

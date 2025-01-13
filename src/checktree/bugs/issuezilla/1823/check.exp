@@ -34,11 +34,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -51,7 +51,7 @@ append check_description(0) "if rc-scripts are started by the wrong user"
 
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # define test's procedure order
 set check_functions ""
@@ -78,13 +78,13 @@ proc LSB_lockfile_test {} {
       ts_log_fine "testing host $exec_host ..."
 
       switch -glob -- $test_arch {
-         lx* {
-                set output [start_remote_prog $exec_host $CHECK_USER "ls" "-la /var/lock | grep subsys" "exit_val" $my_timeout ]
-                if {$output != ""} {
+         "lx-*" -
+         "ulx-*" {
+                if {[is_remote_path $exec_host $CHECK_USER "/var/lock/subsys"]} {
                    set execd_found [is_daemon_running $exec_host "sge_execd" 1]
                    if {$execd_found == 0} {
                       continue
-                   } 
+                   }
                    set found_linux 1
                    ts_log_fine "try to stop sge_execd as user $CHECK_USER ..."
                    set output [start_remote_prog $exec_host $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "stop" "exit_val" $my_timeout]
@@ -116,15 +116,15 @@ proc LSB_lockfile_test {} {
                    if {$exit_val == 0} {
                       ts_log_severe "failed - /var/lock/subsys/sgeexecd has not been deleted on host $exec_host!"
                       return
-                   }                 
+                   }
                    ts_log_fine $output
 
                    ts_log_fine "ok"
                    ts_log_fine "try to start sge_execd as user $CHECK_USER ..."
                    set output [start_remote_prog $exec_host $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "start" "exit_val" $my_timeout ]
                    if {$exit_val != 0} {
-                      ts_log_fine $output 
-                      ts_log_severe "failed - rc-script runs into any error, tried to start as user $CHECK_USER on host $exec_host" 
+                      ts_log_fine $output
+                      ts_log_severe "failed - rc-script runs into any error, tried to start as user $CHECK_USER on host $exec_host"
                       return
                    }
                    wait_for_load_from_all_queues 60
@@ -168,16 +168,14 @@ proc LSB_lockfile_test {} {
 
                    ts_log_fine "ok"
                 }
-              
          }
 
          default {
-               ts_log_fine "looking for linux hosts ...."
-
+            ts_log_fine "looking for linux hosts ...."
          }
-
       }
    }
+
    if {$found_linux == 0} {
       ts_log_config "test not possible, no linux host found in configuration!"
    }

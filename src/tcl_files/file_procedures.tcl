@@ -3424,7 +3424,7 @@ proc is_remote_path {hostname user path} {
    if {$prg_exit_state == 0} {
       ts_log_finest "found path: $hostname:$path"
       return 1;
-   } 
+   }
    ts_log_finest "path not found: $hostname:$path"
    return 0;
 }

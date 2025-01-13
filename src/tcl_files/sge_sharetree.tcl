@@ -1035,4 +1035,6 @@ proc sge_share_mon {output_var {on_host ""} {as_user ""} {raise_error 1}} {
       set messages(-1) [translate_macro MSG_SGESHAREMON_NOSHARETREE]
       set ret [handle_sge_errors "sge_share_mon" "sge_share_mon -h -d , -c 1" $result messages $raise_error]
    }
+
+   return $ret
 }
