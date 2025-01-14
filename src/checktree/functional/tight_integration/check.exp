@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -50,7 +50,7 @@ set check_description(1)  "check tightly integrated parallel jobs submitted with
 set check_description(2)  "check tightly integrated parallel jobs submitted with qrsh, accounting summary"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function tight_integration_setup
@@ -73,7 +73,7 @@ lappend check_functions "tight_integration_notify"
 lappend check_functions "tight_integration_check_tmpdir"
 
 # constants to be used by the tight integration test
-global TIGHT_INTEGRATION_FUNCTIONAL_SLOTS 
+global TIGHT_INTEGRATION_FUNCTIONAL_SLOTS
 global TIGHT_INTEGRATION_FUNCTIONAL_DURATION
 global TIGHT_INTEGRATION_MASSIVE_SLOTS
 global TIGHT_INTEGRATION_MASSIVE_DURATION
@@ -169,6 +169,8 @@ proc tight_integration_cleanup {} {
    unassign_queues_with_pe_object "tight"
    del_pe "tight"
    del_queue "tight.q" "" 0 1
+
+   unset -nocomplain TIGHT_INTEGRATION_FUNCTIONAL_DURATION submit_command tight_masterq tight_master_node
 }
 
 # -------- local test procedures: initialization------------------------------
@@ -207,7 +209,7 @@ proc tight_integration_parse_execd_messages {mode} {
       set TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode) 0
       set TIGHT_INTEGRATION_WARNING_MESSAGES($execd,$mode) 0
       set messages [get_execd_messages_file $execd]
-      get_file_content $execd $CHECK_USER $messages 
+      get_file_content $execd $CHECK_USER $messages
       if {$file_array(0) < 1} {
          ts_log_severe "no execd(host=$execd) messages file:\n$messages"
       }
@@ -259,7 +261,7 @@ proc tight_integration_check_messages {mode1 mode2 scenario {expect_error 0}} {
          #
          # We need to blank out qmaster messages that originate from fault injection.
          # There is one check per fault injections scenario.
-         # 
+         #
          # MSG_JOB_JOBTASKFAILED_S (tightly integrated parallel task*failed - killing job)
          #
          if {$scenario == "master_killed" && \
@@ -328,10 +330,10 @@ proc tight_integration_check_messages {mode1 mode2 scenario {expect_error 0}} {
       if {$TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode1) != $TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode2)} {
          ts_log_fine "tight integration check produced execd error messages at $execd:"
          append error_text "tight integration check produced execd error messages at $execd:\n"
-         for {set i [expr $TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode1) + 1]} {$i <= $TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode2)} {incr i 1} { 
+         for {set i [expr $TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode1) + 1]} {$i <= $TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode2)} {incr i 1} {
             set message $TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode2,$i)
             set mstart [string last "|" $message]
-            incr mstart 1 
+            incr mstart 1
             append error_text [string range "$message\n" $mstart end]
          }
       }
@@ -464,8 +466,8 @@ proc tight_integration_function {} {
 
 # check if qmaster is killed on reschedule
 proc tight_integration_iz_1916 {} {
-   global ts_config CHECK_USER 
-   global CHECK_ACT_LEVEL 
+   global ts_config CHECK_USER
+   global CHECK_ACT_LEVEL
    global TIGHT_INTEGRATION_FUNCTIONAL_DURATION
    global submit_command tight_masterq tight_master_node
    #
@@ -474,7 +476,7 @@ proc tight_integration_iz_1916 {} {
    tight_integration_init_messages_check
 
    ts_log_fine "tight_integration: test iz 1916 (reschedule kills qmaster)"
-   
+
    set exit_now 0
 
    if {$CHECK_ACT_LEVEL != 0} {
@@ -483,14 +485,14 @@ proc tight_integration_iz_1916 {} {
    }
 
    set TIGHT_INTEGRATION_FUNCTIONAL_SLOTS "4"
-   
+
    # set global config to speed up the test
    get_config org_global_conf
    set global_conf(load_report_time) "00:00:01"
    set global_conf(max_unheard) "00:00:45"
    set_config_and_propagate global_conf
-  
-   # start job 
+
+   # start job
 
    set id [submit_with_method $submit_command "-pe tight $TIGHT_INTEGRATION_FUNCTIONAL_SLOTS -q $tight_masterq -cwd -N tightf" "$ts_config(testsuite_root_dir)/scripts/pe_job.sh" "$ts_config(testsuite_root_dir)/scripts/pe_task.sh 1 3600" $tight_master_node]
 
@@ -514,14 +516,14 @@ proc tight_integration_iz_1916 {} {
       }
       after 1000
    }
-   
+
    if {$exit_now == 0} {
       # wait for usage reports
       set online_info(cpu) 0
       set online_info(mem) 0
       set now [clock seconds]
       set end [expr $now + 45]
-   
+
       while {$now < $end} {
          set my_timeout 1
          set timeout_error 0
@@ -536,7 +538,7 @@ proc tight_integration_iz_1916 {} {
                   set online_cpu [parse_cpu_time [lindex $value_list 1]]
                   set value_list [split [lindex $usage_list 1] "="]
                   set online_mem [lindex [lindex $value_list 1] 0]
-                  
+
                   set online_info(cpu) [max $online_info(cpu) $online_cpu]
                   set online_info(mem) [max $online_info(mem) $online_mem]
                }
@@ -544,17 +546,17 @@ proc tight_integration_iz_1916 {} {
             ts_log_fine "job state: $job_state, cpu: $online_info(cpu), mem: $online_info(mem)"
          }
          if {$online_info(mem) > 0} {
-            set now $end   
+            set now $end
          } else {
             set now [clock seconds]
             after 1000
          }
       }
-   
+
       # reschedule job
-      ts_log_fine "sending qmod -rj to job $jobid"   
+      ts_log_fine "sending qmod -rj to job $jobid"
       set result [start_sge_bin "qmod" "-rj $jobid"]
-      
+
       #  ts_log_fine $output
       ts_log_fine "qmod returns $result"
       if {$prg_exit_state != 0} {
@@ -581,7 +583,7 @@ proc tight_integration_iz_1916 {} {
 
 # check if tasks are killed when they hit a wallclock limit
 proc tight_integration_iz_575 {} {
-   global ts_config CHECK_USER 
+   global ts_config CHECK_USER
    global TIGHT_INTEGRATION_FUNCTIONAL_SLOTS TIGHT_INTEGRATION_FUNCTIONAL_DURATION
    global submit_command tight_masterq tight_master_node
    #
@@ -739,7 +741,7 @@ proc tight_integration_slave_killed {} {
    set hosts_to_check {}
    set resolved_master [resolve_host $tight_master_node]
    foreach host $ts_config(execd_nodes) {
-      set resolved_host [resolve_host $host] 
+      set resolved_host [resolve_host $host]
       if { $resolved_host != $resolved_master } {
          lappend hosts_to_check $resolved_host
       }
@@ -851,7 +853,7 @@ proc tight_integration_massive {} {
    set finished 0
    set jobid 0
    set job_finished 0
-   
+
    while {$job_finished == 0} {
       set job_state [tight_integration_monitor $id $tight_master_node started finished jobid info]
       set job_finished [tight_integration_job_finished $job_state]
@@ -908,7 +910,7 @@ proc tight_integration_massive_nfs_tmpdir {} {
    set finished 0
    set jobid 0
    set job_finished 0
-   
+
    while {$job_finished == 0} {
       set job_state [tight_integration_monitor $id $tight_master_node started finished jobid info]
       set job_finished [tight_integration_job_finished $job_state]
@@ -949,7 +951,7 @@ proc tight_integration_acct {job_id num_tasks} {
    } else {
       set expected [expr $num_tasks + 1]
    }
-  
+
    set job_id [lindex [split $job_id "."] 0]
    get_qacct $job_id qacct_info $ts_config(master_host) "" 1 $expected 30
 
@@ -959,7 +961,7 @@ proc tight_integration_acct {job_id num_tasks} {
       if {$num_acct != 1} {
          ts_log_severe "job $job_id: expected only one accounting record with accounting_summary enabled, but got $num_qacct"
       }
-   } else { 
+   } else {
       set expected [expr $num_tasks + 1]
       if {$num_acct != $expected} {
          ts_log_severe "job $job_id: expected $expected accounting records, but got $num_acct"
@@ -1007,7 +1009,7 @@ proc tight_integration_massive_short {} {
    set finished 0
    set jobid 0
    set job_finished 0
-   
+
    while {$job_finished == 0} {
       set job_state [tight_integration_monitor $id $tight_master_node started finished jobid info]
       set job_finished [tight_integration_job_finished $job_state]
@@ -1036,7 +1038,7 @@ proc tight_integration_check_tmpdir {} {
 
    foreach host $ts_config(execd_nodes) {
       set output [start_remote_prog $host $CHECK_USER ls $tmpdir]
-      set output [string trim $output] 
+      set output [string trim $output]
       if {$output != ""} {
          append error "Found IZ 2846: tmpdir was not cleaned on host $host for jobs: $output\n"
       }
@@ -1117,7 +1119,7 @@ proc tight_integration_notify_doit {scenario expected_signal {special_option ""}
 #     tight_integration_notify() -- test tight integration with -notify option
 #
 #  SYNOPSIS
-#     tight_integration_notify {} 
+#     tight_integration_notify {}
 #
 #  FUNCTION
 #     Tests if the -notify option works correctly with tightly integrated jobs.

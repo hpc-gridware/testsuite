@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -48,7 +48,7 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED JENKINS_DISABLED"
 set check_description(0)  ""
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function jsv_ge_setup
@@ -113,14 +113,14 @@ proc jsv_ge_setup {} {
    # get base path of scripts
    set jsv_base_path $ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_ge
 
-   # change global config 
+   # change global config
    get_config jsv_org_global_conf
    set global_conf(load_report_time) "00:00:04"
    set global_conf(max_unheard) "00:00:15"
    set_config global_conf
 
-   # test that user specification might be omitted 
-   # urls with valid users are acceped 
+   # test that user specification might be omitted
+   # urls with valid users are acceped
    # but for the other scenarios reset the URL
    set global_conf(jsv_url) "script:${jsv_base_path}/jsv_test_modify.tcl"
    set_config global_conf
@@ -130,7 +130,7 @@ proc jsv_ge_setup {} {
    set_config global_conf
 }
 
-# stop all running JSV scripts 
+# stop all running JSV scripts
 proc jsv_ge_cleanup {} {
    global ts_config
    global jsv_org_global_conf
@@ -152,10 +152,10 @@ proc jsv_ge_cleanup {} {
 
 # This test will verify the parsing functionality which is used in clients
 # and qmaster when server JSV's try to modify a job specification.
-# 
+#
 # Scenario:
 #     A special JSV script is used to send valid and also invalid
-#     modification requests to the client. 
+#     modification requests to the client.
 #     As part of the modification requests a special pseudo parameter
 #     named "__JSV_TEST_RESULT" will be sent by the JSV script. The
 #     value of this variable contains a sequence of "0" and "1"
@@ -169,9 +169,9 @@ proc jsv_ge_cleanup {} {
 #     If the "__JSV_TEST_RESULT" is modified with JSV then special
 #     test code will be executed in the JSV's counterpart (client,
 #     qmaster) In this case the expected results will be compared with
-#     the real results of the parsing code. If they match then 
+#     the real results of the parsing code. If they match then
 #     expected results then the job will be accepted (with
-#     its initial specification) independent of the JSV's RESULT 
+#     its initial specification) independent of the JSV's RESULT
 #     state. If the results do not fit then the job is rejected.
 #
 proc jsv_ge_parsing_in_client_or_master {} {
@@ -222,7 +222,7 @@ proc jsv_ge_parsing_jsv_url_user_in_client {} {
    global ts_config
 
    if {$CHECK_ACT_LEVEL == 0} {
-      # user specification not allowed in client url 
+      # user specification not allowed in client url
       set jsv_script [jsv_script_get_script_file "expect" tcl]
       set submit_args "-jsv script:troete@${jsv_script}"
       append submit_args " $ts_config(product_root)/examples/jobs/sleeper.sh 3"
@@ -337,7 +337,7 @@ proc jsv_ge_restart_after_kill {} {
       set qstat_out1 [start_sge_bin qstat "-j $job_id1"]
       set qstat_out2 [start_sge_bin qstat "-j $job_id2"]
 
-      # kill both jsv scripts 
+      # kill both jsv scripts
       set pid1 0
       set pid2 0
       set pid3 0
@@ -351,7 +351,7 @@ proc jsv_ge_restart_after_kill {} {
          # same time
          after 1500
          start_remote_prog $ts_config(master_host) "root" "kill" "-9 $pid2"
-                
+
          # This sleep is necessary to give threads time to react on killed jsv script
          after 3500
 
@@ -409,7 +409,7 @@ proc jsv_ge_restart_after_configuration_change {} {
    if {$CHECK_ACT_LEVEL == 0} {
       # change the global configuration
       # the JSV script will give us the pid of the JSV and the qmaster param will slow down
-      # the worker threads so that it is possible that each worker thread will be triggered 
+      # the worker threads so that it is possible that each worker thread will be triggered
       set global_conf(jsv_url) "script:${jsv_base_path}/jsv_get_pid.sh"
       set global_conf(qmaster_params) "__TEST_SLEEP_AFTER_REQUEST"
       set_config global_conf
@@ -427,7 +427,7 @@ proc jsv_ge_restart_after_configuration_change {} {
       regexp "JSV_PID=(\[0-9\]*)" $qstat_out1 match pid1
       regexp "JSV_PID=(\[0-9\]*)" $qstat_out2 match pid2
 
-      # this sleep is extremely important this will give both worker threads the necessary time 
+      # this sleep is extremely important this will give both worker threads the necessary time
       # to continue if the sleep would be missing here then the next GDI operation below might
       # fail due to timeout
       after 5000
@@ -445,7 +445,7 @@ proc jsv_ge_restart_after_configuration_change {} {
       regexp "JSV_PID=(\[0-9\]*)" $qstat_out3 match pid3
       regexp "JSV_PID=(\[0-9\]*)" $qstat_out4 match pid4
 
-      # this sleep is extremely important this will give both worker threads the necessary time 
+      # this sleep is extremely important this will give both worker threads the necessary time
       # to continue if the sleep would be missing here then the next GDI operation below might
       # fail due to timeout
       after 5000
@@ -465,7 +465,7 @@ proc jsv_ge_restart_after_configuration_change {} {
       regexp "JSV_PID=(\[0-9\]*)" $qstat_out5 match pid5
       regexp "JSV_PID=(\[0-9\]*)" $qstat_out6 match pid6
 
-      # this sleep is extremely important this will give both worker threads the necessary time 
+      # this sleep is extremely important this will give both worker threads the necessary time
       # to continue if the sleep would be missing here then the next GDI operation below might
       # fail due to timeout
       after 5000
@@ -479,7 +479,7 @@ proc jsv_ge_restart_after_configuration_change {} {
       if {$pid1 == 0 || $pid2 == 0 ||
           $pid3 == 0 || $pid4 == 0} {
           ts_log_severe "Did not receive one or more of the JSV scripts pids"
-      } 
+      }
       # the last 2 have to be 0
       if {$pid5 != 0 || $pid6 != 0} {
           ts_log_severe "Setting JSV URL to NONE failed"
@@ -559,7 +559,7 @@ proc jsv_ge_start_user {user jsv_url} {
       # the JSV script will give us the uid of the JSV
       set expected_user $user
       set expected_uid [get_uid $expected_user $ts_config(master_host)]
-      set global_conf(jsv_url) $jsv_url 
+      set global_conf(jsv_url) $jsv_url
       set_config global_conf
 
       # submit all jobs in hold state
@@ -569,7 +569,7 @@ proc jsv_ge_start_user {user jsv_url} {
       set job_id1 [submit_job "$submit_args" 1 60 $ts_config(master_host)]
       set qstat_out1 [start_sge_bin qstat "-j $job_id1"]
 
-      # kill both jsv scripts 
+      # kill both jsv scripts
       set uid1 0
       regexp "JSV_UID=(\[0-9\]*)" $qstat_out1 match uid1
 
@@ -591,7 +591,7 @@ proc jsv_ge_start_user_specified {} {
    # user didderent from admin user is used in JSV URL and this user should also be used as start user for the script
    jsv_ge_start_user $ts_user_config(first_foreign_user) "script:$ts_user_config(first_foreign_user)@${jsv_base_path}/jsv_get_uid.sh"
 }
-   
+
 
 proc jsv_ge_start_user_unspecified {} {
    global ts_config
@@ -620,10 +620,10 @@ proc jsv_ge_do_not_block {} {
    if {$CHECK_ACT_LEVEL == 0} {
       # change the global configuration
       # the JSV script will block the executing worker thread in master for a minute
-      set global_conf(jsv_url) "script:@${jsv_base_path}/jsv_sleep.sh" 
+      set global_conf(jsv_url) "script:@${jsv_base_path}/jsv_sleep.sh"
       set_config global_conf
 
-      # submit a job. request will block until master detects that jsv is blocking. JSV will then be killed 
+      # submit a job. request will block until master detects that jsv is blocking. JSV will then be killed
       set qsub_out1 [start_sge_bin qsub "-h $ts_config(product_root)/examples/jobs/sleeper.sh 3" $ts_config(master_host) $CHECK_USER exit_state 90]
 
       # reset the configuration changes. submit another job. This should work correctly
@@ -649,7 +649,7 @@ proc jsv_ge_receive_stderr {} {
       set global_conf(jsv_url) "script:@${jsv_base_path}/jsv_write_stdout.sh"
       set_config global_conf
 
-      #  submit a job 
+      #  submit a job
       set qsub_out1 [start_sge_bin qsub "-h $ts_config(product_root)/examples/jobs/sleeper.sh 3" $ts_config(master_host) $CHECK_USER exit_state 90]
 
       # reset the configuration changes. submit another job. This should work correctly
@@ -664,7 +664,7 @@ proc jsv_ge_receive_stderr {} {
       # the jsv script writes to its stderr stream. This output has to be contained in the
       # qsub output because this message should have been passed via GDI to the client
       set full_message ""
-      regexp "(.*This message has to appear in the answer of the request.*)" $qsub_out1 match full_message 
+      regexp "(.*This message has to appear in the answer of the request.*)" $qsub_out1 match full_message
       if {$full_message == ""} {
          ts_log_severe "Stderr of JSV script was not passed to client"
       }
@@ -682,7 +682,7 @@ proc jsv_ge_receive_stderr {} {
       set global_conf(jsv_url) "script:@${jsv_base_path}/jsv_write_stdout.sh"
       set_config global_conf
 
-      #  submit a job 
+      #  submit a job
       set qsub_out1 [start_sge_bin qsub "-h $ts_config(product_root)/examples/jobs/sleeper.sh 3" $ts_config(master_host) $CHECK_USER exit_state 90]
 
       # reset the configuration changes. submit another job. This should work correctly
@@ -697,7 +697,7 @@ proc jsv_ge_receive_stderr {} {
       # the jsv script writes to its stderr stream. This output has to be contained in the
       # qsub output because this message should have been passed via GDI to the client
       set full_message ""
-      regexp "(.*This message has to appear in the answer of the request.*)" $qsub_out1 match full_message 
+      regexp "(.*This message has to appear in the answer of the request.*)" $qsub_out1 match full_message
       if {$full_message == ""} {
          ts_log_severe "Stderr of JSV script was not passed to client"
       }
@@ -711,7 +711,7 @@ proc jsv_ge_receive_log {level} {
    global jsv_base_path
 
    if {$CHECK_ACT_LEVEL == 0} {
-      #  submit a job 
+      #  submit a job
       set qsub_out1 [start_sge_bin qsub "-ac level=$level -jsv script:@${jsv_base_path}/jsv_write_log.sh -h $ts_config(product_root)/examples/jobs/sleeper.sh 3" $ts_config(master_host) $CHECK_USER exit_state 90]
 
       # cleanup
@@ -720,7 +720,7 @@ proc jsv_ge_receive_log {level} {
 
       # check if log message is part of the output
       set full_message ""
-      regexp "(.*JSV - $level - MESSAGE.*)" $qsub_out1 match full_message 
+      regexp "(.*JSV - $level - MESSAGE.*)" $qsub_out1 match full_message
       if {$full_message == ""} {
          ts_log_severe "log $level of JSV script was not passed to client"
       }

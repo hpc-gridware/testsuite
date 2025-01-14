@@ -76,7 +76,6 @@ global check_needs
 global check_functions
 global check_root_access_needs
 global ts_config
-global submit_command
 
 set check_root_access_needs "yes"
 
@@ -110,7 +109,7 @@ lappend check_functions "usage_loose2"
 proc usage_setup_level {} {
    global ts_config
    global CHECK_ACT_LEVEL
-   global submit_command usage_master_hosts usage_accounting_summary
+   global usage_submit_command usage_master_hosts usage_accounting_summary
 
    switch -- $CHECK_ACT_LEVEL {
       2 -
@@ -121,21 +120,21 @@ proc usage_setup_level {} {
    set usage_accounting_summary 0
    switch -exact $CHECK_ACT_LEVEL {
       0 {
-         set submit_command "qsub"
+         set usage_submit_command "qsub"
          set usage_master_hosts [host_conf_get_suited_hosts]
       }
       1 -
       2 {
-         set submit_command "qrsh"
+         set usage_submit_command "qrsh"
          set usage_master_hosts [host_conf_get_suited_hosts]
       }
       100 {
-         set submit_command "qsub"
+         set usage_submit_command "qsub"
          set usage_master_hosts $ts_config(unique_arch_nodes)
       }
       101 -
       102 {
-         set submit_command "qrsh"
+         set usage_submit_command "qrsh"
          set usage_master_hosts $ts_config(unique_arch_nodes)
       }
    }
@@ -151,19 +150,19 @@ proc usage_setup_level {} {
    }
    mod_pe "tight" pe
 
-   ts_log_fine "testing $submit_command on host(s) $usage_master_hosts"
+   ts_log_fine "testing $usage_submit_command on host(s) $usage_master_hosts"
 }
 
 proc usage_setup {} {
    global ts_config
-   global saved_config
+   global usage_saved_config
 
    # backup old config
-   get_config saved_config
+   get_config usage_saved_config
 
    # set global config params
    set new_config(load_report_time) "0:0:2"
-   set new_config(execd_params) "$saved_config(execd_params) acct_reserved_usage=1 sharetree_reserved_usage=1"
+   set new_config(execd_params) "$usage_saved_config(execd_params) acct_reserved_usage=1 sharetree_reserved_usage=1"
    set_config_and_propagate new_config
 
    # create parallel environments
@@ -194,13 +193,13 @@ proc usage_setup {} {
 
 proc usage_cleanup {} {
    global ts_config
-   global saved_config
+   global usage_saved_config
 
    delete_all_jobs
    wait_for_end_of_all_jobs 60
 
    # reset config
-   reset_config_and_propagate saved_config
+   reset_config_and_propagate usage_saved_config
 
    del_queue usage.q "" 0 1
 
@@ -208,6 +207,8 @@ proc usage_cleanup {} {
    del_pe tight
    del_pe loose1
    del_pe loose2
+
+   unset -nocomplain usage_saved_config usage_submit_command usage_master_hosts usage_accounting_summary
 }
 
 # -------- local test procedures: utilities --------------------------
@@ -550,16 +551,16 @@ proc usage_monitor_check {id test_name slots acct_slots wallclock master_host {j
 # -------- local test procedures: tests ------------------------------
 proc usage_single {} {
    global ts_config
-   global submit_command usage_master_hosts
+   global usage_submit_command usage_master_hosts
    global master_host
    global CHECK_FIRST_FOREIGN_SYSTEM_USER
 
    wait_for_end_of_all_jobs
    foreach master_host $usage_master_hosts {
-      ts_log_fine "usage test: single cpu job submitted with $submit_command to run on host $master_host"
+      ts_log_fine "usage test: single cpu job submitted with $usage_submit_command to run on host $master_host"
 
       set queue [get_queue_instance "usage.q" $master_host]
-      set id [submit_with_method $submit_command "-N usage -q $queue" "$ts_config(testsuite_root_dir)/scripts/usage.sh" "sleep 60" $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER]
+      set id [submit_with_method $usage_submit_command "-N usage -q $queue" "$ts_config(testsuite_root_dir)/scripts/usage.sh" "sleep 60" $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER]
 
       usage_monitor_check $id "usage_single" 1 1 60 $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER
    }
@@ -567,7 +568,7 @@ proc usage_single {} {
 
 proc usage_tight {} {
    global ts_config
-   global submit_command usage_master_hosts
+   global usage_submit_command usage_master_hosts
    global master_host
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_ACT_LEVEL
 
@@ -585,12 +586,12 @@ proc usage_tight {} {
 
    wait_for_end_of_all_jobs
    foreach master_host $usage_master_hosts {
-      ts_log_fine "usage: tightly integrated parallel job submitted with $submit_command, master_host is $master_host"
+      ts_log_fine "usage: tightly integrated parallel job submitted with $usage_submit_command, master_host is $master_host"
 
       set queue [get_queue_instance "usage.q" $master_host]
       # with accounting_summary=TRUE
       # tasks will only sleep 100s, but RESERVED_USAGE should still be correct!
-      set id [submit_with_method $submit_command "-pe tight 4 -N usage -masterq $queue" "$ts_config(testsuite_root_dir)/scripts/pe_job.sh" "$ts_config(testsuite_root_dir)/scripts/pe_task.sh 1 $task_runtime $sleep_after" $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER]
+      set id [submit_with_method $usage_submit_command "-pe tight 4 -N usage -masterq $queue" "$ts_config(testsuite_root_dir)/scripts/pe_job.sh" "$ts_config(testsuite_root_dir)/scripts/pe_task.sh 1 $task_runtime $sleep_after" $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER]
 
       usage_monitor_check $id "usage_tight" 5 5 120 $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER
    }
@@ -598,15 +599,15 @@ proc usage_tight {} {
 
 proc usage_loose {pe expected_slots acct_slots} {
    global ts_config
-   global submit_command usage_master_hosts
+   global usage_submit_command usage_master_hosts
    global master_host
    global CHECK_FIRST_FOREIGN_SYSTEM_USER
 
    foreach master_host $usage_master_hosts {
-      ts_log_fine "usage: parallel job in pe $pe submitted with $submit_command, master_host is $master_host"
+      ts_log_fine "usage: parallel job in pe $pe submitted with $usage_submit_command, master_host is $master_host"
 
       set queue [get_queue_instance "usage.q" $master_host]
-      set id [submit_with_method $submit_command "-N usage -pe $pe 4 -masterq $queue" "$ts_config(testsuite_root_dir)/scripts/usage.sh" "sleep 60" $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER]
+      set id [submit_with_method $usage_submit_command "-N usage -pe $pe 4 -masterq $queue" "$ts_config(testsuite_root_dir)/scripts/usage.sh" "sleep 60" $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER]
 
       usage_monitor_check $id "usage_loose" $expected_slots $acct_slots 60 $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER
    }

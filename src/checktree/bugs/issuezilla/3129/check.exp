@@ -1,4 +1,3 @@
-#!/usr/bin/expect
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -34,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global check_need_running_system
 
@@ -48,7 +47,7 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "make sure exec hosts are not spooled when the global config is changed"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function issue_3129_setup
@@ -84,11 +83,7 @@ proc issue_3129_cleanup {} {
    reset_config issue_3129_backup
 
    # unset our test's global variables
-   foreach var "issue_3129_hosts issue_3129_backup" {
-      if {[info exists $var]} {
-         unset $var
-      }
-   }
+   unset -nocomplain issue_3129_hosts issue_3129_backup
 }
 
 proc get_exec_host_classic_spool_time {host} {

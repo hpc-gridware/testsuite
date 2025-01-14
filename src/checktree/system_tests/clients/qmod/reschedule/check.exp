@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # we need root access
@@ -70,27 +70,27 @@ lappend check_functions "reschedule_deleted_job"
 #
 #****** check/reschedule_setup() ******
 #  NAME
-#     reschedule_setup -- ??? 
+#     reschedule_setup -- ???
 #
 #  SYNOPSIS
-#     reschedule_setup { } 
+#     reschedule_setup { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -127,13 +127,13 @@ proc reschedule_setup {} {
 
    set pe_names      {}
    set pe_alloc_rule {}
-   lappend pe_names      "reschpe_1" 
+   lappend pe_names      "reschpe_1"
    lappend pe_alloc_rule "1"
-   lappend pe_names      "reschpe_2" 
+   lappend pe_names      "reschpe_2"
    lappend pe_alloc_rule "2"
-   lappend pe_names      "reschpe_rr" 
+   lappend pe_names      "reschpe_rr"
    lappend pe_alloc_rule "\$round_robin"
-   lappend pe_names      "reschpe_fill" 
+   lappend pe_names      "reschpe_fill"
    lappend pe_alloc_rule "\$fill_up"
 
    set schedd_config(schedule_interval) "0:0:4"
@@ -191,27 +191,27 @@ proc reschedule_setup {} {
 #
 #****** check/reschedule_cleanup() ******
 #  NAME
-#     reschedule_cleanup -- ??? 
+#     reschedule_cleanup -- ???
 #
 #  SYNOPSIS
-#     reschedule_cleanup { } 
+#     reschedule_cleanup { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -245,6 +245,8 @@ proc reschedule_cleanup {} {
    foreach host $ts_config(execd_nodes) {
       enable_queue [get_queue_instance all.q $host]
    }
+
+   unset -nocomplain rerun_queue rerun_queue2 no_rerun_queue rerun_host no_rerun_host stored_configuration pe_names
 }
 
 #
@@ -252,27 +254,27 @@ proc reschedule_cleanup {} {
 #
 #****** check/reschedule_submit_jobs() ******
 #  NAME
-#     reschedule_submit_jobs -- ??? 
+#     reschedule_submit_jobs -- ???
 #
 #  SYNOPSIS
-#     reschedule_submit_jobs { } 
+#     reschedule_submit_jobs { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -281,12 +283,12 @@ proc reschedule_cleanup {} {
 proc reschedule_submit_jobs {} {
    global ts_config
    global rerun_queue no_rerun_queue rerun_host no_rerun_host
-  
+
    set jobs {}
    set my_outputs "-o /dev/null -e /dev/null"
    set arguments "$my_outputs -q [get_queue_instance $rerun_queue $rerun_host] -r y $ts_config(product_root)/examples/jobs/sleeper.sh 1000"
    lappend jobs [submit_job $arguments]
-   
+
    set arguments "$my_outputs -q [get_queue_instance $rerun_queue $rerun_host] -r n $ts_config(product_root)/examples/jobs/sleeper.sh 1000"
    lappend jobs [submit_job $arguments]
 
@@ -298,7 +300,7 @@ proc reschedule_submit_jobs {} {
 
    set arguments "$my_outputs -q [get_queue_instance $no_rerun_queue $no_rerun_host] -r y $ts_config(product_root)/examples/jobs/sleeper.sh 1000"
    lappend jobs [submit_job $arguments]
- 
+
    set arguments "$my_outputs -q [get_queue_instance $no_rerun_queue $no_rerun_host] $ts_config(product_root)/examples/jobs/sleeper.sh 1000"
    lappend jobs [submit_job $arguments]
 
@@ -314,12 +316,12 @@ proc reschedule_submit_jobs {} {
    ts_log_fine "disabling queues $no_rerun_queue and $rerun_queue"
    disable_queue [get_queue_instance $no_rerun_queue $no_rerun_host]
    disable_queue [get_queue_instance $rerun_queue $rerun_host]
-   
+
    # send qmod -r to each job
-   ts_log_fine "sending qmod -r to jobs $jobs_string"   
+   ts_log_fine "sending qmod -r to jobs $jobs_string"
    set output [start_sge_bin "qmod" "-r $jobs_string"]
    ts_log_fine $output
-  
+
    set sched_jobs    "[lindex $jobs 0] [lindex $jobs 2] [lindex $jobs 4]"
    set no_sched_jobs "[lindex $jobs 1] [lindex $jobs 3] [lindex $jobs 5]"
    ts_log_fine "jobs $sched_jobs should be pending ..."
@@ -350,7 +352,7 @@ proc reschedule_submit_jobs {} {
    disable_queue [get_queue_instance $no_rerun_queue $no_rerun_host]
    disable_queue [get_queue_instance $rerun_queue $rerun_host]
 
-   # send qmod -r to each job in queue 
+   # send qmod -r to each job in queue
    ts_log_fine "sending qmod -r to queues $no_rerun_queue and $rerun_queue"
    set output [start_sge_bin "qmod" "-r [get_queue_instance $no_rerun_queue $no_rerun_host] [get_queue_instance $rerun_queue $rerun_host]"]
    ts_log_fine $output
@@ -390,27 +392,27 @@ proc reschedule_submit_jobs {} {
 #
 #****** check/reschedule_checkpointing() ******
 #  NAME
-#     reschedule_checkpointing -- ??? 
+#     reschedule_checkpointing -- ???
 #
 #  SYNOPSIS
-#     reschedule_checkpointing { } 
+#     reschedule_checkpointing { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -419,7 +421,7 @@ proc reschedule_submit_jobs {} {
 proc reschedule_checkpointing {} {
    global ts_config
    global rerun_queue no_rerun_queue rerun_host no_rerun_host
-   
+
    set jobs {}
    set my_outputs "-o /dev/null -e /dev/null"
    set arguments "$my_outputs -ckpt qmod_with_r $ts_config(product_root)/examples/jobs/sleeper.sh 1000"
@@ -445,7 +447,7 @@ proc reschedule_checkpointing {} {
 
    ts_log_fine "disabling queue $rerun_queue"
    disable_queue [get_queue_instance $rerun_queue $rerun_host]
- 
+
    # send qmod -r to each job
    ts_log_fine "sending qmod -r to jobs $jobs_string"
    set output [start_sge_bin "qmod" "-r $jobs_string"]
@@ -503,18 +505,18 @@ proc reschedule_checkpointing {} {
 proc reschedule_checkpointing_forced {} {
    global ts_config
    global rerun_queue no_rerun_queue rerun_host no_rerun_host
- 
+
    set jobs {}
    set my_outputs "-o /dev/null -e /dev/null"
    set arguments "$my_outputs -ckpt qmod_with_r $ts_config(product_root)/examples/jobs/sleeper.sh 1000"
    lappend jobs [submit_job $arguments]
- 
+
    set arguments "$my_outputs -ckpt qmod_without_r $ts_config(product_root)/examples/jobs/sleeper.sh 1000"
    lappend jobs [submit_job $arguments]
 
    set arguments "$my_outputs -ckpt qmod_with_r -r n $ts_config(product_root)/examples/jobs/sleeper.sh 1000"
    lappend jobs [submit_job $arguments]
- 
+
    set arguments "$my_outputs -ckpt qmod_without_r -r y $ts_config(product_root)/examples/jobs/sleeper.sh 1000"
    lappend jobs [submit_job $arguments]
 
@@ -555,7 +557,7 @@ proc reschedule_checkpointing_forced {} {
    ts_log_fine "disabling queue $rerun_queue"
    disable_queue [get_queue_instance $rerun_queue $rerun_host]
 
-   # send qmod -r to each job in queue 
+   # send qmod -r to each job in queue
    ts_log_fine "sending qmod -f -r to queue $rerun_queue"
    set output [start_sge_bin "qmod" "-f -r [get_queue_instance $rerun_queue $rerun_host]"]
    ts_log_fine $output
@@ -590,27 +592,27 @@ proc reschedule_checkpointing_forced {} {
 #
 #****** check/reschedule_qsh_qlogin_qrsh_qrlogin() ******
 #  NAME
-#     reschedule_qsh_qlogin_qrsh_qrlogin -- ??? 
+#     reschedule_qsh_qlogin_qrsh_qrlogin -- ???
 #
 #  SYNOPSIS
-#     reschedule_qsh_qlogin_qrsh_qrlogin { } 
+#     reschedule_qsh_qlogin_qrsh_qrlogin { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -621,7 +623,7 @@ proc reschedule_qsh_qlogin_qrsh_qrlogin {} {
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
    global CHECK_DISPLAY_OUTPUT
    global rerun_queue no_rerun_queue rerun_host no_rerun_host
- 
+
    set host $ts_config(master_host)
    set no_jobs 4
    set result ""
@@ -665,7 +667,7 @@ proc reschedule_qsh_qlogin_qrsh_qrlogin {} {
          after 1500
       }
 
-      # on some systems (Solaris 10), telnet doesn't present a login, but tries 
+      # on some systems (Solaris 10), telnet doesn't present a login, but tries
       # to login current user first
       if {[string first "assword:" $result] < 0} {
          if {[string first "login:" $result] < 0} {
@@ -741,7 +743,7 @@ proc reschedule_qsh_qlogin_qrsh_qrlogin {} {
    ts_log_fine "sending qmod -r to jobs $jobs_string"
    set output [start_sge_bin "qmod" "-r $jobs_string"]
    ts_log_fine $output
- 
+
    ts_log_fine "jobs $jobs_string should still run ..."
    set index 0
    foreach elem $jobs_string {
@@ -751,7 +753,7 @@ proc reschedule_qsh_qlogin_qrsh_qrlogin {} {
    }
 
    enable_queue [get_queue_instance $rerun_queue $rerun_host]
- 
+
    foreach elem $jobs_string {
       delete_job $elem
    }
@@ -770,27 +772,27 @@ proc reschedule_qsh_qlogin_qrsh_qrlogin {} {
 #
 #****** check/reschedule_pe_jobs() ******
 #  NAME
-#     reschedule_pe_jobs -- ??? 
+#     reschedule_pe_jobs -- ???
 #
 #  SYNOPSIS
-#     reschedule_pe_jobs { } 
+#     reschedule_pe_jobs { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -867,7 +869,7 @@ proc reschedule_pe_jobs {} {
           ts_log_fine "job $job should still run ..."
           wait_for_jobstart $job "Sleeper" 60
        }
- 
+
        ts_log_fine "rescheduling MASTER task queue \"$master_queue\""
        set output [start_sge_bin "qmod" "-r $master_queue"]
        ts_log_fine $output
@@ -888,7 +890,7 @@ proc reschedule_pe_jobs {} {
        ts_log_fine "enable queue $rerun_queue and $rerun_queue2"
        enable_queue [get_queue_instance $rerun_queue $rerun_host]
        enable_queue [get_queue_instance $rerun_queue2 $no_rerun_host]
- 
+
        if {[wait_for_jobstart $job "Sleeper" 45] == 0} {
           set mytime [expr [timestamp] + 45]
           set run 1
@@ -939,27 +941,27 @@ proc reschedule_pe_jobs {} {
 #
 #****** check/reschedule_deleted_job() ******
 #  NAME
-#     reschedule_deleted_job -- ??? 
+#     reschedule_deleted_job -- ???
 #
 #  SYNOPSIS
-#     reschedule_deleted_job { } 
+#     reschedule_deleted_job { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -986,7 +988,7 @@ proc reschedule_deleted_job {} {
    ts_log_fine "deleting job $job_id ..."
    # Make delete_job ignore errors: Beginning with 6.0, we get an error
    # when deleting a job while the execd is down.
-   # Nevertheless the job is being registered for deletion, 
+   # Nevertheless the job is being registered for deletion,
    # and gets deleted once the execd is up again.
    delete_job $job_id 0 0 0
 

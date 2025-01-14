@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global check_need_running_system
 
@@ -50,7 +50,7 @@ set check_description(2)  "check cpu accounting with only SHARETREE_RESERVED_USA
 set check_description(3)  "check cpu accounting with both ACCT_RESERVED_USAGE and SHARETREE_RESERVED_USAGE set"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_level_function issue_3094_setup
@@ -75,7 +75,7 @@ proc issue_3094_setup {} {
    # depending on the runlevel, set execd_params
    set new_conf(load_report_time) "0:0:1"
    set execd_params ""
-   if {[info exists issue_3094_backup(execd_params)] && 
+   if {[info exists issue_3094_backup(execd_params)] &&
        [string compare -nocase $issue_3094_backup(execd_params) "none"] != 0} {
       set execd_params "$issue_3094_backup(execd_params),"
    }
@@ -107,11 +107,7 @@ proc issue_3094_cleanup {} {
    reset_config_and_propagate issue_3094_backup $issue_3094_host
 
    # unset our test's global variables
-   foreach var "issue_3094_backup issue_3094_host" {
-      if {[info exists $var]} {
-         unset $var
-      }
-   }
+   unset -nocomplain issue_3094_backup issue_3094_host
 }
 
 

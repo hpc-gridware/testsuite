@@ -56,7 +56,16 @@ set ts_checktree($drmaaj_checktree_nr,start_runlevel_hooks_0)   "drmaaj_test_run
 ##
 proc drmaaj_compile {compile_hosts a_report} {
    upvar $a_report report
-   return [drmaaj_build [host_conf_get_java_compile_host] "package" report "-Dmaven.test.skip"]
+
+   # build the drmaa.jar
+   set ret [drmaaj_build [host_conf_get_java_compile_host] "package" report "-Dmaven.test.skip"]
+
+   # build the test classes
+   if {$ret == 0} {
+      return [drmaaj_build [host_conf_get_java_compile_host] "test-compile" report ""]
+   }
+
+   return $ret
 }
 
 proc drmaaj_compile_clean { compile_hosts a_report } {

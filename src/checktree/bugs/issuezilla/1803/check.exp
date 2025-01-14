@@ -41,17 +41,17 @@
 #     issue_1803
 #
 #  FUNCTION
-#     Run level short: 
-#     
+#     Run level short:
+#
 #*******************************************************************************
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -64,7 +64,7 @@ set check_description(0)  "batch job submission"
 
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function issue_1803_setup
@@ -76,18 +76,16 @@ set check_cleanup_function issue_1803_cleanup
 set check_functions ""
 lappend check_functions "issue_1803_test"
 
-global issue_1803_stored_configuration  
-
 # -------- local test procedures: initialization------------------------------
 
 proc issue_1803_setup {} {
-   global ts_config test_host
-   global issue_1803_global_conf issue_1803_host_conf issue_1803_allq_conf
+   global ts_config
+   global issue_1803_global_conf issue_1803_host_conf issue_1803_allq_conf issue_1803_use_local_conf issue_1803_test_host
 
    ts_log_fine "\n--- Setup ---"
 
    # we need just any test execd host for this test
-   set test_host [lindex $ts_config(execd_nodes) 0]
+   set issue_1803_test_host [lindex $ts_config(execd_nodes) 0]
 
    # we will change the global configuration, the scheduler configuration,
    # the configuration of the queue "all.q" and possibly the one of the
@@ -95,7 +93,7 @@ proc issue_1803_setup {} {
    # to default, so we save the three others here:
    ts_log_fine "saving current configurations ..."
    get_config issue_1803_global_conf "global"
-   get_config issue_1803_host_conf $test_host
+   get_config issue_1803_host_conf $issue_1803_test_host
    get_queue "all.q" issue_1803_allq_conf
 
    # set short scheduling interval
@@ -114,10 +112,10 @@ proc issue_1803_setup {} {
    # if there is none, do it in the global config.
    if {[info exists issue_1803_host_conf(execd_params)] == 1} {
       # there is a host local execd_params list set
-      set local 1
+      set issue_1803_use_local_host 1
       set conf_execd_params $issue_1803_host_conf(execd_params)
    } else {
-      set local 0
+      set issue_1803_use_local_host 0
       set conf_execd_params $issue_1803_global_conf(execd_params)
    }
 
@@ -127,10 +125,10 @@ proc issue_1803_setup {} {
       append my_execd_params ",$conf_execd_params"
    }
 
-   if {$local == 1} {
+   if {$issue_1803_use_local_host == 1} {
       # modify the test exec host config
-      set my_host_conf(execd_params) "$my_execd_params"
-      set_config my_host_conf $test_host
+      set my_host_conf(execd_params) $my_execd_params
+      set_config my_host_conf $issue_1803_test_host
    } else {
       # modify the global config
       set my_global_conf(execd_params) "$my_execd_params"
@@ -143,19 +141,19 @@ proc issue_1803_setup {} {
 }
 
 proc issue_1803_cleanup {} {
-   global test_host
-   global issue_1803_global_conf issue_1803_host_conf issue_1803_allq_conf
+   global issue_1803_test_host
+   global issue_1803_global_conf issue_1803_host_conf issue_1803_allq_conf issue_1803_use_local_conf issue_1803_test_host
 
    ts_log_fine "--- Cleanup ---"
    delete_all_jobs
    wait_for_end_of_all_jobs 60
 
    # delete the content of the "active_jobs" directory
-   clear_active_jobs_dir $test_host
+   clear_active_jobs_dir $issue_1803_test_host
 
    ts_log_fine "restoring original configuration ..."
    reset_schedd_config
-   set_config issue_1803_host_conf $test_host
+   set_config issue_1803_host_conf $issue_1803_test_host
    reset_config_and_propagate issue_1803_global_conf
 
    set my_queue_conf(prolog) $issue_1803_allq_conf(prolog)
@@ -166,13 +164,13 @@ proc issue_1803_cleanup {} {
 
    switch_to_admin_user_system
 
-   unset -nocomplain issue_1803_global_conf issue_1803_host_conf issue_1803_allq_conf
+   unset -nocomplain issue_1803_global_conf issue_1803_host_conf issue_1803_allq_conf issue_1803_use_local_conf issue_1803_test_host
 }
 
 
 proc issue_1803_test {} {
    global check_description CHECK_USER ts_user_config
-   global ts_config test_host
+   global ts_config issue_1803_test_host
    global CHECK_ACT_LEVEL CHECK_DISPLAY_OUTPUT
    ts_log_fine $check_description($CHECK_ACT_LEVEL)
 
@@ -190,14 +188,14 @@ proc issue_1803_test {} {
 
       # init_logfile_wait instead of sleep
 
-      set spool_dir [get_spool_dir $test_host execd]
+      set spool_dir [get_spool_dir $issue_1803_test_host execd]
 
       set qsub_arg_list {}
-      set csh_path [get_binary_path $test_host "csh"]
-      lappend qsub_arg_list "-l h=$test_host -o /dev/null -e /dev/null -S $csh_path"
-      lappend qsub_arg_list "-b y -l h=$test_host -o /dev/null -e /dev/null -S $csh_path"
-      lappend qsub_arg_list "-l h=$test_host -S $csh_path"
-      lappend qsub_arg_list "-b y -l h=$test_host -S $csh_path"
+      set csh_path [get_binary_path $issue_1803_test_host "csh"]
+      lappend qsub_arg_list "-l h=$issue_1803_test_host -o /dev/null -e /dev/null -S $csh_path"
+      lappend qsub_arg_list "-b y -l h=$issue_1803_test_host -o /dev/null -e /dev/null -S $csh_path"
+      lappend qsub_arg_list "-l h=$issue_1803_test_host -S $csh_path"
+      lappend qsub_arg_list "-b y -l h=$issue_1803_test_host -S $csh_path"
 
       foreach job_args $qsub_arg_list {
          set job_id [submit_job "$job_args $ts_config(product_root)/examples/jobs/sleeper.sh 1"]
@@ -209,10 +207,10 @@ proc issue_1803_test {} {
          set jobs_dir "$spool_dir/active_jobs/$job_id.1"
          set trace_file "$jobs_dir/trace"
          ts_log_fine "trace file:       $trace_file"
-         wait_for_remote_file $test_host $ts_user_config(second_foreign_user) $trace_file
+         wait_for_remote_file $issue_1803_test_host $ts_user_config(second_foreign_user) $trace_file
 
          ts_log_fine "reading $trace_file ..."
-         set trace_output [start_remote_prog $test_host $ts_user_config(second_foreign_user) cat $trace_file prg_exit_state 10]
+         set trace_output [start_remote_prog $issue_1803_test_host $ts_user_config(second_foreign_user) cat $trace_file prg_exit_state 10]
 #         ts_log_fine "---\n$trace_output\n---"
          set trace_output [split $trace_output "\r\n"]
 
@@ -294,5 +292,4 @@ proc issue_1803_test {} {
       }
    }
 }
-
 

@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -48,7 +48,7 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED JENKINS_DISABLED"
 set check_description(0)  "jsv full check"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function jsv_full_setup
@@ -68,7 +68,7 @@ proc jsv_full_setup {} {
    # get base path of scripts
    set jsv_base_path $ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_full
 
-   # change global config 
+   # change global config
    get_config jsv_org_global_conf
    set global_conf(load_report_time) "00:00:04"
    set global_conf(max_unheard) "00:00:15"
@@ -81,7 +81,7 @@ proc jsv_full_cleanup {} {
    global jsv_base_path
    global jsv_job_id
    global jsv_hjob_id
- 
+
    # trigger and wait for job termination
    delete_all_jobs
    wait_for_end_of_all_jobs 60
@@ -116,12 +116,12 @@ proc jsv_full_all_all_correct {} {
    if {[file exists $home_file]} {
       ts_log_severe "Test was not executed because there either is another TS running the same test or there is a .sge_request file in the home directory of the test user"
       set skip 1
-   } 
+   }
 
-   # initialisation 
+   # initialisation
    if {$skip == 0} {
       # define server side jsv
-      set global_conf(jsv_url) "script:${jsv_base_path}/jsvEcorrect.sh"   
+      set global_conf(jsv_url) "script:${jsv_base_path}/jsvEcorrect.sh"
       set_config global_conf
 
       # Create a new directory and store a .sge_request file containing a -jsv switch
@@ -172,7 +172,7 @@ proc jsv_full_all_all_correct {} {
       regexp "C=(\[0-9\]*)," $context match qstat_c
       regexp "D=(\[0-9\]*)," $context match qstat_d
       regexp "E=(\[0-9\]*)" $context match qstat_e
-   } 
+   }
 
    # cleanup stuff
    if {$skip == 0} {
@@ -193,7 +193,7 @@ proc jsv_full_all_all_correct {} {
          file delete $global_file
       }
    }
-  
+
    if {$skip == 0} {
       set count_a $qstat_a
       set count_b [expr $qstat_b - $qstat_a]
@@ -202,20 +202,20 @@ proc jsv_full_all_all_correct {} {
       set count_e [expr $qstat_e - $qstat_d]
 
       if {$count_a != 1} {
-         ts_log_severe "JSV specified at commandline was executed $count_a times"      
+         ts_log_severe "JSV specified at commandline was executed $count_a times"
       }
       if {$count_b != 1} {
-         ts_log_severe "JSV specified in .sge_request of cwd was executed $count_b times"      
+         ts_log_severe "JSV specified in .sge_request of cwd was executed $count_b times"
       }
       if {$count_c != 1} {
-         ts_log_severe "JSV specified in .sge_request of home directory was executed $count_c times"      
+         ts_log_severe "JSV specified in .sge_request of home directory was executed $count_c times"
       }
       if {$count_d != 1} {
-         ts_log_severe "JSV specified in global sge_request file was executed $count_d times"      
+         ts_log_severe "JSV specified in global sge_request file was executed $count_d times"
       }
       if {$count_e != 1} {
-         ts_log_severe "JSV specified in global configuration was executed $count_e times"      
+         ts_log_severe "JSV specified in global configuration was executed $count_e times"
       }
-   } 
+   }
 }
 

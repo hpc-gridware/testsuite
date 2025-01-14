@@ -38,7 +38,7 @@ proc kill_running_system {} {
    global ts_config
    global CHECK_USER CORE_INSTALLED
    global check_use_installed_system
- 
+
    set result [check_all_system_times]
    ts_log_fine "check_all_system_times returned $result"
    if {$result != 0} {
@@ -70,7 +70,7 @@ proc make_user_cert {} {
    global CHECK_MAIN_RESULTS_DIR
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER CHECK_REPORT_EMAIL_TO
    global CHECK_USER CHECK_DEBUG_LEVEL
-   global ts_config 
+   global ts_config
    global CHECK_USER CHECK_ADMIN_USER_SYSTEM
 
    if {$CHECK_ADMIN_USER_SYSTEM == 0 } {
@@ -78,24 +78,24 @@ proc make_user_cert {} {
    } else {
       set cert_user $CHECK_USER
    }
-  
+
    if { !$check_use_installed_system } {
       # create testsuite user certificates for csp mode
        if {$ts_config(product_feature) == "csp"} {
           ts_log_fine "removing poss. existing user_file.txt \"$CHECK_MAIN_RESULTS_DIR/user_file.txt\" ..."
           set result [ start_remote_prog "$ts_config(master_host)" "$CHECK_USER" "rm" "$CHECK_MAIN_RESULTS_DIR/user_file.txt" ]
           ts_log_fine $result
-     
+
           ts_log_fine "creating file \"$CHECK_MAIN_RESULTS_DIR/user_file.txt\" ..."
           set script [ open "$CHECK_MAIN_RESULTS_DIR/user_file.txt" "w" ]
           puts $script "$CHECK_FIRST_FOREIGN_SYSTEM_USER:first_testsuite_user:$CHECK_REPORT_EMAIL_TO"
           puts $script "$CHECK_SECOND_FOREIGN_SYSTEM_USER:second_testsuite_user:$CHECK_REPORT_EMAIL_TO"
           flush $script
           close $script
-         
+
           set result [ start_remote_prog "$ts_config(master_host)" $cert_user "util/sgeCA/sge_ca" "-usercert $CHECK_MAIN_RESULTS_DIR/user_file.txt" prg_exit_state 60 0 $ts_config(product_root)]
           ts_log_fine $result
-       
+
           ts_log_fine "removing poss. existing user_file.txt \"$CHECK_MAIN_RESULTS_DIR/user_file.txt\" ..."
           set result [ start_remote_prog "$ts_config(master_host)" "$CHECK_USER" "rm" "$CHECK_MAIN_RESULTS_DIR/user_file.txt" ]
           ts_log_fine $result
@@ -118,7 +118,7 @@ proc cleanup_system {} {
       ts_log_warning "error connecting qmaster: $result"
       return
    }
-   
+
    ts_log_newline
    ts_log_fine "cleaning up system"
 
@@ -137,7 +137,7 @@ proc cleanup_system {} {
    ts_log_newline
    ts_log_fine "removing ckpt objects ..."
    set NO_CKPT_INTERFACE_DEFINED [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_QCONF_NOXDEFINED_S] "ckpt interface definition"]
-   
+
    set result [start_sge_bin "qconf" "-sckptl"]
 
    if { [string first $NO_CKPT_INTERFACE_DEFINED $result] >= 0 } {
@@ -160,10 +160,10 @@ proc cleanup_system {} {
   } else {
      foreach elem $result {
         ts_log_fine "removing PE $elem."
-        del_pe $elem 
+        del_pe $elem
      }
   }
- 
+
    # remove all calendars
    ts_log_newline
   ts_log_fine "removing calendars ..."
@@ -176,11 +176,11 @@ proc cleanup_system {} {
   } else {
      foreach elem $result {
         ts_log_fine "removing calendar $elem."
-        del_calendar $elem 
+        del_calendar $elem
      }
   }
 
-   # remove all projects 
+   # remove all projects
   if { [ string compare $ts_config(product_type) "sgeee" ] == 0 } {
       ts_log_newline
      ts_log_fine "removing project objects ..."
@@ -198,7 +198,7 @@ proc cleanup_system {} {
   }
 
    # JG: TODO: what about SGEEE users?
-  
+
    # remove all access lists
    # JG: TODO: accesslists are referenced in a variety of objects - first delete them
    #           there!
@@ -230,14 +230,14 @@ proc cleanup_system {} {
    }
 
    # cleanup the tmpdir's referenced in queues
-   cleanup_tmpdirs 
+   cleanup_tmpdirs
 
    # add new testsuite queues
    ts_log_newline
   ts_log_fine "adding testsuite queues ..."
   add_queue "all.q" "@allhosts" q_param 1
-  
-  
+
+
   # execute the clean hooks of all checktrees
   if { [ exec_checktree_clean_hooks ] != 0 } {
      ts_log_config "exec_checktree_clean_hooks reported an error"
@@ -261,20 +261,20 @@ proc setup_queues {} {
    set new_values(qtype)                 "BATCH INTERACTIVE CHECKPOINTING PARALLEL"
 
    set result [mod_queue "all.q" "" new_values]
-   switch -- $result { 
+   switch -- $result {
       -1 {
          ts_log_severe "modify queue all.q - got timeout"
       }
       -100 {
          ts_log_severe "could not modify queue"
-      } 
+      }
    }
 
    if {$result == 0} {
       # for each individual queue set the slots attribute
       foreach hostname $ts_config(execd_nodes) {
          unset new_values
-         set index [lsearch $ts_config(execd_nodes) $hostname] 
+         set index [lsearch $ts_config(execd_nodes) $hostname]
          set slots_tmp [node_get_processors $hostname]
 
          if {$slots_tmp <= 0} {
@@ -292,48 +292,48 @@ proc setup_queues {} {
          set new_values(slots) $slots
 
          set result [mod_queue "all.q" $hostname new_values]
-         switch -- $result { 
+         switch -- $result {
             -1 {
                ts_log_severe "modify queue ${hostname}.q - got timeout"
             }
             -100 {
                ts_log_severe "could not modify queue"
-            } 
+            }
          }
       }
    }
 
    # wait until all hosts are up
    if {$result == 0} {
-      wait_for_load_from_all_queues 300 
+      wait_for_load_from_all_queues 300
    }
 }
 
 #                                                             max. column:     |
 #****** install_core_system/setup_testcheckpointobject() ******
-# 
+#
 #  NAME
-#     setup_testcheckpointobject -- ??? 
+#     setup_testcheckpointobject -- ???
 #
 #  SYNOPSIS
-#     setup_testcheckpointobject { } 
+#     setup_testcheckpointobject { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -346,37 +346,37 @@ proc setup_testcheckpointobject {} {
 
 #                                                             max. column:     |
 #****** install_core_system/setup_conf() ******
-# 
+#
 #  NAME
-#     setup_conf -- ??? 
+#     setup_conf -- ???
 #
 #  SYNOPSIS
-#     setup_conf { } 
+#     setup_conf { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
 #*******************************
 proc setup_conf {} {
-  global CHECK_DEFAULT_DOMAIN 
-  global CHECK_REPORT_EMAIL_TO 
-  global CHECK_USER 
+  global CHECK_DEFAULT_DOMAIN
+  global CHECK_REPORT_EMAIL_TO
+  global CHECK_USER
   global CHECK_DNS_DOMAINNAME
 
   global ts_config
@@ -387,7 +387,7 @@ proc setup_conf {} {
   get_config old_config
 
   # set finished_job in global config
-  set params(finished_jobs) "0"  
+  set params(finished_jobs) "0"
   set params(load_report_time) "00:00:15"
   set params(reschedule_unknown) "00:00:00"
   set params(loglevel) "log_info"
@@ -452,7 +452,7 @@ proc setup_conf {} {
   }
 
   get_config new_config
-  
+
   set arrays_old [ array names old_config ]
   set arrays_new [ array names new_config ]
 
@@ -469,7 +469,7 @@ proc setup_conf {} {
           if { [ string compare $param "max_unheard" ] == 0 } { continue }
           if { [ string compare $param "reporting_params" ] == 0 } { continue }
 
-          ts_log_config "config parameter $param:\ndefault setup: $old, after testsuite reset: $new" 
+          ts_log_config "config parameter $param:\ndefault setup: $old, after testsuite reset: $new"
        }
     }
   } else {
@@ -478,7 +478,7 @@ proc setup_conf {} {
             ts_log_severe "parameter $elem not in new configuration"
          }
       }
-      foreach elem $arrays_new { 
+      foreach elem $arrays_new {
          if { [string first $elem $arrays_old] < 0 } {
            ts_log_severe "parameter $elem not in old configuration"
          }
@@ -523,27 +523,27 @@ proc setup_conf {} {
 
 #****** check/setup_execd_conf() ***********************************************
 #  NAME
-#     setup_execd_conf() -- ??? 
+#     setup_execd_conf() -- ???
 #
 #  SYNOPSIS
-#     setup_execd_conf { } 
+#     setup_execd_conf { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -765,29 +765,29 @@ proc setup_execd_conf_ssh {conf_name node} {
 
 #                                                             max. column:     |
 #****** install_core_system/setup_mytestproject() ******
-# 
+#
 #  NAME
-#     setup_mytestproject -- ??? 
+#     setup_mytestproject -- ???
 #
 #  SYNOPSIS
-#     setup_mytestproject { } 
+#     setup_mytestproject { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -809,29 +809,29 @@ proc setup_mytestproject {} {
 
 #                                                             max. column:     |
 #****** install_core_system/setup_mytestpe() ******
-# 
+#
 #  NAME
-#     setup_mytestpe -- ??? 
+#     setup_mytestpe -- ???
 #
 #  SYNOPSIS
-#     setup_mytestpe { } 
+#     setup_mytestpe { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -846,29 +846,29 @@ proc setup_mytestpe {} {
 
 #                                                             max. column:     |
 #****** install_core_system/setup_deadlineuser() ******
-# 
+#
 #  NAME
-#     setup_deadlineuser -- ??? 
+#     setup_deadlineuser -- ???
 #
 #  SYNOPSIS
-#     setup_deadlineuser { } 
+#     setup_deadlineuser { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -881,29 +881,29 @@ proc setup_deadlineuser {} {
 
 #                                                             max. column:     |
 #****** install_core_system/setup_schedconf() ******
-# 
+#
 #  NAME
-#     setup_schedconf -- ??? 
+#     setup_schedconf -- ???
 #
 #  SYNOPSIS
-#     setup_schedconf { } 
+#     setup_schedconf { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -933,7 +933,7 @@ proc setup_schedconf {} {
           if { [ string compare $param "schedule_interval" ] == 0 } { continue }
           if { [ string compare $param "flush_submit_sec" ] == 0 } { continue }
           if { [ string compare $param "flush_finish_sec" ] == 0 } { continue }
-          ts_log_config "scheduler parameter $param:\ndefault setup: $old, after testsuite reset: $new" 
+          ts_log_config "scheduler parameter $param:\ndefault setup: $old, after testsuite reset: $new"
        }
     }
   } else {
@@ -945,29 +945,29 @@ proc setup_schedconf {} {
 
 #                                                             max. column:     |
 #****** install_core_system/setup_default_calendars() ******
-# 
+#
 #  NAME
-#     setup_default_calendars -- ??? 
+#     setup_default_calendars -- ???
 #
 #  SYNOPSIS
-#     setup_default_calendars { } 
+#     setup_default_calendars { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -1009,7 +1009,7 @@ proc setup_check_message_file_line {line} {
 
 proc setup_check_messages_files {} {
    global ts_config CHECK_USER
-   global check_use_installed_system 
+   global check_use_installed_system
 
    if {$check_use_installed_system} {
       return
@@ -1017,7 +1017,7 @@ proc setup_check_messages_files {} {
 
    ts_log_fine "qmaster ..."
    set messages [get_qmaster_messages_file]
-   get_file_content $ts_config(master_host) $CHECK_USER $messages 
+   get_file_content $ts_config(master_host) $CHECK_USER $messages
    if {$file_array(0) < 1} {
       ts_log_severe "no qmaster messages file:\n$messages"
    }
@@ -1026,7 +1026,7 @@ proc setup_check_messages_files {} {
    }
 
    # Since execd does not immediately write the messages file after
-   # startup it might take some time until it is completely available 
+   # startup it might take some time until it is completely available
    set had_timeout 0
    foreach execd $ts_config(execd_nodes) {
       # get messages file path
@@ -1062,7 +1062,7 @@ proc setup_check_messages_files {} {
    foreach execd $ts_config(execd_nodes) {
       ts_log_fine "execd $execd ..."
       set messages [get_execd_messages_file $execd]
-      get_file_content $execd $CHECK_USER $messages 
+      get_file_content $execd $CHECK_USER $messages
       if {$file_array(0) < 1} {
          ts_log_severe "no execd(host=$execd) messages file:\n$messages"
       }
@@ -1088,7 +1088,7 @@ proc setup_inhouse_cluster {} {
 #     setup_win_users() -- special setup for windows users
 #
 #  SYNOPSIS
-#     setup_win_users { } 
+#     setup_win_users { }
 #
 #  FUNCTION
 #     If we have windows hosts in the cluster, this procedure does special setup
@@ -1177,12 +1177,12 @@ proc setup_and_check_users {} {
 #     setup_win_user_passwd() -- register the passwd of a windows user
 #
 #  SYNOPSIS
-#     setup_win_user_passwd { user } 
+#     setup_win_user_passwd { user }
 #
 #  FUNCTION
 #     Registeres the passwd of a given windows user by calling the sgepasswd
 #     utilbin binary and answering the password questions.
-#  
+#
 #     Requires that passwords have been interactively entered through the
 #     set_root_passwd procedure.
 #
@@ -1198,7 +1198,7 @@ proc setup_win_user_passwd {user} {
    global ts_config
 
    ts_log_fine "setting sgepasswd of user $user ..."
-   
+
    set id [open_remote_spawn_process $ts_config(master_host) $CHECK_USER "sgepasswd" $user]
    set sp_id [lindex $id 1]
 
@@ -1215,15 +1215,15 @@ proc setup_win_user_passwd {user} {
          ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
          close_spawn_process $id
          return
-      }   
+      }
 
-      -i $sp_id eof { 
+      -i $sp_id eof {
          ts_log_severe "unexpected eof"
          close_spawn_process $id
          return
       }
 
-      -i $sp_id timeout { 
+      -i $sp_id timeout {
          ts_log_severe "timeout while waiting for password question"
          close_spawn_process $id;
          return
@@ -1255,10 +1255,10 @@ proc setup_win_user_passwd {user} {
 #     setup_sge_aliases_file() -- adds automounter prefixes to sge_aliases file
 #
 #  SYNOPSIS
-#     setup_sge_aliases_file { } 
+#     setup_sge_aliases_file { }
 #
 #  FUNCTION
-#     The installation should copy a sge_aliases file to 
+#     The installation should copy a sge_aliases file to
 #     $SGE_ROOT/$SGE_CELL/common which contains all known fixed automounter
 #     prefixes.
 #     This function checks if the sge_aliases file was copied, if not creates
@@ -1281,13 +1281,13 @@ proc setup_sge_aliases_file {} {
 
       set data(src-path,$index)     "/tmp_mnt/"
       set data(sub-host,$index)     "*"
-      set data(exec-host,$index)    "*" 
+      set data(exec-host,$index)    "*"
       set data(replacement,$index)  "/"
       incr index 1
 
       set data(src-path,$index)     "/private/var/automount/"
       set data(sub-host,$index)     "*"
-      set data(exec-host,$index)    "*" 
+      set data(exec-host,$index)    "*"
       set data(replacement,$index)  "/"
       incr index 1
 
@@ -1312,13 +1312,13 @@ proc setup_sge_aliases_file {} {
          set index 0
          set data(src-path,$index)     "$prefix"
          set data(sub-host,$index)     "*"
-         set data(exec-host,$index)    "*" 
+         set data(exec-host,$index)    "*"
          set data(replacement,$index)  "/"
          incr index 1
 
          add_to_path_aliasing_file ${file_name} data $index
          break
-      } 
+      }
    }
    ts_log_fine "Done setting up sge_aliases file"
 }

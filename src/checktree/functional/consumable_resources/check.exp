@@ -40,9 +40,9 @@
 #   setup:
 #      - add following complex attribute ( test1 t1 INT <=  YES YES 0 1000)
 #      - add the attribute to the global host complex_values     test1=5
-#   
+#
 #   a) - default cluster with two execution hosts and unlimited slots
-#      - submit 6 jobs without resource requests 
+#      - submit 6 jobs without resource requests
 #      => All jobs will run
 #
 #   b) - default cluster with two execution hosts and unlimited slots
@@ -60,11 +60,11 @@
 #
 #   d) - default cluster with two execution hosts and unlimited slots
 #      - submit 6 jobs with (-l test1=0) resource request
-#      => 6 jobs will run 
+#      => 6 jobs will run
 #
 #   e) - define a consumable load threashold (t1=3)
 #      - submit 6 jobs
-#     => 2 jobs will run, 
+#     => 2 jobs will run,
 #        queue instance "all.q@carc" dropped because it is overloaded: test1=8.000000 (no load value) <= 8
 #
 # Scenario 2) Consumable resource on host level
@@ -79,9 +79,9 @@
 #
 #   b) - default cluster with two execution hosts and unlimited slots
 #      - submit 6 jobs with following request (-l h=host_a,test2=1)
-#      => 5 jobs will run the 6th has to wait because: 
+#      => 5 jobs will run the 6th has to wait because:
 #      (-l hostname=carc,test2=1) cannot run at host "carc.germany.sun.com" because it offers only hc:test2=0.000000
-#      
+#
 #   mod:
 #    - add following complex attribute (test1 t1 INT <= YES YES 1 1000)
 #
@@ -92,11 +92,11 @@
 #
 #   d) - default cluster with two execution hosts and unlimited slots
 #      - submit 6 jobs with following request (-l h=host_a,test2=0)
-#      => 6 jobs will run 
+#      => 6 jobs will run
 #
 #   e) - define a consumable load threashold (t1=3)
 #      - submit 6 jobs
-#     => 2 jobs will run, 
+#     => 2 jobs will run,
 #        queue instance "all.q@carc" dropped because it is overloaded: test1=8.000000 (no load value) <= 8
 #
 # and more, issue 1212 coveres most of it
@@ -109,11 +109,11 @@
 # - Issue: 1745
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -130,7 +130,7 @@ set check_description(7)  "Consumable resources and load sensors"
 set check_description(8)  "Consumable resources and 2 load sensor scripts"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function consumable_resources_setup
@@ -153,12 +153,12 @@ proc consumable_resources_setup {} {
 
    # backup complex - we will modify it during the test
    get_complex consumable_complex_backup
-   
+
    set consumable_resources_test_hosts [host_conf_get_suited_hosts 2]
    set consumable_resources_saved_slot_count ""
    set host_a [lindex $consumable_resources_test_hosts 0]
    get_config consumable_host_config_setup $host_a
-   
+
    set queue_list {}
    foreach host $ts_config(execd_nodes) {
       lappend queue_list [get_queue_instance "all.q" $host]
@@ -189,7 +189,7 @@ proc consumable_resources_cleanup {} {
    global ts_config
    global consumable_resources_test_hosts
    global consumable_resources_saved_slot_count
-   global consumable_complex_backup 
+   global consumable_complex_backup
    global consumable_host_config_setup
 
    delete_all_jobs
@@ -220,7 +220,9 @@ proc consumable_resources_cleanup {} {
    # we changed the schedd config - reset to defaults
    reset_schedd_config
 
-   reset_config_and_propagate consumable_host_config_setup $host_a 
+   reset_config_and_propagate consumable_host_config_setup $host_a
+
+   unset -nocomplain consumable_resources_test_hosts consumable_resources_saved_slot_count consumable_complex_backup consumable_host_config_setup
 }
 
 # Issue: 1306, Bugster: 6287862 - qhost -l for complexes broken
@@ -298,8 +300,8 @@ proc consumable_resources_submit_jobs_and_alter {job_arguments resource resource
       ts_log_fine "qalter result: $alter_result - $prg_exit_state"
       set error 1
    }
- 
-   delete_all_jobs  
+
+   delete_all_jobs
    wait_for_end_of_all_jobs
 }
 
@@ -314,7 +316,7 @@ proc consumable_resources_submit_pejobs_and_wait {job_arguments job_count run_jo
       trigger_scheduling
       set running_jobs 0
       set error 0
-      
+
       set job_state [is_job_running $job_id "leeper"]
       if {$job_state == 1} {
          set job_std_state [get_standard_job_info $job_id 1]
@@ -339,7 +341,7 @@ proc consumable_resources_submit_pejobs_and_wait {job_arguments job_count run_jo
    }
 
    # delete all jobs, and make sure they are no longer referenced
-   delete_all_jobs  
+   delete_all_jobs
    wait_for_end_of_all_jobs
    trigger_scheduling
    after 1000
@@ -432,7 +434,7 @@ proc consumable_resources_submit_jobs_and_wait {job_arguments job_count run_job_
    }
 
    # delete all jobs, and make sure they are no longer referenced
-   delete_all_jobs  
+   delete_all_jobs
    wait_for_end_of_all_jobs
    trigger_scheduling
 }
@@ -444,7 +446,7 @@ proc consumable_resources_test {} {
 
    if {$CHECK_ACT_LEVEL == 0} {
       set GLOBALLY [translate_macro MSG_SCHEDD_INFO_CANNOTRUNGLOBALLY_SS "*" "*test1=0*"]
-   
+
       # case a)
       #           all jobs will run
       ts_log_fine "\ncase a)"
@@ -452,22 +454,22 @@ proc consumable_resources_test {} {
       # create test1 complex
       set test1_complex(test1) "t1 INT <= YES YES 0 1000"
       set_complex test1_complex
-   
+
       # get original global host coniguration
       get_exechost orig_global_host global
-   
+
       # modify complex_values of global host
       set global_host(complex_values) "test1=5"
       set_exechost global_host global
-   
+
       set job_arguments "-o /dev/null -e /dev/null"
       set job_count 6
       set run_job_count 6
       consumable_resources_submit_jobs_and_wait $job_arguments $job_count $run_job_count "" "a"
       consumable_resources_submit_pejobs_and_wait $job_arguments $job_count $run_job_count "a" "round_robin"
       consumable_resources_submit_pejobs_and_wait $job_arguments $job_count $run_job_count "a" "fill_up"
-  
-      # case b) 
+
+      # case b)
       #           5 jobs run, 1 have to wait
       ts_log_fine "\ncase b)"
       set job_arguments "-l test1=1 -o /dev/null -e /dev/null"
@@ -476,13 +478,13 @@ proc consumable_resources_test {} {
       consumable_resources_submit_jobs_and_wait $job_arguments $job_count $run_job_count "" "b" $GLOBALLY
       consumable_resources_submit_pejobs_and_wait $job_arguments $job_count $run_job_count "b" "round_robin"
       consumable_resources_submit_pejobs_and_wait $job_arguments $job_count $run_job_count "b" "fill_up"
-   
+
       # case c)
       #           5 jobs run, 1 have to wait
       ts_log_fine "\ncase c)"
       set test1_complex(test1) "t1 INT <= YES YES 1 1000"
       set_complex test1_complex
-      
+
       set job_arguments "-o /dev/null -e /dev/null"
       set job_count 6
       set run_job_count 5
@@ -515,14 +517,14 @@ proc consumable_resources_test {} {
       # TODO: this tests issue 1745.
       #   consumable_resources_submit_pejobs_and_wait $job_arguments $job_count $run_job_count "e" "round_robin"
       #   consumable_resources_submit_pejobs_and_wait $job_arguments $job_count $run_job_count "e" "fill_up"
-      
+
       # clean up
       set queue_settings(load_thresholds) "np_load_avg=11.75"
       set_queue "res.q" $consumable_resources_test_hosts queue_settings
-      
+
       set global_host(complex_values) $orig_global_host(complex_values)
       set_exechost global_host global
-      
+
       set test1_complex(test1) ""
       set_complex test1_complex
       ts_log_fine "done"
@@ -544,7 +546,7 @@ proc consumable_resources_test {} {
 
       # get original host_a host coniguration
       get_exechost orig_host_a_host $host_a
-   
+
       # modify complex_values of host_a host
       set host_a_host(complex_values) "test2=5,test3=5"
       set_exechost host_a_host $host_a
@@ -557,37 +559,37 @@ proc consumable_resources_test {} {
       consumable_resources_submit_pejobs_and_wait $job_arguments $job_count $run_job_count "a" "round_robin"
       consumable_resources_submit_pejobs_and_wait $job_arguments $job_count $run_job_count "a" "fill_up"
 
-      # case b) 
+      # case b)
       #           5 jobs run, 1 have to wait
       ts_log_fine "\ncase b)"
-      
+
       set job_arguments "-l h=$host_a,test2=1 -o /dev/null -e /dev/null"
       set job_count 6
       set run_job_count 5
       consumable_resources_submit_jobs_and_wait $job_arguments $job_count $run_job_count "" "b" $RUNATHOST
       consumable_resources_submit_pejobs_and_wait $job_arguments $job_count $run_job_count "b" "round_robin"
       consumable_resources_submit_pejobs_and_wait $job_arguments $job_count $run_job_count "b" "fill_up"
-     
+
       # case ba)
       #   issue : 1761
       #   checks wether qalter can modify a consumable
       ts_log_fine "\ncase ba  - Issue: 1761)"
       set job_arguments "-l h=$host_a,test2=1 -o /dev/null -e /dev/null"
-      consumable_resources_submit_jobs_and_alter $job_arguments "test2" "test3" "f"  
+      consumable_resources_submit_jobs_and_alter $job_arguments "test2" "test3" "f"
 
       # case c)
       #           5 jobs run, 1 have to wait
       ts_log_fine "\ncase c)"
       set test2_complex(test2) "t2 INT <= YES YES 1 1000"
       set_complex test2_complex
-      
+
       set job_arguments "-l h=$host_a -o /dev/null -e /dev/null"
       set job_count 6
       set run_job_count 5
       consumable_resources_submit_jobs_and_wait $job_arguments $job_count $run_job_count "" "c" $RUNATHOST
       consumable_resources_submit_pejobs_and_wait $job_arguments $job_count $run_job_count "c" "round_robin"
       consumable_resources_submit_pejobs_and_wait $job_arguments $job_count $run_job_count "c" "fill_up"
-   
+
       # case d)
       #           6 jobs run, 0 have to wait
       ts_log_fine "\ncase d)"
@@ -600,7 +602,7 @@ proc consumable_resources_test {} {
 
       # case e)
       #        2 jobs run, 4 have to wait
-      
+
       set RUNATHOST [translate_macro MSG_SCHEDD_INFO_QUEUEOVERLOADED_SS "*" "*"]
 
       ts_log_fine "\ncase e)"
@@ -620,7 +622,7 @@ proc consumable_resources_test {} {
 
       set host_a_host(complex_values) $orig_host_a_host(complex_values)
       set_exechost host_a_host $host_a
-      
+
       set test2_complex(test2) ""
       set_complex test2_complex
       ts_log_fine "done"
@@ -628,7 +630,7 @@ proc consumable_resources_test {} {
 
    if {$CHECK_ACT_LEVEL == 2} {
       set RUNINQUEUE [translate_macro MSG_SCHEDD_INFO_CANNOTRUNINQUEUE_SSS "*" "*" "*test3=0*"]
-  
+
       # case a)
       #           all jobs will run
       ts_log_fine "\ncase a)"
@@ -686,7 +688,7 @@ proc consumable_resources_test {} {
       set queue_settings(complex_values) "NONE"
       set_queue "res.q" $consumable_resources_test_hosts queue_settings
 
-      # remove test3 complex 
+      # remove test3 complex
       set test3_complex(test3) ""
       set_complex test3_complex
 
@@ -701,7 +703,7 @@ proc consumable_resources_test {} {
       # create complex
       set test1_complex(test1) "t2 INT <= YES YES 0 1000"
       set_complex test1_complex
-  
+
       # get original global host coniguration
       get_exechost orig_global_host global
       # modify complex_values of global host
@@ -774,7 +776,7 @@ proc consumable_resources_test {} {
 
       set queue_settings(complex_values) "NONE"
       set_queue "res.q" $consumable_resources_test_hosts queue_settings
-      
+
       set host_a_host(complex_values) $orig_host_a_host(complex_values)
       set_exechost host_a_host $host_a
 
@@ -782,20 +784,20 @@ proc consumable_resources_test {} {
       set_exechost global_host global
 
 
-      # remove test1 complex 
+      # remove test1 complex
       set test1_complex(test1) ""
       set_complex test1_complex
 
       ts_log_fine "done"
    }
-   
+
    if {$CHECK_ACT_LEVEL == 4} {
       set FORCED [translate_macro MSG_SCHEDD_INFO_NOTREQFORCEDRES_SS "test1" "*"]
 
       # create complex
       set test1_complex(test1) "t1 INT <= FORCED YES 0 1000"
       set_complex test1_complex
-  
+
       set queue_settings(complex_values) "test1=1"
       set_queue "res.q" $consumable_resources_test_hosts queue_settings
 
@@ -823,19 +825,19 @@ proc consumable_resources_test {} {
       set queue_settings(complex_values) "NONE"
       set_queue "res.q" $consumable_resources_test_hosts queue_settings
 
-      # remove test1 complex 
+      # remove test1 complex
       set test1_complex(test1) ""
       set_complex test1_complex
 
       ts_log_fine "done"
    }
-    
+
 
    if {$CHECK_ACT_LEVEL == 5} {
       # create complex
       set test1_complex(test1) "t1 INT <= YES YES 0 1000"
       set_complex test1_complex
-  
+
       # get original global host coniguration
       get_exechost orig_global_host global
       # modify complex_values of global host
@@ -873,12 +875,12 @@ proc consumable_resources_test {} {
 
       set host_a_host(complex_values) $orig_host_a_host(complex_values)
       set_exechost host_a_host $host_a
-      
+
       set global_host(complex_values) $orig_global_host(complex_values)
       set_exechost global_host global
 
 
-      # remove test1 complex 
+      # remove test1 complex
       set test1_complex(test1) ""
       set_complex test1_complex
 
@@ -890,7 +892,7 @@ proc consumable_resources_test {} {
       # create complex
       set test1_complex(test1) "t1 INT <= YES YES 0 1000"
       set_complex test1_complex
-  
+
       # get original global host coniguration
       get_exechost orig_global_host global
       # modify complex_values of global host
@@ -928,7 +930,7 @@ proc consumable_resources_test {} {
       if {$state != ""} {
          ts_log_severe "queue did not free alarm state"
       }
-      
+
       set qstat_F_3 [start_sge_bin "qstat" "-F | grep 'c:test'"]
 
       ts_log_fine "qstat1 (before job was started)   :\n$qstat_F_1"
@@ -940,7 +942,7 @@ proc consumable_resources_test {} {
          ts_log_severe "resources of rescheduled job wasn't freed"
       }
 
-      delete_all_jobs  
+      delete_all_jobs
       wait_for_end_of_all_jobs
 
       set queue_settings(load_thresholds) "np_load_avg=11.75"
@@ -949,18 +951,18 @@ proc consumable_resources_test {} {
 
       set host_a_host(complex_values) $orig_host_a_host(complex_values)
       set_exechost host_a_host $host_a
-      
+
       set global_host(complex_values) $orig_global_host(complex_values)
       set_exechost global_host global
 
 
-      # remove test1 complex 
+      # remove test1 complex
       set test1_complex(test1) ""
       set_complex test1_complex
 
       ts_log_fine "done"
    }
-   
+
    if {$CHECK_ACT_LEVEL == 7} {
       # this is our test host
       set host_a [lindex $consumable_resources_test_hosts 0]
@@ -981,7 +983,7 @@ proc consumable_resources_test {} {
       # create complex
       set test1_complex(test1) "t1 INT <= YES YES 0 1000"
       set_complex test1_complex
-  
+
       # modify complex_values of global host
       set global_host(complex_values) "test1=15"
       set_exechost global_host global
@@ -1045,7 +1047,7 @@ proc consumable_resources_test {} {
       set output [start_remote_prog $host_a $CHECK_USER "ln" "-s $ts_config(testsuite_root_dir)/scripts/resource_test1_3_loadsensor.sh $ts_config(testsuite_root_dir)/scripts/resource_loadsensor_link.sh"]
       ts_log_fine "created link output: $output"
       wait_for_remote_file $host_a $CHECK_USER "$ts_config(testsuite_root_dir)/scripts/resource_loadsensor_link.sh"
-      
+
       # check for reported load value
       set retries 30
       set ok 0
@@ -1083,7 +1085,7 @@ proc consumable_resources_test {} {
       set global_host(complex_values) $orig_global_host(complex_values)
       set_exechost global_host global
 
-      set test_grep "test1" 
+      set test_grep "test1"
       set retries 45
       set ok 0
       while {$retries > 0} {
@@ -1102,15 +1104,15 @@ proc consumable_resources_test {} {
       if {$ok != 1} {
          ts_log_severe "load sensor report test1 does not disappear"
       }
-      
-      # remove test1 complex 
+
+      # remove test1 complex
       set test1_complex(test1) ""
       set_complex test1_complex
 
       delete_remote_file $host_a $CHECK_USER $ts_config(testsuite_root_dir)/scripts/resource_loadsensor_link.sh
       ts_log_fine "done"
    }
-   
+
    if {$CHECK_ACT_LEVEL == 8} {
       # this is our test host
       set host_a [lindex $consumable_resources_test_hosts 0]
@@ -1119,7 +1121,7 @@ proc consumable_resources_test {} {
       set test1_complex(test1) "t1 INT <= YES YES 0 1000"
       set test1_complex(test2) "t2 INT <= YES YES 0 1000"
       set_complex test1_complex
-  
+
       # get original global host coniguration
       get_exechost orig_global_host global
       # modify complex_values of global host
@@ -1137,7 +1139,7 @@ proc consumable_resources_test {} {
 
       # setup load script
       get_config execd_config_a_host $host_a
-            
+
       delete_remote_file $host_a $CHECK_USER $ts_config(testsuite_root_dir)/scripts/resource_loadsensor_link6.sh
       after 10000 ;# wait at least 10 sec. so that execd knows that the file has changed via stat() command
       set output [start_remote_prog $host_a $CHECK_USER "ln" "-s $ts_config(testsuite_root_dir)/scripts/resource_test1_6_loadsensor.sh $ts_config(testsuite_root_dir)/scripts/resource_loadsensor_link6.sh"]
@@ -1227,7 +1229,7 @@ proc consumable_resources_test {} {
       set global_host(complex_values) $orig_global_host(complex_values)
       set_exechost global_host global
 
-      set test_grep "test1" 
+      set test_grep "test1"
       set retries 45
       while {[string match "*test1*" $test_grep] && $retries > 0} {
          set test_grep [start_sge_bin "qconf" "-se $host_a | grep test1"]
@@ -1241,7 +1243,7 @@ proc consumable_resources_test {} {
          ts_log_severe "load sensor report test1 does not disappear"
       }
 
-      set test_grep "test2" 
+      set test_grep "test2"
       set retries 45
       while {[string match "*test2*" $test_grep] && $retries > 0} {
          set test_grep [start_sge_bin "qconf" "-se $host_a | grep test2"]
@@ -1254,8 +1256,8 @@ proc consumable_resources_test {} {
       if {[string match "*test2*" $test_grep]} {
          ts_log_severe "load sensor report test2 does not disappear"
       }
-      
-      # remove test1 and test2 complex 
+
+      # remove test1 and test2 complex
       set test1_complex(test1) ""
       set test1_complex(test2) ""
       set_complex test1_complex

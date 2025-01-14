@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -49,7 +49,7 @@ set check_description(0)  "test qalter jsv requests using job id of job to modif
 set check_description(1)  "test qalter jsv requests using job name of job to modify"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_level_function jsv_ge_mod_setup_level
@@ -80,30 +80,30 @@ lappend check_functions "jsv_ge_mod_slave_l_hard"
 lappend check_functions "jsv_ge_mod_a"
 lappend check_functions "jsv_ge_mod_ac"
 lappend check_functions "jsv_ge_mod_binding"
-lappend check_functions "jsv_ge_mod_A"               
-lappend check_functions "jsv_ge_mod_c"               
-lappend check_functions "jsv_ge_mod_ckpt"             
-lappend check_functions "jsv_ge_mod_cwd"              
+lappend check_functions "jsv_ge_mod_A"
+lappend check_functions "jsv_ge_mod_c"
+lappend check_functions "jsv_ge_mod_ckpt"
+lappend check_functions "jsv_ge_mod_cwd"
 lappend check_functions "jsv_ge_mod_dc"
-lappend check_functions "jsv_ge_mod_dl"               
-lappend check_functions "jsv_ge_mod_e"                
+lappend check_functions "jsv_ge_mod_dl"
+lappend check_functions "jsv_ge_mod_e"
 lappend check_functions "jsv_ge_mod_h"
 lappend check_functions "jsv_ge_mod_hold_jid"
 lappend check_functions "jsv_ge_mod_hold_jid_ad"
-lappend check_functions "jsv_ge_mod_i"               
-lappend check_functions "jsv_ge_mod_j"               
-lappend check_functions "jsv_ge_mod_js"              
+lappend check_functions "jsv_ge_mod_i"
+lappend check_functions "jsv_ge_mod_j"
+lappend check_functions "jsv_ge_mod_js"
 lappend check_functions "jsv_ge_mod_m"
 lappend check_functions "jsv_ge_mod_M"
-lappend check_functions "jsv_ge_mod_notify"           
-lappend check_functions "jsv_ge_mod_N"                
-lappend check_functions "jsv_ge_mod_o"                
-lappend check_functions "jsv_ge_mod_ot"               
-lappend check_functions "jsv_ge_mod_P"    
-lappend check_functions "jsv_ge_mod_p"               
-lappend check_functions "jsv_ge_mod_pe_name_min_max"  
+lappend check_functions "jsv_ge_mod_notify"
+lappend check_functions "jsv_ge_mod_N"
+lappend check_functions "jsv_ge_mod_o"
+lappend check_functions "jsv_ge_mod_ot"
+lappend check_functions "jsv_ge_mod_P"
+lappend check_functions "jsv_ge_mod_p"
+lappend check_functions "jsv_ge_mod_pe_name_min_max"
 lappend check_functions "jsv_ge_mod_R"
-lappend check_functions "jsv_ge_mod_r"                
+lappend check_functions "jsv_ge_mod_r"
 lappend check_functions "jsv_ge_mod_sc"
 lappend check_functions "jsv_ge_mod_S"
 lappend check_functions "jsv_ge_mod_tc"
@@ -139,7 +139,7 @@ proc jsv_ge_mod_setup_level {} {
    set ckpt_param(ckpt_command) "none"
    set ckpt_param(migr_command) "/bin/true"
    set ckpt_param(restart_command) "none"
-   set ckpt_param(clean_command) "none"   
+   set ckpt_param(clean_command) "none"
    set ckpt_param(ckpt_dir) "/tmp"
    set ckpt_param(signal) "none"
    set ckpt_param(when) "sx"
@@ -148,7 +148,7 @@ proc jsv_ge_mod_setup_level {} {
    # create project
    add_project "jsv_ge_mod_prj"
 
-   # change global config 
+   # change global config
    get_config jsv_org_global_conf
    set global_conf(load_report_time) "00:00:04"
    set global_conf(max_unheard) "00:00:15"
@@ -188,7 +188,7 @@ proc jsv_ge_mod_cleanup {} {
    global jsv_org_global_conf
    global jsv_job_id
    global jsv_hjob_id
- 
+
    # unset our test's global variables
    unset -nocomplain jsv_org_global_conf jsv_base_path jsv_job_id jsv_hjob_id
 }
@@ -314,13 +314,13 @@ proc jsv_ge_mod_e {} {
 }
 
 proc jsv_ge_mod_hold_jid {} {
-   global jsv_hjob_id 
+   global jsv_hjob_id
 
    jsv_ge_mod "hold_jid" "-hold_jid $jsv_hjob_id"
 }
 
 proc jsv_ge_mod_hold_jid_ad {} {
-   global jsv_hjob_id 
+   global jsv_hjob_id
 
    jsv_ge_mod "hold_jid_ad" "-hold_jid_ad $jsv_hjob_id"
 }

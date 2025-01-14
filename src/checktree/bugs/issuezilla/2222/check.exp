@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -50,7 +50,7 @@ set check_description(1)  "hybrid user/project sharetree was broken (test array 
 
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function issue_2222_setup
@@ -66,14 +66,14 @@ lappend check_functions "issue_2222_test"
 
 proc issue_2222_setup {} {
    global ts_config
-   global config_backup issue_2222_host
+   global issue_2222_config_backup issue_2222_host
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
 
    # select a host for testing
    set issue_2222_host [host_conf_get_suited_hosts]
 
    # backup the hosts configuration
-   get_config config_backup $issue_2222_host
+   get_config issue_2222_config_backup $issue_2222_host
 
    # activate SHARETREE_RESERVED_USAGE,
    # and a shorter load report interval to get usage reports more quickly
@@ -126,7 +126,7 @@ proc issue_2222_setup {} {
 
 proc issue_2222_cleanup {} {
    global ts_config
-   global config_backup issue_2222_host
+   global issue_2222_config_backup issue_2222_host
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
 
    # delete jobs and make sure they are no longer referenced in qmaster
@@ -152,7 +152,7 @@ proc issue_2222_cleanup {} {
    reset_schedd_config
 
    # restore the global configuration
-   reset_config_and_propagate config_backup $issue_2222_host
+   reset_config_and_propagate issue_2222_config_backup $issue_2222_host
 
    # enable all.q
    set queues {}
@@ -160,6 +160,8 @@ proc issue_2222_cleanup {} {
       lappend queues [get_queue_instance "all.q" $host]
    }
    enable_queue $queues
+
+   unset -nocomplain issue_2222_config_backup issue_2222_host
 }
 
 proc issue_2222_cleanup_level {} {
@@ -187,7 +189,7 @@ proc issue_2222_test {} {
       submit_job "-t 1-50 $options $job_script 300" 1 60 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER
    }
 
-   # make the jobs run and wait some time (3 * load_report_interval) 
+   # make the jobs run and wait some time (3 * load_report_interval)
    # for usage reports
    trigger_scheduling
    after 15000

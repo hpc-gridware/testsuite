@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -48,7 +48,7 @@ set check_category        "LIMITS PARALLEL SCHEDULER VERIFIED"
 set check_description(0)  "verify that runtime limits are enforced by sge_qmaster (param ENABLE_ENFORCE_MASTER_LIMIT)"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function enforce_limits_setup
@@ -75,11 +75,11 @@ set tight_slots 5
 # 01) startup cluster
 # 02) create a PE
 #    - use round robin
-#    - tight pe  
+#    - tight pe
 #    - create a machine file containing all hosts
 # 03) create a PE
 #    - use round robin
-#    - loose pe  
+#    - loose pe
 # 04) select N hosts (at least 2)
 # 05) create a queue QUEUE
 #    - h_rt = 30 sec
@@ -90,12 +90,12 @@ set tight_slots 5
 proc enforce_limits_setup {} {
    global ts_config
    global tight_slots
-   global tight_masterq 
+   global tight_masterq
    global tight_master_node
    global tight_slaveq
    global tight_slave_node
    global loose_slots
-   global loose_masterq 
+   global loose_masterq
    global loose_master_node
    global loose_slaveq
    global loose_slave_node
@@ -129,8 +129,8 @@ proc enforce_limits_setup {} {
    set pe(slots)              1000
    set pe(user_lists)         none
    set pe(xuser_lists)        none
-   set pe(start_proc_args)    "$el_base_path/startmpi.sh \$pe_hostfile" 
-   set pe(stop_proc_args)     "$el_base_path/stopmpi.sh" 
+   set pe(start_proc_args)    "$el_base_path/startmpi.sh \$pe_hostfile"
+   set pe(stop_proc_args)     "$el_base_path/stopmpi.sh"
    set pe(allocation_rule)    "\$round_robin"
    set pe(control_slaves)     TRUE
    set pe(job_is_first_task)  FALSE
@@ -159,13 +159,13 @@ proc enforce_limits_setup {} {
    set queue_conf(h_rt) "00:00:30"
    add_queue loose.q "@allhosts" queue_conf
 
-   # assign queue to tight pe 
+   # assign queue to tight pe
    assign_queues_with_pe_object tight.q "" tight
 
-   # assign queue to loose pe 
+   # assign queue to loose pe
    assign_queues_with_pe_object loose.q "" loose
 
-   # change global config 
+   # change global config
    get_config org_global_conf
    set global_conf(load_report_time) "00:00:04"
    set global_conf(max_unheard) "00:00:15"
@@ -175,7 +175,7 @@ proc enforce_limits_setup {} {
 
    # change schedd config
    set sched_conf(params) "DURATION_OFFSET=00:00:05"
-   set_schedd_config sched_conf 
+   set_schedd_config sched_conf
 }
 
 # 100) delete remaining jobs if there are some
@@ -185,6 +185,17 @@ proc enforce_limits_setup {} {
 # 104) reset the config
 proc enforce_limits_cleanup {} {
    global ts_config
+   global tight_slots
+   global tight_masterq
+   global tight_master_node
+   global tight_slaveq
+   global tight_slave_node
+   global loose_slots
+   global loose_masterq
+   global loose_master_node
+   global loose_slaveq
+   global loose_slave_node
+   global el_base_path
    global org_global_conf
 
    # trigger and wait for job termination
@@ -197,8 +208,8 @@ proc enforce_limits_cleanup {} {
    del_queue tight.q "" 0 1
 
    # unassign loose pe
-   unassign_queues_with_pe_object loose 
-   del_pe loose 
+   unassign_queues_with_pe_object loose
+   del_pe loose
    del_queue loose.q "" 0 1
 
    # reset global config
@@ -206,6 +217,8 @@ proc enforce_limits_cleanup {} {
 
    # reset sched config
    reset_schedd_config
+
+   unset -nocomplain tight_slots tight_masterq tight_master_node tight_slaveq tight_slave_node loose_slots loose_masterq loose_master_node loose_slaveq loose_slave_node el_base_path org_global_conf
 }
 
 # 50) submit a sleeper job
@@ -219,26 +232,26 @@ proc enforce_limits_cleanup {} {
 proc enforce_limits_tight_execd_limit_enforcement {} {
    global ts_config CHECK_USER
    global tight_slots
-   global tight_masterq 
+   global tight_masterq
    global tight_master_node
    global tight_slaveq
    global tight_slave_node
    global el_base_path
 
-   # submit a job 
+   # submit a job
    set qsub_params "-pe tight $tight_slots -masterq $tight_masterq $el_base_path/qrexec.sh 60"
    set job_id [ submit_job "$qsub_params" ]
 
-   # wait for start and end 
+   # wait for start and end
    wait_for_jobstart $job_id "qrexec.sh" 100 1 1
    wait_for_end_of_transfer $job_id 60
    wait_for_job_end $job_id 120
 
-   # check accounting entry 
+   # check accounting entry
    if {[get_qacct $job_id] == 0} {
       set wallclock $qacct_info(ru_wallclock)
 
-      # if the job was running 60 seconds and more that the limit enforcement failed 
+      # if the job was running 60 seconds and more that the limit enforcement failed
       if {$wallclock < 30 || $wallclock > 40} {
          ts_log_severe "wallclock limit seems not to be enforced in execd for tight PE job $job_id"
       }
@@ -255,11 +268,11 @@ proc enforce_limits_tight_execd_limit_enforcement {} {
 # 51) Wait till all tasks are running
 # 52) Terminate all execds where parts of the pe jobs are running
 # 53) Wait till all tasks (job) is terminated
-# 54) Check that the job has been terminated before the normal runtime ended 
+# 54) Check that the job has been terminated before the normal runtime ended
 proc enforce_limits_tight_qmaster_limit_enforcement_all_queue {} {
    global ts_config CHECK_USER
    global tight_slots
-   global tight_masterq 
+   global tight_masterq
    global tight_master_node
    global tight_slaveq
    global tight_slave_node
@@ -279,7 +292,7 @@ proc enforce_limits_tight_qmaster_limit_enforcement_all_queue {} {
    set end_shutdown [clock seconds]
 
    # wait for termination of job
-   wait_for_job_end $job_id 240 
+   wait_for_job_end $job_id 240
    set end [clock seconds]
 
    # startup all execds
@@ -312,7 +325,7 @@ proc enforce_limits_tight_qmaster_limit_enforcement_all_queue {} {
 proc enforce_limits_tight_qmaster_limit_enforcement_master_queue {} {
    global ts_config CHECK_USER
    global tight_slots
-   global tight_masterq 
+   global tight_masterq
    global tight_master_node
    global tight_slaveq
    global tight_slave_node
@@ -327,14 +340,14 @@ proc enforce_limits_tight_qmaster_limit_enforcement_master_queue {} {
    set start [clock seconds]
 
    # shutdown master execds
-   soft_execd_shutdown $tight_master_node 
+   soft_execd_shutdown $tight_master_node
    set end_shutdown [clock seconds]
 
    # wait for termination of job
-   wait_for_job_end $job_id 240 
+   wait_for_job_end $job_id 240
    set end [clock seconds]
 
-   # startup master 
+   # startup master
    startup_execd $tight_master_node
 
    # runtime limit for the job is 30 seconds
@@ -361,7 +374,7 @@ proc enforce_limits_tight_qmaster_limit_enforcement_master_queue {} {
 proc enforce_limits_tight_qmaster_limit_enforcement_slave_queue {} {
    global ts_config CHECK_USER
    global tight_slots
-   global tight_masterq 
+   global tight_masterq
    global tight_master_node
    global tight_slaveq
    global tight_slave_node
@@ -377,14 +390,14 @@ proc enforce_limits_tight_qmaster_limit_enforcement_slave_queue {} {
    set start [clock seconds]
 
    # shutdown master execds
-   soft_execd_shutdown $tight_slave_node 
+   soft_execd_shutdown $tight_slave_node
    set end_shutdown [clock seconds]
 
    # wait for termination of job
-   wait_for_job_end $job_id 240 
+   wait_for_job_end $job_id 240
    set end [clock seconds]
 
-   # startup master 
+   # startup master
    startup_execd $tight_slave_node
 
    # runtime limit for the job is 30 seconds
@@ -407,11 +420,11 @@ proc enforce_limits_tight_qmaster_limit_enforcement_slave_queue {} {
 # 51) Wait till all tasks are running
 # 52) Terminate all execds where parts of the pe jobs are running
 # 52) Wait till all tasks (job) is terminated
-# 53) Check that the job has been terminated before the normal runtime ended 
+# 53) Check that the job has been terminated before the normal runtime ended
 proc enforce_limits_loose_qmaster_limit_enforcement_all_queue {} {
    global ts_config CHECK_USER
    global loose_slots
-   global loose_masterq 
+   global loose_masterq
    global loose_master_node
    global loose_slaveq
    global loose_slave_node
@@ -432,7 +445,7 @@ proc enforce_limits_loose_qmaster_limit_enforcement_all_queue {} {
    set end_shutdown [clock seconds]
 
    # wait for termination of job
-   wait_for_job_end $job_id 240 
+   wait_for_job_end $job_id 240
    set end [clock seconds]
 
    # startup all execds
@@ -460,14 +473,14 @@ proc enforce_limits_loose_qmaster_limit_enforcement_all_queue {} {
 #    - each pe task should sleep 60 seconds
 # 51) Wait till all tasks are running
 # 52) Terminate execution host where master task is running
-# 53) Start execution host again 
+# 53) Start execution host again
 # 54) Wait till all tasks (job) is terminated
 # 55) Check that job was terminated before the regular job runtime ended
 # 56) Make sure that job was terminated by execd
 proc enforce_limits_tight_execd_limit_enforcement_after_stop_start {} {
    global ts_config CHECK_USER
    global tight_slots
-   global tight_masterq 
+   global tight_masterq
    global tight_master_node
    global tight_slaveq
    global tight_slave_node
@@ -485,10 +498,10 @@ proc enforce_limits_tight_execd_limit_enforcement_after_stop_start {} {
    # shutdown master execds
    # TODO: Test runs not for 62_BRANCH, and shutdown_system daemon does not shutdown execd fast enough
    #       AND execd reconnect might take up to 60 seconds. The wait_for_unknown_load 15 call is not guaranteed
-   soft_execd_shutdown $tight_master_node 
+   soft_execd_shutdown $tight_master_node
    wait_for_unknown_load 15 $tight_masterq
 
-   # startup master 
+   # startup master
    startup_execd $tight_master_node
 
    # wait for termination of job
@@ -501,7 +514,7 @@ proc enforce_limits_tight_execd_limit_enforcement_after_stop_start {} {
       ts_log_severe "runtime should be in the range of 35-85 but it is $start_end"
    }
 
-   # check accounting entry 
+   # check accounting entry
    if {[get_qacct $job_id] == 0} {
       set task [lindex $qacct_info(failed) [expr $tight_slots - 1]]
       set failed [lindex $task 0]
@@ -523,11 +536,11 @@ proc enforce_limits_tight_execd_limit_enforcement_after_stop_start {} {
 # 52) Terminate all execds where parts of the pe jobs are running
 # 53) Start the master execd again
 # 54) Wait till all tasks (job) is terminated
-# 55) Check that the job has been terminated before the normal runtime ended 
+# 55) Check that the job has been terminated before the normal runtime ended
 proc enforce_limits_tight_qmaster_limit_enforcement_after_stop_start_master {} {
    global ts_config CHECK_USER
    global tight_slots
-   global tight_masterq 
+   global tight_masterq
    global tight_master_node
    global tight_slaveq
    global tight_slave_node
@@ -542,22 +555,22 @@ proc enforce_limits_tight_qmaster_limit_enforcement_after_stop_start_master {} {
    set start [clock seconds]
 
    # at least one slave task must be running. 5 seconds should be enough
-   # so that one slave execd reports one task running 
+   # so that one slave execd reports one task running
    after 5000
 
    # shutdown all execds and startup one again
    set all_exec_hosts $ts_config(execd_nodes)
-   soft_execd_shutdown $all_exec_hosts 
+   soft_execd_shutdown $all_exec_hosts
 
    startup_execd $tight_master_node
    set end_shutdown [clock seconds]
 
    # wait for termination of job
-   wait_for_job_end $job_id 240 
+   wait_for_job_end $job_id 240
    set end [clock seconds]
 
    # startup all execds
-   soft_execd_shutdown $tight_master_node 
+   soft_execd_shutdown $tight_master_node
    set all_exec_hosts $ts_config(execd_nodes)
    foreach host $all_exec_hosts {
       startup_execd $host
@@ -584,11 +597,11 @@ proc enforce_limits_tight_qmaster_limit_enforcement_after_stop_start_master {} {
 # 52) Terminate all execds where parts of the pe jobs are running
 # 53) Start the slave execd again
 # 54) Wait till all tasks (job) is terminated
-# 55) Check that the job has been terminated before the normal runtime ended 
+# 55) Check that the job has been terminated before the normal runtime ended
 proc enforce_limits_tight_qmaster_limit_enforcement_after_stop_start_slave {} {
    global ts_config CHECK_USER
    global tight_slots
-   global tight_masterq 
+   global tight_masterq
    global tight_master_node
    global tight_slaveq
    global tight_slave_node
@@ -601,20 +614,20 @@ proc enforce_limits_tight_qmaster_limit_enforcement_after_stop_start_slave {} {
    wait_for_end_of_transfer $job_id 60
 
    # at least one slave task must be running. 5 seconds should be enough
-   # so that one slave execd reports one task running 
+   # so that one slave execd reports one task running
    after 5000
 
    set start [clock seconds]
 
    # shutdown all execds and startup one again
    set all_exec_hosts $ts_config(execd_nodes)
-   soft_execd_shutdown $all_exec_hosts 
+   soft_execd_shutdown $all_exec_hosts
 
    startup_execd $tight_slave_node
    set end_shutdown [clock seconds]
 
    # wait for termination of job
-   wait_for_job_end $job_id 240 
+   wait_for_job_end $job_id 240
    set end [clock seconds]
 
    # startup all execds
@@ -628,7 +641,7 @@ proc enforce_limits_tight_qmaster_limit_enforcement_after_stop_start_slave {} {
    # runtime limit for the job is 30 seconds
    # DURATION_OFFSET is 5 seconds
    # so the shutdown should be triggered after 35 seconds
-   # but we have to add the time till the job leaves the system 
+   # but we have to add the time till the job leaves the system
    # until it can't be seen by by qstat -j
    # so we give it 70 seconds (plus the time for shutting down the execds)
    set start_shutdown [expr $end_shutdown - $start]
@@ -648,11 +661,11 @@ proc enforce_limits_tight_qmaster_limit_enforcement_after_stop_start_slave {} {
 # 51) Wait till all tasks are running
 # 52) Terminate all execds where parts of the pe jobs are running
 # 53) Wait till all tasks (job) is terminated
-# 54) Check that the job has been terminated before the normal runtime ended 
+# 54) Check that the job has been terminated before the normal runtime ended
 proc enforce_limits_tight_qmaster_forced_all_queue {} {
    global ts_config CHECK_USER
    global tight_slots
-   global tight_masterq 
+   global tight_masterq
    global tight_master_node
    global tight_slaveq
    global tight_slave_node
@@ -674,7 +687,7 @@ proc enforce_limits_tight_qmaster_forced_all_queue {} {
    set end_shutdown [clock seconds]
 
    # wait for termination of job
-   wait_for_job_end $job_id 240 
+   wait_for_job_end $job_id 240
    set end [clock seconds]
 
    # startup all execds
@@ -694,8 +707,8 @@ proc enforce_limits_tight_qmaster_forced_all_queue {} {
       ts_log_severe "runtime should be in the range of 35-70 but it is $start_end (start_shutdown = $start_shutdown)"
    }
 
-   # check accounting entry  
-   if {[get_qacct $job_id] == 0} { 
+   # check accounting entry
+   if {[get_qacct $job_id] == 0} {
       set task [lindex $qacct_info(failed) 0]
       set failed [lindex $task 0]
 
@@ -709,11 +722,11 @@ proc enforce_limits_tight_qmaster_forced_all_queue {} {
 # 51) Wait till job is running
 # 52) Terminate execd
 # 53) Wait till job is terminated
-# 54) Check that the job has been terminated before the normal runtime ended 
+# 54) Check that the job has been terminated before the normal runtime ended
 proc enforce_limits_batch_qmaster_limit_enforcement_all_queue {} {
    global ts_config CHECK_USER
    global tight_slots
-   global tight_masterq 
+   global tight_masterq
    global tight_master_node
    global tight_slaveq
    global tight_slave_node
@@ -733,7 +746,7 @@ proc enforce_limits_batch_qmaster_limit_enforcement_all_queue {} {
    set end_shutdown [clock seconds]
 
    # wait for termination of job
-   wait_for_job_end $job_id 240 
+   wait_for_job_end $job_id 240
    set end [clock seconds]
 
    # startup all execds
@@ -750,8 +763,8 @@ proc enforce_limits_batch_qmaster_limit_enforcement_all_queue {} {
       ts_log_severe "runtime should be in the range of 35-70 but it is $start_end (start_shutdown = $start_shutdown)"
    }
 
-   # check accounting entry  
-   if {[get_qacct $job_id] == 0} { 
+   # check accounting entry
+   if {[get_qacct $job_id] == 0} {
       set task [lindex $qacct_info(failed) 0]
       set failed [lindex $task 0]
 

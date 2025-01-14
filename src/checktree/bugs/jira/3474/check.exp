@@ -87,6 +87,8 @@ proc ge_3474_cleanup {} {
 
    # restore test host local configuration
    set_config_and_propagate ge_3474_host_conf $ge_3474_host 1
+
+   unset -nocomplain ge_3474_host_conf ge_3474_host
 }
 
 proc ge_3474_test {} {

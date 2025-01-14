@@ -41,7 +41,7 @@
 #  FUNCTION
 #     Run level short: check only one execd host
 #     Run level medium: check all execd hosts with differenct architectures
-#     
+#
 #     This check will change the spooling directories of each execd to
 #     cell, NFS-ROOT2NOBODY, NFS-ROOT2ROOT and local and sumbit various job
 #     types (qsub, qsh, qrsh, qrlogin, qlogin and tight_integrated). After
@@ -53,11 +53,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -72,35 +72,26 @@ set check_description(100) "test shepherd trace file write on admin  user system
 set check_description(101) "test shepherd trace file write on root   user system (on all architectures in cluster)"
 set check_description(102) "test shepherd trace file write on normal user system (on all architectures in cluster)"
 
-
-
-
-
-
-
 # define test's dependencies
-set check_needs           "init_core_system display_test" 
+set check_needs           "init_core_system display_test"
 
 # setup and cleanup functions
 set check_setup_function job_start_setup
 set check_cleanup_function job_start_cleanup
 
-
-
 # define test's procedure order
 set check_functions ""
 lappend check_functions "job_start_test"
 
-
-global job_start_stored_configuration  
-
 # -------- local test procedures: initialization------------------------------
 
 proc job_start_setup  {} {
-   global ts_config  job_start_stored_configuration 
+   global ts_config
+   global job_start_stored_configuration
+
    ts_log_fine "\n--- Setup ---"
 
-   ts_log_fine "saving actual configuration ..."   
+   ts_log_fine "saving actual configuration ..."
    get_config job_start_stored_configuration
 
    # create parallel environment
@@ -117,7 +108,8 @@ proc job_start_setup  {} {
 }
 
 proc job_start_cleanup  {} {
-   global ts_config job_start_stored_configuration
+   global ts_config
+   global job_start_stored_configuration
 
    ts_log_fine "--- Cleanup ---"
    delete_all_jobs
@@ -129,11 +121,13 @@ proc job_start_cleanup  {} {
    del_pe tight_job_start
 
    switch_to_admin_user_system
+
+   unset -nocomplain job_start_stored_configuration
 }
 
 
 proc job_start_test {} {
-   global job_start_test_hosts check_description CHECK_USER ts_user_config
+   global check_description CHECK_USER ts_user_config
    global ts_config CHECK_ACT_LEVEL
    global CHECK_DISPLAY_OUTPUT
    ts_log_fine $check_description($CHECK_ACT_LEVEL)
@@ -149,7 +143,7 @@ proc job_start_test {} {
       }
    }
 
-   if { $CHECK_ACT_LEVEL == 1 || $CHECK_ACT_LEVEL == 101 } {    
+   if { $CHECK_ACT_LEVEL == 1 || $CHECK_ACT_LEVEL == 101 } {
       if { [switch_to_root_user_system ] != 0 } {
          ts_log_config "can't run test shepherd/job_start for root user system"
          return
@@ -174,13 +168,13 @@ proc job_start_test {} {
    set myconfig(load_report_time) "00:00:02"
    ts_log_fine "setting execd_param to \"$my_execd_params\" ..."
    set_config myconfig
- 
+
 
    set type_list {}
    lappend type_list "cell"
    lappend type_list "NFS-ROOT2NOBODY"
    lappend type_list "NFS-ROOT2ROOT"
-   lappend type_list "local"   ;# this has to be the last one (original testsuite spool directory) 
+   lappend type_list "local"   ;# this has to be the last one (original testsuite spool directory)
 
 
    set hosts_to_check {}
@@ -215,7 +209,7 @@ proc job_start_test {} {
       lappend job_type "qrlogin"
       lappend job_type "qlogin"
       lappend job_type "tight_integrated"
-      
+
       foreach host $hosts_to_check {
          get_config execd_host_config $host
          get_queue all.q all_queue_config
@@ -236,7 +230,7 @@ proc job_start_test {} {
             append current_run_text "spooling directory of execd:\n"
             append current_run_text "[get_execd_spooldir $host $spool_type]\n"
             append current_run_text "Following test error occured:\n"
-   
+
             if { $job_id <= 0 } {
                ts_log_severe "$current_run_text Skipping further job result test! Continue with next job ..."
                continue
@@ -248,27 +242,27 @@ proc job_start_test {} {
                "qlogin" {
                   set expected_trace_status      9   ;# killed by qdel (signal 9)
                   set expected_trace_WIFSIGNALED 1   ;# yes a signaled exit
-                  set expected_trace_WIFEXITED   0   ;# no normal exit 
+                  set expected_trace_WIFEXITED   0   ;# no normal exit
                   set expected_qacct_exit_state  137 ;# 128 + 9
                }
                "qsh" {
                   set expected_trace_status      9   ;# killed by qdel (signal 9)
                   set expected_trace_WIFSIGNALED 1   ;# yes a signaled exit
-                  set expected_trace_WIFEXITED   0   ;# no normal exit 
+                  set expected_trace_WIFEXITED   0   ;# no normal exit
                   set expected_qacct_exit_state  137 ;# 128 + 9
                }
                "tight_integrated" {
                   set expected_trace_status      0
                   set expected_trace_WIFSIGNALED 0
                   set expected_trace_WIFEXITED   1
-                  set expected_qacct_exit_state  0  
+                  set expected_qacct_exit_state  0
                   set expected_job_run_time      30
                }
                "qrlogin" {
                   set expected_trace_status      "undefined"
                   set expected_trace_WIFSIGNALED 0
                   set expected_trace_WIFEXITED   1
-                  set expected_qacct_exit_state  "undefined" 
+                  set expected_qacct_exit_state  "undefined"
                   set expected_job_run_time      5
                }
 
@@ -276,7 +270,7 @@ proc job_start_test {} {
                   set expected_trace_status      0
                   set expected_trace_WIFSIGNALED 0
                   set expected_trace_WIFEXITED   1
-                  set expected_qacct_exit_state  0  
+                  set expected_qacct_exit_state  0
                   set expected_job_run_time      5
                }
             }
@@ -294,7 +288,7 @@ proc job_start_test {} {
                   ts_log_fine "exit state is $qacct_info(exit_status)"
                }
             }
-            
+
             # get trace file
             set spool_dir [get_execd_spooldir $host $spool_type]
             set jobs_dir $spool_dir/$host/active_jobs/$job_id.1
@@ -308,10 +302,10 @@ proc job_start_test {} {
             ts_log_fine "error file:       $error_file"
 
 
-            wait_for_remote_file $host $ts_user_config(second_foreign_user) $trace_file 
-            wait_for_remote_file $host $ts_user_config(second_foreign_user) $exit_status_file 
-            wait_for_remote_file $host $ts_user_config(second_foreign_user) $error_file 
-            wait_for_remote_file $host $ts_user_config(second_foreign_user) $usage_file 
+            wait_for_remote_file $host $ts_user_config(second_foreign_user) $trace_file
+            wait_for_remote_file $host $ts_user_config(second_foreign_user) $exit_status_file
+            wait_for_remote_file $host $ts_user_config(second_foreign_user) $error_file
+            wait_for_remote_file $host $ts_user_config(second_foreign_user) $usage_file
 
 
             ts_log_fine "reading $trace_file ..."
@@ -321,7 +315,7 @@ proc job_start_test {} {
             set error_output [start_remote_prog $host $ts_user_config(second_foreign_user) cat $error_file prg_exit_state 10]
 #            ts_log_fine "---\n$error_output\n---"
             ts_log_fine "doing ls -n $jobs_dir ..."
-            set file_perms_output [start_remote_prog $host $ts_user_config(second_foreign_user) ls "-n $jobs_dir" prg_exit_state 10] 
+            set file_perms_output [start_remote_prog $host $ts_user_config(second_foreign_user) ls "-n $jobs_dir" prg_exit_state 10]
 #            ts_log_fine "---\n$file_perms_output\n---"
 
             if { $jobt == "qrsh" || $jobt == "qrlogin" } {
@@ -348,7 +342,7 @@ proc job_start_test {} {
             if { $expected_qacct_exit_state != "undefined" } {
                if { [lindex $qacct_info(exit_status) 0] != $expected_qacct_exit_state } {
                   ts_log_severe "$current_run_text qacct exit_status($qacct_info(exit_status)) doesn't match expected exit state($expected_qacct_exit_state)"
-               }         
+               }
             } else {
                ts_log_config "$current_run_text skipping test of accounting file exit status - expected value set to undefined"
             }
@@ -361,7 +355,7 @@ proc job_start_test {} {
                ts_log_severe "$current_run_text error_file is not empty: \"$error_output\""
             }
 
-            
+
             if { $jobt == "tight_integrated" } {
                set tight_jobs_dir "$jobs_dir/1.$host"
                set tight_trace_file        $tight_jobs_dir/trace
@@ -371,9 +365,9 @@ proc job_start_test {} {
                ts_log_fine "tight exit_status file: $tight_exit_status_file"
                ts_log_fine "tight error file:       $tight_error_file"
 
-               wait_for_remote_file $host $ts_user_config(second_foreign_user) $tight_trace_file 
-               wait_for_remote_file $host $ts_user_config(second_foreign_user) $tight_exit_status_file 
-               wait_for_remote_file $host $ts_user_config(second_foreign_user) $tight_error_file 
+               wait_for_remote_file $host $ts_user_config(second_foreign_user) $tight_trace_file
+               wait_for_remote_file $host $ts_user_config(second_foreign_user) $tight_exit_status_file
+               wait_for_remote_file $host $ts_user_config(second_foreign_user) $tight_error_file
 
                set tight_trace_output [start_remote_prog $host $ts_user_config(second_foreign_user) cat $tight_trace_file prg_exit_state 60]
 #               ts_log_fine "---\n$tight_trace_output\n---"
@@ -384,13 +378,13 @@ proc job_start_test {} {
                set tight_error_output [start_remote_prog $host $ts_user_config(second_foreign_user) cat $tight_error_file prg_exit_state 60]
 #               ts_log_fine "---\n$tight_error_output\n---"
 
-               set tight_file_perms_output [start_remote_prog $host $ts_user_config(second_foreign_user) ls "-n $tight_jobs_dir" prg_exit_state 60] 
+               set tight_file_perms_output [start_remote_prog $host $ts_user_config(second_foreign_user) ls "-n $tight_jobs_dir" prg_exit_state 60]
 #               ts_log_fine "---\n$tight_file_perms_output\n---"
 
                if { $expected_qacct_exit_state != "undefined" } {
                   if { [lindex $qacct_info(exit_status) 0] != $expected_qacct_exit_state } {
                      ts_log_severe "$current_run_text qacct exit_status of master task doesn't match expected exit state $expected_qacct_exit_state: [lindex $qacct_info(exit_status) 0] != $expected_qacct_exit_state"
-                  }         
+                  }
                } else {
                   ts_log_config "$current_run_text skipping test of accounting file exit status - expected value set to undefined"
                }
@@ -412,7 +406,7 @@ proc job_start_test {} {
 
             set uid [get_uid $ts_user_config(second_foreign_user) $host]
             ts_log_fine "my uid is \"$uid\""
-            
+
             set gid [get_gid $ts_user_config(second_foreign_user) $host]
             ts_log_fine "my gid is \"$gid\""
 
@@ -442,7 +436,7 @@ proc job_start_test {} {
                   if { $file_perm != "-rw-rw-rw-" } {
                      ts_log_severe "$current_run_text permission $file_uid of file \"$file\" doesn't match expected perm -rw-rw-rw-"
                   }
-                  
+
                } else {
                   if { $file_uid != $uid } {
                      ts_log_severe "$current_run_text uid($file_uid) of file \"$file\" doesn't match job uid($uid):\n file uid($file_uid) != admin_uid($admin_uid)"
@@ -488,11 +482,11 @@ proc job_start_test {} {
 #                  ts_log_fine $line
                   if { [string match "*shepherd called with*" $line ] } {
                      set found_array(1) 1
-                     set trace_pid_1 [get_string_value_between "\[" "\]" $line ] 
-                     set trace_pid_1 [get_string_value_between ":" -1 $trace_pid_1 ] 
+                     set trace_pid_1 [get_string_value_between "\[" "\]" $line ]
+                     set trace_pid_1 [get_string_value_between ":" -1 $trace_pid_1 ]
 
-                     set trace_uid   [get_string_value_between "with uid = " ", euid = " $line ] 
-                     set trace_euid  [get_string_value_between "euid = " -1 $line ] 
+                     set trace_uid   [get_string_value_between "with uid = " ", euid = " $line ]
+                     set trace_euid  [get_string_value_between "euid = " -1 $line ]
 
                      ts_log_fine "pid 1: $trace_pid_1"
                      ts_log_fine "uid:   $trace_uid"
@@ -510,10 +504,10 @@ proc job_start_test {} {
 
                   if { [string match "*setting limits*" $line ] } {
                      set found_array(2) 1
-                     set trace_pid_2 [get_string_value_between "\[" "\]" $line ] 
-                     set trace_pid_2 [get_string_value_between ":" -1 $trace_pid_2 ] 
+                     set trace_pid_2 [get_string_value_between "\[" "\]" $line ]
+                     set trace_pid_2 [get_string_value_between ":" -1 $trace_pid_2 ]
                      ts_log_fine "pid 2: $trace_pid_2"
-                     
+
                      if { [info exists trace_pid_1] != 1 } {
                         ts_log_severe "$current_run_text sheperd trace file doesn't contain \"shepherd called with\" string"
                         set trace_pid_1 "unknown"
@@ -530,8 +524,8 @@ proc job_start_test {} {
 
                   if { [string match "*now running with uid*euid*" $line ] } {
                      set found_array(4) 1
-                     set trace_running_uid  [get_string_value_between "uid=" ", euid" $line ] 
-                     set trace_running_euid [get_string_value_between "euid=" -1 $line ] 
+                     set trace_running_uid  [get_string_value_between "uid=" ", euid" $line ]
+                     set trace_running_euid [get_string_value_between "euid=" -1 $line ]
                      ts_log_fine "trace_running_uid: $trace_running_uid"
                      ts_log_fine "trace_running_euid: $trace_running_euid"
 
@@ -664,7 +658,7 @@ proc job_start_test {} {
                            }
                         }
                         default {
-                           # using rshd from Cluster Scheduler (Grid Engine) source 
+                           # using rshd from Cluster Scheduler (Grid Engine) source
                            set host_arch [resolve_arch $host]
                            set expected_trace_daemon "$ts_config(product_root)/utilbin/$host_arch/rshd"
                            set trace_daemon_split [split $trace_daemon " "]
@@ -672,7 +666,7 @@ proc job_start_test {} {
                            set trace_daemon_arg [lindex $trace_daemon_split 1]
                            ts_log_fine "trace_rshd:     \"$trace_daemon\""
                            ts_log_fine "trace_rshd_arg: \"$trace_daemon_arg\""
-                           
+
                            if { $trace_daemon != $expected_trace_daemon } {
                               ts_log_severe "$current_run_text shepherd trace file qlogin_starter output job daemon \"$expected_trace_daemon\": $trace_daemon"
                            }
@@ -682,7 +676,7 @@ proc job_start_test {} {
                         }
                      }
                   }
-                  
+
 
 
 #08/25/2005 11:45:28 [115091:13995]: wait3 returned 13996 (status: 0; WIFSIGNALED: 0,  WIFEXITED: 1, WEXITSTATUS: 0)
@@ -796,11 +790,11 @@ proc job_start_test {} {
                   if { $line != "" } {
                      if { [string match "*shepherd called with*" $line ] } {
                         set found_array(1) 1
-                        set trace_pid_1 [get_string_value_between "\[" "\]" $line ] 
-                        set trace_pid_1 [get_string_value_between ":" -1 $trace_pid_1 ] 
+                        set trace_pid_1 [get_string_value_between "\[" "\]" $line ]
+                        set trace_pid_1 [get_string_value_between ":" -1 $trace_pid_1 ]
 
-                        set trace_uid   [get_string_value_between "with uid = " ", euid = " $line ] 
-                        set trace_euid  [get_string_value_between "euid = " -1 $line ] 
+                        set trace_uid   [get_string_value_between "with uid = " ", euid = " $line ]
+                        set trace_euid  [get_string_value_between "euid = " -1 $line ]
 
                         ts_log_fine "pid 1: $trace_pid_1"
                         ts_log_fine "uid:   $trace_uid"
@@ -818,10 +812,10 @@ proc job_start_test {} {
 
                      if { [string match "*setting limits*" $line ] } {
                         set found_array(2) 1
-                        set trace_pid_2 [get_string_value_between "\[" "\]" $line ] 
-                        set trace_pid_2 [get_string_value_between ":" -1 $trace_pid_2 ] 
+                        set trace_pid_2 [get_string_value_between "\[" "\]" $line ]
+                        set trace_pid_2 [get_string_value_between ":" -1 $trace_pid_2 ]
                         ts_log_fine "pid 2: $trace_pid_2"
-                        
+
                         if { $trace_pid_2 == $trace_pid_1 } {
                            ts_log_severe "$current_run_text shepherd trace file doesn't have different pids: pid 1($trace_pid_1), pid2($trace_pid_2)"
                         }
@@ -833,8 +827,8 @@ proc job_start_test {} {
 
                      if { [string match "*now running with uid*euid*" $line ] } {
                         set found_array(4) 1
-                        set trace_running_uid  [get_string_value_between "uid=" ", euid" $line ] 
-                        set trace_running_euid [get_string_value_between "euid=" -1 $line ] 
+                        set trace_running_uid  [get_string_value_between "uid=" ", euid" $line ]
+                        set trace_running_euid [get_string_value_between "euid=" -1 $line ]
                         ts_log_fine "trace_running_uid: $trace_running_uid"
                         ts_log_fine "trace_running_euid: $trace_running_euid"
 
@@ -899,7 +893,7 @@ proc job_start_test {} {
                         if { [string match "*$tight_jobs_dir*" $trace_job_dir] == 0 } {
                            ts_log_severe "$current_run_text shepherd trace file qlogin_starter output job dir \"$tight_jobs_dir\": $trace_job_dir"
                         }
-                        # using rshd from Cluster Scheduler (Grid Engine) source 
+                        # using rshd from Cluster Scheduler (Grid Engine) source
                         set host_arch [resolve_arch $host]
                         set expected_trace_daemon "$ts_config(product_root)/utilbin/$host_arch/rshd"
                         set trace_daemon_split [split $trace_daemon " "]
@@ -907,7 +901,7 @@ proc job_start_test {} {
                         set trace_daemon_arg [lindex $trace_daemon_split 1]
                         ts_log_fine "trace_rshd:     \"$trace_daemon\""
                         ts_log_fine "trace_rshd_arg: \"$trace_daemon_arg\""
-                        
+
                         if { $trace_daemon != $expected_trace_daemon } {
                            ts_log_severe "$current_run_text shepherd trace file qlogin_starter output job daemon \"$expected_trace_daemon\": $trace_daemon"
                         }
@@ -915,7 +909,7 @@ proc job_start_test {} {
                            ts_log_severe "$current_run_text shepherd trace file qlogin_starter output job daemon \"-l\": $trace_daemon_arg"
                         }
                      }
-                     
+
 
                      if { [string match "*wait3 returned*(status*" $line ] } {
                         set found_array(7) 1
@@ -992,7 +986,7 @@ proc job_start_test {} {
                   }
                }
             }
-            
+
 
          }  ;# jobt
       }

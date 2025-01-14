@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -48,7 +48,7 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "test special jsv issues"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function jsv_issues_setup
@@ -91,7 +91,7 @@ proc jsv_issues_setup {} {
    # get base path of scripts
    set jsv_base_path $ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_issues
 
-   # change global config 
+   # change global config
    get_config jsv_org_global_conf
    set global_conf(load_report_time) "00:00:04"
    set global_conf(max_unheard) "00:00:15"
@@ -101,7 +101,7 @@ proc jsv_issues_setup {} {
    set_config_and_propagate global_conf
 }
 
-# stop all running JSV scripts 
+# stop all running JSV scripts
 proc jsv_issues_cleanup {} {
    global ts_config
    global jsv_org_global_conf
@@ -134,9 +134,9 @@ proc jsv_issues_job_start_user_qsub {} {
    close $fd
 
    # Submit a job in that directory as a result the .sge_request file will be parsed and
-   # the contained switch will be used 
+   # the contained switch will be used
    # The script will be started as client JSV and this will write the
-   # passed job owner as job context variable in the job 
+   # passed job owner as job context variable in the job
    set qsub_args "-h $ts_config(product_root)/examples/jobs/sleeper.sh 3"
    set qsub_user $CHECK_USER
    set qsub_host $ts_config(master_host)
@@ -153,7 +153,7 @@ proc jsv_issues_job_start_user_qsub {} {
 
    # read the job owner from the job context variables
    set qstat_user 0
-   regexp "JSV_USER=(\[a-z0-9()\]*)" $qstat_out match qstat_user 
+   regexp "JSV_USER=(\[a-z0-9()\]*)" $qstat_out match qstat_user
 
    # test
    if {$qstat_user != $qsub_user} {
@@ -162,7 +162,7 @@ proc jsv_issues_job_start_user_qsub {} {
 }
 
 proc submit_drmaa_job {host job_id_var} {
-   global CHECK_USER 
+   global CHECK_USER
    global ts_config
 
    upvar $job_id_var job_id
@@ -173,7 +173,7 @@ proc submit_drmaa_job {host job_id_var} {
       ts_log_severe "Submitting drmaa job failed. Output of command was $drmaa_out and exit state is $prg_exit_stat"
    } else {
       set job_id 0
-      regexp ".*\"(\[0-9\]*)\"" $drmaa_out match job_id 
+      regexp ".*\"(\[0-9\]*)\"" $drmaa_out match job_id
    }
 }
 
@@ -186,17 +186,17 @@ proc jsv_issues_job_start_user_drmaa {} {
    global ts_config
    global CHECK_USER drmaa_binary_name level_host_list
 
-   set host $ts_config(master_host) 
+   set host $ts_config(master_host)
    set global_file $ts_config(product_root)/$ts_config(cell)/common/sge_request
    set saved_global_file $ts_config(product_root)/$ts_config(cell)/common/sge_request.jsv_issues_job_start_user_drmaa
    set did_copy 0
 
-   # safe possibly existing file 
+   # safe possibly existing file
    if {[file exists $global_file]} {
       file copy -force $global_file $saved_global_file
       set did_copy 1
    }
-   # create file used for this test 
+   # create file used for this test
    set fd [open $global_file "a+"]
    puts $fd "-jsv ${jsv_base_path}/jsv_get_owner.sh"
    close $fd
@@ -207,8 +207,8 @@ proc jsv_issues_job_start_user_drmaa {} {
    ts_log_fine "starting single threaded test $drmaa_binary_name -h without SGE_ROOT"
 
    # Submit a drmaa job
-   # if the issue is present the binary might return (null) as user or die 
-   submit_drmaa_job $host job_id 
+   # if the issue is present the binary might return (null) as user or die
+   submit_drmaa_job $host job_id
 
    # remove the sge_request file and optionally restore the original
    file delete $global_file
@@ -221,7 +221,7 @@ proc jsv_issues_job_start_user_drmaa {} {
 
    # read the job reported job owner from the job context variables
    set qstat_user 0
-   regexp "JSV_USER=(\[a-z0-9()\]*).*\n" $qstat_out match qstat_user 
+   regexp "JSV_USER=(\[a-z0-9()\]*).*\n" $qstat_out match qstat_user
 
    # test
    if {$qstat_user != $CHECK_USER} {
@@ -238,7 +238,7 @@ proc jsv_issues_wrong_w_flag {} {
 
    # Submit a job with -jsv script
    # The script will be started as client JSV and this will write the
-   # passed -w flag as job context variable in the job 
+   # passed -w flag as job context variable in the job
    set qsub_flag "v"
    set qsub_args "-w $qsub_flag -h -jsv ${jsv_base_path}/jsv_get_w_flag.sh $ts_config(product_root)/examples/jobs/sleeper.sh 3"
    set qsub_host $ts_config(master_host)
@@ -251,7 +251,7 @@ proc jsv_issues_wrong_w_flag {} {
 
    # read the flag from the job context variables
    set qstat_flag 0
-   regexp "JSV_w=(\[a-z0-9()\]*)" $qstat_out match qstat_flag 
+   regexp "JSV_w=(\[a-z0-9()\]*)" $qstat_out match qstat_flag
 
    # test
    if {$qstat_flag != $qsub_flag} {
@@ -266,7 +266,7 @@ proc jsv_issues_q_soft_selection {} {
 
    # Submit a job with -jsv script
    # The script will be started as client JSV and this will write the
-   # passed -w flag as job context variable in the job 
+   # passed -w flag as job context variable in the job
    set qsub_flag "all.q"
    set qsub_args "-soft -q $qsub_flag -h -jsv ${jsv_base_path}/jsv_get_q_soft.sh $ts_config(product_root)/examples/jobs/sleeper.sh 3"
    set qsub_host $ts_config(master_host)
@@ -279,7 +279,7 @@ proc jsv_issues_q_soft_selection {} {
 
    # read the flag from the job context variables
    set qstat_flag 0
-   regexp "JSV_q_soft=(\[a-z0-9()\\\.]*)" $qstat_out match qstat_flag 
+   regexp "JSV_q_soft=(\[a-z0-9()\\\.]*)" $qstat_out match qstat_flag
 
    # test
    if {$qstat_flag != $qsub_flag} {
@@ -294,7 +294,7 @@ proc jsv_issues_q_hard_selection {} {
 
    # Submit a job with -jsv script
    # The script will be started as client JSV and this will write the
-   # passed -w flag as job context variable in the job 
+   # passed -w flag as job context variable in the job
    set qsub_flag "all.q"
    set qsub_args "-hard -q $qsub_flag -h -jsv ${jsv_base_path}/jsv_get_q_hard.sh $ts_config(product_root)/examples/jobs/sleeper.sh 3"
    set qsub_host $ts_config(master_host)
@@ -307,7 +307,7 @@ proc jsv_issues_q_hard_selection {} {
 
    # read the flag from the job context variables
    set qstat_flag 0
-   regexp "JSV_q_hard=(\[a-z0-9()\\\.]*)" $qstat_out match qstat_flag 
+   regexp "JSV_q_hard=(\[a-z0-9()\\\.]*)" $qstat_out match qstat_flag
 
    # test
    if {$qstat_flag != $qsub_flag} {
@@ -343,7 +343,7 @@ proc jsv_issues_cmdargs {} {
    set job_id [lindex $qsub_out 2]
 
    set qstat_out [start_sge_bin qstat "-j $job_id"]
-   
+
    plain_j_parse plain $job_id $qstat_out
 
    if {[string compare [string trim $plain(job_args)] "5,6,NONE,NONE,NONE"] != 0} {
@@ -358,7 +358,7 @@ proc jsv_issues_cmdargs {} {
    set job_id [lindex $qsub_out 2]
 
    set qstat_out [start_sge_bin qstat "-j $job_id"]
-   
+
    plain_j_parse plain $job_id $qstat_out
 
    if {[string compare [string trim $plain(job_args)] "5,6,7,8,9"] != 0} {
@@ -388,7 +388,7 @@ proc jsv_issues_cmdargs {} {
    set job_id [lindex $qsub_out 2]
 
    set qstat_out [start_sge_bin qstat "-j $job_id"]
-   
+
    plain_j_parse plain $job_id $qstat_out
 
    if {[string compare [string trim $plain(job_args)] "5,6,NONE,NONE,NONE,22"] != 0} {
@@ -405,7 +405,7 @@ proc jsv_issues_iz3088 {} {
 
    set JOB_COULDNOTRUN  [translate $ts_config(master_host) 0 0 0 [sge_macro MSG_QSUB_COULDNOTRUNJOB_S] "Binary job is rejected." ]
 
-   # First case: Submit job with a client jsv, with jsv_send_env enabled in jsv_on_start and VAR="hello" 
+   # First case: Submit job with a client jsv, with jsv_send_env enabled in jsv_on_start and VAR="hello"
    set qsub_args "-v VAR=\"hello\" -b y -jsv ${jsv_base_path}/jsv_iz3088.sh /bin/date"
    set qsub_host $ts_config(master_host)
    set qsub_out [start_sge_bin qsub $qsub_args $qsub_host $CHECK_USER]
@@ -436,7 +436,7 @@ proc jsv_A_comma_list {} {
    set qsub_args "-N jsvTest -jsv $ts_config(product_root)/util/resources/jsv/jsv.pl -A \"test\" $ts_config(product_root)/examples/jobs/sleeper.sh"
    set qsub_host $ts_config(master_host)
    set job_id [submit_job $qsub_args]
-   
+
    set ret [wait_for_jobstart $job_id "jsvTest" 30]
 
    if {$ret != 0} {
@@ -448,7 +448,7 @@ proc jsv_A_comma_list {} {
    # submit a job with -A option and comma separated list. Expect the job to run.
    set qsub_args "-N jsvTest -jsv $ts_config(product_root)/util/resources/jsv/jsv.pl -A \"test,test\" $ts_config(product_root)/examples/jobs/sleeper.sh"
    set job_id [submit_job $qsub_args]
-   
+
    set ret [wait_for_jobstart $job_id "jsvTest" 30]
 
    if {$ret != 0} {
@@ -465,8 +465,8 @@ proc jsv_issues_GE-3311 {} {
    global ts_config
    global jsv_base_path
 
-   # submit a job request a boolean complex without a value and then check 
-   # the result in qstat -j output after a JSV changed a different attribute. 
+   # submit a job request a boolean complex without a value and then check
+   # the result in qstat -j output after a JSV changed a different attribute.
    set qsub_flag "TRUE"
    set qsub_args "-l display_win_gui -jsv ${jsv_base_path}/jsv_GE-3311.sh $ts_config(product_root)/examples/jobs/sleeper.sh 301"
    set qsub_host $ts_config(master_host)
@@ -479,7 +479,7 @@ proc jsv_issues_GE-3311 {} {
 
    # read the flag from qstat output
    set qstat_flag 0
-   regexp "display_win_gui=(\[a-zA-Z0-9()\\\.\]*)" $qstat_out match qstat_flag 
+   regexp "display_win_gui=(\[a-zA-Z0-9()\\\.\]*)" $qstat_out match qstat_flag
 
    # test
    if {$qstat_flag != $qsub_flag} {

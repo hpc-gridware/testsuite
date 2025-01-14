@@ -34,11 +34,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global check_need_running_system
 
@@ -55,7 +55,7 @@ set check_description(0)  "execd cannot get rid of not existing task which resul
 
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function issue_3170_setup
@@ -66,7 +66,7 @@ set check_functions {}
 lappend check_functions "issue_3170_test"
 
 proc issue_3170_setup {} {
-   global CHECK_USER 
+   global CHECK_USER
    global test_3170_config
    global test_3170_execd_config
    get_current_cluster_config_array ts_config
@@ -111,7 +111,7 @@ proc issue_3170_setup {} {
 
 proc issue_3170_cleanup {} {
    get_current_cluster_config_array ts_config
-   global test_3170_config 
+   global test_3170_config
    global test_3170_execd_config
 
    if {$test_3170_config(execd_down)} {
@@ -129,7 +129,7 @@ proc issue_3170_cleanup {} {
    foreach q $test_3170_config(queue_list) {
       del_queue $q $test_3170_config(host) 0 1
    }
-   
+
    ts_log_fine "removing PEs ..."
    foreach pe $test_3170_config(pe_list) {
       del_pe $pe
@@ -142,13 +142,12 @@ proc issue_3170_cleanup {} {
    startup_execd $test_3170_config(host)
 
 
-   unset test_3170_config   
-   unset test_3170_execd_config
+   unset -nocomplain test_3170_config test_3170_execd_config
 }
 
 
 proc issue_3170_test {} {
-   global CHECK_USER test_3170_config 
+   global CHECK_USER test_3170_config
    get_current_cluster_config_array ts_config
 
    set error_text ""
@@ -202,7 +201,7 @@ proc issue_3170_test {} {
          } else {
             append error_text "CANNOT find task spool dir \"$delete_dir_path\" found on host \"$host\"\n"
          }
-         
+
          # restart execd
          if {[startup_execd $host] == 0} {
             set test_3170_config(execd_down) 0
@@ -212,7 +211,7 @@ proc issue_3170_test {} {
       -i $sp_id "assword" {
          append error_text "unexpected password question for user $user on host $host - break\n"
       }
- 
+
       -i $sp_id "_END_OF_FILE_" {
          ts_log_fine "now we can check messages files ..."
       }
@@ -235,17 +234,17 @@ proc issue_3170_test {} {
    # the time period we wait for messages
    set now [clock seconds]
    set start $now
-   set end [expr $now + 120]   
+   set end [expr $now + 120]
 
 
    set analyse_wait_time 70
-   
+
    set timeout 15
    expect {
       -i $log_sp_id timeout {
          set now [clock seconds]
          set run_time [expr $now - $start ]
-         
+
          if {$run_time > $analyse_wait_time} {
             ts_log_fine "no new messages arrived, runtime > $analyse_wait_time - don't expect any further logging - fine"
          } else {
