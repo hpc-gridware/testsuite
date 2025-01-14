@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -48,7 +48,7 @@ set check_category        "AR VERIFIED"
 set check_description(0)  "qrdel test"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function   "qrdel_setup"
@@ -66,8 +66,6 @@ lappend check_functions "qrdel_user_list"             ;# delete all jobs of user
 lappend check_functions "qrdel_force"                 ;# force action
 lappend check_functions "qrdel_race_condition_with_qdel"
 lappend check_functions "qrdel_foreign_user"          ;# delete jobs of foreign user
-# check's globals
-global queue test_host pe
 
 # -------- local test procedures -----------------------------------------------
 
@@ -123,7 +121,7 @@ proc qrdel_submit_delete_when_transfered {} {
       # we submit sleeper jobs and delete the AR after all of them are running
       set job_script "$ts_config(product_root)/examples/jobs/sleeper.sh 1000"
       set runs 5
-      while { $runs > 0 } { 
+      while { $runs > 0 } {
          set arguments "-o /dev/null -j y -q $queue -ar $ar_id"
          set job_id [submit_job "$arguments $job_script"]
          if {$job_id > 0} {
@@ -163,7 +161,7 @@ proc qrdel_submit_delete_when_transfered_parallel {} {
       # we submit sleeper jobs and delete the AR after all of them are running
       set job_script "$ts_config(product_root)/examples/jobs/sleeper.sh 1000"
       set runs 5
-      while { $runs > 0 } { 
+      while { $runs > 0 } {
          set arguments "-o /dev/null -e /dev/null -q $queue -ar $ar_id -pe $pe 10"
          set job_id [submit_job "$arguments $job_script"]
          if {$job_id > 0} {
@@ -191,7 +189,7 @@ proc qrdel_submit_delete_when_transfered_parallel {} {
 proc submit_testars {{user ""} {additional_ar_args ""} {with_job "0"} {testar_count "4" }} {
    global CHECK_USER queue ts_config
 
-   set arlist ""
+   set arlist {}
 
    set arargs "$additional_ar_args -q $queue -d 3600"
 
@@ -199,11 +197,18 @@ proc submit_testars {{user ""} {additional_ar_args ""} {with_job "0"} {testar_co
    if {$user == ""} {
       set user $CHECK_USER
    }
-  
-   for {set count 1} {$count <= $testar_count} {incr count +1} {
+
+   for {set count 1} {$count <= $testar_count} {incr count} {
       set arresult [submit_ar $arargs "" $user]     ;# submit_ar has it's own error handling
       if {$arresult > 0 } {
          lappend arlist $arresult
+
+         # wait for AR to be visible (due to reader threads)
+         if {[is_version_in_range "9.0.2"]} {
+            if {[parse_qrstat $arresult qrstat_info qrstat_output "" $user]} {
+               ts_log_severe "just submitted AR $arresult is not visible via qrstat:\n$qrstat_output"
+            }
+         }
 
          if {$with_job != 0} {
             set job_id [submit_job "-o /dev/null -j y -ar $arresult $ts_config(product_root)/examples/jobs/sleeper.sh 3600" 1 30 "" $user]
@@ -239,10 +244,10 @@ proc qrdel_help {} {
 
    if {[string first $CHECK_PRODUCT_VERSION_NUMBER $output] < 0} {
       ts_log_severe "version string ($CHECK_PRODUCT_VERSION_NUMBER) not found"
-   } 
- 
+   }
+
    set lines [split $output "\n"]
-   set nr_of_lines [llength $lines] 
+   set nr_of_lines [llength $lines]
 
    ts_log_fine "Output has $nr_of_lines lines"
 
@@ -257,13 +262,13 @@ proc qrdel_delete_unknown_arbid {} {
    wait_for_end_of_all_jobs
 
    # delete a unknown ar_id
-   set ret [delete_ar 1 0 0 "" "" 0] 
+   set ret [delete_ar 1 0 0 "" "" 0]
    if {$ret != -1} {
       ts_log_severe "deleting unknown advance reservation does not show an error"
    }
 
    # delete a ar_id = 0
-   set ret [delete_ar 0 0 0 "" "" 0] 
+   set ret [delete_ar 0 0 0 "" "" 0]
    if {$ret != -2} {
       ts_log_severe "deleting ar_id=0 does not show an error"
    }
@@ -281,26 +286,26 @@ proc qrdel_check_deleted_running {ars_deleted_var ars_running_var} {
             incr deleted 1
          }
       }
- 
+
       if {$deleted == [llength $ars_deleted]} {
          break;
       }
 
       if {$timeout == 0} {
          ts_log_severe "timeout while waiting for end of testars $ars_deleted"
-         break  
+         break
       }
       ts_log_progress
       incr timeout -1
       after 1000
-   }     
+   }
 
    # now check ars are still running
    foreach ar_id $ars_running {
       if {[parse_qrstat $ar_id] != 0} {
-         ts_log_severe "not all advance reservations are running" 
+         ts_log_severe "AR $ar_id is not running:\n$qrstat_output"
       }
-   } 
+   }
 }
 
 proc qrdel_all {} {
@@ -313,38 +318,38 @@ proc qrdel_all {} {
    set all_args "'*'"
 
    # submit ars to delete
-   set ar_list_user1 [submit_testars] 
+   set ar_list_user1 [submit_testars]
    ts_log_fine "user 1 has ars $ar_list_user1"
- 
+
 
    set ar_list_user2 [submit_testars $CHECK_FIRST_FOREIGN_SYSTEM_USER]
    ts_log_fine "user 2 has ars $ar_list_user2"
- 
-   
+
+
    # now delete ars of user 1
    set qrdel_output [start_sge_bin "qrdel" "$all_args"]
    ts_log_fine "qrdel_result = $prg_exit_state"
-   ts_log_fine "qrdel_output = $qrdel_output" 
+   ts_log_fine "qrdel_output = $qrdel_output"
    if {$prg_exit_state != 0} {
        ts_log_severe "could not delete ars $ar_list_user1 (exit status: $prg_exit_state) "
    }
 
    qrdel_check_deleted_running ar_list_user1 ar_list_user2
-  
+
    # now submit new jobs for user 1
-   set ar_list_user1 [submit_testars]  
+   set ar_list_user1 [submit_testars]
    ts_log_fine "user 1 has ars $ar_list_user1"
 
    # now delete jobs of user 2
    set result [start_sge_bin "qrdel" "$all_args" "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
-   ts_log_fine "qrdel_output = \n$result" 
+   ts_log_fine "qrdel_output = \n$result"
 
    qrdel_check_deleted_running ar_list_user2 ar_list_user1
 
    # now delete jobs of user1
    set qrdel_output [start_sge_bin "qrdel" "$all_args"]
    ts_log_fine "qrdel_result = $prg_exit_state"
-   ts_log_fine "qrdel_output = $qrdel_output" 
+   ts_log_fine "qrdel_output = $qrdel_output"
    if { $prg_exit_state != 0 } {
        ts_log_severe "could not delete jobs $ar_list_user1 (exit status: $prg_exit_state) "
    }
@@ -354,36 +359,36 @@ proc qrdel_all {} {
 }
 
 proc qrdel_uall {} {
-   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER 
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
 
    delete_all_ars
    wait_for_end_of_all_jobs
 
    set uall_args "-u '*'"
-   set empty_list ""
+   set empty_list {}
 
    # submit jobs to delete
-   set ar_list_user1 [submit_testars]  
-   ts_log_fine "user 1 has jobs $ar_list_user1"
- 
+   set ar_list_user1 [submit_testars]
+   ts_log_fine "user 1 has ARs $ar_list_user1"
+
    set ar_list_user2 [submit_testars $CHECK_FIRST_FOREIGN_SYSTEM_USER]
-   ts_log_fine "user 2 has jobs $ar_list_user2"
+   ts_log_fine "user 2 has ARs $ar_list_user2"
 
    # now delete all jobs as user 2 (only submit user)
    set result [start_sge_bin "qrdel" $uall_args "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
-   ts_log_fine "qrdel_output = \n$result" 
+   ts_log_fine "qrdel_output = $result"
 
-   # test if all jobs are still there:
-   set all_jobs "$ar_list_user1 $ar_list_user2"
-   ts_log_fine "following jobs must be in the system: $all_jobs"
-   qrdel_check_deleted_running empty_list all_jobs
+   # test if all ARs are still there:
+   set all_ars "$ar_list_user1 $ar_list_user2"
+   ts_log_fine "following ARs must be in the system: $all_ars"
+   qrdel_check_deleted_running empty_list all_ars
 
    # now delete all jobs as user 1 (manager)
    set result [start_sge_bin "qrdel" $uall_args]
-   ts_log_fine "qrdel_output = \n$result" 
+   ts_log_fine "qrdel_output = $result"
 
    # now check if all jobs are deleted
-   qrdel_check_deleted_running all_jobs empty_list
+   qrdel_check_deleted_running all_ars empty_list
 }
 
 proc qrdel_user_list {} {
@@ -398,8 +403,8 @@ proc qrdel_user_list {} {
    add_user_to_access_list $CHECK_SECOND_FOREIGN_SYSTEM_USER "arusers"
 
    # submit jobs to delete
-   set ar_list_user1 [submit_testars]  
- 
+   set ar_list_user1 [submit_testars]
+
    set ar_list_user2 [submit_testars $CHECK_FIRST_FOREIGN_SYSTEM_USER]
 
    set ar_list_user3 [submit_testars $CHECK_SECOND_FOREIGN_SYSTEM_USER]
@@ -417,7 +422,7 @@ proc qrdel_user_list {} {
    set all_jobs "$ar_list_user1 $ar_list_user2 $ar_list_user3"
    qrdel_check_deleted_running empty_list all_jobs
 
-   # now delete all jobs as user 2 (only submit user) of user 2 (himself) 
+   # now delete all jobs as user 2 (only submit user) of user 2 (himself)
    set result [start_sge_bin "qrdel" "-u $CHECK_FIRST_FOREIGN_SYSTEM_USER" "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
 
    set running_ars "$ar_list_user1 $ar_list_user3"
@@ -444,14 +449,14 @@ proc qrdel_user_list {} {
        ts_log_severe "Could not delete jobs $ar_list_user1 (exit status: $prg_exit_state)"
    }
 
-   qrdel_check_deleted_running all_jobs empty_list 
+   qrdel_check_deleted_running all_jobs empty_list
 
    del_user_from_access_list $CHECK_SECOND_FOREIGN_SYSTEM_USER "arusers"
 }
 
 proc qrdel_force {} {
    global ts_config test_host
-   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER 
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
    global CHECK_SECOND_FOREIGN_SYSTEM_USER
 
    set empty_list ""
@@ -468,9 +473,9 @@ proc qrdel_force {} {
 
    # shutdown execd
    set output [start_sge_bin "qconf" "-ke $test_host"]
-   after 10000 
+   after 10000
 
-   # now test if his jobs still running or pending 
+   # now test if his jobs still running or pending
    set all_jobs "$ar_list_user1 $ar_list_user2"
    qrdel_check_deleted_running empty_list all_jobs
 
@@ -482,11 +487,11 @@ proc qrdel_force {} {
 
    if {$prg_exit_state != 0} {
       ts_log_severe "exit state is not 0"
-   }    
+   }
 
    # delete the jobs of user2 as user2 without -f switch
    set result [start_sge_bin "qrdel" "$ar_list_user2" "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
-   ts_log_fine "qrdel_output = \n$result" 
+   ts_log_fine "qrdel_output = \n$result"
 
    qrdel_check_deleted_running empty_list all_jobs
 
@@ -495,7 +500,7 @@ proc qrdel_force {} {
    # wait for deletion of the advance reservation
    qrdel_check_deleted_running all_jobs empty_list
 
-   # ok - qrdel without execd is ok, now check the -f option 
+   # ok - qrdel without execd is ok, now check the -f option
 
    # submit jobs to delete
    set ar_list_user1 [submit_testars "" "" 1]
@@ -506,9 +511,9 @@ proc qrdel_force {} {
 
    # shutdown execd
    set output [start_sge_bin "qconf" "-ke $test_host"]
-   after 10000 
+   after 10000
 
-   # now test if his jobs still running or pending 
+   # now test if his jobs still running or pending
    set all_jobs "$ar_list_user1 $ar_list_user2"
    qrdel_check_deleted_running empty_list all_jobs
 
@@ -527,7 +532,7 @@ proc qrdel_force {} {
 
    # delete the jobs of user 2 as user 2 with -f switch
    set result [start_sge_bin "qrdel" "-f $ar_list_user2" "" $CHECK_FIRST_FOREIGN_SYSTEM_USER prg_exit_state 120]
-   ts_log_fine "qrdel_output = \n$result" 
+   ts_log_fine "qrdel_output = \n$result"
 
    # jobs of user2 should be deleted
    qrdel_check_deleted_running ar_list_user2 empty_list
@@ -558,26 +563,26 @@ proc qrdel_race_condition_with_qdel {} {
       set job_state [wait_for_jobstart $job_id "leeper" 120]
    } else {
       ts_log_severe "error submitting job"
-      return; 
+      return;
    }
 
    # delete job and immediatly the AR and wait for end
    # delete AR will raise a
-   delete_job $job_id 
+   delete_job $job_id
    if {[delete_ar $ar_id 1 0 "" "" 0] < 0} {
       ts_log_severe "error deleted AR stays wrongly in deleted state"
    }
 }
 
 proc qrdel_foreign_user {} {
-   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER 
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
 
    set ar_id1 [submit_ar "-d 3600"]
    set ar_id2 [submit_ar "-d 3600" "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
 
    if {[delete_ar $ar_id1 0 0 "" "$CHECK_FIRST_FOREIGN_SYSTEM_USER" 0] != -3} {
       ts_log_severe "qrdel as non-admin on AR of foreign successed wrongly"
-   } 
+   }
 
    if {[delete_ar $ar_id2] != 0} {
       ts_log_severe "qrdel as admin on AR of foreign user failed"

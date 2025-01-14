@@ -35,7 +35,7 @@
 
 #                                                             max. column:     |
 #****** sge_ar/submit_ar() ******
-# 
+#
 #  NAME
 #     submit_ar -- submit a AR with qrsub
 #
@@ -53,7 +53,7 @@
 #
 #  RESULT
 #     This procedure returns:
-#     
+#
 #     ar_id   of array or ar_id if submit was successfull (value >= 1)
 #        -1   general error
 #        -2   if usage was printed on -help or commandfile argument
@@ -63,8 +63,8 @@
 #       -10   resource not requestable - error
 #       -13   unknown option - error
 #
-#      -100   on error 
-#     
+#      -100   on error
+#
 #
 #*******************************
 global g_submit_ar_messages
@@ -72,7 +72,7 @@ unset -nocomplain g_submit_ar_messages
 proc submit_ar {args {on_host ""} {as_user ""} {raise_error 1}} {
    global g_submit_ar_messages
    upvar 0 g_submit_ar_messages messages
-  
+
    if {![info exists messages(index)]} {
       ts_log_fine "submit_ar: translating messages"
       # failure messages from jobs common valiation part:
@@ -122,7 +122,7 @@ proc submit_ar {args {on_host ""} {as_user ""} {raise_error 1}} {
          lappend messages(index) $idx
       }
    }
-   
+
    set output [start_sge_bin "qrsub" $args $on_host $as_user]
 
    set ret [handle_sge_errors "submit_ar" "qrsub $args" $output messages $raise_error]
@@ -151,7 +151,7 @@ proc submit_ar {args {on_host ""} {as_user ""} {raise_error 1}} {
 
 #                                                             max. column:     |
 #****** sge_ar/delete_all_ars() ******
-# 
+#
 #  NAME
 #     delete_all_ars -- delete_all_ars
 #
@@ -179,11 +179,11 @@ proc delete_all_ars {} {
 
 #****** sge_ar.62/delete_ar() **************************************************
 #  NAME
-#     delete_ar() -- ??? 
+#     delete_ar() -- ???
 #
 #  SYNOPSIS
-#     delete_ar { ar_id {wait_for_end 0} {all_users 0} {on_host ""} 
-#     {as_user ""} {raise_error 1} } 
+#     delete_ar { ar_id {wait_for_end 0} {all_users 0} {on_host ""}
+#     {as_user ""} {raise_error 1} }
 #
 #  FUNCTION
 #     deletes a advance reservation
@@ -199,7 +199,7 @@ proc delete_all_ars {} {
 #  RESULT
 #      -2   general error
 #      -1   id does not exist
-#      0    deleted advance reservation 
+#      0    deleted advance reservation
 #      1    tagged advance reservation as deleted
 #
 #  SEE ALSO
@@ -257,7 +257,7 @@ proc delete_ar {ar_id {wait_for_end 0} {all_users 0} {on_host ""} {as_user ""} {
 #     submit_ar_parse_ar_id() -- parse ar id from qrsub output
 #
 #  SYNOPSIS
-#     submit_ar_parse_ar_id { output_var } 
+#     submit_ar_parse_ar_id { output_var }
 #
 #  FUNCTION
 #     Analyzes qrsub output and parsed the ar id from this output.
@@ -321,12 +321,12 @@ ts_log_fine "AR id: $ret"
 #     parse_qrstat -- parse output of a qrstat -ar ar_id command
 #
 #  SYNOPSIS
-#     parse_qrstat input output 
+#     parse_qrstat input output
 #
 #  FUNCTION
-#     Parses the output of a qrstat -ar command. 
+#     Parses the output of a qrstat -ar command.
 #     This parser is capable to parse just output for sigular AR (qrstat with -ar ar_id)
-#  
+#
 #
 #  INPUTS
 #     ar_id   - AR id to analyze
@@ -338,18 +338,18 @@ ts_log_fine "AR id: $ret"
 #
 #***************************************************************************
 #
-proc parse_qrstat {ar_id {output qrstat_info} {plain_output qrstat_output}} {
+proc parse_qrstat {ar_id {output qrstat_info} {plain_output qrstat_output} {host ""} {user ""}} {
    upvar $output out
    upvar $plain_output result
 
-   set result [start_sge_bin qrstat "-u '*' -ar $ar_id"]
+   set result [start_sge_bin "qrstat" "-u '*' -ar $ar_id" $host $user]
    if {$prg_exit_state != 0} {
       return -1
    }
 
    set    match_text(id)                id*
    set    match_text(name)              name*
-   set    match_text(owner)             owner* 
+   set    match_text(owner)             owner*
    set    match_text(state)             state*
    set    match_text(start_time)        start_time*
    set    match_text(end_time)          end_time*
@@ -379,7 +379,7 @@ proc parse_qrstat {ar_id {output qrstat_info} {plain_output qrstat_output}} {
             set len [string length $line]
             set value [string trimright [string trimleft [string range $line $pos $len]]]
             set out($name) $value
-         }  
+         }
       }
    }
 
@@ -404,7 +404,7 @@ proc parse_qrstat {ar_id {output qrstat_info} {plain_output qrstat_output}} {
 #     Test function for parse_qrstat.
 #     Execute test_parse_qrstat in your testsuite, e.g. by executing
 #
-#     expect check.exp file <config file> execute_func test_parse_qstat 2 
+#     expect check.exp file <config file> execute_func test_parse_qstat 2
 #
 #  INPUTS
 #     ar_id - AR id to analyze
@@ -438,7 +438,7 @@ proc test_parse_qrstat { ar_id } {
 #     The  0 .... success in check
 #         -1      could not find the AR by input ar_id
 #         -2      expected attribute is missing in the qrstat output
-#         -3      attribute value does no match expected pattern 
+#         -3      attribute value does no match expected pattern
 #
 #  SEE ALSO
 #     sge_ar/parse_qrstat()
@@ -457,20 +457,20 @@ proc parse_qrstat_check { ar_id match_values } {
         append errors "The expected attribute $name is missing in the result\n"
         set ret -2
         continue
-      }     
+      }
 
       if {[string match $pattern $value]} {
-         ts_log_fine "SUCCESSFUL MATCH for attribute $name:\tvalue: $value"         
+         ts_log_fine "SUCCESSFUL MATCH for attribute $name:\tvalue: $value"
       } else {
          append errors "Attribute: $name\tvalue: $value\t DOES NOT MATCH pattern: $pattern\n"
          set ret -3
-      } 
+      }
    }
 
    if {$errors != ""} {
       ts_log_severe "$errors\n$qrstat_output"
    }
-   return $ret 
+   return $ret
 }
 
 
@@ -485,7 +485,7 @@ proc parse_qrstat_check { ar_id match_values } {
 #     Test function for parse_qrstat.
 #     Execute test_parse_qrstat in your testsuite, e.g. by executing
 #
-#     expect check.exp file <config file> execute_func test_parse_qstat_check 
+#     expect check.exp file <config file> execute_func test_parse_qstat_check
 #
 #
 #  SEE ALSO
@@ -517,7 +517,7 @@ proc test_parse_qrstat_check {} {
    }
    set val(id)                             "$ar_id"
    set val(name)                           "test_ar_name"
-   set val(owner)                          "$CHECK_USER"  
+   set val(owner)                          "$CHECK_USER"
    set val(checkpoint_name)                "test_ar_ckpt"
    set val(start_time)                     "01/01/2008 01:01:00"
    set val(end_time)                       "01/01/2009 01:01:00"
