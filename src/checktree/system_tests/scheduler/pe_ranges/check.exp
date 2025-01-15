@@ -34,11 +34,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -48,7 +48,7 @@ set check_description(0)  "test pe-ranges"
 set check_description(1)  "test pe-ranges with resource quota sets"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function pe_ranges_setup
@@ -73,7 +73,7 @@ proc pe_ranges_setup {} {
          incr execd_count 1
          lappend pe_ranges_test_hosts $host
          ts_log_fine "using host $host"
-      } 
+      }
    }
 
    set queue_list {}
@@ -83,7 +83,7 @@ proc pe_ranges_setup {} {
 
    disable_queue $queue_list
    ts_log_fine "disabled $queue_list"
-   
+
    set pe(slots)             "999"
    set pe(allocation_rule)   "\$round_robin"
    add_pe "round_robin" pe
@@ -91,9 +91,7 @@ proc pe_ranges_setup {} {
    set queue_settings(slots) 1000
    set queue_settings(load_thresholds) "np_load_avg=11.75"
    set queue_settings(pe_list)          "round_robin"
-   set qname "res.q"
-   add_queue $qname $pe_ranges_test_hosts queue_settings
-   ts_log_fine "added queue $qname for hosts $pe_ranges_test_hosts"
+   add_queue "res.q" $pe_ranges_test_hosts queue_settings
 }
 
 proc pe_ranges_cleanup {} {
@@ -101,6 +99,8 @@ proc pe_ranges_cleanup {} {
    global pe_ranges_test_hosts
    global pe_ranges_complex_backup
 
+   # we modify the scheduler config in pe_ranges_test, reset it here
+   reset_schedd_config
 
    delete_all_jobs
    wait_for_end_of_all_jobs 60
@@ -113,9 +113,7 @@ proc pe_ranges_cleanup {} {
    enable_queue $queue_list
    ts_log_fine "enabled $queue_list"
 
-
-   set qname "res.q"
-   del_queue $qname $pe_ranges_test_hosts  0 1
+   del_queue "res.q" $pe_ranges_test_hosts  0 1
 
    del_pe        "round_robin"
 
@@ -127,7 +125,8 @@ proc pe_ranges_cleanup {} {
       }
    }
    reset_complex pe_ranges_complex_backup
-   unset pe_ranges_complex_backup
+
+   unset -nocomplain pe_ranges_test_hosts pe_ranges_complex_backup
 }
 
 proc pe_ranges_submit_pejobs_and_wait { job_arguments job_count job_count_max run_job_count } {
@@ -139,7 +138,7 @@ proc pe_ranges_submit_pejobs_and_wait { job_arguments job_count job_count_max ru
       trigger_scheduling
       set running_jobs 0
       set error 0
-      
+
       set job_state [is_job_running $job_id "leeper"]
       if { $job_state == 1 } {
          set job_std_state [get_standard_job_info  $job_id 1 ]
@@ -164,7 +163,7 @@ proc pe_ranges_submit_pejobs_and_wait { job_arguments job_count job_count_max ru
       }
    }
 
-   delete_all_jobs  
+   delete_all_jobs
    wait_for_end_of_all_jobs 60
 }
 
@@ -178,22 +177,22 @@ proc pe_ranges_test1 {} {
 
    for { set i 1 } { $i <= 6 } { incr i 1 } {
       pe_ranges_submit_pejobs_and_wait $job_arguments $i $i $i
-   }  
-   
+   }
+
    set job_count 6
    set run_job_count 6
-   
+
    for { set i 1 } { $i <= 6 } { incr i 1 } {
-      pe_ranges_submit_pejobs_and_wait $job_arguments $i 6 $run_job_count  
+      pe_ranges_submit_pejobs_and_wait $job_arguments $i 6 $run_job_count
    }
 
    for { set i 1 } { $i <= 6 } { incr i 1 } {
       set max_count [expr $i + $run_job_count]
-      pe_ranges_submit_pejobs_and_wait $job_arguments $i $max_count $run_job_count  
+      pe_ranges_submit_pejobs_and_wait $job_arguments $i $max_count $run_job_count
    }
 
    for { set i 6 } { $i <= 12 } { incr i 1 } {
-      pe_ranges_submit_pejobs_and_wait $job_arguments 6 $i $run_job_count  
+      pe_ranges_submit_pejobs_and_wait $job_arguments 6 $i $run_job_count
    }
 }
 
@@ -256,7 +255,7 @@ proc pe_ranges_test {} {
    # case d)
    #         test least pe-range match alg.
    ts_log_fine "\ncase d)"
-   
+
    set schedconf(params) "pe_range_alg=least"
    set result [ set_schedd_config schedconf ]
 
@@ -265,14 +264,14 @@ proc pe_ranges_test {} {
    #clean up
    set queue_settings(load_thresholds) "np_load_avg=11.75"
    mod_queue "res.q" $pe_ranges_test_hosts queue_settings
-   
+
    if {$CHECK_ACT_LEVEL == 1} {
       del_rqs $rqs_name
    }
 
    set global_host(complex_values) $orig_global_host(complex_values)
    set_exechost global_host global
-   
+
    set test1_complex(test1) ""
    set_complex test1_complex
 

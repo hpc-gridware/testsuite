@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -46,7 +46,7 @@ set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
 set check_description(0)  "qalter -h xxx should not cause qmaster core if task is not existing"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_cleanup_function "issue_171_cleanup"
@@ -64,14 +64,14 @@ proc issue_171_cleanup  {} {
 
 proc issue_171_check {} {
    global ts_config
-  
+
    ts_log_fine "Starting job ..."
    set arguments "-o /dev/null -e /dev/null -h -t 1-10"
    set job_id [submit_job "$arguments $ts_config(product_root)/examples/jobs/sleeper.sh 1000"]
 
    ts_log_fine "Waiting for start of job tasks ${job_id}.1-10 ..."
-   wait_for_jobpending $job_id "Sleeper" 60 
-   
+   wait_for_jobpending $job_id "Sleeper" 60
+
    ts_log_fine "Delete job task $job_id.5"
    delete_job "${job_id}.5"
 
@@ -106,8 +106,8 @@ proc issue_171_check {} {
       return
    }
    wait_for_jobstart $job_id "Sleeper" 60 1 1
-   wait_for_end_of_transfer $job_id 60 
- 
+   wait_for_end_of_transfer $job_id 60
+
    set statelist [get_job_state $job_id 1 tasklist]
    set length [llength $statelist]
    set taskcount 0
@@ -118,8 +118,9 @@ proc issue_171_check {} {
       if {$task == 5} {
          ts_log_severe "task $task should not exist"
       }
-      if {[string first "r" $state] < 0} {
-         ts_log_severe "task $task should be in running state, but is in state \"$state\""
+      ts_log_fine "task $task is in state \"$state\""
+      if {$state != "r" && $state != "t"} {
+         ts_log_severe "task $task should be in running or transferring state, but is in state \"$state\""
          return
       }
    }

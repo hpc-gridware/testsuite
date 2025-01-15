@@ -283,7 +283,7 @@ global CHECK_COMMD_PORT            ;# commd port
 global CHECK_USER                  ;# user who start test
 if {[catch {set CHECK_USER [set env(USER)] }] != 0} {
    set CHECK_USER [file attributes check.exp -owner]
-} 
+}
 
 global CHECK_GROUP                 ;# group of user who start test
 global CHECK_ACT_LEVEL             ;# actual check level ( value from 0 up to xxx )
@@ -374,7 +374,7 @@ set CHECK_DETERMINISTIC_HOST_SELECT 1
 global CHECK_HAVE_TDOM ;# do we have the tdom tcl package installed?
 set CHECK_HAVE_TDOM 0
 
-global CHECK_USE_HUDSON ;# instead of logging creates xml files in junit format for Hudson 
+global CHECK_USE_HUDSON ;# instead of logging creates xml files in junit format for Hudson
 set CHECK_USE_HUDSON 0
 
 global DISABLE_WASHING_MACHINE
@@ -857,7 +857,7 @@ proc set_root_passwd {} {
    set result "no password"
 
    set passwd_required ""
-   
+
    # if we don't have ssh access, we need the root passwd
    # and test it on the master host
    if {![have_ssh_access]} {
@@ -935,7 +935,7 @@ proc get_user_passwd_hooks {} {
 #     get_supported_config_parameter_list() -- return current config parameters
 #
 #  SYNOPSIS
-#     get_supported_config_parameter_list { } 
+#     get_supported_config_parameter_list { }
 #
 #  FUNCTION
 #     This function returns a list with the current testsuite configuration
@@ -1143,7 +1143,7 @@ proc set_passwd {user root_host win_host} {
 #     query_passwd() -- query a password for a user
 #
 #  SYNOPSIS
-#     query_passwd { user } 
+#     query_passwd { user }
 #
 #  FUNCTION
 #
@@ -1166,7 +1166,7 @@ proc set_passwd {user root_host win_host} {
 #
 #
 #  INPUTS
-#     user - the name of the user 
+#     user - the name of the user
 #
 #  RESULT
 #     the password of the user. If the executed command in non interactive mode did not return 0 the
@@ -1189,9 +1189,9 @@ proc query_passwd {user} {
          testsuite_shutdown 1
          return ""
       }
-   } else { 
+   } else {
       puts "user $user's password: "
-     
+
       stty -echo
       set passwd [wait_for_enter 1 0 1]
       stty echo
@@ -1346,7 +1346,7 @@ proc mail_report { subject body } {
    global write_mail_to_file
    global CHECK_USE_HUDSON
    global DISABLE_MAIL
-   
+
    #Do not send emails when in hudson_reports mode
    if {$CHECK_USE_HUDSON == 1 || $DISABLE_MAIL == 1} {
       return
@@ -1400,7 +1400,7 @@ proc send_mail { address cc subject body } {
    global ts_config
    global CHECK_USE_HUDSON
    global DISABLE_MAIL
-   
+
    #Do not send emails when in hudson_reports mode
    if {$CHECK_USE_HUDSON == 1 || $DISABLE_MAIL == 1} {
       return
@@ -1444,7 +1444,7 @@ proc send_mail { address cc subject body } {
    }
    set mail_file_array(0) $act_line
    write_remote_file $CHECK_MAILX_HOST $CHECK_USER $tmp_mailfile mail_file_array
- 
+
    set mail_args "-s \"$new_subject\" \"$address\" < \"$tmp_mailfile\""
    set mail_output [start_remote_prog $CHECK_MAILX_HOST $CHECK_USER "mailx" "$mail_args" prg_exit_state 60 0 "" "" 1 0]
    if { $prg_exit_state != 0 } {
@@ -2039,7 +2039,7 @@ proc save_configuration { {filename ""} {config_array ""} } {
       puts "           without overwrite arguments!!!"
       testsuite_shutdown 1
    }
-   
+
    set conf_name "testsuite configuration"
 
    upvar $config_array config
@@ -2520,7 +2520,7 @@ proc setup2 { } {
       } else {
          puts "Cannot read configuration file \"$CHECK_DEFAULTS_FILE\""
          testsuite_shutdown 1
-      }   
+      }
    }
 
 
@@ -2547,7 +2547,7 @@ proc setup2 { } {
             puts "           In the following setup mode it is not possible to"
             puts "           change the configuration!!!"
             wait_for_enter
-         } 
+         }
          foreach elem $err_list {
             puts "$elem"
          }
@@ -2778,7 +2778,7 @@ proc build_checktree {} {
    # read_checktree_nodes is setting additional information in the checktree !!!
 
    ts_log_fine "reading checktree nodes ..."
-   
+
    #Optimalization: With the fast_setup and check <check> set, we just read what we really need
    if {$CHECK_USE_HUDSON == 1 && [llength $custom_checktree] > 0} {
       set error ""
@@ -2924,7 +2924,7 @@ proc build_checktree {} {
       set file_name "$ts_config(testsuite_root_dir)/checktree_export_file.csv"
 
       # first detect the categories
-      
+
       set max_cat 0
       for {set index 0} {$index < $ts_checktree(next_free)} {incr index 1} {
          if {$ts_checktree($index,test_available) != 0} {
@@ -2944,7 +2944,7 @@ proc build_checktree {} {
       }
       append file_data(1) "|Name|Level count|Function count|Description|Location"
 
-      
+
       for {set index 0} {$index < $ts_checktree(next_free)} {incr index 1} {
          if {$ts_checktree($index,test_available) != 0} {
             set nr_of_levels [llength $ts_checktree($index,check_levels)]
@@ -3000,11 +3000,14 @@ proc build_checktree {} {
 
 
 proc verify_version_range {check_version_range_var levels_in} {
+   global check_name
    upvar $check_version_range_var check_version_range
 
    set levels $levels_in
 
    if {[array exists check_version_range]} {
+      ts_log_finer "check \"$check_name\" - per runlevel version range"
+
       # we have per runlevel version info
       foreach runlevel [array names check_version_range] {
          set pos [lsearch -exact $levels $runlevel]
@@ -3016,6 +3019,7 @@ proc verify_version_range {check_version_range_var levels_in} {
          }
       }
    } else {
+      ts_log_finer "check \"$check_name\" - global version range: $check_version_range"
       # we have one version info for the whole test
       set from [lindex $check_version_range 0]
       if {[llength $check_version_range] > 1} {
@@ -3059,7 +3063,7 @@ proc read_checktree_nodes {path} {
 
    # try to find and source check files in this directory for the configured Cluster Scheduler (Grid Engine) version
    set sourced_files [ts_source $path/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT]
-   
+
    # additionally source all tcl files
    if {$check_source_files != "--"} {
       foreach asf $check_source_files {
@@ -3087,6 +3091,7 @@ proc read_checktree_nodes {path} {
       if {[info exists check_version_range]} {
          set levels [verify_version_range check_version_range $levels]
          if {[llength $levels] == 0} {
+            ts_log_finer "check \"$check_name\" - no version supported!"
             set test_available 0
          }
       }
@@ -3104,7 +3109,7 @@ proc read_checktree_nodes {path} {
                testsuite_shutdown 1
             }
             set ts_checktree($nr,$level,check_description) $check_description($level)
-         } 
+         }
       }
 
       if {$check_setup_function != "--" && $check_setup_function != ""} {
@@ -3342,7 +3347,7 @@ proc clear_all_check_errors {check_name} {
 #     has_check_errors() -- Has the current test run produced an error
 #
 #  SYNOPSIS
-#     has_check_errors { } 
+#     has_check_errors { }
 #
 #  FUNCTION
 #
@@ -3373,7 +3378,7 @@ proc has_check_errors {} {
             }
          }
       }
-   } 
+   }
    return 0
 }
 
@@ -3795,7 +3800,7 @@ proc is_category_enabled { path } {
 #     Returns the state of a specific runlevel of a test. The state can be one
 #     of "completed", "uncompleted", "failed" and "unsupported". If there is no
 #     result file of this runlevel of this test, "none" is returned.
-#     
+#
 #  INPUTS
 #     name  - The name of the test as it is defined in the global check_name
 #             variable in the test module.
@@ -3901,8 +3906,8 @@ proc delete_tests {path state_to_delete {only_if_not_there 0}} {
 #     The list is expected to contain the absolute pathes to the tests, e.g.
 #     "/clusterscheduler/testsuite/src/checktree/functional/tight_integration".
 #     This list is generated by the build_checks_to_do_list() and accepted by
-#     the run_tests() functions. 
-#     
+#     the run_tests() functions.
+#
 #  INPUTS
 #     list  - upvar: The list of absolute pathes to tests that is to be sorted.
 #
@@ -3983,7 +3988,7 @@ proc sort_tests_by_duration {list} {
 #     Builds a list of all checks that are to be run according to the current
 #     directory in the checktree, configured categories and runlevels and the
 #     selected test state (uncompleted, completed, failed or unsupported).
-#     
+#
 #  INPUTS
 #     list  - upvar; gets filled with all checks that are to be run
 #     path  - tests from this path and all its subdirectories in the
@@ -4330,9 +4335,9 @@ proc run_tests {path state_to_run} {
 #  FUNCTION
 #     Reads the content of the check_durations.txt file and stores it in the
 #     "durations_param" array.
-#     
+#
 #  INPUTS
-#     durations_param - upvar: the content of the check_durations.txt file is 
+#     durations_param - upvar: the content of the check_durations.txt file is
 #                       stored to this array
 #
 #  RESULT
@@ -4341,7 +4346,7 @@ proc run_tests {path state_to_run} {
 proc read_check_durations_spoolfile {durations_param} {
    global CHECK_MAIN_RESULTS_DIR
    upvar $durations_param durations
-   
+
    set check_durations_spoolfile "$CHECK_MAIN_RESULTS_DIR/check_durations.txt"
 
    # read check durations from file
@@ -4360,9 +4365,9 @@ proc read_check_durations_spoolfile {durations_param} {
 #     write_check_durations_spoolfile {durations_param}
 #
 #  FUNCTION
-#     Writes the content of the "durations_param" array to the 
+#     Writes the content of the "durations_param" array to the
 #     check_durations.txt file.
-#     
+#
 #  INPUTS
 #     durations_param - upvar: the content of this array is stored to the
 #                       check_durations.txt file
@@ -4518,16 +4523,16 @@ proc unlock_testsuite {} {
 #     run_test_level -- ???
 #
 #  SYNOPSIS
-#     run_test_level { path state_to_run level {do_save 1} {warnings 0}} 
+#     run_test_level { path state_to_run level {do_save 1} {warnings 0}}
 #
 #  FUNCTION
 #     ???
 #
 #  INPUTS
-#     path         - ??? 
+#     path         - ???
 #     state_to_run - "completed", "uncompleted", "failed", "unsupported" or "all"
-#     level        - ??? 
-#     {do_save 1}  - ??? 
+#     level        - ???
+#     {do_save 1}  - ???
 #     {warnings 0}  - warnings count of setup function
 #
 #*******************************
@@ -4581,7 +4586,7 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
    # unless we are in install - check if system is running
    set runlevel_error_text ""
    set do_run_hook 0
-   
+
    #prepare a path name for hudson XML reports
    if {$CHECK_USE_HUDSON == 1} {
       set pkg [join [split $path "/"] "."]
@@ -4589,7 +4594,7 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
    }
 
    if {[string compare $check_name "init_core_system"] != 0 &&
-       [string compare $check_needs "" ]               != 0 && 
+       [string compare $check_needs "" ]               != 0 &&
        $check_need_running_system == "yes"} {
 
       # If master not available skip scheduler tests ...
@@ -4667,7 +4672,7 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
                set hudson_global_stacktrace $CHECK_HUDSON_STACKTRACE
                set hudson_failure_type ""
                set hudson_failure_reason ""
-               set CHECK_HUDSON_OUTPUT ""            
+               set CHECK_HUDSON_OUTPUT ""
                set CHECK_HUDSON_STACKTRACE ""
             }
             set check_duration [clock clicks -milliseconds]
@@ -4691,10 +4696,10 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
                      set hudson_failure_type "TCL.$lev"
                      set hudson_failure_reason "TCL $lev\n"
                      foreach matched $all_matched {
-                        append hudson_failure_reason "[lindex $check_errstr($elem) $matched]\n"                        
+                        append hudson_failure_reason "[lindex $check_errstr($elem) $matched]\n"
                      }
                      #TODO: Do we want all messsages?
-                     break                     
+                     break
                   }
                }
                #Report the result
@@ -4732,7 +4737,7 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
          # skip the test
       }
 
-      
+
       # if we have a level specific cleanup function: execute it
       if {[info exists check_cleanup_level_function] && $setup_ret != 99}  {
          execute_test_preparation_procedure $check_cleanup_level_function "cleanup_level"
@@ -4752,8 +4757,8 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
    set was_unsupported 0
    private_check_error_run_test_level was_error was_unsupported
    incr was_unsupported $warnings
-   
-   
+
+
    if {$setup_ret == 99 && $was_unsupported == 0 && $was_error == 0 } {
       # this means there was no ts_log_config. We will not let the test (level) be successful
       ts_log_severe "Test setup level function returned 99 without ts_log_config error! Setting test to failed!"
@@ -4791,7 +4796,7 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
       #Never report global as failure, so that we have a correct count for failed tests
       generate_xml_junit_report $pkg $check_name "000_GLOBAL" $duration $CHECK_HUDSON_OUTPUT "" ""
    }
-   
+
    if {$do_save} {
       save_result $path $duration $level $finished
    }
@@ -4849,7 +4854,7 @@ proc check_root_access {path} {
 #     execute_test_preparation_procedure() -- execute a setup/cleanup function
 #
 #  SYNOPSIS
-#     execute_test_preparation_procedure { func_name type {warning_counter} } 
+#     execute_test_preparation_procedure { func_name type {warning_counter} }
 #
 #  FUNCTION
 #     execute_test_preparation_procedure is used to execute a setup/cleanup
@@ -4869,11 +4874,11 @@ proc check_root_access {path} {
 #*******************************************************************************
 proc execute_test_preparation_procedure {func_name type {warning_counter ""}} {
    global CHECK_ACT_LEVEL
-   global CHECK_CUR_PROC_NAME 
+   global CHECK_CUR_PROC_NAME
    global check_category
    global check_errno
    global CHECK_CUR_PREPARATION_PROCEDURE
-   
+
    if {$warning_counter != ""} {
       upvar $warning_counter warnings
    } else {
@@ -4913,7 +4918,7 @@ proc execute_test_preparation_procedure {func_name type {warning_counter ""}} {
 
       set CHECK_CUR_PREPARATION_PROCEDURE "Test >$type< preparation procedure \"$func_name\""
       set func_back ""
-      
+
       set catch_return [ catch {
          set func_back [$func_name]
       } catch_message ]
@@ -4926,7 +4931,7 @@ proc execute_test_preparation_procedure {func_name type {warning_counter ""}} {
 
       if {$func_back == 99} {
          set ret 99
-      } 
+      }
 
       #We restore original category
       set CHECK_CUR_PREPARATION_PROCEDURE ""
@@ -5018,7 +5023,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    set check_cleanup_function ""
    set check_setup_level_function ""
    set check_cleanup_level_function ""
-   set check_root_access_needs   "no" 
+   set check_root_access_needs   "no"
    set check_need_running_system "yes"
    set check_source_files "--"
    unset -nocomplain check_version_range
@@ -5030,7 +5035,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    }
 
    ts_source $path/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT
- 
+
    # additionally source all tcl files
    if {$check_source_files != "--"} {
       foreach asf $check_source_files {
@@ -5110,7 +5115,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       set CHECK_TEST_RUNNING 0
       return 2
    }
-   
+
    # in case testsuite had been idle for a long time we might want to re-start valgrinded daemons
    valgrind_restart_daemon_after_idle
 
@@ -6166,7 +6171,7 @@ proc run_all_at_starttime {} {
       set CHECK_ACT_PATH $saved_path
    }
    run_tests $CHECK_ACT_PATH "all"
-   create_report ${CHECK_REPORT_FILE}.ok "completed" 
+   create_report ${CHECK_REPORT_FILE}.ok "completed"
    create_report ${CHECK_REPORT_FILE}.unsupported "unsupported"
    create_report ${CHECK_REPORT_FILE}.failed "failed"
 
@@ -6414,7 +6419,7 @@ proc menu {} {
                while {$CHECK_INTERRUPT == 0} {
                   puts "running local test ..."
                   run_test $CHECK_ACT_PATH "all"
-                  create_report ${CHECK_REPORT_FILE}.ok "completed" 
+                  create_report ${CHECK_REPORT_FILE}.ok "completed"
                   create_report ${CHECK_REPORT_FILE}.unsupported "unsupported"
                   create_report ${CHECK_REPORT_FILE}.failed "failed"
                }
@@ -6713,7 +6718,7 @@ proc show_test_infos_menu {} {
          if {[file isfile "${CHECK_REPORT_FILE}.failed"] == 1} {
             delete_file "${CHECK_REPORT_FILE}.failed"
          }
-         create_report ${CHECK_REPORT_FILE}.ok "completed" 
+         create_report ${CHECK_REPORT_FILE}.ok "completed"
          create_report ${CHECK_REPORT_FILE}.unsupported "unsupported"
          create_report ${CHECK_REPORT_FILE}.failed "failed"
          wait_for_enter
@@ -7360,15 +7365,15 @@ proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {e
          }
       }
       "kill" {
-         append args " kill" 
+         append args " kill"
       }
-      "execute_func" {  
+      "execute_func" {
          append args " execute_func"   ;# The "execute_func" has to be the last argument!!!
-         append args " $execute_func" 
+         append args " $execute_func"
       }
    }
- 
-   set output "" 
+
+   set output ""
    # now the command line is available
    set expect_bin [get_binary_path $add_config(master_host) "expect"]
    append output "Starting remote testsuite as user \"$CHECK_USER\" on host \"$add_config(master_host)\" ...\n"
@@ -7412,7 +7417,7 @@ proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {e
          foreach line [split $expect_out(0,string) "\r\n"] {
             set line [string trim $line]
             if {$line != ""  && $line != "-" && $line != "|" && $line != "/" && $line != "\\"} {
-               append output "$line\n" 
+               append output "$line\n"
                if {![string match "*>>>>>>>>*" $line]} {
                   if {[string match "*>>>*" $line]} {
                      ts_log_fine "\[[file tail $filename]\]$line"
@@ -7604,7 +7609,7 @@ for {set i 0} {$i < $argc} {incr i} {
       set do_close_rlogin 1
       continue
    }
-   
+
    if {([string compare [lindex $argv $i] "--wait_on_error"] == 0) || ([string compare [lindex $argv $i] "wait_on_error"] == 0) } {
       set do_wait_on_error 1
       continue
@@ -7765,7 +7770,7 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "                      parameter the name of the user for which the password is needed. If the command could"
       puts "                      retrieve the password correctly it should have an exit status 0 and the password should"
       puts "                      be printed to stdout. On any non zero exit status the testsuite will write a warning"
-      puts "                      message which includes the output of the command." 
+      puts "                      message which includes the output of the command."
       puts ""
       puts "overwrite <name=val>  With this option it is possible to overwrite settings from the testsuite configuration"
       puts "                      file (e.g. --overwrite cell=default2). A cloned testsuite config file is created and used."
@@ -8016,7 +8021,7 @@ for {set i 0} {$i < $argc} {incr i} {
       incr i
       set help_var [lindex $argv $i]
       set o_parameter [string trim $help_var]
-      
+
       # check arguments
       if {![string match "*=*" $o_parameter ]} {
          puts "Error: --overwrite: need parameter=value syntax!"
@@ -8380,8 +8385,8 @@ for {set i 0} {$i < $argc} {incr i} {
       ts_log_set_level "mail" $help_var
       continue
    }
-  
-   # if this code is executed the command line parameter is not known! 
+
+   # if this code is executed the command line parameter is not known!
    puts "unexpected command line parameter: \"[lindex $argv $i]\""
    testsuite_shutdown 1
 }

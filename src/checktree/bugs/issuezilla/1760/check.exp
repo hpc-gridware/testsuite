@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global issue_1760_fake_host
 global issue_1760_qname
@@ -52,7 +52,7 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "unable to delete a configuration of a non existing host"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 #set check_setup_function "issue_1760_setup"
@@ -69,8 +69,13 @@ proc issue_1760_check {} {
    global ts_config issue_1760_fake_host issue_1760_milestone issue_1760_group
    global CHECK_USER issue_1760_qname
 
-   set pid [pid]
    set master_arch [resolve_arch $ts_config(master_host)]
+   if {[string first "lx-" $master_arch] != 0} {
+      ts_log_config "Test needs a Linux master host"
+      return
+   }
+
+   set pid [pid]
    set qconf "$ts_config(product_root)/bin/$master_arch/qconf"
    set issue_1760_milestone 0
 
@@ -169,8 +174,8 @@ proc issue_1760_check {} {
 
    # Remove configuration
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER $qconf "-dconf $issue_1760_fake_host" result]
-   
-   set hasFakeHostConf 0   
+
+   set hasFakeHostConf 0
    #Check we do not have the configuration the the output
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER $qconf "-sconfl" result]
    foreach out_line $output {
@@ -233,7 +238,7 @@ proc issue_1760_cleanup {} {
       # Restart qmaster without envlist set
       startup_qmaster 0
    }
-   
+
    # Remote fake exechost (created during -Ahgrp?)
    start_remote_prog $ts_config(master_host) $CHECK_USER $qconf "-de $issue_1760_fake_host" result
 }
