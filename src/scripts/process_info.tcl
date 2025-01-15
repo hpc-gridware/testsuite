@@ -39,7 +39,7 @@ proc parse_cpu_time {s_cpu} {
 
    while {[llength $l_cpu] > 0} {
       scan [lindex $l_cpu 0] "%02d" part
-      
+
       switch [llength $l_cpu] {
          1 {
             incr cpu $part
@@ -60,6 +60,7 @@ proc parse_cpu_time {s_cpu} {
 
 proc get_ps_cmd {pid} {
    global arch
+   global clockticks
 
    switch -exact $arch {
       "darwin" -
@@ -80,7 +81,14 @@ proc get_ps_cmd {pid} {
       "ulx-x86" -
       "ulx-amd64" -
       "xlx-amd64" {
-         set cmd "/bin/ps -p $pid --no-heading -o vsz,time"
+         #set cmd "/usr/bin/ps -p $pid --no-heading -o vsz,time"
+         set cmd "/usr/bin/cat /proc/$pid/stat"
+         if {[catch {exec "/bin/sh" "-c" "/usr/bin/getconf CLK_TCK"} output] == 0} {
+            set clockticks_str [string trim $output]
+            set clockticks [expr double($clockticks_str)]
+         } else {
+            set clockticks 100.0
+         }
       }
       default {
          set cmd ""
@@ -92,22 +100,31 @@ proc get_ps_cmd {pid} {
 
 proc get_process_info {} {
    global active interval
-   global pids process
+   global pids process clockticks
 
    set time_start [clock seconds]
    if {$active} {
       foreach pid $pids {
          # try to exec ps command
-         if { [catch { exec "/bin/sh" "-c" $process($pid,cmd) } output] == 0 } {
-            set vsz  [lindex $output 0]
-            set time [lindex $output 1]
-            set time [parse_cpu_time $time]
+         if {[catch {exec "/bin/sh" "-c" $process($pid,cmd)} output] == 0} {
+            if {$process($pid,format) == "ps"} {
+               # output is result of ps call
+               set vsz  [lindex $output 0]
+               set time [lindex $output 1]
+               set time [parse_cpu_time $time]
+            } else {
+               # output is content of /proc/pid/stat
+               scan $output "%*lu %*s %*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %*u %lu %ld" utime stime vsize rss
+               # vsize is in bytes, we report kB
+               set vsz [expr $vsize / 1024]
+               set time [expr double($utime + $stime) / $clockticks]
+            }
             if {[info exists process($pid,time)]} {
                set timediff [expr $time - $process($pid,time)]
             } else {
                set timediff 0
             }
-            set timepercent [expr 100.0 * double($timediff) / double($interval)]
+            set timepercent [expr int(100.0 * double($timediff) / double($interval))]
             set process($pid,time) $time
             puts "PROCESS DATA [clock seconds] $pid $process($pid,name) $vsz $timepercent"
          } else {
@@ -121,7 +138,7 @@ proc get_process_info {} {
    set delay [expr $interval - ($time_end - $time_start)]
    if {$delay < 0} {
       set delay 0
-   } 
+   }
 
    return $delay
 }
@@ -174,6 +191,11 @@ while { !$do_exit } {
             lappend pids $pid
             set process($pid,name) [lindex $expect_out(0,string) 2]
             set process($pid,cmd) $cmd
+            if {[string first "/usr/bin/ps" $cmd] >= 0} {
+               set process($pid,format) "ps"
+            } else {
+               set process($pid,format) "stat"
+            }
             puts "PROCESS INFO PROCESS $process($pid,name) OK"
          } else {
             puts "PROCESS INFO PROCESS ERROR: don't know ps syntax for architecture $arch"
