@@ -565,15 +565,17 @@ proc throughput_setup_level {} {
          set enable_queues_job_count  [expr $job_count / 2]
          set qstat_interval 1
 
-         # increase the number of reader threads
+         # increase the number of reader threads (beginning with 9.0.2)
          # reserve at least 6 cores for listener, worker, scheduler, timed_event, commlib, ...
          # we re-start sge_qmaster at the beginning of the test, so no need to do it here
-         if {[bootstrap_file_read throughput_bootstrap_backup]} {
-            global throughput_host_info
-            set reader_threads [expr $throughput_host_info($ts_config(master_host),num_proc) - 6]
-            if {$reader_threads > $throughput_bootstrap_backup(reader_threads)} {
-               set bootstrap(reader_threads) $reader_threads
-               bootstrap_file_write
+         if {[is_version_in_range "9.0.2"]} {
+            if {[bootstrap_file_read throughput_bootstrap_backup]} {
+               global throughput_host_info
+               set reader_threads [expr $throughput_host_info($ts_config(master_host),num_proc) - 6]
+               if {$reader_threads > $throughput_bootstrap_backup(reader_threads)} {
+                  set bootstrap(reader_threads) $reader_threads
+                  bootstrap_file_write
+               }
             }
          }
       }
@@ -828,7 +830,7 @@ proc throughput_get_host_info {} {
 
    set throughput_host_info(hosts) {}
    foreach queue $output(queue_list) {
-      set host [lindex [split $queue "@"] 1]
+      set host [resolve_host [lindex [split $queue "@"] 1]]
       if {[lsearch -exact $throughput_host_info(hosts) $host] == -1} {
          lappend throughput_host_info(hosts) $host
          foreach var $variables {
@@ -3168,9 +3170,9 @@ proc calculate_submit_run_xy_rows { results_array_name row_array_name test_start
     if { [info exists run_time_values ] } {
        unset run_time_values
     }
-   set index_size $jobs(index_size)
+    set index_size $jobs(index_size)
     for {set job 0} {$job < $index_size} {incr job} {
-       if {[info exists jobs($job,job_id)]} {
+       if {[info exists jobs($job,job_id)] && [info exists jobs($job,state)] && $jobs($job,state) == "done"} {
           set submit_time [expr ($jobs($job,submit_time) / 1000.0)]
           set submit_end_time [expr $jobs($job,submit_start_time) + $submit_time]
           set normalized_submit_end_time [expr ($submit_end_time - $test_start)]

@@ -2887,7 +2887,7 @@ proc qstat_F_plain_parse {  output {params ""} } {
    set args [join $params ","]
 
    # Run usual command
-   set myenv(SGE_LONG_QNAMES) 50
+   set myenv(SGE_LONG_QNAMES) 80
    set result [start_sge_bin "qstat" "-F $args" "" "" prg_exit_state 60 "" "bin" output_lines myenv]
    parse_multiline_list result parsed_out
 

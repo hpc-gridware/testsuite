@@ -3175,7 +3175,8 @@ proc close_open_rlogin_sessions {{if_not_working 0} {older_than 0}} {
 
 global last_close_outdated_rlogin_sessions
 set last_close_outdated_rlogin_sessions 0
-proc close_outdated_rlogin_sessions { } {
+proc close_outdated_rlogin_sessions {} {
+   get_current_cluster_config_array ts_config
    global last_close_outdated_rlogin_sessions
 
    # only do this check once a minute
@@ -3189,8 +3190,14 @@ proc close_outdated_rlogin_sessions { } {
    # to reduce the probability of recursive calls
    set last_close_outdated_rlogin_sessions [timestamp]
 
-   # close connections idle for more than 10 minutes
-   close_open_rlogin_sessions 0 600
+   # close connections idle for more than 10 minutes (regular case),
+   # we keep them open for 20 minutes in huge setups (e.g. cloud performance testing)
+   if {[llength $ts_config(execd_nodes)] > 50} {
+      set max_open 1200
+   } else {
+      set max_open 600
+   }
+   close_open_rlogin_sessions 0 $max_open
 
    # set the last check timestamp - no check for one minute
    set last_close_outdated_rlogin_sessions [timestamp]
