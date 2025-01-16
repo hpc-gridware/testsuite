@@ -1722,6 +1722,7 @@ proc update_ts_host_config_version { filename } {
          set ts_host_config($host,arch,91) $ts_host_config($host,arch,90)
          set ts_host_config($host,compile,91) $ts_host_config($host,compile,90)
          set ts_host_config($host,java_compile,91) $ts_host_config($host,java_compile,90)
+         set ts_host_config($host,doc_compile,91) $ts_host_config($host,doc_compile,90)
       }
 
       set ts_host_config(version) "1.17"
