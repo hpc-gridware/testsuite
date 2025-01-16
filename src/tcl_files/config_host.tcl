@@ -34,7 +34,7 @@
 
 global ts_host_config               ;# new testsuite host configuration array
 global actual_ts_host_config_version      ;# actual host config version number
-set    actual_ts_host_config_version "1.16"
+set    actual_ts_host_config_version "1.17"
 
 if {![info exists ts_host_config]} {
    # ts_host_config defaults
@@ -315,15 +315,19 @@ proc host_config_get_host_parameters { } {
    lappend params arch,62
    lappend params arch,80
    lappend params arch,90
+   lappend params arch,91
    lappend params compile,62
    lappend params compile,80
    lappend params compile,90
+   lappend params compile,91
    lappend params doc_compile,62
    lappend params doc_compile,80
    lappend params doc_compile,90
+   lappend params doc_compile,91
    lappend params java_compile,62
    lappend params java_compile,80
    lappend params java_compile,90
+   lappend params java_compile,91
    lappend params compile_time
    lappend params response_time
    lappend params fr_locale
@@ -1709,6 +1713,28 @@ proc update_ts_host_config_version { filename } {
       return 0
    }
 
+   if {[string compare $ts_host_config(version)  "1.16"] == 0} {
+      puts "\ntestsuite host configuration update from 1.16 to 1.17 ..."
+
+      # introduce new version 91
+      foreach host $ts_host_config(hostlist) {
+         puts $host
+         set ts_host_config($host,arch,91) $ts_host_config($host,arch,90)
+         set ts_host_config($host,compile,91) $ts_host_config($host,compile,90)
+         set ts_host_config($host,java_compile,91) $ts_host_config($host,java_compile,90)
+      }
+
+      set ts_host_config(version) "1.17"
+
+      show_config ts_host_config
+      wait_for_enter
+      if {[save_host_configuration $filename] != 0} {
+         puts "Could not save host configuration"
+         wait_for_enter
+         return
+      }
+      return 0
+   }
 
    puts "\nunexpected version"
    return -1

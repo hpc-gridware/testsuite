@@ -821,7 +821,7 @@ proc modify_setup2 {} {
 #     config/config_choose_value()
 #     config/config_verify_*()
 #*******************************************************************************
-proc config_generic { only_check name config_array help_text check_type 
+proc config_generic { only_check name config_array help_text check_type
                       {allow_null 1} {count 1} {choice_list ""} {add_params ""} } {
    global CHECK_USER ts_host_config ts_user_config ts_db_config fast_setup
 
@@ -3942,6 +3942,7 @@ proc config_testsuite_gridengine_version { only_check name config_array } {
       62 "SGE 6.2 systems"
       80 "UGE 8.0.* systems"
       90 "GCS/OCS 9.0.* systems"
+      91 "GCS/OCS 9.1.* systems"
    }
 
    return [config_generic $only_check $name config "" "choice" 0 1 version_list]
