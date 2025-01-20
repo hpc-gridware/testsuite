@@ -1754,7 +1754,7 @@ proc save_current_system_status { results_array array_name } {
 proc compare_dump_directory { dir } {
    global ts_config
 
-   set files [get_file_names $dir "saved_run*"]
+   set files [get_file_names $dir "saved_run.*"]
    set first_data 0
    set test_info "FLUSH_FINISH_SEC"
    lappend test_info "FLUSH_SUBMIT_SEC"
@@ -1788,6 +1788,10 @@ proc compare_dump_directory { dir } {
 
    set count 0
    foreach file $files {
+      # strip extension ".tsd"
+      if {[file extension $file] == ".tsd"} {
+         set file [file rootname $file]
+      }
       if { [string first "old" $file ] > 0 } {
          continue
       }
@@ -2482,16 +2486,19 @@ proc analyse_dump_data_file { file { force 0 } } {
    global throughput_sharetree functional_policy qstat_interval array_size parallel_jobs reservation
    global throughput_sharetree_ext
 
-   set sub_dir [file tail $file]
-   set dir_name [file dirname $file]
+   if {[file extension $file] == ".tsd"} {
+      set base_file [file rootname $file]
+   }
+   set sub_dir [file tail $base_file]
+   set dir_name [file dirname $base_file]
    set output_dir $dir_name/${sub_dir}_dir
    ts_log_fine "file: [file tail $file]"
    ts_log_fine "generating report in directory: $output_dir"
-   if { [file isdirectory $output_dir] && $force == 0 } {
+   if {[file isdirectory $output_dir] && $force == 0} {
       ts_log_fine "existing analyse directory found. Use force option to re-analyse data file."
       return
    }
-   if { [file isdirectory $output_dir] && $force != 0 } {
+   if {[file isdirectory $output_dir] && $force != 0} {
       ts_log_fine "forcing re-analyse ..."
    }
 
@@ -3521,7 +3528,7 @@ proc calculate_test_run_xy_rows { results_array_name row_array_name start_numb }
           set xy_rows($pos3,title) "jobs done $add_info"
 
           set xy_rows($pos4,drawmode) "lines"
-          set xy_rows($pos4,title) "jobs subitted $add_info"
+          set xy_rows($pos4,title) "jobs submitted $add_info"
 
           set xy_rows($pos5,drawmode) "lines"
           set xy_rows($pos5,title) "total system slots $add_info"
@@ -3618,23 +3625,29 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
    ts_log_fine $prot_output_dir
    file mkdir $prot_output_dir
 
-   set files [get_file_names $prot_output_dir "saved_run*"]
+   set files [get_file_names $prot_output_dir "saved_run.*"]
    # saved_run.x
    set run_nr 1
    foreach file $files {
+      # filename has format "saved_run.num.tsd
       ts_log_fine "file: $file"
+      # strip the extension .tsd
+      if {[file extension $file] == ".tsd"} {
+         set file [file rootname $file]
+      }
+      # get the running number
       set act_run [file extension $file]
       set act_run [string range $act_run 1 end]
       ts_log_fine "act-run: $act_run"
-      if { [ string is integer $act_run ] } {
-         if { $act_run >= $run_nr } {
+      if {[string is integer $act_run]} {
+         if {$act_run >= $run_nr} {
             set run_nr $act_run
             incr run_nr 1
          }
       }
    }
 
-   set prot_output_file "${prot_output_dir}/saved_run.${run_nr}"
+   set prot_output_file "${prot_output_dir}/saved_run.${run_nr}.tsd"
    ts_log_fine "using filename:"
    ts_log_fine $prot_output_file
    spool_array_prepare $prot_output_file
@@ -3679,7 +3692,11 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
    catch { file delete ${prot_output_file}.old }
 
    # save qmaster and scheduler messages files in report directory
-   set results_dir "${prot_output_file}_dir"
+   set results_dir $prot_output_file
+   if {[file extension $results_dir] == ".tsd"} {
+      set results_dir [file rootname $results_dir]
+   }
+   append results_dir "_dir"
    ts_log_fine "copying master and scheduler messages files to $results_dir"
    if {![file isdirectory $results_dir]} {
       file mkdir $results_dir
