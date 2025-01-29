@@ -362,12 +362,16 @@ proc test_issue132_l {} {
    set results1 [qhost_xml_parse xml $args]
    set results1 [qhost_parse plain job $args]
 
-   # for each host test that the xml and plain outpus are the same
+   # for each host test that the xml and plain outputs are the same
    set errors ""
    for {set ind 0} {$ind < $job} {incr ind 1} {
       foreach attrib "name arch_string num_proc load_avg mem_total mem_used swap_total swap_used" {
          set raw_value1 [string trim $xml(host$ind,$attrib)]
          set raw_value2 [string trim $plain(host$ind,$attrib)]
+         if {$attrib == "name"} {
+            set raw_value1 [get_short_hostname $raw_value1]
+            set raw_value2 [get_short_hostname $raw_value2]
+         }
          if {[string compare $raw_value1 $raw_value2] != 0} {
             append errors "outputs do not match from plain and xml for $attrib:\n   xml:   $raw_value1\n   plain: $raw_value2\n"
          }
