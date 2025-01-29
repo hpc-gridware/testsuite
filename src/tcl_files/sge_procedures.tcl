@@ -8348,7 +8348,7 @@ proc wait_till_qmaster_is_down {host {timeout 60}} {
    set start_time [clock seconds]
    set my_timeout [expr $start_time + $timeout]
 
-   set pstack [get_binary_path $ts_config(master_host) "pstack"]
+   set pstack [get_binary_path $ts_config(master_host) "pstack" 0]
 
    while {1} {
       set found_p [ps_grep "$ts_config(product_root)/" $host]
