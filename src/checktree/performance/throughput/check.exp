@@ -1641,7 +1641,7 @@ proc fill_job_list_from_accounting {job_array_name} {
       }
    }
    set total_time [expr [clock seconds] - $start_time]
-   ts_log_info "fill_job_list_from_accounting: $qacct_time seconds for qacct, $total_time seconds total"
+   ts_log_fine "fill_job_list_from_accounting: $qacct_time seconds for qacct, $total_time seconds total"
 }
 
 proc fill_sched_from_messages {start_time end_time schedd_data_name} {

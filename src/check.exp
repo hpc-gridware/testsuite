@@ -6222,7 +6222,7 @@ proc get_user_input { what } {
 #     This procedure will shutdown and restart the qmaster and scheduler
 #
 #  INPUTS
-#     { shutdown 0 } - 0 -> do shutdown (otherwise only do starup)
+#     { shutdown 0 } - 0 -> do shutdown (otherwise only do startup)
 #
 #*******************************************************************************
 proc restart_debug_daemons { { shutdown 0 } } {

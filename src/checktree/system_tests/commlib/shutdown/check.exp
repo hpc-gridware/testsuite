@@ -65,7 +65,7 @@ proc commlib_shutdown_setup {} {
 #     commlib_shutdown_run() -- test correct shutdown of commlib
 #
 #  SYNOPSIS
-#     commlib_shutdown_run { } 
+#     commlib_shutdown_run { }
 #
 #  FUNCTION
 #     Scenario:
@@ -90,7 +90,7 @@ proc commlib_shutdown_run {} {
    global ts_config
    global CHECK_USER
    global CHECK_ACT_LEVEL
-   
+
    set cs_user $CHECK_USER
    if {$ts_config(commd_port) < 1024} {
       set cs_user "root"
@@ -178,16 +178,16 @@ proc commlib_shutdown_run {} {
             -i $all_list timeout {
                ts_log_fine "---->>>>>>>>> got timeout"
                append error_text "got timeout\nThis will happen if server is blocking\nThis is issue IZ 2747!\n"
-               set in_loop 0   
+               set in_loop 0
             }
             -i $all_list eof {
                set spawn_id $expect_out(spawn_id)
                ts_log_fine "got eof for spawn_id $spawn_id"
                append error_text "got eof for spawn_id $spawn_id\nserver id is $server_id, client id is $client_id, qping dump is $qping_dump_id, qping info is $qping_info_id"
-               set in_loop 0   
+               set in_loop 0
             }
             -i $server_id -- "*\n" {
-               set output $expect_out(0,string) 
+               set output $expect_out(0,string)
                set output [ split $output "\n" ]
                foreach line $output {
                   set help [string trim $line]
@@ -214,7 +214,7 @@ proc commlib_shutdown_run {} {
                }
             }
             -i $client_id -- "*\n" {
-               set output $expect_out(0,string) 
+               set output $expect_out(0,string)
                set output [ split $output "\n" ]
                foreach line $output {
                   set help [string trim $line]
@@ -238,7 +238,7 @@ proc commlib_shutdown_run {} {
                }
             }
             -i $qping_dump_id -- "*\n" {
-               set output $expect_out(0,string) 
+               set output $expect_out(0,string)
                set output [ split $output "\n" ]
                foreach line $output {
                   set help [string trim $line]
@@ -280,7 +280,7 @@ proc commlib_shutdown_run {} {
                }
             }
             -i $qping_info_id -- "*\n" {
-               set output $expect_out(0,string) 
+               set output $expect_out(0,string)
                set output [ split $output "\n" ]
                foreach line $output {
                   set help [string trim $line]
@@ -333,7 +333,7 @@ proc commlib_shutdown_run {} {
          }
       }
    }
-   
+
    if {$server_exit_state != 0} {
       append error_text "server exit state is $server_exit_state\n"
    }
@@ -343,8 +343,8 @@ proc commlib_shutdown_run {} {
    if {$error_text != ""} {
       append error_text "client output:\n$client_output\n"
       append error_text "server output:\n$server_output\n"
-      append error_text "qping -dump output:\n$qping_dump_output\n" 
-      append error_text "qping -info output:\n$qping_info_output\n" 
+      append error_text "qping -dump output:\n$qping_dump_output\n"
+      append error_text "qping -info output:\n$qping_info_output\n"
       ts_log_severe $error_text
    }
 }

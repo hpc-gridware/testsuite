@@ -8340,12 +8340,20 @@ proc startup_core_system {{only_hooks 0} {with_additional_clusters 0} } {
 proc wait_till_qmaster_is_down {host {timeout 60}} {
    get_current_cluster_config_array ts_config
 
+   set start_time [clock seconds]
+
    set process_names "sge_qmaster"
-   set my_timeout [expr [clock seconds] + $timeout]
+   set qmaster_pid [get_qmaster_pid]
+
+   set start_time [clock seconds]
+   set my_timeout [expr $start_time + $timeout]
+
+   set pstack [get_binary_path $ts_config(master_host) "pstack"]
 
    while {1} {
       set found_p [ps_grep "$ts_config(product_root)/" $host]
       set nr_of_found_qmaster_processes_or_threads 0
+      set pstack_add_info ""
 
       foreach process_name $process_names {
          ts_log_finer "looking for \"$process_name\" processes on host $host ..."
@@ -8356,16 +8364,48 @@ proc wait_till_qmaster_is_down {host {timeout 60}} {
                   incr nr_of_found_qmaster_processes_or_threads 1
                   ts_log_finest "found running $process_name with pid $ps_info(pid,$elem) on host $host"
                   ts_log_finest $ps_info(string,$elem)
+                  append pstack_add_info "$ps_info(string,$elem)\n"
                }
             }
          }
       }
+
+      # for debugging: send the stack trace of the shutting-down qmaster as info mail
+      if {0} {
+         set msg "waiting for qmaster to shutdown\n"
+         append msg $pstack_add_info
+         # if pstack is installed try to get a stack trace (per thread) to see where it is hanging
+         if {$pstack != "pstack"} {
+            set output [start_remote_prog $ts_config(master_host) "root" "pstack" $qmaster_pid prg_exit_state 60 0 "" "" 1 0]
+            if {$prg_exit_state == 0} {
+               append msg "stack_trace of qmaster process $qmaster_pid:\n"
+            } else {
+               append msg "running ptrace $qmaster_pid failed:\n"
+            }
+            append msg $output
+         }
+         ts_log_info $msg
+      }
+
       if {[clock seconds] > $my_timeout} {
-         ts_log_info "timeout while waiting for qmaster going down"
+         set msg "timeout after $timeout seconds while waiting for qmaster going down\n"
+         append msg $pstack_add_info
+         # if pstack is installed try to get a stack trace (per thread) to see where it is hanging
+         if {$pstack != "pstack"} {
+            set output [start_remote_prog $ts_config(master_host) "root" "pstack" $qmaster_pid prg_exit_state 60 0 "" "" 1 0]
+            if {$prg_exit_state == 0} {
+               append msg "stack_trace of qmaster process $qmaster_pid:\n"
+            } else {
+               append msg "running ptrace $qmaster_pid failed:\n"
+            }
+            append msg $output
+         }
+         ts_log_info $msg
          return -1
       }
       if {$nr_of_found_qmaster_processes_or_threads == 0} {
          ts_log_finest "no qmaster processes running"
+         ts_log_fine "wait_till_qmaster_is_down: it took [expr [clock seconds] - $start_time] seconds for the sge_qmaster process to vanish"
          return 0
       } else {
          ts_log_finest "still qmaster processes running ..."

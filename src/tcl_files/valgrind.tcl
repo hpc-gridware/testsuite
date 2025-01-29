@@ -88,7 +88,7 @@ proc valgrind_analyse_copy_files {} {
    set prot_dir [valgrind_get_protocol_path]
 
    # if the protocol directory does not yet exist, create it
-   if {[remote_file_isdirectory $CHECK_VALGRIND_HOST $prot_dir]} {
+   if {![remote_file_isdirectory $CHECK_VALGRIND_HOST $prot_dir]} {
       remote_file_mkdir $CHECK_VALGRIND_HOST $prot_dir
    }
 

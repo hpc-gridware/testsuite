@@ -36,11 +36,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -51,7 +51,7 @@ set check_category        "SCHEDULER VERIFIED"
 set check_description(0)  "shutdown and restart qmaster, verify that schedd reconnects within reasonable time"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function   "schedd_reconnect_setup"
@@ -102,7 +102,7 @@ proc schedd_reconnect_test {} {
 
    # shutdown and restart qmaster
    shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
-   startup_qmaster 0  
+   startup_qmaster 0
 
    set mytimeout [timestamp]
    incr mytimeout 120
@@ -134,7 +134,7 @@ proc schedd_reconnect_test {} {
 #     schedd_reconnect_after_timeout_test() -- test scheduler ack timeout
 #
 #  SYNOPSIS
-#     schedd_reconnect_after_timeout_test { } 
+#     schedd_reconnect_after_timeout_test { }
 #
 #  FUNCTION
 #     Produce scheduler timeout which does a disconnect of the event client.
@@ -146,7 +146,11 @@ proc schedd_reconnect_after_timeout_test {} {
    get_current_cluster_config_array ts_config
 
    # Get expected message text in qmaster messages file
-   set message_text [translate_macro MSG_COM_ACKTIMEOUT4EV_ISIS "*" "schedd" "*" "*"]
+   if {[is_version_in_range "9.0.3"]} {
+      set message_text [translate_macro MSG_COM_ACKTIMEOUT4EV_USISIS "*" "scheduler" "1" "schedd" "0" "*"]
+   } else {
+      set message_text [translate_macro MSG_COM_ACKTIMEOUT4EV_ISIS "*" "schedd" "*" "*"]
+   }
 
    # do a "tail" for the qmaster messages file
    ts_log_fine "tail -f to qmaster messages file"
@@ -168,7 +172,7 @@ proc schedd_reconnect_after_timeout_test {} {
       set_config my_config
       after 5000
       set my_timeout 90
-      if {[wait_for_connected_scheduler $my_timeout] == 0 } { 
+      if {[wait_for_connected_scheduler $my_timeout] == 0 } {
          set schedd_reconnect_test_globals(restart_master) 0
       }
    } else {

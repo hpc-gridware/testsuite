@@ -56,11 +56,11 @@
 #*******************************************************************************
 #
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global check_version_range
 
@@ -74,7 +74,7 @@ set check_description(1)  "Test reporting parameters and qmaster reporting (JSON
 set check_version_range(1) "9.0.0"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function reporting_setup
@@ -189,7 +189,7 @@ proc reporting_setup_level {} {
 
 proc reporting_cleanup {} {
    global reporting_old_config reporting_old_exechost
-   global reporting_file reporting_acct_file reporting_test_host 
+   global reporting_file reporting_acct_file reporting_test_host
    global reporting_old_config_test_host
    global reporting_complex_backup
    global reporting_format_config
@@ -285,15 +285,12 @@ proc reporting_do_accounting_test {scenario flush_time} {
    # Check accounting file size
    # we might be the first test after installation - in this case no accounting file exists
    if {![file exists $reporting_acct_file]} {
-      set f [open $reporting_acct_file w]
-      puts $f "# new accounting file"
-      close $f
-      wait_for_remote_file $ts_config(master_host) $CHECK_USER $reporting_acct_file
+      start_remote_prog $ts_config(master_host) $CHECK_USER "touch" $reporting_acct_file
    }
 
    set mtime [reporting_get_timestamp $reporting_acct_file]
    # Submit job
-   # we submit an array job of short running sleepers 
+   # we submit an array job of short running sleepers
    # to a queue with one slot
    set script "$ts_config(product_root)/examples/jobs/sleeper.sh"
    set job_id [submit_job "-t 1-100 -o /dev/null -j y -q reporting $script 1"]
@@ -605,7 +602,7 @@ proc reporting_queue_state_test {} {
    }
 
    ####################################
-   # test queue calender disabled state 
+   # test queue calender disabled state
    ####################################
    #
    # after adding the calendar "always disabled"
