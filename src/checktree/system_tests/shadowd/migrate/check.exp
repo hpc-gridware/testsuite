@@ -37,11 +37,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -79,38 +79,45 @@ global shadowd_migrate_test_hosts
 global shadowd_migrate_saved_slot_count
 
 # -------- local test procedures: initialization------------------------------
-proc shadowd_migrate_setup_level {} {
-   global CHECK_ACT_LEVEL
+proc shadowd_migrate_setup  {} {
    global ts_config
+   global shadowd_unsupported_logged
+
+   set shadowd_unsupported_logged 0
+}
+
+proc shadowd_migrate_setup_level {} {
+   global ts_config
+   global CHECK_ACT_LEVEL
+   global shadowd_unsupported_logged
 
    set nr_shadowds [llength $ts_config(shadowd_hosts)]
 
-   if { $nr_shadowds < 2 && $CHECK_ACT_LEVEL > 1 } {
-      ts_log_severe "Need 2 shadowd hosts for runlevel > 1"
+   if {$nr_shadowds < 2 && $CHECK_ACT_LEVEL > 0} {
+      if {!$shadowd_unsupported_logged} {
+         set shadowd_unsupported_logged 1
+         ts_log_config "Need 2 shadowd hosts for runlevel > 0"
+      }
       return 99
    }
 }
 
-proc shadowd_migrate_setup  {} {
-   global ts_config
-}
-
 proc shadowd_migrate_cleanup  {} {
    global ts_config
+   global shadowd_unsupported_logged
+
    delete_all_jobs
    wait_for_end_of_all_jobs 640
+
+   unset -nocomplain shadowd_unsupported_logged
 }
 
 
 proc shadowd_migrate_test {} {
-   global ts_config  CHECK_ACT_LEVEL check_description 
+   global ts_config  CHECK_ACT_LEVEL check_description
    global CHECK_USER file_procedure_logfile_wait_sp_id
 
    set nr_shadowds [llength $ts_config(shadowd_hosts)]
-   if {$nr_shadowds < 2 && $CHECK_ACT_LEVEL > 0} {
-      ts_log_severe "Need 2 configured shadowd hosts. Can't run this test in level 1-9."
-      return
-   }
 
    if {$nr_shadowds >= 2 && $CHECK_ACT_LEVEL > 0} {
       set heartbeat_file [get_qmaster_spool_dir]/heartbeat
@@ -122,17 +129,17 @@ proc shadowd_migrate_test {} {
       set act_qmaster [string trim $result]
 
       set result [start_remote_prog [lindex $ts_config(shadowd_hosts) 0] $CHECK_USER "cat" $heartbeat_file]
-      if { $prg_exit_state != 0 } {
+      if {$prg_exit_state != 0} {
          ts_log_config "no nfs shared qmaster spool directory? Cat failed - > Skipping this test (1)!\nresult: $result"
          return;
-      } 
+      }
 
       ts_log_fine $result
       set heartbeat1 [string trim $result]
       set heartbeat1 [string trimleft $heartbeat1 "0"]
 
       set result [start_remote_prog [lindex $ts_config(shadowd_hosts) 1] $CHECK_USER "cat" $heartbeat_file]
-      if { $prg_exit_state != 0 } {
+      if {$prg_exit_state != 0} {
          ts_log_config "no nfs shared qmaster spool directory? Cat failed - > Skipping this test (2)!\nresult: $result"
          return;
       }
@@ -141,12 +148,11 @@ proc shadowd_migrate_test {} {
       set heartbeat2 [string trim $result ]
       set heartbeat2 [string trimleft $heartbeat2 "0"]
 
-      set heart_diff [expr ( $heartbeat2 - $heartbeat1 ) ]
-      if { $heart_diff > 1 || $heart_diff < -1 } {
+      set heart_diff [expr $heartbeat2 - $heartbeat1]
+      if {$heart_diff > 1 || $heart_diff < -1} {
          ts_log_config "heartbeat file diff error ($heartbeat1,$heartbeat2). heart_diff=$heart_diff\nno nfs shared qmaster spool directory found. Skipping this test"
-         return;
+         return
       }
-
 
       # We need access to spooling data from shadow hosts, by
       # - classic spooling to a shared filesystem (to qmaster spooldir - if it was not shared,
@@ -154,7 +160,7 @@ proc shadowd_migrate_test {} {
       # - bdb spooling with rpc server
       # - bdb spooling to nfsv4
       set spooling_ok 0
-      if { $ts_config(spooling_method) == "classic" } {
+      if {$ts_config(spooling_method) == "classic"} {
          ts_log_fine "We have \"classic\" spooling to a shared qmaster spool dir."
          set spooling_ok 1
       } else {
@@ -162,7 +168,7 @@ proc shadowd_migrate_test {} {
             set bdb_spooldir [get_bdb_spooldir]
             set fstype [fs_config_get_filesystem_type $bdb_spooldir $ts_config(master_host) 0]
             if {$fstype == "nfs4"} {
-               ts_log_fine "We have \"berkeleydb\" spooling on NFS v4" 
+               ts_log_fine "We have \"berkeleydb\" spooling on NFS v4"
                set spooling_ok 1
 
                # check that the spooldir is NFS v4 on all shadow hosts
@@ -178,7 +184,7 @@ proc shadowd_migrate_test {} {
          }
       }
 
-      if {! $spooling_ok} {
+      if {!$spooling_ok} {
          ts_log_config "Spooling database is not shared between master and shadow hosts"
          return
       }
@@ -191,13 +197,14 @@ proc shadowd_migrate_test {} {
          set CONTROLED_SHUTDOWN [translate_macro MSG_SHADOWD_CONTROLLEDSHUTDOWN_SU "*" "100"]
 
          ts_log_fine "restarting qmaster and shadowds with SGE_TEST_HEARTBEAT_TIMEOUT=600"
+         foreach host $ts_config(shadowd_hosts) {
+            shutdown_system_daemon $host "shadowd"
+         }
          shutdown_system_daemon $ts_config(master_host) "qmaster"
-         shutdown_system_daemon [lindex $ts_config(shadowd_hosts) 0] "shadowd"
-         shutdown_system_daemon [lindex $ts_config(shadowd_hosts) 1] "shadowd"
 
          ts_log_fine "   reading heartbeat file ..."
          ts_log_fine "   $heartbeat_file"
-         
+
 
          set result [start_remote_prog $ts_config(master_host) $CHECK_USER "cat" $heartbeat_file]
 
@@ -214,11 +221,12 @@ proc shadowd_migrate_test {} {
          set my_env(SGE_TEST_HEARTBEAT_TIMEOUT) 600
          startup_qmaster 0 my_env
          ts_log_fine "restart shadowd with SGE_TEST_HEARTBEAT_TIMEOUT env set to 600"
-         startup_shadowd [lindex $ts_config(shadowd_hosts) 0] my_env
-         startup_shadowd [lindex $ts_config(shadowd_hosts) 1] my_env
+         foreach host $ts_config(shadowd_hosts) {
+            startup_shadowd $host my_env
+         }
 
          ts_log_fine "qmaster and shadowds restarted!"
- 
+
          # This is for issue #3096 (start qsub -sync job ...)
          # Job will be deleted after shadowd qmaster take over.
          set qsub_sync_host [host_conf_get_suited_hosts 1 {} {} {} 1]
@@ -229,7 +237,7 @@ proc shadowd_migrate_test {} {
          set qsub_sync_id [open_remote_spawn_process $qsub_sync_host $CHECK_USER $qsub_sync_binary $qsub_sync_binary_params]
          set qsub_sync_spawn_id [lindex $qsub_sync_id 1]
          set JOB_SUBMITTED [translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]
-         set JAPI_QMASTER_DOWN [translate_macro MSG_JAPI_QMASTER_DOWN] 
+         set JAPI_QMASTER_DOWN [translate_macro MSG_JAPI_QMASTER_DOWN]
          set JAPI_RECONNECTED [translate_macro MSG_JAPI_RECONNECTED]
          set timeout 60
          expect {
@@ -241,7 +249,7 @@ proc shadowd_migrate_test {} {
                 ts_log_severe "got timeout"
             }
             -i $qsub_sync_spawn_id "*\n" {
-               set is_ok 0 
+               set is_ok 0
                foreach line [split $expect_out(0,string) "\n"] {
                   ts_log_fine "qsub: $line"
                   if {[string match "*$JOB_SUBMITTED*" $line]} {
@@ -269,13 +277,11 @@ proc shadowd_migrate_test {} {
                ts_log_severe "timeout waiting for shadowd to take over!"
                break
             }
-            if {[is_daemon_running [lindex $ts_config(shadowd_hosts) 0] "sge_shadowd"] == 0} {
-               ts_log_severe "shadowd \"[lindex $ts_config(shadowd_hosts) 0]\" is not running!"
-               break 
-            }
-            if {[is_daemon_running [lindex $ts_config(shadowd_hosts) 1] "sge_shadowd"] == 0} {
-               ts_log_severe "shadowd \"[lindex $ts_config(shadowd_hosts) 1]\" is not running!"
-               break 
+            foreach host $ts_config(shadowd_hosts) {
+               if {![is_daemon_running $host "sge_shadowd"]} {
+                  ts_log_severe "shadowd \"$host\" is not running!"
+                  break
+               }
             }
             after 5000
          }
@@ -293,7 +299,7 @@ proc shadowd_migrate_test {} {
          }
 
          # wait until old master terminated (this produces logging in messages file)
-         init_logfile_wait $ts_config(master_host) $qmaster_messages_file 
+         init_logfile_wait $ts_config(master_host) $qmaster_messages_file
          set message_file_output ""
          set my_timeout [timestamp]
          incr my_timeout 300
@@ -313,7 +319,7 @@ proc shadowd_migrate_test {} {
                }
             }
             if {$was_in_elem_loop == 0} {
-               # don't stop ps grep'in when ps_grep doesn't return any value  
+               # don't stop ps grep'in when ps_grep doesn't return any value
                # (execd and shadowd should be available)
                set still_running 1
             }
@@ -402,20 +408,22 @@ proc shadowd_migrate_test {} {
             ts_log_severe "found lock file after shutdown of old qmaster"
          }
 
+         foreach host $ts_config(shadowd_hosts) {
+            shutdown_system_daemon $host "shadowd"
+         }
          shutdown_system_daemon $new_act_qmaster "qmaster"
-         shutdown_system_daemon [lindex $ts_config(shadowd_hosts) 0] "shadowd"
-         shutdown_system_daemon [lindex $ts_config(shadowd_hosts) 1] "shadowd"
 
          startup_qmaster
-         startup_shadowd [lindex $ts_config(shadowd_hosts) 0]
-         startup_shadowd [lindex $ts_config(shadowd_hosts) 1]
-         
+         foreach host $ts_config(shadowd_hosts) {
+            startup_shadowd $host
+         }
+
          wait_for_load_from_all_queues 120
       }
 
       if {$CHECK_ACT_LEVEL == 2} {
          ts_log_fine "shutting down qmaster ..."
-         
+
          if {[wait_for_remote_file $ts_config(master_host) $CHECK_USER $qmaster_lock_file 60 0 1] != 0} {
             ts_log_severe "found lock file after shutdown of old qmaster"
          }
@@ -432,7 +440,7 @@ proc shadowd_migrate_test {} {
          if {$prg_exit_state != 0} {
             ts_log_severe "error removing qmaster lock file \"$qmaster_lock_file\""
          }
-         
+
          set new_act_qmaster $act_qmaster
          set my_timeout [timestamp]
          incr my_timeout 660
@@ -494,7 +502,7 @@ proc shadowd_migrate_test {} {
          set qsub_sync_id [open_remote_spawn_process $qsub_sync_host $CHECK_USER $qsub_sync_binary $qsub_sync_binary_params]
          set qsub_sync_spawn_id [lindex $qsub_sync_id 1]
          set JOB_SUBMITTED [translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]
-         set JAPI_QMASTER_DOWN [translate_macro MSG_JAPI_QMASTER_DOWN] 
+         set JAPI_QMASTER_DOWN [translate_macro MSG_JAPI_QMASTER_DOWN]
          set JAPI_RECONNECTED [translate_macro MSG_JAPI_RECONNECTED]
          set timeout 60
          expect {
@@ -506,7 +514,7 @@ proc shadowd_migrate_test {} {
                 ts_log_severe "got timeout"
             }
             -i $qsub_sync_spawn_id "*\n" {
-               set is_ok 0 
+               set is_ok 0
                foreach line [split $expect_out(0,string) "\n"] {
                   ts_log_fine "qsub: $line"
                   if {[string match "*$JOB_SUBMITTED*" $line]} {
@@ -539,7 +547,7 @@ proc shadowd_migrate_test {} {
                 ts_log_severe "got timeout"
             }
             -i $qsub_sync_spawn_id "*\n" {
-               set is_ok 0 
+               set is_ok 0
                foreach line [split $expect_out(0,string) "\n"] {
                   ts_log_fine "qsub: $line"
                   if {[string match "*$JAPI_QMASTER_DOWN*" $line]} {
@@ -561,7 +569,7 @@ proc shadowd_migrate_test {} {
             ts_log_severe "found lock file after -migrate on host $migrate_host"
          }
 
-         
+
          # This is for issue #3096 ( qsub -sync job ...)
          ts_log_fine "checking qsub -sync to be reconnected to qmaster ..."
          # with delayed job reporting it will take up to 600 seconds until -sync client
@@ -577,7 +585,7 @@ proc shadowd_migrate_test {} {
                 ts_log_severe "timeout - qsub -sync does not stop"
             }
             -i $qsub_sync_spawn_id "*\n" {
-               set is_ok 0 
+               set is_ok 0
                foreach line [split $expect_out(0,string) "\n"] {
                   ts_log_fine "qsub: $line"
                   if {[string match "*$JAPI_RECONNECTED*" $line]} {
@@ -737,7 +745,6 @@ proc shadowd_migrate_test {} {
       }
 
       if {$CHECK_ACT_LEVEL == 8} {
-         
          set wrong_started_qmaster [lindex $ts_config(shadowd_hosts) 0]
          if {$wrong_started_qmaster == $ts_config(master_host)} {
             set wrong_started_qmaster [lindex $ts_config(shadowd_hosts) 1]
@@ -784,7 +791,7 @@ proc shadowd_migrate_test {} {
    if {$CHECK_ACT_LEVEL == 0} {
       foreach host $ts_config(execd_nodes) {
          ts_log_fine "\ntesting heartbeat incrementation on host $host ..."
-      
+
          set heartbeat_file [get_tmp_file_name]
          if {[is_version_in_range "9.0.0"]} {
             set test_heartbeat_binary [get_test_or_source_path "test_common_heartbeat" $host]
@@ -802,7 +809,7 @@ proc shadowd_migrate_test {} {
                ts_log_severe "$host: heartbeat should be $exp_heartbeat"
                break
             }
-             
+
             set cat_output [start_remote_prog $host $CHECK_USER cat $heartbeat_file]
             ts_log_fine "cat: $cat_output"
             if {$cat_output != $heart_beat} {
@@ -826,7 +833,7 @@ proc shadowd_migrate_test {} {
                ts_log_severe "$host: heartbeat should be $exp_heartbeat"
                break
             }
-             
+
             set cat_output [start_remote_prog $host $CHECK_USER cat $heartbeat_file]
             ts_log_fine "cat: \"$cat_output\""
             if {$cat_output != $heart_beat} {
