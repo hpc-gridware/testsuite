@@ -64,12 +64,12 @@ lappend check_functions "dynamic_reprioritization"
 # -------- local test procedures: initialization------------------------------
 
 proc reprioritization_setup {} {
-   global ts_config reprioritization_host
+   global ts_config reprioritization_backup reprioritization_host
 
    set found 0
    foreach host $ts_config(execd_nodes) {
       set num_proc [get_numb_proc $host]
-      if {$num_proc == "1"} {
+      if {$num_proc == 1} {
          ts_log_fine "using host $host for test"
          set reprioritization_host $host
          set found 1
@@ -77,8 +77,7 @@ proc reprioritization_setup {} {
       }
    }
    if {$found == 0} {
-      ts_log_config "No host found with only 1 processor. Please re-configure \
-                     the testsuite setup"
+      ts_log_config "No host found with only 1 processor. Please re-configure the testsuite setup."
       return 99
    }
 
@@ -111,8 +110,8 @@ proc reprioritization_setup {} {
 }
 
 proc reprioritization_cleanup {} {
-   global ts_config reprioritization_host
-   global reprioritization_backup
+   global ts_config
+   global reprioritization_backup reprioritization_host
 
    delete_all_jobs
    wait_for_end_of_all_jobs
@@ -137,7 +136,7 @@ proc reprioritization_cleanup {} {
 
 
 proc reprioritization_sched_conf {} {
-   global ts_config CHECK_USER reprioritization_host
+   global ts_config CHECK_USER
 
    # disable the reprioritize_interval in scheduler configuration
    set mysched_config(reprioritize_interval) "0:0:0"

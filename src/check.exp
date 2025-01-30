@@ -5256,10 +5256,9 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       incr nr_errors
    }
 
-
    if {$was_check_abort} {
       ts_log_fine "******************************************************************"
-      ts_log_fine "* Testsuite user abort. Setting test state to failed!            *"
+      ts_log_fine "* Testsuite user abort. Setting test state to uncompleted!       *"
       ts_log_fine "******************************************************************"
       set immediate_return -1
       incr nr_errors 1
@@ -5267,6 +5266,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
          save_result $path 0 $level "uncompleted"
       }
    }
+
    # check the number of busy rlogin sessions
    # it should be 0, or at least not higher than before starting test
    set num_busy_sessions_after_check [get_busy_spawn_rlogin_sessions]
@@ -5274,6 +5274,10 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       set session_info [dump_spawn_rlogin_sessions 0]
       close_open_rlogin_sessions
       ts_log_severe "Session leak in check $check_name ($path)!\nWe have $num_busy_sessions_after_check busy rlogin sessions after starting the test.\nBefore the test, we had $num_busy_sessions_before_check busy sessions.\nMake sure the test closes all opened sessions again!\n\n$session_info\nClosing all sessions now to prepare clean reconnect."
+      incr nr_errors
+   }
+
+   if {![check_if_test_cleaned_up]} {
       incr nr_errors
    }
 
@@ -5339,6 +5343,49 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       }
       return -1
    }
+}
+
+proc check_if_test_cleaned_up {} {
+   global ts_config
+   global check_name
+   global check_do_not_create_local_config
+
+   # @todo CS-984 we should ideally check the whole configuration
+   #              ideally only on demand (by command line option)
+
+   set start [clock seconds]
+   set ret 1
+
+   # noticed, that some test leaves a load_report_time in a local configuration, need to detect which test
+   set allowed_attribs "mailer xterm execd_spool_dir"
+   set errors {}
+   foreach host $ts_config(execd_nodes) {
+      unset -nocomplain local_conf
+      set ret [get_config local_conf $host]
+      if {$ret == 0} {
+         if {$check_do_not_create_local_config} {
+            lappend errors "local config $host found, but testsuite was started with option lo_local_config"
+         }
+         foreach attrib [array names local_conf] {
+            if {[lsearch -exact $allowed_attribs $attrib] < 0} {
+               lappend errors "local config $host: attribute $attrib should not be set"
+            }
+         }
+      } else {
+         if {!$check_do_not_create_local_config} {
+            lappend errors "local config $host does not exist"
+         }
+      }
+   }
+
+   if {[llength $errors] > 0} {
+      ts_log_severe [join $errors "\n"]
+      set ret 0
+   }
+
+   ts_log_fine "verifying the configuration after the $check_name check took [expr [clock seconds] - $start] seconds"
+
+   return $ret
 }
 
 proc clean_up_globals {} {
