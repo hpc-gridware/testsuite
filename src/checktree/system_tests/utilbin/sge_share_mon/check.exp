@@ -231,10 +231,13 @@ proc share_mon_sharetree {} {
       # now run jobs as the different users
       set args "$ts_config(product_root)/examples/jobs/sleeper.sh 10"
       set job_id [submit_job $args 1 60 "" $CHECK_USER]
+      wait_for_jobstart $job_id "" 5
       lappend submitted_jobs $job_id
       set job_id [submit_job $args 1 60 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
+      wait_for_jobstart $job_id "" 5
       lappend submitted_jobs $job_id
       set job_id [submit_job $args 1 60 "" $CHECK_SECOND_FOREIGN_SYSTEM_USER]
+      wait_for_jobstart $job_id "" 5
       lappend submitted_jobs $job_id
 
       # now we shall have the first/second foreign user under the default nodes
@@ -247,10 +250,13 @@ proc share_mon_sharetree {} {
       # now submit jobs with project
       set args "-P mytestproject $ts_config(product_root)/examples/jobs/sleeper.sh 10"
       set job_id [submit_job $args 1 60 "" $CHECK_USER]
+      wait_for_jobstart $job_id "" 5
       lappend submitted_jobs $job_id
       set job_id [submit_job $args 1 60 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
+      wait_for_jobstart $job_id "" 5
       lappend submitted_jobs $job_id
       set job_id [submit_job $args 1 60 "" $CHECK_SECOND_FOREIGN_SYSTEM_USER]
+      wait_for_jobstart $job_id "" 5
       lappend submitted_jobs $job_id
 
       # wait for all jobs to finish

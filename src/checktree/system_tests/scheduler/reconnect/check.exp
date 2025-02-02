@@ -147,7 +147,7 @@ proc schedd_reconnect_after_timeout_test {} {
 
    # Get expected message text in qmaster messages file
    if {[is_version_in_range "9.0.3"]} {
-      set message_text [translate_macro MSG_COM_ACKTIMEOUT4EV_USISIS "*" "scheduler" "1" "schedd" "0" "*"]
+      set message_text [translate_macro MSG_COM_ACKTIMEOUT4EV_ISUSIS "*" "scheduler" "1" "schedd" "0" "*"]
    } else {
       set message_text [translate_macro MSG_COM_ACKTIMEOUT4EV_ISIS "*" "schedd" "*" "*"]
    }

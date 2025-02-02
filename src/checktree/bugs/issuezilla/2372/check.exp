@@ -34,11 +34,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -52,7 +52,7 @@ set check_description(2)  "Testing commlib enhancement for parameterlist feature
 set check_description(3)  "Testing if scheduler is crashing when no qmaster_params are set"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_level_function issue_2372_setup
@@ -66,12 +66,8 @@ lappend check_functions "issue_2372"
 
 proc issue_2372_setup {} {
    global ts_config
-   global issue_2372_backup
    global CHECK_ACT_LEVEL
-   global issue_2372_cl_ping
-   global issue_2372_gdi_timeout
-   global issue_2372_gdi_retries
-
+   global issue_2372_backup issue_2372_cl_ping issue_2372_gdi_timeout issue_2372_gdi_retries
 
    # we want to modify the global config - make a backup
    get_config issue_2372_backup
@@ -94,18 +90,18 @@ proc issue_2372_setup {} {
       set issue_2372_gdi_timeout 60
       set issue_2372_gdi_retries 0
    }
-   
+
    if {$issue_2372_gdi_retries != 0} {
       set global_conf(qmaster_params) "gdi_timeout=$issue_2372_gdi_timeout,gdi_retries=$issue_2372_gdi_retries,cl_ping=$issue_2372_cl_ping"
    } else {
       set global_conf(qmaster_params) "none"
    }
    set_config global_conf
-   
+
    # shutdown qmaster & scheduler
    shutdown_system_daemon $ts_config(master_host) qmaster
-   
-   
+
+
    # restart qmaster with test environment variable SGE_TEST_SPOOLING_WAIT_TIME
    ts_log_fine "restarting qmaster (and scheduler) with slow spooling options enabled when qping -dump client is connected!"
 
@@ -115,7 +111,7 @@ proc issue_2372_setup {} {
 
 proc issue_2372_cleanup {} {
    global ts_config
-   global issue_2372_backup
+   global issue_2372_backup issue_2372_cl_ping issue_2372_gdi_timeout issue_2372_gdi_retries
 
    shutdown_system_daemon $ts_config(master_host) qmaster
 
@@ -137,16 +133,15 @@ proc issue_2372_cleanup {} {
 
    wait_for_load_from_all_queues 120
    wait_for_end_of_all_jobs
+
+   unset -nocomplain issue_2372_backup issue_2372_cl_ping issue_2372_gdi_timeout issue_2372_gdi_retries
 }
 
 
 proc issue_2372 {} {
    global ts_config CHECK_USER
-   global issue_2372_hosts
-   global CHECK_ACT_LEVEL result
-   global issue_2372_cl_ping
-   global issue_2372_gdi_timeout
-   global issue_2372_gdi_retries
+   global CHECK_ACT_LEVEL
+   global issue_2372_cl_ping issue_2372_gdi_timeout issue_2372_gdi_retries
 
    if {$CHECK_ACT_LEVEL == 0 || $CHECK_ACT_LEVEL == 1} {
       set host [host_conf_get_suited_hosts 1 {lx-x86 lx-amd64 lx-arm64 lx-riscv64 lx-ppc64le ulx-x86 ulx-amd64}]
@@ -161,7 +156,7 @@ proc issue_2372 {} {
       # when qping -dump debug client is connected qmaster will sleep 80 seconds when doing spooling
       setup_qping_dump dump_handle
       get_qping_dump_output dump_handle
-        
+
       ts_log_fine "doing qsub ..."
       set result [start_remote_prog $host $user $binary $args prg_exit_state 120 0 "" envlist]
       ts_log_finer "qsub result:\n$result"
@@ -232,7 +227,7 @@ proc issue_2372 {} {
       setup_qping_dump dump_handle
       # qping output is out of interrest, but we call it (for expect reasons)
       get_qping_dump_output dump_handle
-        
+
       ts_log_fine "doing qsub ..."
       set qping_closed 0
       set sp_id [open_remote_spawn_process $host $user $binary $args 0 "" envlist]
@@ -268,12 +263,12 @@ proc issue_2372 {} {
                         if {![string match "*:(0)*" $line]} {
                            append error_text "qsub was not successfull\noutput:\n$full_output"
                         }
-                     } 
+                     }
                      if {$CHECK_ACT_LEVEL == 3} {
                         if {[string match "*:(0)*" $line]} {
                            append error_text "qsub was successfull (not expected)\noutput:\n$full_output"
                         }
-                     } 
+                     }
                      set do_continue 0
                   }
                   ts_log_fine $line
@@ -322,7 +317,7 @@ proc issue_2372 {} {
 
       ts_log_fine "gdi_timeout=$gdi_timeout"
       ts_log_fine "cl_ping=$cl_ping"
-  
+
       if {$error_text != ""} {
          ts_log_severe $error_text
       }
