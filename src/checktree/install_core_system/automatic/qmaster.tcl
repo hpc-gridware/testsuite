@@ -37,14 +37,14 @@ proc install_qmaster {} {
    global CHECK_USER
    global CORE_INSTALLED
    global check_use_installed_system CHECK_ADMIN_USER_SYSTEM
-   global CHECK_DEBUG_LEVEL CHECK_QMASTER_INSTALL_OPTIONS 
+   global CHECK_DEBUG_LEVEL CHECK_QMASTER_INSTALL_OPTIONS
    global CHECK_PROTOCOL_DIR
 
    ts_log_fine "install qmaster ($ts_config(product_type) system) on host $ts_config(master_host) ..."
 
    if {$check_use_installed_system != 0} {
       puts "no need to install qmaster on host $ts_config(master_host), noinst parameter is set"
-      set CORE_INSTALLED "" 
+      set CORE_INSTALLED ""
       if {[startup_qmaster] == 0} {
          lappend CORE_INSTALLED $ts_config(master_host)
          write_install_list
@@ -75,6 +75,9 @@ proc install_qmaster {} {
    if {$ts_config(product_feature) == "csp"} {
       append feature_install_options "-csp"
    }
+   if {$ts_config(product_feature) == "munge"} {
+      append feature_install_options "-munge"
+   }
 
    set my_timeout 500
    set exit_val 0
@@ -82,10 +85,10 @@ proc install_qmaster {} {
    switch_spooling
 
    ts_log_fine "install_qmaster $CHECK_QMASTER_INSTALL_OPTIONS $feature_install_options -auto $ts_config(product_root)/autoinst_config_$ts_config(cell).conf"
-   if {$CHECK_ADMIN_USER_SYSTEM == 0} { 
+   if {$CHECK_ADMIN_USER_SYSTEM == 0} {
       set output [start_remote_prog "$ts_config(master_host)" "root"  "./install_qmaster" "$CHECK_QMASTER_INSTALL_OPTIONS $feature_install_options -auto $ts_config(product_root)/autoinst_config_$ts_config(cell).conf" exit_val $my_timeout 0 $ts_config(product_root) env_list]
    } else {
-      ts_log_finer "--> install as user $CHECK_USER <--" 
+      ts_log_finer "--> install as user $CHECK_USER <--"
       set output [start_remote_prog "$ts_config(master_host)" "$CHECK_USER"  "./install_qmaster" "$CHECK_QMASTER_INSTALL_OPTIONS $feature_install_options -auto $ts_config(product_root)/autoinst_config_$ts_config(cell).conf" exit_val $my_timeout 0 $ts_config(product_root) env_list]
    }
 
@@ -100,7 +103,7 @@ proc install_qmaster {} {
       set do_log_output  1 ;# 1
    }
 
-   # Wait for NFS availability of the settings file on each host 
+   # Wait for NFS availability of the settings file on each host
    foreach host [get_all_hosts] {
       wait_for_remote_file $host $CHECK_USER $ts_config(product_root)/$ts_config(cell)/common/settings.sh
    }
@@ -110,7 +113,7 @@ proc install_qmaster {} {
       lappend CORE_INSTALLED $ts_config(master_host)
       write_install_list
       return
-   } else { 
+   } else {
       ts_log_warning "install failed:\n$output"
       return
    }
@@ -121,7 +124,7 @@ proc install_qmaster {} {
 #     write_autoinst_config() -- write the autoinst config file
 #
 #  SYNOPSIS
-#     write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1}} 
+#     write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1}}
 #
 #  FUNCTION
 #     Writes the config file for autoinstallation.
@@ -133,7 +136,7 @@ proc install_qmaster {} {
 #     {file_delete_wait 1} - delete the file before writing it, and wait for it
 #                            to vanish / reappear
 #     {exechost 0}         - is this a config for an exechost installation?
-#     {set_file_perms 0}   - shall the file permissions be checked 
+#     {set_file_perms 0}   - shall the file permissions be checked
 #                            during (qmaster) installation?
 #     {{shadowd 0}         - is this a config for a shadowd host installation?
 #*******************************************************************************
@@ -254,29 +257,29 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
 
 #                                                             max. column:     |
 #****** install_core_system/create_autoinst_config() ******
-# 
+#
 #  NAME
-#     create_autoinst_config -- ??? 
+#     create_autoinst_config -- ???
 #
 #  SYNOPSIS
-#     create_autoinst_config { } 
+#     create_autoinst_config { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -286,7 +289,7 @@ proc create_autoinst_config {} {
    global CHECK_USER
    global CORE_INSTALLED
    global check_use_installed_system CHECK_ADMIN_USER_SYSTEM
-   global CHECK_DEBUG_LEVEL CHECK_QMASTER_INSTALL_OPTIONS 
+   global CHECK_DEBUG_LEVEL CHECK_QMASTER_INSTALL_OPTIONS
    global CHECK_PROTOCOL_DIR
 
 

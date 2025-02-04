@@ -37,7 +37,7 @@
 #     verify_config() -- verify testsuite configuration setup
 #
 #  SYNOPSIS
-#     verify_config { config_array only_check parameter_error_list } 
+#     verify_config { config_array only_check parameter_error_list }
 #
 #  FUNCTION
 #     This procedure will verify or enter setup configuration
@@ -70,7 +70,7 @@ proc verify_config2 { config_array only_check parameter_error_list expected_vers
 
    set errors 0
    set error_list ""
-   
+
    if { ! [ info exists config(version) ] } {
       puts "Could not find version info in configuration file"
       lappend error_list "no version info"
@@ -79,7 +79,7 @@ proc verify_config2 { config_array only_check parameter_error_list expected_vers
    }
 
    if { $config(version) != $expected_version } {
-      # CR: TODO implement update hook for additional checktrees 
+      # CR: TODO implement update hook for additional checktrees
       #          They are called when the version doesn't match
       #          The update hook may be implemented like in setup2 which is
       #          calling update_ts_config_version() till the version matches
@@ -91,22 +91,22 @@ proc verify_config2 { config_array only_check parameter_error_list expected_vers
       puts "Expected version is \"$expected_version\""
       lappend error_list "unexpected version"
       incr errors 1
-      return -1      
+      return -1
    } else {
       ts_log_finest "Configuration Version: $config(version)"
    }
 
    set max_pos [get_configuration_element_count config]
-   
+
    set uninitalized ""
-   if { $be_quiet == 0 } { 
+   if { $be_quiet == 0 } {
       ts_log_fine ""
    }
 
    for { set param 1 } { $param <= $max_pos } { incr param 1 } {
       set par [ get_configuration_element_name_on_pos config $param ]
       set status "ok"
-      if { $be_quiet == 0 } { 
+      if { $be_quiet == 0 } {
          puts -nonewline "   $config($par,desc) ..."
          ts_log_progress
       }
@@ -140,14 +140,14 @@ proc verify_config2 { config_array only_check parameter_error_list expected_vers
                   lappend error_list $par
                   lappend uninitalized $param
                   ts_log_warning "verify error in procedure \"$procedure_name\" !!!"
-               } 
+               }
             }
          }
       }
-      if { $be_quiet == 0 } { 
+      if { $be_quiet == 0 } {
          ts_log_fine "\r   $config($par,desc) ... $status"
       }
-   } 
+   }
    if { [set count [llength $uninitalized]] != 0 && $only_check == 0} {
       puts "$count parameters are not initialized!"
       ts_log_fine "Entering setup procedures ..."
@@ -157,7 +157,7 @@ proc verify_config2 { config_array only_check parameter_error_list expected_vers
          set p_name [get_configuration_element_name_on_pos config $pos]
          set procedure_name  $config($p_name,setup_func)
          set default_value   $config($p_name,default)
-       
+
          ts_log_finest "Starting configuration procedure for parameter \"$p_name\" ($config($p_name,pos)) ..."
          set use_default 0
          if { [string length $procedure_name] == 0 } {
@@ -169,28 +169,28 @@ proc verify_config2 { config_array only_check parameter_error_list expected_vers
                if { $only_check == 0 } { wait_for_enter }
                set use_default 1
             }
-         } 
+         }
 
          if { $use_default != 0 } {
             # we have no setup procedure
             if { $default_value != "" } {
-               puts "using default value: \"$default_value\"" 
-               set config($p_name) $default_value 
+               puts "using default value: \"$default_value\""
+               set config($p_name) $default_value
             } else {
                puts "No setup procedure and no default value found!!!"
                if { $only_check == 0 } {
                   puts -nonewline "Enter value for parameter \"$p_name\": "
                   set value [wait_for_enter 1]
-                  puts "using value: \"$value\"" 
+                  puts "using value: \"$value\""
                   set config($p_name) $value
-               } 
+               }
             }
          } else {
             # call setup procedure ...
             ts_log_finest "starting >$procedure_name< (setup mode) ..."
             set value [ $procedure_name 0 $p_name config ]
             if { $value != -1 } {
-               puts "using value: \"$value\"" 
+               puts "using value: \"$value\""
                set config($p_name) $value
             }
          }
@@ -211,10 +211,10 @@ proc verify_config2 { config_array only_check parameter_error_list expected_vers
 #     clone_config() -- clone testsuite config (ts_config) and save into file
 #
 #  SYNOPSIS
-#     clone_config { source_config file_path {log_config 1}} 
+#     clone_config { source_config file_path {log_config 1}}
 #
 #  FUNCTION
-#     This procedure is used to obtain all necessary information from the 
+#     This procedure is used to obtain all necessary information from the
 #     specified testsuite configuration array and store it into a new testsuite
 #     configuration file.
 #
@@ -248,7 +248,7 @@ proc clone_config { source_config file_path {log_config 1} } {
             ts_log_fine "appending missing parameter \"$parameter\""
             lappend clone_argument_list $parameter
          }
-      }    
+      }
       ts_log_config $error_text
    }
 
@@ -271,7 +271,7 @@ proc clone_config { source_config file_path {log_config 1} } {
 #     edit_setup() -- edit testsuite/host/user configuration setup
 #
 #  SYNOPSIS
-#     edit_setup { array_name verify_func mod_string } 
+#     edit_setup { array_name verify_func mod_string }
 #
 #  FUNCTION
 #     This procedure is used to change the testsuite setup configuration
@@ -318,15 +318,15 @@ proc edit_setup { array_name verify_func mod_string } {
       set index 1
       for { set param 1 } { $param <= $max_pos } { incr param 1 } {
          set par [ get_configuration_element_name_on_pos config $param ]
-     
+
          set procedure_name  $config($par,setup_func)
          if { $procedure_name == "" } {
             continue
          }
-          
+
          if { [info procs $procedure_name ] == $procedure_name } {
             set index_par_list($index) $par
-   
+
             if { $index <= 9 } {
                puts "    $index) $config($par,desc)"
             } else {
@@ -338,12 +338,12 @@ proc edit_setup { array_name verify_func mod_string } {
       puts "\nEnter the number of the configuration parameter"
       puts -nonewline "you want to change or return to exit: "
       set input [ wait_for_enter 1]
-   
+
       if { [ info exists index_par_list($input) ] } {
          set no_changes 0
          set back [$config($index_par_list($input),setup_func) 0 $index_par_list($input) config ]
          if { $back != -1 } {
-            puts "setting $index_par_list($input) to:\n\"$back\"" 
+            puts "setting $index_par_list($input) to:\n\"$back\""
             set config($index_par_list($input)) $back
             wait_for_enter
          } else {
@@ -377,7 +377,7 @@ proc edit_setup { array_name verify_func mod_string } {
       }
    }
    # added values
-   set new_names [ array names config ]      
+   set new_names [ array names config ]
    foreach name $new_names {
       if { [ info exists org_config($name)] != 1 } {
          incr no_changes 1
@@ -412,7 +412,7 @@ proc edit_setup { array_name verify_func mod_string } {
          }
       }
       # added values
-      set new_names [ array names config ]      
+      set new_names [ array names config ]
       foreach name $new_names {
          if { [ info exists org_config($name)] != 1 } {
             puts "added $name:"
@@ -467,7 +467,7 @@ proc edit_setup { array_name verify_func mod_string } {
       wait_for_enter
    }
    puts "resetting old values ..."
-   $verify_func org_config 1 errors 
+   $verify_func org_config 1 errors
    return -1
 }
 
@@ -476,7 +476,7 @@ proc edit_setup { array_name verify_func mod_string } {
 #     show_config() -- show configuration settings
 #
 #  SYNOPSIS
-#     show_config { conf_array {short 1} { output "not_set" } } 
+#     show_config { conf_array {short 1} { output "not_set" } }
 #
 #  FUNCTION
 #     This procedure will print the current configuration settings for the
@@ -505,7 +505,7 @@ proc show_config { conf_array {short 1} { output "not_set" } } {
    for { set param 1 } { $param <= $max_pos } { incr param 1 } {
       set par [ get_configuration_element_name_on_pos config $param ]
       set description     $config($par,desc)
-      
+
       set par_length [string length $par]
       set description_length [string length $description]
       if { $max_par_length < $par_length } {
@@ -542,7 +542,7 @@ proc show_config { conf_array {short 1} { output "not_set" } } {
 #     modify_setup2() -- modify testsuite setup files
 #
 #  SYNOPSIS
-#     modify_setup2 { } 
+#     modify_setup2 { }
 #
 #  FUNCTION
 #     This procedure is called to let the user change testsuite settings
@@ -564,23 +564,23 @@ proc modify_setup2 {} {
    set old_root $ts_config(product_root)
 
    set change_level ""
-   
+
    set check_name "setup"
    set CHECK_ACT_LEVEL "0"
-   
-   
+
+
    set setup_hook(1,name) "Testsuite configuration"
    set setup_hook(1,config_array) "ts_config"
    set setup_hook(1,verify_func)  "verify_config"
    set setup_hook(1,save_func)    "save_configuration"
    set setup_hook(1,filename)     "$CHECK_DEFAULTS_FILE"
-   
+
    set setup_hook(2,name) "Host file configuration"
    set setup_hook(2,config_array) "ts_host_config"
    set setup_hook(2,verify_func)  "verify_host_config"
    set setup_hook(2,save_func)    "save_host_configuration"
    set setup_hook(2,filename)     "$ts_config(host_config_file)"
-   
+
    set setup_hook(3,name) "User file configuration"
    set setup_hook(3,config_array) "ts_user_config"
    set setup_hook(3,verify_func)  "verify_user_config"
@@ -592,7 +592,7 @@ proc modify_setup2 {} {
    set setup_hook(4,verify_func)  "verify_fs_config"
    set setup_hook(4,save_func)    "save_fs_configuration"
    set setup_hook(4,filename)     "$ts_config(fs_config_file)"
-   
+
    if { [info exists ts_config(db_config_file)] && [ string compare $ts_config(db_config_file) "none" ] != 0 } {
    set setup_hook(5,name) "Database file configuration"
    set setup_hook(5,config_array) "ts_db_config"
@@ -622,18 +622,18 @@ proc modify_setup2 {} {
          }
       }
    }
-   
+
 
     while { 1 } {
       clear_screen
       puts "--------------------------------------------------------------------"
       puts "Modify testsuite configuration"
       puts "--------------------------------------------------------------------"
-      
+
       for { set i 1 } { $i <= $numSetups } { incr i 1 } {
          puts [format "    (%d) %-27s (%ds) %s" $i $setup_hook($i,name) $i $setup_hook($i,name)]
-      }   
-         
+      }
+
       puts ""
       if { [string compare $ts_config(additional_config) "none" ] != 0 } {
          set numAddConfigs [llength $ts_config(additional_config)]
@@ -665,7 +665,7 @@ proc modify_setup2 {} {
             set do_save [edit_setup $setup_hook($input,config_array) $setup_hook($input,verify_func) tmp_string]
             if { $do_save == 0 } {
                if { [info exists setup_hook($input,filename)] } {
-                  $setup_hook($input,save_func) $setup_hook($input,filename) 
+                  $setup_hook($input,save_func) $setup_hook($input,filename)
                } else {
                   $setup_hook($input,save_func)
                }
@@ -699,7 +699,7 @@ proc modify_setup2 {} {
    # onchange:   "", "compile", "install", "stop"
    ts_log_finest "change_level: \"$change_level\""
 
-   if { [string length $change_level] != 0 } { 
+   if { [string length $change_level] != 0 } {
       puts "modification needs shutdown of old Cluster Scheduler (Grid Engine) system"
       set new_exed $ts_config(execd_hosts)
       set new_master $ts_config(master_host)
@@ -723,7 +723,7 @@ proc modify_setup2 {} {
       if { $CHECK_PACKAGE_DIRECTORY != "none" } {
          puts "modification needs reinstallation of packages"
          prepare_packages ;# reinstall tar binaries
-      } else { 
+      } else {
          puts "modification needs compilation of new Cluster Scheduler (Grid Engine) system"
          compile_source
       }
@@ -737,7 +737,7 @@ proc modify_setup2 {} {
 #     config_generic() -- Get generic configuration values
 #
 #  SYNOPSIS
-#     config_generic { only_check name config_array help_text check_type } 
+#     config_generic { only_check name config_array help_text check_type }
 #
 #  FUNCTION
 #     This procedure is used to get standard (generic) testsuite configuration
@@ -757,7 +757,7 @@ proc modify_setup2 {} {
 #                    "directory+":request a directory path, create if doesn't exist
 #                    "filename":  request a path to existing file
 #                    "filename+": request a path to a file, if file doesn't exist,
-#                                 it will allow the parent procedure to create 
+#                                 it will allow the parent procedure to create
 #                                 a new file
 #                    "user" :     request an existing user on localhost
 #                    Selection types:
@@ -800,7 +800,7 @@ proc modify_setup2 {} {
 #                          - screen_clear   : for multiple selection the screen is
 #                                             automatically cleared
 #                                             set it to 0 if not clear screen
-#                                             (example: compile, java compile 
+#                                             (example: compile, java compile
 #                                              option in host configurtion)
 #                         - selected        : set it to 1 if there is only one
 #                                             possible value in the list
@@ -920,7 +920,7 @@ proc config_generic { only_check name config_array help_text check_type
    if { $values == "" } {
       set values $default_value
       }
-  
+
    # request the user input values
    if { $only_check == 0 } {
       while {1} {
@@ -967,7 +967,7 @@ proc config_generic { only_check name config_array help_text check_type
             break
          }
       }
-   } 
+   }
 
    # input values verification
    if {!$fast_setup} {
@@ -1125,7 +1125,7 @@ proc config_generic { only_check name config_array help_text check_type
 #      config/config_display_list()
 #      config/config_display_hosts()
 #*******************************************************************************
-proc config_choose_value { choice_list null_value {count 1} {sel_values ""} 
+proc config_choose_value { choice_list null_value {count 1} {sel_values ""}
                            {value_type value} {display_method_name config_display_list} {usage 0} } {
 
             upvar $choice_list choices
@@ -1141,7 +1141,7 @@ proc config_choose_value { choice_list null_value {count 1} {sel_values ""}
       puts "([config_verify_count $count])\n"
    } else {
       puts ""
-               }   
+               }
    # assign the indexes to each value in the list
    if { [config_assign_indexes choices indexes $null_value] == -1 } {
       return -1
@@ -1250,7 +1250,7 @@ proc config_choose_value { choice_list null_value {count 1} {sel_values ""}
       }
 
    return 1
-   } 
+   }
 
 #****** config/config_assign_indexes() *****************************************
 #  NAME
@@ -1360,8 +1360,8 @@ proc config_assign_indexes { choice_list {choice_index ""} {null_value "none"} }
 #*******************************************************************************
 proc config_list_order { a b } {
    if { [string is integer $a] && [string is integer $b] } {
-      if { $a < $b } { return -1 } else { return 1 }   
-   } elseif {[string is integer $a] && ![string is integer $b]} { 
+      if { $a < $b } { return -1 } else { return 1 }
+   } elseif {[string is integer $a] && ![string is integer $b]} {
       return 1
    } elseif {![string is integer $a] && [string is integer $b]} {
                      return -1
@@ -1396,7 +1396,7 @@ proc config_list_order { a b } {
 #      config/config_choose_value()
 #      config_host/config_display_hosts()
 #*******************************************************************************
-proc config_display_list { choice_list choice_index 
+proc config_display_list { choice_list choice_index
                            {selected ""} {null_value "none"} {disp_usage 0} } {
 
    upvar $choice_list choices
@@ -1498,7 +1498,7 @@ proc config_verify_count { count_allowed { count_values "" } } {
    }
    return 0
 }
-       
+
 #****** config/config_verify_*() ***********************************************
 #  NAME
 #     config_verify_directory() -- Verify directory input
@@ -1546,8 +1546,8 @@ proc config_verify_directory { value { create_new 0 } } {
       return -1
    }
    if {[string first "/" $value] == 1} {
-      if {$create_new == 1 && [ file isdirectory $value ] != 1 } { 
-         file mkdir $value 
+      if {$create_new == 1 && [ file isdirectory $value ] != 1 } {
+         file mkdir $value
       }
       if {[file isdirectory $value] != 1} {
          puts "Directory \"$value\" not found"
@@ -1620,7 +1620,7 @@ proc config_verify_user { value } {
 
    set local_host [gethostname]
    if {$local_host == "unknown"} {
-      puts "Could not get local host name" 
+      puts "Could not get local host name"
       return -1
    }
    set result [start_remote_prog $local_host $CHECK_USER "id" "$value" prg_exit_state 60 0 "" "" 1 0]
@@ -1651,7 +1651,7 @@ proc config_verify_string { value { patterns "" } } {
 #     config_verify_uri() -- verify uri syntax
 #
 #  SYNOPSIS
-#     config_verify_uri { value } 
+#     config_verify_uri { value }
 #
 #  FUNCTION
 #     Check the syntax of the specified uri parameter
@@ -1758,7 +1758,7 @@ proc config_check_all_usages { check_list config_array type } {
       read_array_from_file "$fl" "testsuite configuration" tmp_config
       if { [string match "*arco*" $tmp_config(additional_checktree_dirs)] == 1 } {
          set add_tmp_file [ get_additional_config_file_path "arco" $fl]
-         if { [lsearch $filenames(arco) $add_tmp_file] == -1 } { 
+         if { [lsearch $filenames(arco) $add_tmp_file] == -1 } {
             lappend filenames(arco) $add_tmp_file
          }
       }
@@ -1841,7 +1841,7 @@ proc config_check_usage { check_list check_params config_array config_file confi
       if { [info exists check_config($name)] } { set value $check_config($name) }
       # can be multiple value
       foreach val $value {
-         if { [lsearch -exact [array names checks] $val] >= 0 
+         if { [lsearch -exact [array names checks] $val] >= 0
               && [string first "$file_name_short: $name" "$checks($val)"] == -1 } {
             append checks($val) "| $file_name_short: $name "
          }
@@ -1855,7 +1855,7 @@ proc config_check_usage { check_list check_params config_array config_file confi
 #     config_check_host_in_hostlist() -- ensure given hostname is first in list
 #
 #  SYNOPSIS
-#     config_check_host_in_hostlist { hostlist {first_host ""}} 
+#     config_check_host_in_hostlist { hostlist {first_host ""}}
 #
 #  FUNCTION
 #     The function ensures, that $first_host is the first host in a given
@@ -1874,7 +1874,7 @@ proc config_check_host_in_hostlist {hostlist { first_host ""} } {
       # make sure, [gethostname] is the first host in list
       set first_host [gethostname]
       if {$first_host == "unknown"} {
-         puts "Could not get local host name" 
+         puts "Could not get local host name"
          return -1
       }
    }
@@ -1891,7 +1891,7 @@ proc config_check_host_in_hostlist {hostlist { first_host ""} } {
 #     config_testsuite_root_dir() -- testsuite root directory setup
 #
 #  SYNOPSIS
-#     config_testsuite_root_dir { only_check name config_array } 
+#     config_testsuite_root_dir { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -1912,7 +1912,7 @@ proc config_testsuite_root_dir { only_check name config_array } {
    global env fast_setup
 
    upvar $config_array config
-   
+
    set help_text { "Enter the full pathname of the testsuite root directory,"
                    "or press >RETURN< to use the default value."
                    "If you want to test with root permissions (which is neccessary"
@@ -1936,7 +1936,7 @@ proc config_testsuite_root_dir { only_check name config_array } {
       set CHECK_USER [file attributes $value/check.exp -owner]
       puts "\nNo USER is set!\n(default: $CHECK_USER)\n"
       set env(USER) $CHECK_USER
-   } 
+   }
 
    # if USER env. variable is empty
    if { $CHECK_USER == "" } {
@@ -1959,7 +1959,7 @@ proc config_testsuite_root_dir { only_check name config_array } {
 #     config_checktree_root_dir() -- checktree root setup
 #
 #  SYNOPSIS
-#     config_checktree_root_dir { only_check name config_array } 
+#     config_checktree_root_dir { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -1977,7 +1977,7 @@ proc config_testsuite_root_dir { only_check name config_array } {
 proc config_checktree_root_dir { only_check name config_array } {
 
    upvar $config_array config
-   
+
    set help_text { "Enter the full pathname of the testsuite checktree directory,"
                    "or press >RETURN< to use the default value."
                    "The checktree directory contains all tests in its subdirectory"
@@ -1996,7 +1996,7 @@ proc config_checktree_root_dir { only_check name config_array } {
 #     config_additional_checktree_dirs() -- additional checktree root setup
 #
 #  SYNOPSIS
-#     config_additional_checktree_dirs { only_check name config_array } 
+#     config_additional_checktree_dirs { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite additional configuration(s) setup - called from verify_config()
@@ -2014,7 +2014,7 @@ proc config_checktree_root_dir { only_check name config_array } {
 proc config_additional_checktree_dirs { only_check name config_array } {
 
    upvar $config_array config
-   
+
    set help_text { "Choose the path to the additional checktree directory."
                    "The checktree directory contains all tests in its subdirectory"
                    "structure."
@@ -2053,7 +2053,7 @@ proc config_additional_config { only_check name config_array } {
    global CHECK_CUR_CONFIG_FILE
 
    upvar $config_array config
-   
+
    set allow_null 1
    set config($name,onchange)   ""
 
@@ -2105,7 +2105,7 @@ proc config_additional_config { only_check name config_array } {
 #     config_results_dir() -- results directory setup
 #
 #  SYNOPSIS
-#     config_results_dir { only_check name config_array } 
+#     config_results_dir { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -2146,7 +2146,7 @@ proc config_results_dir { only_check name config_array } {
 
    set local_host [gethostname]
    if {$local_host == "unknown"} {
-      puts "Could not get local host name" 
+      puts "Could not get local host name"
          return -1
       }
 
@@ -2186,7 +2186,7 @@ proc config_results_dir { only_check name config_array } {
 #     config_connection_type() -- configurate the remote connect starter
 #
 #  SYNOPSIS
-#     config_connection_type { only_check name config_array } 
+#     config_connection_type { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -2222,17 +2222,17 @@ proc config_connection_type {only_check name config_array} {
 
    if {$only_check == 0} {
       # reset global variable for have_ssh_access() procedure !!
-      set have_ssh_access_state -1 
+      set have_ssh_access_state -1
    }
 
    set local_host [gethostname]
    if {$local_host == "unknown"} {
-      puts "Could not get local host name" 
+      puts "Could not get local host name"
       return -1
    }
 
    if {!$fast_setup} {
-      # test the new connection type 
+      # test the new connection type
       set old_value $config($name)
       set config($name) $value
       set result [start_remote_prog $local_host $CHECK_USER "echo" "\"hello $local_host\"" prg_exit_state 60 0 "" "" 1 0]
@@ -2258,7 +2258,7 @@ proc config_connection_type {only_check name config_array} {
 #     config_source_dir() -- source directory setup
 #
 #  SYNOPSIS
-#     config_source_dir { only_check name config_array } 
+#     config_source_dir { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -2282,7 +2282,7 @@ proc config_source_dir { only_check name config_array } {
                    "press >RETURN< to use the default value."
                    "The testsuite needs this directory to compile source code"
                    "and for resolving the host names (util scripts)." }
- 
+
    if { $config($name,default) == "" } {
       set pos [string first "/testsuite" $config(testsuite_root_dir)]
       set config($name,default) "[string range $config(testsuite_root_dir) 0 $pos]source"
@@ -2325,7 +2325,7 @@ proc config_ext_source_dir {only_check name config_array} {
    set help_text { "Enter the relative path of the HPC-Gridware extensions source directory,"
                    "relative to the OCS source directory or press >RETURN< to use the default value."
                    "If you do not want to configure HPC-Gridware extenstions use \"none\"." }
- 
+
    if { $config($name,default) == "" } {
       set pos [string first "/testsuite" $config(testsuite_root_dir)]
       set config($name,default) "[string range $config(testsuite_root_dir) 0 $pos]source"
@@ -2340,8 +2340,8 @@ proc config_ext_source_dir {only_check name config_array} {
 
    if {$value == "none"} {
       ts_log_fine "no HPC-Gridware extensions dir specified - running without the extensions"
-   } 
- 
+   }
+
    if {$old_value != $value} {
       set config($name) $value
    }
@@ -2354,7 +2354,7 @@ proc config_ext_source_dir {only_check name config_array} {
 #     config_host_config_file() -- host config file setup
 #
 #  SYNOPSIS
-#     config_host_config_file { only_check name config_array } 
+#     config_host_config_file { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -2372,12 +2372,12 @@ proc config_ext_source_dir {only_check name config_array} {
 proc config_host_config_file { only_check name config_array } {
 
    upvar $config_array config
-   
+
    set help_text { "Enter the full pathname of the host configuration file,"
                    "or press >RETURN< to use the default value."
                    "The host configuration file is used to define the cluster"
                    "hosts setup configuration needed by the testsuite." }
-   
+
    while {1} {
       set value [config_generic $only_check $name config $help_text "filename+" 0]
 
@@ -2395,7 +2395,7 @@ proc config_host_config_file { only_check name config_array } {
 #     config_user_config_file() -- user configuration file setup
 #
 #  SYNOPSIS
-#     config_user_config_file { only_check name config_array } 
+#     config_user_config_file { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -2413,12 +2413,12 @@ proc config_host_config_file { only_check name config_array } {
 proc config_user_config_file { only_check name config_array } {
 
    upvar $config_array config
-   
+
    set help_text { "Enter the full pathname of the user configuration file,"
                    "or press >RETURN< to use the default value."
                    "The user configuration file is used to define the cluster"
                    "user needed by the testsuite." }
-   
+
    while {1} {
       set value [config_generic $only_check $name config $help_text "filename+" 0]
 
@@ -2436,7 +2436,7 @@ proc config_user_config_file { only_check name config_array } {
 #     config_fs_config_file() -- filesystem configuration file setup
 #
 #  SYNOPSIS
-#     config_fs_config_file { only_check name config_array } 
+#     config_fs_config_file { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -2454,13 +2454,13 @@ proc config_user_config_file { only_check name config_array } {
 proc config_fs_config_file { only_check name config_array } {
 
    upvar $config_array config
-   
+
    set help_text { "Enter the full pathname of the filesystem configuration file,"
                    "or press >RETURN< to use the default value."
                    "The filesystem configuration file is used to provide"
                    "different types of filesystems needed by the testsuite."
                    "eg. nfs4 mounted fs or root2nobody mounted fs" }
-   
+
    while {1} {
       set value [config_generic $only_check $name config $help_text "filename+" 0]
 
@@ -2468,7 +2468,7 @@ proc config_fs_config_file { only_check name config_array } {
          setup_fs_config $value
          break
       } elseif { $only_check } {
-         break 
+         break
       }
       clear_screen
    }
@@ -2480,7 +2480,7 @@ proc config_fs_config_file { only_check name config_array } {
 #     config_ge_packages_uri() -- configuration function for ge_packages_uri
 #
 #  SYNOPSIS
-#     config_ge_packages_uri { only_check name config_array } 
+#     config_ge_packages_uri { only_check name config_array }
 #
 #  FUNCTION
 #     Configure the ts_config(ge_packages_uri) parameter.
@@ -2498,7 +2498,7 @@ proc config_fs_config_file { only_check name config_array } {
 proc config_ge_packages_uri { only_check name config_array } {
    global fast_setup CHECK_USER
    upvar $config_array config
-   
+
    set help_text { "Enter the URI pathname of the directory location containing"
                    "a \"testsuite.info\" file,"
                    "or press >RETURN< to use the default value."
@@ -2511,7 +2511,7 @@ proc config_ge_packages_uri { only_check name config_array } {
                    "Example:"
                    "6:2:5   |V62u5_TAG    |SGE 6.2u5  |true               |file://foo/adir"
                  }
-   
+
    set value [config_generic $only_check $name config $help_text "uri" 0]
    if {$value == -1} {
       return -1
@@ -2541,7 +2541,7 @@ proc config_ge_packages_uri { only_check name config_array } {
 #     config_db_config_file() -- database configuration file setup
 #
 #  SYNOPSIS
-#     config_db_config_file { only_check name config_array } 
+#     config_db_config_file { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -2560,7 +2560,7 @@ proc config_db_config_file { only_check name config_array } {
    global fast_setup
 
    upvar $config_array config
-   
+
    set allow_null 1                       ;# path to config database is optional
          if { $config(additional_checktree_dirs) != "none" } {
             foreach dir $config(additional_checktree_dirs) {
@@ -2592,7 +2592,7 @@ proc config_db_config_file { only_check name config_array } {
 #     config_master_host() -- master host setup
 #
 #  SYNOPSIS
-#     config_master_host { only_check name config_array } 
+#     config_master_host { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -2615,7 +2615,7 @@ proc config_master_host { only_check name config_array } {
 
    set local_host [gethostname]
    if {$local_host == "unknown"} {
-      puts "Could not get local host name" 
+      puts "Could not get local host name"
       return -1
    }
 
@@ -2642,7 +2642,7 @@ proc config_master_host { only_check name config_array } {
 #     config_execd_hosts() -- execd daemon host setup
 #
 #  SYNOPSIS
-#     config_execd_hosts { only_check name config_array } 
+#     config_execd_hosts { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -2711,7 +2711,7 @@ proc config_execd_hosts { only_check name config_array } {
 #     config_submit_only_hosts() -- submit only hosts setup
 #
 #  SYNOPSIS
-#     config_submit_only_hosts { only_check name config_array } 
+#     config_submit_only_hosts { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -2767,7 +2767,7 @@ proc config_non_cluster_hosts {only_check name config_array} {
 #     config_commd_port() -- commd port option setup
 #
 #  SYNOPSIS
-#     config_commd_port { only_check name config_array } 
+#     config_commd_port { only_check name config_array }
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
 #
@@ -2787,7 +2787,7 @@ proc config_commd_port { only_check name config_array } {
    global CHECK_USE_HUDSON
 
    upvar $config_array config
-   
+
    set help_text {
       "Enter the port number value the testsuite should use for COMMD_PORT,"
       "or press >RETURN< to use the default value."
@@ -2795,7 +2795,7 @@ proc config_commd_port { only_check name config_array } {
       "(IMPORTANT NOTE: COMMD_PORT must be a even number, because for"
       "SGE/EE 6.0 sytems or later COMMD_PORT is used for SGE_QMASTER_PORT and"
       "COMMD_PORT + 1 is used for SGE_EXECD_PORT)"
-   }   
+   }
 
    if {$CHECK_USE_HUDSON == 1} {
       array set params { port_type all }
@@ -2804,7 +2804,7 @@ proc config_commd_port { only_check name config_array } {
    }
 
    set value [config_generic $only_check $name config $help_text "port" 0 1 "" params]
-   
+
    if { $value < 1024 } {
       puts "Need COMMD_PORT value >= 1024"
       return -1
@@ -2820,7 +2820,7 @@ proc config_commd_port { only_check name config_array } {
 #     config_jmx_port() -- jmx port option setup
 #
 #  SYNOPSIS
-#     config_jmx_port { only_check name config_array } 
+#     config_jmx_port { only_check name config_array }
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
 #
@@ -2838,12 +2838,12 @@ proc config_commd_port { only_check name config_array } {
 proc config_jmx_port { only_check name config_array } {
 
    upvar $config_array config
-   
+
    set help_text {
       "Enter the port number for qmaster JMX mbean server"
       "or press >RETURN< to use the default value."
       "Value 0 means that the mbean server is not started."
-   }   
+   }
 
    array set params { }
    if { [info exists config(commd_port)] } {
@@ -2857,7 +2857,7 @@ proc config_jmx_port { only_check name config_array } {
       puts "Need JMX_PORT value >= 1024"
       return -1
    }
-   
+
    return $value
 }
 
@@ -2866,7 +2866,7 @@ proc config_jmx_port { only_check name config_array } {
 #     config_jmx_ssl() -- jmx ssl server authentication option setup
 #
 #  SYNOPSIS
-#     config_jmx_ssl { only_check name config_array } 
+#     config_jmx_ssl { only_check name config_array }
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
 #
@@ -2884,12 +2884,12 @@ proc config_jmx_port { only_check name config_array } {
 proc config_jmx_ssl { only_check name config_array } {
 
    upvar $config_array config
-   
+
    array set jmx {
       "true" "enable SSL server authentication for qmaster JMX mbean server"
       "false" "no SSL server authentication for qmaster JMX mbean server"
-   }   
-   set value [config_generic $only_check $name config "" "choice" 0 1 jmx ] 
+   }
+   set value [config_generic $only_check $name config "" "choice" 0 1 jmx ]
 
    return $value
 }
@@ -2899,7 +2899,7 @@ proc config_jmx_ssl { only_check name config_array } {
 #     config_jmx_ssl_client() -- jmx ssl client authentication option setup
 #
 #  SYNOPSIS
-#     config_jmx_ssl_client { only_check name config_array } 
+#     config_jmx_ssl_client { only_check name config_array }
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
 #
@@ -2917,12 +2917,12 @@ proc config_jmx_ssl { only_check name config_array } {
 proc config_jmx_ssl_client { only_check name config_array } {
 
    upvar $config_array config
-   
+
    array set jmx {
       "true" "enable SSL client authentication for qmaster JMX mbean server"
       "false" "no SSL client authentication for qmaster JMX mbean server"
-   }   
-   set value [config_generic $only_check $name config "" "choice" 0 1 jmx ] 
+   }
+   set value [config_generic $only_check $name config "" "choice" 0 1 jmx ]
 
    return $value
 }
@@ -2932,7 +2932,7 @@ proc config_jmx_ssl_client { only_check name config_array } {
 #     config_jmx_ssl_keystore_pw() -- jmx ssl keystore password
 #
 #  SYNOPSIS
-#     config_jmx_ssl_keystore_pw { only_check name config_array } 
+#     config_jmx_ssl_keystore_pw { only_check name config_array }
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
 #
@@ -2950,12 +2950,12 @@ proc config_jmx_ssl_client { only_check name config_array } {
 proc config_jmx_ssl_keystore_pw { only_check name config_array } {
 
    upvar $config_array config
-   
+
    set helptext {
       "Enter the JMX SSL keystore pw for qmaster JMX mbean server"
       "or press >RETURN< to use the default value."
-   }   
-   set value [config_generic $only_check $name config $helptext "string"] 
+   }
+   set value [config_generic $only_check $name config $helptext "string"]
 
    return $value
 }
@@ -2965,7 +2965,7 @@ proc config_jmx_ssl_keystore_pw { only_check name config_array } {
 #     config_reserved_port() -- reserved option setup
 #
 #  SYNOPSIS
-#     config_reserved_port { only_check name config_array } 
+#     config_reserved_port { only_check name config_array }
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
 #
@@ -2983,20 +2983,20 @@ proc config_jmx_ssl_keystore_pw { only_check name config_array } {
 proc config_reserved_port { only_check name config_array } {
 
    upvar $config_array config
-   
+
    set help_text {
       "Enter an unused port number < 1024. This port is used to test"
-      "port binding." 
+      "port binding."
    }
-   
+
    array set params { port_type reserved }
 
    set value [config_generic $only_check $name config $help_text "port" 0 1 "" params]
-   
+
    if { $value >= 1024 } {
       puts "Need an unused port number < 1024."
       return -1
-   } 
+   }
 
    return $value
 }
@@ -3006,7 +3006,7 @@ proc config_reserved_port { only_check name config_array } {
 #     config_product_root() -- product root setup
 #
 #  SYNOPSIS
-#     config_product_root { only_check name config_array } 
+#     config_product_root { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3053,7 +3053,7 @@ proc config_product_root { only_check name config_array } {
 #     config_product_type() -- product type setup
 #
 #  SYNOPSIS
-#     config_product_type { only_check name config_array } 
+#     config_product_type { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3089,7 +3089,7 @@ proc config_product_type { only_check name config_array } {
 #     config_product_feature() -- product feature setup
 #
 #  SYNOPSIS
-#     config_product_feature { only_check name config_array } 
+#     config_product_feature { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3110,6 +3110,7 @@ proc config_product_feature { only_check name config_array } {
 
    array set sge_features {
       csp "Certificate Security Protocol"
+      munge "Munge Authentication"
       none "no special product features"
    }
 
@@ -3166,7 +3167,7 @@ proc config_aimk_compile_options { only_check name config_array } {
 #     config_dist_install_options() -- distrib install options
 #
 #  SYNOPSIS
-#     config_dist_install_options { only_check name config_array } 
+#     config_dist_install_options { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3196,7 +3197,7 @@ proc config_dist_install_options { only_check name config_array } {
 #     config_qmaster_install_options() -- master install options setup
 #
 #  SYNOPSIS
-#     config_qmaster_install_options { only_check name config_array } 
+#     config_qmaster_install_options { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3221,10 +3222,10 @@ proc config_qmaster_install_options { only_check name config_array } {
 
    set value [config_generic $only_check $name config $help_text "string" 1 0]
 
-   if {$value == -1} { 
-      return -1 
+   if {$value == -1} {
+      return -1
    }
-   
+
    # set global values
    set CHECK_QMASTER_INSTALL_OPTIONS  $value
    if {$value == "none"} {
@@ -3239,7 +3240,7 @@ proc config_qmaster_install_options { only_check name config_array } {
 #     config_execd_install_options() -- install options setup
 #
 #  SYNOPSIS
-#     config_execd_install_options { only_check name config_array } 
+#     config_execd_install_options { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3255,7 +3256,7 @@ proc config_qmaster_install_options { only_check name config_array } {
 #     check/verify_config()
 #*******************************************************************************
 proc config_execd_install_options { only_check name config_array } {
-   global CHECK_EXECD_INSTALL_OPTIONS 
+   global CHECK_EXECD_INSTALL_OPTIONS
 
    upvar $config_array config
 
@@ -3280,7 +3281,7 @@ proc config_execd_install_options { only_check name config_array } {
 #     config_package_directory() -- package optiont setup
 #
 #  SYNOPSIS
-#     config_package_directory { only_check name config_array } 
+#     config_package_directory { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3321,7 +3322,7 @@ proc config_package_directory { only_check name config_array } {
             puts "error checking package_directory! are all package file installed?"
             return -1
          }
-      } 
+      }
    }
 
    set CHECK_PACKAGE_DIRECTORY $value
@@ -3334,7 +3335,7 @@ proc config_package_directory { only_check name config_array } {
 #     config_package_type() -- package type setup
 #
 #  SYNOPSIS
-#     config_package_type { only_check name config_array } 
+#     config_package_type { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3405,7 +3406,7 @@ proc config_package_release {only_check name config_array} {
 #     config_dns_domain() -- dns domain setup
 #
 #  SYNOPSIS
-#     config_dns_domain { only_check name config_array } 
+#     config_dns_domain { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3429,7 +3430,7 @@ proc config_dns_domain { only_check name config_array } {
 
    set local_host [gethostname]
    if {$local_host == "unknown"} {
-      puts "Could not get local host name" 
+      puts "Could not get local host name"
       return -1
    }
 
@@ -3480,7 +3481,7 @@ proc config_dns_domain { only_check name config_array } {
 #     config_dns_for_install_script() -- domain used for sge installation
 #
 #  SYNOPSIS
-#     config_dns_for_install_script { only_check name config_array } 
+#     config_dns_for_install_script { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3504,7 +3505,7 @@ proc config_dns_for_install_script { only_check name config_array } {
 
    set local_host [gethostname]
    if {$local_host == "unknown"} {
-      puts "Could not get local host name" 
+      puts "Could not get local host name"
       return -1
    }
 
@@ -3524,7 +3525,7 @@ proc config_dns_for_install_script { only_check name config_array } {
          ts_log_finest "domain check ..."
          set host "$local_host.$value"
          ts_log_finest "hostname with dns domain: \"$host\""
-      
+
          set result [start_remote_prog $host $CHECK_USER "echo" "\"hello $host\"" prg_exit_state 60 0 "" "" 1 0]
          if { $prg_exit_state != 0 } {
             puts "rlogin to host $host doesn't work correctly"
@@ -3546,10 +3547,10 @@ proc config_dns_for_install_script { only_check name config_array } {
 
 #****** config/config_mail_application() ***************************************
 #  NAME
-#     config_mail_application() -- ??? 
+#     config_mail_application() -- ???
 #
 #  SYNOPSIS
-#     config_mail_application { only_check name config_array } 
+#     config_mail_application { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3583,7 +3584,7 @@ proc config_mail_application { only_check name config_array } {
 #     config_mailx_host() -- mailx option setup
 #
 #  SYNOPSIS
-#     config_mailx_host { only_check name config_array } 
+#     config_mailx_host { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3599,7 +3600,7 @@ proc config_mail_application { only_check name config_array } {
 #     check/verify_config()
 #*******************************************************************************
 proc config_mailx_host { only_check name config_array } {
-   global CHECK_USER 
+   global CHECK_USER
    global CHECK_MAILX_HOST
    global fast_setup
 
@@ -3612,7 +3613,7 @@ proc config_mailx_host { only_check name config_array } {
 
    set local_host [gethostname]
    if {$local_host == "unknown"} {
-      puts "Could not get local host name" 
+      puts "Could not get local host name"
       return -1
    }
 
@@ -3662,7 +3663,7 @@ proc config_mailx_host { only_check name config_array } {
 #     config_report_mail_to() -- mail to setup
 #
 #  SYNOPSIS
-#     config_report_mail_to { only_check name config_array } 
+#     config_report_mail_to { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3705,7 +3706,7 @@ proc config_report_mail_to { only_check name config_array } {
 #     config_report_mail_cc() -- mail cc setup
 #
 #  SYNOPSIS
-#     config_report_mail_cc { only_check name config_array } 
+#     config_report_mail_cc { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3748,7 +3749,7 @@ proc config_report_mail_cc { only_check name config_array } {
 #     config_enable_error_mails() -- error mail setup
 #
 #  SYNOPSIS
-#     config_enable_error_mails { only_check name config_array } 
+#     config_enable_error_mails { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3764,7 +3765,7 @@ proc config_report_mail_cc { only_check name config_array } {
 #     check/verify_config()
 #*******************************************************************************
 proc config_enable_error_mails { only_check name config_array } {
-   global CHECK_USER 
+   global CHECK_USER
    global CHECK_MAILX_HOST
    global CHECK_REPORT_EMAIL_TO
    global CHECK_REPORT_EMAIL_CC
@@ -3829,7 +3830,7 @@ proc config_enable_error_mails { only_check name config_array } {
 #     config_l10n_test_locale() -- l10n option setup
 #
 #  SYNOPSIS
-#     config_l10n_test_locale { only_check name config_array } 
+#     config_l10n_test_locale { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3862,7 +3863,7 @@ proc config_l10n_test_locale { only_check name config_array } {
 
    set CHECK_L10N 0
    if { $value != "none" } {
-        
+
            if {!$fast_setup} {
               set was_error 0
 
@@ -3904,7 +3905,7 @@ proc config_l10n_test_locale { only_check name config_array } {
            if {!$fast_setup} {
               set test_result [perform_simple_l10n_test]
               if { $test_result != 0 } {
-            puts "l10n errors" 
+            puts "l10n errors"
                  set CHECK_L10N 0
                  return -1
               }
@@ -3919,7 +3920,7 @@ proc config_l10n_test_locale { only_check name config_array } {
 #     config_testsuite_gridengine_version() -- version setup
 #
 #  SYNOPSIS
-#     config_testsuite_gridengine_version { only_check name config_array } 
+#     config_testsuite_gridengine_version { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3953,7 +3954,7 @@ proc config_testsuite_gridengine_version { only_check name config_array } {
 #     config_testsuite_spooling_method() -- spooling method setup
 #
 #  SYNOPSIS
-#     config_testsuite_spooling_method { only_check name config_array } 
+#     config_testsuite_spooling_method { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -3988,7 +3989,7 @@ proc config_testsuite_spooling_method { only_check name config_array } {
 #     config_testsuite_bdb_dir() -- bdb database directory setup
 #
 #  SYNOPSIS
-#     config_testsuite_bdb_dir { only_check name config_array } 
+#     config_testsuite_bdb_dir { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -4055,7 +4056,7 @@ proc config_testsuite_bdb_dir { only_check name config_array } {
             set tmp_dir $value
             while {[is_remote_path $master_host $CHECK_USER $tmp_dir] != 1} {
                set tmp_dir [file dirname $tmp_dir]
-            }  
+            }
             set fstype [fs_config_get_filesystem_type $tmp_dir $master_host]
             if {$fstype == "nfs4"} {
                set spool_dir_ok 1
@@ -4074,7 +4075,7 @@ proc config_testsuite_bdb_dir { only_check name config_array } {
 #     config_testsuite_cell() -- cell name
 #
 #  SYNOPSIS
-#     config_testsuite_cell { only_check name config_array } 
+#     config_testsuite_cell { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -4104,7 +4105,7 @@ proc config_testsuite_cell { only_check name config_array } {
 #     config_testsuite_cluster_name() -- cluster name
 #
 #  SYNOPSIS
-#     config_testsuite_cluster_name { only_check name config_array } 
+#     config_testsuite_cluster_name { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -4138,7 +4139,7 @@ proc config_testsuite_cluster_name { only_check name config_array } {
 #     config_add_compile_archs() -- forced compilation setup
 #
 #  SYNOPSIS
-#     config_add_compile_archs { only_check name config_array } 
+#     config_add_compile_archs { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -4170,7 +4171,7 @@ proc config_add_compile_archs { only_check name config_array } {
 #     config_shadowd_hosts() -- shadowd daemon host setup
 #
 #  SYNOPSIS
-#     config_shadowd_hosts { only_check name config_array } 
+#     config_shadowd_hosts { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite configuration setup - called from verify_config()
@@ -4192,7 +4193,7 @@ proc config_shadowd_hosts { only_check name config_array } {
    upvar $config_array config
 
    set master_host $config(master_host)
- 
+
    if { $config($name,default) == "" } {
       set config($name,default) $master_host
    }
@@ -4212,8 +4213,8 @@ proc config_shadowd_hosts { only_check name config_array } {
       }
       # master_host must be first host in the list
       set value [config_check_host_in_hostlist $value $master_host]
-   } 
-   
+   }
+
    # at least one shadowd must run on qmaster host
    if {[lsearch -exact $value $config(master_host)] < 0 } {
       puts "master host $config(master_host) is not in shadowd list: $value"
@@ -4224,7 +4225,7 @@ proc config_shadowd_hosts { only_check name config_array } {
    # get master spool dir
    #   1) host might be a virtual host - to query local spooldir we need the real host
    set physical_master_host [node_get_host $config(master_host)]
-  
+
    #   2) read local spool dir from host config
    if {[info exist ts_host_config($physical_master_host,spooldir)] && $check_do_not_use_spool_config_entries == 0 } {
       set spooldir $ts_host_config($physical_master_host,spooldir)
@@ -4253,7 +4254,7 @@ proc config_shadowd_hosts { only_check name config_array } {
          }
       }
    }
-    
+
    return $value
 }
 
@@ -4280,7 +4281,7 @@ proc config_build_ts_config {} {
    global ts_config
    global CHECK_CURRENT_WORKING_DIR
 
-   # ts_config defaults 
+   # ts_config defaults
    set ts_pos 1
    set parameter "version"
    set ts_config($parameter)            "1.0"
@@ -4303,7 +4304,7 @@ proc config_build_ts_config {} {
    set parameter "checktree_root_dir"
    set ts_config($parameter)            ""
    set ts_config($parameter,desc)       "Testsuite's checktree directory"
-   set ts_config($parameter,default)    ""   ;# depend on testsuite root dir 
+   set ts_config($parameter,default)    ""   ;# depend on testsuite root dir
    set ts_config($parameter,setup_func) "config_checktree_root_dir"
    set ts_config($parameter,onchange)   "stop"
    set ts_config($parameter,pos)        $ts_pos
@@ -4552,7 +4553,7 @@ proc config_build_ts_config_1_1 {} {
    # insert new parameter after product_feature parameter
    set insert_pos $ts_config(product_feature,pos)
    incr insert_pos 1
-   
+
    # move positions of following parameters
    set names [array names ts_config "*,pos"]
    foreach name $names {
@@ -4580,7 +4581,7 @@ proc config_build_ts_config_1_2 {} {
    # insert new parameter after submit_only_hosts parameter
    set insert_pos $ts_config(submit_only_hosts,pos)
    incr insert_pos 1
-   
+
    # move positions of following parameters
    set names [array names ts_config "*,pos"]
    foreach name $names {
@@ -4751,7 +4752,7 @@ proc config_build_ts_config_1_7 {} {
    # now we have a configuration version 1.7
    set ts_config(version) "1.7"
 }
-  
+
 proc config_build_ts_config_1_8 {} {
    global ts_config
 
@@ -4824,7 +4825,7 @@ proc config_build_ts_config_1_91 {} {
    set parameter "additional_checktree_dirs"
    set ts_config($parameter)            ""
    set ts_config($parameter,desc)       "Additional Testsuite's checktree directories"
-   set ts_config($parameter,default)    "none"   ;# depend on testsuite root dir 
+   set ts_config($parameter,default)    "none"   ;# depend on testsuite root dir
    set ts_config($parameter,setup_func) "config_additional_checktree_dirs"
    set ts_config($parameter,onchange)   "stop"
    set ts_config($parameter,pos)        $insert_pos
@@ -4885,7 +4886,7 @@ proc config_build_ts_config_1_12 {} {
    unset ts_config(use_ssh,setup_func)
    unset ts_config(use_ssh,onchange)
    unset ts_config(use_ssh,pos)
-   
+
    set parameter "connection_type"
    set ts_config($parameter)            ""
    set ts_config($parameter,desc)       "Starter method for remote connections"
@@ -4901,7 +4902,7 @@ proc config_build_ts_config_1_12 {} {
 proc config_build_ts_config_1_13 {} {
    global ts_config
 
-   
+
    # we override a the parameter: use_ssh
    set insert_pos $ts_config(commd_port,pos)
    incr insert_pos 1
@@ -5056,12 +5057,12 @@ proc config_build_ts_config_1_17 {} {
    # now we have a configuration version 1.17
    set ts_config(version) "1.17"
 }
-        
+
 
 proc config_build_ts_config_1_18 {} {
    global ts_config CHECK_CURRENT_WORKING_DIR
 
-   # we add a new parameter: fs_config_file 
+   # we add a new parameter: fs_config_file
    # after user_config_file
    set insert_pos $ts_config(user_config_file,pos)
    incr insert_pos 1
@@ -5089,7 +5090,7 @@ proc config_build_ts_config_1_18 {} {
 proc config_build_ts_config_1_19 {} {
    global ts_config CHECK_CURRENT_WORKING_DIR
 
-   # we add a new parameter: ge_packages_uri 
+   # we add a new parameter: ge_packages_uri
    # after fs_config_file
    set insert_pos $ts_config(fs_config_file,pos)
    incr insert_pos 1
@@ -5105,7 +5106,7 @@ proc config_build_ts_config_1_19 {} {
    set parameter "ge_packages_uri"
    set ts_config($parameter)            ""
    set ts_config($parameter,desc)       "URI to the location to a directory containing testsuite.info file"
-   
+
    if {[catch {
           set host_config_dir [file dirname $ts_config(host_config_file)]
         }]} {
@@ -5234,7 +5235,7 @@ proc config_build_ts_config_1_22 {} {
    ts_config_move_down_params $insert_pos 1
    set ts_config($new_param)            ""
    set ts_config($new_param,desc)       "Non-cluster hosts"
-   set ts_config($new_param,default)    "none" 
+   set ts_config($new_param,default)    "none"
    set ts_config($new_param,setup_func) "config_$new_param"
    set ts_config($new_param,onchange)   ""
    set ts_config($new_param,pos)        $insert_pos
@@ -5243,10 +5244,10 @@ proc config_build_ts_config_1_22 {} {
    set new_param "admin_only_hosts"
    set insert_pos $ts_config(submit_only_hosts,pos)
    incr insert_pos 1
-   ts_config_move_down_params $insert_pos 1 
+   ts_config_move_down_params $insert_pos 1
    set ts_config($new_param)            ""
    set ts_config($new_param,desc)       "Pure administration hosts"
-   set ts_config($new_param,default)    "none" 
+   set ts_config($new_param,default)    "none"
    set ts_config($new_param,setup_func) "config_$new_param"
    set ts_config($new_param,onchange)   ""
    set ts_config($new_param,pos)        $insert_pos
@@ -5290,7 +5291,7 @@ proc config_build_ts_config_1_23 {} {
    unset ts_config(jmx_ssl_keystore_pw,pos)
 
    # move positions of following parameters up
-   ts_config_move_up_params $remove_pos 4 
+   ts_config_move_up_params $remove_pos 4
 
    # now we have a configuration version 1.23
    set ts_config(version) "1.23"

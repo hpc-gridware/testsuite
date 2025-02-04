@@ -41,7 +41,7 @@ proc install_qmaster {{report_var report}} {
    global CHECK_REPORT_EMAIL_TO CHECK_MAIN_RESULTS_DIR CHECK_FIRST_FOREIGN_SYSTEM_USER
    global CHECK_SECOND_FOREIGN_SYSTEM_USER CHECK_REPORT_EMAIL_TO CHECK_DNS_DOMAINNAME
    global CHECK_PROTOCOL_DIR
- 
+
    global ts_config
 
    upvar $report_var report
@@ -54,7 +54,7 @@ proc install_qmaster {{report_var report}} {
 
    if {$check_use_installed_system != 0} {
       puts "no need to install qmaster on host $ts_config(master_host), noinst parameter is set"
-      set CORE_INSTALLED "" 
+      set CORE_INSTALLED ""
       if {[startup_qmaster] == 0} {
          lappend CORE_INSTALLED $ts_config(master_host)
          write_install_list
@@ -101,7 +101,7 @@ proc install_qmaster {{report_var report}} {
    set VERIFY_FILE_PERMISSIONS2      [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_VERIFY_FILE_PERMISSIONS2] ]
    set WILL_NOT_VERIFY_FILE_PERMISSIONS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_WILL_NOT_VERIFY_FILE_PERMISSIONS] ]
    set DO_NOT_VERIFY_FILE_PERMISSIONS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DO_NOT_VERIFY_FILE_PERMISSIONS] ]
-   set NOT_COMPILED_IN_SECURE_MODE  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_NOT_COMPILED_IN_SECURE_MODE] ] 
+   set NOT_COMPILED_IN_SECURE_MODE  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_NOT_COMPILED_IN_SECURE_MODE] ]
    set ENTER_HOSTS                  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_HOSTS] ]
    set MASTER_INSTALLATION_COMPLETE [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_MASTER_INSTALLATION_COMPLETE] ]
    set ENTER_A_RANGE                [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_A_RANGE] ]
@@ -114,7 +114,7 @@ proc install_qmaster {{report_var report}} {
    set ANSWER_YES                   [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ANSWER_YES] ]
    set ANSWER_NO                    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ANSWER_NO] ]
    set ENTER_DEFAULT_DOMAIN         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_DEFAULT_DOMAIN] ]
-   set CONFIGURE_DEFAULT_DOMAIN     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CONFIGURE_DEFAULT_DOMAIN] ] 
+   set CONFIGURE_DEFAULT_DOMAIN     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CONFIGURE_DEFAULT_DOMAIN] ]
    set PKGADD_QUESTION              [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_PKGADD_QUESTION] ]
    set PKGADD_QUESTION_SINCE_U3     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_PKGADD_QUESTION_SINCE_U3] ]
    set MESSAGES_LOGGING             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_MESSAGES_LOGGING] ]
@@ -125,7 +125,7 @@ proc install_qmaster {{report_var report}} {
    set USE_CONFIGURATION_PARAMS     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_USE_CONFIGURATION_PARAMS] ]
    set INSTALL_GE_NOT_AS_ROOT       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_INSTALL_GE_NOT_AS_ROOT] ]
    set IF_NOT_OK_STOP_INSTALLATION  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_IF_NOT_OK_STOP_INSTALLATION] ]
-   set DNS_DOMAIN_QUESTION          [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DNS_DOMAIN_QUESTION] ] 
+   set DNS_DOMAIN_QUESTION          [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DNS_DOMAIN_QUESTION] ]
    set SERVICE_TAGS_SUPPORT         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_SERVICE_TAGS_SUPPORT] ]
    set ENTER_SPOOL_DIR   [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_SPOOL_DIR] "*"]
    set ENTER_QMASTER_SPOOL_DIR      [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_QMASTER_SPOOL_DIR] "*"]
@@ -176,6 +176,9 @@ proc install_qmaster {{report_var report}} {
    if {$ts_config(product_feature) == "csp"} {
       append feature_install_options "-csp"
    }
+   if {$ts_config(product_feature) == "munge"} {
+      append feature_install_options "-munge"
+   }
 
    ts_log_fine "install_qmaster $CHECK_QMASTER_INSTALL_OPTIONS $feature_install_options"
 
@@ -191,10 +194,10 @@ proc install_qmaster {{report_var report}} {
       set install_user "root"
    } else {
       set install_user $CHECK_USER
-      ts_log_fine "--> install as user $CHECK_USER <--" 
+      ts_log_fine "--> install as user $CHECK_USER <--"
    }
    set id [open_remote_spawn_process "$ts_config(master_host)" $install_user "./install_qmaster" "$CHECK_QMASTER_INSTALL_OPTIONS $feature_install_options" 0 $ts_config(product_root) env_list 0 15 $set_ld_library_path 1 1]
-   set sp_id [lindex $id 1] 
+   set sp_id [lindex $id 1]
 
    set hostcount 0
    set do_stop 0
@@ -206,7 +209,7 @@ proc install_qmaster {{report_var report}} {
          puts "-->testsuite: press RETURN (main) or type \"break\""
          set anykey [wait_for_enter 1]
          if {[string match "*break*" $anykey]} {
-            break  
+            break
          }
       }
       set timeout 300
@@ -311,7 +314,7 @@ proc install_qmaster {{report_var report}} {
             install_send_answer $sp_id "Bavaria"
             continue
          }
- 
+
          -i $sp_id "lease enter your location" {
             install_send_answer $sp_id "Regensburg"
             continue
@@ -336,12 +339,12 @@ proc install_qmaster {{report_var report}} {
             continue
          }
 
-         -i $sp_id "o you want to use these data" { 
+         -i $sp_id "o you want to use these data" {
             install_send_answer $sp_id "y" "2"
             continue
          }
-         
-         -i $sp_id $DNS_DOMAIN_QUESTION { 
+
+         -i $sp_id $DNS_DOMAIN_QUESTION {
             install_send_answer $sp_id $ANSWER_YES "4"
             continue
          }
@@ -351,23 +354,23 @@ proc install_qmaster {{report_var report}} {
             continue
          }
 
-         -i $sp_id $INSTALL_AS_ADMIN_USER { 
+         -i $sp_id $INSTALL_AS_ADMIN_USER {
             install_send_answer $sp_id $ANSWER_YES "5"
             continue
          }
 
-         -i $sp_id $CELL_NAME_EXISTS { 
+         -i $sp_id $CELL_NAME_EXISTS {
             install_send_answer $sp_id $ANSWER_NO "5.1"
             continue
          }
 
-         -i $sp_id $CELL_NAME_OVERWRITE { 
+         -i $sp_id $CELL_NAME_OVERWRITE {
             install_send_answer $sp_id $ANSWER_NO "5.2.1"
             continue
          }
 
          # BDB was installed first, we have a new question
-         -i $sp_id -- $DETECT_BDB_KEEP_CELL { 
+         -i $sp_id -- $DETECT_BDB_KEEP_CELL {
             install_send_answer $sp_id $ANSWER_YES "5.2"
             continue
          }
@@ -419,7 +422,7 @@ proc install_qmaster {{report_var report}} {
             }
             continue
          }
-         -i $sp_id -- $VERIFY_FILE_PERMISSIONS2 { 
+         -i $sp_id -- $VERIFY_FILE_PERMISSIONS2 {
             if {$ts_config(package_type) == "tar" || $ts_config(package_type) == "create_tar"} {
                install_send_answer $sp_id $ANSWER_NO "verify_file 2"
             } else {
@@ -520,8 +523,8 @@ proc install_qmaster {{report_var report}} {
                install_send_answer $sp_id ""
             }
             continue
-         }       
-       
+         }
+
          -i $sp_id $EXECD_SPOOLING_DIR_NOROOT_NOADMINUSER {
             set spooldir [get_local_spool_dir $ts_config(master_host) execd 0]
             if {$spooldir != ""} {
@@ -572,12 +575,12 @@ proc install_qmaster {{report_var report}} {
             install_send_answer $sp_id ${host_file_name}
             continue
          }
-   
+
          -i $sp_id $FINISHED_ADDING_HOSTS {
             install_send_answer $sp_id "" "7"
             continue
          }
-   
+
          -i $sp_id $FILE_FOR_HOSTLIST {
             install_send_answer $sp_id "" "10"
             continue
@@ -587,7 +590,7 @@ proc install_qmaster {{report_var report}} {
             install_send_answer $sp_id $ANSWER_NO "10"
             continue
          }
-  
+
          -i $sp_id $ENTER_A_RANGE {
             set myrange [get_gid_range $CHECK_USER $CHECK_COMMD_PORT]
             install_send_answer $sp_id ${myrange}
@@ -599,7 +602,7 @@ proc install_qmaster {{report_var report}} {
             lappend CORE_INSTALLED $ts_config(master_host)
             write_install_list
             set do_stop 1
-            # If we compiled with code coverage, we have to 
+            # If we compiled with code coverage, we have to
             # wait a little bit before closing the connection.
             # Otherwise the last command executed (infotext)
             # will leave a lockfile lying around.
@@ -623,7 +626,7 @@ proc install_qmaster {{report_var report}} {
             continue
          }
 
-         -i $sp_id $ENTER_ADMIN_MAIL { 
+         -i $sp_id $ENTER_ADMIN_MAIL {
             if {$CHECK_REPORT_EMAIL_TO == "none" } {
                install_send_answer $sp_id "${CHECK_USER}@${CHECK_DNS_DOMAINNAME}"
             } else {
@@ -632,7 +635,7 @@ proc install_qmaster {{report_var report}} {
             continue
          }
 
-         -i $sp_id $ENTER_ADMIN_MAIL_SINCE_U3 { 
+         -i $sp_id $ENTER_ADMIN_MAIL_SINCE_U3 {
             if {$CHECK_REPORT_EMAIL_TO == "none" } {
                install_send_answer $sp_id "${CHECK_USER}@${CHECK_DNS_DOMAINNAME}"
             } else {
@@ -657,15 +660,15 @@ proc install_qmaster {{report_var report}} {
             continue
          }
 
-         # 
-         # SGE 6.0 Dynamic Spooling 
+         #
+         # SGE 6.0 Dynamic Spooling
          #
          -i $sp_id $CHOOSE_SPOOLING_METHOD {
             install_send_answer $sp_id $ts_config(spooling_method)
             continue
          }
 
-         # 
+         #
          # SGE 6.0 Berkeley DB Spooling
          #
          -i $sp_id $DATABASE_LOCAL_SPOOLING {
@@ -807,7 +810,7 @@ proc install_qmaster {{report_var report}} {
             ts_log_severe "$expect_out(0,string)"
             continue
          }
- 
+
          -i $sp_id $USING_GID_RANGE_HIT_RETURN {
             install_send_answer $sp_id "" "17"
             continue
@@ -848,7 +851,7 @@ proc install_qmaster {{report_var report}} {
             continue
          }
 
-         -i $sp_id $LICENSE_AGREEMENT { 
+         -i $sp_id $LICENSE_AGREEMENT {
             install_send_answer $sp_id $ANSWER_YES
             continue
          }
@@ -876,7 +879,7 @@ proc install_qmaster {{report_var report}} {
             continue
          }
          -i $sp_id $CSP_COPY_RSH_FAILED {
-            ts_log_config "We received a rsh/ssh failure. This error happends, if the rsh/ssh connection\nto any execution host was not possible, due to the missing permissions for user\nroot to connect via rsh/ssh without entering a password. This warning shows,\nthat the tested error handling code is working. To prevent this warning make\nsure the you qmaster host allows rsh/ssh connction for root without asking for\na password." 
+            ts_log_config "We received a rsh/ssh failure. This error happends, if the rsh/ssh connection\nto any execution host was not possible, due to the missing permissions for user\nroot to connect via rsh/ssh without entering a password. This warning shows,\nthat the tested error handling code is working. To prevent this warning make\nsure the you qmaster host allows rsh/ssh connction for root without asking for\na password."
             continue
          }
          -i $sp_id default {
