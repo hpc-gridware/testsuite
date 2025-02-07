@@ -365,6 +365,9 @@ set CHECK_VALGRIND ""
 global CHECK_VALGRIND_HOST
 set CHECK_VALGRIND_HOST ""
 
+global CHECK_VALGRIND_STOP_ON_ERROR
+set CHECK_VALGRIND_STOP_ON_ERROR 0
+
 global CHECK_PREFERRED_ARCHS ;# preferred architecture for testing
 set CHECK_PREFERRED_ARCHS {}
 
@@ -4994,6 +4997,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    global exclude_array
    global check_set_ignore_dependencies
    global ONLY_ONE_LEVEL
+   global CHECK_VALGRIND_STOP_ON_ERROR
 
    # check if the state_to_run is valid
    if {$state_to_run != "all" &&
@@ -5228,7 +5232,8 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
          # do valgrind checks after each runlevel
          # (except for the last one, where we do it after the cleanup function)
          if {$no_level_calls < $possible_test_levels} {
-            if {![valgrind_check_after_runlevel]} {
+            if {![valgrind_check_after_runlevel] && $CHECK_VALGRIND_STOP_ON_ERROR} {
+               set CHECK_INTERRUPT 2
                incr nr_errors
             }
          }
@@ -5252,7 +5257,9 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
 
    # do another valgrind check after executing the cleanup function
    # it has probably called some Cluster Scheduler binaries
-   if {![valgrind_check_after_runlevel]} {
+   if {![valgrind_check_after_runlevel] && $CHECK_VALGRIND_STOP_ON_ERROR} {
+      set CHECK_INTERRUPT 2
+      set was_check_abort 1
       incr nr_errors
    }
 
@@ -7787,6 +7794,7 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "valgrind <components> with valgrind memory testing"
       puts "                      components are master|execution|clients|tests"
       puts "valgrind_host <host>  host for valgrind memory testing"
+      puts "valgrind_stop_on_error make testsuite stop running tests when valgrind detects an error"
       puts ""
       puts "preferred_archs <archs> specify architectures, that shall be used whenever possible"
       puts "                      please use quotes, when specifying multiple architectures, e.g."
@@ -8248,6 +8256,11 @@ for {set i 0} {$i < $argc} {incr i} {
       incr i
       set help_var [lindex $argv $i]
       set CHECK_VALGRIND_HOST [string trim $help_var]
+      continue
+   }
+
+   if {[string compare [lindex $argv $i] "--valgrind_stop_on_error"] == 0 || [string compare [lindex $argv $i] "valgrind_stop_on_error"] == 0} {
+      set CHECK_VALGRIND_STOP_ON_ERROR 1
       continue
    }
 
