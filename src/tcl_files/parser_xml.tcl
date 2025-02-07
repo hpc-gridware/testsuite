@@ -37,7 +37,7 @@
 #****** parser_xml/qstat_xml_parse() ******
 #
 #  NAME
-#     qstat_xml_parse -- Generate XML output and return assoc array 
+#     qstat_xml_parse -- Generate XML output and return assoc array
 #
 #  SYNOPSIS
 #     qstat_xml_parse { output {param ""} }
@@ -48,11 +48,11 @@
 #                        the work.
 #
 #      output  -  asscoc array with the entries mentioned above.#
-#                 Output array is similar to that of 
+#                 Output array is similar to that of
 #                 parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1 } }
 #
 #      param -  pass in param to qstat
-# 
+#
 #  FUNCTION
 #     Print out parsed xml output
 #
@@ -60,7 +60,7 @@
 #     None
 #
 #  NOTES
-#     
+#
 #
 #*******************************
 proc qstat_xml_parse { output {param ""} } {
@@ -79,11 +79,11 @@ proc qstat_xml_parse { output {param ""} } {
    } elseif {$param == "-pri"} {
       set jobparam "pri"
    } elseif {$param == "-r"} {
-      set jobparam "r"   
+      set jobparam "r"
    } else {
       set jobparam "running"
    }
-   
+
    # Parse the running jobs  using this node.
    set node [$root firstChild]   ; # <job-info/>
    set node1 [$node firstChild]  ; # <queue-info/>
@@ -109,6 +109,8 @@ proc qstat_xml_parse { output {param ""} } {
 
    # free the XML document
    $doc delete
+
+   return $XML
 }
 
 
@@ -116,7 +118,7 @@ proc qstat_xml_parse { output {param ""} } {
 #****** parser_xml/qstat_j_xml_parse() ******
 #
 #  NAME
-#     qstat_j_xml_parse -- Generate XML output and return assoc array 
+#     qstat_j_xml_parse -- Generate XML output and return assoc array
 #
 #  SYNOPSIS
 #     qstat_j_xml_parse { output {param ""} }
@@ -127,11 +129,11 @@ proc qstat_xml_parse { output {param ""} } {
 #                        the work.
 #
 #      output  -  asscoc array with the entries mentioned above.#
-#                 Output array is similar to that of 
+#                 Output array is similar to that of
 #                 parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1 } }
 #
 #      param -  pass in param to qstat
-# 
+#
 #  FUNCTION
 #     Print out parsed xml output
 #
@@ -139,7 +141,7 @@ proc qstat_xml_parse { output {param ""} } {
 #     None
 #
 #  NOTES
-#     
+#
 #
 #*******************************
 
@@ -153,14 +155,14 @@ proc qstat_j_xml_parse { output  } {
 
    set root [$doc documentElement]
 
-   
+
    # Parse the running jobs  using this node.
    set node [$root firstChild]   ; # <qmaster_response/>
 
    set result1 [qstat_j_xml_jobid $node output_xml]
 }
 
- 
+
 
 
 
@@ -169,7 +171,7 @@ proc qstat_j_xml_parse { output  } {
 #****** parser_xml/qstat_j_JOB_NAME_xml_parse() ******
 #
 #  NAME
-#     qstat_j_JOB_NAME_xml_parse -- Generate XML output and return assoc array 
+#     qstat_j_JOB_NAME_xml_parse -- Generate XML output and return assoc array
 #
 #  SYNOPSIS
 #     qstat_j_JOB_NAME_xml_parse { output {param ""} }
@@ -180,11 +182,11 @@ proc qstat_j_xml_parse { output  } {
 #                        the work.
 #
 #      output  -  asscoc array with the entries mentioned above.#
-#                 Output array is similar to that of 
+#                 Output array is similar to that of
 #                 parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1 } }
 #
 #      param -  pass in param to qstat
-# 
+#
 #  FUNCTION
 #     Print out parsed xml output
 #
@@ -192,7 +194,7 @@ proc qstat_j_xml_parse { output  } {
 #     None
 #
 #  NOTES
-#     
+#
 #
 #*******************************
 
@@ -205,7 +207,7 @@ proc qstat_j_JOB_NAME_xml_parse { output {param ""} } {
    set doc  [dom parse $XML]
 
    set root [$doc documentElement]
-   
+
    # Parse the running jobs  using this node.
    set node [$root firstChild]   ; # <djob-info/>
    set node1 [$node firstChild]  ; # <qmaster_response/>
@@ -247,24 +249,24 @@ proc qstat_j_JOB_NAME_xml_parse { output {param ""} } {
 
 proc qstat_f_xml_parse { output {param ""} } {
    upvar $output output_xml
-   
+
    # Run now -xml command
    set XML [start_sge_bin  "qstat" "-f $param -xml" ]
 
    set doc  [dom parse $XML]
 
    set root [$doc documentElement]
-   
+
    if { ($param == "-ext") } {
       set queueparam "fext"
    } elseif { ($param == "-r") } {
       set queueparam "fr"
    } elseif { ($param == "-urg") } {
-      set queueparam "furg"   
+      set queueparam "furg"
    } else {
       set queueparam ""
    }
-   
+
    # Parse the running jobs  using this node.
    set node [$root firstChild]   ; # <job-info/>
    set node1 [$node firstChild]  ; # <queue-info/>
@@ -273,17 +275,17 @@ proc qstat_f_xml_parse { output {param ""} } {
 
    # Parse the pending jobs info using this node. Need to start here
    # NOT at root.
-   
+
    if { ($param == "-ext") } {
       set jobparam "fextpending"
    } elseif { ($param == "-r") } {
       set jobparam "frpending"
    } elseif { ($param == "-urg") } {
-      set jobparam "urgpending"   
+      set jobparam "urgpending"
    } else {
       set jobparam "full"
    }
-   
+
    set node [$root firstChild]   ; # <job-info/>
    set node12 [$node nextSibling]  ; # <queue-info/>
    set node121 [$node12 firstChild]  ; # <qname/>
@@ -291,7 +293,7 @@ proc qstat_f_xml_parse { output {param ""} } {
    set result2 [qstat_xml_jobid $node121 $jobparam output_xml]
 }
 
- 
+
 #                                                             max. column:     |
 #****** parser_xml/qstat_F_xml_parse() ******
 #
@@ -311,7 +313,7 @@ proc qstat_f_xml_parse { output {param ""} } {
 #                 parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1 } }
 #
 #      params  - args passed to the "qstat -F" command
-# 
+#
 #  FUNCTION
 #     Print out parsed xml output
 #
@@ -334,7 +336,7 @@ proc qstat_F_xml_parse { output {params ""} } {
    set doc  [dom parse $XML]
 
    set root [$doc documentElement]
-   
+
    # Parse the running jobs  using this node.
    set node [$root firstChild]   ; # <job_info/>
    set node1 [$node firstChild]  ; # <queue-info/>
@@ -345,7 +347,7 @@ proc qstat_F_xml_parse { output {params ""} } {
 
    # Parse the pending jobs info using this node. Need to start here
    # NOT at root.
-   
+
    set node [$root firstChild]   ; # <job-info/>
    set node12 [$node nextSibling]  ; # <queue-info/>
    set node121 [$node12 firstChild]  ; # <qname/>
@@ -359,32 +361,32 @@ proc qstat_F_xml_parse { output {params ""} } {
 #****** parser_xml/qstat_j_xml_jobid() ******
 #
 #  NAME
-#     qstat_j_xml_jobid -- Take XML node and return assoc array 
+#     qstat_j_xml_jobid -- Take XML node and return assoc array
 #
 #  SYNOPSIS
 #     qstat_j_xml_jobid -- Take XML node and return assoc array with
-#                          entries jobid, message. 
+#                          entries jobid, message.
 #
 #  FUNCTION
 #     Return assoc array
 #
 #  INPUTS
-#     
-#     qstat_j_xml_jobid {node121  output} 
+#
+#     qstat_j_xml_jobid {node121  output}
 #
 #     node121  -  node in XML doc where we start navigation
-#    
+#
 #     output  -  asscoc array with the entries mentioned above.
 #
 #  NOTES
-#     
+#
 #
 #*******************************
 
 proc qstat_j_xml_jobid { node1  output} {
    upvar $output output_xml_qstat
    get_current_cluster_config_array ts_config
-   
+
    set node121 [$node1 firstChild]  ; # <SME_message_list/>
 
    # If nothing, we have not started any jobs, so we return
@@ -394,18 +396,18 @@ proc qstat_j_xml_jobid { node1  output} {
    set node1211 [$node121 firstChild]  ; # <element/>
    set node12111 [$node1211 firstChild]  ; # <SME_job_number_list/>
    set node124 [$node12111 firstChild] ; # <element/>
-   
+
    set node125 [$node124 firstChild] ; # <ULNG/>
    set node126 [$node125 firstChild] ; # <elem/>
    set jobid [$node126 nodeValue]
-                                
+
    set output_xml_qstat($jobid,jobid) $jobid
    lappend output_xml_qstat(jobid_list) $jobid
 
    ts_log_fine "jobid is $jobid ....\n"
-   
+
    set column_vars "job_number jobid_msg"
-      
+
 
    foreach column $column_vars {
       set node21 [$node12111 nextSibling] ;
@@ -419,28 +421,28 @@ proc qstat_j_xml_jobid { node1  output} {
          set node12111 $node21
          continue
       }
-      
+
       set xml_param [$node211 nodeValue]
 
-      set output_xml_qstat($jobid,$column) $xml_param   
+      set output_xml_qstat($jobid,$column) $xml_param
       set node12111 $node21
-      
+
    }
-  
-   # The next list of jobs 
+
+   # The next list of jobs
    set node1311 [$node1211 nextSibling]  ; # <next element/>
    set node13111 [$node1311 firstChild]  ; # <SME_job_number_list/>
    set node131111 [$node13111 firstChild] ; # <element/>
-   
+
    set node135 [$node131111 firstChild] ; # <ULNG/>
    set node136 [$node135 firstChild] ; # <elem/>
    set jobid [$node136 nodeValue]
-   
+
    set output_xml_qstat($jobid,jobid) $jobid
    lappend output_xml_qstat(jobid_list) $jobid
-         
+
    ts_log_fine "jobid is $jobid ....\n"
-  
+
    foreach column $column_vars {
       set node31 [$node13111 nextSibling] ;
       if { $node31 == "" } {
@@ -453,12 +455,12 @@ proc qstat_j_xml_jobid { node1  output} {
          set node13111 $node31
          continue
       }
-      
+
       set xml_param [$node311 nodeValue]
-      
-      set output_xml_qstat($jobid,$column) $xml_param   
+
+      set output_xml_qstat($jobid,$column) $xml_param
       set node13111 $node31
-      
+
   }
 }
 
@@ -467,37 +469,36 @@ proc qstat_j_xml_jobid { node1  output} {
 #****** parser_xml/qstat_xml_jobid() ******
 #
 #  NAME
-#     qstat_xml_jobid -- Take XML node and return assoc array 
+#     qstat_xml_jobid -- Take XML node and return assoc array
 #
 #  SYNOPSIS
 #     qstat_xml_jobid -- Take XML node and return assoc array with
 #                        entries jobid, prior, name, user, state, total_time,
-#                        queue slots and task_id if needed. 
+#                        queue slots and task_id if needed.
 #
 #  FUNCTION
 #     Return assoc array
 #
 #  INPUTS
-#     
-#     qstat_xml_jobid {node121 jobtype output} 
+#
+#     qstat_xml_jobid {node121 jobtype output}
 #
 #     node121  -  node in XML doc where we start navigation
-#     jobtype  -  "running" or "pending", "ext" or "extpending" which tells us which 
+#     jobtype  -  "running" or "pending", "ext" or "extpending" which tells us which
 #                  fields to expect
 #     output  -  asscoc array with the entries mentioned above.
 #
 #  NOTES
-#     
+#
 #
 #*******************************
 
 proc qstat_xml_jobid { node121 jobtype output} {
    upvar $output output_xml_qstat
-   
 
    # Add var to tell if doing a running job parse or pending job parse
    # jobtype = {runing, pending, full, ext, ext_pending}
-   
+
    # If nothing, we have not started any jobs, so we return
    if { $node121 == "" } {
       return
@@ -516,18 +517,18 @@ proc qstat_xml_jobid { node121 jobtype output} {
    # set column_vars "prior name user state time queue master"
    # As in parse_plain_qstat case, for pending jobs, queue and task_id entries
    # are set to blank.
-   
+
    # For -ext, column order is: job-ID prior ntckts name  user
    # project department state cpu mem io tckts ovrts otckt ftckt stckt share queue ja-task-ID
    # The -ext_pending has missing data for: cpu mem io tckts ovrtcts queue ja-task-ID
-   
-   if { $jobtype == "running" } { ; # this is for listing of qstat running jobs 
+
+   if { $jobtype == "running" } { ; # this is for listing of qstat running jobs
       set column_vars "prior name user state time queue master task_id"
    } elseif { $jobtype == "pending" } { ; # this is for listing of qstat pending jobs
       set column_vars "prior name user state time queue master"
       set output_xml_qstat($jobid,task_id) ""
    }  elseif { $jobtype == "full" } { ; # this is for listing of qstat -F jobs
-      set column_vars "prior name user state time slots task_id"   
+      set column_vars "prior name user state time slots task_id"
    }
    if { $jobtype == "extpending" } { ; # this is for listing qstat -ext pending jobs
       set column_vars "prior ntckts name  user project department state tckts ovrts job_share otckt ftckt  \
@@ -535,10 +536,10 @@ proc qstat_xml_jobid { node121 jobtype output} {
       append output_xml_qstat($jobid,cpu) " "
       append output_xml_qstat($jobid,mem) " "
       append output_xml_qstat($jobid,io) " "
-      append output_xml_qstat($jobid,queue) " "      
+      append output_xml_qstat($jobid,queue) " "
       append output_xml_qstat($jobid,task_id) " "
    }
-   
+
    if { $jobtype == "fextpending" } { ; # this is for listing qstat -f -ext pending jobs
       set column_vars "prior ntckts name user project department state tckts ovrts job_share \
       otckt ftckt stckt share slots"
@@ -562,14 +563,14 @@ proc qstat_xml_jobid { node121 jobtype output} {
       append output_xml_qstat($jobid,deadline) " "
       append output_xml_qstat($jobid,task_id) " "
    }
-   
+
    if { $jobtype == "furg" } { ; # this is for listing qstat -f -urg jobs. See IZ 2072.
       set column_vars "prior nurg urg rrcontr wtcontr dlcontr name user state time  \
       slots task_id"
       append output_xml_qstat($jobid,deadline) " "
       append output_xml_qstat($jobid,task_id) " "
    }
-   
+
    if { $jobtype == "urgpending" } { ; # this is for listing qstat -urg jobs
       set column_vars "prior nurg urg rrcontr wtcontr dlcontr name user state time  \
       slots slots"
@@ -577,7 +578,7 @@ proc qstat_xml_jobid { node121 jobtype output} {
       append output_xml_qstat($jobid,queue) " "
       append output_xml_qstat($jobid,task_id) " "
    }
-   
+
    if { $jobtype == "pri" } { ; # this is for listing qstat -pri jobs
       set column_vars "prior npprior ppri name  user state time queue slots task_id "
    }
@@ -609,7 +610,7 @@ proc qstat_xml_jobid { node121 jobtype output} {
       append output_xml_qstat($jobid,req_pe_value) ""
       append output_xml_qstat($jobid,granted_pe_value) ""
    }
-   
+
 	if { $jobtype == "frpending" } { ; # this is for listing qstat -f -r pending jobs
       set column_vars "prior  name  user state time slots  hard_req_queue"
       append output_xml_qstat($jobid,queue) ""
@@ -622,7 +623,7 @@ proc qstat_xml_jobid { node121 jobtype output} {
       append output_xml_qstat($jobid,req_pe_value) ""
       append output_xml_qstat($jobid,granted_pe_value) ""
    }
-	
+
     if { $jobtype == "fr" } { ; # this is for listing qstat -f -r jobs; See IZ 2071.
       set column_vars "prior name user state time slots task_id \
                        hard_req_queue hard_resource "
@@ -647,67 +648,64 @@ proc qstat_xml_jobid { node121 jobtype output} {
          set node1211 $node21
          continue
       }
-      
+
       set xml_param [$node211 nodeValue]
-      
+
       # For time, need the UNIX value, to compare with plain output.
       if { ($column == "time") } {
          set xml_param [transform_date_time $xml_param 1]
-      }   
-      
+      }
+
       # In the case of qstat -r, we get hard_req_queue after slots, not task_id
       if { ($jobtype == "r") && ($column == "task_id") && [regexp "\[a-zA-Z.\]"  $xml_param] } {
           set output_xml_qstat($jobid,hard_req_queue) $xml_param
           set node1211 $node21
           continue
       }
-      
+
       if { ($jobtype == "rpending") && ($column == "hard_req_queue") && [regexp "\[0-9\]"  $xml_param] } {
           set output_xml_qstat($jobid,slots) $xml_param
           set node1211 $node21
           continue
       }
-      
+
       # In the case of qstat -f -r, we get hard_req_queue after slots, not task_id
       if { ($jobtype == "fr") && ($column == "task_id") && [regexp "\[a-zA-Z.\]"  $xml_param] } {
           set output_xml_qstat($jobid,hard_req_queue) $xml_param
           set node1211 $node21
           continue
       }
-      
-      if { ($column == "hard_req_queue") && ($jobtype == "r") && [regexp "lx" $xml_param] || \
-           [regexp "sol" $xml_param]} {
+
+      if { ($column == "hard_req_queue") && ($jobtype == "r") && [regexp "lx" $xml_param]} {
           set output_xml_qstat($jobid,hard_resource) "arch=$xml_param"
           #set output_xml_qstat($jobid,$column) ""
           set node1211 $node21
           continue
       }
-      
-      if { ($column == "hard_req_queue") && ($jobtype == "fr") && [regexp "lx" $xml_param] || \
-           [regexp "sol" $xml_param]} {
+
+      if { ($column == "hard_req_queue") && ($jobtype == "fr") && [regexp "lx" $xml_param]} {
           set output_xml_qstat($jobid,hard_resource) "arch=$xml_param"
           set node1211 $node21
           continue
       }
-      
+
       # For colums "queue" and others we need to append rather than set
       # since we can have more than one entries.
       if {$column == "queue" || $column == "master" || $column == "slots" || $column == "task_id" || $column == "state"} {
          append output_xml_qstat($jobid,$column) "$xml_param "
          set node1211 $node21
       } else {
-         set output_xml_qstat($jobid,$column) $xml_param      
+         set output_xml_qstat($jobid,$column) $xml_param
          set node1211 $node21
       }
-     
+
       if { ($column == "hard_resource") } {
          set output_xml_qstat($jobid,hard_resource) "arch=$xml_param"
       }
-      
+
    }
 
    while { 1 } {
-
       set node13  [$node121 nextSibling]  ; # <next jobid/>
       if { $node13 == "" } {
          break
@@ -720,7 +718,7 @@ proc qstat_xml_jobid { node121 jobtype output} {
 
       set output_xml_qstat($next_jobid,jobid) $next_jobid
       lappend output_xml_qstat(jobid_list) $next_jobid
-      
+
       set node121 $node13 ; # yes, node121, NOT node122...
 
       foreach next_column $column_vars {
@@ -733,7 +731,7 @@ proc qstat_xml_jobid { node121 jobtype output} {
          if { $node221 == "" } { ; # we hit the empty queue entry
             append output_xml_qstat($next_jobid,$next_column) ""
             set node122 $node22
-            continue        
+            continue
          }
 
          set next_xml_param [$node221 nodeValue]
@@ -744,32 +742,30 @@ proc qstat_xml_jobid { node121 jobtype output} {
             set node1211 $node21
             continue
          }
-         
+
          # In the case of qstat -f -r, we get hard_req_queue after slots, not task_id
          if { ($jobtype == "fr")  && ($next_column == "task_id") && [regexp "\[a-zA-Z.\]" $next_xml_param] } {
             set output_xml_qstat($next_jobid,hard_req_queue) $next_xml_param
             set node1211 $node21
             continue
          }
-         
-         
+
+
          if { ($jobtype == "rpending") && ($next_column == "hard_req_queue") && [regexp "\[0-9\]"  $next_xml_param] } {
             set output_xml_qstat($next_jobid,slots) $next_xml_param
             set node1211 $node21
             continue
          }
-         
-         
-         if { ($next_column == "hard_req_queue") && ($jobtype == "r") && ([regexp "lx" $next_xml_param] || \
-              [regexp "sol" $next_xml_param]) } {
+
+
+         if { ($next_column == "hard_req_queue") && ($jobtype == "r")} {
            set output_xml_qstat($next_jobid,hard_resource) "arch=$next_xml_param"
            #set output_xml_qstat($next_jobid,$next_column) ""
            set node1211 $node21
            continue
          }
-         
-         if { ($next_column == "hard_req_queue") && ($jobtype == "fr") && ([regexp "lx" $next_xml_param] || \
-              [regexp "sol" $next_xml_param]) } {
+
+         if { ($next_column == "hard_req_queue") && ($jobtype == "fr")} {
            set output_xml_qstat($next_jobid,hard_resource) "arch=$next_xml_param"
            #set output_xml_qstat($next_jobid,$next_column) ""
            set node1211 $node21
@@ -778,18 +774,18 @@ proc qstat_xml_jobid { node121 jobtype output} {
 
          if { ($next_column == "time") } {
             set next_xml_param  [transform_date_time $next_xml_param 1]
-         }   
-            
+         }
+
          # For colums "queue", "master", "slots", "task_id" we need to append
          # rather than set since we can have more than one entries.
          if {$next_column == "queue" || $next_column == "master" || $next_column == "slots" || $next_column == "task_id" || $next_column == "state"} {
             append output_xml_qstat($next_jobid,$next_column) "$next_xml_param "
             set node122 $node22
-         } else {   
+         } else {
             set output_xml_qstat($next_jobid,$next_column) $next_xml_param
             set node122 $node22
          }
-         
+
          if { ($next_column == "hard_resource") } {
             set output_xml_qstat($next_jobid,hard_resource) "arch=$next_xml_param"
          }
@@ -856,7 +852,7 @@ proc qstat_j_JOB_NAME_xml_jobid { node121 output} {
                      nrunning soft_wallclock_gmt hard_wallclock_gmt override_tickets urg nurg \
                      nppri rrcont dlcontr wtcont"; # .... stop at </qmaster_response>
 
-  
+
    # Here are sub-vars for some of the  vars above.
    set shell_list_vars "path host file_host file_staging"
 
@@ -960,7 +956,7 @@ proc qstat_j_JOB_NAME_xml_jobid { node121 output} {
                 continue
              }
              set node311 [$node31 firstChild] ; # <jobid info/
-          
+
                if { $node311 == "" } { ; # we have hit the empty queue entry
                append output_xml_qstat($jobid,$env_column) ""
                set node1311 [$node31 nextSibling]
@@ -1170,11 +1166,11 @@ proc qstat_xml_queue { node1 output {param ""} } {
    } elseif { ($param == "fr") } {
       set jobparam "fr"
    } elseif { ($param == "furg") } {
-      set jobparam "furg"   
+      set jobparam "furg"
    } else {
       set jobparam "full"
    }
-   
+
    set result12 [qstat_xml_jobid $node11 $jobparam output_xml_qstat]
    set  node11 $node12
 
@@ -1224,11 +1220,11 @@ proc qstat_xml_queue { node1 output {param ""} } {
       } elseif { ($param == "fr") } {
          set jobparam "fr"
       } elseif { ($param == "furg") } {
-      set jobparam "furg"   
+      set jobparam "furg"
       } else {
          set jobparam "full"
       }
-   
+
       set result222 [qstat_xml_jobid $node222 $jobparam output_xml_qstat]
 
     }
@@ -1242,7 +1238,7 @@ proc qstat_xml_queue { node1 output {param ""} } {
 #
 #  SYNOPSIS
 #     qstat_xml_queue -- Take XML node and return assoc array with
-#                        queuename, qtype, used slots,total slots, load_avg, 
+#                        queuename, qtype, used slots,total slots, load_avg,
 #                        arch, states.
 #
 #  FUNCTION
@@ -1276,8 +1272,8 @@ proc qstat_F_xml_queue { node1 output {params ""} } {
    set output_xml_qstat($queue,qname) $queue
    append output_xml_qstat($queue,state) ""
    lappend output_xml_qstat(queue_list) $queue
-   
-   if { $params == "" } {  
+
+   if { $params == "" } {
       set column_vars  "qtype used_slots total_slots load_avg arch \
                      hl:arch hl:num_proc hl:mem_total hl:swap_total hl:virtual_total \
                      hl:load_avg hl:load_short hl:load_medium hl:load_long hl:mem_free \
@@ -1287,12 +1283,12 @@ proc qstat_F_xml_queue { node1 output {params ""} } {
                      qf:s_rt qf:h_rt qf:s_cpu qf:h_cpu qf:s_fsize qf:h_fsize qf:s_data \
                      qf:h_data qf:s_stack qf:h_stack qf:s_core qf:h_core qf:s_rss \
                      qf:h_rss qf:s_vmem qf:h_vmem qf:min_cpu_interval"
-      
-   } elseif { $params == "rerun h_vmem" } {             
+
+   } elseif { $params == "rerun h_vmem" } {
       set column_vars  "qtype used_slots total_slots load_avg arch \
                         qf:rerun qf:h_vmem"
    }
-   
+
    foreach column $column_vars {
 
      set node12 [$node11 nextSibling]  ; # <queue name data/>
@@ -1303,22 +1299,22 @@ proc qstat_F_xml_queue { node1 output {params ""} } {
       set node122 [$node12 firstChild] ; # <parameters in queue listing/>
       set xml_param [$node122 nodeValue]
       set output_xml_qstat($queue,$column) $xml_param
-      
+
       if { ($column == "load_avg") } {
             set output_xml_qstat($queue,$column) [format "%3.2f" $output_xml_qstat($queue,$column)]
-         }           
+         }
 
       set node11 $node12  ; # Shift to next parameter in the list
-      
+
    }
-   
+
    # Once we are done with the queue parameters, the next Sibling will be the
    # node pointing to job id information. We re-user queue_xml_jobid with
    # the  "full" flag, to pick information as listed in "qstat -F"
    # We use a slightly different list of column vars, since it seems
    # that is what the XML schema does! See IZ 2049.
-   
-   if { $params == ""  } { 
+
+   if { $params == ""  } {
       set column_vars  "qtype used_slots total_slots load_avg arch \
                      hl:load_avg hl:load_short hl:load_medium hl:load_long \
                      hl:arch hl:num_proc hl:mem_free hl:swap_free hl:virtual_free \
@@ -1330,15 +1326,15 @@ proc qstat_F_xml_queue { node1 output {params ""} } {
                      qf:h_fsize qf:s_data qf:h_data qf:s_stack qf:h_stack \
                      qf:s_core qf:h_core qf:s_rss qf:h_rss qf:s_vmem \
                      qf:h_vmem qf:min_cpu_interval"
-              
-   } elseif { $params == "rerun h_vmem" } {             
+
+   } elseif { $params == "rerun h_vmem" } {
       set column_vars  "qtype used_slots total_slots load_avg arch \
                         qf:rerun qf:h_vmem"
    }
-   
+
    set node13 [$node11 nextSibling]
    set result12 [qstat_xml_jobid $node13 full output_xml_qstat]
-   
+
    while { 1 } {
       set node22 [$node1 nextSibling]  ; # <queue-info/>
       if { $node22 ==""} { ;  # Get out if at the end of tree
@@ -1364,19 +1360,19 @@ proc qstat_F_xml_queue { node1 output {params ""} } {
          set node221 [$node2 firstChild] ; #
          set xml_param [$node221 nodeValue]
          set output_xml_qstat($queue,$column) $xml_param
-      
+
          if { ($column == "load_avg") } {
             set output_xml_qstat($queue,$column) [format "%3.2f" $output_xml_qstat($queue,$column)]
-         }           
+         }
 
          set node222 $node2 ; # move to the next parameter
 
       }
-      
+
       # Once we are done with the queue parameters, the next Sibling will be the
       # node pointing to job id information. We re-user queue_xml_jobid with
       # the  "full" flag, to pick information as listed in "qstat -F"
-      
+
       set node223 [$node222 nextSibling]
       set result222 [qstat_xml_jobid $node223 full output_xml_qstat]
 
@@ -1422,10 +1418,10 @@ proc qstat_g_c_xml_parse { output } {
    set doc  [dom parse $XML]
 
    set root [$doc documentElement]
-   
+
    # Parse the running jobs  using this node.
    set node [$root firstChild]   ; # <cluster-queue-info/>
-   #set node1 [$node firstChild]  ; # 
+   #set node1 [$node firstChild]  ; #
 
    set result1 [qstat_g_c_xml_queue $node output_xml]
 }
@@ -1498,8 +1494,8 @@ proc qstat_g_c_xml_queue { node output } {
       }
 
       set node $node22
-      set node222 [$node22 firstChild]  
-      set node222 [$node22 firstChild]  
+      set node222 [$node22 firstChild]
+      set node222 [$node22 firstChild]
       set node2222 [$node222 firstChild]
       set queue [$node2222 nodeValue]
 
@@ -1526,12 +1522,12 @@ proc qstat_g_c_xml_queue { node output } {
    }
 }
 
- 
+
 #                                                             max. column:     |
 #****** parser_xml/qstat_ext_xml_parse() ******
 #
 #  NAME
-#     qstat_ext_xml_parse -- Generate XML output and return assoc array 
+#     qstat_ext_xml_parse -- Generate XML output and return assoc array
 #
 #  SYNOPSIS
 #     qstat_ext_xml_parse { output }
@@ -1542,7 +1538,7 @@ proc qstat_g_c_xml_queue { node output } {
 #                        the work.
 #
 #      output  -  asscoc array with the entries mentioned above.#
-#                 Output array is similar to that of 
+#                 Output array is similar to that of
 #                 parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1 } }
 #
 #  FUNCTION
@@ -1552,7 +1548,7 @@ proc qstat_g_c_xml_queue { node output } {
 #     None
 #
 #  NOTES
-#     
+#
 #
 #*******************************
 
@@ -1569,7 +1565,7 @@ proc qstat_ext_xml_parse { output } {
    # Parse the running jobs  using this node.
    set node [$root firstChild]   ; # <job-info/>
    set node1 [$node firstChild]  ; # <joblisting/>
-  
+
    set job_type1 "ext"
    set result1 [qstat_xml_jobid $node1 $job_type1 output_xml]
 
@@ -1586,7 +1582,7 @@ proc qstat_ext_xml_parse { output } {
 #****** parser_xml/qhost_xml_parse() ******
 #
 #  NAME
-#     qhost_xml_parse -- Generate XML output and return assoc array 
+#     qhost_xml_parse -- Generate XML output and return assoc array
 #
 #  SYNOPSIS
 #     qhost_xml_parse { output }
@@ -1595,7 +1591,7 @@ proc qstat_ext_xml_parse { output } {
 #                        memory used, swap total, swap used.
 #
 #      output  -  asscoc array with the entries mentioned above.#
-#                 
+#
 #
 #  FUNCTION
 #     Print out parsed xml output
@@ -1605,7 +1601,7 @@ proc qstat_ext_xml_parse { output } {
 #     additional params that qhost should use.
 #
 #  NOTES
-#     
+#
 #
 #*******************************
 proc qhost_xml_parse { output {params ""} } {
@@ -1613,7 +1609,7 @@ proc qhost_xml_parse { output {params ""} } {
 
    # capture xml output
    set xmloutput [start_sge_bin "qhost" "$params -xml"]
-   
+
    set doc [dom parse $xmloutput]
    set root [$doc documentElement]
 
@@ -1622,22 +1618,22 @@ proc qhost_xml_parse { output {params ""} } {
    set job -1
    foreach elem $qhost {
       set hostvalue [$elem childNodes]
-      set inc 1      
+      set inc 1
       foreach elemin $hostvalue {
          if {$inc == "1"} {
-            incr job 1 
+            incr job 1
             set xml(host$job,name) [$elem getAttribute name]
-         } 
-         set xml(host$job,[$elemin getAttribute name]) [[$elemin firstChild] nodeValue]            
+         }
+         set xml(host$job,[$elemin getAttribute name]) [[$elemin firstChild] nodeValue]
          incr inc 1
-      }     
+      }
    }
 }
 
 #****** parser_xml/qhost_u_xml_parse() ******
 #
 #  NAME
-#     qhost_u_xml_parse -- Generate XML output and return assoc array 
+#     qhost_u_xml_parse -- Generate XML output and return assoc array
 #
 #  SYNOPSIS
 #     qhost_u_xml_parse { output }
@@ -1645,7 +1641,7 @@ proc qhost_xml_parse { output {params ""} } {
 #                        entries based on the output of qhost -u -xml.
 #
 #      output  -  asscoc array with the entries mentioned above.#
-#                 
+#
 #
 #  FUNCTION
 #     Print out parsed xml output
@@ -1655,34 +1651,34 @@ proc qhost_xml_parse { output {params ""} } {
 #     additional params that qhost should use.
 #
 #  NOTES
-#     
+#
 #
 #*******************************
 proc qhost_u_xml_parse { output_var {params ""} } {
    upvar $output_var xml
-   
+
    # capture xml output
    set xmloutput [start_sge_bin "qhost" "$params -xml"]
 
    set doc [dom parse $xmloutput]
    set root [$doc documentElement]
-   
+
    # parse xml output and create lists based on the attributes
-   
+
    set children [$root getElementsByTagName job]
-   set jobs [$children childNodes]   
-   
-   foreach jobvalue $jobs {   
-      set xml(job,jobid) [$jobvalue getAttribute jobid] 
+   set jobs [$children childNodes]
+
+   foreach jobvalue $jobs {
+      set xml(job,jobid) [$jobvalue getAttribute jobid]
       set cNode [$jobvalue childNode]
-      set xml(job,[$jobvalue getAttribute name]) [$cNode nodeValue]            
+      set xml(job,[$jobvalue getAttribute name]) [$cNode nodeValue]
    }
 }
 
 #****** parser_xml/qhost_q_xml_parse() ******
 #
 #  NAME
-#     qhost_q_xml_parse -- Generate XML output and return assoc array 
+#     qhost_q_xml_parse -- Generate XML output and return assoc array
 #
 #  SYNOPSIS
 #     qhost_q_xml_parse { output }
@@ -1690,7 +1686,7 @@ proc qhost_u_xml_parse { output_var {params ""} } {
 #                        entries based on the output of qhost -q -xml.
 #
 #      output  -  asscoc array with the entries mentioned above.#
-#                 
+#
 #
 #  FUNCTION
 #     Print out parsed xml output
@@ -1700,7 +1696,7 @@ proc qhost_u_xml_parse { output_var {params ""} } {
 #     additional params that qhost should use.
 #
 #  NOTES
-#     
+#
 #
 #*******************************
 proc qhost_q_xml_parse { output_var } {
@@ -1713,18 +1709,18 @@ proc qhost_q_xml_parse { output_var } {
    set root [$doc documentElement]
 
    # parse xml output and create lists based on the attributes
-   
+
    set qhost [$root childNodes]
    set job -1
    foreach elem $qhost {
       set hostvalue [$elem childNodes]
       set inc 1
-      
+
       foreach elemin $hostvalue {
          if {$inc == "1"} {
-            incr job 1 
+            incr job 1
             set xml(host$job,name) [$elem getAttribute name]
-         } 
+         }
             set xml(host$job,[$elemin getAttribute name]) [[$elemin firstChild] nodeValue]
             if { [$elemin hasChildNodes] == "1"} {
                set queue [$elemin childNodes]
@@ -1740,18 +1736,18 @@ proc qhost_q_xml_parse { output_var } {
                         set xml(host$job,[$innerelem getAttribute name]) [[$innerelem firstChild] nodeValue]
                      }
                   }
-                  
+
                }
             }
          incr inc 1
-      }     
+      }
    }
 }
 
 #****** parser_xml/qstat_gdr_xml_parse() ******
 #
 #  NAME
-#     qstat_gdr_xml_parse -- Generate XML output and return assoc array 
+#     qstat_gdr_xml_parse -- Generate XML output and return assoc array
 #
 #  SYNOPSIS
 #     qstat_gdr_xml_parse { output }
@@ -1760,7 +1756,7 @@ proc qhost_q_xml_parse { output_var } {
 #                        queue, slots, task_id and full name.
 #
 #      output  -  asscoc array with the entries mentioned above.
-#                 
+#
 #
 #  FUNCTION
 #     Print out parsed xml output
@@ -1769,12 +1765,12 @@ proc qhost_q_xml_parse { output_var } {
 #     varialbe into which will be stored the parsed xml array
 #
 #  NOTES
-#     
+#
 #
 #*******************************
 proc qstat_gdr_xml_parse { output } {
    upvar $output xml
-   
+
    if {[info exists xml]} {
       unset xml
    }
@@ -1782,7 +1778,7 @@ proc qstat_gdr_xml_parse { output } {
    set xmloutput [start_sge_bin "qstat" "-g d -r -xml"]
    set doc [dom parse $xmloutput]
    set root [$doc documentElement]
-   
+
    # parse xml output and create lists based on the attributes
    set jobNumberList [$root selectNodes /job_info/queue_info/job_list/JB_job_number/text()]
    set prioList [$root selectNodes /job_info/queue_info/job_list/JAT_prio/text()]
@@ -1816,15 +1812,15 @@ proc qstat_gdr_xml_parse { output } {
       set node [lindex $tasksList $ind]
       set xml(job$ind,tasks) [$node nodeValue]
       set node [lindex $fullJobNameList $ind]
-      set xml(job$ind,fullName) [$node nodeValue]        
+      set xml(job$ind,fullName) [$node nodeValue]
    }
-   
+
 }
 
 #****** parser_xml/qstat_r_xml_parse() ******
 #
 #  NAME
-#     qstat_r_xml_parse -- Generate XML output and return assoc array 
+#     qstat_r_xml_parse -- Generate XML output and return assoc array
 #
 #  SYNOPSIS
 #     qstat_r_xml_parse { output }
@@ -1833,7 +1829,7 @@ proc qstat_gdr_xml_parse { output } {
 #                        queue, slots, hard resources, and soft resources.
 #
 #      output  -  asscoc array with the entries mentioned above.#
-#                 
+#
 #
 #  FUNCTION
 #     Print out parsed xml output
@@ -1842,29 +1838,29 @@ proc qstat_gdr_xml_parse { output } {
 #     varialbe into which will be stored the parsed xml array
 #
 #  NOTES
-#     
+#
 #
 #*******************************
 proc qstat_r_xml_parse { output } {
    upvar $output xml
-   
+
    set xmloutput [start_sge_bin "qstat" "-r -xml"]
    set doc [dom parse $xmloutput]
    set root [$doc documentElement]
-   
+
    # parse xml output and create array based on the attributes
-   set jobNumber [$root selectNodes /job_info/queue_info/job_list/JB_job_number/text()] 
-   set prio [$root selectNodes /job_info/queue_info/job_list/JAT_prio/text()] 
-   set name [$root selectNodes /job_info/queue_info/job_list/JB_name/text()] 
-   set owner [$root selectNodes /job_info/queue_info/job_list/JB_owner/text()] 
-   set state [$root selectNodes /job_info/queue_info/job_list/state/text()] 
-   set time [$root selectNodes /job_info/queue_info/job_list/JAT_start_time/text()] 
-   set queue [$root selectNodes /job_info/queue_info/job_list/queue_name/text()] 
-   set slots [$root selectNodes /job_info/queue_info/job_list/slots/text()] 
-   set fullName [$root selectNodes /job_info/queue_info/job_list/full_job_name/text()] 
-   set hard [$root selectNodes /job_info/queue_info/job_list/hard_request/text()] 
+   set jobNumber [$root selectNodes /job_info/queue_info/job_list/JB_job_number/text()]
+   set prio [$root selectNodes /job_info/queue_info/job_list/JAT_prio/text()]
+   set name [$root selectNodes /job_info/queue_info/job_list/JB_name/text()]
+   set owner [$root selectNodes /job_info/queue_info/job_list/JB_owner/text()]
+   set state [$root selectNodes /job_info/queue_info/job_list/state/text()]
+   set time [$root selectNodes /job_info/queue_info/job_list/JAT_start_time/text()]
+   set queue [$root selectNodes /job_info/queue_info/job_list/queue_name/text()]
+   set slots [$root selectNodes /job_info/queue_info/job_list/slots/text()]
+   set fullName [$root selectNodes /job_info/queue_info/job_list/full_job_name/text()]
+   set hard [$root selectNodes /job_info/queue_info/job_list/hard_request/text()]
    set soft [$root selectNodes /job_info/queue_info/job_list/soft_request/text()]
-   
+
    set xml(jobNumber) [$jobNumber nodeValue]
    set xml(prio)  [$prio nodeValue]
    set xml(name) [$name nodeValue]
@@ -1875,16 +1871,16 @@ proc qstat_r_xml_parse { output } {
    set xml(slots) [$slots nodeValue]
    set xml(hard) [[$hard parentNode] getAttribute name]=[$hard nodeValue]
    set xml(soft) [[$soft parentNode] getAttribute name]=[$soft nodeValue]
-   
+
 }
 
 proc qstat_j_xml_par { output job_id xmloutput} {
    upvar $output xml
    get_current_cluster_config_array ts_config
-      
+
    set doc [dom parse $xmloutput]
    set root [$doc documentElement]
-   
+
    # parse xml output and create array based on the attributes
    # JB_job_number
    set jobNumber [$root getElementsByTagName JB_job_number]
@@ -1934,7 +1930,7 @@ proc qstat_j_xml_par { output job_id xmloutput} {
    # JB_merge_stderr
    set merge [$root getElementsByTagName JB_merge_stderr]
    foreach elem $merge {
-      if {[string compare [[$elem firstChild] nodeValue] "true"] == 0} {  
+      if {[string compare [[$elem firstChild] nodeValue] "true"] == 0} {
          set xml(merge) y
       } else {
          set xml(merge) n
@@ -2000,7 +1996,7 @@ proc qstat_j_xml_par { output job_id xmloutput} {
                set xml([$var nodeValue]) [format %.5f [$val nodeValue]]
             }
          }
-         
+
       }
    }
    # JB_stderr_path_list

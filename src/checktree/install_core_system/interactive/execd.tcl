@@ -526,7 +526,7 @@ proc install_execd {{report_var report}} {
       if {$result == 0} {
          ts_log_fine "Startup of execd was successful!"
       } else {
-         ts_log_severe "Error starting execd!"
+         ts_log_severe "Error starting execd on host $exec_host!"
       }
    }
    test_report report $curr_task_nr $report_id result [get_result_ok]

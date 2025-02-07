@@ -1613,6 +1613,8 @@ proc qstat_plain_parse { output  {params ""} } {
    set result [start_sge_bin "qstat" $params "" "" prg_exit_state 60 "" "bin" output_lines myenv]
 
    parse_qstat result qstat_output
+
+   return $result
 }
 
 #                                                             max. column:     |
