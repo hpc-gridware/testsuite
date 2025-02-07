@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -47,7 +47,7 @@ set check_category "AR RQS SPOOLING VERIFIED"
 set check_description(0) "check qmaster spooling"
 
 # define test's dependencies
-set check_needs "init_core_system" 
+set check_needs "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function "qmaster_spooling_setup"
@@ -64,6 +64,13 @@ lappend check_functions "qmaster_spooling_issue2442"
 
 proc qmaster_spooling_setup {} {
    global qmaster_spooling_dateformat
+
+   # skip the test for valgrind master
+   global CHECK_VALGRIND
+   if {$CHECK_VALGRIND == "master"} {
+      ts_log_info "Skipping qmaster_spooling_setup for valgrind master, as it will report all thread local storage as leaked"
+      return
+   }
 
    if {[is_version_in_range "9.0.0"]} {
       set qmaster_spooling_dateformat "%Y-%m-%d %H:%M:%S"
@@ -114,27 +121,23 @@ proc cmp_config {conf_a conf_b fields check} {
 proc qmaster_spooling_prj_restart {} {
    global ts_config
 
-   if {$ts_config(product_type) != "sgeee"} {
-      ts_log_config "this can only run in sgeee clusters"
-   } else {
-      set check_fields "oticket fshare acl xacl"
+   set check_fields "oticket fshare acl xacl"
 
-      set PROJECT_NAME "spool_prj"
-      set config(oticket) "123"
-      set config(fshare)  "234"
-      set config(acl)  "deadlineusers"
-      set config(xacl)  "defaultdepartment"
+   set PROJECT_NAME "spool_prj"
+   set config(oticket) "123"
+   set config(fshare)  "234"
+   set config(acl)  "deadlineusers"
+   set config(xacl)  "defaultdepartment"
 
-      add_project $PROJECT_NAME config
+   add_project $PROJECT_NAME config
 
-      shutdown_and_restart_qmaster
+   shutdown_and_restart_qmaster
 
-      get_project $PROJECT_NAME new_config
+   get_project $PROJECT_NAME new_config
 
-      cmp_config config new_config $check_fields "qmaster_spooling_prj_restart"
+   cmp_config config new_config $check_fields "qmaster_spooling_prj_restart"
 
-      del_project $PROJECT_NAME
-   }
+   del_project $PROJECT_NAME
 }
 
 
@@ -187,7 +190,7 @@ proc qmaster_spooling_ar_restart {} {
 
 
    #  To be sure, no conflict exists
-   delete_all_ars   
+   delete_all_ars
 
    set    args "-a $start "
    append args "-e $end "
@@ -207,12 +210,12 @@ proc qmaster_spooling_ar_restart {} {
    ts_log_fine "qrsub $args\n"
    set ar_id [submit_ar "$args"]
    if {$ar_id < 0} {
-    return
+      return
    }
 
    set check_values(id)                             "$ar_id"
    set check_values(name)                           "test_ar_name"
-   set check_values(owner)                          "$CHECK_USER"  
+   set check_values(owner)                          "$CHECK_USER"
    set check_values(checkpoint_name)                "testcheckpointobject"
    set check_values(start_time)                     "$starto"
    set check_values(end_time)                       "$endo"
@@ -240,8 +243,8 @@ proc qmaster_spooling_ar_restart {} {
 
    ts_log_fine "check output of qrstat -ar $ar_id after spooling\n"
    set ret [parse_qrstat_check $ar_id check_values]
-   if {$ret != 0 } {
-    return
+   if {$ret != 0} {
+      return
    }
 
    ts_log_fine "test qmaster_spooling_ar_restart OK"
@@ -262,7 +265,7 @@ proc qmaster_spooling_issue2442 {} {
             lappend objects $dir
          }
       }
-      # set the unique number which we use in the object name 
+      # set the unique number which we use in the object name
       # (just for case we run the test more times without reinstalling the cluster)
       set unq_num [expr {int(rand()*1000)}]
       # create wrong configuration files for each object
@@ -305,7 +308,7 @@ proc qmaster_spooling_issue2442 {} {
             set error 1
             lappend missing_log $object
          }
-         
+
       }
       shutdown_and_restart_qmaster
       if {$error == 1} {

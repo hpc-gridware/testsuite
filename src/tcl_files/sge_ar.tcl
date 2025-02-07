@@ -452,8 +452,8 @@ proc parse_qrstat_check { ar_id match_values } {
    set errors ""
    foreach name [array names val] {
       set pattern "$val($name)"
-      set skip [catch { set value   "$arinfo($name)" }]
-      if { $skip } {
+      set skip [catch {set value "$arinfo($name)"}]
+      if {$skip} {
         append errors "The expected attribute $name is missing in the result\n"
         set ret -2
         continue
@@ -470,6 +470,7 @@ proc parse_qrstat_check { ar_id match_values } {
    if {$errors != ""} {
       ts_log_severe "$errors\n$qrstat_output"
    }
+
    return $ret
 }
 

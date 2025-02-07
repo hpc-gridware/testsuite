@@ -6897,6 +6897,8 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
    global CHECK_VALGRIND CHECK_VALGRIND_LAST_DAEMON_RESTART
    if {$CHECK_VALGRIND == "master"} {
       set CHECK_VALGRIND_LAST_DAEMON_RESTART [clock seconds]
+      # wait a little bit for qmaster to be really up and mirror threads having been initialized
+      after 5000
    }
 
    return 0
