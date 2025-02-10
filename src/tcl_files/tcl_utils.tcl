@@ -338,7 +338,7 @@ proc add_or_replace_param {input name_only name_value {delimiter ","}} {
    }
 }
 
-## @grief copy name/value pairs from an attribute array to a data array for a given object
+## @brief copy name/value pairs from an attribute array to a data array for a given object
 #
 # This procedure copies name/value pairs from an attribute array to a data array. The
 # attribute array is indexed by object name and key, and the data array is indexed by
@@ -384,8 +384,12 @@ proc init_object_attr {data_array attribute_array object_name {key ""} {key_is_h
    }
 
    # copy values for matching keys to the data array
-   foreach key $matching_keys {
-      set attr_name [lindex [split $key ","] 2]
-      set data($attr_name) $attr($key)
+   foreach mkey $matching_keys {
+      if {$key != ""} {
+         set attr_name [lindex [split $mkey ","] 2]
+      } else {
+         set attr_name [lindex [split $mkey ","] 1]
+      }
+      set data($attr_name) $attr($mkey)
    }
 }
