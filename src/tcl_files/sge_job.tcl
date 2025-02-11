@@ -140,7 +140,7 @@ proc tight_integration_monitor {id master_node started_var finished_var jobid_va
                      ts_log_fine "task $task finished, total finished: $finished"
                      set ret "task finished"
                   }
-                  "master task started with job id ?????? and pid*" {
+                  "master task started with job id ?????????? and pid*" {
                      set jobid [lindex $line 6]
                      lappend job_info(tasks) master
                      set job_info(master,pid) [lindex $line 9]
