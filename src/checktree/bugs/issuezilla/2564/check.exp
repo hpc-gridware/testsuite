@@ -33,13 +33,13 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
-global check_errno 
-global check_errstr 
+global check_functions
+global check_errno
+global check_errstr
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -50,7 +50,7 @@ set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
 set check_description(0)  "scheduler failure when job-id's roll over to 1"
 
 # define test's dependencies
-set check_needs "init_core_system" 
+set check_needs "init_core_system"
 
 
 # setup and cleanup functions
@@ -99,15 +99,15 @@ proc issue_2564_setup {} {
    # Create projects.
    #
    set this_project(name) $project_1
-   set this_project(fshare) 1000 
+   set this_project(fshare) 1000
    add_project $project_1 this_project
 
    set this_project(name) $project_2
-   set this_project(fshare) 1000 
+   set this_project(fshare) 1000
    add_project $project_2 this_project
 
    set this_project(name) $project_3
-   set this_project(fshare) 1000 
+   set this_project(fshare) 1000
    add_project $project_3 this_project
    #
    # Create test queue with projects assigned. It is really
@@ -126,14 +126,14 @@ proc issue_2564_setup {} {
 # -------- local test procedures -----------------------------------------------
 
 #
-# This is the test plan: 
+# This is the test plan:
 #
 # o first clean up any leftovers from previous (possibly failed tests)
 # o save original job sequence number file and create a copy
 # o bump up sequence number in JobID sequence file in the region close
 #   to wrap-around
 # o create a mix of dummy jobs (array and sequential) using two projects
-#   with fshares attribute. This should execercise the areas in the 
+#   with fshares attribute. This should execercise the areas in the
 #   scheduler which make assumptions about steadily increasing JobID's.
 # o Monitor job processing: test failure scenario is JobID 1 running with
 #   more senior jobs (i.e. higher numbered) pending.
@@ -150,10 +150,18 @@ proc issue_2564_check {} {
    #
    # Create new sequence file and store new sequence number.
    #
-   set start_jid 9999990
-   set max_jid   9999999
+   if {[is_version_in_range "9.0.3"]} {
+      set start_jid 4294967286
+      set max_jid   4294967295
+   } elseif {[is_version_in_range "9.0.3"]} {
+      set start_jid 2147483638
+      set max_jid   2147483647
+   } else {
+      set start_jid 9999990
+      set max_jid   9999999
+   }
    set_jobseqnum $start_jid
-   
+
    #
    # Prepare dummy jobs.
    #
@@ -242,16 +250,16 @@ proc issue_2564_check {} {
                #
                # Ensure we are making progress: the lowest JobID should be running by
                # by now. Fatal if it's still sitting on the pending list. The current
-               # settings of grace_period and sleep_time combined give us a timeout 
+               # settings of grace_period and sleep_time combined give us a timeout
                # of 15 seconds.
-               # 
+               #
                if {  $iterations == $grace_period  &&  $job_id == [ expr { $start_jid  +1 } ] } {
                   ts_log_severe "issue_2564_check: no progress observed; aborting. $job_id still pending state"
                   return
                }
                #
-               # If we have a job with wrapped around ID (i.e. JobID 1) in running 
-               # state AND more senior (i.e. higher numbered) jobs sitting on the pending list, 
+               # If we have a job with wrapped around ID (i.e. JobID 1) in running
+               # state AND more senior (i.e. higher numbered) jobs sitting on the pending list,
                # then indicate test failure.
                #
                if { $job_1_is_running } {
@@ -281,7 +289,7 @@ proc issue_2564_check {} {
             #
             ts_log_severe "issue_2564_check: wrap around problem still exists: => found  IZ2564"
             return
-         } else { 
+         } else {
             #
             # No problem encountered; indicate success.
             #
@@ -290,7 +298,7 @@ proc issue_2564_check {} {
          }
       }
       #
-      # Yet no JobID 1 running, wait one second 
+      # Yet no JobID 1 running, wait one second
       #
       after 1000
       incr iterations 1
@@ -300,7 +308,7 @@ proc issue_2564_check {} {
    # as test failure. Generate error report and then exit.
    #
    ts_log_severe "issue_2564_check: timeout: JobID 1 never started, aborting"
-   return 
+   return
 }
 
 proc issue_2564_cleanup  {} {
@@ -314,7 +322,7 @@ proc issue_2564_cleanup  {} {
    global old_schedd_config
    global issue_2564_backup_seqno
 
-   
+
    set_schedd_config old_schedd_config
 
    delete_all_jobs
@@ -339,7 +347,7 @@ proc issue_2564_cleanup  {} {
 proc submit_dummy_jobs { job_script project_name is_array { task_range 1-5 } } {
 
    if { $is_array == 1 } {
-      set job_args "-P $project_name -t $task_range $job_script" 
+      set job_args "-P $project_name -t $task_range $job_script"
    } else {
       set job_args "-P $project_name $job_script"
    }

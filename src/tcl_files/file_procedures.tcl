@@ -4495,7 +4495,7 @@ proc set_jobseqnum {jobseqnum} {
       ts_log_severe "setting job sequence number failed:\n$output"
    }
    startup_qmaster
-   
+
    return $ret
 }
 

@@ -3682,7 +3682,7 @@ proc wait_for_end_of_all_jobs {{seconds 60} {raise_error 1} {check_spool_dir 1}}
                if {$seconds > 0} {
                   set runtime [expr [clock seconds] - $time]
                   if {$runtime >= $seconds} {
-                      ts_log_severe "timeout (= $seconds seconds) waiting for end of all jobs (spooled):\n\"$result\"" $raise_error
+                      ts_log_severe "timeout (1) (= $seconds seconds) waiting for end of all jobs (spooled):\n\"$result\"" $raise_error
                       return -1
                   }
                }
@@ -3709,7 +3709,7 @@ proc wait_for_end_of_all_jobs {{seconds 60} {raise_error 1} {check_spool_dir 1}}
       if {$seconds > 0} {
          set runtime [expr [clock seconds] - $time]
          if {$runtime >= $seconds} {
-             ts_log_severe "timeout (= $seconds seconds) waiting for end of all jobs (spooled):\n\"$result\"" $raise_error
+             ts_log_severe "timeout (2) (= $seconds seconds) waiting for end of all jobs (spooled):\n\"$result\"" $raise_error
              return -1
          }
       }

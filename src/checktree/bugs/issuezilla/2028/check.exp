@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -48,7 +48,7 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "check job seqno wraparound"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function issue_2028_setup
@@ -120,7 +120,13 @@ proc issue_2028_test {} {
 
 
    # set jobseqnum file shortly before wraparound (will shutdown and restart qmaster)
-   set max_jobseqnum 9999999
+   if {[is_version_in_range "9.1.0"]} {
+      set max_jobseqnum 4294967295
+   } elseif {[is_version_in_range "9.0.3"]} {
+      set max_jobseqnum 2147483647
+   } else {
+      set max_jobseqnum 9999999
+   }
    set_jobseqnum [expr $max_jobseqnum - 2]
 
    # submit some jobs, force wraparound
@@ -129,14 +135,14 @@ proc issue_2028_test {} {
    ts_log_fine "id_list: $id_list"
    set high_number_count 0
    set low_number_count 0
-   
+
    foreach job_id $id_list {
       if {$job_id > 1000 } {
          incr high_number_count 1
-      } 
+      }
       if {$job_id >= 1 && $job_id <= 1000 } {
          incr low_number_count 1
-      } 
+      }
    }
    if {$high_number_count == 0} {
       ts_log_severe "expected at least one high job number"
@@ -147,7 +153,7 @@ proc issue_2028_test {} {
 
    # shutdown and restart qmaster
    shutdown_master_and_scheduler $ts_config(master_host) $qmaster_spool_dir
-   startup_qmaster 
+   startup_qmaster
 
    # submit some jobs - must be successfull
    set id_list [issue_2028_submit "after wraparound and qmaster restart"]
@@ -155,14 +161,14 @@ proc issue_2028_test {} {
    ts_log_fine "id_list: $id_list"
    set high_number_count 0
    set low_number_count 0
-   
+
    foreach job_id $id_list {
       if {$job_id > 1000 } {
          incr high_number_count 1
-      } 
+      }
       if {$job_id >= 1 && $job_id <= 1000 } {
          incr low_number_count 1
-      } 
+      }
    }
    if {$high_number_count != 0} {
       ts_log_severe "expected no high job number"

@@ -55,7 +55,7 @@ prepare_host_slots()
 }
 
 unset SGE_DEBUG_LEVEL
-printf "master task started with job id %6d and pid %8d\n" $JOB_ID $$
+printf "master task started with job id %10d and pid %8d\n" $JOB_ID $$
 
 job_is_first_task=`read_pe_attrib $PE job_is_first_task`
 master_forks_slaves=`read_pe_attrib $PE master_forks_slaves`

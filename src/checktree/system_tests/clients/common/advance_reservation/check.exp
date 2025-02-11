@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 #set check_root_access_needs "yes"
@@ -48,7 +48,7 @@ set check_category        "AR RESERVATION VERIFIED"
 set check_description(0)  "common clients -ar switch checks (qsh, qrsh, qlogin)"
 
 # define test's dependencies
-set check_needs           "init_core_system display_test" 
+set check_needs           "init_core_system display_test"
 
 # setup and cleanup functions
 set check_setup_function client_ar_setup
@@ -67,7 +67,7 @@ global default_args
 proc client_ar_setup {} {
    global ts_config CHECK_USER
    global job_output_dir default_args
-   
+
    # set default jobargs
    set default_args "-o /dev/null -j y"
 }
@@ -86,9 +86,9 @@ proc test_qsh_ar_switch {} {
    global ts_config CHECK_USER default_args
 
    # Test setup
-   delete_all_ars   
-   
-   # Submit advance reservation 
+   delete_all_ars
+
+   # Submit advance reservation
    set args "-d 36000"
    set cmd "qsh"
    set job_name "test_${cmd}"
@@ -97,23 +97,23 @@ proc test_qsh_ar_switch {} {
       ts_log_info "submit ar failed"
       return
    }
-   
-   # Submit qsh job with advance reservation 
+
+   # Submit qsh job with advance reservation
    set args  "-ar $ar_id -N $job_name $default_args"
    set job_id [submit_job $args 1 60 "" "" "" 1 $cmd]
    if {$job_id < 0} {
       ts_log_severe "interactive job was not submitted"
       return
    }
-   
+
    # start job
    trigger_scheduling
-   
+
    #job should be running
    set run_result [wait_for_jobstart $job_id  $job_name 20]
    if {$run_result != 0} {
        ts_log_severe "job was not scheduled to with ar option"
-   } 
+   }
    ts_log_fine "delete AR: $ar_id and job should ends soon"
    delete_ar $ar_id
    wait_for_job_end $job_id 60
@@ -127,16 +127,16 @@ proc test_qsh_ar_switch {} {
       return
    }
    ts_log_fine "${job_name}_ar_switch OK"
- 
+
 }
 
 proc test_qrsh_ar_switch {} {
    global ts_config CHECK_USER  default_args
 
    # Test setup
-   delete_all_ars   
-   
-   # Submit advance reservation 
+   delete_all_ars
+
+   # Submit advance reservation
    set args "-d 36000"
    set cmd "qrsh"
    set job_name "test_${cmd}"
@@ -145,8 +145,8 @@ proc test_qrsh_ar_switch {} {
       ts_log_info "submit ar failed"
       return
    }
-   
-   # Submit qsh job with advance reservation, simulate the right output 
+
+   # Submit qsh job with advance reservation, simulate the right output
    set echo [translate_macro MSG_QSUB_YOURIMMEDIATEJOBXHASBEENSUCCESSFULLYSCHEDULED_S "9999999"]
    set args  "-ar $ar_id -N $job_name $default_args echo '$echo'"
    set job_id [submit_job $args 0 60 "" "" "" 1 $cmd]
@@ -171,9 +171,9 @@ proc test_qlogin_ar_switch {} {
    global qlogin_session
 
    # Test setup
-   delete_all_ars   
-   
-   # Submit advance reservation 
+   delete_all_ars
+
+   # Submit advance reservation
    set args "-d 36000"
    set cmd "qlogin"
    set job_name "test_${cmd}"
@@ -189,7 +189,7 @@ proc test_qlogin_ar_switch {} {
       ts_log_severe "submit of qlogin with -ar switch failed!"
       return
    }
-   
+
    #delete the ar
    ts_log_fine "delete AR: $ar_id and job should ends soon"
    delete_ar $ar_id 1
@@ -212,11 +212,11 @@ proc qlogin_ar_call {ar_id job_name} {
    global ts_config CHECK_USER  default_args
    global qlogin_session
 
-   # Submit qsh job with advance reservation 
+   # Submit qsh job with advance reservation
    set args  "-ar $ar_id  -N $job_name $default_args"
    set host [host_conf_get_suited_hosts]
    set arch [resolve_arch $host]
-   
+
    #The message must be presented in the result
    set messages(-2)     "*[translate_macro MSG_JOB_NOAREXISTS_U "*"]*"
    set messages(-1)     "*[translate_macro MSG_JOB_ARNOLONGERAVAILABE_U "*"]*"
@@ -225,7 +225,7 @@ proc qlogin_ar_call {ar_id job_name} {
    foreach idx [lsort [array names messages]] {
       append messages(index) "$idx "
    }
-   
+
    # Submit qlogin
    ts_log_fine "open_remote_spawn_process $host $CHECK_USER qlogin $args"
    set qlogin_session [open_remote_spawn_process $host $CHECK_USER "$ts_config(product_root)/bin/$arch/qlogin" "$args"]
@@ -235,7 +235,7 @@ proc qlogin_ar_call {ar_id job_name} {
    set output ""
    while { $do_stop == 0 } {
       expect {
-         -i $sp_id full_buffer {     ;# input buffer default size is 2000 byte 
+         -i $sp_id full_buffer {     ;# input buffer default size is 2000 byte
             set do_stop 1
             ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
          }
@@ -258,14 +258,14 @@ proc qlogin_ar_call {ar_id job_name} {
             set output "$output$expect_out(0,string)"
          }
       }
-   }  
- 
+   }
+
    ts_log_fine ">>> qlogin output start <<<"
    ts_log_fine $output
    ts_log_fine ">>> qlogin output end <<<\n"
-   
+
    set ret [handle_sge_errors "qlogin_ar_call" "qlogin" $output messages 0]
    ts_log_fine "qlogin_ar_call ret: $ret"
- 
+
    return $ret
 }

@@ -397,6 +397,10 @@ set CHECK_HUDSON_OUTPUT ""
 global CHECK_HUDSON_STACKTRACE ;# Used to hold most recent stacktrace when failure occurred
 set CHECK_HUDSON_STACKTRACE ""
 
+# use 10 digits for jobids (start with job id 2000000000 / 4000000000 after installation)
+global CHECK_HIGH_JOBIDS
+set CHECK_HIGH_JOBIDS 0
+
 global custom_checktree ;# For a custom checktree building, list of checks for which to build checktree
 set custom_checktree {}
 
@@ -7767,6 +7771,8 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "interactive_mode      run the test in interactive mode."
       puts ""
+      puts "high_jobids           start allocating job ids at 4000000000 in a newly created cluster"
+      puts ""
       puts "mfile FILE            write all mails into file FILE (when mail is enabled)"
       puts ""
       puts "html_dir              write testsuite html files into that directory"
@@ -7925,6 +7931,11 @@ for {set i 0} {$i < $argc} {incr i} {
 
    if {[string compare [lindex $argv $i] "--interactive_mode"] == 0 || [string compare [lindex $argv $i] "interactive_mode"] == 0} {
       check_set_interactive true
+      continue
+   }
+
+   if {[string compare [lindex $argv $i] "--high_jobids"] == 0 || [string compare [lindex $argv $i] "high_jobids"] == 0} {
+      set CHECK_HIGH_JOBIDS 1
       continue
    }
 

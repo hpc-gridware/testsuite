@@ -1265,98 +1265,196 @@ proc parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1}} {
    upvar $input  in
    upvar $output out
 
-   if {$ext == 1} {
-      set   position(0)  "0 6"               ; set    names(0)    id
-      set   position(1)  "8 14"              ; set    names(1)    prior
-      set   position(2)  "16 22"             ; set    names(2)    ntckts
-      set   position(3)  "24 33"             ; set    names(3)    name
-      set   position(4)  "35 46"             ; set    names(4)    user
-      set   position(5)  "48 63"             ; set    names(5)    project
-      set   position(6)  "65 74"             ; set    names(6)    department
-      set   position(7)  "76 80"             ; set    names(7)    state
-      set      rules(7)  rule_list
-      set   position(8)  "82 91"             ; set    names(8)    cpu
-      if { $do_replace_NA == 1 } {
-        set      rules(8)  rule_sum
-      }
-      set    replace(8,) 0:00:00:00
-      if {$do_replace_NA == 1} {
-         set    replace(8,NA) 0:00:00:00
-      }
-      set  transform(8)  transform_cpu
-      set  position(9)  "93 99"              ; set    names(9)    mem
-      set   replace(9,) 0                    ; set    replace(9,NA) 0
-      set     rules(9)  rule_sum
-      set  position(9) "101 107"             ; set   names(9)    io
-      set   replace(9,) 0                    ; set   replace(9,NA) 0
-      set     rules(9)  rule_sum
-      set  position(10)  "109 113"           ; set   names(10)    tckts
-      set  position(11)  "115 119"           ; set   names(11)    ovrts
-      set  position(12)  "121 125"           ; set   names(12)    otckt
-      set  position(13)  "127 131"           ; set   names(13)    ftckt
-      set  position(14)  "133 137"           ; set   names(14)    stckt
-      set  position(15)  "139 143"           ; set   names(15)    share
+   if {[is_version_in_range "9.0.3 9.1.0"]} {
+      # beginning with 9.0.3 / 9.1.0 the job id column is 3 characters wider
+      if {$ext == 1} {
+         set   position(0)  "0 9"               ; set    names(0)    id
+         set   position(1)  "11 17"              ; set    names(1)    prior
+         set   position(2)  "19 25"             ; set    names(2)    ntckts
+         set   position(3)  "27 36"             ; set    names(3)    name
+         set   position(4)  "38 49"             ; set    names(4)    user
+         set   position(5)  "51 66"             ; set    names(5)    project
+         set   position(6)  "68 77"             ; set    names(6)    department
+         set   position(7)  "79 83"             ; set    names(7)    state
+         set      rules(7)  rule_list
+         set   position(8)  "85 94"             ; set    names(8)    cpu
+         if { $do_replace_NA == 1 } {
+           set      rules(8)  rule_sum
+         }
+         set    replace(8,) 0:00:00:00
+         if {$do_replace_NA == 1} {
+            set    replace(8,NA) 0:00:00:00
+         }
+         set  transform(8)  transform_cpu
+         set  position(9)  "96 102"              ; set    names(9)    mem
+         set   replace(9,) 0                    ; set    replace(9,NA) 0
+         set     rules(9)  rule_sum
+         set  position(9) "104 110"             ; set   names(9)    io
+         set   replace(9,) 0                    ; set   replace(9,NA) 0
+         set     rules(9)  rule_sum
+         set  position(10)  "112 116"           ; set   names(10)    tckts
+         set  position(11)  "118 122"           ; set   names(11)    ovrts
+         set  position(12)  "124 128"           ; set   names(12)    otckt
+         set  position(13)  "130 134"           ; set   names(13)    ftckt
+         set  position(14)  "136 140"           ; set   names(14)    stckt
+         set  position(15)  "142 146"           ; set   names(15)    share
 
-      set  position(16)  "145 194"           ; set   names(16)    queue
-      set     rules(16)  rule_list
-      set  position(17)  "196 200"           ; set   names(17)    master
-      set  position(18)  "202 end"           ; set   names(18)    jatask
-      set     rules(18)  rule_list
-   } elseif {$ext == 2} {
-      # qstat -urg
-      set   position(0)  "0 6"               ; set    names(0)    id
-      set   position(1)  "8 14"              ; set    names(1)    prior
-      set   position(2)  "16 23"             ; set    names(2)    nurg
-      set   position(3)  "24 32"             ; set    names(3)    urg
-      set   position(4)  "33 41"             ; set    names(4)    rrcontr
-      set   position(5)  "42 50"             ; set    names(5)    wtcontr
-      set   position(6)  "51 59"             ; set    names(6)    dlcontr
-      set   position(7)  "60 70"             ; set    names(7)    name
-      set   position(8)  "71 83"             ; set    names(8)    user
-      set   position(9)  "84 89"             ; set    names(9)    state
-      set      rules(9)  rule_list
-      set   position(10) "90 110"            ; set    names(10)   time
-      set  transform(10)  transform_date_time
-      set   position(11) "111 129"           ; set    names(11)   deadline
-      set   position(12) "130 180"           ; set    names(12)   queue
-      set      rules(12)  rule_list
-      set   position(13) "181 185"           ; set    names(13)   slots
-      set   position(14) "187 end"           ; set    names(14)   jatask
-      set      rules(14)  rule_list
-   } elseif {$ext == 3} {
-      # qstat -pri
-      set   position(0)  "0 6"               ; set    names(0)    id
-      set   position(1)  "8 14"              ; set    names(1)    prior
-      set   position(2)  "16 22"             ; set    names(2)    nurg
-      set   position(3)  "24 30"             ; set    names(3)    npprior
-      set   position(4)  "32 38"             ; set    names(4)    ntckts
-      set   position(5)  "40 44"             ; set    names(5)    ppri
-      set   position(6)  "46 55"             ; set    names(6)    name
-      set   position(7)  "57 68"             ; set    names(7)    user
-      set   position(8)  "70 74"             ; set    names(8)    state
-      set      rules(8)  rule_list
-      set   position(9)  "76 94"             ; set    names(9)    time
-      set  transform(9)  transform_date_time
-      set   position(10) "96 145"            ; set    names(10)   queue
-      set      rules(10)  rule_list
-      set   position(11) "147 152"           ; set    names(11)   slots
-      set   position(12) "153 end"           ; set    names(12)   jatask
-      set      rules(12)  rule_list
-   } else { # normat qstat
-      set   position(0)  "0 6"               ; set    names(0)    id
-      set   position(1)  "8 14"              ; set    names(1)    prior
-      set   position(2)  "16 25"             ; set    names(2)    name
-      set   position(3)  "27 38"             ; set    names(3)    user
-      set   position(4)  "40 44"             ; set    names(4)    state
-      set      rules(4)  rule_list
-      set   position(5)  "46 64"             ; set    names(5)    time
-      set  transform(5)  transform_date_time
-      set   position(6)  "66 115"            ; set    names(6)    queue
-      set      rules(6)  rule_list
-      set   position(7)  "117 121"            ; set    names(7)    master
-      set      rules(7)  rule_list
-      set   position(8)  "123 end"           ; set    names(8)    jatask
-      set      rules(8)  rule_list
+         set  position(16)  "148 197"           ; set   names(16)    queue
+         set     rules(16)  rule_list
+         set  position(17)  "199 203"           ; set   names(17)    master
+         set  position(18)  "205 end"           ; set   names(18)    jatask
+         set     rules(18)  rule_list
+      } elseif {$ext == 2} {
+         # qstat -urg
+         set   position(0)  "0 9"               ; set    names(0)    id
+         set   position(1)  "11 17"              ; set    names(1)    prior
+         set   position(2)  "19 26"             ; set    names(2)    nurg
+         set   position(3)  "27 35"             ; set    names(3)    urg
+         set   position(4)  "36 44"             ; set    names(4)    rrcontr
+         set   position(5)  "45 53"             ; set    names(5)    wtcontr
+         set   position(6)  "54 62"             ; set    names(6)    dlcontr
+         set   position(7)  "63 73"             ; set    names(7)    name
+         set   position(8)  "74 86"             ; set    names(8)    user
+         set   position(9)  "87 92"             ; set    names(9)    state
+         set      rules(9)  rule_list
+         set   position(10) "93 113"            ; set    names(10)   time
+         set  transform(10)  transform_date_time
+         set   position(11) "114 132"           ; set    names(11)   deadline
+         set   position(12) "133 183"           ; set    names(12)   queue
+         set      rules(12)  rule_list
+         set   position(13) "184 188"           ; set    names(13)   slots
+         set   position(14) "190 end"           ; set    names(14)   jatask
+         set      rules(14)  rule_list
+      } elseif {$ext == 3} {
+         # qstat -pri
+         set   position(0)  "0 9"               ; set    names(0)    id
+         set   position(1)  "11 17"              ; set    names(1)    prior
+         set   position(2)  "19 25"             ; set    names(2)    nurg
+         set   position(3)  "27 33"             ; set    names(3)    npprior
+         set   position(4)  "35 41"             ; set    names(4)    ntckts
+         set   position(5)  "43 47"             ; set    names(5)    ppri
+         set   position(6)  "49 58"             ; set    names(6)    name
+         set   position(7)  "60 71"             ; set    names(7)    user
+         set   position(8)  "73 77"             ; set    names(8)    state
+         set      rules(8)  rule_list
+         set   position(9)  "79 97"             ; set    names(9)    time
+         set  transform(9)  transform_date_time
+         set   position(10) "99 148"            ; set    names(10)   queue
+         set      rules(10)  rule_list
+         set   position(11) "150 155"           ; set    names(11)   slots
+         set   position(12) "158 end"           ; set    names(12)   jatask
+         set      rules(12)  rule_list
+      } else { # normat qstat
+         set   position(0)  "0 9"               ; set    names(0)    id
+         set   position(1)  "11 17"              ; set    names(1)    prior
+         set   position(2)  "19 28"             ; set    names(2)    name
+         set   position(3)  "30 41"             ; set    names(3)    user
+         set   position(4)  "43 47"             ; set    names(4)    state
+         set      rules(4)  rule_list
+         set   position(5)  "49 67"             ; set    names(5)    time
+         set  transform(5)  transform_date_time
+         set   position(6)  "69 118"            ; set    names(6)    queue
+         set      rules(6)  rule_list
+         set   position(7)  "120 124"            ; set    names(7)    master
+         set      rules(7)  rule_list
+         set   position(8)  "126 end"           ; set    names(8)    jatask
+         set      rules(8)  rule_list
+      }
+   } else {
+      # old SGE/OGS/GCS up to 9.0.2
+      if {$ext == 1} {
+         set   position(0)  "0 6"               ; set    names(0)    id
+         set   position(1)  "8 14"              ; set    names(1)    prior
+         set   position(2)  "16 22"             ; set    names(2)    ntckts
+         set   position(3)  "24 33"             ; set    names(3)    name
+         set   position(4)  "35 46"             ; set    names(4)    user
+         set   position(5)  "48 63"             ; set    names(5)    project
+         set   position(6)  "65 74"             ; set    names(6)    department
+         set   position(7)  "76 80"             ; set    names(7)    state
+         set      rules(7)  rule_list
+         set   position(8)  "82 91"             ; set    names(8)    cpu
+         if { $do_replace_NA == 1 } {
+           set      rules(8)  rule_sum
+         }
+         set    replace(8,) 0:00:00:00
+         if {$do_replace_NA == 1} {
+            set    replace(8,NA) 0:00:00:00
+         }
+         set  transform(8)  transform_cpu
+         set  position(9)  "93 99"              ; set    names(9)    mem
+         set   replace(9,) 0                    ; set    replace(9,NA) 0
+         set     rules(9)  rule_sum
+         set  position(9) "101 107"             ; set   names(9)    io
+         set   replace(9,) 0                    ; set   replace(9,NA) 0
+         set     rules(9)  rule_sum
+         set  position(10)  "109 113"           ; set   names(10)    tckts
+         set  position(11)  "115 119"           ; set   names(11)    ovrts
+         set  position(12)  "121 125"           ; set   names(12)    otckt
+         set  position(13)  "127 131"           ; set   names(13)    ftckt
+         set  position(14)  "133 137"           ; set   names(14)    stckt
+         set  position(15)  "139 143"           ; set   names(15)    share
+
+         set  position(16)  "145 194"           ; set   names(16)    queue
+         set     rules(16)  rule_list
+         set  position(17)  "196 200"           ; set   names(17)    master
+         set  position(18)  "202 end"           ; set   names(18)    jatask
+         set     rules(18)  rule_list
+      } elseif {$ext == 2} {
+         # qstat -urg
+         set   position(0)  "0 6"               ; set    names(0)    id
+         set   position(1)  "8 14"              ; set    names(1)    prior
+         set   position(2)  "16 23"             ; set    names(2)    nurg
+         set   position(3)  "24 32"             ; set    names(3)    urg
+         set   position(4)  "33 41"             ; set    names(4)    rrcontr
+         set   position(5)  "42 50"             ; set    names(5)    wtcontr
+         set   position(6)  "51 59"             ; set    names(6)    dlcontr
+         set   position(7)  "60 70"             ; set    names(7)    name
+         set   position(8)  "71 83"             ; set    names(8)    user
+         set   position(9)  "84 89"             ; set    names(9)    state
+         set      rules(9)  rule_list
+         set   position(10) "90 110"            ; set    names(10)   time
+         set  transform(10)  transform_date_time
+         set   position(11) "111 129"           ; set    names(11)   deadline
+         set   position(12) "130 180"           ; set    names(12)   queue
+         set      rules(12)  rule_list
+         set   position(13) "181 185"           ; set    names(13)   slots
+         set   position(14) "187 end"           ; set    names(14)   jatask
+         set      rules(14)  rule_list
+      } elseif {$ext == 3} {
+         # qstat -pri
+         set   position(0)  "0 6"               ; set    names(0)    id
+         set   position(1)  "8 14"              ; set    names(1)    prior
+         set   position(2)  "16 22"             ; set    names(2)    nurg
+         set   position(3)  "24 30"             ; set    names(3)    npprior
+         set   position(4)  "32 38"             ; set    names(4)    ntckts
+         set   position(5)  "40 44"             ; set    names(5)    ppri
+         set   position(6)  "46 55"             ; set    names(6)    name
+         set   position(7)  "57 68"             ; set    names(7)    user
+         set   position(8)  "70 74"             ; set    names(8)    state
+         set      rules(8)  rule_list
+         set   position(9)  "76 94"             ; set    names(9)    time
+         set  transform(9)  transform_date_time
+         set   position(10) "96 145"            ; set    names(10)   queue
+         set      rules(10)  rule_list
+         set   position(11) "147 152"           ; set    names(11)   slots
+         set   position(12) "153 end"           ; set    names(12)   jatask
+         set      rules(12)  rule_list
+      } else { # normat qstat
+         set   position(0)  "0 6"               ; set    names(0)    id
+         set   position(1)  "8 14"              ; set    names(1)    prior
+         set   position(2)  "16 25"             ; set    names(2)    name
+         set   position(3)  "27 38"             ; set    names(3)    user
+         set   position(4)  "40 44"             ; set    names(4)    state
+         set      rules(4)  rule_list
+         set   position(5)  "46 64"             ; set    names(5)    time
+         set  transform(5)  transform_date_time
+         set   position(6)  "66 115"            ; set    names(6)    queue
+         set      rules(6)  rule_list
+         set   position(7)  "117 121"            ; set    names(7)    master
+         set      rules(7)  rule_list
+         set   position(8)  "123 end"           ; set    names(8)    jatask
+         set      rules(8)  rule_list
+      }
    }
 
    # split text output of qstat to Array (list of lists)

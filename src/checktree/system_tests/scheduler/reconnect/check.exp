@@ -68,6 +68,12 @@ proc schedd_reconnect_setup  {} {
    global schedd_reconnect_test_globals
    global schedd_reconnect_saved_config
 
+   global CHECK_VALGRIND
+   if {$CHECK_VALGRIND == "master"} {
+      ts_log_info "skipping test with valgrind master, see CS-1002"
+      return 99
+   }
+
    get_config schedd_reconnect_saved_config
    if {[info exists schedd_reconnect_test_globals]} {
       unset schedd_reconnect_test_globals

@@ -1338,3 +1338,14 @@ proc install_send_answer {sp_id answer {scenario ""}} {
 
    ts_send $sp_id "$answer\n"
 }
+
+proc setup_ids {} {
+   global CHECK_HIGH_JOBIDS
+   if {$CHECK_HIGH_JOBIDS} {
+      if {[is_version_in_range "9.0.3"]} {
+         set_jobseqnum 2000000000
+      } else {
+         set_jobseqnum 9000000
+      }
+   }
+}

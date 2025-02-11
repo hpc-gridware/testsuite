@@ -85,6 +85,7 @@ lappend check_functions "install_execd"
 # do standard testsuite setup
 # WARNING: If making changes here please also update issue_1330 test !!!
 # ========
+lappend check_functions "setup_ids"
 lappend check_functions "cleanup_system"
 lappend check_functions "setup_queues"
 lappend check_functions "setup_testcheckpointobject"
