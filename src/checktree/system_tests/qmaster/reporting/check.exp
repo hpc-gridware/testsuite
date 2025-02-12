@@ -83,15 +83,15 @@ set check_cleanup_function reporting_cleanup
 
 # define test's procedure order
 set check_functions {}
+lappend check_functions "reporting_consumables_test"
 lappend check_functions "reporting_periodic_accounting_test"
 lappend check_functions "reporting_immediate_accounting_test"
 lappend check_functions "reporting_reporting_accounting_test"
 lappend check_functions "reporting_queue_state_test"
-lappend check_functions "reporting_complex_change_test"
-lappend check_functions "reporting_consumables_test"
 lappend check_functions "reporting_ar_error_state_test"
 lappend check_functions "reporting_ar_warning_state_test"
 lappend check_functions "reporting_no_comment_in_json"
+lappend check_functions "reporting_complex_change_test"
 
 # -------- local test procedures -----------------------------------------------
 
@@ -905,6 +905,7 @@ proc reporting_consumables_test {} {
    reporting_check_consumable_records $output "host_consumable" "" {"F001=1.000000=2.000000" "F002=0.000000=2.000000"}
    reporting_check_consumable_records $output "queue_consumable" "" {"F003=0.000000=2.000000" "slots=1.000000=1.000000"}
    wait_for_jobend $job_id "" 25
+
    # expect all host and queue consumables to be reported
    set output [reporting_read_consumable_records "queue_consumable"]
    reporting_check_consumable_records $output "host_consumable" "" {"F001=0.000000=2.000000" "F002=0.000000=2.000000"}
