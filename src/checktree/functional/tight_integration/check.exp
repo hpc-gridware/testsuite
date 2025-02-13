@@ -89,11 +89,21 @@ proc tight_integration_setup {} {
    global ts_config
    global TIGHT_INTEGRATION_FUNCTIONAL_SLOTS
    global tight_masterq tight_master_node
-   global tight_global_config
+   global tight_global_config tight_boostrap_backup
 
    # we have to set a short load report time
    # to workaround CR 6728379
    get_config tight_global_config
+
+   # workaround for CS-1019 sge_execd logs errors when running tightly integrated parallel jobs
+   # modify bootstrap file: use only 1 listener and 1 worker
+   if {1} {
+      bootstrap_file_read tight_bootstrap_backup
+      set bootstrap(listener_threads) 1
+      set bootstrap(worker_threads) 1
+      bootstrap_file_write bootstrap
+      shutdown_and_restart_qmaster
+   }
 
    # for the functional test we want to schedule one task to each host
    # we set the allocation rule to round_robin and request as many slots
@@ -159,7 +169,7 @@ proc tight_integration_setup_level {} {
 
 proc tight_integration_cleanup {} {
    global ts_config
-   global tight_global_config
+   global tight_global_config tight_bootstrap_backup
 
    reset_config_and_propagate tight_global_config
 
@@ -170,7 +180,12 @@ proc tight_integration_cleanup {} {
    del_pe "tight"
    del_queue "tight.q" "" 0 1
 
-   unset -nocomplain TIGHT_INTEGRATION_FUNCTIONAL_DURATION submit_command tight_masterq tight_master_node
+   if {[info exists tight_bootstrap_backup]} {
+      bootstrap_file_write tight_bootstrap_backup
+      shutdown_and_restart_qmaster
+   }
+
+   unset -nocomplain TIGHT_INTEGRATION_FUNCTIONAL_DURATION submit_command tight_masterq tight_master_node tight_bootstrap_backup
 }
 
 # -------- local test procedures: initialization------------------------------
