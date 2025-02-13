@@ -137,7 +137,7 @@ proc jsv_ge_mod_setup_level {} {
    set ckpt_param(ckpt_name) "jsv_ge_mod_ckpt"
    set ckpt_param(interface) "CPR"
    set ckpt_param(ckpt_command) "none"
-   set ckpt_param(migr_command) "/bin/true"
+   set ckpt_param(migr_command) "/usr/bin/true"
    set ckpt_param(restart_command) "none"
    set ckpt_param(clean_command) "none"
    set ckpt_param(ckpt_dir) "/tmp"
@@ -330,7 +330,7 @@ proc jsv_ge_mod_h {} {
 }
 
 proc jsv_ge_mod_i {} {
-   jsv_ge_mod "i" "-i /bin/true"
+   jsv_ge_mod "i" "-i /usr/bin/true"
 }
 
 proc jsv_ge_mod_j {} {

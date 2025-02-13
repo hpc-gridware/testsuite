@@ -101,8 +101,8 @@ proc issue_1803_setup {} {
    set_schedd_config my_schedd_conf
 
    # set prolog and epilog in all.q
-   set my_queue_conf(prolog) "/bin/true prolog"
-   set my_queue_conf(epilog) "/bin/true epilog"
+   set my_queue_conf(prolog) "/usr/bin/true prolog"
+   set my_queue_conf(epilog) "/usr/bin/true epilog"
    # test relies on (former default) shell_start_mode posix_compliant
    set my_queue_conf(shell_start_mode) "posix_compliant"
    mod_queue all.q  "" my_queue_conf
@@ -230,8 +230,8 @@ proc issue_1803_test {} {
 
                   if {$counter == 0} {
                      # prolog
-                     set expected_binary    "/bin/true"
-                     set expected_argument1 "/bin/true"
+                     set expected_binary    "/usr/bin/true"
+                     set expected_argument1 "/usr/bin/true"
                      set expected_argument2 "prolog"
                      set expected_argument3 ""
                   } elseif {$starter_method == "none" && $counter == 1 && [string first "-b y" $job_args] >= 0} {
@@ -260,8 +260,8 @@ proc issue_1803_test {} {
                      set expected_argument3 "1"
                   } elseif {$counter == 2} {
                      # epilog
-                     set expected_binary    "/bin/true"
-                     set expected_argument1 "/bin/true"
+                     set expected_binary    "/usr/bin/true"
+                     set expected_argument1 "/usr/bin/true"
                      set expected_argument2 "epilog"
                      set expected_argument3 ""
                   } else {

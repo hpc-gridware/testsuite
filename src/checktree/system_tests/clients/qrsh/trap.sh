@@ -35,7 +35,7 @@ echo "qrsh trap test with JOB_ID $JOB_ID"
 
 trap "echo received SIGINT" 2
 
-while /bin/true; do
+while /usr/bin/true; do
    sleep 1
 done
 

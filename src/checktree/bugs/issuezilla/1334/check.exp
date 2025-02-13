@@ -101,7 +101,7 @@ proc issue_1334_run {} {
    #
    #  Submit a binary job with no shell
    #
-   set my_job [submit_job "-q iz_1334  $option -shell n -b y /bin/true"]
+   set my_job [submit_job "-q iz_1334  $option -shell n -b y /usr/bin/true"]
    if {$my_job < 0} {
      ts_log_severe "submit job failed"
      return
@@ -139,7 +139,7 @@ proc issue_1334_run {} {
    #
    #  Submit a binary job with a shell
    #
-   set my_job [submit_job "-q iz_1334  $option -shell y -b y /bin/true"]
+   set my_job [submit_job "-q iz_1334  $option -shell y -b y /usr/bin/true"]
    if {$my_job < 0} {
      ts_log_severe "submit job failed"
      return

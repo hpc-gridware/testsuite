@@ -128,36 +128,36 @@ proc issue_2136_test {} {
       {0 "load_sensor" "blah"}
       {1 "load_sensor" "none"}
 
-      {1 "set_token_cmd" "/bin/true"}
+      {1 "set_token_cmd" "/usr/bin/true"}
       {0 "set_token_cmd" "blah"}
       {1 "set_token_cmd" "none"}
 
-      {1 "pag_cmd" "/bin/true"}
+      {1 "pag_cmd" "/usr/bin/true"}
       {0 "pag_cmd" "blah"}
       {1 "pag_cmd" "none"}
 
-      {1 "shepherd_cmd" "/bin/true"}
+      {1 "shepherd_cmd" "/usr/bin/true"}
       {0 "shepherd_cmd" "blah"}
       {1 "shepherd_cmd" "none"}
 
-      {1 "mailer" "/bin/true"}
+      {1 "mailer" "/usr/bin/true"}
       {1 "mailer" "/bin/foo"}
       {0 "mailer" "blah"}
       {0 "mailer" "none"}
 
-      {1 "xterm" "/bin/true"}
+      {1 "xterm" "/usr/bin/true"}
       {0 "xterm" "blah"}
       {0 "xterm" "none"}
 
-      {1 "qlogin_daemon" "/bin/true"}
+      {1 "qlogin_daemon" "/usr/bin/true"}
       {0 "qlogin_daemon" "blah"}
       {0 "qlogin_daemon" "none"}
 
-      {1 "rlogin_daemon" "/bin/true"}
+      {1 "rlogin_daemon" "/usr/bin/true"}
       {0 "rlogin_daemon" "blah"}
       {0 "rlogin_daemon" "none"}
 
-      {1 "rsh_daemon" "/bin/true"}
+      {1 "rsh_daemon" "/usr/bin/true"}
       {0 "rsh_daemon" "blah"}
       {0 "rsh_daemon" "none"}
    }
