@@ -524,7 +524,7 @@ proc usage_monitor_check {id test_name slots acct_slots wallclock master_host {j
    close_spawn_process $id
 
    if {$timeout_error} {
-      ts_log_severe "job didn't run as expected, master host $master_host"
+      ts_log_severe "job $jobid didn't run as expected, master host $master_host"
       delete_all_jobs
    } else {
       wait_for_jobend $jobid usage 60 0 1

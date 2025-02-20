@@ -47,7 +47,7 @@
 method=$1
 time=$2
 
-printf "master task started with job id %6d and pid %8d\n" $JOB_ID $$
+printf "master task started with job id %10d and pid %8d\n" $JOB_ID $$
 printf "starting with method %s for %d s\n" $method $time
 case $method in
    sleep)

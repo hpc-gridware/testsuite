@@ -120,7 +120,7 @@ proc issue_2028_test {} {
 
 
    # set jobseqnum file shortly before wraparound (will shutdown and restart qmaster)
-   if {[is_version_in_range "9.1.0"]} {
+   if {[is_version_in_range "9.1.1"]} {
       set max_jobseqnum 4294967295
    } elseif {[is_version_in_range "9.0.3"]} {
       set max_jobseqnum 2147483647
