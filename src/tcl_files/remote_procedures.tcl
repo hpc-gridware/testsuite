@@ -179,32 +179,26 @@ proc setup_qping_dump { log_array  } {
    set used_log_array(in_block)     0
 
    set timeout [host_conf_scale_timeout $master_host 15]
-   while {1} {
-      expect {
-         -i $used_log_array(spawn_id) -- full_buffer {
-            ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
-            break
-         }
-         -i $used_log_array(spawn_id) eof {
-            ts_log_severe "unexpected eof getting qping -dump connection to qmaster"
-            break
-         }
-         -i $used_log_array(spawn_id) timeout {
-            ts_log_severe "timeout for getting qping -dump connection to qmaster"
-            break
-         }
-         -i $used_log_array(spawn_id) -- "*debug_client*crm*\n" {
-            ts_log_fine "qping is now connected to qmaster!"
-            break
-         }
-         -i $used_log_array(spawn_id) -- "_exit_status_*\n" {
-            ts_log_fine "qping doesn't support -dump switch in this version"
-            break
-         }
-         -i $used_log_array(spawn_id) -- "*\n" {
-            ts_log_finest $expect_out(buffer)
-         }
-      }     
+   expect {
+      -i $used_log_array(spawn_id) -- full_buffer {
+         ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
+      }
+      -i $used_log_array(spawn_id) eof {
+         ts_log_severe "unexpected eof getting qping -dump connection to qmaster"
+      }
+      -i $used_log_array(spawn_id) timeout {
+         ts_log_severe "timeout for getting qping -dump connection to qmaster"
+      }
+      -i $used_log_array(spawn_id) -- "*debug_client*crm*\n" {
+         ts_log_fine "qping is now connected to qmaster!"
+      }
+      -i $used_log_array(spawn_id) -- "_exit_status_*\n" {
+         ts_log_fine "qping doesn't support -dump switch in this version"
+      }
+      -i $used_log_array(spawn_id) -- "*\n" {
+         ts_log_fine $expect_out(buffer)
+         exp_continue
+      }
    }
 }
 
