@@ -68,7 +68,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "reporting"
-set check_category        "ACCOUNTING REPORTING VERIFIED JENKINS_DISABLED"
+set check_category        "ACCOUNTING REPORTING JOB_SYNC VERIFIED JENKINS_DISABLED"
 set check_description(0)  "Test reporting parameters and qmaster reporting (old colon separated format)"
 set check_description(1)  "Test reporting parameters and qmaster reporting (JSON format)"
 set check_version_range(1) "9.0.0"

@@ -25,7 +25,7 @@ global check_need_running_system
 
 # define test's name and run level descriptions
 set check_name            "max_dyn_ec"
-set check_category        "COMPATIBILITY SYSTEM EVENTCLIENT VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM EVENTCLIENT JOB_SYNC VERIFIED"
 set check_description(0)  "test setting of the maximum number of dynamic event clients"
 set check_description(1)  "test a high number of event clients (qsub -sync y) with simulated hosts"
 

@@ -327,14 +327,14 @@ proc setup_output_directory {} {
    set files_deleted 0
    if {![file isdirectory "$job_output_dir"]} {
       file mkdir "$job_output_dir"
-      ts_log_fine "new output directory \"$job_output_dir\" generated!"
+      ts_log_finest "new output directory \"$job_output_dir\" generated!"
    } else {
-      ts_log_fine "deleting all files in output directory \"$job_output_dir\"!"
+      ts_log_finest "deleting all files in output directory \"$job_output_dir\"!"
       set files [glob -nocomplain $job_output_dir/*]
       foreach elem $files {
-         ts_log_fine $elem
+         ts_log_finest $elem
          if {[file isfile $elem] == 1 } {
-            ts_log_fine "deleting file $elem"
+            ts_log_finest "deleting file $elem"
             incr files_deleted
             delete_file $elem
          }

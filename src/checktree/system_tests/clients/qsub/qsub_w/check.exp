@@ -28,7 +28,7 @@ global check_need_running_system
 
 # define test's name and run level descriptions
 set check_name            "qsub_w"
-set check_category        "COMPATIBILITY SYSTEM EVENTCLIENT VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM EVENTCLIENT JOB_SYNC VERIFIED"
 set check_description(0)  "check qsub -w option"
 
 # define test's dependencies
@@ -54,7 +54,7 @@ proc qsub_option_w_cleanup {} {
 
 #****** qsub_option_w/qsub_option_w_qsub_sync() ********************************
 #  NAME
-#     qsub_option_w_qsub_sync() -- run qsub -sync y -w ... job
+#     qsub_option_w_qsub_sync() -- run qsub -sync x -w ... job
 #
 #  SYNOPSIS
 #     qsub_option_w_qsub_sync {options expect_success {messages {}}

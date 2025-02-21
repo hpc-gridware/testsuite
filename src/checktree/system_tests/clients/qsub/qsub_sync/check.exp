@@ -45,7 +45,7 @@ set check_root_access_needs "yes"
 set check_description(0)  "check every qsub sync option"
 
 set check_name         "qsub_sync"
-set check_category     "SUBMISSION VERIFIED"
+set check_category     "SUBMISSION JOB_SYNC VERIFIED"
 set check_needs        "init_core_system"
 
 # setup and cleanup functions
@@ -54,8 +54,16 @@ set check_cleanup_function "qsub_cleanup"
 
 # define test's procedure order
 set check_functions {}
-lappend check_functions "qsub_sync"
-lappend check_functions "qsub_sync_t"
+lappend check_functions "qsub_sync_y"
+lappend check_functions "qsub_sync_x"
+lappend check_functions "qsub_sync_r"
+lappend check_functions "qsub_sync_rx"
+
+lappend check_functions "qsub_sync_t_y"
+lappend check_functions "qsub_sync_t_x"
+lappend check_functions "qsub_sync_t_r"
+lappend check_functions "qsub_sync_t_rx"
+
 lappend check_functions "qsub_sync_failover"
 
 proc qsub_setup {} {
@@ -176,38 +184,86 @@ proc qsub_submit_check {jobargs expect_submit_error {user ""} {host ""} {output_
    return 0
 }
  
-proc qsub_sync {} {
+proc qsub_sync_with_option {option is_array} {
    global ts_config
    global job_output_dir test_host
 
    # first clean up output directory:  
    setup_output_directory
 
-   set option "-sync y"
-   set jobargs "$option -o /dev/null -e /dev/null -j y $ts_config(testsuite_root_dir)/scripts/qsub_exit.sh 5" 
+   # Start a qsub -sync job (regular job or array job)
+   if {$is_array == 1} {
+      set jobargs "-t 1-2"
+   }
+   append jobargs " -sync $option -o /dev/null -e /dev/null -j y $ts_config(testsuite_root_dir)/scripts/qsub_exit.sh 5"
    set result [start_sge_bin "qsub" $jobargs]
-   ts_log_fine "\njob has args: \"$jobargs\""
-   ts_log_fine "exit code: $prg_exit_state"
-   if {$prg_exit_state != 5} {
-      ts_log_severe "qsub did not exit with correct exit code: $result"
+
+   # translate macros for messages that we might get
+   set started_msg [translate_macro MSG_QSUB_JOBHASSTARTED_S "*"]
+   set exited_msg [translate_macro MSG_QSUB_JOBEXITED_SI "*" "5"]
+
+   # prepare the pattern that we expect to see in the output
+   # - start message should be only printed once also for array jobs
+   # - exit message should be printed for each task in an array
+   # - start messages have to appear in front of exit messages
+   # - this implicitely check the exit status of the tasks of an array job where the exist status is part of the message
+   if {$option == "y" || $option == "x"} {
+      set expected_pattern "$exited_msg"
+      set expected_exit_state 5
+   } elseif {$option == "r"} {
+      set expected_pattern "$started_msg"
+      set expected_exit_state 0
+   } elseif {$option == "xr" || $option == "rx"} {
+      set expected_pattern "$started_msg$exited_msg"
+      set expected_exit_state 5
+   }
+   if {$is_array == 1 && ( [string first "x" $option] != -1 || [string first "y" $option] != -1 ) } {
+      append expected_pattern "*$exited_msg"
+   }
+
+   # check if the output is correct
+   if {[string match "*$expected_pattern*" $result] == 0} {
+      ts_log_severe "qsub ... -sync $option output is \n\n $result \n\n but should match the pattern \n\n $expected_pattern"
+   }
+
+   # check the exit status of qsub
+   if { ( $option == "x" || $option == "y" ) && $prg_exit_state != $expected_exit_state} {
+      ts_log_severe "qsub did not exit with exit code 5. We got: $prg_exit_state"
+   } elseif { ( $option == "r" ) && $prg_exit_state != $expected_exit_state} {
+      ts_log_severe "qsub did not exit with exit code 0. We got: $prg_exit_state"
    }
 }
 
-proc qsub_sync_t {} {
-   global ts_config
-   global job_output_dir test_host
+proc qsub_sync_y {} {
+   qsub_sync_with_option "y" 0
+}
 
-   # first clean up output directory:  
-   setup_output_directory
+proc qsub_sync_x {} {
+   qsub_sync_with_option "x" 0
+}
 
-   set option "-sync y -t 1-2"
-   set jobargs "$option -o /dev/null -e /dev/null -j y $ts_config(testsuite_root_dir)/scripts/qsub_exit.sh 5"
-   set result [start_sge_bin "qsub" "$jobargs"]
-   ts_log_fine "\njob $result has args: \"$jobargs\""
-   ts_log_fine "exit state: $prg_exit_state"
-   if {$prg_exit_state != 5} {
-      ts_log_severe "qsub did not exit with correct exit code: $result"
-   }
+proc qsub_sync_r {} {
+   qsub_sync_with_option "r" 0
+}
+
+proc qsub_sync_rx {} {
+   qsub_sync_with_option "rx" 0
+}
+
+proc qsub_sync_t_y {} {
+   qsub_sync_with_option "y" 1
+}
+
+proc qsub_sync_t_x {} {
+   qsub_sync_with_option "x" 1
+}
+
+proc qsub_sync_t_r {} {
+   qsub_sync_with_option "r" 1
+}
+
+proc qsub_sync_t_rx {} {
+   qsub_sync_with_option "xr" 1
 }
 
 #****** check.61/qsub_sync_failover() *****************************************
