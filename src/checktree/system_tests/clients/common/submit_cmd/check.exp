@@ -222,6 +222,10 @@ proc submit_cmd_options {} {
    lappend options "-t 1-10:2 -tc 1"
    lappend options "-v foo=bar"
    lappend options "-wd /tmp"
+   # Beginning with v9.1.0, the output of -sync is available in qstat -j
+   if {[is_version_in_range "9.1.0"]} {
+      lappend options "-sync r"
+   }
 
    set cmd "$CHECK_ACTUAL_TEST_PATH/job.sh"
    set args "5"
