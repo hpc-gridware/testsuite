@@ -3607,6 +3607,11 @@ proc host_conf_detect_java_on_host {host} {
       "fbsd-*" {
          lappend default_locations "/usr/local"
       }
+      "darwin-*" {
+         lappend default_locations "/Library/Java/JavaVirtualMachines/jdk-20.jdk/Contents"
+         lappend default_locations "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents"
+         lappend default_locations "/Library/Java/JavaVirtualMachines/jdk-22.jdk/Contents"
+      }
       "lx-*" -
       "ulx-*" - 
       "xlx-*" {
