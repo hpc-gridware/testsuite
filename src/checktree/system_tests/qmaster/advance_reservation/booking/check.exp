@@ -1,0 +1,128 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+#set check_root_access_needs "yes"
+set check_version_range "9.0.4"
+
+# define test's name and run level descriptions
+set check_name            "ar_booking"
+set check_category        "AR RESERVATION SCHEDULER VERIFIED"
+set check_description(0)  "check if resource booking in ARs are correct for global resources"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function ar_booking_setup
+set check_cleanup_function ar_booking_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "ar_booking_test"
+
+# -------- local test procedures: initialization------------------------------
+
+proc ar_booking_setup {} {
+   get_current_cluster_config_array ts_config
+   global ar_booking_complex_backup ar_booking_global_backup ar_booking_slots
+
+   # we need a globally defined per job complex
+   get_complex ar_booking_complex_backup
+   get_exechost ar_booking_global_backup "global"
+   set complex(per_job) "pj INT <= YES JOB 0 0"
+   set_complex complex
+
+   set eh(complex_values) "pj=100"
+   set_exechost eh
+
+   # create a test queue and a pe with a defined number of slots
+   set ar_booking_slots [expr [llength $ts_config(execd_nodes)] * 10]
+   set pe(slots) $ar_booking_slots
+   set pe(allocation_rule) 10
+   add_pe "test.pe" pe
+
+   set q(slots) 10
+   set q(pe_list) "test.pe"
+   add_queue "test.q" "@allhosts" q
+
+   # we want to trigger scheduling manually
+   set sconf(schedule_interval) "1:0:0"
+   set_schedd_config sconf
+}
+
+proc ar_booking_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global ar_booking_complex_backup ar_booking_global_backup ar_booking_slots
+
+   reset_schedd_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   delete_all_ars
+
+   del_queue "test.q" "" 1 1
+   del_pe "test.pe"
+
+   set_exechost ar_booking_global_backup "global"
+   reset_complex ar_booking_complex_backup
+
+   unset -nocomplain ar_booking_complex_backup ar_booking_global_backup ar_booking_slots
+}
+
+
+proc ar_booking_test {} {
+   get_current_cluster_config_array ts_config
+   global ar_booking_slots
+
+   # submit an AR reserving the whole test.q
+   set ar_id [submit_ar "-pe test.pe $ar_booking_slots -d 3600 -l pj=100"]
+   if {$ar_id > 0} {
+      # submit jobs requesting pj
+      # with CS-430 present they will start in the first qinstance only (as the per job consumable is booked there)
+      # the 11th job will fail as it needs to go to a different qinstance
+      set job_opts "-ar $ar_id -l pj=1"
+      set job_args "-b y sleep 600"
+      for {set i 0} {$i < 11} {incr i} {
+         set job_id [submit_job "$job_opts $job_args"]
+         if {$job_id < 0} {
+            # error raised in submit_job
+            break
+         }
+         trigger_scheduling
+         if {[wait_for_jobstart $job_id "" 10] != 0} {
+            # error raised in wait_for_jobstart
+            break
+         }
+      }
+
+      # delete the ar - this will also delete its jobs
+      delete_ar $ar_id
+   }
+}
