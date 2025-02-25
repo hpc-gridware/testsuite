@@ -598,6 +598,14 @@ proc update_macro_messages_list {} {
            set line [replace_string $line " sge_x32 " "\"%lx\""]
            set line [replace_string $line " sge_x32" "\"%lx\""]
            set line [replace_string $line "sge_x32 " "\"%lx\""]
+           if {$ts_config(gridengine_version) < 91} {
+              set line [replace_string $line "sge_U32CFormat " "\"%ld\""]
+              set line [replace_string $line " sge_U32CFormat" "\"%ld\""]
+              set line [replace_string $line "sge_U32CFormat " "\"%ld\""]
+              set line [replace_string $line " sge_X32CFormat " "\"%lx\""]
+              set line [replace_string $line " sge_X32CFormat" "\"%lx\""]
+              set line [replace_string $line "sge_X32CFormat " "\"%lx\""]
+           }
            set line [replace_string $line " U32CFormat " "\"%ld\""]
            set line [replace_string $line " U32CFormat" "\"%ld\""]
            set line [replace_string $line "U32CFormat " "\"%ld\""]
