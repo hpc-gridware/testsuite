@@ -74,7 +74,7 @@ proc qsub_setup {} {
    global steps_per_queue size_interval
 
    # set some global variables
-   set num_queues [llength $ts_config(unique_arch_nodes)] 
+   set num_queues [llength $ts_config(unique_arch_nodes)]
    set job_output_dir $CHECK_JOB_OUTPUT_DIR
 
    # run host specific tests on a random host
@@ -88,7 +88,7 @@ proc qsub_setup {} {
 
    # backup global config
    get_config stored_configuration
-  
+
    # set config for fast scheduling / fast writing of accounting record
    set my_config(reporting_params) "accounting=true reporting=false flush_time=00:00:01 joblog=true sharelog=00:10:00"
    set_config my_config
@@ -100,7 +100,7 @@ proc qsub_cleanup {} {
    global job_output_dir test_host default_args default_q_args default_h_args
    global steps_per_queue size_interval
 
-   set spool_dir [get_spool_dir $ts_config(master_host)  "qmaster"] 
+   set spool_dir [get_spool_dir $ts_config(master_host)  "qmaster"]
    if {[is_qmaster_alive $ts_config(master_host) $spool_dir] != 1} {
       if {[is_scheduler_alive $ts_config(master_host) $spool_dir] != 1} {
          startup_qmaster 1
@@ -159,7 +159,7 @@ proc qsub_submit_check {jobargs expect_submit_error {user ""} {host ""} {output_
    }
 
    # wait for job accounting record and expect 1 or 2 ($output_files) output/error files
-   set time [expr [timestamp] + 300] 
+   set time [expr [timestamp] + 300]
    while {[timestamp] < $time}  {
       after 1000
       set back [was_job_running $job_id 0]
@@ -183,12 +183,12 @@ proc qsub_submit_check {jobargs expect_submit_error {user ""} {host ""} {output_
    del_job_files $job_id $job_output_dir 2
    return 0
 }
- 
+
 proc qsub_sync_with_option {option is_array} {
    global ts_config
    global job_output_dir test_host
 
-   # first clean up output directory:  
+   # first clean up output directory:
    setup_output_directory
 
    # Start a qsub -sync job (regular job or array job)
@@ -214,7 +214,7 @@ proc qsub_sync_with_option {option is_array} {
       set expected_pattern "$started_msg"
       set expected_exit_state 0
    } elseif {$option == "xr" || $option == "rx"} {
-      set expected_pattern "$started_msg$exited_msg"
+      set expected_pattern "${started_msg}*${exited_msg}"
       set expected_exit_state 5
    }
    if {$is_array == 1 && ( [string first "x" $option] != -1 || [string first "y" $option] != -1 ) } {
