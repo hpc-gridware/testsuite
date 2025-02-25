@@ -52,7 +52,7 @@ lappend check_functions       "issue_1848_run"
 
 proc issue_1848_setup {} {
    global ts_config
-   global prj1_id_list 
+   global prj1_id_list
    global issue_1848_setup_stored_config
 
    get_config issue_1848_setup_stored_config
@@ -83,16 +83,16 @@ proc issue_1848_setup {} {
          while { $SEC_COUNT <= $SEC_NO } {
             set SEC_NAME "sec$SEC_COUNT"
             stree_buffer_add_node stree "/$DIV_NAME/$DEP_NAME/$SEC_NAME" $TICKET_VALUE
-         
+
             set PRJ_TMP_COUNT "1"
             while { $PRJ_TMP_COUNT <= $PRJ_NO } {
                set PRJ "PRJ$PRJ_COUNT"
                stree_buffer_add_node stree "/$DIV_NAME/$DEP_NAME/$SEC_NAME/$PRJ" $TICKET_VALUE
 
                lappend prj1_id_list $PRJ
-              
+
                add_project "$PRJ"
-              
+
                incr PRJ_TMP_COUNT
                incr PRJ_COUNT
                ts_log_progress
@@ -113,7 +113,7 @@ proc issue_1848_setup {} {
 
 proc issue_1848_cleanup {} {
    global ts_config
-   global prj1_id_list 
+   global prj1_id_list
    global issue_1848_setup_stored_config
 
    del_sharetree
@@ -130,14 +130,14 @@ proc issue_1848_cleanup {} {
 
 proc issue_1848_run {} {
    global ts_config
-   global CHECK_PRODUCT_TYPE 
+   global CHECK_PRODUCT_TYPE
 
    # tail -f to qmaster messages file
    ts_log_fine "tail -f to qmaster messages file"
    set spooldir [get_qmaster_spool_dir]
    set id [init_logfile_wait $ts_config(master_host) "$spooldir/messages"]
 
-   get_schedd_config my_config 
+   get_schedd_config my_config
    set my_config(weight_tickets_share) "10000"
    set my_config(job_load_adjustments) "np_load_avg=0.0"
    set my_config(schedule_interval)    "2:0:0"
@@ -147,7 +147,7 @@ proc issue_1848_run {} {
 
    reset_schedd_config
 
-   get_schedd_config my_config 
+   get_schedd_config my_config
    set my_config(weight_tickets_share) "10000"
    set my_config(job_load_adjustments) "np_load_avg=0.0"
    set my_config(schedule_interval)    "2:0:0"
@@ -156,17 +156,18 @@ proc issue_1848_run {} {
    set_schedd_config my_config
 
    reset_schedd_config
-   
+
    ts_log_fine "waiting..."
-   
+
    # the time period we wait for messages
    set now [clock seconds]
-   set end [expr $now + 10]   
+   set end [expr $now + 10]
 
    # this is the spawn id of our tail to qmaster messages file
    set sp_id [lindex $id 1]
 
-   set count "0"
+   set count 0
+   set errors ""
 
    # wait until timeout
    while {$now < $end} {
@@ -187,9 +188,10 @@ proc issue_1848_run {} {
                set line [string trim $line]
                if {[string length $line] > 0} {
                   ts_log_finer "processing line: $line"
+                  append errors "$line\n"
                   incr count
                } ;# valid line
-            } ;# foreach line  
+            } ;# foreach line
          } ;# data
       } ;# switch
 
@@ -202,7 +204,7 @@ proc issue_1848_run {} {
    ts_log_fine "done waiting messages: $count"
 
    if {$count != 0} {
-      ts_log_severe "errors were generated"
+      ts_log_severe "errors were generated:\n$errors"
    }
 }
 
