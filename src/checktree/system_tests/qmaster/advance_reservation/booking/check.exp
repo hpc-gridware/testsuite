@@ -33,7 +33,7 @@ set check_version_range "9.0.4"
 
 # define test's name and run level descriptions
 set check_name            "ar_booking"
-set check_category        "AR RESERVATION SCHEDULER VERIFIED"
+set check_category        "AR RESERVATION SCHEDULER"
 set check_description(0)  "check if resource booking in ARs are correct for global resources"
 
 # define test's dependencies
