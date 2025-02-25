@@ -87,18 +87,20 @@ lappend check_functions "jsv_ge_add_pe_max"
 lappend check_functions "jsv_ge_add_R"
 lappend check_functions "jsv_ge_add_r"
 lappend check_functions "jsv_ge_add_S"
-
-# beginning with version 9.0.0 the XML structure for resource and queue requests changed
-# therefore we cannot use following check functions anymore
-if {0} {
-lappend check_functions "jsv_ge_add_masterq"
 lappend check_functions "jsv_ge_add_l_hard"
+lappend check_functions "jsv_ge_add_global_l_hard"
 lappend check_functions "jsv_ge_add_l_hard_wildcard"
-lappend check_functions "jsv_ge_add_l_soft"
-lappend check_functions "jsv_ge_add_l_soft_wildcard"
+lappend check_functions "jsv_ge_add_global_l_hard_wildcard"
 lappend check_functions "jsv_ge_add_q_hard"
+lappend check_functions "jsv_ge_add_global_q_hard"
+lappend check_functions "jsv_ge_add_masterq"
+lappend check_functions "jsv_ge_add_master_q_hard"
+lappend check_functions "jsv_ge_add_l_soft"
+lappend check_functions "jsv_ge_add_global_l_soft"
+lappend check_functions "jsv_ge_add_l_soft_wildcard"
+lappend check_functions "jsv_ge_add_global_l_soft_wildcard"
 lappend check_functions "jsv_ge_add_q_soft"
-}
+lappend check_functions "jsv_ge_add_global_q_soft"
 
 proc jsv_ge_add_setup {} {
    global ts_config
@@ -635,111 +637,192 @@ proc jsv_ge_add_M {} {
    jsv_ge_add_param_set "false" "M" "" "" "JB_mail_list mail_list" "-M a@sun.com"
 }
 
-proc jsv_ge_add_q_hard {} {
+proc jsv_ge_add_q_hard_func {jsv_attr_name} {
    global ts_config
 
    # set value which was not provided by submitter
-   jsv_ge_add_param_set "false" "q_hard" "all.q" "all.q" "JB_hard_queue_list QR_name" ""
+   jsv_ge_add_param_set "false" $jsv_attr_name "all.q" "all.q" "JB_request_set_list ulong_sublist JRS_hard_queue_list QR_name" ""
+   jsv_ge_add_param_set "false" $jsv_attr_name "all.q" "0" "JB_request_set_list ulong_sublist JRS_scope" ""
 
    # overwrite value which was specified during submission
-   jsv_ge_add_param_set "false" "q_hard" "all2.q" "all2.q" "JB_hard_queue_list QR_name" "-hard -q all.q"
+   jsv_ge_add_param_set "false" $jsv_attr_name "all2.q" "all2.q" "JB_request_set_list ulong_sublist JRS_hard_queue_list QR_name" "-hard -q all.q"
+   jsv_ge_add_param_set "false" $jsv_attr_name "all2.q" "0" "JB_request_set_list ulong_sublist JRS_scope" "-hard -q all.q"
 
    # deletion of value
-   jsv_ge_add_param_set "false" "q_hard" "" "" "JB_hard_queue_list QR_name" "-hard -q all.q"
+   jsv_ge_add_param_set "false" $jsv_attr_name "" "" "JB_request_set_list ulong_sublist JRS_hard_queue_list QR_name" "-hard -q all.q"
+   jsv_ge_add_param_set "false" $jsv_attr_name "" "0" "JB_request_set_list ulong_sublist JRS_scope" "-hard -q all.q"
+}
+
+proc jsv_ge_add_q_hard {} {
+    jsv_ge_add_q_hard_func "q_hard"
+}
+
+proc jsv_ge_add_global_q_hard {} {
+    jsv_ge_add_q_hard_func "global_q_hard"
+}
+
+proc jsv_ge_add_q_soft_func {jsv_attr_name} {
+   global ts_config
+
+   # set value which was not provided by submitter
+   jsv_ge_add_param_set "false" $jsv_attr_name "all.q" "all.q" "JB_request_set_list ulong_sublist JRS_soft_queue_list QR_name" ""
+   jsv_ge_add_param_set "false" $jsv_attr_name "all.q" "0" "JB_request_set_list ulong_sublist JRS_scope" ""
+
+   # overwrite value which was specified during submission
+   jsv_ge_add_param_set "false" $jsv_attr_name "all2.q" "all2.q" "JB_request_set_list ulong_sublist JRS_soft_queue_list QR_name" "-soft -q all.q"
+   jsv_ge_add_param_set "false" $jsv_attr_name "all2.q" "0" "JB_request_set_list ulong_sublist JRS_scope" "-soft -q all.q"
+
+   # deletion of value
+   jsv_ge_add_param_set "false" $jsv_attr_name "" "" "JB_request_set_list ulong_sublist JRS_soft_queue_list QR_name" "-soft -q all.q"
+   jsv_ge_add_param_set "false" $jsv_attr_name "" "0" "JB_request_set_list ulong_sublist JRS_scope" "-soft -q all.q"
 }
 
 proc jsv_ge_add_q_soft {} {
+   jsv_ge_add_q_soft_func "q_soft"
+}
+
+proc jsv_ge_add_global_q_soft {} {
+   jsv_ge_add_q_soft_func "global_q_soft"
+}
+
+proc jsv_ge_add_l_hard_func {jsv_attr_name} {
    global ts_config
 
-   # set value which was not provided by submitter
-   jsv_ge_add_param_set "false" "q_soft" "all.q" "all.q" "JB_soft_queue_list QR_name" ""
+   # set value which was not provided by submitter. list will then contain one entry
+   jsv_ge_add_param_set "true" $jsv_attr_name "123M" "123M" "JB_request_set_list ulong_sublist JRS_hard_resource_list qstat_l_requests CE_stringval" "" "add" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "123M" "0" "JB_request_set_list ulong_sublist JRS_scope" "" "add" "h_vmem"
 
    # overwrite value which was specified during submission
-   jsv_ge_add_param_set "false" "q_soft" "all2.q" "all2.q" "JB_soft_queue_list QR_name" "-soft -q all.q"
+   jsv_ge_add_param_set "true" $jsv_attr_name "123M" "123M" "JB_request_set_list ulong_sublist JRS_hard_resource_list qstat_l_requests CE_stringval" "-hard -l h_vmem=456M" "add" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "123M" "0" "JB_request_set_list ulong_sublist JRS_scope" "" "add" "h_vmem"
 
-   # deletion of value
-   jsv_ge_add_param_set "false" "q_soft" "" "" "JB_soft_queue_list QR_name" "-soft -q all.q"
+   # deletion of value so that the list will be empty
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "" "JB_request_set_list ulong_sublist JRS_hard_resource_list qstat_l_requests CE_stringval" "-hard -l h_vmem=123M" "del" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "" "JB_request_set_list ulong_sublist JRS_scope" "" "del" "h_vmem"
+
+   # job with following resource request will be submitted: -hard -l h_v mem=123M,h_fsize=6M
+   # then JSV will modify it to:  -hard -l h_fsize=6M
+   # so the value for the tag <JB_hard_resource_list><qstat_l_requests><CE_stringval> should 6M
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "6M" "JB_request_set_list ulong_sublist JRS_hard_resource_list qstat_l_requests CE_stringval" "-hard -l h_vmem=123M,h_fsize=6M" "del" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "" "JB_request_set_list ulong_sublist JRS_scope" "" "del" "h_vmem"
+
+   # job with following resource request will be submitted: -hard -l h_v mem=123M,h_fsize=6M
+   # then JSV will modify it to:  -hard -l h_fsize=6M
+   # so the value for the tag <JB_hard_resource_list><qstat_l_requests><CE_stringval> should 6M
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "6M" "JB_request_set_list ulong_sublist JRS_hard_resource_list qstat_l_requests CE_stringval" "-hard -l h_vmem=123M,h_fsize=6M" "del" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "" "JB_request_set_list ulong_sublist JRS_scope" "" "del" "h_vmem"
 }
 
 proc jsv_ge_add_l_hard {} {
-   global ts_config
+   jsv_ge_add_l_hard_func "l_hard"
+}
 
-   # set value which was not provided by submitter. list will then contain one entry
-   jsv_ge_add_param_set "true" "l_hard" "123M" "123M" "JB_hard_resource_list qstat_l_requests CE_stringval" "" "add" "h_vmem"
+proc jsv_ge_add_global_l_hard {} {
+   jsv_ge_add_l_hard_func "global_l_hard"
+}
 
-   # overwrite value which was specified during submission
-   jsv_ge_add_param_set "true" "l_hard" "123M" "123M" "JB_hard_resource_list qstat_l_requests CE_stringval" "-hard -l h_vmem=456M" "add" "h_vmem"
+proc jsv_ge_add_l_hard_wildcard_func {jsv_attr_name} {
+   # add of new resource request with wildcard
+   jsv_ge_add_param_set "true" $jsv_attr_name "\"(lx*|sol*)&*64*\"" "(lx*|sol*)&amp;*64*" "JB_request_set_list ulong_sublist JRS_hard_resource_list qstat_l_requests CE_stringval" "" "add" "arch"
+   jsv_ge_add_param_set "true" $jsv_attr_name "\"(lx*|sol*)&*64*\"" "0" "JB_request_set_list ulong_sublist JRS_scope" "" "add" "arch"
 
-   # deletion of value so that the list will be empty
-   jsv_ge_add_param_set "true" "l_hard" "" "" "JB_hard_resource_list qstat_l_requests CE_stringval" "-hard -l h_vmem=123M" "del" "h_vmem"
+   # mod of resource request with wildcard
+   jsv_ge_add_param_set "true" $jsv_attr_name "\"(lx*|sol*)&*64*\"" "(lx*|sol*)&amp;*64*" "JB_request_set_list ulong_sublist JRS_hard_resource_list qstat_l_requests CE_stringval" "-hard -l a=troete" "mod" "arch"
+   jsv_ge_add_param_set "true" $jsv_attr_name "\"(lx*|sol*)&*64*\"" "0" "JB_request_set_list ulong_sublist JRS_scope" "-hard -l a=troete" "mod" "arch"
 
-   # job with following resource request will be submitted: -hard -l h_v mem=123M,h_fsize=6M
-   # then JSV will modify it to:  -hard -l h_fsize=6M
-   # so the value for the tag <JB_hard_resource_list><qstat_l_requests><CE_stringval> should 6M
-   jsv_ge_add_param_set "true" "l_hard" "" "6M" "JB_hard_resource_list qstat_l_requests CE_stringval" "-hard -l h_vmem=123M,h_fsize=6M" "del" "h_vmem"
-
-   # job with following resource request will be submitted: -hard -l h_v mem=123M,h_fsize=6M
-   # then JSV will modify it to:  -hard -l h_fsize=6M
-   # so the value for the tag <JB_hard_resource_list><qstat_l_requests><CE_stringval> should 6M
-   jsv_ge_add_param_set "true" "l_hard" "" "6M" "JB_hard_resource_list qstat_l_requests CE_stringval" "-hard -l h_vmem=123M,h_fsize=6M" "del" "h_vmem"
+   # del of resource request
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "" "JB_request_set_list ulong_sublist JRS_hard_resource_list qstat_l_requests CE_stringval" "-hard -l a=\"(lx*|sol*)&*64*\"" "del" "arch"
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "0" "JB_request_set_list ulong_sublist JRS_scope" "-hard -l a=\"(lx*|sol*)&*64*\"" "del" "arch"
 }
 
 proc jsv_ge_add_l_hard_wildcard {} {
-   # add of new resource request with wildcard
-   jsv_ge_add_param_set "true" "l_hard" "\"(lx*|sol*)&*64*\"" "(lx*|sol*)&amp;*64*" "JB_hard_resource_list qstat_l_requests CE_stringval" "" "add" "arch"
-
-   # mod of resource request with wildcard
-   jsv_ge_add_param_set "true" "l_hard" "\"(lx*|sol*)&*64*\"" "(lx*|sol*)&amp;*64*" "JB_hard_resource_list qstat_l_requests CE_stringval" "-hard -l a=troete" "mod" "arch"
-
-   # del of resource request
-   jsv_ge_add_param_set "true" "l_hard" "" "" "JB_hard_resource_list qstat_l_requests CE_stringval" "-hard -l a=\"(lx*|sol*)&*64*\"" "del" "arch"
+    jsv_ge_add_l_hard_wildcard_func "l_hard"
 }
 
-proc jsv_ge_add_l_soft {} {
+proc jsv_ge_add_global_l_hard_wildcard {} {
+    jsv_ge_add_l_hard_wildcard_func "global_l_hard"
+}
+
+proc jsv_ge_add_l_soft_func {jsv_attr_name} {
    global ts_config
 
    # set value which was not provided by submitter. list will then contain one entry
-   jsv_ge_add_param_set "true" "l_soft" "123M" "123M" "JB_soft_resource_list qstat_l_requests CE_stringval" "" "add" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "123M" "123M" "JB_request_set_list ulong_sublist JRS_soft_resource_list qstat_l_requests CE_stringval" "" "add" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "123M" "0" "JB_request_set_list ulong_sublist JRS_scope" "" "add" "h_vmem"
 
    # overwrite value which was specified during submission
-   jsv_ge_add_param_set "true" "l_soft" "123M" "123M" "JB_soft_resource_list qstat_l_requests CE_stringval" "-soft -l h_vmem=456M" "add" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "123M" "123M" "JB_request_set_list ulong_sublist JRS_soft_resource_list qstat_l_requests CE_stringval" "-soft -l h_vmem=456M" "add" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "123M" "0" "JB_request_set_list ulong_sublist JRS_scope" "-soft -l h_vmem=456M" "add" "h_vmem"
 
    # deletion of value so that the list will be empty
-   jsv_ge_add_param_set "true" "l_soft" "" "" "JB_soft_resource_list qstat_l_requests CE_stringval" "-soft -l h_vmem=123M" "del" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "" "JB_request_set_list ulong_sublist JRS_soft_resource_list qstat_l_requests CE_stringval" "-soft -l h_vmem=123M" "del" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "0" "JB_request_set_list ulong_sublist JRS_scope" "-soft -l h_vmem=123M" "del" "h_vmem"
 
    # job with following resource request will be submitted: -soft -l h_v mem=123M,h_fsize=6M
    # then JSV will modify it to:  -soft -l h_fsize=6M
    # so the value for the tag <JB_soft_resource_list><qstat_l_requests><CE_stringval> should 6M
-   jsv_ge_add_param_set "true" "l_soft" "" "6M" "JB_soft_resource_list qstat_l_requests CE_stringval" "-soft -l h_vmem=123M,h_fsize=6M" "del" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "6M" "JB_request_set_list ulong_sublist JRS_soft_resource_list qstat_l_requests CE_stringval" "-soft -l h_vmem=123M,h_fsize=6M" "del" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "0" "JB_request_set_list ulong_sublist JRS_scope" "-soft -l h_vmem=123M,h_fsize=6M" "del" "h_vmem"
 
    # job with following resource request will be submitted: -soft -l h_v mem=123M,h_fsize=6M
    # then JSV will modify it to:  -soft -l h_fsize=6M
    # so the value for the tag <JB_soft_resource_list><qstat_l_requests><CE_stringval> should 6M
-   jsv_ge_add_param_set "true" "l_soft" "" "6M" "JB_soft_resource_list qstat_l_requests CE_stringval" "-soft -l h_vmem=123M,h_fsize=6M" "del" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "6M" "JB_request_set_list ulong_sublist JRS_soft_resource_list qstat_l_requests CE_stringval" "-soft -l h_vmem=123M,h_fsize=6M" "del" "h_vmem"
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "0" "JB_request_set_list ulong_sublist JRS_scope" "-soft -l h_vmem=123M,h_fsize=6M" "del" "h_vmem"
+}
+
+proc jsv_ge_add_l_soft {} {
+    jsv_ge_add_l_soft_func "l_soft"
+}
+
+proc jsv_ge_add_global_l_soft {} {
+    jsv_ge_add_l_soft_func "global_l_soft"
+}
+
+proc jsv_ge_add_l_soft_wildcard_func {jsv_attr_name} {
+   # add of new resource request with wildcard
+   jsv_ge_add_param_set "true" $jsv_attr_name "\"(lx*|sol*)&*64*\"" "(lx*|sol*)&amp;*64*" "JB_request_set_list ulong_sublist JRS_soft_resource_list qstat_l_requests CE_stringval" "" "add" "arch"
+   jsv_ge_add_param_set "true" $jsv_attr_name "\"(lx*|sol*)&*64*\"" "0" "JB_request_set_list ulong_sublist JRS_scope" "" "add" "arch"
+
+   # mod of resource request with wildcard
+   jsv_ge_add_param_set "true" $jsv_attr_name "\"(lx*|sol*)&*64*\"" "(lx*|sol*)&amp;*64*" "JB_request_set_list ulong_sublist JRS_soft_resource_list qstat_l_requests CE_stringval" "-soft -l \"a=(a*|b*)\"" "mod" "arch"
+   jsv_ge_add_param_set "true" $jsv_attr_name "\"(lx*|sol*)&*64*\"" "0" "JB_request_set_list ulong_sublist JRS_scope" "-soft -l \"a=(a*|b*)\"" "mod" "arch"
+
+   # del of resource request
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "" "JB_request_set_list ulong_sublist JRS_soft_resource_list qstat_l_requests CE_stringval" "-soft -l a=\"(lx*|sol*)&*64*\"" "del" "arch"
+   jsv_ge_add_param_set "true" $jsv_attr_name "" "0" "JB_request_set_list ulong_sublist JRS_scope" "-soft -l a=\"(lx*|sol*)&*64*\"" "del" "arch"
 }
 
 proc jsv_ge_add_l_soft_wildcard {} {
-   # add of new resource request with wildcard
-   jsv_ge_add_param_set "true" "l_soft" "\"(lx*|sol*)&*64*\"" "(lx*|sol*)&amp;*64*" "JB_soft_resource_list qstat_l_requests CE_stringval" "" "add" "arch"
-
-   # mod of resource request with wildcard
-   jsv_ge_add_param_set "true" "l_soft" "\"(lx*|sol*)&*64*\"" "(lx*|sol*)&amp;*64*" "JB_soft_resource_list qstat_l_requests CE_stringval" "-soft -l \"a=(a*|b*)\"" "mod" "arch"
-
-   # del of resource request
-   jsv_ge_add_param_set "true" "l_soft" "" "" "JB_soft_resource_list qstat_l_requests CE_stringval" "-soft -l a=\"(lx*|sol*)&*64*\"" "del" "arch"
+   jsv_ge_add_l_soft_wildcard_func "l_soft"
 }
 
-proc jsv_ge_add_masterq {} {
+proc jsv_ge_add_global_l_soft_wildcard {} {
+   jsv_ge_add_l_soft_wildcard_func "global_l_soft"
+}
+
+proc jsv_ge_add_masterq_func {jsv_attr_name} {
    global ts_config
 
    # set value which was not provided by submitter
-   jsv_ge_add_param_set "false" "masterq" "all.q" "all.q" "JB_master_hard_queue_list QR_name" "-pe mytestpe 1"
+   jsv_ge_add_param_set "false" $jsv_attr_name "all.q" "all.q" "JB_request_set_list ulong_sublist JRS_hard_queue_list QR_name" "-pe mytestpe 1"
+   jsv_ge_add_param_set "false" $jsv_attr_name "all.q" "1" "JB_request_set_list ulong_sublist JRS_scope" "-pe mytestpe 1"
 
    # overwrite value which was specified during submission
-   jsv_ge_add_param_set "false" "masterq" "all2.q" "all2.q" "JB_master_hard_queue_list QR_name" "-pe mytestpe 1 -masterq all.q"
+   jsv_ge_add_param_set "false" $jsv_attr_name "all2.q" "all2.q" "JB_request_set_list ulong_sublist JRS_hard_queue_list QR_name" "-pe mytestpe 1 -masterq all.q"
+   jsv_ge_add_param_set "false" $jsv_attr_name "all2.q" "1" "JB_request_set_list ulong_sublist JRS_scope" "-pe mytestpe 1 -masterq all.q"
 
    # deletion of value
-   jsv_ge_add_param_set "false" "masterq" "" "" "JB_master_hard_queue_list QR_name" "-pe mytestpe 1 -masterq all.q"
+   jsv_ge_add_param_set "false" $jsv_attr_name "" "" "JB_request_set_list ulong_sublist JRS_hard_queue_list QR_name" "-pe mytestpe 1 -masterq all.q"
+   jsv_ge_add_param_set "false" $jsv_attr_name "" "1" "JB_request_set_list ulong_sublist JRS_scope" "-pe mytestpe 1 -masterq all.q"
+}
+
+proc jsv_ge_add_masterq {} {
+    jsv_ge_add_masterq_func "masterq"
+}
+
+proc jsv_ge_add_master_q_hard {} {
+    jsv_ge_add_masterq_func "master_q_hard"
 }
 
 proc jsv_ge_add_notify {} {
