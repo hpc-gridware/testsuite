@@ -1,20 +1,20 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
-#  
+#
 #  Copyright 2024 HPC-Gridware GmbH
-#  
+#
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
 #  You may obtain a copy of the License at
-#  
+#
 #      http://www.apache.org/licenses/LICENSE-2.0
-#  
+#
 #  Unless required by applicable law or agreed to in writing, software
 #  distributed under the License is distributed on an "AS IS" BASIS,
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-#  
+#
 ###########################################################################
 #___INFO__MARK_END_NEW__
 
@@ -116,7 +116,7 @@ proc per_host_consumable_setup_level {} {
          set phc_consumable_type "hc"
          set complex_values "phc_int=2,phc_rsmap=2(A B)"
       }
-      3 - 
+      3 -
       5 {
          # set up consumables on exechost layer, but we limit job execution by AR / RQS
          set phc_capacity_hosts [host_conf_get_suited_hosts 2]
@@ -264,7 +264,7 @@ proc per_host_consumable_check_running_job_count {num_expected} {
 proc per_host_consumable_int_sequential {} {
    get_current_cluster_config_array ts_config
    global phc_consumable_type phc_ar
-   
+
    # submit a job requesting one of phc_int, expect 3 to be left
    set job_opts "-o /dev/null -e /dev/null -b y -l phc_int=1"
    if {$phc_ar != 0} {
@@ -296,7 +296,7 @@ proc per_host_consumable_int_sequential {} {
 proc per_host_consumable_rsmap_sequential {} {
    get_current_cluster_config_array ts_config
    global phc_consumable_type phc_ar
-   
+
    # submit a job requesting two of phc_rsmap, expect 3 to be left
    set job_opts "-o /dev/null -e /dev/null -b y -l phc_rsmap=2"
    if {$phc_ar != 0} {
@@ -328,7 +328,7 @@ proc per_host_consumable_rsmap_sequential {} {
 proc per_host_consumable_int_array {} {
    get_current_cluster_config_array ts_config
    global phc_consumable_type phc_ar
-   
+
    # submit an array job requesting one of phc_int each
    set job_opts "-o /dev/null -e /dev/null -b y -t 1-10 -l phc_int=1"
    if {$phc_ar != 0} {
@@ -351,7 +351,7 @@ proc per_host_consumable_int_array {} {
 proc per_host_consumable_rsmap_array {} {
    get_current_cluster_config_array ts_config
    global phc_consumable_type phc_ar
-   
+
    # submit an array job requesting two of phc_rsmap each
    set job_opts "-o /dev/null -e /dev/null -b y -t 1-10 -l phc_rsmap=2"
    if {$phc_ar != 0} {
@@ -374,7 +374,7 @@ proc per_host_consumable_rsmap_array {} {
 proc per_host_consumable_int_parallel {} {
    get_current_cluster_config_array ts_config
    global phc_consumable_type phc_ar
-   
+
    # submit a parallel job requesting one of phc_int (per host)
    set job_opts "-o /dev/null -e /dev/null -b y -l phc_int=1 -pe test.pe 8"
    if {$phc_ar != 0} {
@@ -386,8 +386,12 @@ proc per_host_consumable_int_parallel {} {
 
    # expect the job to be running in 2 chunks
    set num_running [per_host_consumable_check_running_job_count 1]
-   # expect remaining capacity being 2
-   per_host_consumable_check_remaining $phc_consumable_type "phc_int" 2
+   # expect remaining capacity being 3|2:4 (1 consumed globally or 1 per host)
+   if {$phc_consumable_type == "gc"} {
+      per_host_consumable_check_remaining $phc_consumable_type "phc_int" 3
+   } else {
+      per_host_consumable_check_remaining $phc_consumable_type "phc_int" 2
+   }
 
    # cleanup
    delete_all_jobs
@@ -397,7 +401,7 @@ proc per_host_consumable_int_parallel {} {
 proc per_host_consumable_rsmap_parallel {} {
    get_current_cluster_config_array ts_config
    global phc_consumable_type phc_ar
-   
+
    # submit a parallel job requesting two of phc_rsmap (per host)
    set job_opts "-o /dev/null -e /dev/null -b y -l phc_rsmap=2 -pe test.pe 8"
    if {$phc_ar != 0} {
@@ -409,8 +413,12 @@ proc per_host_consumable_rsmap_parallel {} {
 
    # expect the job to be running in 2 chunks
    set num_running [per_host_consumable_check_running_job_count 1]
-   # expect remaining capacity being 2
-   per_host_consumable_check_remaining $phc_consumable_type "phc_rsmap" 0
+   # expect remaining capacity being 2|0:4 (consumed globally or 2 per host = 4)
+   if {$phc_consumable_type == "gc"} {
+      per_host_consumable_check_remaining $phc_consumable_type "phc_rsmap" 2
+   } else {
+      per_host_consumable_check_remaining $phc_consumable_type "phc_rsmap" 0
+   }
 
    # cleanup
    delete_all_jobs
