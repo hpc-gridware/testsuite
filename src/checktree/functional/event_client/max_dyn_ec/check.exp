@@ -397,7 +397,10 @@ proc max_dyn_ec_out_of_ids {} {
                      incr finished
                   }
                   "*cannot register event client. Only 1 event clients are allowed in the system" {
-                     incr rejected
+                     # workaround for CS-1060
+                     if {[string first "Unable to initialize environment" $line] < 0} {
+                        incr rejected
+                     }
                   }
                   "qsub_sync.sh exiting" {
                      set done 1
