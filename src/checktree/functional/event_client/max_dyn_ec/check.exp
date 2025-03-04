@@ -42,7 +42,7 @@ set check_cleanup_function max_dyn_ec_cleanup
 # define test's procedure order
 set check_functions {}
 lappend check_functions "max_dyn_ec_default" ;# shall be first check_function
-#lappend check_functions "max_dyn_ec_massive_qsub_sync"
+lappend check_functions "max_dyn_ec_massive_qsub_sync"
 lappend check_functions "max_dyn_ec_out_of_ids"
 
 # -------- local test procedures: initialization------------------------------
