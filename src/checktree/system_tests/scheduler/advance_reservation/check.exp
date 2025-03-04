@@ -39,11 +39,6 @@ global check_description
 global check_needs
 global check_functions 
 global check_root_access_needs
-global test_host test_hosts
-global queue_name
-global complex_queue_name
-global global_consumable host_consumable
-global host_complex queue_complex 
 
 set check_root_access_needs "yes"
 
@@ -52,7 +47,6 @@ set check_name            "scheduler_advance_reservation"
 set check_category        "AR RESERVATION RQS SCHEDULER VERIFIED"
 set check_description(0)  "check advance reservation"
 set check_description(1)  "check advance reservation with enabled resource reservation"
-
 
 # define test's dependencies
 set check_needs           "init_core_system" 
@@ -113,7 +107,7 @@ proc scheduler_advance_reservation_setup {} {
    set complex($host_complex)  "hc1       RESTRING  ==    YES    NO    NONE     0"
    set complex($queue_complex)  "qc2      RESTRING  ==    YES    NO    NONE     0"
    set_complex complex
-   
+
    # add global complex
    set config(complex_values) "$global_consumable=4"
    set_exechost config "global"

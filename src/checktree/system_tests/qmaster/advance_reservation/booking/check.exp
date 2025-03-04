@@ -29,7 +29,7 @@ global check_need_running_system
 global check_version_range
 
 #set check_root_access_needs "yes"
-set check_version_range "9.0.4"
+set check_version_range "9.0.5"
 
 # define test's name and run level descriptions
 set check_name            "ar_booking"
