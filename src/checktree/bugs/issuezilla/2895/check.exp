@@ -43,7 +43,7 @@ set check_description(0)      "check that execd does not stop on access denied e
 set check_description(1)      "check that never ever connected execd does not stop on access denied error from qmaster"
 set check_needs               "init_core_system"      ;# dependencies of this check (name of other check)
 set check_root_access_needs   "yes"
-set check_need_running_system "no" 
+set check_need_running_system "no"
 
 # setup and cleanup functions
 set check_setup_level_function "issue_2895_setup"
@@ -92,7 +92,7 @@ proc issue_2895_setup {} {
    set host_aliases_test_ip $ip
 
    set cur_nr 1
-   
+
    set long_name "$host_aliases_test_host.$ts_config(dns_domain)"
    set my_alias_file($cur_nr) "$host_aliases_test_ip $host_aliases_test_host $long_name"
 
@@ -158,7 +158,7 @@ proc issue_2895_cleanup {} {
 #     issue_2895_run() -- test host alias file
 #
 #  SYNOPSIS
-#     issue_2895_run { } 
+#     issue_2895_run { }
 #
 #  FUNCTION
 #     Scenario 1: qmaster using host alias file resolves execd host different
@@ -201,7 +201,7 @@ proc issue_2895_run {} {
 
    if {$error_text == ""} {
       set possible_error_text_2 [translate_macro MSG_COM_CANTREGISTER_SS "*" "*"]
-      if {[is_version_in_range "9.1.0"] || [is_version_in_range "9.0.4"]} {
+      if {[is_version_in_range "9.1.0"]} {
          set possible_error_text_3 [translate_macro MSG_SHADOWD_CONTROLLEDSHUTDOWN_SI "*" "*"]
       } else {
          set possible_error_text_3 [translate_macro MSG_SHADOWD_CONTROLLEDSHUTDOWN_SU "*" "*"]
@@ -230,7 +230,7 @@ proc issue_2895_run {} {
          # shutdown execd
          shutdown_system_daemon $host_aliases_test_host "execd"
          ts_log_fine "execd $host_aliases_test_host should be down now"
-                  
+
          # move host_aliases file
          set move_away_cmd "$ts_config(product_root)/$ts_config(cell)/common/host_aliases $ts_config(product_root)/$ts_config(cell)/common/host_aliases.tmp"
          set move_back_cmd "$ts_config(product_root)/$ts_config(cell)/common/host_aliases.tmp $ts_config(product_root)/$ts_config(cell)/common/host_aliases"
@@ -247,7 +247,7 @@ proc issue_2895_run {} {
          wait_for_remote_file $ts_config(master_host) $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/host_aliases"
          wait_for_remote_file $ts_config(master_host) $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/host_aliases.tmp" 60 1 1
 
-         # close old logfile tail and re-init new one      
+         # close old logfile tail and re-init new one
          close_logfile_wait
          init_logfile_wait $host_aliases_test_host $execd_messages_file
 
@@ -292,8 +292,8 @@ proc issue_2895_run {} {
       ts_log_fine "now shutdown the master again ..."
       # Shutdown master again
       shutdown_system_daemon $ts_config(master_host) "qmaster"
-      
-      # Fix alias file 
+
+      # Fix alias file
       if {[info exists orig_aliases_file]} {
          ts_log_fine "restoring original host_aliases file ..."
          write_remote_file $host_aliases_test_host $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/host_aliases" orig_aliases_file
@@ -318,7 +318,7 @@ proc issue_2895_run {} {
       logfile_wait $reconnect_message_text 120 0
 
       close_logfile_wait
-      
+
    }
 
    if {$error_text != ""} {

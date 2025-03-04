@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global check_need_running_system
 
@@ -50,7 +50,7 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "rerun of a tightly integrated parallel array job crashes qmaster after restart"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function issue_3216_setup
@@ -153,7 +153,8 @@ proc issue_3216_test {} {
 
    # wait for both tasks to finish - if we see them having finished,
    # qmaster is still responding - everything OK
-   wait_for_end_of_all_jobs 180
+   # due to delayed reporting after execd reconnected to qmaster this takes > 10 minutes, see CS-662
+   wait_for_end_of_all_jobs 610
 }
 
 proc issue_3216_test_array {} {
@@ -191,7 +192,8 @@ proc issue_3216_test_array {} {
 
    # wait for both tasks to finish - if we see them having finished,
    # qmaster is still responding - everything OK
-   set ret [wait_for_end_of_all_jobs 180]
+   # due to delayed reporting after execd reconnected to qmaster this takes > 10 minutes, see CS-662
+   set ret [wait_for_end_of_all_jobs 610]
    if {$ret == -1} {
 
       ts_log_fine "job did not terminate"

@@ -390,6 +390,14 @@ proc max_dyn_ec_out_of_ids {} {
             if {$line != ""} {
                # ts_log_fine "==> $line"
                switch -glob -- $line {
+                  "*_qsub_sync.sh_*_*.sh" -
+                  "*_start_mark_:(0)" -
+                  "script done. (_END_OF_FILE_)" -
+                  "_exit_status_:(*)" -
+                  "Unable to initialize environment*" -
+                  "Exiting." {
+                     # ignore
+                  }
                   "Your job * has been submitted" {
                      incr submitted
                   }
@@ -401,14 +409,6 @@ proc max_dyn_ec_out_of_ids {} {
                   }
                   "qsub_sync.sh exiting" {
                      set done 1
-                  }
-                  "*_qsub_sync.sh_*_*.sh" -
-                  "*_start_mark_:(0)" -
-                  "script done. (_END_OF_FILE_)" -
-                  "_exit_status_:(*)" -
-                  "Unable to initialize environment*" -
-                  "Exiting." {
-                     # ignore
                   }
                   default {
                      ts_log_fine "max_dyn_ec_massive_qsub_sync: unexpected output: $line"
