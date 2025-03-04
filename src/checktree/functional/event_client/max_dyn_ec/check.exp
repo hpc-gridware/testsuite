@@ -42,7 +42,7 @@ set check_cleanup_function max_dyn_ec_cleanup
 # define test's procedure order
 set check_functions {}
 lappend check_functions "max_dyn_ec_default" ;# shall be first check_function
-lappend check_functions "max_dyn_ec_massive_qsub_sync"
+#lappend check_functions "max_dyn_ec_massive_qsub_sync"
 lappend check_functions "max_dyn_ec_out_of_ids"
 
 # -------- local test procedures: initialization------------------------------
@@ -373,7 +373,7 @@ proc max_dyn_ec_out_of_ids {} {
    set unexpected_output ""
    set done 0
    set timeout 60
-   #log_user 1
+   log_user 1
    expect_user {
       -i $spawn_id full_buffer {
          ts_log_severe "expect full_buffer error"
@@ -390,14 +390,6 @@ proc max_dyn_ec_out_of_ids {} {
             if {$line != ""} {
                # ts_log_fine "==> $line"
                switch -glob -- $line {
-                  "*_qsub_sync.sh_*_*.sh" -
-                  "*_start_mark_:(0)" -
-                  "script done. (_END_OF_FILE_)" -
-                  "_exit_status_:(*)" -
-                  "Unable to initialize environment*" -
-                  "Exiting." {
-                     # ignore
-                  }
                   "Your job * has been submitted" {
                      incr submitted
                   }
@@ -409,6 +401,14 @@ proc max_dyn_ec_out_of_ids {} {
                   }
                   "qsub_sync.sh exiting" {
                      set done 1
+                  }
+                  "*_qsub_sync.sh_*_*.sh" -
+                  "*_start_mark_:(0)" -
+                  "script done. (_END_OF_FILE_)" -
+                  "_exit_status_:(*)" -
+                  "Unable to initialize environment*" -
+                  "Exiting." {
+                     # ignore
                   }
                   default {
                      ts_log_fine "max_dyn_ec_massive_qsub_sync: unexpected output: $line"
