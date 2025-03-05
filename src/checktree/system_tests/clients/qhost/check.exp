@@ -46,7 +46,7 @@ set check_root_access_needs "no"
 
 # define test's name and run level descriptions
 set check_name            "qhost"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM QHOST VERIFIED"
 set check_description(0)  "test qhost functionality"
 
 # define test's dependencies

@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "client_setup"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM QHOST VERIFIED"
 set check_description(0)  "test setup (startup) of clients in certain error situations"
 
 # define test's dependencies
