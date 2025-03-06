@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -49,7 +49,7 @@ set check_description(4)  "check resource reservation with calendar disabled que
 set check_description(5)  "check resource reservation inside an advance reservation (drmaa version 1.0)"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function resource_reservation_setup
@@ -66,12 +66,12 @@ lappend check_functions "resource_reservation_basic"
 # -------- local test procedures: initialization ------------------------------
 
 proc resource_reservation_setup {} {
-   global rr_queue_name rr_cal_queue_name rr_h_vmem_complex 
+   global rr_queue_name rr_cal_queue_name rr_h_vmem_complex
    global rr_host
    global ts_config
    global resource_reservation_complex_backup
 
-   ts_log_fine "resource_reservation_setup" 
+   ts_log_fine "resource_reservation_setup"
 
    get_complex resource_reservation_complex_backup
 
@@ -100,7 +100,7 @@ proc resource_reservation_setup {} {
       ts_log_severe "setup of scheduler for overwrite ticket test failed"
       return
    }
-   
+
    ts_log_fine "Scheduler configured"
 
    # Save original complexes
@@ -109,7 +109,7 @@ proc resource_reservation_setup {} {
 
    # set complex attributes
    set tmp_complex(license)   "lic        INT      <=    YES         YES        0       100"
-   set tmp_complex(license2)  "lic2       double   <=    YES         YES        0       100"   
+   set tmp_complex(license2)  "lic2       double   <=    YES         YES        0       100"
    set tmp_complex(h_vmem)    "h_vmem     MEMORY   <=    YES         YES        200M    0.0000001"
    set tmp_complex(myslots)   "ms         INT      <=    YES         YES        0       100"
    set tmp_complex(jobs)      "j          INT      <=    YES         JOB        0       0"
@@ -119,13 +119,13 @@ proc resource_reservation_setup {} {
    # enable / disable queues needed for the test
    disable_queue "all.q"
 
-#-----  
-  
-   # set global variable  
+#-----
+
+   # set global variable
    set my_host_config(complex_values) "license=10,license2=10"
    set_exechost my_host_config "global"
 
-   # set host variable 
+   # set host variable
    set my_host_config(complex_values) "h_vmem=20G"
    set_exechost my_host_config $rr_host
 }
@@ -228,7 +228,7 @@ proc resource_reservation_level_setup {} {
       lappend rules "pes * to slots=10,jobs=2"
       set rqs_charray($rqs_name,limit) $rules
       set rqs_charray($rqs_name,enabled) "true"
- 
+
       add_rqs rqs_charray
    }
 
@@ -268,15 +268,15 @@ proc resource_reservation_cleanup {  } {
 
    # reset the scheduler configuration
    reset_schedd_config
-   
-   # set global variable  
+
+   # set global variable
    set my_host_config(complex_values) "NONE"
    set_exechost my_host_config "global"
 
-   # set host variable 
+   # set host variable
    set my_host_config(complex_values) "NONE"
    set_exechost my_host_config $rr_host
- 
+
    # remove complex attributes
    reset_complex resource_reservation_complex_backup
    unset resource_reservation_complex_backup
@@ -299,14 +299,14 @@ proc resource_reservation_level_cleanup {} {
    delete_all_jobs
    wait_for_end_of_all_jobs 60
 
-   # del queues 
+   # del queues
    del_queue $rr_queue_name "@allhosts" 0 1
 
    if {$CHECK_ACT_LEVEL == 4} {
       del_queue $rr_cal_queue_name "@allhosts" 0 1
       del_calendar "always_suspend_calendar"
    }
- 
+
    # remove PEs
    del_pe        "round_robin"
    del_pe        "fill_up"
@@ -328,13 +328,13 @@ proc get_job_descriptions { test1 test2 {ar_id 0} } {
    global ts_config
 
    set runtime_def "10"
-   set runtime_long "20" 
+   set runtime_long "20"
 
    set job_script "$ts_config(product_root)/examples/jobs/sleeper.sh"
    set drmaa_mode "ST_RESERVATION_FINISH_ORDER"
 
    if { $test2 == "backfill" } {
-      set runtime_long $runtime_def 
+      set runtime_long $runtime_def
       set drmaa_mode "ST_BACKFILL_FINISH_ORDER"
    }
 
@@ -343,7 +343,7 @@ proc get_job_descriptions { test1 test2 {ar_id 0} } {
    } else {
       set args "-R y"
    }
-   
+
    switch -exact $test1 {
       "license" {
          set job_desc1 "$args -N L4_BF -p 100 -l h_rt=$runtime_def,license=8"
@@ -357,27 +357,27 @@ proc get_job_descriptions { test1 test2 {ar_id 0} } {
       }
       "memory" {
          set job_desc1 "$args -N L4_BF -p 100 -l h_rt=$runtime_def,h_vmem=16G"
-         set job_desc2 "$args -N L5_BF -p 0 -l h_rt=$runtime_def,h_vmem=20G" 
+         set job_desc2 "$args -N L5_BF -p 0 -l h_rt=$runtime_def,h_vmem=20G"
          set job_desc3 "$args -N L1_BF -p 0 -l h_rt=$runtime_long,h_vmem=4G"
       }
       "myslots" {
          set job_desc1 "$args -N L4_BF -p 100 -l h_rt=$runtime_def,myslots=8"
-         set job_desc2 "$args -N L5_BF -p 0 -l h_rt=$runtime_def,myslots=10" 
+         set job_desc2 "$args -N L5_BF -p 0 -l h_rt=$runtime_def,myslots=10"
          set job_desc3 "$args -N L1_BF -p 0 -l h_rt=$runtime_long,myslots=2"
       }
       "round_robin" {
          set job_desc1 "$args -N L4_BF -p 100 -l h_rt=$runtime_def -pe round_robin 8"
-         set job_desc2 "$args -N L5_BF -p 0 -l h_rt=$runtime_def -pe round_robin 10" 
+         set job_desc2 "$args -N L5_BF -p 0 -l h_rt=$runtime_def -pe round_robin 10"
          set job_desc3 "$args -N L1_BF -p 0 -l h_rt=$runtime_long -pe round_robin 2"
       }
       "fill_up" {
          set job_desc1 "$args -N L4_BF -p 100 -l h_rt=$runtime_def -pe fill_up 8"
-         set job_desc2 "$args -N L5_BF -p 0 -l h_rt=$runtime_def -pe fill_up 10" 
+         set job_desc2 "$args -N L5_BF -p 0 -l h_rt=$runtime_def -pe fill_up 10"
          set job_desc3 "$args -N L1_BF -p 0 -l h_rt=$runtime_long -pe fill_up 2"
       }
       "pe_slots" {
          set job_desc1 "$args -N L4_BF -p 100 -l h_rt=$runtime_def -pe pe_slots 8"
-         set job_desc2 "$args -N L5_BF -p 0 -l h_rt=$runtime_def -pe pe_slots 10" 
+         set job_desc2 "$args -N L5_BF -p 0 -l h_rt=$runtime_def -pe pe_slots 10"
          set job_desc3 "$args -N L1_BF -p 0 -l h_rt=$runtime_long -pe pe_slots 2"
       }
    }
@@ -404,7 +404,7 @@ proc get_job_descriptions { test1 test2 {ar_id 0} } {
       }
    }
 
-   set job_desc "$drmaa_mode $job_script \"$job_desc1\" \"$job_desc2\" \"$job_desc3\"" 
+   set job_desc "$drmaa_mode $job_script \"$job_desc1\" \"$job_desc2\" \"$job_desc3\""
 }
 
 #****** resource_reservation/resource_reservation_drmaa_test() ******
@@ -467,17 +467,17 @@ proc resource_reservation_basic { } {
       }
    }
    get_job_descriptions "license" "backfill" $ar_id
-   resource_reservation_drmaa_test "" $job_desc 
+   resource_reservation_drmaa_test "" $job_desc
    get_job_descriptions "memory" "backfill" $ar_id
    resource_reservation_drmaa_test "" $job_desc
    get_job_descriptions "myslots" "backfill" $ar_id
-   resource_reservation_drmaa_test "" $job_desc 
+   resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "jobs" "backfill" $ar_id
    resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "round_robin" "backfill" $ar_id
-   resource_reservation_drmaa_test "" $job_desc 
+   resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "rr_jobs" "backfill" $ar_id
    resource_reservation_drmaa_test "" $job_desc
@@ -512,10 +512,10 @@ proc resource_reservation_basic { } {
    resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "array" "backfill" $ar_id
-   resource_reservation_drmaa_test "" $job_desc 
-  
+   resource_reservation_drmaa_test "" $job_desc
+
    get_job_descriptions "license" "reservation" $ar_id
-   resource_reservation_drmaa_test "" $job_desc 
+   resource_reservation_drmaa_test "" $job_desc
 
    get_job_descriptions "memory" "reservation" $ar_id
    resource_reservation_drmaa_test "" $job_desc
