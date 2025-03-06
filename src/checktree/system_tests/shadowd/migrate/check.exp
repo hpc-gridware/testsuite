@@ -100,6 +100,11 @@ proc shadowd_migrate_setup_level {} {
       }
       return 99
    }
+
+   if {$ts_config(spooling_method) == "berkeleydb" && $CHECK_ACT_LEVEL == 1} {
+      ts_log_config "Skipping runlevel 1 with berkeleydb spooling on NFSv4, see CS-1020"
+      return 99
+   }
 }
 
 proc shadowd_migrate_cleanup  {} {
