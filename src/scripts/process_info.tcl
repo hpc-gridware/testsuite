@@ -71,6 +71,7 @@ proc get_ps_cmd {pid} {
       "solaris86" -
       "sol-x86" -
       "sol-amd64" -
+      "osol-amd64" -
       "usol-sparc" -
       "usol-sparc64" -
       "usol-x86" {

@@ -1563,6 +1563,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
 
    switch -glob -- $host_arch {
       "sol*" -
+      "osol-*" -
       "usol-*" {
          set myenvironment(COLUMNS) "1000"
          set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-e -o \"pid=_____pid\" -o \"pgid=_____pgid\" -o \"ppid=_____ppid\" -o \"uid=_____uid\" -o \"s=_____s\" -o \"stime=_____stime\" -o \"vsz=_____vsz\" -o \"time=_____time\" -o \"nice=_____nice\" -o \"args=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]

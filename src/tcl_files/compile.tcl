@@ -1269,7 +1269,8 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
          append args " -DCMAKE_INSTALL_PREFIX=$ts_config(product_root)"
 
          # use gmake instead of make on sol-amd64
-         if {[resolve_arch $host] == "sol-amd64"} {
+         set arch [resolve_arch $host]
+         if {$arch == "sol-amd64" || $arch == "osol-amd64"} {
             append args " -DCMAKE_MAKE_PROGRAM=gmake"
          }
 
@@ -1322,9 +1323,10 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
       if {[llength $build_3rdparty_hosts] > 0} {
          unset -nocomplain options
          foreach host $build_3rdparty_hosts {
-	    if {[resolve_arch $host] == "sol-amd64"} {
+            set arch [resolve_arch $host]
+            if {$arch == "sol-amd64" || $arch == "osol-amd64"} {
                set options($host,cmd) "gmake"
-	    } else {
+            } else {
                set options($host,cmd) "make"
             }
             set num_procs [node_get_processors $host]
@@ -1344,9 +1346,10 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
       # call make on every host
       unset -nocomplain options
       foreach host $compile_hosts {
-	 if {[resolve_arch $host] == "sol-amd64"} {
+         set arch [resolve_arch $host]
+         if {$arch == "sol-amd64" || $arch == "osol-amd64"} {
             set options($host,cmd) "gmake"
-	 } else {
+         } else {
             set options($host,cmd) "make"
          }
          set num_procs [node_get_processors $host]
@@ -1411,9 +1414,10 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
       unset -nocomplain options
       foreach host $compile_hosts {
          set num_procs [node_get_processors $host]
-	 if {[resolve_arch $host] == "sol-amd64"} {
+         set arch [resolve_arch $host]
+         if {$arch == "sol-amd64" || $arch == "osol-amd64"} {
             set options($host,cmd) "gmake"
-	 } else {
+         } else {
             set options($host,cmd) "make"
          }
          if {$num_procs > 1} {

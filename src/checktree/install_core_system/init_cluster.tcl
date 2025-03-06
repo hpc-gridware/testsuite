@@ -634,11 +634,13 @@ proc setup_execd_conf {} {
             }
             "xterm" {
                if {!$existing_config || ![is_remote_file $host $CHECK_USER $tmp_config($elem)]} {
-                  set config_xterm_path [get_binary_path $host "xterm"]
+                  set config_xterm_path [get_binary_path $host "xterm" 0]
                   if {$config_xterm_path == "xterm"} {
-                     ts_log_config "xterm seems not to be installed on host $host"
+                     ts_log_config "xterm seems not to be installed on host $host - setting /usr/bin/xterm"
+                     set tmp_config($elem) "/usr/bin/xterm"
+                  } else {
+                     set tmp_config($elem) $config_xterm_path
                   }
-                  set tmp_config($elem) $config_xterm_path
                }
             }
             "load_sensor" {

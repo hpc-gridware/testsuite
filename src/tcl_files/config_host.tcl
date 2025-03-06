@@ -2288,7 +2288,8 @@ proc get_jvm_lib_path_for_host { host {java_version "1.5+"} } {
       "sol-sparc64" {
          set jvm_lib_path $java_home/jre/lib/sparcv9/server/libjvm.so
       } 
-      "sol-amd64" { 
+      "sol-amd64" -
+      "osol-amd64" { 
          set jvm_lib_path $java_home/jre/lib/amd64/server/libjvm.so
       }
       "sol-x86" {
@@ -3618,7 +3619,8 @@ proc host_conf_detect_java_on_host {host} {
          lappend default_locations "/usr/lib/jvm"
          lappend default_locations "/usr/lib64/jvm"
       }
-      "sol-*" {
+      "sol-*" -
+      "osol-*" {
          lappend default_locations "/usr/jdk/instances"
       }
       default {
