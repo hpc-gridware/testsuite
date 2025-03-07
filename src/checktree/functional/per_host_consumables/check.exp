@@ -34,7 +34,7 @@ set check_version_range "9.0.0"
 
 # define test's name and run level descriptions
 set check_name            "per_host_consumable"
-set check_category        "AR CENTRY RQS SCHEDULER VERIFIED"
+set check_category        "AR CENTRY RQS SCHEDULER QQUOTA VERIFIED"
 set check_description(0)  "test per host consumables on global layer"
 set check_description(1)  "test per host consumables on exechost layer"
 set check_description(2)  "test per host consumables on global layer granted to an AR"

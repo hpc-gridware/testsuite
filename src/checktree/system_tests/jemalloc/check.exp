@@ -45,7 +45,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "jemalloc_test"
-set check_category        "COMPATIBILITY SYSTEM QHOST VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM QHOST QQUOTA VERIFIED"
 set check_description(0)  "basic test if compiled with jemalloc"
 
 # define test's procedure order
