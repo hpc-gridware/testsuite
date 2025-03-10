@@ -482,6 +482,7 @@ proc config_display_hosts { host_list host_index {selected ""} {null_value "none
    set comp_doc ""
    set comp_java ""
    set max_length 0
+   set max_arch_length 0
    foreach host [lsort [array names hosts]] {
       if { [string compare $host "new"] == 0 } { continue }
       if { [string compare $host "usage"] == 0 } { continue }
@@ -490,13 +491,14 @@ proc config_display_hosts { host_list host_index {selected ""} {null_value "none
       set host_info [split $hosts($host) "|"]
       set is_arch_name 1
       set usage ""
-      set max_arch_length 0
       # format: arch|[c]|[java]|[(usage1)|(usage2)|...]
       foreach elem $host_info {
          if { $is_arch_name == 1 } {
             set arch $elem
             set is_arch_name 0
-            if {[string length $arch] > $max_arch_length} { set max_arch_length [string length $arch] }
+            if {[string length $arch] > $max_arch_length} {
+               set max_arch_length [string length $arch]
+            }
          } elseif { [string compare $elem java] == 0 } {
             lappend comp_java $host
          } elseif { [string compare $elem doc] == 0 } {
@@ -527,7 +529,12 @@ proc config_display_hosts { host_list host_index {selected ""} {null_value "none
             set gap 1
          }
       } else {
-         if { $gap == 1 } { puts "" } else { set gap 0 }
+         if { $gap == 1 } {
+            puts "\n"
+         } else {
+            puts ""
+            set gap 0
+         }
          # display compile hosts and host lists
          set comp_host "none"
          foreach comp $comp_c {
@@ -539,13 +546,13 @@ proc config_display_hosts { host_list host_index {selected ""} {null_value "none
             }
          }
 
-         set count 0         
+         set count 0
          # display host list
-         set host_disp "$arch:[get_spaces [expr ( $max_arch_length - [string length $arch] ) ]]"
+         set host_disp "[get_spaces [expr ( $max_arch_length - [string length $arch] ) ]]$arch:"
          set arch_space "[get_spaces [string length $host_disp]]"
          foreach host $archs($arch) {
-            if { $count == 4 } {
-               puts $host_disp
+            if { $count == 3 } {
+               puts "$host_disp"
                set host_disp $arch_space
                set count 0
             }
@@ -558,7 +565,9 @@ proc config_display_hosts { host_list host_index {selected ""} {null_value "none
             }
             if { [string compare $host $comp_host] == 0 } {
                set comph "(cc)"
-            } else { set comph "    " }
+            } else {
+               set comph "    "
+            }
             if { [info exists archs($arch,$host)] } {
                # the host is used, mark it
                if { $index <= 9 } { set ind " \[$index\]" } else { set ind "\[$index\]" }
@@ -567,7 +576,9 @@ proc config_display_hosts { host_list host_index {selected ""} {null_value "none
             }
             if { [info exists selected] && [ lsearch $selected $host ] >= 0 } {
                set sel "*"                             ;# mark the selected host
-            } else { set sel " " }
+            } else {
+               set sel " "
+            }
             append host_disp " $sel$ind $host $comph$space"
             incr index 1
             incr count 1
@@ -582,7 +593,9 @@ proc config_display_hosts { host_list host_index {selected ""} {null_value "none
    if { [string compare $indexes($count) $null_value] == 0 } {
       if { [info exists selected] && [ lsearch $selected $null_value ] >= 0 } {
          set sel "*"                                         ;# mark if selected
-      } else { set sel " " }
+      } else {
+         set sel " "
+      }
       puts "\n$arch_space $sel $count) $null_value"
    }
 
@@ -1867,43 +1880,26 @@ proc setup_host_config {file {force_params "" } } {
    }
 }
 
-#****** config_host/host_conf_get_nodes() **************************************
-#  NAME
-#     host_conf_get_nodes() -- return a list of exechosts and zones
+## @brief get a list of exechosts and zones
 #
-#  SYNOPSIS
-#     host_conf_get_nodes { host_list } 
+# Iterates through host_list and builds a new node list, that contains
+# both hosts and zones.
 #
-#  FUNCTION
-#     Iterates through host_list and builds a new node list, that contains
-#     both hosts and zones.
-#     If zones are available on a host, only the zones are contained in the new
-#     node list,
-#     if no zones are available on a host, the hostname will be contained in the
-#     new node list.
+# @param host_list list of physical hosts
+# @return node list
 #
-#  INPUTS
-#     host_list - list of physical hosts
-#
-#  RESULT
-#     node list
-#
-#  SEE ALSO
-#     config_host/host_conf_get_unique_nodes()
-#*******************************************************************************
 proc host_conf_get_nodes {host_list} {
    global ts_host_config
 
    set node_list {}
 
    foreach host $host_list {
-      if {![info exists ts_host_config($host,zones)]} {
-         ts_log_severe "host $host is not contained in testsuite host configuration!"
-      } else {
+      if {[info exists ts_host_config($host,zones)]} {
          set zones $ts_host_config($host,zones)
          if {[llength $zones] == 0} {
             lappend node_list $host
          } else {
+            lappend node_list $host
             set node_list [concat $node_list $zones]
          }
       }
@@ -1942,9 +1938,7 @@ proc host_conf_get_unique_nodes {host_list} {
    set node_list {}
 
    foreach host $host_list {
-      if {![info exists ts_host_config($host,zones)]} {
-         ts_log_severe "host $host is not contained in testsuite host configuration!"
-      } else {
+      if {[info exists ts_host_config($host,zones)]} {
          set zones $ts_host_config($host,zones)
          if {[llength $zones] == 0} {
             lappend node_list $host
@@ -1992,9 +1986,7 @@ proc host_conf_get_all_nodes {host_list} {
    foreach host $host_list {
       lappend node_list $host
 
-      if {![info exists ts_host_config($host,zones)]} {
-         ts_log_severe "host $host is not contained in testsuite host configuration!"
-      } else {
+      if {[info exists ts_host_config($host,zones)]} {
          set zones $ts_host_config($host,zones)
          if {[llength $zones] > 0} {
             set node_list [concat $node_list $zones]
