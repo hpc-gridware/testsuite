@@ -4971,7 +4971,7 @@ proc init_global_submit_job_messages {} {
    set messages(-38)    "*[translate_macro MSG_QSUB_COULDNOTRUNJOB_S "*"]*"
 }
 
-proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {cd_dir ""} {show_args 1} {qcmd "qsub"} {dev_null 1} {the_output "qsub_output"} {ignore_list {}} {new_grp ""}} {
+proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {cd_dir ""} {show_args 1} {qcmd "qsub"} {dev_null 1} {the_output "qsub_output"} {ignore_list {}} {new_grp ""} {env_var ""}} {
    get_current_cluster_config_array ts_config
    global g_submit_job_messages
    global CHECK_USER
@@ -4979,6 +4979,10 @@ proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {c
    if {$the_output != ""} {
       upvar $the_output output
       set output ""
+   }
+
+   if {$env_var != ""} {
+      upvar $env_var myenv
    }
 
    # cache the messages in a global variable, map it to our local messages variable
@@ -4999,7 +5003,7 @@ proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {c
       }
    }
 
-   set output [start_sge_bin $qcmd $args $host $user prg_exit_state $submit_timeout $cd_dir "bin" output_lines "" $new_grp]
+   set output [start_sge_bin $qcmd $args $host $user prg_exit_state $submit_timeout $cd_dir "bin" output_lines myenv $new_grp]
 
    set ret [handle_sge_errors "submit_job" "$qcmd $args" $output messages $raise_error "" $ignore_list]
 

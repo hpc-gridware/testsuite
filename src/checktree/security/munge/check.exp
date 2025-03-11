@@ -1,0 +1,213 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range "9.1.0"
+
+# define test's name and run level descriptions
+set check_name            "munge"
+set check_category        "MUNGE SECURITY VERIFIED"
+set check_description(0)  "check if Munge authentication prevents actions as fake user/group"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function munge_setup
+set check_cleanup_function munge_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "munge_fake_uid"
+lappend check_functions "munge_fake_gid"
+lappend check_functions "munge_fake_user"
+lappend check_functions "munge_fake_group"
+lappend check_functions "munge_use_qsub_gid"
+lappend check_functions "munge_tight_pe"
+
+# -------- local test procedures: initialization------------------------------
+
+proc munge_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_CMAKE_BUILD_TYPE
+   global munge_host
+
+   if {$ts_config(product_feature) != "munge"} {
+      ts_log_config "test requires munge authentication to be enabled"
+      return 99
+   }
+
+   if {$CHECK_CMAKE_BUILD_TYPE != "Debug"} {
+      ts_log_config "test requires a debug build"
+      return 99
+   }
+
+   # add a tight PE + queue to the configuration
+   set munge_host [host_conf_get_suited_hosts]
+   set pe(slots) 999
+   set pe(control_slaves) "TRUE"
+   set pe(allocation_rule) "\$pe_slots"
+   add_pe "tight.pe" pe
+
+   set q(slots) 10
+   set q(pe_list) "tight.pe"
+   add_queue "tight.q" $munge_host q
+}
+
+proc munge_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global munge_host
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   del_queue "tight.q" "" 1 1
+   del_pe "tight.pe"
+
+   unset -nocomplain munge_host
+}
+
+proc munge_do_fake_submit {envvar envvalue expect_submit expected_user expected_group pattern} {
+   get_current_cluster_config_array ts_config
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_FIRST_FOREIGN_SYSTEM_GROUP
+
+   # expect error messages in the qmaster messages file
+   if {$pattern != ""} {
+      init_logfile_wait $ts_config(master_host) [get_qmaster_messages_file]
+   }
+
+   set myenv($envvar) $envvalue
+   set args "-h -b y sleep 1"
+   if {$expect_submit} {
+      set mytimeout 20
+   } else {
+      # we expect the submit to fail, it will timeout after 60 seconds (commlib receive timeout)
+      set mytimeout 70
+   }
+   set job_id [submit_job $args 0 $mytimeout "" $CHECK_FIRST_FOREIGN_SYSTEM_USER "" 1 "qsub" 1 "qsub_output" {} "" myenv]
+   if {$job_id <= 0} {
+      if {$expect_submit} {
+         ts_log_severe "submit failed: $qsub_output"
+      }
+   } else {
+      # fetch and check user info
+      get_qstat_j_info $job_id qstat_j_info "" "" $CHECK_FIRST_FOREIGN_SYSTEM_USER
+      if {$expected_user != ""} {
+         if {$qstat_j_info(owner) != $expected_user} {
+            ts_log_severe "expected job $job_id to belong user $expected_user, got $qstat_j_info(owner)"
+         }
+      }
+      if {$expected_group != ""} {
+         if {$qstat_j_info(group) != $expected_group} {
+            ts_log_severe "expected job $job_id to have group $expected_group, got $qstat_j_info(group)"
+         }
+      }
+   }
+
+   # expect error messages in the qmaster messages file
+   if {$pattern != ""} {
+      logfile_wait $pattern 10 ;# will also close the logfile
+   }
+
+   if {$job_id > 0} {
+      delete_job $job_id
+   }
+}
+
+proc munge_fake_uid {} {
+   set pattern [translate_macro "MSG_UTI_MUNGE_AUTH_UID_MISMATCH_II" "*" "0"]
+   munge_do_fake_submit "SGE_DEBUG_FAKE_UID" "0" 0 "" "" $pattern
+}
+
+proc munge_fake_gid {} {
+   set pattern [translate_macro "MSG_UTI_MUNGE_AUTH_GID_MISMATCH_II" "*" 0]
+   munge_do_fake_submit "SGE_DEBUG_FAKE_GID" "0" 0 "" "" $pattern
+}
+
+proc munge_fake_user {} {
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_FIRST_FOREIGN_SYSTEM_GROUP
+   global CHECK_SECOND_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_GROUP
+   set group [lindex $CHECK_FIRST_FOREIGN_SYSTEM_GROUP 0]
+   set pattern [translate_macro "MSG_CULL_AUTHINFO_CORRECTINGUSERNAME_SS" $CHECK_SECOND_FOREIGN_SYSTEM_USER $CHECK_FIRST_FOREIGN_SYSTEM_USER]
+   munge_do_fake_submit "SGE_DEBUG_FAKE_USERNAME" $CHECK_SECOND_FOREIGN_SYSTEM_USER 1 $CHECK_FIRST_FOREIGN_SYSTEM_USER $group $pattern
+}
+
+proc munge_fake_group {} {
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_FIRST_FOREIGN_SYSTEM_GROUP
+   global CHECK_SECOND_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_GROUP
+   set fake_group [lindex $CHECK_SECOND_FOREIGN_SYSTEM_GROUP 0]
+   set group [lindex $CHECK_FIRST_FOREIGN_SYSTEM_GROUP 0]
+   set pattern [translate_macro "MSG_CULL_AUTHINFO_CORRECTINGGROUPNAME_SS" $fake_group $group]
+   munge_do_fake_submit "SGE_DEBUG_FAKE_GROUPNAME" $fake_group 1 $CHECK_FIRST_FOREIGN_SYSTEM_USER $group $pattern
+}
+
+proc munge_use_qsub_gid {} {
+   ts_log_fine "testing if a group id other than the primary one is accepted with Munge authentication"
+   ts_log_fine "is done in qrsh test, check_function qrsh_qsub_gid."
+}
+
+proc munge_tight_pe {} {
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global munge_host
+
+   set args "-o /dev/null -j y -pe tight.pe 2 -b y sleep 3600"
+   set job_id [submit_job $args]
+   if {$job_id > 0} {
+      wait_for_jobstart $job_id "" 10
+
+      set myenv(JOB_ID) $job_id
+      set myenv(SGE_TASK_ID) "undefined"
+      # try to start a task, should succeed
+      start_sge_bin "qrsh" "-inherit $munge_host id" $munge_host $CHECK_USER prg_exit_state 60 "" "bin" "output_lines" myenv
+      if {$prg_exit_state != 0} {
+         ts_log_severe "qrsh -inherit should have succeeded but failed: $prg_exit_state: $output_lines(1)"
+      }
+
+      # @todo: faking a uid does not work:
+      #        - qrsh first connects to sge_qmaster to query rsh_client and rsh_server, which will already fail
+      #        - wasn't there some caching mechanism in qrsh to do this only once?
+
+      # now try to fake a different user
+      # @todo wait for correcting user name from authinfo
+      set pattern [translate_macro "MSG_CULL_AUTHINFO_CORRECTINGUSERNAME_SS" $CHECK_FIRST_FOREIGN_SYSTEM_USER $CHECK_USER]
+      init_logfile_wait $munge_host [get_execd_messages_file $munge_host]
+      set myenv(SGE_DEBUG_FAKE_USERNAME) $CHECK_FIRST_FOREIGN_SYSTEM_USER
+      start_sge_bin "qrsh" "-inherit $munge_host hostname" $munge_host $CHECK_USER prg_exit_state 60 "" "bin" "output_lines" myenv
+      puts $prg_exit_state
+      parray output_lines
+      if {$prg_exit_state != 0} {
+         ts_log_severe "qrsh -inherit should have succeeded but failed: $prg_exit_state: $output_lines(1)"
+      }
+      logfile_wait $pattern 10 ;# will also close the logfile
+
+      delete_job $job_id
+   }
+}
+
