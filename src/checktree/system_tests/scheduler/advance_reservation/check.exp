@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -49,7 +49,7 @@ set check_description(0)  "check advance reservation"
 set check_description(1)  "check advance reservation with enabled resource reservation"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function scheduler_advance_reservation_setup
@@ -76,7 +76,7 @@ proc scheduler_advance_reservation_setup {} {
    global queue_name test_host test_hosts
    global complex_queue_name
    global global_consumable host_consumable
-   global host_complex queue_complex 
+   global host_complex queue_complex
    global scheduler_advance_reservation_complex_backup
 
    get_complex scheduler_advance_reservation_complex_backup
@@ -88,7 +88,7 @@ proc scheduler_advance_reservation_setup {} {
    set host_complex "host_complex"
    set queue_complex "queue_complex"
 
-   set pe_settings(slots)  10 
+   set pe_settings(slots)  10
    set pe_settings(allocation_rule) "\$round_robin"
    add_pe "ar_pe" pe_settings
 
@@ -141,7 +141,7 @@ proc scheduler_advance_reservation_cleanup {} {
    # remove global complex
    set config(complex_values) "none"
    set_exechost config "global"
-   set_exechost config [lindex $test_hosts 0] 
+   set_exechost config [lindex $test_hosts 0]
 
    # remove queues
    del_queue $queue_name $test_host 0 1
@@ -262,7 +262,7 @@ proc scheduler_ar_unlimited_runtime_job {} {
    if {$job_state == -1} {
       ts_log_severe "ar job was not scheduled(2)"
    }
-   
+
    delete_all_jobs
    wait_for_end_of_all_jobs
    delete_all_ars
@@ -346,7 +346,7 @@ proc scheduler_ar_parallel_consuamble {} {
       delete_job $job_id
       ts_log_severe "job submit was not rejected (2)"
       return
-   } 
+   }
 
    set job_id [submit_job "-pe ar_pe 2 -l $global_consumable=3 $job_args" 0]
    if {$job_id > 0} {
@@ -504,7 +504,7 @@ proc scheduler_ar_non_reserved_complex_requests {} {
          ts_log_severe "sequential job submit was not rejected (1)"
       }
 
-      delete_ar $ar_id
+      delete_ar $ar_id 1
    }
 
    # 1b) reserve host without complex
@@ -517,10 +517,10 @@ proc scheduler_ar_non_reserved_complex_requests {} {
          delete_job $job_id
          ts_log_severe "sequential job submit was not rejected (2)"
       }
-      delete_ar $ar_id
+      delete_ar $ar_id 1
    }
 
-   # 1c) reserve queue with complex 
+   # 1c) reserve queue with complex
    ts_log_fine "1c: testing sequential AR, submit with queue ecomplex"
    set ar_id [submit_ar "-q $complex_queue_name -d 3600"]
    if {$ar_id > 0} {
@@ -537,10 +537,10 @@ proc scheduler_ar_non_reserved_complex_requests {} {
          ts_log_severe "sequential job submit was not rejected (3)"
       }
 
-      delete_ar $ar_id
+      delete_ar $ar_id 1
    }
 
-   # 1d) reserve queue without complex 
+   # 1d) reserve queue without complex
    ts_log_fine "1d: testing sequential AR, submit with queue complex"
    set ar_id [submit_ar "-q $queue_name -d 3600"]
    if {$ar_id > 0} {
@@ -550,7 +550,7 @@ proc scheduler_ar_non_reserved_complex_requests {} {
          ts_log_severe "sequential job submit was not rejected (4)"
       }
 
-      delete_ar $ar_id
+      delete_ar $ar_id 1
    }
 
    # 2) testing parallel jobs
@@ -569,16 +569,15 @@ proc scheduler_ar_non_reserved_complex_requests {} {
       }
 
       set job_id [submit_job "-pe ar_pe 2 -ar $ar_id -l $host_complex=bla $job_args" 0]
-
       if {$job_id > 0} {
          delete_job $job_id
          ts_log_severe "parallel job submit was not rejected (1)"
       }
 
-      delete_ar $ar_id
+      delete_ar $ar_id 1
    }
 
-   # 2b) reserve queue with complex 
+   # 2b) reserve queue with complex
    ts_log_fine "2b: testing parallel AR with queue complex"
    set ar_id [submit_ar "-pe ar_pe 2 -q $complex_queue_name -d 3600"]
    if {$ar_id > 0} {
@@ -595,7 +594,7 @@ proc scheduler_ar_non_reserved_complex_requests {} {
          ts_log_severe "parallel job submit was not rejected (3)"
       }
 
-      delete_ar $ar_id
+      delete_ar $ar_id 1
    }
 
    # 2c) reserve queue without complex
@@ -608,7 +607,7 @@ proc scheduler_ar_non_reserved_complex_requests {} {
          ts_log_severe "parallel job submit was not rejected (4)"
       }
 
-      delete_ar $ar_id
+      delete_ar $ar_id 1
    }
 }
 
@@ -664,7 +663,7 @@ proc scheduler_ar_hard_error_handling {} {
    delete_all_ars
 
    set host [lindex $test_hosts 0]
-  
+
    # reserve 4 slots with soft error handling (default)
    set ar_id [submit_ar "-he y -pe ar_pe 4 -d 3600 -q $complex_queue_name"]
 
