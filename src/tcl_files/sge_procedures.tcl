@@ -398,6 +398,22 @@ proc ge_has_feature {feature {quiet 0}} {
                set result 0
             }
          }
+         "gcs" {
+            set output [start_sge_bin "qsub" "-help"]
+            if {[string first "GCS" $output] >= 0} {
+               set result 1
+            } else {
+               set result 0
+            }
+         }
+         "ocs" {
+            set output [start_sge_bin "qsub" "-help"]
+            if {[string first "OCS" $output] >= 0} {
+               set result 1
+            } else {
+               set result 0
+            }
+         }
          default {
             ts_log_severe "testsuite error: Unsupported feature string \"$feature\""
             set result 0
