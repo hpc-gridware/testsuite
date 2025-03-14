@@ -69,17 +69,19 @@ proc issue_1760_check {} {
    global ts_config issue_1760_fake_host issue_1760_milestone issue_1760_group
    global CHECK_USER issue_1760_qname
 
+   set pid [pid]
+   set issue_1760_fake_host "issue1760_$pid"
+   set issue_1760_milestone 0
+   set issue_1760_group "@hg_issue1760_$pid"
+
    set master_arch [resolve_arch $ts_config(master_host)]
    if {[string first "lx-" $master_arch] != 0} {
       ts_log_config "Test needs a Linux master host"
       return
    }
 
-   set pid [pid]
    set qconf "$ts_config(product_root)/bin/$master_arch/qconf"
-   set issue_1760_milestone 0
 
-   set issue_1760_fake_host "issue1760_$pid"
    set envlist(SGE_COMMLIB_DEBUG_RESOLVE) "$issue_1760_fake_host"
 
    # Shutdown qmaster
@@ -106,7 +108,6 @@ proc issue_1760_check {} {
    set issue_1760_milestone 1
 
    # Add hostgroup with fake host and local host
-   set issue_1760_group "@hg_issue1760_$pid"
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER "echo" "\"group_name $issue_1760_group\nhostlist $ts_config(master_host) $issue_1760_fake_host\n\" > /tmp/hg_issue1760.$pid" result]
 
    if {$result != 0} {

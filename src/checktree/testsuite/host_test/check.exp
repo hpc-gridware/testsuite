@@ -118,8 +118,10 @@ proc host_test_test {} {
    set error_text ""
    set is_first 1
    set expect_version ""
-   foreach host $test_hosts {
-      ts_log_fine "testing host $host"
+   foreach node $test_hosts {
+      set host [node_get_host $host]
+      ts_log_fine "testing node $node located on host $host"
+
       set params [host_config_get_host_parameters]
       foreach param $params {
          set is_checked 0
@@ -128,13 +130,13 @@ proc host_test_test {} {
             "expect" {
                set is_checked 1
                if {[is_remote_file $host $CHECK_USER $ts_host_config($host,$param)] == 0} {
-                  append error_text "host \"$host\" expect binary \"$ts_host_config($host,$param)\" not available!\n"
+                  append error_text "node $node expect binary \"$ts_host_config($host,$param)\" not available!\n"
                } else {
-                  ts_log_fine "found expect binary \"$ts_host_config($host,$param)\" on host \"$host\""
+                  ts_log_fine "found expect binary \"$ts_host_config($host,$param)\" on node \"$node\""
                   set version [start_remote_prog $host $CHECK_USER $ts_host_config($host,$param) "-version"]
                   set version [string trim $version]
                   if {$prg_exit_state != 0} {
-                     append error_text "host \"$host\" \"$ts_host_config($host,$param) -version\" exit code not 0!\n"
+                     append error_text "on node $node \"$ts_host_config($host,$param) -version\" exit code not 0!\n"
                   } else {
                      ts_log_fine "Expect version: $version"
                      if {$expect_version == ""} {

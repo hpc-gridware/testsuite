@@ -2418,7 +2418,7 @@ proc set_config {change_array {host global} {do_add 0} {raise_error 1} {do_reset
       upvar 0 g_set_config_messages_mod messages
    }
    if {![info exists messages(index)]} {
-      ts_log_fine "set_config($do_add): translating messages"
+      ts_log_finest "set_config($do_add): translating messages"
 
       add_message_to_container messages -1 [translate_macro_if_possible MSG_CONF_THEPATHGIVENFORXMUSTSTARTWITHANY_S "*"]
       add_message_to_container messages -2 [translate_macro_if_possible MSG_WARN_CHANGENOTEFFECTEDUNTILRESTARTOFEXECHOSTS "execd_spool_dir"]
@@ -4969,6 +4969,7 @@ proc init_global_submit_job_messages {} {
    set messages(-33)    "*[translate_macro MSG_STREE_USERTNOACCESS2PRJ_SS "*" "*"]*"
    set messages(-34)    "*[translate_macro MSG_JOB_NOSUITABLEQ_S "*"]*"
    set messages(-38)    "*[translate_macro MSG_QSUB_COULDNOTRUNJOB_S "*"]*"
+   set messages(-39)    "*[translate_macro MSG_REQLIMIT_EXCEEDED_S "*"]*"
 }
 
 proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {cd_dir ""} {show_args 1} {qcmd "qsub"} {dev_null 1} {the_output "qsub_output"} {ignore_list {}} {new_grp ""} {env_var ""}} {
@@ -4995,11 +4996,11 @@ proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {c
    if { $qcmd == "qsub" } {
       if { [string first "-o " $args] == -1 && $dev_null == 1} {
          set args "-o /dev/null $args"
-         ts_log_fine "added submit argument: -o /dev/null"
+         ts_log_finest "added submit argument: -o /dev/null"
       }
       if { [string first "-e " $args] == -1 && $dev_null == 1} {
          set args "-e /dev/null $args"
-         ts_log_fine "added submit argument: -e /dev/null"
+         ts_log_finest "added submit argument: -e /dev/null"
       }
    }
 
