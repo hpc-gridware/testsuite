@@ -1915,7 +1915,7 @@ proc qrsh_forward_stdin {} {
 
          # Start "qrsh stdin.sh < input_file"
          # Job has to finish within 60 seconds (timeout of start_remote_prog) otherwise GE-3580 is still present.
-         ts_log_fine "executing $ts_config(product_root)/bin/$arch/qrsh \
+         ts_log_fine "executing on $submit_host: $ts_config(product_root)/bin/$arch/qrsh \
                       -l h=$host cat < $inputfile > $tmpfile on host $submit_host as $CHECK_USER"
          # Unfortunatelly we cannot use submit_job as the qrsh support is broken.
          # created TS-414
