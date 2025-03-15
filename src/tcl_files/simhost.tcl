@@ -45,6 +45,7 @@ proc simhost_init {} {
    global CHECK_USER
    global simhost_cache
 
+   set host_arch [resolve_arch $ts_config(master_host)]
    set num_hosts_free [llength $simhost_cache(free_hosts)]
    set num_hosts_used [llength $simhost_cache(used_hosts)]
    if {$num_hosts_free > 0 || $num_hosts_used > 0} {
@@ -53,15 +54,21 @@ proc simhost_init {} {
    }
 
    # try to find simulated hosts
-   set cmd [get_binary_path $ts_config(master_host) "getent"]
-   if {$cmd == "getent"} {
-      ts_log_config "cannot initialize simhost: There is no getent command in PATH on $ts_config(master_host)"
+   if {$host_arch != "fbsd-amd64"} {
+      set getent_cmd "getent"
+      set args "hosts | awk '{print \$2}' | grep '^sim-eh-'"
+   } else {
+      set getent_cmd "ypcat"
+      set args "hosts | awk '{print \$2}' | grep 'sim-eh-' | sort"
+   }
+   set cmd [get_binary_path $ts_config(master_host) $getent_cmd]
+   if {$cmd == $getent_cmd} {
+      ts_log_config "cannot initialize simhost: There is no $getent_cmd command in PATH on $ts_config(master_host)"
       return 0
    }
-   set args "hosts | awk '{print \$2}' | grep '^sim-eh-'"
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER $cmd $args prg_exit_state 300]
    if {$prg_exit_state != 0} {
-      ts_log_config "cannot initialize simhost: getent failed:\n$output"
+      ts_log_config "cannot initialize simhost: $getent_cmd failed:\n$output"
       return 0
    }
 
