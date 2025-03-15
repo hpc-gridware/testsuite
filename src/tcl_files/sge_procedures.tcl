@@ -4985,7 +4985,9 @@ proc init_global_submit_job_messages {} {
    set messages(-33)    "*[translate_macro MSG_STREE_USERTNOACCESS2PRJ_SS "*" "*"]*"
    set messages(-34)    "*[translate_macro MSG_JOB_NOSUITABLEQ_S "*"]*"
    set messages(-38)    "*[translate_macro MSG_QSUB_COULDNOTRUNJOB_S "*"]*"
-   set messages(-39)    "*[translate_macro MSG_REQLIMIT_EXCEEDED_S "*"]*"
+   if {[is_version_in_range "9.1.0"]} {
+      set messages(-39)    "*[translate_macro MSG_REQLIMIT_EXCEEDED_S "*"]*"
+   }
 }
 
 proc submit_job {args {raise_error 1} {submit_timeout 60} {host ""} {user ""} {cd_dir ""} {show_args 1} {qcmd "qsub"} {dev_null 1} {the_output "qsub_output"} {ignore_list {}} {new_grp ""} {env_var ""}} {
