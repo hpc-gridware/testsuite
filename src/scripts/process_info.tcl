@@ -63,6 +63,10 @@ proc get_ps_cmd {pid} {
    global clockticks
 
    switch -exact $arch {
+      "fbsd-amd64" - 
+      "fbsd-arm64" {
+         set cmd "/bin/ps -p $pid -o vsz,time | tail -1"
+      }
       "darwin" -
       "solaris" -
       "sol-sparc" -
@@ -192,7 +196,7 @@ while { !$do_exit } {
             lappend pids $pid
             set process($pid,name) [lindex $expect_out(0,string) 2]
             set process($pid,cmd) $cmd
-            if {[string first "/usr/bin/ps" $cmd] >= 0} {
+            if {[string first "/bin/ps" $cmd] >= 0} {
                set process($pid,format) "ps"
             } else {
                set process($pid,format) "stat"

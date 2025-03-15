@@ -50,7 +50,7 @@ proc submitter_submit_job { num_jobs add_opts } {
    global sge_root arch
    global submit_options script
 
-   #puts "submitting job:"
+   # puts "submitting $num_jobs jobs:"
 
    for {set i 0} {$i < $num_jobs} {incr i} {
       set start_clock [timestamp]
