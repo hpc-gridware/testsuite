@@ -473,7 +473,8 @@ proc throughput_cleanup {} {
 }
 
 proc throughput_setup_level {} {
-   global ts_config CHECK_USER
+   global ts_config
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
    global CHECK_ACT_LEVEL CHECK_PRODUCT_TYPE
    global end_job_count                      ;# number of jobs
    global enable_queues_job_count             ;# after with job, enable queues
@@ -486,7 +487,7 @@ proc throughput_setup_level {} {
    global throughput_subdir             ;# subdirectory in protocols/throughput/
    global throughput_sharetree throughput_sharetree_ext functional_policy
    global consumables
-   global host_list
+   global host_list submit_hosts qstat_hosts
    global test_scenario
    global ps_interval qstat_interval array_size parallel_jobs
    global reservation job_options
@@ -496,17 +497,18 @@ proc throughput_setup_level {} {
    global throughput_bootstrap_backup
 
    # parameters for all tests
-   set enable_queues_job_count  0   ;# after witch job, enable queues
-   set ps_interval              5   ;# ps every 5 seconds
-   set qstat_interval           0   ;# don't do qstats
-   set throughput_sharetree     0   ;# default, we enable explicitly
-   set throughput_sharetree_ext 0   ;# default, we enable explicitly
-   set array_size               1   ;# default: no array jobs
-   set parallel_jobs            0   ;# default: no parallel jobs
-   set functional_policy        0   ;# default: no functional policy
-   set reservation              0   ;# default: no reservation
-   set consumables              0   ;# default: no additional consumables
-   set job_options(count)       0   ;# default: no special job options
+   set enable_queues_job_count   0   ;# after witch job, enable queues
+   set ps_interval               5   ;# ps every 5 seconds
+   set qstat_interval            0   ;# don't do qstats
+   set throughput_sharetree      0   ;# default, we enable explicitly
+   set throughput_sharetree_ext  0   ;# default, we enable explicitly
+   set array_size                1   ;# default: no array jobs
+   set parallel_jobs             0   ;# default: no parallel jobs
+   set functional_policy         0   ;# default: no functional policy
+   set reservation               0   ;# default: no reservation
+   set consumables               0   ;# default: no additional consumables
+   set job_options(count)        0   ;# default: no special job options
+   set define_gdi_request_limits 1   ;# default: define gdi request limits
 
    # setup levels
    set major_level [expr $CHECK_ACT_LEVEL / 100]
@@ -671,6 +673,35 @@ proc throughput_setup_level {} {
    }
 
    set test_scenario "$CHECK_ACT_LEVEL ($throughput_subdir)"
+
+   # setup gdi request limits
+   # - create one individual rule per user/host combination
+   # - ensure that limits will never be reached
+   # - make rules for submit hosts (that match qsub) and qstat hosts (that match qstat)
+   if {$define_gdi_request_limits == 1} {
+       set gdi_request_limits ""
+       foreach user [list $CHECK_USER $CHECK_FIRST_FOREIGN_SYSTEM_USER $CHECK_SECOND_FOREIGN_SYSTEM_USER] {
+          foreach host $qstat_hosts {
+             set rule [build_gdi_request_limit "qstat" "GET" "JOB" "$user" "$host" "100000"]
+             if {$gdi_request_limits == ""} {
+                set gdi_request_limits $rule
+             } else {
+                append gdi_request_limits ",$rule"
+             }
+          }
+          foreach host $submit_hosts {
+             set rule [build_gdi_request_limit "qsub" "ADD" "JOB" "$user" "$host" "100000"]
+             if {$gdi_request_limits == ""} {
+                set gdi_request_limits $rule
+             } else {
+                append gdi_request_limits ",$rule"
+             }
+          }
+       }
+       set myconfig(gdi_request_limits) $gdi_request_limits
+   } else {
+       set myconfig(gdi_request_limits) "none"
+   }
 
    # setup global configuration
    get_config stored_configuration
@@ -1038,7 +1069,7 @@ proc run_throughput_test {} {
    #set submit_script "/usr/bin/sleep $global_job_run_time"
 
    # write unexpected output to a file for later analysis
-   set unexpected_out_filename [get_tmp_file_name]
+   set unexpected_out_filename [get_tmp_file_name "" "default" "txt"]
    set unexpected_out [open $unexpected_out_filename w]
    puts "creating file for unexpected output: $unexpected_out_filename"
 
@@ -3709,7 +3740,7 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
    ts_log_fine "-> $qmaster_messages"
    ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "mv" "$qmaster_messages $results_dir/qmaster_messages"]
    ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "touch" "$qmaster_messages"]
-   ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "mv" "$unexpected_out_filename $results_dir/unexpected_output"]
+   ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "mv" "$unexpected_out_filename $results_dir/unexpected_output.txt"]
    ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "cp" "$ts_config(product_root)/$ts_config(cell)/common/bootstrap $results_dir/bootstrap"]
 
    # create analysis, dump html and gif's

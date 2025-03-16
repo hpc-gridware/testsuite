@@ -2680,7 +2680,6 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
             set buffer [string trim $expect_out(0,string)]
             set splitline [split $buffer "\n"]
             foreach line $splitline {
-ts_log_fine "$host: $line"
                if {[string match "*$host*\|I\|*using \"$expected_value($host)\" for $name*" $line]} {
                   ts_log_fine "$host: Configuration changed: $name = \"$expected_value($host)\""
                   set is_host_ok($host) 1
@@ -2761,9 +2760,20 @@ proc compare_complex {a b} {
    return 0
 }
 
-
-
-
+## @grief create one gdi_request_limit rule
+#
+# fnmatch pattern are allowed for all fields except for the limit value
+#
+# @param src source (qsub, qconf, ...)
+# @param type type (ADD, MOD, DEL, GET)
+# @param obj object (JOB, CQUEUE, EHOST, ...)
+# @param user user or user set name
+# @param host host or hostgroup name
+# @param limit limit value
+proc build_gdi_request_limit {src type obj user host limit} {
+    set rule "$src:$type:$obj:$user:$host=$limit"
+    return $rule
+}
 
 #                                                             max. column:     |
 #****** sge_procedures/add_exechost() ******
