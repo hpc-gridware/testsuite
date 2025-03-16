@@ -1,0 +1,176 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.0.5"
+
+# define test's name and run level descriptions
+set check_name            "qstat_r"
+set check_category        "QSTAT VERIFIED"
+set check_description(0)  "test qstat -r option"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function qstat_r_setup
+set check_cleanup_function qstat_r_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "qstat_r_sequential"
+lappend check_functions "qstat_r_parallel"
+
+# -------- local test procedures: initialization------------------------------
+
+proc qstat_r_setup {} {
+   get_current_cluster_config_array ts_config
+}
+
+proc qstat_r_cleanup {} {
+   get_current_cluster_config_array ts_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+proc qstat_r_check_job {format job_id expected_var} {
+   upvar $expected_var expected
+
+   set now [clock seconds]
+
+   switch $format {
+      "plain" {
+         qstat_r_plain_parse qstat_info
+      }
+      "xml" {
+         qstat_r_xml_parse qstat_info
+      }
+   }
+
+   # check parsed values
+   set errors {}
+   foreach attrib [array names expected] {
+      if {[info exists qstat_info($job_id,$attrib)]} {
+         set expected_value $expected($attrib)
+
+         # WORKAROUND: the qstat_r_plain_parse parser only gives us the first value of a multi-value resource
+         if {$format == "plain" && [string first "_resource" $attrib] > 0 && [llength $expected_value] > 1} {
+            set expected_value [lindex $expected_value 0]
+         }
+
+         set actual_value [string trim $qstat_info($job_id,$attrib)]
+         if {$actual_value != $expected_value} {
+            lappend errors "qstat -r $format $job_id: $attrib: expected '$expected_value', got '$actual_value'"
+         }
+      } else {
+         lappend errors "qstat -r $format $job_id: $attrib: expected '$expected($attrib)', got nothing"
+      }
+   }
+
+   # check time
+   if {[info exists qstat_info($job_id,time)]} {
+      # check if time is about the same as now
+      set diff [expr abs($now - $qstat_info($job_id,time))]
+      if {$diff > 10} {
+         lappend errors "qstat -r $format $job_id: submit_time: expected to be about/lower $now, got $qstat_info($job_id,time)"
+      }
+   } else {
+      lappend errors "qstat -r $format $job_id: time (submit/start time): expected a value, got nothing"
+   }
+
+   if {[llength $errors] > 0} {
+      ts_log_severe "qstat -r $format $job_id: errors:\n[join $errors "\n"]"
+   }
+}
+
+proc qstat_r_do_test {job_opts expected_var} {
+   upvar $expected_var expected
+
+   # submit job
+   set job_id [submit_job "$job_opts -b y sleep 600"]
+   if {$job_id > 0} {
+      wait_for_job_state $job_id "r" 10
+
+      qstat_r_check_job plain $job_id expected
+      qstat_r_check_job xml $job_id expected
+
+      delete_job $job_id
+   }
+}
+
+proc qstat_r_sequential {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set host [lindex $ts_config(execd_nodes) 0]
+
+   set job_opts "-q all.q -l h=$host -soft -q all.q@$host -l h_rss=10G"
+   set expected(hard_req_queue)  "all.q"
+   set expected(hard_resource)   "hostname=$host"
+   set expected(name)            "sleep"
+   set expected(owner)           $CHECK_USER
+   set expected(prior)           "0.55500"
+   set expected(queue)           "all.q@$host"
+   set expected(slots)           1
+   set expected(soft_req_queue)  "all.q@$host"
+   set expected(soft_resource)   "h_rss=10G"
+   set expected(state)           "r"
+
+   qstat_r_do_test $job_opts expected
+}
+
+proc qstat_r_parallel {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set host [lindex $ts_config(execd_nodes) 0]
+
+   set job_opts "-pe mytestpe 1-4 -scope global -q all.q -l h=$host -soft -q all.q@$host -hard"
+   append job_opts " -scope master -l h_rss=5G,h_vmem=10G"
+   append job_opts " -scope slave -l h_rss=1G,h_vmem=2G"
+
+   set expected(granted_pe)           "mytestpe"
+   set expected(granted_pe_slots)     4
+   set expected(hard_req_queue)       "all.q"
+   set expected(hard_resource)        "hostname=$host"
+   set expected(master_hard_resource) "h_rss=5G h_vmem=10G"
+   set expected(name)                 "sleep"
+   set expected(owner)                $CHECK_USER
+   set expected(prior)                0.55500
+   set expected(queue)                "all.q@$host"
+   set expected(requested_pe)         "mytestpe"
+   set expected(requested_pe_range)   "1-4"
+   set expected(slave_hard_resource)  "h_rss=1G h_vmem=2G"
+   set expected(slots)                4
+   set expected(soft_req_queue)       "all.q@$host"
+   set expected(state)                "r"
+
+   qstat_r_do_test $job_opts expected
+}

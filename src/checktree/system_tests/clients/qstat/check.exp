@@ -3514,7 +3514,7 @@ proc qstat_tasks {} {
    for {set ind 0} {$ind < 5} {incr ind 1} {
       foreach elem $var_array {
          if {[string compare [string trim $xml(job$ind,$elem)] [string trim $plain(job$ind,$elem)]] != 0} {
-            if {[info exists xml($elem)]} {
+            if {[info exists xml(job$ind,$elem)]} {
                set xml_output [string trim $xml(job$ind,$elem)]
             } else {
                set xml_output "XML tag \"$elem\" not found!"
@@ -3541,12 +3541,12 @@ proc qstat_tasks {} {
    # capture plain output
    set res1 [plain_r_parse plain]
 
-   set var_array1 { jobNumber prio name owner state queue slots hard soft }
+   set var_array1 {prior name owner state queue slots hard_resource soft_resource}
    # compare xml and plain arrays to ensure  all attributes match
    foreach elem $var_array1 {
-      if {[ string compare [string trim $xml($elem)] \
+      if {[string compare [string trim $xml($job_id,$elem)] \
          [string trim $plain($elem)]] != 0} {
-         ts_log_fine "xml = [string trim $xml($elem)] , plain = [string trim $plain($elem)]"
+         ts_log_fine "xml = [string trim $xml($job_id,$elem)] , plain = [string trim $plain($elem)]"
          ts_log_severe "outputs do not match from plain and xml for $elem.\nxml output: [string trim $xml($elem)]\nplain output: [string trim $plain($elem)]"
          return
       }

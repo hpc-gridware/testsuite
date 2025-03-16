@@ -1776,6 +1776,7 @@ proc qstat_gdr_xml_parse { output } {
    }
 
    set xmloutput [start_sge_bin "qstat" "-g d -r -xml"]
+
    set doc [dom parse $xmloutput]
    set root [$doc documentElement]
 
@@ -1814,7 +1815,7 @@ proc qstat_gdr_xml_parse { output } {
       set node [lindex $fullJobNameList $ind]
       set xml(job$ind,fullName) [$node nodeValue]
    }
-
+   parray xml
 }
 
 #****** parser_xml/qstat_r_xml_parse() ******
@@ -1841,37 +1842,113 @@ proc qstat_gdr_xml_parse { output } {
 #
 #
 #*******************************
-proc qstat_r_xml_parse { output } {
+proc qstat_r_xml_parse {{output qstat_r_info}} {
    upvar $output xml
+   unset -nocomplain xml
+
+   set xml(jobid_list) {}
 
    set xmloutput [start_sge_bin "qstat" "-r -xml"]
+
    set doc [dom parse $xmloutput]
    set root [$doc documentElement]
 
+   # read all running jobs
+   foreach node [$root selectNodes /job_info/queue_info/job_list] {
+      qstat_r_xml_parse_node $node xml
+   }
+   foreach node [$root selectNodes /job_info/job_info/job_list] {
+      qstat_r_xml_parse_node $node xml
+   }
+}
+
+proc qstat_r_xml_parse_node {node output} {
+   upvar $output xml
+
    # parse xml output and create array based on the attributes
-   set jobNumber [$root selectNodes /job_info/queue_info/job_list/JB_job_number/text()]
-   set prio [$root selectNodes /job_info/queue_info/job_list/JAT_prio/text()]
-   set name [$root selectNodes /job_info/queue_info/job_list/JB_name/text()]
-   set owner [$root selectNodes /job_info/queue_info/job_list/JB_owner/text()]
-   set state [$root selectNodes /job_info/queue_info/job_list/state/text()]
-   set time [$root selectNodes /job_info/queue_info/job_list/JAT_start_time/text()]
-   set queue [$root selectNodes /job_info/queue_info/job_list/queue_name/text()]
-   set slots [$root selectNodes /job_info/queue_info/job_list/slots/text()]
-   set fullName [$root selectNodes /job_info/queue_info/job_list/full_job_name/text()]
-   set hard [$root selectNodes /job_info/queue_info/job_list/hard_request/text()]
-   set soft [$root selectNodes /job_info/queue_info/job_list/soft_request/text()]
+   set jobid [$node selectNodes JB_job_number/text()]
+   set job_id [$jobid nodeValue]
+   lappend xml(jobid_list) $job_id
 
-   set xml(jobNumber) [$jobNumber nodeValue]
-   set xml(prio)  [$prio nodeValue]
-   set xml(name) [$name nodeValue]
-   set xml(owner) [$owner nodeValue]
-   set xml(state) [$state nodeValue]
-   set xml(time) [$time nodeValue]
-   set xml(queue) [$queue nodeValue]
-   set xml(slots) [$slots nodeValue]
-   set xml(hard) [[$hard parentNode] getAttribute name]=[$hard nodeValue]
-   set xml(soft) [[$soft parentNode] getAttribute name]=[$soft nodeValue]
+   # get the xml nodes
+   set general_attribs "prior name owner state queue slots full_jobname" ;# @todo master_queue missing in XML?
+   set nodes(prior) [$node selectNodes JAT_prio/text()]
+   set nodes(name) [$node selectNodes JB_name/text()]
+   set nodes(owner) [$node selectNodes JB_owner/text()]
+   set nodes(state) [$node selectNodes state/text()]
+   set nodes(queue) [$node selectNodes queue_name/text()]
+   set nodes(slots) [$node selectNodes slots/text()]
+   set nodes(full_jobname) [$node selectNodes full_job_name/text()]
+   foreach attrib $general_attribs {
+      if {$nodes($attrib) != ""} {
+         set xml($job_id,$attrib) [$nodes($attrib) nodeValue]
+      }
+   }
 
+   set time_attribs "time"
+   set nodes(time) [$node selectNodes JAT_submission_time/text()]
+   if {$nodes(time) == ""} {
+      set nodes(time) [$node selectNodes JAT_start_time/text()]
+   }
+   foreach attrib $time_attribs {
+      if {$nodes($attrib) != ""} {
+         set xml($job_id,$attrib) [transform_date_time [$nodes($attrib) nodeValue]]
+      }
+   }
+
+   set hard_resource_attribs "master_hard_resource slave_hard_resource hard_resource"
+   set nodes(hard_resource) [$node selectNodes hard_request]
+   set nodes(master_hard_resource) [$node selectNodes master_hard_request]
+   set nodes(slave_hard_resource) [$node selectNodes slave_hard_request]
+   foreach attrib $hard_resource_attribs {
+      foreach subnode $nodes($attrib) {
+         lappend xml($job_id,$attrib) [$subnode getAttribute name]=[$subnode text]
+      }
+   }
+
+   set soft_resource_attribs "master_soft_resource slave_soft_resource soft_resource"
+   set nodes(soft_resource) [$node selectNodes soft_request]
+   set nodes(master_soft_resource) [$node selectNodes master_soft_request]
+   set nodes(slave_soft_resource) [$node selectNodes slave_soft_request]
+   foreach attrib $soft_resource_attribs {
+      foreach subnode $nodes($attrib) {
+         lappend xml($job_id,$attrib) [$subnode getAttribute name]=[$subnode text]
+      }
+   }
+
+   set pe_attribs "requested_pe requested_pe_range"
+   set nodes(requested_pe) [$node selectNodes requested_pe/text()]
+   if {$nodes(requested_pe) != ""} {
+      set xml($job_id,requested_pe) [[$nodes(requested_pe) parentNode] getAttribute name]
+      set xml($job_id,requested_pe_range) [$nodes(requested_pe) nodeValue]
+   }
+
+   append pe_attribs " granted_pe granted_pe_slots"
+   set nodes(granted_pe) [$node selectNodes granted_pe/text()]
+   if {$nodes(granted_pe) != ""} {
+      set xml($job_id,granted_pe) [[$nodes(granted_pe) parentNode] getAttribute name]
+      set xml($job_id,granted_pe_slots) [$nodes(granted_pe) nodeValue]
+   }
+
+   set hard_queue_attribs "master_hard_req_queue slave_hard_req_queue hard_req_queue"
+   set nodes(master_hard_req_queue) [$node selectNodes master_hard_req_queue/text()]
+   set nodes(slave_hard_req_queue) [$node selectNodes slave_hard_req_queue/text()]
+   set nodes(hard_req_queue) [$node selectNodes hard_req_queue/text()]
+   foreach attrib $hard_queue_attribs {
+      if {$nodes($attrib) != ""} {
+         lappend xml($job_id,$attrib) [$nodes($attrib) nodeValue]
+      }
+   }
+
+   set soft_queue_attribs "master_soft_req_queue slave_soft_req_queue soft_req_queue"
+   set nodes(master_soft_req_queue) [$node selectNodes master_soft_req_queue/text()]
+   set nodes(slave_soft_req_queue) [$node selectNodes slave_soft_req_queue/text()]
+   set nodes(soft_req_queue) [$node selectNodes soft_req_queue/text()]
+   foreach attrib $soft_queue_attribs {
+      if {$nodes($attrib) != ""} {
+         lappend xml($job_id,$attrib) [$nodes($attrib) nodeValue]
+      }
+   }
 }
 
 proc qstat_j_xml_par { output job_id xmloutput} {

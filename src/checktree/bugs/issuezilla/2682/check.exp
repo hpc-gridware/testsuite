@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global check_need_running_system
 
@@ -50,7 +50,7 @@ set check_description(0)  "The test verify that the qstat -r output has separate
                            queue names by comma in Hard requested queues item."
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function issue_2682_setup
@@ -112,8 +112,7 @@ proc issue_2682_test {} {
    set hard_rq_queues $output($job_id,hard_req_queue)
 
    # compare the expected and the obtained output
-   if { [string compare $hard_rq_queues $exp_hard_rq_queues] != 0 } {
+   if {[string compare $hard_rq_queues $exp_hard_rq_queues] != 0} {
       ts_log_severe "Unexpected Hard requested queues output. Issue 2628 is still present."
    }
-
 }
