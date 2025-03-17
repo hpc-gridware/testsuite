@@ -984,7 +984,7 @@ proc sendmail_wrapper { address cc subject body } {
    flush $script
    close $script
 
-   set new_subject "[get_version_info] ($ts_config(cell)) - $subject"
+   set new_subject "[get_mail_tag] - $subject"
 
    wait_for_remote_file $ts_config(mailx_host) $CHECK_USER $tmp_file
    set result [start_remote_prog $ts_config(mailx_host) $CHECK_USER $ts_config(mail_application) "\"$address\" \"$cc\" \"$new_subject\" \"$tmp_file\""]

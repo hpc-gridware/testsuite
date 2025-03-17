@@ -412,6 +412,10 @@ proc setup_conf {} {
      set params(administrator_mail) $CHECK_REPORT_EMAIL_TO
   }
 
+  if {[is_version_in_range "9.1.0"]} {
+     set params(mail_tag) [get_mail_tag]
+  }
+
   set params(set_token_cmd) "none"
   set params(pag_cmd) "none"
   set params(token_extend_time) "none"
@@ -461,13 +465,11 @@ proc setup_conf {} {
        set old  $old_config($param)
        set new  $new_config($param)
 
-       if { [ string compare -nocase $old $new ] != 0 } {
-          if { [ string compare $param "load_report_time" ] == 0 } { continue }
-          if { [ string compare $param "loglevel" ] == 0 } { continue }
-          if { [ string compare $param "execd_params" ] == 0 } { continue }
-          if { [ string compare $param "finished_jobs" ] == 0 } { continue }
-          if { [ string compare $param "max_unheard" ] == 0 } { continue }
-          if { [ string compare $param "reporting_params" ] == 0 } { continue }
+       if {[string compare -nocase $old $new] != 0} {
+          set name_list [list "reschedule_unknown" "load_report_time" "loglevel" "execd_params" "finished_jobs" "max_unheard" "reporting_params" "mail_tag"]
+          if {[lsearch -exact $name_list $param] != -1} {
+             continue
+          }
 
           ts_log_config "config parameter $param:\ndefault setup: $old, after testsuite reset: $new"
        }

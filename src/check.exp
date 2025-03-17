@@ -1431,7 +1431,7 @@ proc send_mail { address cc subject body } {
    if { $erg == 0 } {
       return
    }
-   set new_subject "[get_version_info] ($ts_config(cell)) - $subject"
+   set new_subject "[get_mail_tag] - $subject"
 
    if {$CHECK_ENABLE_MAIL != 1} {
       ts_log_fine "mail sending disabled, mails sent: $CHECK_MAILS_SENT"
@@ -4318,7 +4318,7 @@ proc run_tests {path state_to_run} {
    }
 
    # do send mail
-   mail_report "$mail_subject" $mail_body
+   mail_report [get_mail_subject "$mail_subject"] $mail_body
 
    set CHECK_TESTS_RUNNING 0
 
@@ -7623,7 +7623,6 @@ set fast_setup        0
 set CHECK_CUR_PROC_NAME "main"
 set check_name "main"
 set CHECK_ACTUAL_TEST_PATH "not in testmode"
-set mail_subject "testsuite error - main"
 set mail_body    "date: [clock format [clock seconds]]\n:\n"
 
 # for some reason, we need this with SuSE 10 expect 5.43.0
@@ -7638,6 +7637,33 @@ set CHECK_CURRENT_WORKING_DIR [get_current_working_dir]
 set CHECK_DEFAULTS_FILE    "$CHECK_CURRENT_WORKING_DIR/defaults.sav"
 set CHECK_MAIN_RESULTS_DIR "$CHECK_CURRENT_WORKING_DIR/results"
 set CHECK_TESTSUITE_LOCKFILE "$CHECK_CURRENT_WORKING_DIR/testsuite_lockfile"
+
+proc get_mail_tag {} {
+   global ts_config
+   global CHECK_PRODUCT_VERSION_NUMBER
+
+   if {[info exists ts_config(cluster_name)]} {
+      set name "$ts_config(cluster_name)"
+   } else {
+      set name "unknown"
+   }
+   if {[info exists ts_config(cell)]} {
+      set cell "$ts_config(cell)"
+   } else {
+      set cell "unknown"
+   }
+   set product "OCS"
+   if {[ge_has_feature "gcs"] == 1} {
+      set product "GCS"
+   }
+   set full_version [get_version_info version_array]   ; # GCS 9.1.0prealpha (160325-1944)
+   set version $version_array(detected_version)        ; # 9.1.0 without prefix, suffix, build ID
+   return "\[$name\]\[$product\]\[$version\]"          ; # [p8006][GCS][9.1.0]
+}
+
+proc get_mail_subject {text} {
+   return "$text"
+}
 
 # commandline parsing
 set log_to_file 0
@@ -8315,7 +8341,7 @@ for {set i 0} {$i < $argc} {incr i} {
          set mail_body "$mail_body check is running on host \"$local_host\" architecture is \"$local_arch\"\n"
          set mail_body "$mail_body product root directory is \"$ts_config(product_root)\"\n-------\n"
          set mail_body "$mail_body SGE CELL is  \"$ts_config(cell)\"\n-------\n"
-         mail_report $mail_subject "$mail_body used check parameter without runlevel or checkname"
+         mail_report [get_mail_subject "testsuite error - main"] "$mail_body used check parameter without runlevel or checkname"
          testsuite_shutdown 1
       } else {
          #Save then to the new global array
@@ -8339,7 +8365,7 @@ for {set i 0} {$i < $argc} {incr i} {
          set mail_body "$mail_body check is running on host \"$local_host\" architecture is \"$local_arch\"\n"
          set mail_body "$mail_body product root directory is \"$ts_config(testsuite_root_dir)\"\n-------\n"
          set mail_body "$mail_body SGE CELL is  \"$ts_config(cell)\"\n-------\n"
-         mail_report $mail_subject "$mail_body used all parameter without runlevel"
+         mail_report [get_mail_subject "testsuite error - main"] "$mail_body used all parameter without runlevel"
          testsuite_shutdown 1
       }
       incr i
@@ -8360,7 +8386,7 @@ for {set i 0} {$i < $argc} {incr i} {
          set mail_body "$mail_body check is running on host \"$local_host\" architecture is \"$local_arch\"\n"
          set mail_body "$mail_body product root directory is \"$ts_config(testsuite_root_dir)\"\n-------\n"
          set mail_body "$mail_body SGE CELL is  \"$ts_config(cell)\"\n-------\n"
-         mail_report $mail_subject "$mail_body used category parameter without category list"
+         mail_report [get_mail_subject "testsuite error - main"] "$mail_body used category parameter without category list"
          testsuite_shutdown 1
       }
       incr i

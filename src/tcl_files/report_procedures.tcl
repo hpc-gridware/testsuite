@@ -603,7 +603,7 @@ proc report_send_mail { report } {
    }
    append mail_body "------------------------------------------\n"
    
-   mail_report $mail_subject $mail_body
+   mail_report [get_mail_subject $mail_subject] $mail_body
 }
 
 #****** report_procedures/report_hudson_xml() ***********************************
