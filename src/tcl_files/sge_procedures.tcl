@@ -5857,7 +5857,11 @@ proc get_qacct_error {result job_id raise_error} {
       ts_log_fine "get_qacct_error: translating messages"
       set messages(index) "-1 -2"
       set messages(-1) "*[translate_macro MSG_HISTORY_NOJOBSRUNNINGSINCESTARTUP]"
-      set messages(-2) "*[translate_macro MSG_HISTORY_JOBIDXNOTFOUND_D $job_id]"
+      if {[is_version_in_range "9.1.0"]} {
+         set messages(-2) "*[translate_macro MSG_HISTORY_JOBIDXNOTFOUND_U $job_id]"
+      } else {
+         set messages(-2) "*[translate_macro MSG_HISTORY_JOBIDXNOTFOUND_D $job_id]"
+      }
    }
 
    # should we have version dependent error messages, create following
