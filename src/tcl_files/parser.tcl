@@ -2990,7 +2990,7 @@ proc qstat_ext_plain_parse { output {param ""} } {
 #  SEE ALSO
 #     parser/parse_qstat
 #*******************************
-proc qstat_F_plain_parse {  output {params ""} } {
+proc qstat_F_plain_parse {  output {params ""} {user ""} {add_args ""}} {
    global queue_name
 
    upvar $output qstat_output
@@ -3003,7 +3003,7 @@ proc qstat_F_plain_parse {  output {params ""} } {
 
    # Run usual command
    set myenv(SGE_LONG_QNAMES) 80
-   set result [start_sge_bin "qstat" "-F $args" "" "" prg_exit_state 60 "" "bin" output_lines myenv]
+   set result [start_sge_bin "qstat" "$add_args -F $args" "" $user prg_exit_state 60 "" "bin" output_lines myenv]
    parse_multiline_list result parsed_out
 
    set index 0
@@ -3039,8 +3039,6 @@ proc qstat_F_plain_parse {  output {params ""} } {
          set complex_attribute [lindex $complex_attribute_value 0]
          set value [lindex $complex_attribute_value 1]
          set qstat_output($queue_name,$complex_attribute) $value
-
-
       } elseif { [regexp "\[a-zA-Z\]" $id] } {  ; # queue listing
          set delta 0
          set qstat_output($id,qname) [lindex $single_white_space_string [expr 0 + $delta]]
@@ -3058,7 +3056,6 @@ proc qstat_F_plain_parse {  output {params ""} } {
          }
 
          lappend qstat_output(queue_list) $id
-
       } else { ; # job listing
          set jobid $id
          set qstat_output($jobid,jobid) $jobid
@@ -3076,7 +3073,6 @@ proc qstat_F_plain_parse {  output {params ""} } {
          if { [llength $single_white_space_string ] > 7} {
             append qstat_output($jobid,task_id) "[lindex $single_white_space_string  8] "
          }
-
      }
 
   }
