@@ -412,10 +412,6 @@ proc setup_conf {} {
      set params(administrator_mail) $CHECK_REPORT_EMAIL_TO
   }
 
-  if {[is_version_in_range "9.1.0"]} {
-     set params(mail_tag) [get_mail_tag]
-  }
-
   set params(set_token_cmd) "none"
   set params(pag_cmd) "none"
   set params(token_extend_time) "none"
@@ -434,6 +430,10 @@ proc setup_conf {} {
   if [info exists old_config(ignore_fqdn)] {
     set params(ignore_fqdn) "true"
   }
+  if [info exists old_config(mail_tag)] {
+     set params(mail_tag) [get_mail_tag]
+  }
+
 
   if { $ts_config(product_type) == "sgeee" } {
     set params(execd_params)    "PTF_MIN_PRIORITY=20,PTF_MAX_PRIORITY=0,SET_LIB_PATH=true"
