@@ -2838,12 +2838,10 @@ proc add_exechost {change_array {fast_add 1}} {
       set default_array(user_lists)        "NONE"
       set default_array(xuser_lists)       "NONE"
 
-      if {$ts_config(product_type) == "sgeee"} {
-         set default_array(projects)                    "NONE"
-         set default_array(xprojects)                   "NONE"
-         set default_array(usage_scaling)               "NONE"
-         set default_array(report_variables)            "NONE"
-      }
+      set default_array(projects)                    "NONE"
+      set default_array(xprojects)                   "NONE"
+      set default_array(usage_scaling)               "NONE"
+      set default_array(report_variables)            "NONE"
 
       foreach elem $values {
          set value $chgar($elem)
@@ -3389,7 +3387,7 @@ proc wait_for_connected_scheduler { {seconds 90} {raise_error 1} } {
 #  SEE ALSO
 #     sge_procedures/wait_for_queue_state()
 #*******************************************************************************
-proc wait_for_job_state {jobid state wait_timeout} {
+proc wait_for_job_state {jobid state wait_timeout {raise_error 1}} {
    get_current_cluster_config_array ts_config
 
    set my_timeout [expr [clock seconds] + $wait_timeout]
@@ -3401,7 +3399,9 @@ proc wait_for_job_state {jobid state wait_timeout} {
          return $job_state
       }
       if {[clock seconds] > $my_timeout} {
-         ts_log_severe "timeout waiting for job $jobid to get in \"$state\" state"
+         if {$raise_error == 1} {
+            ts_log_severe "timeout waiting for job $jobid to get in \"$state\" state"
+         }
          return -1
       }
       after 1000
@@ -5674,15 +5674,8 @@ proc get_extended_job_info {jobid {variable job_info} {do_replace_NA 1} {do_grou
    }
 
    set myenv(SGE_LONG_QNAMES) 50
-
-   if {$ts_config(product_type) == "sgeee" } {
-      set result [start_sge_bin "qstat" "$qstat_options -ext $group_options" "" "" exit_code 60 "" "bin" output_lines myenv]
-      set ext 1
-   } else {
-      set result [start_sge_bin "qstat" "$qstat_options" "" "" exit_code 60 "" "bin" output_lines myenv]
-      set ext 0
-   }
-#   set jobinfo(output) $result
+   set result [start_sge_bin "qstat" "$qstat_options -ext $group_options" "" "" exit_code 60 "" "bin" output_lines myenv]
+   set ext 1
 
    if {$exit_code == 0} {
       parse_qstat result jobinfo $jobid $ext $do_replace_NA
@@ -5734,7 +5727,7 @@ proc get_qstat_j_info {jobid {my_variable qstat_j_info} {add_switch ""} {host ""
    }
 
    set result [start_sge_bin "qstat" "$add_switch -j $jobid" $host $user]
-#   set jobinfo(output) $result
+   set jobinfo(output) $result
    if {$prg_exit_state == 0} {
       set result "$result\n"
       set my_result ""
@@ -5909,17 +5902,6 @@ proc get_qacct_error {result job_id raise_error} {
 #        if { $cpu < 30 } {
 #           ts_log_severe "cpu entry in accounting ($qacct_info(cpu)) seems
 #                                     to be wrong for job $job_id on host $host"
-#        }
-#
-#        if { $ts_config(product_type) == "sgeee" } {
-#           # compute absolute diffence between cpu and ru_utime + ru_stime
-#           set difference [expr $cpu - $qacct_info(cpu)]
-#           set difference [expr $difference * $difference]
-#           if { $difference > 1 } {
-#              ts_log_severe "accounting: cpu($qacct_info(cpu)) is not the
-#                            sum of ru_utime and ru_stime ($cpu) for
-#                            job $job_id on host $host"
-#           }
 #        }
 #     }
 #

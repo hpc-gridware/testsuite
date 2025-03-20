@@ -128,10 +128,8 @@ proc cleanup_system {} {
    # wait until cluster is empty
    wait_for_end_of_all_jobs
 
-   # SGEEE: remove sharetree
-   if {[string compare $ts_config(product_type) "sgeee"] == 0} {
-      del_sharetree
-   }
+   # remove sharetree
+   del_sharetree
 
    # remove all checkpoint environments
    ts_log_newline
@@ -181,21 +179,19 @@ proc cleanup_system {} {
   }
 
    # remove all projects
-  if { [ string compare $ts_config(product_type) "sgeee" ] == 0 } {
-      ts_log_newline
-     ts_log_fine "removing project objects ..."
-     set NO_PROJECT_LIST_DEFINED [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_QCONF_NOXDEFINED_S] "project list"]
-     set result [start_sge_bin "qconf" "-sprjl"]
+   ts_log_newline
+   ts_log_fine "removing project objects ..."
+   set NO_PROJECT_LIST_DEFINED [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_QCONF_NOXDEFINED_S] "project list"]
+   set result [start_sge_bin "qconf" "-sprjl"]
 
-     if { [string first $NO_PROJECT_LIST_DEFINED $result] >= 0 } {
-        ts_log_fine "no project list defined"
-     } else {
-        foreach elem $result {
-           ts_log_fine "removing project $elem."
-           del_project $elem
-        }
-     }
-  }
+   if { [string first $NO_PROJECT_LIST_DEFINED $result] >= 0 } {
+      ts_log_fine "no project list defined"
+   } else {
+      foreach elem $result {
+         ts_log_fine "removing project $elem."
+         del_project $elem
+      }
+   }
 
    # JG: TODO: what about SGEEE users?
 
@@ -435,25 +431,12 @@ proc setup_conf {} {
   }
 
 
-  if { $ts_config(product_type) == "sgeee" } {
-    set params(execd_params)    "PTF_MIN_PRIORITY=20,PTF_MAX_PRIORITY=0,SET_LIB_PATH=true"
-    set params(enforce_project) "false"
-    set params(projects) "none"
-    set params(xprojects) "none"
-  }
+  set params(execd_params)    "PTF_MIN_PRIORITY=20,PTF_MAX_PRIORITY=0,SET_LIB_PATH=true"
+  set params(enforce_project) "false"
+  set params(projects) "none"
+  set params(xprojects) "none"
 
   set_config params
-
-  if { $ts_config(product_type) == "sgeee" } {
-    set ptf_param(execd_params) "PTF_MIN_PRIORITY=40,PTF_MAX_PRIORITY=20,SET_LIB_PATH=true"
-    foreach i $ts_config(execd_nodes) {
-      switch -exact [resolve_arch $i] {
-        irix6 {
-          set_config ptf_param $i
-        }
-      }
-    }
-  }
 
   get_config new_config
 

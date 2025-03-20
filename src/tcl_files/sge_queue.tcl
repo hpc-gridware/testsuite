@@ -100,18 +100,13 @@ proc set_queue_defaults { change_array } {
    set chgar(h_rss)                "INFINITY"
    set chgar(s_vmem)               "INFINITY"
    set chgar(h_vmem)               "INFINITY"
-
    set chgar(hostlist)             "NONE"
    set chgar(qtype)                "BATCH INTERACTIVE"
    set chgar(ckpt_list)            "NONE"
    set chgar(pe_list)              "make"
-
-   if {$ts_config(product_type) == "sgeee"} {
-      set chgar(projects)           "NONE"
-      set chgar(xprojects)          "NONE"
-   }
-
-}
+   set chgar(projects)             "NONE"
+   set chgar(xprojects)            "NONE"
+ }
 
 #****** sge_queue/set_lab_defaults() *******************************************
 #  NAME

@@ -1164,16 +1164,9 @@ proc qalter_P {} {
    global submitresult
 
    set option "-P mytestproject"
-   if {[string compare $ts_config(product_type) "sgeee"] == 0} {
-      set qalteroutput [start_sge_bin "qalter" "$option $submitresult"]
-      if {$prg_exit_state != 0} {
-         ts_log_severe "qalter $option failed:\n$qalteroutput"
-         return
-      }
-   } else {
-      # not possible for sge systems!
-      ts_log_config "qalter $option - not possible for sge system"
-      return
+   set qalteroutput [start_sge_bin "qalter" "$option $submitresult"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qalter $option failed:\n$qalteroutput"
    }
 }
 
