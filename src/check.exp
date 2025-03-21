@@ -5914,7 +5914,7 @@ proc print_menu_header {} {
   puts "==============================================================================="
 
   puts " system version     :  $CHECK_PRODUCT_VERSION_NUMBER (interpreted as $version_info(detected_version))"
-  puts " feature            :  $ts_config(product_feature)"
+  puts " cluster name       :  $ts_config(cluster_name)"
   puts " current dir        :  $CHECK_ACT_PATH"
 
   set dirs [ get_checktree_dir_names $CHECK_ACT_PATH ]
