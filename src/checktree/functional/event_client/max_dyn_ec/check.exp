@@ -238,9 +238,6 @@ proc max_dyn_ec_massive_qsub_sync {} {
    set finished 0
    set unexpected_output ""
    set timeout 60
-   # we run into the delayed reporting of jobs by sge_execds, this takes 10 minutes
-   # @todo CS-662 why? It starts when we re-start sge_qmaster in the previous check_function, but there is not a single job running
-   #       at that time. Does it then have to enable the delayed reporting at all?
    set final_timeout [expr [clock seconds] + 15 * 60]
    # log_user 1
    expect_user {

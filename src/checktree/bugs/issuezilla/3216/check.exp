@@ -154,7 +154,7 @@ proc issue_3216_test {} {
    # wait for both tasks to finish - if we see them having finished,
    # qmaster is still responding - everything OK
    set wait_time 180
-   if {![is_version_in_range "9.0.5"] && ![is_version_in_range "9.1.0"]} {
+   if {![is_version_in_range "9.1.0"]} {
       # older versions require longer wait time due to CS-662
       set wait_time 600
    }
@@ -197,7 +197,7 @@ proc issue_3216_test_array {} {
    # wait for both tasks to finish - if we see them having finished,
    # qmaster is still responding - everything OK
    set wait_time 180
-   if {![is_version_in_range "9.0.5"] && ![is_version_in_range "9.1.0"]} {
+   if {![is_version_in_range "9.1.0"]} {
       # older versions require longer wait time due to CS-662
       set wait_time 600
    }
