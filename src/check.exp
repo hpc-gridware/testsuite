@@ -5915,7 +5915,7 @@ proc print_menu_header {} {
 
   puts " system version     :  $CHECK_PRODUCT_VERSION_NUMBER (interpreted as $version_info(detected_version))"
   puts " cluster name       :  $ts_config(cluster_name)"
-  puts " current dir        :  $CHECK_ACT_PATH"
+  puts " current dir        :  $CHECK_ACT_PATH ([pwd])"
 
   set dirs [ get_checktree_dir_names $CHECK_ACT_PATH ]
   lappend dirs $CHECK_ACT_PATH
@@ -5960,10 +5960,12 @@ proc print_menu_header {} {
            append test_name " (category not enabled)"
         }
      }
-     if { $count > 9 } {
+     if {$count > 99} {
         set blank " "
-     } else {
+     } elseif {$count > 9} {
         set blank "  "
+     } else {
+        set blank "   "
      }
      lappend test_counts "$count"
 
@@ -5982,7 +5984,7 @@ proc print_menu_header {} {
         }
      } else {
         if { $elem != $CHECK_ACT_PATH } {
-           lappend test_text   "${blank}${count} test(s) available in subdir: [file tail $elem]"
+           lappend test_text   "${blank}${count} test(s) in [file tail $elem]"
         }
      }
   }
@@ -6334,18 +6336,18 @@ proc menu {} {
       # and to make sure that valgrind is used e.g. when restarting qmaster via menu
       set CHECK_CUR_PROC_NAME "main"
       print_menu_header
-      puts "  (0) select runlevels/categories..."
+      puts "  (0)  select runlevels/categories..."
       if {$CHECK_PACKAGE_DIRECTORY == "none" || $CHECK_PACKAGE_TYPE == "create_tar"} {
-         puts "  (1) compile source code and run distinst"
+         puts "  (1)  compile source code and run distinst"
          puts "  (1t) compile and just replace binaries (no re-install needed)"
       } else {
-         puts "  (1) install product packages"
+         puts "  (1)  install product packages"
       }
-      puts "  (2) run not completed tests (including subdirectories)"
-      puts "  (3) run other tests..."
-      puts "  (4) reset test lists..."
-      puts "  (5) show test infos..."
-      puts "  (9) exit (press ^C to exit without shutdown of the cluster)"
+      puts "  (2)  run not completed tests (including subdirectories)"
+      puts "  (3)  run other tests..."
+      puts "  (4)  reset test lists..."
+      puts "  (5)  show test infos..."
+      puts "  (9)  exit (press ^C to exit without shutdown of the cluster)"
 
       set localtest -1
       if {[info exists ts_checktree($CHECK_ACT_PATH)]} {
@@ -6356,29 +6358,29 @@ proc menu {} {
       }
 
       if {$localtest >= 0} {
-         puts " (11) show test descriptions of local test"
-         puts " (12) run local test"
-         puts " (13) run local test continously"
+         puts " (11)  show test descriptions of local test"
+         puts " (12)  run local test"
+         puts " (13)  run local test continously"
       }
       puts "==============================================================================="
-      puts " (20) run distinst (without compiling before)"
-      puts " (21) install cluster"
+      puts " (20)  run distinst (without compiling before)"
+      puts " (21)  install cluster"
       puts " (21c) reset cluster configuration to defaults"
-      puts " (22) start cluster"
-      puts " (23) shutdown cluster"
-      puts " (24) start master (and scheduler)"
-      puts " (25) shutdown and restart master (and scheduler)"
-      puts " (26) cluster checks..."
-      puts " (27) cluster cleanups..."
-      puts " (30) enter testsuite setup..."
-      puts " (31) set command line options..."
-      puts " (32) set testsuite debug level (current value: $CHECK_DEBUG_LEVEL)"
-      puts " (33) re-read checktree and re-source tcl-files"
-      puts " (34) testsuite cleanups..."
-      puts " (40) hooks..."
-      puts " (50) run (1) and then (2)"
-      puts " (51) run (1) and then (21)"
-      puts " (60) interactive TCL shell"
+      puts " (22)  start cluster"
+      puts " (23)  shutdown cluster"
+      puts " (24)  start master (and scheduler)"
+      puts " (25)  shutdown and restart master (and scheduler)"
+      puts " (26)  cluster checks..."
+      puts " (27)  cluster cleanups..."
+      puts " (30)  enter testsuite setup..."
+      puts " (31)  set command line options..."
+      puts " (32)  set testsuite debug level (current value: $CHECK_DEBUG_LEVEL)"
+      puts " (33)  re-read checktree and re-source tcl-files"
+      puts " (34)  testsuite cleanups..."
+      puts " (40)  hooks..."
+      puts " (50)  run (1) and then (2)"
+      puts " (51)  run (1) and then (21)"
+      puts " (60)  interactive TCL shell"
 
       puts "\nYou can select a menu number,"
       puts "enter a relative/absolute path or \"..\" to switch the directory."

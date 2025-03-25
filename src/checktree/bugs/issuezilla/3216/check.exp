@@ -153,8 +153,12 @@ proc issue_3216_test {} {
 
    # wait for both tasks to finish - if we see them having finished,
    # qmaster is still responding - everything OK
-   # due to delayed reporting after execd reconnected to qmaster this takes > 10 minutes, see CS-662
-   wait_for_end_of_all_jobs 610
+   set wait_time 180
+   if {![is_version_in_range "9.0.5"] && ![is_version_in_range "9.1.0"]} {
+      # older versions require longer wait time due to CS-662
+      set wait_time 600
+   }
+   wait_for_end_of_all_jobs $wait_time
 }
 
 proc issue_3216_test_array {} {
@@ -192,8 +196,12 @@ proc issue_3216_test_array {} {
 
    # wait for both tasks to finish - if we see them having finished,
    # qmaster is still responding - everything OK
-   # due to delayed reporting after execd reconnected to qmaster this takes > 10 minutes, see CS-662
-   set ret [wait_for_end_of_all_jobs 610]
+   set wait_time 180
+   if {![is_version_in_range "9.0.5"] && ![is_version_in_range "9.1.0"]} {
+      # older versions require longer wait time due to CS-662
+      set wait_time 600
+   }
+   set ret [wait_for_end_of_all_jobs $wait_time]
    if {$ret == -1} {
 
       ts_log_fine "job did not terminate"
