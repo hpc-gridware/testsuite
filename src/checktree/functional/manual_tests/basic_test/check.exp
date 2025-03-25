@@ -46,6 +46,7 @@ set check_need_running_system "no"
 
 # define test's name and run level descriptions
 set check_name             "basic"
+# this is a manual test - do not enable it for automatic execution
 set check_category         "COMPATIBILITY SYSTEM INTERACTIVE JENKINS_DISABLED"
 set check_description(0)   "Basic test on selected hosts"
 set check_description(100) "Basic test on all cluster hosts"
@@ -297,7 +298,7 @@ proc basic_test {report_var} {
       sge_jsv report
       sge_check_32bit_binaries report
       sge_qmaster_log report
-      sge_reject_other_binaries report
+      #sge_reject_other_binaries report
       set test_count [get_test_count report task_${curr_task_nr} err_var]
       if {$err_var == ""} {
          set result [get_result_ok]

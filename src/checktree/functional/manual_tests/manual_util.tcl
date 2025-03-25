@@ -1261,9 +1261,7 @@ proc sge_drmaa {report_var} {
       # set the shared library variable
       set shared_lib_var [get_shared_lib_path_variable_name $b_arch]
       set my_env($shared_lib_var) $ts_config(product_root)/lib/$b_arch
-      set result [start_test_bin $drmaa_bin ""-jobs 2 -threads 2 -wait yes \
-                 $ts_config(product_root)/examples/jobs/sleeper.sh 5" \
-                 prg_exit_state 120 my_env]
+      set result [start_test_bin $drmaa_bin "-jobs 2 -threads 2 -wait yes $ts_config(product_root)/examples/jobs/sleeper.sh 5" "" "" prg_exit_state 120 my_env]
       if {[string trim "$result"] == ""} {
          append output "No output! "
          incr err_count 1
@@ -1701,7 +1699,7 @@ proc sge_check_32bit_binaries {report_var} {
 }
 
 proc manual_cluster_parameters {} {
-   return "master_host shadowd_hosts execd_hosts commd_port jmx_port reserved_port \n
+   return "master_host shadowd_hosts execd_hosts commd_port reserved_port \n
    product_root product_feature cell cluster_name spooling_method bdb_dir"
 }
 
@@ -1710,7 +1708,7 @@ proc manual_arch32_mapping {arch} {
 
    set arch_32 ""
    switch -- $arch {
-      "lx-amd64" -
+      "lx-amd64" {
          set arch_32 "lx-x86"
       }
       "sol-amd64" {
