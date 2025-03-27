@@ -150,7 +150,7 @@ proc issue_2564_check {} {
    #
    # Create new sequence file and store new sequence number.
    #
-   if {[is_version_in_range "9.0.3"]} {
+   if {[is_version_in_range "9.1.0"]} {
       set start_jid 4294967286
       set max_jid   4294967295
    } elseif {[is_version_in_range "9.0.3"]} {
