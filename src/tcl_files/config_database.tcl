@@ -67,7 +67,7 @@ if {![info exists ts_db_config]} {
 #     db_config_dbtypelist() -- database list setup
 #
 #  SYNOPSIS
-#     db_config_dbtypelist { only_check name config_array } 
+#     db_config_dbtypelist { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite supported database types configuration setup.
@@ -131,11 +131,11 @@ proc db_config_dbtypelist { only_check name config_array } {
 
 #****** config_database/db_config_dbtypelist_show_dbtypes() ********************
 #  NAME
-#     db_config_dbtypelist_show_dbtypes() -- show testsuite database type 
+#     db_config_dbtypelist_show_dbtypes() -- show testsuite database type
 #                                            configuration
 #
 #  SYNOPSIS
-#     db_config_dbtypelist_show_dbtypes { array_name } 
+#     db_config_dbtypelist_show_dbtypes { array_name }
 #
 #  FUNCTION
 #     This procedure will show the current testsuite database type configuration
@@ -161,7 +161,7 @@ proc db_config_dbtypelist_show_dbtypes { array_name } {
    }
    set index 0
    foreach dbtype $config(dbtypelist) {
-      incr index 1 
+      incr index 1
       puts "($index) $dbtype"
    }
    return $config(dbtypelist)
@@ -172,7 +172,7 @@ proc db_config_dbtypelist_show_dbtypes { array_name } {
 #     db_config_get_dbtype_parameters() -- get the list of database type parameters
 #
 #  SYNOPSIS
-#     db_config_get_dbtype_parameters { } 
+#     db_config_get_dbtype_parameters { }
 #
 #  FUNCTION
 #     get the list of all parameters needed to configure a database type
@@ -191,12 +191,12 @@ proc db_config_get_dbtype_parameters { } {
    return $params
 }
 
-#****** config_database/db_config_dislpay_params() *****************************
+#****** config_database/db_config_display_params() *****************************
 #  NAME
-#     db_config_dislpay_params() -- display the database configuration
+#     db_config_display_params() -- display the database configuration
 #
 #  SYNOPSIS
-#     db_config_dislpay_params { name type config_array }
+#     db_config_display_params { name type config_array }
 #
 #  FUNCTION
 #     display the list of parameters and it's values
@@ -207,7 +207,7 @@ proc db_config_get_dbtype_parameters { } {
 #     config_array - ts_db_config
 #
 #*******************************************************************************
-proc db_config_dislpay_params { name type config_array } {
+proc db_config_display_params { name type config_array } {
 
    upvar $config_array config
 
@@ -228,7 +228,7 @@ proc db_config_dislpay_params { name type config_array } {
 
 #****** config_database/db_config_dbtypelist_add_dbtype() **********************
 #  NAME
-#     db_config_dbtypelist_add_dbtype() -- add database type to database type 
+#     db_config_dbtypelist_add_dbtype() -- add database type to database type
 #                                          configuration
 #
 #  SYNOPSIS
@@ -248,7 +248,7 @@ proc db_config_dislpay_params { name type config_array } {
 #*******************************************************************************
 proc db_config_dbtypelist_add_dbtype { array_name { have_dbtype "" } } {
    upvar $array_name config
-  
+
    if { $have_dbtype == "" } {
       clear_screen
       puts "\nAdd database type to global database type configuration"
@@ -263,12 +263,12 @@ proc db_config_dbtypelist_add_dbtype { array_name { have_dbtype "" } } {
       puts "no database type entered"
       return -1
    }
-   
+
    if { [ string is integer $new_dbtype ] } {
       puts "invalid database type entered"
       return -1
    }
-  
+
    if { [ lsearch $config(dbtypelist) $new_dbtype ] >= 0 } {
       puts "database type \"$new_dbtype\" is already in list"
       return -1
@@ -279,7 +279,7 @@ proc db_config_dbtypelist_add_dbtype { array_name { have_dbtype "" } } {
       set config($new_dbtype,$param)   ""
    }
    if { $have_dbtype == "" } { db_config_dbtypelist_edit_dbtype config $new_dbtype }
-   return 0   
+   return 0
 }
 
 #****** config_database/db_config_dbtypelist_edit_dbtype() *********************
@@ -287,7 +287,7 @@ proc db_config_dbtypelist_add_dbtype { array_name { have_dbtype "" } } {
 #     db_config_dbtypelist_edit_dbtype() -- edit database type configuration
 #
 #  SYNOPSIS
-#     db_config_dbtypelist_edit_dbtype { array_name { have_dbtype "" } } 
+#     db_config_dbtypelist_edit_dbtype { array_name { have_dbtype "" } }
 #
 #  FUNCTION
 #     This procedure is used to edit the testsuite database type configuration
@@ -306,7 +306,7 @@ proc db_config_dbtypelist_edit_dbtype { array_name { have_dbtype "" } } {
 
    set goto 0
 
-   if { $have_dbtype != "" } { set goto $have_dbtype } 
+   if { $have_dbtype != "" } { set goto $have_dbtype }
 
    while { 1 } {
       clear_screen
@@ -322,9 +322,9 @@ proc db_config_dbtypelist_edit_dbtype { array_name { have_dbtype "" } } {
          set dbtype $goto
          ts_log_fine $dbtype
       }
- 
+
       if { [ string length $dbtype ] == 0 } { break }
-     
+
       if { [string is integer $dbtype] } {
          incr dbtype -1
          set dbtype [ lindex $config(dbtypelist) $dbtype ]
@@ -336,8 +336,8 @@ proc db_config_dbtypelist_edit_dbtype { array_name { have_dbtype "" } } {
          set goto 0
          continue
       }
-   
-      db_config_dislpay_params $dbtype dbtype config
+
+      db_config_display_params $dbtype dbtype config
 
       puts -nonewline "Enter category to edit or hit return to exit > "
       set input [ wait_for_enter 1]
@@ -363,13 +363,13 @@ proc db_config_dbtypelist_edit_dbtype { array_name { have_dbtype "" } } {
          "port"    { set extra 1 }
          "driver"  { set extra 2 }
          "url"     { set extra 3 }
-      }      
+      }
 
       if { $extra == 0 } {
          puts "\nEnter new $input value: "
          set value [ wait_for_enter 1 ]
       }
-      
+
       if { $extra == 1 } {
          set help_text {  "Enter the default port number:" }
          array set add_param { patterns "\[0-9\]*" }
@@ -377,13 +377,13 @@ proc db_config_dbtypelist_edit_dbtype { array_name { have_dbtype "" } } {
          if { $value == -1 } {
             wait_for_enter
          } else {
-            if { [string is integer $value] } { 
+            if { [string is integer $value] } {
             set config($dbtype,$input) $value
          } else {
             puts "$value is not a valid port number"
             wait_for_enter
          }
-         } 
+         }
          continue
       }
 
@@ -412,14 +412,14 @@ proc db_config_dbtypelist_edit_dbtype { array_name { have_dbtype "" } } {
 
 #****** config_database/db_config_dbtypelist_delete_dbtype() *******************
 #  NAME
-#     db_config_dbtypelist_delete_dbtype() -- delete database type from database 
+#     db_config_dbtypelist_delete_dbtype() -- delete database type from database
 #                                             type configuration
 #
 #  SYNOPSIS
-#     db_config_dbtypelist_delete_dbtype { array_name } 
+#     db_config_dbtypelist_delete_dbtype { array_name }
 #
 #  FUNCTION
-#     This procedure is called to delete database type from the database type 
+#     This procedure is called to delete database type from the database type
 #     configuration.
 #
 #  INPUTS
@@ -441,9 +441,9 @@ proc db_config_dbtypelist_delete_dbtype { array_name { have_dbtype "" } } {
       puts "\n"
       puts -nonewline "Enter database type/number or return to exit: "
       set dbtype [wait_for_enter 1]
- 
+
       if { [ string length $dbtype ] == 0 } { break }
-     
+
       if { [string is integer $dbtype] } {
          incr dbtype -1
          set dbtype [ lindex $config(dbtypelist) $dbtype ]
@@ -455,7 +455,7 @@ proc db_config_dbtypelist_delete_dbtype { array_name { have_dbtype "" } } {
          continue
       }
 
-      db_config_dislpay_params $dbtype dbtype config
+      db_config_display_params $dbtype dbtype config
 
       set index [lsearch $config(dbtypelist) $dbtype]
       foreach database $config(databaselist) {
@@ -478,7 +478,7 @@ proc db_config_dbtypelist_delete_dbtype { array_name { have_dbtype "" } } {
          continue
       }
    }
-   return 0   
+   return 0
 }
 
 #****** config_database/db_config_databaselist() *******************************
@@ -486,7 +486,7 @@ proc db_config_dbtypelist_delete_dbtype { array_name { have_dbtype "" } } {
 #     db_config_databaselist() -- database list setup
 #
 #  SYNOPSIS
-#     db_config_databaselist { only_check name config_array } 
+#     db_config_databaselist { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite database configuration setup - called from verify_db_config()
@@ -554,11 +554,11 @@ proc db_config_databaselist { only_check name config_array } {
 
 #****** config_database/db_config_databaselist_show_databases() ****************
 #  NAME
-#     db_config_databaselist_show_databases() -- show testsuite database 
+#     db_config_databaselist_show_databases() -- show testsuite database
 #                                                configuration
 #
 #  SYNOPSIS
-#     db_config_databaselist_show_databases { array_name } 
+#     db_config_databaselist_show_databases { array_name }
 #
 #  FUNCTION
 #     This procedure will show the current testsuite database configuration
@@ -583,7 +583,7 @@ proc db_config_databaselist_show_databases { array_name } {
 
    set index 0
    foreach database $config(databaselist) {
-      incr index 1 
+      incr index 1
       puts "($index) $database     ($config($database,dbtype)/$config($database,dbhost))"
    }
    return $config(databaselist)
@@ -594,7 +594,7 @@ proc db_config_databaselist_show_databases { array_name } {
 #     db_config_get_database_parameters() -- get the list of database parameters
 #
 #  SYNOPSIS
-#     db_config_get_database_parameters { } 
+#     db_config_get_database_parameters { }
 #
 #  FUNCTION
 #     get the list of all parameters needed to configure a database
@@ -620,11 +620,11 @@ proc db_config_get_database_parameters { } {
 
 #****** config_database/db_config_databaselist_add_database() ******************
 #  NAME
-#     db_config_databaselist_add_database() -- add database to database 
+#     db_config_databaselist_add_database() -- add database to database
 #                                              configuration
 #
 #  SYNOPSIS
-#     db_config_databaselist_add_database { array_name { have_database "" } } 
+#     db_config_databaselist_add_database { array_name { have_database "" } }
 #
 #  FUNCTION
 #     Add database to testsuite database configuration
@@ -641,7 +641,7 @@ proc db_config_get_database_parameters { } {
 proc db_config_databaselist_add_database { array_name { have_database "" } } {
 
    upvar $array_name config
-  
+
    if { $have_database == "" } {
       clear_screen
       puts "\nAdd database to global database configuration"
@@ -656,12 +656,12 @@ proc db_config_databaselist_add_database { array_name { have_database "" } } {
       puts "no database entered"
       return -1
    }
-   
+
    if { [ string is integer $new_database ] } {
       puts "invalid database name entered"
       return -1
    }
-  
+
    if { [ lsearch $config(databaselist) $new_database ] >= 0 } {
       puts "database \"$new_database\" is already in list"
       return -1
@@ -673,7 +673,7 @@ proc db_config_databaselist_add_database { array_name { have_database "" } } {
    }
 
    if { $have_database == "" } { db_config_databaselist_edit_database config $new_database }
-   return 0   
+   return 0
 }
 
 #****** config_database/db_config_databaselist_edit_database() *****************
@@ -681,7 +681,7 @@ proc db_config_databaselist_add_database { array_name { have_database "" } } {
 #     db_config_databaselist_edit_database() -- edit database configuration
 #
 #  SYNOPSIS
-#     db_config_databaselist_edit_database { array_name { have_database "" } } 
+#     db_config_databaselist_edit_database { array_name { have_database "" } }
 #
 #  FUNCTION
 #     This procedure is used to edit the testsuite database configuration
@@ -702,7 +702,7 @@ proc db_config_databaselist_edit_database { array_name { have_database "" } } {
 
    set goto 0
 
-   if { $have_database != "" } { set goto $have_database } 
+   if { $have_database != "" } { set goto $have_database }
 
    while { 1 } {
       clear_screen
@@ -718,9 +718,9 @@ proc db_config_databaselist_edit_database { array_name { have_database "" } } {
          set database $goto
          ts_log_fine $database
       }
- 
+
       if { [ string length $database ] == 0 } { break }
-     
+
       if { [string is integer $database] } {
          incr database -1
          set database [ lindex $config(databaselist) $database ]
@@ -733,7 +733,7 @@ proc db_config_databaselist_edit_database { array_name { have_database "" } } {
          continue
       }
 
-      db_config_dislpay_params $database database config
+      db_config_display_params $database database config
 
       puts -nonewline "Enter category to edit or hit return to exit > "
       set input [ wait_for_enter 1]
@@ -828,7 +828,7 @@ proc db_config_databaselist_edit_database { array_name { have_database "" } } {
          } else { wait_for_enter }
          continue
       }
- 
+
       if { $extra == 6 } {
          set help_text {  "Enter the password for the database user with write access:" }
          set value [config_generic 0 "$database,$input" config $help_text "string" 0]
@@ -856,16 +856,16 @@ proc db_config_databaselist_edit_database { array_name { have_database "" } } {
          continue
       }
    }
-   return 0   
+   return 0
 }
 
 #****** config_database/db_config_databaselist_delete_database() ***************
 #  NAME
-#     db_config_databaselist_delete_database() -- delete database from database 
+#     db_config_databaselist_delete_database() -- delete database from database
 #                                                 configuration
 #
 #  SYNOPSIS
-#     db_config_databaselist_delete_database { array_name } 
+#     db_config_databaselist_delete_database { array_name }
 #
 #  FUNCTION
 #     This procedure is called to delete database from the database configuration.
@@ -891,9 +891,9 @@ proc db_config_databaselist_delete_database { array_name } {
       puts "\n"
       puts -nonewline "Enter database/number or return to exit: "
       set database [wait_for_enter 1]
- 
+
       if { [ string length $database ] == 0 } { break }
-     
+
       if { [string is integer $database] } {
          incr database -1
          set database [ lindex $config(databaselist) $database ]
@@ -905,14 +905,14 @@ proc db_config_databaselist_delete_database { array_name } {
          continue
       }
 
-      db_config_dislpay_params $database database config
+      db_config_display_params $database database config
 
       puts -nonewline "Delete this database? (y/n): "
       set input [ wait_for_enter 1]
       if { [ string length $input ] == 0 } {
          continue
       }
- 
+
       if { [ string compare $input "y"] == 0 } {
          set index [lsearch $config(databaselist) $database]
          set config(databaselist) [ lreplace $config(databaselist) $index $index ]
@@ -923,7 +923,7 @@ proc db_config_databaselist_delete_database { array_name } {
          continue
       }
    }
-   return 0   
+   return 0
 }
 
 #****** config_database/db_config_add_newdatabase() ****************************
@@ -931,11 +931,11 @@ proc db_config_databaselist_delete_database { array_name } {
 #     db_config_add_newdatabase() -- add database to database configuration
 #
 #  SYNOPSIS
-#     db_config_add_newdatabase { dbname } 
+#     db_config_add_newdatabase { dbname }
 #
 #  FUNCTION
 #     This procedure is used to add a database to the testsuite global database
-#     configuration 
+#     configuration
 #
 #  INPUTS
 #     db_name - database name
@@ -975,8 +975,8 @@ proc db_config_add_newdatabase { dbname } {
 #     verify_db_config() -- verify testsuite database configuration setup
 #
 #  SYNOPSIS
-#     verify_db_config { config_array only_check parameter_error_list 
-#     { force 0 } } 
+#     verify_db_config { config_array only_check parameter_error_list
+#     { force 0 } }
 #
 #  FUNCTION
 #     This procedure will verify or enter database setup configuration
@@ -996,7 +996,7 @@ proc db_config_add_newdatabase { dbname } {
 #     check/verify_host_config()
 #     check/verify_user_config()
 #     check/verify_config()
-#     
+#
 #*******************************************************************************
 proc verify_db_config { config_array only_check parameter_error_list { force_params "" } } {
    global actual_ts_db_config_version be_quiet
@@ -1042,7 +1042,7 @@ proc verify_db_config { config_array only_check parameter_error_list { force_par
 
    for { set param 1 } { $param <= $max_pos } { incr param 1 } {
       set par [ get_configuration_element_name_on_pos config $param ]
-      if { $be_quiet == 0 } { 
+      if { $be_quiet == 0 } {
          puts -nonewline "      $config($par,desc) ..."
       }
       if { $config($par) == "" || [lsearch -exact $force_params $par] >= 0 } {
@@ -1082,12 +1082,12 @@ proc verify_db_config { config_array only_check parameter_error_list { force_par
       ts_log_warning "$count parameters are not initialized!"
       puts "Entering setup procedures ..."
       wait_for_enter
-      
+
       foreach pos $uninitalized {
          set p_name [get_configuration_element_name_on_pos config $pos]
          set procedure_name  $config($p_name,setup_func)
          set default_value   $config($p_name,default)
-       
+
          ts_log_finest "Starting configuration procedure for parameter \"$p_name\" ($config($p_name,pos)) ..."
          set use_default 0
          if { [string length $procedure_name] == 0 } {
@@ -1099,23 +1099,23 @@ proc verify_db_config { config_array only_check parameter_error_list { force_par
                if { $only_check == 0 } { wait_for_enter }
                set use_default 1
             }
-         } 
+         }
 
          if { $use_default != 0 } {
-            # check again if we have value ( force flag) 
+            # check again if we have value ( force flag)
             if { $config($p_name) == "" } {
                # we have no setup procedure
                if { $default_value != "" } {
-                  puts "using default value: \"$default_value\"" 
-                  set config($p_name) $default_value 
+                  puts "using default value: \"$default_value\""
+                  set config($p_name) $default_value
                } else {
                   puts "No setup procedure and no default value found!!!"
                   if { $only_check == 0 } {
                      puts -nonewline "Enter value for parameter \"$p_name\": "
                      set value [wait_for_enter 1]
-                     puts "using value: \"$value\"" 
+                     puts "using value: \"$value\""
                      set config($p_name) $value
-                  } 
+                  }
                }
             }
          } else {
@@ -1123,7 +1123,7 @@ proc verify_db_config { config_array only_check parameter_error_list { force_par
             ts_log_finest "starting >$procedure_name< (setup mode) ..."
             set value [ $procedure_name 0 $p_name config ]
             if { $value != -1 } {
-               puts "using value: \"$value\"" 
+               puts "using value: \"$value\""
                set config($p_name) $value
             }
          }
@@ -1133,7 +1133,7 @@ proc verify_db_config { config_array only_check parameter_error_list { force_par
             lappend error_list $p_name
          }
          wait_for_enter
-      } 
+      }
    }
    return $errors
 }
@@ -1143,7 +1143,7 @@ proc verify_db_config { config_array only_check parameter_error_list { force_par
 #     setup_db_config() -- testsuite database configuration initalization
 #
 #  SYNOPSIS
-#     setup_db_config { file { force 0 } } 
+#     setup_db_config { file { force 0 } }
 #
 #  FUNCTION
 #     This procedure will initalize the testsuite database configuration
@@ -1173,7 +1173,7 @@ proc setup_db_config { file { force_params "" }} {
       if { $do_nomain == 0 } {
          if { [verify_db_config ts_db_config 1 err_list $force_params ] != 0 } {
             # configuration problems
-            foreach elem $err_list { ts_log_fine "$elem" } 
+            foreach elem $err_list { ts_log_fine "$elem" }
             set not_ok 1
             while { $not_ok } {
                if { [verify_db_config ts_db_config 0 err_list $force_params ] != 0 } {
@@ -1181,7 +1181,7 @@ proc setup_db_config { file { force_params "" }} {
                   ts_log_fine "Database configuration error. Stop."
                   foreach elem $err_list {
                      ts_log_fine "error in: $elem"
-                  } 
+                  }
                   ts_log_fine "try again? (y/n)"
                   set answer [wait_for_enter 1]
                   if { $answer == "n" } {
@@ -1212,7 +1212,7 @@ proc setup_db_config { file { force_params "" }} {
          }
          return
       }
-      return 
+      return
    } else {
       ts_log_fine "could not open database config file \"$file\""
       ts_log_fine "press return to create new database configuration file"
@@ -1229,7 +1229,7 @@ proc setup_db_config { file { force_params "" }} {
 #     db_config_get_databaselist() -- get the database list
 #
 #  SYNOPSIS
-#     db_config_get_databaselist { config_array result_array {port_type ""} } 
+#     db_config_get_databaselist { config_array result_array {port_type ""} }
 #
 #  FUNCTION
 #     Gets the array of databases configured in database configuration

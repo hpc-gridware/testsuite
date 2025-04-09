@@ -5883,8 +5883,11 @@ proc get_qacct_error {result job_id raise_error} {
 #     up the given variable name with information.
 #
 #  INPUTS
-#     job_id                  - job identification number, if format is job.task only the
-#                               record for the selected task is returned
+#     job_task_spec           - job identification number, if format is job.task only the
+#                               record(s) for the selected task is/are returned
+#                               a pe task id can be appended separated by a space, e.g.
+#                               "123.1 1.rocky-8-amd64-1" to get a specific pe task of a parallel job, or
+#                               "123.1 NONE" to get only the master task of a parallel job
 #     {variable qacct_info}   - name of variable to save the results
 #     {on_host ""}            - execute qacct on this host
 #     {as_user ""}            - execute qacct as this user
@@ -5914,7 +5917,7 @@ proc get_qacct_error {result job_id raise_error} {
 #     parser/parse_qacct()
 #     sge_procedures/get_qacct_error()
 #*******************************
-proc get_qacct {job_id {my_variable "qacct_info"} {on_host ""} {as_user ""} {raise_error 1} {expected_amount -1} {atimeout_value 0} {sum_up_tasks 1} {qacct_output_var qacct_output}} {
+proc get_qacct {job_task_spec {my_variable "qacct_info"} {on_host ""} {as_user ""} {raise_error 1} {expected_amount -1} {atimeout_value 0} {sum_up_tasks 1} {qacct_output_var qacct_output}} {
    get_current_cluster_config_array ts_config
 
    upvar $my_variable qacctinfo
@@ -5933,18 +5936,32 @@ proc get_qacct {job_id {my_variable "qacct_info"} {on_host ""} {as_user ""} {rai
    }
 
    # if qacct host is not master host we have also to add some NFS timeout
-   if {"$on_host" == ""} {
+   if {$on_host == ""} {
       set on_host $ts_config(master_host)
    }
-   if {"$on_host" != "$ts_config(master_host)"} {
+   if {$on_host != $ts_config(master_host)} {
       incr timeout_value 60
       ts_log_finer "get_qacct(): increasing timeout to $timeout_value because qacct host might not be master host \"$ts_config(master_host)\"!"
+   }
+
+   # we might have a job specification with a pe task id
+   if {[string first " " $job_task_spec] >= 0} {
+      set split_spec [split $job_task_spec " "]
+      set job_id [lindex $split_spec 0]
+      set pe_task_id [lindex $split_spec 1]
+   } else {
+      set job_id $job_task_spec
+      set pe_task_id ""
    }
 
    if {[string first "." $job_id] >= 0} {
       set job_array [split $job_id "."]
       set job_id [lindex $job_array 0]
-      set qacct_args "-j $job_id -t [lindex $job_array 1]"
+      set task_id [lindex $job_array 1]
+      if {$task_id == "undefined"} {
+         set task_id 0
+      }
+      set qacct_args "-j $job_id -t $task_id"
    } else {
       set qacct_args "-j $job_id"
    }
@@ -5961,11 +5978,11 @@ proc get_qacct {job_id {my_variable "qacct_info"} {on_host ""} {as_user ""} {rai
       if {$prg_exit_state == 0} {
          if {$expected_amount == -1} {
             # we have the qacct info without errors
-            parse_qacct qacct_output qacctinfo $job_id $sum_up_tasks
+            parse_qacct qacct_output qacctinfo $job_id $sum_up_tasks $pe_task_id
             break
          } else {
             # we want to have $expected_amount accounting data sets
-            parse_qacct qacct_output qacctinfo $job_id $sum_up_tasks
+            parse_qacct qacct_output qacctinfo $job_id $sum_up_tasks $pe_task_id
             set num_acct [llength $qacctinfo(exit_status)]
             if {$num_acct == $expected_amount} {
                ts_log_fine "found all $num_acct expected accounting records!"

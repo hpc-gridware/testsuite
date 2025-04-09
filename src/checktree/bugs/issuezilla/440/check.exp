@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -46,7 +46,7 @@ set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
 set check_description(0) "qsub / qrsh command lines crash qmaster with arg. lines > 10 K"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_cleanup_function "issue_440_cleanup"
@@ -62,7 +62,7 @@ lappend check_functions "issue_440_check_qrsh"
 proc issue_440_setup {} {
    global issue_440_config
    get_current_cluster_config_array ts_config
-   
+
    set issue_440_config(host_list) $ts_config(unique_arch_nodes)
 
    foreach host $issue_440_config(host_list) {
@@ -90,7 +90,7 @@ proc issue_440_check_qsub {} {
    get_current_cluster_config_array ts_config
 
    set error_text ""
-   set submit_script_path "$ts_config(testsuite_root_dir)/scripts/cmd_line_output.sh" 
+   set submit_script_path "$ts_config(testsuite_root_dir)/scripts/cmd_line_output.sh"
 
 
    foreach check_440_host $issue_440_config(host_list) {
@@ -109,12 +109,12 @@ proc issue_440_check_qsub {} {
       ts_log_fine "preparing tmp files for jobs on host $check_440_host ..."
       foreach length $length_list($check_440_host) {
          # generate job output/error file names
-         set test_info($check_440_host,$length,output_file) [get_tmp_file_name $check_440_host $length output] 
+         set test_info($check_440_host,$length,output_file) [get_tmp_file_name $check_440_host $length output]
          set test_info($check_440_host,$length,error_file)  [get_tmp_file_name $check_440_host $length error]
          # generate command line with corrent length
          set arg_name "argument"
          set command_line "-l h=$check_440_host -S /bin/sh -o $test_info($check_440_host,$length,output_file)"
-         append command_line " -e $test_info($check_440_host,$length,error_file) -N long_cmd $submit_script_path $arg_name" 
+         append command_line " -e $test_info($check_440_host,$length,error_file) -N long_cmd $submit_script_path $arg_name"
          set arg_length 0
          while {[string length $command_line] < $length} {
             incr arg_length 1
@@ -151,7 +151,7 @@ proc issue_440_check_qsub {} {
          # read job output/error files remotely on the execution host (to prevent NFS problems)
          get_file_content $check_440_host $CHECK_USER $test_info($check_440_host,$length,output_file) f_output
          get_file_content $check_440_host $CHECK_USER $test_info($check_440_host,$length,error_file) f_error
-      
+
          ts_log_fine "analyse job output on host $check_440_host, command line length = $length ..."
 
          set nr_of_lines $f_output(0)
@@ -161,7 +161,7 @@ proc issue_440_check_qsub {} {
             if {[string match "*_GE_TESTSUITE_SCRIPT_OUTPUT_END_*" $$f_output($i)]} {
                set found_start 0
             }
-    
+
             if {$found_start == 1} {
                append output $f_output($i)
             }
@@ -196,7 +196,7 @@ proc issue_440_check_qsub {} {
 
    ts_log_fine "check if master and scheduler are running ..."
    set back [are_master_and_scheduler_running $ts_config(master_host) [get_qmaster_spool_dir]]
-   set expected_result 2 
+   set expected_result 2
    if {$back != $expected_result} {
       append error_text "are_master_and_scheduler_running returns $back submit on host $check_440_host"
    }
@@ -218,7 +218,7 @@ proc issue_440_check_qrsh {} {
    return
 
    set error_text ""
-   set submit_script_path "$ts_config(testsuite_root_dir)/scripts/cmd_line_output.sh" 
+   set submit_script_path "$ts_config(testsuite_root_dir)/scripts/cmd_line_output.sh"
 
    foreach check_440_host $issue_440_config(host_list) {
       set end_length [expr 1024 * $issue_440_config(max_kbyte,$check_440_host)]
@@ -279,7 +279,7 @@ proc issue_440_check_qrsh {} {
             if {[string match "*_GE_TESTSUITE_SCRIPT_OUTPUT_END_*" $out_line]} {
                set found_start 0
             }
-    
+
             if {$found_start == 1} {
                append output $out_line
             }

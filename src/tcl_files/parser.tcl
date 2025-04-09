@@ -1493,8 +1493,9 @@ proc parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1}} {
 #     input   - name of a string variable containing the output of qacct
 #     output  - TCL array in which to store the results
 #     [jobid] - jobid that was used for qacct command
-#     sum     - 1 than array job usages are summed up or otherwise
+#     [sum]   - optional, if 1 (default) then array job usages are summed up or otherwise
 #               individual usage per task is reported in lists
+#     [pe_task_id] - optional: report only the data for a given pe task id
 #
 #  RESULT
 #     The output array is filled with the processed data.
@@ -1503,7 +1504,7 @@ proc parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1}} {
 #
 #***************************************************************************
 #
-proc parse_qacct {input output {jobid 0} {sum 1}} {
+proc parse_qacct {input output {jobid 0} {sum 1} {pe_task_id ""}} {
    upvar $input  in
    upvar $output out
 
@@ -1566,7 +1567,17 @@ proc parse_qacct {input output {jobid 0} {sum 1}} {
    # delimiter if we have multiple records per qacct call
    set delimiter "=============================================================="
 
-   process_named_record in out $delimiter "jobnumber" $jobid 1 0 replace transform rules
+   # Do we need to filter for a certain jobid? We should only have got records of one job
+   # from qacct.
+   set fields {}
+   set filters {}
+   lappend fields "jobnumber"
+   lappend filters $jobid
+   if {$pe_task_id != ""} {
+      lappend fields "pe_taskid"
+      lappend filters $pe_task_id
+   }
+   process_named_record in out $delimiter $fields $filters 1 0 replace transform rules
 }
 
 #****** parser/parse_qstat_j() *************************************************
@@ -3246,7 +3257,9 @@ proc parse_csv {output_var input_var delimiter index} {
    # find position of index field
    set index_pos -1
    for {set i 0} {$i < $num_fields} {incr i} {
-      set field_names($i) [string trim [lindex $split_header $i]]
+      set header_field [string trim [lindex $split_header $i]]
+      set header_field [string trim $header_field "\""]
+      set field_names($i) [string trim $header_field]
 
       if {$field_names($i) == $index} {
          set index_pos $i
@@ -3278,7 +3291,8 @@ proc parse_csv {output_var input_var delimiter index} {
 
       # store the fields by index
       # we do not allow empty or duplicate index
-      set name [lindex $split_line $index_pos]
+      set name [string trim [lindex $split_line $index_pos]]
+      set name [string trim [string trim $name "\""]]
       if {$name == ""} {
          ts_log_severe "empty index field in line $i:\n$line"
          return -4
@@ -3292,7 +3306,9 @@ proc parse_csv {output_var input_var delimiter index} {
       lappend out(index) $name
       for {set j 0} {$j < $num_fields} {incr j} {
          if {$j != $index_pos} {
-            set out($name,$field_names($j)) [string trim [lindex $split_line $j]]
+            set field_data [string trim [lindex $split_line $j]]
+            set field_data [string trim $field_data "\""]
+            set out($name,$field_names($j)) [string trim $field_data]
          }
       }
    }
