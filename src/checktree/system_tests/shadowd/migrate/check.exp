@@ -101,10 +101,10 @@ proc shadowd_migrate_setup_level {} {
       return 99
    }
 
-   if {$ts_config(spooling_method) == "berkeleydb" && $CHECK_ACT_LEVEL == 1} {
-      ts_log_config "Skipping runlevel 1 with berkeleydb spooling on NFSv4, see CS-1020"
-      return 99
-   }
+#   if {$ts_config(spooling_method) == "berkeleydb" && $CHECK_ACT_LEVEL == 1} {
+#      ts_log_config "Skipping runlevel 1 with berkeleydb spooling on NFSv4, see CS-1020"
+#      return 99
+#   }
 }
 
 proc shadowd_migrate_cleanup  {} {
@@ -199,7 +199,11 @@ proc shadowd_migrate_test {} {
       ts_log_fine "------------------------------------------------------------"
 
       if {$CHECK_ACT_LEVEL == 1} {
-         set CONTROLED_SHUTDOWN [translate_macro MSG_SHADOWD_CONTROLLEDSHUTDOWN_SU "*" "100"]
+         if {[is_version_in_range "9.1.0"]} {
+            set CONTROLED_SHUTDOWN [translate_macro MSG_SHADOWD_CONTROLLEDSHUTDOWN_SI "*" "100"]
+         } else {
+            set CONTROLED_SHUTDOWN [translate_macro MSG_SHADOWD_CONTROLLEDSHUTDOWN_SU "*" "100"]
+         }
 
          ts_log_fine "restarting qmaster and shadowds with SGE_TEST_HEARTBEAT_TIMEOUT=600"
          foreach host $ts_config(shadowd_hosts) {
