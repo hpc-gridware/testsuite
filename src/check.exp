@@ -5361,6 +5361,12 @@ proc check_if_test_cleaned_up {} {
    global check_name
    global check_do_not_create_local_config
 
+   if {![is_qmaster_alive $ts_config(master_host) [get_qmaster_spool_dir]]} {
+      # test must have failed and will trigger a re-install anyway
+      # or in case of init_core_system it might not have been done due to clock issues
+      return 0
+   }
+
    # @todo CS-984 we should ideally check the whole configuration
    #              ideally only on demand (by command line option)
 
