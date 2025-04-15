@@ -51,7 +51,6 @@ set check_cleanup_function "qstat_cleanup"
 
 set check_functions     {}
 lappend check_functions "qstat_profile"
-if {0} {
 lappend check_functions "check_core_queues"  ;# functions to call (in order)
 lappend check_functions "qstat_help"
 lappend check_functions "qstat_issue1800"
@@ -74,7 +73,6 @@ lappend check_functions "qstat_s_hu_plain_xml_comparison" ;# Compare the two qst
 lappend check_functions "qstat_u_valid_plain_xml_comparison" ;# Compare the two qstat -u $CHECK_USER commands
 lappend check_functions "qstat_u_invalid_plain_xml_comparison" ;# Compare the two qstat -u wrong_user commands
 lappend check_functions "qstat_U_valid_plain_xml_comparison" ;# Compare the two qstat -U $CHECK_USER commands
-}
 #lappend check_functions "qstat_urg_plain_xml_comparison"  ;# Compare the two qstat -urg commands
 #lappend check_functions "qstat_pri_plain_xml_comparison"  ;# Compare the two qstat -pri commands
 #lappend check_functions "qstat_explain_plain_xml_comparison"  ;# Compare the two qstat -explain E commands
