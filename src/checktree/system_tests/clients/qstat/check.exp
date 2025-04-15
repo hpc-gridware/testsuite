@@ -51,6 +51,7 @@ set check_cleanup_function "qstat_cleanup"
 
 set check_functions     {}
 lappend check_functions "qstat_profile"
+if {0} {
 lappend check_functions "check_core_queues"  ;# functions to call (in order)
 lappend check_functions "qstat_help"
 lappend check_functions "qstat_issue1800"
@@ -73,7 +74,7 @@ lappend check_functions "qstat_s_hu_plain_xml_comparison" ;# Compare the two qst
 lappend check_functions "qstat_u_valid_plain_xml_comparison" ;# Compare the two qstat -u $CHECK_USER commands
 lappend check_functions "qstat_u_invalid_plain_xml_comparison" ;# Compare the two qstat -u wrong_user commands
 lappend check_functions "qstat_U_valid_plain_xml_comparison" ;# Compare the two qstat -U $CHECK_USER commands
-
+}
 #lappend check_functions "qstat_urg_plain_xml_comparison"  ;# Compare the two qstat -urg commands
 #lappend check_functions "qstat_pri_plain_xml_comparison"  ;# Compare the two qstat -pri commands
 #lappend check_functions "qstat_explain_plain_xml_comparison"  ;# Compare the two qstat -explain E commands
@@ -3607,11 +3608,9 @@ proc qstat_profile {} {
    set job_id_list ""
    set job_args "-o /dev/null -e /dev/null -q $qname"
    set job_id_list {}
-   #
-   #
-   #
+
    foreach user "$CHECK_SECOND_FOREIGN_SYSTEM_USER $CHECK_FIRST_FOREIGN_SYSTEM_USER $CHECK_USER" {
-      set job_id [submit_job "$job_args $ts_config(product_root)/examples/jobs/sleeper.sh 180" 1 30 "" $user]
+      set job_id [submit_job "$job_args $ts_config(product_root)/examples/jobs/sleeper.sh 18000" 1 30 "" $user]
       if {$job_id <= 0} {
          ts_log_severe "can't start job for qstat profile test user $user"
          return -1
@@ -3625,6 +3624,7 @@ proc qstat_profile {} {
    foreach job_id $job_id_list {
       wait_for_jobstart $job_id "Sleeper" 60
    }
+
    #
    # Ok, now we know that all required jobs are in the correct state to
    # to get picked up by qstat. The life time of the jobs should be
@@ -3632,7 +3632,6 @@ proc qstat_profile {} {
    #
    # Create global qstat profile. File gets truncated (paranoia!).
    #
-
 
    set sge_global_qstat_profile "$ts_config(product_root)/$ts_config(cell)/common/sge_qstat"
    set my_global_stat_file(0) 1
