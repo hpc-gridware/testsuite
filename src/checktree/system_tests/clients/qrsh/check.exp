@@ -1014,7 +1014,16 @@ proc qrsh_terminate {} {
 }
 
 proc check_qsub_gid_output {output check_group} {
-   set substring [string range $output [string first "gid=" $output] end]
+   # output if BSD's id is different from other archs. There egid entry might exist.
+   set start_egid [string first "egid=" $output]
+   set start_gid [string first "gid=" $output]
+   if {$start_egid != -1} {
+      set start $start_egid
+   } else {
+      set start $start_gid
+   }
+   set substring [string range $output $start end]
+
    set group [string trim [string range $substring [string first "(" $substring] [string first ")" $substring]] "()"]
 
    ts_log_fine "process was executed under user group $group"
