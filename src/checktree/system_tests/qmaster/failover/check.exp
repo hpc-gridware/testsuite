@@ -67,7 +67,7 @@ proc qmaster_failover_setup {} {
    #
    # We might come up with some more elaborate host selection
    # criteria in the future.
-   # 
+   #
    set test_hostname [ host_conf_get_suited_hosts 1 "sol-sparc64" ]
    #
    # ... just in case we could not cleanup preceeding test environment.
@@ -82,7 +82,7 @@ proc qmaster_failover_setup {} {
 }
 
 proc qmaster_failover_cleanup {} {
-   global test_hostname 
+   global test_hostname
    #
    # Clean up test.q if it's still around.
    #
@@ -106,7 +106,7 @@ proc check_queue_state {} {
    # Test Plan
    # =========
    #
-   # * shutdown and restart qmaster (sort of paranoia) 
+   # * shutdown and restart qmaster (sort of paranoia)
    # * create a new queue with attribute initial_state == disabled
    # * make sure that queue is disabled
    # * enable queue and verify status
@@ -125,7 +125,7 @@ proc check_queue_state {} {
    #
    # ... start over and sync with execd's.
    #
-   startup_qmaster 0 
+   startup_qmaster 0
    wait_for_load_from_all_queues 60
    #
    # Create test queue with attribute initial_state DISABLED.
@@ -142,7 +142,7 @@ proc check_queue_state {} {
    if { $q_state == "d" } {
       ts_log_fine "Queue $qname state DISABLED as expected"
    } else {
-      ts_log_severe "unexpected state for queue $qname: $q_state. Should be: disabled"
+      ts_log_severe "unexpected state (1) for queue $qname: $q_state. Should be: disabled"
       return
    }
    #
@@ -156,10 +156,10 @@ proc check_queue_state {} {
    if { $q_state == "" } {
       ts_log_fine "Queue $qname state ENABLED as expected"
    } else {
-      ts_log_severe "unexpected state for $qname: $q_state. Should be enabled"
+      ts_log_severe "unexpected state (2) for $qname: $q_state. Should be enabled"
       return
    }
-    
+
    #
    # Shutdown and restart qmaster
    #
@@ -167,7 +167,7 @@ proc check_queue_state {} {
    startup_qmaster 0
    #
    # Give execd's some time to re-register with new qmaster and
-   # update load report and queue status. 
+   # update load report and queue status.
    #
    wait_for_load_from_all_queues 60
    set q_state [ get_queue_state $qname ]
@@ -180,7 +180,7 @@ proc check_queue_state {} {
       #
       # We are having problems here. Report error and bail out.
       #
-      ts_log_severe "unexpected state for $qname: $q_state. Should be enabled"
+      ts_log_severe "unexpected state (3) for $qname: $q_state. Should be enabled"
    }
 
    get_queue_list queue_list
