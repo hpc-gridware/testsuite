@@ -1428,7 +1428,8 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_JAVA_HOME"  { set value "Please enter JAVA_HOME or press enter \[%s\] >> " }
       "DISTINST_JAVA_HOME_OR_NONE"  { set value "Enter JAVA_HOME (use \"none\" when none available) \[%s\] >> " }
       "DISTINST_ADD_JVM_ARGS"  { set value "Please enter additional JVM arguments (optional, default is \[%s\]) >> " }
-      "DISTINST_UNIQUE_CLUSTER_NAME" {set value "Unique cluster name" }
+      #"DISTINST_UNIQUE_CLUSTER_NAME" {set value "Unique cluster name" }
+      "DISTINST_UNIQUE_CLUSTER_NAME" {set value "Enter new cluster name or hit <RETURN>\nto use default \[*\] >> " }
       "DISTINST_DETECT_CHOOSE_NEW_NAME" {set value "NOTE: Choose 'n' to select new SGE_CLUSTER_NAME  (y/n) *" }
       "DISTINST_DETECT_REMOVE_OLD_CLUSTER" {set value "*Stop the installation (WARNING: selecting 'n' *" }
       "DISTINST_SMF_IMPORT_SERVICE" {set value "NOTE: If you select \"n\" SMF will be not used at all" }
@@ -1452,6 +1453,7 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINT_CA_RECREATE" { set value "Do you want to recreate your SGE CA infrastructure (y/n) \[y\] >> " }
       "DISTINT_ENTER_OVERRIDE_PROTECTION" { set value "*override protection 600 (yes/no)? " }
       "DISTINT_INSTALL_BDB_AND_CONTINUE" { set value "Please, log in to your Berkeley DB spooling host and execute \"inst_sge -db\"\nPlease do not continue, before the Berkeley DB installation with\n\"inst_sge -db\" is completed, continue with <RETURN>" }
+      "DISTINST_ENTER_SLICE" { set value "Please enter the slice name (without the trailing .slice) or\nhit <RETURN> to use \[%s\] >> " }
    }
 
    # if it was no install macro, try to find it from messages files

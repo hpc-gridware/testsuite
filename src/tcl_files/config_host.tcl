@@ -3853,3 +3853,26 @@ proc host_conf_add_host_from_template {host_template_var} {
 
    return $ret
 }
+
+###
+# @brief is host using systemd as init system?
+#
+# @param[in] host - the host to check
+# @returns 1 if systemd is used, 0 otherwise
+#
+proc host_has_systemd {host} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set has_systemd 0
+   set arch [resolve_arch $host]
+   if {[string match "lx-*" $arch] || [string match "ulx-*" $arch]} {
+      set output [start_remote_prog $host $CHECK_USER "ps" "-p 1 -o comm=" prg_exit_state 60 0 "" "" 1 0]
+      if {[string trim $output] == "systemd"} {
+         set has_systemd 1
+      }
+   }
+
+   return $has_systemd
+}
+

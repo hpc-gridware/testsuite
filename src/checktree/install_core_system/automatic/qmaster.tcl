@@ -142,6 +142,7 @@ proc install_qmaster {} {
 #*******************************************************************************
 proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {exechost 0} {set_file_perms 0} {shadowd 0}} {
    global CHECK_USER local_execd_spool_set
+   global CHECK_INSTALL_RC
    global ts_config
 
    set execd_port [expr $ts_config(commd_port) + 1]
@@ -225,7 +226,14 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
    append auto_config_content "COPY_COMMAND=\"rcp\"\n"
    append auto_config_content "DEFAULT_DOMAIN=\"none\"\n"
    append auto_config_content "ADMIN_MAIL=\"$ts_config(report_mail_to)\"\n"
-   append auto_config_content "ADD_TO_RC=\"false\"\n"
+   if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"]} {
+      append auto_config_content "ADD_TO_RC=\"true\"\n"
+   } else {
+      append auto_config_content "ADD_TO_RC=\"false\"\n"
+   }
+   if {[ge_has_feature "systemd"]} {
+      append auto_config_content "SLICE_NAME=\"ocs$ts_config(commd_port)\"\n"
+   }
    if {$set_file_perms} {
       append auto_config_content "SET_FILE_PERMS=\"true\"\n"
    } else {

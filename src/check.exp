@@ -249,6 +249,8 @@ global CHECK_EXECD_INSTALL_OPTIONS    ;# optional: execd install parameter
 set CHECK_PACKAGE_DIRECTORY "none"
 set CHECK_QMASTER_INSTALL_OPTIONS ""
 set CHECK_EXECD_INSTALL_OPTIONS   ""
+global CHECK_INSTALL_RC                ;# install rc-scripts/smf service/systemd service, enabled by command line option install_rc
+set CHECK_INSTALL_RC 0
 
 # test system specific
 global CHECK_L10N  ;# is sge/sgeee system l10n'ed ?
@@ -6333,6 +6335,7 @@ proc menu {} {
    global CHECK_INTERRUPT
    global check_use_installed_system
    global CHECK_CUR_PROC_NAME
+   global CHECK_INSTALL_RC
 
    set local_host [gethostname]
    delete_temp_script_files
@@ -6463,6 +6466,9 @@ proc menu {} {
                set_root_passwd
             }
             shutdown_core_system 0 1
+            if {$CHECK_INSTALL_RC} {
+               remove_cluster_hosts_from_init_system
+            }
             testsuite_shutdown 0
          }
          "11" {
@@ -6854,14 +6860,15 @@ proc testsuite_cleanups_menu {} {
    puts "  (1) analyze used testsuite ports (will shutdown cluster)"
    puts "  (2) dump status of all rlogin connections"
    puts "  (3) close all rlogin connections"
+   puts "  (4) remove cluster from init system on all hosts"
    puts ""
    puts -nonewline "Enter a number or press return to exit: "
 
    set input [wait_for_enter 1]
    switch -- $input {
-      "1" {
+      1 {
          # analyze used testsuite ports (will shutdown cluster)
-         if { [have_root_passwd] == -1 } {
+         if {[have_root_passwd] == -1} {
             puts "need root access ..."
             set_root_passwd
          }
@@ -6875,7 +6882,7 @@ proc testsuite_cleanups_menu {} {
             if {[check_correct_testsuite_setup_user tmp_error_text] != 0} {
                ts_log_severe "Found port bind error(s):\n$tmp_error_text"
             }
-         } catch_output ]
+         } catch_output]
 
          if {$catch_return != 0} {
             ts_log_fine "catch output: $catch_output"
@@ -6883,14 +6890,23 @@ proc testsuite_cleanups_menu {} {
 
          wait_for_enter
       }
-      "2" {
+      2 {
          # dump status of all rlogin connections
          dump_spawn_rlogin_sessions
          wait_for_enter
       }
-      "3" {
+      3 {
           # close all rlogin connections
          close_open_rlogin_sessions
+         wait_for_enter
+      }
+      4 {
+         # remove cluster from init system on all hosts
+         if {[have_root_passwd] == -1} {
+            puts "need root access ..."
+            set_root_passwd
+         }
+         remove_all_hosts_from_init_system
          wait_for_enter
       }
    } ;# end switch
@@ -7874,6 +7890,10 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "                      install_core_system test. Supported modes are \"manual\" or \"automatic\"."
       puts "                      Default is \"manual\"."
       puts ""
+      puts "install_rc            With this option set during installation rc scripts / the systemd service / the smf service"
+      puts "                      will be installed. By default testsuite will not install them."
+      puts "                      So far only systemd is supported."
+      puts ""
       puts "create_csv_report     Analyse checktree and create a *.csv file in testsuite directory."
       puts ""
       puts "ignore_dependencies   If used then tests dependencies will be ignored and all tests are executed"
@@ -8161,6 +8181,11 @@ for {set i 0} {$i < $argc} {incr i} {
       }
       set CHECK_TESTSUITE_INSTALL_MODE $o_parameter
       puts " ---> using \"$CHECK_TESTSUITE_INSTALL_MODE\" for install_mode <---"
+      continue
+   }
+
+   if {[string compare [lindex $argv $i] "--install_rc"] == 0 || [string compare [lindex $argv $i] "install_rc"] == 0} {
+      set CHECK_INSTALL_RC 1
       continue
    }
 

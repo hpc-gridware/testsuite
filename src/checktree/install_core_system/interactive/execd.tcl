@@ -68,6 +68,7 @@ proc install_execd {{report_var report}} {
    global CHECK_ADMIN_USER_SYSTEM CHECK_USER
    global CHECK_DEBUG_LEVEL CHECK_EXECD_INSTALL_OPTIONS
    global CHECK_MAIN_RESULTS_DIR
+   global CHECK_INSTALL_RC
 
    set CORE_INSTALLED ""
    set INST_VERSION 0 
@@ -402,13 +403,21 @@ proc install_execd {{report_var report}} {
                }
             }
 
-            -i $sp_id $INSTALL_SCRIPT { 
-               install_send_answer $sp_id $ANSWER_NO
+            -i $sp_id $INSTALL_SCRIPT {
+               if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $exec_host]} {
+                  install_send_answer $sp_id $ANSWER_YES "12a"
+               } else {
+                  install_send_answer $sp_id $ANSWER_NO "12a"
+               }
                continue
             }
 
-            -i $sp_id $INSTALL_STARTUP_SCRIPT { 
-               install_send_answer $sp_id $ANSWER_NO "12"
+            -i $sp_id $INSTALL_STARTUP_SCRIPT {
+               if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $exec_host]} {
+                  install_send_answer $sp_id $ANSWER_YES "12b"
+               } else {
+                  install_send_answer $sp_id $ANSWER_NO "12b"
+               }
                continue
             }
 

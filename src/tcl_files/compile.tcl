@@ -585,6 +585,7 @@ proc compile_source { { do_only_hooks 0} {compile_only 0} } {
    global CHECK_JOB_OUTPUT_DIR
    global CHECK_PROTOCOL_DIR CHECK_USER
    global CMAKE_COMPILE_INSTALL_SEPARATELY
+   global CHECK_INSTALL_RC
 
    # settings for mail
    set check_name "compile_source"
@@ -729,6 +730,14 @@ proc compile_source { { do_only_hooks 0} {compile_only 0} } {
    # shutdown possibly running system (and additional config clusters)
    shutdown_core_system $do_only_hooks 1
    valgrind_analyse_copy_files
+
+   # in case we have possibly installed our cluster to the hosts' init system
+   # de-install them
+   if {$CHECK_INSTALL_RC} {
+      if {!$do_only_hooks && !$compile_only} {
+         remove_cluster_hosts_from_init_system
+      }
+   }
 
    if {$CHECK_COMPILE_TOOL == "aimk"} {
       incr error_count [compile_source_aimk $do_only_hooks $compile_hosts report $compile_only]

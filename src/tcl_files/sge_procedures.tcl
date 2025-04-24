@@ -414,6 +414,14 @@ proc ge_has_feature {feature {quiet 0}} {
                set result 0
             }
          }
+         "systemd" {
+            start_remote_prog $ts_config(master_host) $CHECK_USER "grep" "RC_FILE=systemd $ts_config(product_root)/util/arch_variables"
+            if {$prg_exit_state == 0} {
+               set result 1
+            } else {
+               set result 0
+            }
+         }
          default {
             ts_log_severe "testsuite error: Unsupported feature string \"$feature\""
             set result 0
@@ -3476,8 +3484,9 @@ proc wait_for_queue_state {queue state wait_timeout} {
 #     sge_procedures/shutdown_system_daemon()
 #*******************************************************************************
 proc soft_execd_shutdown {host_list {timeout 60}} {
-   global CHECK_USER
    get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global CHECK_INSTALL_RC
 
    foreach host $host_list {
       set execd_pid($host) [get_execd_pid $host]
@@ -3492,10 +3501,15 @@ proc soft_execd_shutdown {host_list {timeout 60}} {
    # first shutdown the execds
    foreach host $host_list {
       ts_log_fine "shutdown execd pid=$execd_pid($host) on host \"$host\""
-      set result [start_sge_bin "qconf" "-ke $host" $ts_config(master_host) $CHECK_USER]
-      if {$prg_exit_state != 0} {
-         ts_log_fine "qconf -ke $host returned $prg_exit_state, hard killing execd"
-         shutdown_system_daemon $host execd
+      if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
+         set service_name [systemd_get_service_name "execd"]
+         set output [start_remote_prog $host "root" "systemctl" "stop $service_name"]
+      } else {
+         set result [start_sge_bin "qconf" "-ke $host" $ts_config(master_host) $CHECK_USER]
+         if {$prg_exit_state != 0} {
+            ts_log_fine "qconf -ke $host returned $prg_exit_state, hard killing execd"
+            shutdown_system_daemon $host execd
+         }
       }
    }
 
@@ -3614,10 +3628,10 @@ proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
          set q_r ""
          foreach queue $queue_array {
             lappend q_r [array names load_values "$queue"]
-	      }
-	      ts_log_finest "queue_list=$q_r"
+         }
+         ts_log_finest "queue_list=$q_r"
 
-	      foreach queue $q_r {
+         foreach queue $q_r {
             if {[info exists load_values($queue)] == 1} {
                if {$load_values($queue) < 99} {
                    incr failed 1
@@ -4540,7 +4554,7 @@ proc suspend_job { id {force 0} {error_check 1}} {
    set FORCED_SUSP2 [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_JOB_FORCESUSPENDJOB_SU] $CHECK_USER $id]
    log_user 0
    set master_arch [resolve_arch $ts_config(master_host)]
-	set program "$ts_config(product_root)/bin/$master_arch/qmod"
+   set program "$ts_config(product_root)/bin/$master_arch/qmod"
    if {$force} {
       set sid [open_remote_spawn_process $ts_config(master_host) $CHECK_USER $program "-f -s $id"]
    } else {
@@ -4548,49 +4562,49 @@ proc suspend_job { id {force 0} {error_check 1}} {
    }
 
    set sp_id [ lindex $sid 1 ]
-	set timeout 30
+   set timeout 30
    set result -1
    log_user 0
 
-	expect {
+   expect {
       -i $sp_id full_buffer {
          set result -1
          ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
       }
-	   -i $sp_id -- "$SUSPEND1" {
+      -i $sp_id -- "$SUSPEND1" {
          ts_log_finest "$expect_out(0,string)"
-	      set result 0
-	   }
-	   -i $sp_id -- "$SUSPEND2" {
+         set result 0
+      }
+      -i $sp_id -- "$SUSPEND2" {
          ts_log_finest "$expect_out(0,string)"
-	      set result 0
-	   }
-	   -i $sp_id -- "$ALREADY_SUSP1" {
+         set result 0
+      }
+      -i $sp_id -- "$ALREADY_SUSP1" {
          ts_log_finest "$expect_out(0,string)"
-	      set result -1
-	   }
-	   -i $sp_id -- "$ALREADY_SUSP2" {
+         set result -1
+      }
+      -i $sp_id -- "$ALREADY_SUSP2" {
          ts_log_finest "$expect_out(0,string)"
-	      set result -1
-	   }
-	   -i $sp_id -- "$FORCED_SUSP1" {
+         set result -1
+      }
+      -i $sp_id -- "$FORCED_SUSP1" {
          ts_log_finest "$expect_out(0,string)"
-	      set result 0
-	   }
-	   -i $sp_id -- "$FORCED_SUSP2" {
+         set result 0
+      }
+      -i $sp_id -- "$FORCED_SUSP2" {
          ts_log_finest "$expect_out(0,string)"
-	      set result 0
-	   }
-	   -i $sp_id "suspended job" {
-	      set result 0
-	   }
+         set result 0
+      }
+      -i $sp_id "suspended job" {
+         set result 0
+      }
       -i $sp_id default {
          ts_log_finest "unexpected output: $expect_out(0,string)"
-	      set result -1
-	   }
-	}
-	# close spawned process
-	close_spawn_process $sid
+         set result -1
+      }
+   }
+   # close spawned process
+   close_spawn_process $sid
 
    # error check
    if { $error_check && $result != 0 } {
@@ -6867,11 +6881,12 @@ proc wait_for_jobend {jobid jobname seconds {runcheck 1} {wait_for_end 0} {raise
 #     sge_procedures/startup_shadowd()
 #*******************************************************************************
 proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
+   get_current_cluster_config_array ts_config
    global CHECK_USER
    global CHECK_ADMIN_USER_SYSTEM
    global CHECK_DEBUG_LEVEL
    global schedd_debug master_debug CHECK_DISPLAY_OUTPUT CHECK_SGE_DEBUG_LEVEL
-   get_current_cluster_config_array ts_config
+   global CHECK_INSTALL_RC
 
    if {$env_list != ""} {
       upvar $env_list envlist
@@ -6902,12 +6917,17 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
    if {$master_debug != 0} {
       set xterm_path [get_binary_path $start_host "xterm"]
       ts_log_finest "using DISPLAY=${CHECK_DISPLAY_OUTPUT}"
-      set output [start_remote_prog "$start_host" "$startup_user" $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e $ts_config(testsuite_root_dir)/scripts/debug_starter.sh /tmp/out.$CHECK_USER.qmaster.$start_host \"$CHECK_SGE_DEBUG_LEVEL\" $ts_config(product_root)/bin/${arch}/sge_qmaster &" prg_exit_state 60 2 "" envlist]
+      set output [start_remote_prog $start_host $startup_user $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e $ts_config(testsuite_root_dir)/scripts/debug_starter.sh /tmp/out.$CHECK_USER.qmaster.$start_host \"$CHECK_SGE_DEBUG_LEVEL\" $ts_config(product_root)/bin/${arch}/sge_qmaster &" prg_exit_state 60 2 "" envlist]
    } else {
-      set output [start_remote_prog "$start_host" "$startup_user" "$ts_config(product_root)/bin/${arch}/sge_qmaster" ";sleep 2" prg_exit_state 60 0 "" envlist]
+      if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
+         set service_name [systemd_get_service_name "qmaster"]
+         set output [start_remote_prog $start_host $startup_user "systemctl" "start $service_name"]
+      } else {
+         set output [start_remote_prog $start_host $startup_user "$ts_config(product_root)/bin/${arch}/sge_qmaster" ";sleep 2" prg_exit_state 60 0 "" envlist]
+      }
    }
 
-   if { $prg_exit_state != 0 } {
+   if {$prg_exit_state != 0} {
       ts_log_severe "Qmaster did not start exit_code=$prg_exit_state output=$output"
       return
    }
@@ -7025,37 +7045,37 @@ proc startup_daemon { host service } {
    switch -exact $service {
       "master" -
       "qmaster" {
-	 if { [string compare $host $ts_config(master_host)] != 0 } {
-	    ts_log_severe "Can't startup $service on host $host. Qmaster host is only $ts_config(master_host)"
-	    return -1
-	 }
-	 startup_qmaster
+         if {[string compare $host $ts_config(master_host)] != 0} {
+            ts_log_severe "Can't startup $service on host $host. Qmaster host is only $ts_config(master_host)"
+            return -1
+         }
+         startup_qmaster
       }
       "shadow" -
       "shadowd" {
-	 if { [lsearch -exact $ts_config(shadowd_hosts) $host] == -1 } {
-	    ts_log_severe "Can't start $service. Host $host is not a $service host"
-	    return -1
-	 }
-	 startup_shadowd $host
+         if {[lsearch -exact $ts_config(shadowd_hosts) $host] == -1} {
+            ts_log_severe "Can't start $service. Host $host is not a $service host"
+            return -1
+         }
+         startup_shadowd $host
       }
       "execd" {
-	 if { [lsearch -exact $ts_config(execd_nodes) $host] == -1 } {
-	    ts_log_severe "Can't start $service. Host $host is not a $service host"
-	    return -1
-	 }
-	 startup_execd $host
+         if {[lsearch -exact $ts_config(execd_nodes) $host] == -1} {
+            ts_log_severe "Can't start $service. Host $host is not a $service host"
+            return -1
+         }
+         startup_execd $host
       }
       "dbwriter" {
-         if { [string compare $host $arco_config(dbwriter_host)] != 0 } {
-	    ts_log_severe "Can't start $service. Host $host is not a $service host"
-	    return -1
-	 }
-	 startup_dbwriter $host
+         if {[string compare $host $arco_config(dbwriter_host)] != 0} {
+            ts_log_severe "Can't start $service. Host $host is not a $service host"
+            return -1
+         }
+         startup_dbwriter $host
       }
       default {
-	 ts_log_severe "Invalid argument $service passed to shutdown_daemon{}"
-	 return -1
+         ts_log_severe "Invalid argument $service passed to shutdown_daemon{}"
+         return -1
       }
    }
 }
@@ -7462,7 +7482,7 @@ proc get_shadowd_pid { hostname {qmaster_spool_dir ""}} {
       set pid_file "$qmaster_spool_dir/shadowd_$HOST.pid"
       start_remote_prog $hostname $CHECK_USER "test" "-f $pid_file"
       if {$prg_exit_state != 0} {
-	      ts_log_fine "No pid file. Shadowd is not running on host $hostname"
+         ts_log_fine "No pid file. Shadowd is not running on host $hostname"
          return 0
       }
    }
@@ -7591,7 +7611,7 @@ proc get_pid_from_file {host pid_file} {
 proc shutdown_qmaster {hostname qmaster_spool_dir {timeout 60}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER CHECK_ADMIN_USER_SYSTEM
-   global CHECK_VALGRIND
+   global CHECK_VALGRIND CHECK_INSTALL_RC
 
    ts_log_fine "shutdown_qmaster ..."
 
@@ -7611,10 +7631,17 @@ proc shutdown_qmaster {hostname qmaster_spool_dir {timeout 60}} {
    if {$ps_info($qmaster_pid,error) == 0} {
       # is_pid_with_name_existing does not work if qmaster is running under valgrind
       if {[is_pid_with_name_existing $hostname $qmaster_pid "sge_qmaster"] == 0} {
-         ts_log_finest "killing qmaster with pid $qmaster_pid on host $hostname"
-         ts_log_finest "do a qconf -km ..."
-         set result [start_sge_bin "qconf" "-km"]
-         ts_log_finest $result
+         if {$CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"] && [host_has_systemd $hostname]} {
+            set service_name [systemd_get_service_name "qmaster"]
+            ts_log_fine "killing qmaster with pid $qmaster_pid on host $hostname, via systemctl stop $service_name"
+            set result [start_remote_prog $hostname "root" "systemctl" "stop $service_name"]
+            ts_log_fine $result
+         } else {
+            ts_log_finest "killing qmaster with pid $qmaster_pid on host $hostname with qconf -km"
+            ts_log_finest "do a qconf -km ..."
+            set result [start_sge_bin "qconf" "-km"]
+            ts_log_finest $result
+         }
          wait_till_qmaster_is_down $hostname $timeout
          shutdown_system_daemon $hostname qmaster
       } else {
@@ -7622,7 +7649,7 @@ proc shutdown_qmaster {hostname qmaster_spool_dir {timeout 60}} {
          return -1
       }
    } else {
-      ts_log_severe "ps_info failed (2), pid=$qmaster_pid"
+      ts_log_info "ps_info failed (2), pid=$qmaster_pid"
       return -1
    }
 
@@ -7888,7 +7915,7 @@ proc shutdown_bdb_rpc { hostname } {
       ts_log_finest $ps_info(string,$elem)
       if { [ is_pid_with_name_existing $hostname $ps_info(pid,$elem) "berkeley_db_svc" ] == 0 } {
          ts_log_severe "could not shutdown berkeley_db_svc at host $elem with kill signal"
-	 return -1
+    return -1
       }
    }
 
@@ -8140,37 +8167,37 @@ proc shutdown_daemon { host service } {
    switch -exact $service {
       "master" -
       "qmaster" {
-	 if { [string compare $host $ts_config(master_host)] != 0 } {
-	    ts_log_severe "Can't stop $service on host $host. Qmaster host is only $ts_config(master_host)"
-	    return -1
-	 }
-	 return [shutdown_qmaster $host [get_qmaster_spool_dir]]
+         if {[string compare $host $ts_config(master_host)] != 0} {
+            ts_log_severe "Can't stop $service on host $host. Qmaster host is only $ts_config(master_host)"
+            return -1
+         }
+         return [shutdown_qmaster $host [get_qmaster_spool_dir]]
       }
       "shadow" -
       "shadowd" {
-	 if { [lsearch -exact $ts_config(shadowd_hosts) $host] == -1 } {
-	    ts_log_severe "Can't stop $service. Host $host is not a $service host"
-	    return -1
-	 }
-	 return [shutdown_shadowd $host]
+         if {[lsearch -exact $ts_config(shadowd_hosts) $host] == -1} {
+            ts_log_severe "Can't stop $service. Host $host is not a $service host"
+            return -1
+         }
+         return [shutdown_shadowd $host]
       }
       "execd" {
-	 if { [lsearch -exact $ts_config(execd_nodes) $host] == -1 } {
-	    ts_log_severe "Can't stop $service. Host $host is not a $service host"
-	    return -1
-	 }
-	 return [soft_execd_shutdown $host]
+         if {[lsearch -exact $ts_config(execd_nodes) $host] == -1} {
+            ts_log_severe "Can't stop $service. Host $host is not a $service host"
+            return -1
+         }
+         return [soft_execd_shutdown $host]
       }
       "dbwriter" {
-         if { [string compare $host $arco_config(dbwriter_host)] != 0 } {
-	    ts_log_severe "Can't stop $service. Host $host is not a $service host"
-	    return -1
-	 }
-	 return [shutdown_dbwriter $host]
+         if {[string compare $host $arco_config(dbwriter_host)] != 0} {
+            ts_log_severe "Can't stop $service. Host $host is not a $service host"
+            return -1
+         }
+         return [shutdown_dbwriter $host]
       }
       default {
-	 ts_log_severe "Invalid argument $service passed to shutdown_daemon{}"
-	 return -1
+         ts_log_severe "Invalid argument $service passed to shutdown_daemon{}"
+         return -1
       }
    }
 }
@@ -10222,15 +10249,16 @@ proc check_shadowd_settings { shadowd_host } {
 #     sge_procedures/startup_shadowd()
 #*******************************************************************************
 proc startup_execd {hostname {envlist ""} {startup_user ""}} {
+   get_current_cluster_config_array ts_config
    global CHECK_ADMIN_USER_SYSTEM CHECK_USER
    global CHECK_VALGRIND CHECK_VALGRIND_HOST CHECK_VALGRIND_LAST_DAEMON_RESTART
-   get_current_cluster_config_array ts_config
+   global CHECK_INSTALL_RC
 
    upvar $envlist my_envlist
 
    if {$startup_user == ""} {
       if {$CHECK_ADMIN_USER_SYSTEM == 0} {
-         if { [have_root_passwd] != 0  } {
+         if {[have_root_passwd] != 0} {
             ts_log_warning "no root password set or ssh not available"
             return -1
          }
@@ -10241,17 +10269,22 @@ proc startup_execd {hostname {envlist ""} {startup_user ""}} {
    }
 
    ts_log_fine "starting up execd on host \"$hostname\" as user \"$startup_user\""
-   if {$CHECK_VALGRIND == "execution" && $CHECK_VALGRIND_HOST == $hostname} {
-      set CHECK_VALGRIND_LAST_DAEMON_RESTART [clock seconds]
-      set arch [resolve_arch $hostname]
-      set execd_cmd "$ts_config(product_root)/bin/$arch/sge_execd"
-      set execd_args ""
+   if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
+      set service_name [systemd_get_service_name "execd"]
+      start_remote_prog $hostname $startup_user "systemctl" "start $service_name"
    } else {
-      set execd_cmd "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd"
-      set execd_args "start"
-   }
+      if {$CHECK_VALGRIND == "execution" && $CHECK_VALGRIND_HOST == $hostname} {
+         set CHECK_VALGRIND_LAST_DAEMON_RESTART [clock seconds]
+         set arch [resolve_arch $hostname]
+         set execd_cmd "$ts_config(product_root)/bin/$arch/sge_execd"
+         set execd_args ""
+      } else {
+         set execd_cmd "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd"
+         set execd_args "start"
+      }
 
-   set output [start_remote_prog $hostname $startup_user $execd_cmd $execd_args prg_exit_state 60 0 "" my_envlist 1 0]
+      set output [start_remote_prog $hostname $startup_user $execd_cmd $execd_args prg_exit_state 60 0 "" my_envlist 1 0]
+   }
 
    return 0
 }
@@ -10530,23 +10563,23 @@ proc get_daemon_pid { host service } {
    switch -exact $service {
       "master" -
       "qmaster" {
-	 return [get_qmaster_pid $host [get_qmaster_spool_dir]]
+    return [get_qmaster_pid $host [get_qmaster_spool_dir]]
       }
       "shadow" -
       "shadowd" {
-	 return [get_shadowd_pid $host [get_qmaster_spool_dir]]
+    return [get_shadowd_pid $host [get_qmaster_spool_dir]]
       }
       "execd" {
          return [get_execd_pid $host]
       }
       "bdb" {
-	 ts_log_severe "NOT IMPLEMENTED"
+    ts_log_severe "NOT IMPLEMENTED"
       }
       "dbwriter" {
-	 ts_log_severe "NOT IMPLEMENTED"
+    ts_log_severe "NOT IMPLEMENTED"
       }
       default {
-	 ts_log_severe "Invalid service $service passed to get_daemon_pid{}"
+    ts_log_severe "Invalid service $service passed to get_daemon_pid{}"
       }
    }
 }
@@ -10612,7 +10645,7 @@ proc call_startup_script { host service {script_file ""} {args ""} { timeout 30 
             set script_file "$ts_config(product_root)/$ts_config(cell)/common/sge$service"
          }
          default {
-	         ts_log_severe "Invalid service $service in smf_call_stop_script_and_restart{}"
+            ts_log_severe "Invalid service $service in smf_call_stop_script_and_restart{}"
          }
       }
    }
@@ -10663,6 +10696,123 @@ proc add_to_config_attribute {old_conf_var new_conf_var attrib value {delimiter 
       set new_conf($attrib) $old_conf($attrib)
       append new_conf($attrib) $delimiter
       append new_conf($attrib) $value
+   }
+}
+
+###
+# @brief get the systemd service name for a given service
+#
+# @param[in] service - the name of the service, e.g. "execd", "qmaster", ...
+# @return the systemd service name, e.g. "ocs6444-execd.service"
+#
+proc systemd_get_service_name {service} {
+   get_current_cluster_config_array ts_config
+
+   set service_name "ocs"
+   append service_name $ts_config(commd_port)
+   append service_name "-$service"
+   append service_name ".service"
+
+   return $service_name
+}
+
+###
+# @brief get the path to the systemd unit file for a given service name
+#
+# @param[in] service_name - the name of the service, e.g. "ocs6444-execd.service"
+#
+proc systemd_get_unit_path {service_name} {
+   return "/etc/systemd/system/$service_name"
+}
+
+###
+# @brief remove OCS from the init system of a host
+#
+# We shutdown, disable and remove the services for qmaster and execd.
+#
+# @param[in] host - the host to remove the services from
+#
+proc remove_from_init_system {host} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global CHECK_INSTALL_RC
+
+   # @todo differentiate between the various init systems
+   if {$CHECK_INSTALL_RC && [host_has_systemd $host]} {
+      ts_log_frame
+      ts_log_fine "removing services from init system on host $host"
+      set services "qmaster execd"
+      foreach service $services {
+         set service_name [systemd_get_service_name $service]
+         ts_log_fine "   -> $service_name"
+         set output [start_remote_prog $host "root" "systemctl" "status $service_name"]
+         ts_log_finer $output
+         # 0 program is running or service is OK
+         # 1 program is dead and /var/run pid file exists
+         # 2 program is dead and /var/lock lock file exists
+         # 3 program is not running
+         # 4 program or service status is unknown
+         # 5-99  reserved for future LSB use
+         # 100-149   reserved for distribution use
+         # 150-199   reserved for application use
+         # 200-254   reserved
+         if {$prg_exit_state != 4} {
+            # service exists - stop it
+            set output [start_remote_prog $host "root" "systemctl" "is-active $service_name"]
+            if {$prg_exit_state == 0} {
+               # service is running
+               set output [start_remote_prog $host "root" "systemctl" "stop $service_name"]
+               ts_log_finer $output
+            }
+            # service is enabled - disable it
+            set output [start_remote_prog $host "root" "systemctl" "is-enabled $service_name"]
+            if {$prg_exit_state == 0} {
+               # service is running
+               set output [start_remote_prog $host "root" "systemctl" "disable $service_name"]
+               ts_log_finer $output
+            }
+            # remove the service
+            set unit_path [systemd_get_unit_path $service_name]
+            set output [start_remote_prog $host "root" "rm" "-f $unit_path"]
+            ts_log_finer $output
+            set output [start_remote_prog $host "root" "systemctl" "daemon-reload"]
+            ts_log_finer $output
+         }
+      }
+   }
+}
+
+###
+# @brief remove all cluster hosts from the init system
+#
+# This function will remove all cluster hosts from the init system.
+# It is called when testsuite was started with option "install_rc"
+# before building/installing new binaries and when exiting testsuite.
+#
+proc remove_cluster_hosts_from_init_system {} {
+   get_current_cluster_config_array ts_config
+
+   set hosts [concat $ts_config(master_host) $ts_config(shadowd_hosts) $ts_config(execd_nodes)]
+   set hosts [lsort -unique $hosts]
+   foreach host $hosts {
+      remove_from_init_system $host
+   }
+}
+
+###
+# @brief remove all configured hosts from the init system
+#
+# This function will remove all hosts from the init system
+# which are contained in the testsuite host configuration.
+# It is called from the testsuite cleanup menu (34, item 4).
+#
+proc remove_all_hosts_from_init_system {} {
+   get_current_cluster_config_array ts_config
+   global ts_host_config
+
+   set hosts [host_conf_get_all_nodes $ts_host_config(hostlist)]
+   foreach host $hosts {
+      remove_from_init_system $host
    }
 }
 

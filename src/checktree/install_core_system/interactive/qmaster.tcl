@@ -41,6 +41,7 @@ proc install_qmaster {{report_var report}} {
    global CHECK_REPORT_EMAIL_TO CHECK_MAIN_RESULTS_DIR CHECK_FIRST_FOREIGN_SYSTEM_USER
    global CHECK_SECOND_FOREIGN_SYSTEM_USER CHECK_REPORT_EMAIL_TO CHECK_DNS_DOMAINNAME
    global CHECK_PROTOCOL_DIR
+   global CHECK_INSTALL_RC
 
    global ts_config
 
@@ -138,7 +139,9 @@ proc install_qmaster {{report_var report}} {
    set ENTER_ADMIN_MAIL_SINCE_U3    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_ADMIN_MAIL_SINCE_U3] "*"]
    set SHOW_CONFIGURATION           [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_SHOW_CONFIGURATION] "*" "*"]
    set ACCEPT_CONFIGURATION         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ACCEPT_CONFIGURATION] ]
+   # startup
    set INSTALL_STARTUP_SCRIPT       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_INSTALL_STARTUP_SCRIPT] ]
+   set ENTER_SLICE                  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_SLICE] "*"]
    set ENTER_SCHEDLUER_SETUP        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_SCHEDLUER_SETUP] ]
    set DELETE_DB_SPOOL_DIR          [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DELETE_DB_SPOOL_DIR] ]
    set CELL_NAME_EXISTS             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CELL_NAME_EXISTS] ]
@@ -562,7 +565,11 @@ proc install_qmaster {{report_var report}} {
          }
 
          -i $sp_id $INSTALL_SCRIPT {
-            install_send_answer $sp_id $ANSWER_NO "9"
+            if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
+               install_send_answer $sp_id $ANSWER_YES "9"
+            } else {
+               install_send_answer $sp_id $ANSWER_NO "9"
+            }
             continue
          }
 
@@ -650,7 +657,16 @@ proc install_qmaster {{report_var report}} {
          }
 
          -i $sp_id $INSTALL_STARTUP_SCRIPT {
-            install_send_answer $sp_id $ANSWER_NO "10"
+            if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
+               install_send_answer $sp_id $ANSWER_YES "10"
+            } else {
+               install_send_answer $sp_id $ANSWER_NO "10"
+            }
+            continue
+         }
+
+         -i $sp_id $ENTER_SLICE {
+            install_send_answer $sp_id "ocs$ts_config(commd_port)"
             continue
          }
 

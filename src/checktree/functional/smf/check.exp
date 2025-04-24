@@ -36,7 +36,7 @@
 
 # define test's name and run level descriptions
 set check_name            "smf"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "INIT VERIFIED"
 set check_description(0)  "Test SMF support"
 
 set check_root_access_needs  "yes"
