@@ -1,0 +1,158 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range "9.1.0"
+
+# define test's name and run level descriptions
+set check_name            "init_system"
+set check_category        "INIT VERIFIED"
+set check_description(0)  "test system integration of daemons (init, systemd, smf)"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function init_system_setup
+set check_cleanup_function init_system_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "init_system_qmaster"
+#lappend check_functions "init_system_shadowd"   ;# shadow hosts are not added to the init system, see CS-1218
+lappend check_functions "init_system_execd"
+
+# -------- local test procedures: initialization------------------------------
+
+proc init_system_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_INSTALL_RC
+
+   if {!$CHECK_INSTALL_RC} {
+      ts_log_config "to run the test you need to start testsuite with the install_rc option and install the cluster"
+      return 99
+   }
+}
+
+proc init_system_cleanup {} {
+   get_current_cluster_config_array ts_config
+
+   #delete_all_jobs
+   #wait_for_end_of_all_jobs
+
+   #unset -nocomplain ...
+}
+
+
+proc init_system_test {host service} {
+   get_current_cluster_config_array ts_config
+
+   # @todo currently we only test on Linux with systemd
+   if {![host_has_systemd $host]} {
+      ts_log_fine "skipping init_system_test on host $host, systemd not available"
+      return
+   }
+
+   set errors {}
+   set ret 1
+   set service_name [systemd_get_service_name $service]
+
+   if {$ret} {
+      set output [start_remote_prog $host "root" "systemctl" "status $service_name" prg_exit_state 60 0 "" "" 1 0]
+      ts_log_fine $output
+      if {$prg_exit_state != 0} {
+         lappend errors "systemctl status $service_name failed: $output: $output"
+         set ret 0
+      }
+   }
+
+   if {$ret} {
+      set output [start_remote_prog $host "root" "systemctl" "is-active $service_name" prg_exit_state 60 0 "" "" 1 0]
+      ts_log_fine $output
+      if {$prg_exit_state != 0} {
+         lappend errors "systemctl is-active $service_name failed: $output: $output"
+         set ret 0
+      }
+   }
+
+   if {$ret} {
+      set output [start_remote_prog $host "root" "systemctl" "is-enabled $service_name" prg_exit_state 60 0 "" "" 1 0]
+      ts_log_fine $output
+      if {$prg_exit_state != 0} {
+         lappend errors "systemctl is-enabled $service_name failed: $output: $output"
+         set ret 0
+      }
+   }
+
+   if {$ret} {
+      set myenv(PAGER) "cat"
+      set output [start_remote_prog $host "root" "journalctl" "-u $service_name" prg_exit_state 60 0 "" myenv 1 0]
+      ts_log_fine $output
+      if {$prg_exit_state != 0} {
+         lappend errors "journalctl -u $service_name failed: $output: $output"
+         set ret 0
+      }
+   }
+
+   if {[llength $errors] > 0} {
+      ts_log_severe "host $host $service_name had errors:\n[join $errors \n]"
+   }
+}
+
+proc init_system_qmaster {} {
+   get_current_cluster_config_array ts_config
+
+   init_system_test $ts_config(master_host) "qmaster"
+}
+
+proc init_system_shadowd {} {
+   get_current_cluster_config_array ts_config
+
+   foreach host $ts_config(shadowd_hosts) {
+      # qmaster and shadowd are started with the same init script / service
+      # skip the master host
+      if {$host != $ts_config(master_host)} {
+         init_system_test $host "shadowd"
+      }
+   }
+}
+
+proc init_system_execd {} {
+   get_current_cluster_config_array ts_config
+
+   foreach host $ts_config(execd_nodes) {
+      init_system_test $host "execd"
+   }
+
+   # @todo we might want to do further checks on the execd nodes, e.g.
+   #       - stop execd and verify that running jobs are still running
+   #       - once we have proper cgroups support: stop the execution slice and verify that jobs and their shepherds got killed
+   #       - ...
+}
