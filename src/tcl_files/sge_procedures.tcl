@@ -551,15 +551,6 @@ proc full_shutdown_and_csp_cleanup {} {
       set_root_passwd
    }
 
-   # if we have windows hosts in the cluster, we need the passwd
-   # of the CHECK_USER - cleaning spool directories is done as local user
-   foreach host $ts_host_config(hostlist) {
-      if {[host_conf_get_arch $host] == "win32-x86"} {
-         set_passwd $CHECK_USER $ts_config(master_host) $host
-         break
-      }
-   }
-
    # first do a regular shutdown of our cluster
    shutdown_core_system
 
@@ -939,8 +930,7 @@ proc start_sge_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {time
 
    ts_log_finest "executing $binary $args\nas user $user on host $host"
    # Add " around $args if there are more the 1 args....
-   set result [start_remote_prog $host $user $binary "$args" exit_state $timeout 0 $cd_dir envlist \
-                                 1 1 0 1 0 0 0 $new_grp]
+   set result [start_remote_prog $host $user $binary "$args" exit_state $timeout 0 $cd_dir envlist 1 1 0 1 0 0 $new_grp]
 
    ts_log_finer "result:\n\"$result\""
 
@@ -8621,11 +8611,7 @@ proc copy_certificates { host { sync 1 } } {
       ts_log_finest "we have root access, fine !"
       set CA_ROOT_DIR "/var/sgeCA"
       set TAR_FILE "${CA_ROOT_DIR}/port${ts_config(commd_port)}.tar"
-      if {$remote_arch == "win32-x86"} {
-         set UNTAR_OPTS "-xvf"
-      } else {
-         set UNTAR_OPTS "-xpvf"
-      }
+      set UNTAR_OPTS "-xpvf"
 
       ts_log_finest "removing existing tar file \"$TAR_FILE\" ..."
       set result [start_remote_prog "$ts_config(master_host)" "root" "rm" "$TAR_FILE"]
@@ -8677,17 +8663,6 @@ proc copy_certificates { host { sync 1 } } {
       ts_log_finest "removing tar file \"$TAR_FILE\" ..."
       set result [start_remote_prog "$ts_config(master_host)" "root" "rm" "$TAR_FILE"]
       ts_log_finest $result
-
-      # on windows, we have to correct the file permissions and create certs for
-      # <$HOST>+Administrator and <$HOST>+$SGE_ADMIN_USER
-      if {$remote_arch == "win32-x86"} {
-         # correct file permissions
-         ts_log_finer "correcting certificate file permissions on windows host"
-         set users "$CHECK_USER $ts_user_config(first_foreign_user) $ts_user_config(second_foreign_user)"
-         foreach user $users {
-            start_remote_prog $host "root" "chown" "-R $user /var/sgeCA/port${ts_config(commd_port)}/$ts_config(cell)/userkeys/$user"
-         }
-      }
 
       # check for syncron clock times
       if { $sync == 1 } {

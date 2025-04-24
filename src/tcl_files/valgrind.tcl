@@ -70,7 +70,7 @@ proc valgrind_init {} {
       # delete the directory if it exists
       delete_remote_file $CHECK_VALGRIND_HOST "root" $valgrind_output_dir
       # re-create it
-      remote_file_mkdir $CHECK_VALGRIND_HOST $valgrind_output_dir 0 $CHECK_USER "777"
+      remote_file_mkdir $CHECK_VALGRIND_HOST $valgrind_output_dir $CHECK_USER "777"
    }
 }
 

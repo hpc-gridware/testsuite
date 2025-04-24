@@ -442,8 +442,6 @@ proc upgrade_test_upgrade_run_script { bckp_dir } {
       set do_log_output 1
    }
 
-   set have_windows_host [host_conf_have_windows]
-
    set LICENSE_AGREEMENT            [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_LICENSE_AGREEMENT] ]
    set HIT_RETURN_TO_CONTINUE       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_HIT_RETURN_TO_CONTINUE] ]
    set ANSWER_YES                   [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ANSWER_YES] ]
@@ -1126,13 +1124,7 @@ proc upgrade_test_upgrade_run_script { bckp_dir } {
          }
 
          -i $sp_id $CSP_COPY_CERTS {
-            # On windows hosts, rcp / scp doesn't work.
-            # So if we have windows hosts in the cluster, testsuite has to copy the certificates itself
-            if {$have_windows_host} {
-              set answer $ANSWER_NO
-            } else {
-              set answer $ANSWER_YES
-            }
+            set answer $ANSWER_YES
             ts_log_fine "\n -->testsuite: sending >$answer<"
             if {$do_log_output == 1} {
               puts "press RETURN"

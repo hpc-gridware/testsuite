@@ -57,7 +57,7 @@ proc copy_certs_setup {} {
    # inst_sge -copycerts currently doesn't output an error in this case, 
    # once this is fixed, we can handle getting the correct error message here,
    # see Issue xyz
-   if {[lsearch -exact $ts_config(product_feature) "csp"] < 0 && ![host_conf_have_windows]} {
+   if {[lsearch -exact $ts_config(product_feature) "csp"] < 0} {
       ts_log_fine "inst_sge -copycerts does not work without CSP mode or Windows host in the cluster"
       return
    }

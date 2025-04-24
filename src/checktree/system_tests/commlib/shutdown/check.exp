@@ -141,7 +141,7 @@ proc commlib_shutdown_run {} {
       set server_env(CL_PORT) $ts_config(commd_port)
       set client_env(CL_PORT) [expr ( $ts_config(commd_port) + 1) ]
 
-      set server_sid     [open_remote_spawn_process $server_host     $cs_user $server_binary     $server_args     0 "" server_env]
+      set server_sid     [open_remote_spawn_process $server_host $cs_user $server_binary $server_args 0 "" server_env]
       set qping_dump_sid [open_remote_spawn_process $qping_dump_host "root"      $qping_dump_binary $qping_dump_args]
       set qping_info_sid [open_remote_spawn_process $qping_info_host $CHECK_USER $qping_info_binary $qping_info_args]
 

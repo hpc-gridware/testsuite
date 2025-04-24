@@ -88,10 +88,6 @@ proc install_qmaster {{report_var report}} {
    }
    close $f
 
-   # does cluster contain windows hosts?
-   # install_qmaster will ask us about this
-   set have_windows_host [host_conf_have_windows]
-
    set LICENSE_AGREEMENT            [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_LICENSE_AGREEMENT] ]
    set HIT_RETURN_TO_CONTINUE       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_HIT_RETURN_TO_CONTINUE] ]
    set CURRENT_GRID_ROOT_DIRECTORY  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CURRENT_GRID_ROOT_DIRECTORY] "*" "*" ]
@@ -873,13 +869,7 @@ proc install_qmaster {{report_var report}} {
          }
 
          -i $sp_id $CSP_COPY_CERTS {
-            # On windows hosts, rcp / scp doesn't work.
-            # So if we have windows hosts in the cluster, testsuite has to copy the certificates itself
-            if {$have_windows_host} {
-               install_send_answer $sp_id $ANSWER_NO "14"
-            } else {
-               install_send_answer $sp_id $ANSWER_YES "14"
-            }
+            install_send_answer $sp_id $ANSWER_YES "14"
             continue
          }
          -i $sp_id $CSP_COPY_CMD {

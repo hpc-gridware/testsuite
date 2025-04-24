@@ -84,10 +84,6 @@ proc install_execd {{report_var report}} {
  
    read_install_list
 
-   # does cluster contain windows hosts?
-   # if yes, we'll have to copy the certificates, regardless of csp mode or not
-   set have_windows_host [host_conf_have_windows]
-
    set script_version [start_remote_prog $ts_config(master_host) $CHECK_USER "cat" "$ts_config(product_root)/inst_sge | grep \"SCRIPT_VERSION\" | cut -d\\\" -f2" ] ;#"
 
    if {$prg_exit_state == 0} {
@@ -111,7 +107,7 @@ proc install_execd {{report_var report}} {
             ts_log_fine $result
          }
       }
-      if {$ts_config(product_feature) == "csp" || $have_windows_host} {
+      if {$ts_config(product_feature) == "csp"} {
          set feature_install_options "-csp"
          set my_csp_host_list $ts_config(execd_nodes)
          if {$ts_config(admin_only_hosts) != "none"} {

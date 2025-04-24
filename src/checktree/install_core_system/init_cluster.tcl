@@ -1059,49 +1059,6 @@ proc setup_check_messages_files {} {
    }
 }
 
-proc setup_inhouse_cluster {} {
-   global env CHECK_USER
-   global ts_config
-
-   # reset_schedd_config has global error reporting
-   if {[lsearch -exact [info procs] "inhouse_cluster_post_install"] != -1} {
-      ts_log_fine "executing postinstall procedure for inhouse cluster"
-      inhouse_cluster_post_install
-   }
-}
-
-#****** init_cluster/setup_win_users() *****************************************
-#  NAME
-#     setup_win_users() -- special setup for windows users
-#
-#  SYNOPSIS
-#     setup_win_users { }
-#
-#  FUNCTION
-#     If we have windows hosts in the cluster, this procedure does special setup
-#     required for windows users.
-#     The passwords of the following users will be registered through the
-#     sgepasswd utilbin binary:
-#        - CHECK_USER
-#        - Administrator
-#        - CHECK_FIRST_FOREIGN_SYSTEM_USER
-#        - CHECK_SECOND_FOREIGN_SYSTEM_USER
-#
-#  SEE ALSO
-#     init_cluster/setup_win_user()
-#*******************************************************************************
-proc setup_win_users {} {
-   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
-   global ts_config
-
-   if {[host_conf_have_windows]} {
-      set win_users "$CHECK_USER Administrator $CHECK_FIRST_FOREIGN_SYSTEM_USER $CHECK_SECOND_FOREIGN_SYSTEM_USER"
-      foreach user $win_users {
-         setup_win_user_passwd $user
-      }
-   }
-}
-
 proc setup_and_check_users {} {
    global ts_user_config CHECK_USER ts_config
    # setup users to test
@@ -1177,7 +1134,6 @@ proc setup_and_check_users {} {
 #     user - user whose passwd shall be registered
 #
 #  SEE ALSO
-#     init_cluster/setup_win_users()
 #     check/set_root_passwd()
 #*******************************************************************************
 proc setup_win_user_passwd {user} {
@@ -1282,32 +1238,6 @@ proc setup_sge_aliases_file {} {
    } else {
       ts_log_fine "Found '$ts_config(product_root)/$ts_config(cell)/common/sge_aliases' file"
    }
-
-   # Check if we have a Windows (Interix) host in our cluster, if yes ask it for
-   # the automount prefix and add a mapping to the sge_aliases file.
-   ts_log_fine "Checking if sge_aliases file must be enhanced"
-   foreach host $ts_config(execd_nodes) {
-      if {[host_conf_get_arch $host] == "win32-x86"} {
-         # Do a 'cd $SGE_ROOT; pwd' on this host to get the path with
-         # automount prefix
-         ts_log_fine "Found a win32-x86 host, adding automount prefix to sge_aliases file"
-         set output [start_remote_prog $host $CHECK_USER "pwd" "" prg_exit_state 60 0 $ts_config(product_root)]
-         set output [string trim $output]
-         set pos [string first $ts_config(product_root) $output]
-         set prefix [string range $output 0 $pos]
-
-         set index 0
-         set data(src-path,$index)     "$prefix"
-         set data(sub-host,$index)     "*"
-         set data(exec-host,$index)    "*"
-         set data(replacement,$index)  "/"
-         incr index 1
-
-         add_to_path_aliasing_file ${file_name} data $index
-         break
-      }
-   }
-   ts_log_fine "Done setting up sge_aliases file"
 }
 
 proc install_send_answer {sp_id answer {scenario ""}} {

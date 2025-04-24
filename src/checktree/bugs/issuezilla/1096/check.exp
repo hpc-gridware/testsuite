@@ -71,12 +71,6 @@ proc issue_1096_run {} {
 
       foreach act_host $ts_config(unique_arch_nodes) {
          set arch [resolve_arch $act_host]
-
-         if {$arch == "win32-x86"} {
-            ts_log_config "Skipping win32-x86 architecture!" 
-            continue
-         }
-
          set qmaster_binary $ts_config(product_root)/bin/${arch}/sge_qmaster
          set qping_binary $ts_config(product_root)/bin/${arch}/qping
 

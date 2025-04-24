@@ -633,7 +633,6 @@ proc start_remote_prog { hostname
                          {source_settings_file 1}
                          {set_shared_lib_path 0}
                          {raise_error 1}
-                         {win_local_user 0}
                          {without_start_output 0}
                          {without_sge_single_line 0}
                          {new_grp ""}
@@ -665,7 +664,7 @@ proc start_remote_prog { hostname
    # open connection
    set id [open_remote_spawn_process "$hostname" "$user" "$exec_command" "$exec_arguments" $background $cd_dir \
                                      users_env $source_settings_file 15 $set_shared_lib_path $raise_error \
-                                     $win_local_user $without_start_output $without_sge_single_line \
+                                     $without_start_output $without_sge_single_line \
                                      shell_script_name 0 0 $new_grp]
 
    if {$id == ""} {
@@ -1133,30 +1132,19 @@ proc increase_timeout {{max 5} {step 1}} {
 #     map_special_users() -- map special user names and windows user names
 #
 #  SYNOPSIS
-#     map_special_users { hostname user win_local_user } 
+#     map_special_users { hostname user }
 #
 #  FUNCTION
 #     Does username mapping for windows users.
-#
-#     The user id "root" is mapped to the windows user name "Administrator".
-#     If we connect to a windows machine, usually the connection will be done
-#     as windows domain user.
-#     There are cases where we have to become a local user (user Administrator, 
-#     or parameter win_local_user set to 1).
-#     In this case, we'll use as hostname "$hostname+$user".
 #
 #     On UNIX systems, using rlogin, we'll always connect as CHECK_USER, and
 #     later on switch to root or the target user.
 #     Using ssh, we'll connect as CHECK_USER, or as root, and later on 
 #     switch to the target user.
 #
-#     On Windows systems, we'll always connect as the target user (CHECK_USER,
-#     Administrator, other target user).
-#
 #  INPUTS
 #     hostname       - host to which we want to connect
 #     user           - the target user id (may also be a special user id)
-#     win_local_user - do we want to connect as windows local or domain user?
 #
 #  RESULT
 #     The functions sets the following variables in the callers context:
@@ -1168,35 +1156,20 @@ proc increase_timeout {{max 5} {step 1}} {
 #                             commandline.
 #
 #  EXAMPLE
-#     map_special_users unix_host root 0
+#     map_special_users unix_host root
 #        real_user         = root
 #        connect_user      = CHECK_USER
 #        connect_full_user = CHECK_USER
 #
-#     map_special_users unix_host sgetest 1
+#     map_special_users unix_host sgetest
 #        real_user         = sgetest
 #        connect_user      = sgetest
 #        connect_full_user = sgetest
-#
-#     map_special_users win_host root 0
-#        real_user         = Administrator
-#        connect_user      = Administrator
-#        connect_full_user = win_host+Administrator
-#
-#     map_special_users win_host sgetest 0
-#        real_user         = sgetest
-#        connect_user      = sgetest
-#        connect_full_user = sgetest
-#
-#     map_special_users win_host sgetest 1
-#        real_user         = sgetest
-#        connect_user      = sgetest
-#        connect_full_user = win_host+sgetest
 #
 #  SEE ALSO
 #     remote_procedures/open_remote_spawn_process()
 #*******************************************************************************
-proc map_special_users {hostname user win_local_user} {
+proc map_special_users {hostname user} {
    global CHECK_USER CHECK_DEBUG_LEVEL
 
    upvar real_user         real_user          ;# this is the real user name on the target machine
@@ -1205,58 +1178,29 @@ proc map_special_users {hostname user win_local_user} {
 
    set real_user $user
 
-   # on interix, the root user is Administrator
-   # and we have to connect as the target user, as su doesn't work
-   # for Administrator, we have to use "hostname+Administrator" (local user)
-   if {[host_conf_get_arch $hostname] == "win32-x86"} {
-      if {$user == "root"} {
-         set real_user "Administrator"
-         if {!$win_local_user} {
-            set win_local_user 1
-         }
-      }
-
-      set connect_user        $real_user
-
-      if {$win_local_user} {
-         set list_hostname [split $hostname "."]
-         set short_hostname [lindex $list_hostname 0]
-         set connect_full_user   "$short_hostname+$real_user"
-      } else {
-         set connect_full_user   $real_user
-      }
-      if {$CHECK_DEBUG_LEVEL != 0} {
-         ts_log_finer "map_special_users: $user on windows host $hostname"
-         ts_log_finer "   real_user:         $real_user"
-         ts_log_finer "   connect_user:      $connect_user"
-         ts_log_finer "   connect_full_user: $connect_full_user"
-      }
-   } else {
-      # on unixes, we connect
-      # with rlogin always as CHECK_USER (and su later, if necessary)
-      # despite having the root password, we do not connect as root, as some unixes
-      # disallow root login from network
-      #
-      # with ssh either as CHECK_USER
-      #          or     as root (and su later, if necessary)
-      if {[have_ssh_access]} {
-         if {$real_user == $CHECK_USER} {
-            set connect_user $CHECK_USER
-            set connect_full_user $CHECK_USER
-         } else {
-            set connect_user "root"
-            set connect_full_user "root"
-         }
-      } else {
+   # connect with rlogin always as CHECK_USER (and su later, if necessary)
+   # despite having the root password, we do not connect as root, as some unixes
+   # disallow root login from network
+   #
+   # with ssh either as CHECK_USER
+   #          or     as root (and su later, if necessary)
+   if {[have_ssh_access]} {
+      if {$real_user == $CHECK_USER} {
          set connect_user $CHECK_USER
          set connect_full_user $CHECK_USER
+      } else {
+         set connect_user "root"
+         set connect_full_user "root"
       }
-      if {$CHECK_DEBUG_LEVEL != 0} {
-         ts_log_finer "map_special_users: $user on host $hostname"
-         ts_log_finer "   real_user:         $real_user"
-         ts_log_finer "   connect_user:      $connect_user"
-         ts_log_finer "   connect_full_user: $connect_full_user"
-      }
+   } else {
+      set connect_user $CHECK_USER
+      set connect_full_user $CHECK_USER
+   }
+   if {$CHECK_DEBUG_LEVEL != 0} {
+      ts_log_finer "map_special_users: $user on host $hostname"
+      ts_log_finer "   real_user:         $real_user"
+      ts_log_finer "   connect_user:      $connect_user"
+      ts_log_finer "   connect_full_user: $connect_full_user"
    }
 }
 
@@ -1547,7 +1491,6 @@ proc open_remote_spawn_process { hostname
                                  {nr_of_tries 15}
                                  {set_shared_lib_path 0}
                                  {raise_error 1}
-                                 {win_local_user 0}
                                  {without_start_output 0}
                                  {without_sge_single_line 0}
                                  {shell_script_name_var shell_script_name}
@@ -1575,22 +1518,16 @@ proc open_remote_spawn_process { hostname
    if {$nr_of_tries < 5} {
       ts_log_config "unreasonably low nr_of_tries: $nr_of_tries, setting to 5" $raise_error
    }
-   # the win_local_user feature is only needed on windows
-   # reset it for non windows hosts
-   if {$win_local_user && [host_conf_get_arch $hostname] != "win32-x86"} {
-      set win_local_user 0
-   }
 
    # handle special user ids
-   map_special_users $hostname $user $win_local_user
+   map_special_users $hostname $user
 
    # common part of all error messages
    set error_info "connection to host \"$hostname\" as user \"$connect_full_user\""
 
    # if command shall be started as other user than CHECK_USER
    # we need root access
-   # unless the target host is windows - here we need each user's password
-   if {$real_user != $CHECK_USER && [host_conf_get_arch $hostname] != "win32-x86"} {
+   if {$real_user != $CHECK_USER} {
       if {[have_root_passwd] == -1} {
          ts_log_warning "${error_info}\nroot access required" $raise_error
          return "" 
@@ -1618,7 +1555,7 @@ proc open_remote_spawn_process { hostname
    # if the same script is executed multiple times, don't recreate it
    set re_use_script 0
    # we check for a combination of all parameters
-   set spawn_command_arguments "$hostname$user$exec_command$exec_arguments$background$cd_dir$env_string$source_settings_file$set_shared_lib_path$win_local_user$without_start_output$without_sge_single_line$new_grp"
+   set spawn_command_arguments "$hostname$user$exec_command$exec_arguments$background$cd_dir$env_string$source_settings_file$set_shared_lib_path$without_start_output$without_sge_single_line$new_grp"
    if {[info exists open_remote_spawn_script_cache($spawn_command_arguments)]} {
       set cached_script_file_name $open_remote_spawn_script_cache($spawn_command_arguments)
       if {[file isfile $cached_script_file_name]} {
@@ -1651,7 +1588,7 @@ proc open_remote_spawn_process { hostname
    # get info about an already open rlogin connection
    set create_alternate_connection 0
    set open_new_connection 1
-   if {[get_open_spawn_rlogin_session $hostname $user $win_local_user con_data]} {
+   if {[get_open_spawn_rlogin_session $hostname $user con_data]} {
       if {$con_data(in_use)} {
          set found_alternative 0
          if {$CHECK_DEBUG_LEVEL != 0} {
@@ -1709,23 +1646,9 @@ proc open_remote_spawn_process { hostname
          # on unixes, we connect as CHECK_USER which will give us no passwd question,
          # and handle root passwd question when switching to the target user later on
          #
-         # on windows, we have to directly connect as the target user, where we get
-         # a passwd question for root and first/second foreign user
-         # 
-         # for unixes, we reject a passwd question (passwd = ""), for windows, we 
+         # for unixes, we reject a passwd question (passwd = ""), for windows, we
          # send the stored passwd
          set passwd ""
-
-         # we either open an ssh connection (as CHECK_USER or root) 
-         # or rlogin as CHECK_USER
-         #
-         # on windows hosts, login as root and su - <user> doesn't work.
-         # here we connect as target user and answer the passwd question
-         # for connections as CHECK_USER, we don't expect a password question
-         if {[host_conf_get_arch $hostname] == "win32-x86" && $connect_full_user != $CHECK_USER} {
-            set passwd [get_passwd $real_user]
-         }
-
          set tmp_help [have_ssh_access];
          set tmp_log_user [log_user]
          log_user 0
@@ -2162,7 +2085,7 @@ proc open_remote_spawn_process { hostname
          set alternate_connection_of ""    
       }
 
-      add_open_spawn_rlogin_session $hostname     $user           $win_local_user $spawn_id    \
+      add_open_spawn_rlogin_session $hostname     $user           $spawn_id    \
                                     $pid          $nr_of_shells   $real_user      $script_name \
                                     $exec_command $exec_arguments $alternate_connection_of
    } ;# opening new connection
@@ -2490,10 +2413,6 @@ proc dump_spawn_rlogin_sessions {{do_output 1}} {
 #              - pid        pid of the expect child process from spawn command
 #              - hostname   name of host to which we connected
 #              - user       user for which the connection has been established.
-#              - win_local_user For windows, we usually will connect as domain user.
-#                               For some operations, e.g. accessing the local
-#                               spool directory of an exec host, we have to use
-#                               local users.
 #              - ltime      timestamp of last use of the connection
 #              - nr_shells  number of shells started in the connection
 #              - in_use     is the connection in use or idle
@@ -2508,16 +2427,15 @@ proc dump_spawn_rlogin_sessions {{do_output 1}} {
 #        rlogin_spawn_session_idx: TCL Array acting as an index for quick lookup
 #           of connections by hostname and user.
 #           It contains one entry per session. The array names are
-#           <hostname>,<user>,<win_local_user>, e.g.
-#           gimli,sgetest,0        exp4
-#           balrog,sgetest,0       exp6
-#           balrog,sgetest1,0      exp8
-#           bofur,sgetest,1        exp10
+#           <hostname>,<user> e.g.
+#           gimli,sgetest        exp4
+#           balrog,sgetest       exp6
+#           balrog,sgetest1      exp8
+#           bofur,sgetest        exp10
 #
 #  INPUTS
 #     hostname       - hostname of rlogin connection
 #     user           - user who logged in
-#     win_local_user - is the user a windows local (1) or domain user (0)
 #     spawn_id       - spawn process id
 #     pid            - process id of rlogin session
 #
@@ -2527,7 +2445,7 @@ proc dump_spawn_rlogin_sessions {{do_output 1}} {
 #     remote_procedures/del_open_spawn_rlogin_session
 #     remote_procedures/remove_oldest_spawn_rlogin_session()
 #*******************************************************************************
-proc add_open_spawn_rlogin_session {hostname user win_local_user spawn_id \
+proc add_open_spawn_rlogin_session {hostname user spawn_id \
                                     pid nr_of_shells real_user command_script \
                                     command_name command_args alternate_con_of} {
    global rlogin_spawn_session_buffer rlogin_spawn_session_idx
@@ -2557,7 +2475,6 @@ proc add_open_spawn_rlogin_session {hostname user win_local_user spawn_id \
    set rlogin_spawn_session_buffer($spawn_id,hostname)            $hostname
    set rlogin_spawn_session_buffer($spawn_id,user)                $user
    set rlogin_spawn_session_buffer($spawn_id,real_user)           $real_user
-   set rlogin_spawn_session_buffer($spawn_id,win_local_user)      $win_local_user
    set rlogin_spawn_session_buffer($spawn_id,ltime)               [timestamp]
    set rlogin_spawn_session_buffer($spawn_id,nr_shells)           $nr_of_shells
    set rlogin_spawn_session_buffer($spawn_id,in_use)              0
@@ -2578,7 +2495,7 @@ proc add_open_spawn_rlogin_session {hostname user win_local_user spawn_id \
       set rlogin_spawn_session_buffer($spawn_id,is_alternate_of) $alternate_con_of
    } else {
       # add session to search index
-      set rlogin_spawn_session_idx($hostname,$user,$win_local_user) $spawn_id
+      set rlogin_spawn_session_idx($hostname,$user) $spawn_id
    }
 }
 
@@ -2725,7 +2642,6 @@ proc set_open_spawn_session_id_check_needed {spawn_id value} {
 #  INPUTS
 #     hostname       - hostname of rlogin connection 
 #     user           - user who logged in 
-#     win_local_user - is the user a windows local (1) or domain user (0)
 #     back_var       - name of array to store data in
 #                      (the array has following names:
 #                         back_var(spawn_id) 
@@ -2736,11 +2652,6 @@ proc set_open_spawn_session_id_check_needed {spawn_id value} {
 #  RESULT
 #     1 on success, 0 if no connection is available
 #
-#  EXAMPLE
-#     get_open_spawn_rlogin_session $hostname $user $win_local_user con_data
-#     if { $con_data(pid) != 0 } {
-#     }
-#
 #  NOTES
 #     The back_var array is set to "0" if no connection is available 
 #
@@ -2750,21 +2661,21 @@ proc set_open_spawn_session_id_check_needed {spawn_id value} {
 #     remote_procedures/get_spawn_id_rlogin_session
 #     remote_procedures/check_rlogin_session
 #*******************************************************************************
-proc get_open_spawn_rlogin_session {hostname user win_local_user back_var} {
+proc get_open_spawn_rlogin_session {hostname user back_var} {
    global rlogin_spawn_session_buffer rlogin_spawn_session_idx
    global do_close_rlogin
 
    upvar $back_var back 
 
-   ts_log_finest "get open session for $hostname/$user/$win_local_user ..."
+   ts_log_finest "get open session for $hostname/$user ..."
    # we shall not reuse connections, or
    # connection to this host/user does not exist yet
-   if {$do_close_rlogin != 0 || ![info exists rlogin_spawn_session_idx($hostname,$user,$win_local_user)]} {
+   if {$do_close_rlogin != 0 || ![info exists rlogin_spawn_session_idx($hostname,$user)]} {
       clear_open_spawn_rlogin_session back
       return 0
    }
 
-   set spawn_id $rlogin_spawn_session_idx($hostname,$user,$win_local_user)
+   set spawn_id $rlogin_spawn_session_idx($hostname,$user)
    fill_session_info_array $spawn_id back
    return 1
 }
@@ -2831,8 +2742,7 @@ proc del_open_spawn_rlogin_session {spawn_id} {
             set remove_from_index 0
             set hostname       $rlogin_spawn_session_buffer($spawn_id,hostname)
             set user           $rlogin_spawn_session_buffer($spawn_id,user)
-            set win_local_user $rlogin_spawn_session_buffer($spawn_id,win_local_user)
-            set rlogin_spawn_session_idx($hostname,$user,$win_local_user) $new_super_session
+            set rlogin_spawn_session_idx($hostname,$user) $new_super_session
          } else {
             ts_log_severe "error occured for removing super session"
          }
@@ -2843,11 +2753,10 @@ proc del_open_spawn_rlogin_session {spawn_id} {
          if {[info exists rlogin_spawn_session_buffer($spawn_id,hostname)]} {
                set hostname       $rlogin_spawn_session_buffer($spawn_id,hostname)
                set user           $rlogin_spawn_session_buffer($spawn_id,user)
-               set win_local_user $rlogin_spawn_session_buffer($spawn_id,win_local_user)
-            if {[info exists rlogin_spawn_session_idx($hostname,$user,$win_local_user)]} {
-               unset rlogin_spawn_session_idx($hostname,$user,$win_local_user)
+            if {[info exists rlogin_spawn_session_idx($hostname,$user)]} {
+               unset rlogin_spawn_session_idx($hostname,$user)
             } else {
-               ts_log_severe "spawn session index rlogin_spawn_session_idx($hostname,$user,$win_local_user) not found"
+               ts_log_severe "spawn session index rlogin_spawn_session_idx($hostname,$user) not found"
             }
          } else {
             ts_log_severe "spawn session index rlogin_spawn_session_buffer($spawn_id,hostname) not found"
@@ -2868,7 +2777,6 @@ proc del_open_spawn_rlogin_session {spawn_id} {
          unset rlogin_spawn_session_buffer($spawn_id,hostname)
          unset rlogin_spawn_session_buffer($spawn_id,user)
          unset rlogin_spawn_session_buffer($spawn_id,real_user)
-         unset rlogin_spawn_session_buffer($spawn_id,win_local_user)
          unset rlogin_spawn_session_buffer($spawn_id,ltime)
          unset rlogin_spawn_session_buffer($spawn_id,nr_shells)
          unset rlogin_spawn_session_buffer($spawn_id,in_use)
@@ -2955,7 +2863,6 @@ proc clear_open_spawn_rlogin_session {back_var} {
    set back(hostname)       "0"
    set back(user)           "0"
    set back(real_user)      ""
-   set back(win_local_user) "0"
    set back(ltime)           0
    set back(in_use)          0
    set back(nr_shells)       0
@@ -3052,7 +2959,6 @@ proc fill_session_info_array { spawn_id array_name } {
    set back(hostname)           $rlogin_spawn_session_buffer($spawn_id,hostname)
    set back(user)               $rlogin_spawn_session_buffer($spawn_id,user)
    set back(real_user)          $rlogin_spawn_session_buffer($spawn_id,real_user)
-   set back(win_local_user)     $rlogin_spawn_session_buffer($spawn_id,win_local_user)
    set back(ltime)              $rlogin_spawn_session_buffer($spawn_id,ltime)
    set back(in_use)             $rlogin_spawn_session_buffer($spawn_id,in_use)
    set back(nr_shells)          $rlogin_spawn_session_buffer($spawn_id,nr_shells)
@@ -3068,7 +2974,6 @@ proc fill_session_info_array { spawn_id array_name } {
 #   ts_log_finest "hostname  :         $back(hostname)"
 #   ts_log_finest "user      :         $back(user)"
 #   ts_log_finest "real_user :         $back(real_user)"
-#   ts_log_finest "win_local_user :    $back(win_local_user)"
 #   ts_log_finest "ltime     :         $back(ltime)"
 #   ts_log_finest "nr_shells :         $back(nr_shells)"
 #   ts_log_finest "command_script:     $back(command_script)"
@@ -3237,7 +3142,7 @@ proc check_rlogin_session { spawn_id pid hostname user nr_of_shells {only_check 
 
    # handle special user ids
    get_spawn_id_rlogin_session $spawn_id con_data
-   map_special_users $hostname $user $con_data(win_local_user)
+   map_special_users $hostname $user
 
    # perform the following test:
    # - start the check_identity.sh script

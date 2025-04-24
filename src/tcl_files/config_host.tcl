@@ -2786,116 +2786,7 @@ proc host_conf_61_arch {arch} {
    return "unsupported"
 }
 
-#****** config_host/host_conf_have_windows() ***********************************
-#  NAME
-#     host_conf_have_windows() -- do we have a windows host
-#
-#  SYNOPSIS
-#     host_conf_have_windows { } 
-#
-#  FUNCTION
-#     Returns whether we have a windows host in our testsuite cluster 
-#     configuration.
-#
-#  RESULT
-#     1 - if we have a windows host, else 0
-#
-#  SEE ALSO
-#     config_host/host_conf_have_windows()
-#     config_host/host_conf_get_cluster_hosts()
-#     config_host/host_conf_get_arch()
-#*******************************************************************************
-proc host_conf_have_windows {} {
-   set ret 0
-
-   # get a list of all hosts referenced in the cluster
-   set cluster_hosts [host_conf_get_cluster_hosts]
-
-   # search for a windows host
-   foreach host $cluster_hosts {
-      if {[host_conf_get_arch $host] == "win32-x86"} {
-         set ret 1
-         break
-      }
-   }
-
-   return $ret
-}
-
-#****** config_host/host_conf_get_windows_host() *******************************
-#  NAME
-#     host_conf_get_windows_host() -- get a windows host
-#
-#  SYNOPSIS
-#     host_conf_get_windows_host { } 
-#
-#  FUNCTION
-#     Returns the hostname of the first windows host in our testsuite cluster
-#     configuration.
-#
-#  RESULT
-#     A hostname of a windows host, or an empty string, if we don't have a 
-#     windows host in our cluster.
-#
-#  SEE ALSO
-#     config_host/host_conf_have_windows()
-#     config_host/host_conf_get_cluster_hosts()
-#     config_host/host_conf_get_arch()
-#*******************************************************************************
-proc host_conf_get_windows_host {} {
-   set ret ""
-
-   # get a list of all hosts referenced in the cluster
-   set cluster_hosts [host_conf_get_cluster_hosts]
-   
-   # search and return the first windows host
-   foreach host $cluster_hosts {
-      if {[host_conf_get_arch $host] == "win32-x86"} {
-         set ret $host
-         break
-      }
-   }
-
-   return $ret
-}
-
-#****** config_host/host_conf_get_windows_exec_host() **************************
-#  NAME
-#     host_conf_get_windows_exec_host() -- get a windows exec host
-#
-#  SYNOPSIS
-#     host_conf_get_windows_exec_host { } 
-#
-#  FUNCTION
-#     Returns the hostname of the first windows exec host in our testsuite
-#     cluster configuration.
-#
-#  RESULT
-#     A hostname of a windows exec host, or an empty string, if we don't have a 
-#     windows exec host in our cluster.
-#
-#  SEE ALSO
-#     config_host/host_conf_get_arch()
-#*******************************************************************************
-proc host_conf_get_windows_exec_host {} {
-   global ts_config
-   set ret ""
-
-   # get a list of all exec hosts referenced in the cluster
-   set exec_hosts $ts_config(execd_nodes)
-
-   # search for a windows host
-   foreach host $exec_hosts {
-      if {[host_conf_get_arch $host] == "win32-x86"} {
-         set ret $host
-         break
-      }
-   }
-
-   return $ret
-}
-
-### 
+###
 # @brief get doc compile host
 #
 # Returns the name of the doc host configured in the host config.
@@ -3060,8 +2951,7 @@ proc host_has_newgrp {host {raise_error 1}} {
    set arch [resolve_arch $host]
    switch -exact $arch {
       "nbsd-i386" -
-      "darwin*" -
-      "win32-x86" {
+      "darwin*" {
          ts_log_config "host $host ($arch) doesn't support newgrp" $raise_error
          set ret 0
       }

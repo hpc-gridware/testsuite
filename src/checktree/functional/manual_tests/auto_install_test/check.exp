@@ -104,7 +104,7 @@ proc auto_install_setup_level {} {
 
    set auto_install_hosts [manual_select_hosts $auto_install_host_set $auto_install_host_select]
    set auto_install_test_hosts [host_conf_get_suited_hosts 2 {sol-amd64 \
-                                sol-sparc64 lx-amd64 lx-x86 lx24-amd64 lx24-x86} {} {win32-x86}]
+                                sol-sparc64 lx-amd64 lx-x86 lx24-amd64 lx24-x86} {} {}]
 
    set auto_install_test_identificator "AUTO_INSTALL"
 

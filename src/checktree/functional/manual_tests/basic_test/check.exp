@@ -104,7 +104,7 @@ proc basic_setup_level {} {
 
    set basic_hosts [manual_select_hosts $basic_host_set $basic_host_select]
 
-   set basic_master_host_for_win [host_conf_get_suited_hosts 1 {} {} {win32-x86}]
+   set basic_master_host_for_win [host_conf_get_suited_hosts 1 {} {} {}]
 
    set basic_test_identificator "BASIC_TEST"
 

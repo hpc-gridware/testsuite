@@ -267,7 +267,7 @@ proc analyze_directory_structure {host user path dirs files permissions {ignore 
 
    
    if {$dirs != ""} {
-      set tmp [start_remote_prog $host $user $script "$path dirs" prg_exit_state 120 0 "" "" 1 0 0 1 1]
+      set tmp [start_remote_prog $host $user $script "$path dirs" prg_exit_state 120 0 "" "" 1 0 0 1]
       set tmp2 [split $tmp "\n"]
       set spool_directories {}
       if {$prg_exit_state == 0} {
@@ -295,7 +295,7 @@ proc analyze_directory_structure {host user path dirs files permissions {ignore 
       }
    }
 
-   set tmp [start_remote_prog $host $user $script "$path files" prg_exit_state 120 0 "" "" 1 0 0 1 1]
+   set tmp [start_remote_prog $host $user $script "$path files" prg_exit_state 120 0 "" "" 1 0 0 1]
    set tmp2 [split $tmp "\n"]
    set spool_files {}
    if {$prg_exit_state == 0} {
@@ -323,7 +323,7 @@ proc analyze_directory_structure {host user path dirs files permissions {ignore 
    }
 
    if {$permissions != ""} {
-      set tmp [start_remote_prog $host $user $script "$path fileperm" prg_exit_state 120 0 "" "" 1 0 0 1 1]
+      set tmp [start_remote_prog $host $user $script "$path fileperm" prg_exit_state 120 0 "" "" 1 0 0 1]
       set tmp2 [split $tmp "\n"]
       if {$prg_exit_state == 0} {
          foreach file $spool_files {
@@ -2496,12 +2496,12 @@ proc cleanup_spool_dir_for_host {hostname topleveldir subdir} {
 
    ts_log_fine "cleanup spool  directory \"$spooldir\" on host \"$hostname\""
    
-   if {[remote_file_isdirectory $hostname $spooldir 1] == 1} {
+   if {[remote_file_isdirectory $hostname $spooldir] == 1} {
       set spooldir "$spooldir/$ts_config(commd_port)"
-      if {[remote_file_isdirectory $hostname $spooldir 1] != 1} {
+      if {[remote_file_isdirectory $hostname $spooldir] != 1} {
           ts_log_finer "creating directory \"$spooldir\""
-          remote_file_mkdir $hostname $spooldir 1
-          if {[remote_file_isdirectory $hostname $spooldir 1] != 1} {
+          remote_file_mkdir $hostname $spooldir
+          if {[remote_file_isdirectory $hostname $spooldir] != 1} {
               ts_log_severe "could not create directory \"$spooldir\""
           }
       }
@@ -2514,21 +2514,21 @@ proc cleanup_spool_dir_for_host {hostname topleveldir subdir} {
          set spooldir "$spooldir/$hostname"
       }
 
-      if {[remote_file_isdirectory $hostname $spooldir 1] != 1} {
+      if {[remote_file_isdirectory $hostname $spooldir] != 1} {
           ts_log_finer "creating directory \"$spooldir\""
           remote_file_mkdir $hostname $spooldir
-          if {[remote_file_isdirectory $hostname $spooldir 1] != 1} {
+          if {[remote_file_isdirectory $hostname $spooldir] != 1} {
               ts_log_severe "could not create directory \"$spooldir\""
           } 
       } else {
          if {[string compare $spooldir ""] != 0} {
              ts_log_finer "deleting old spool dir entries in \"$spooldir\""
-             if {[remote_delete_directory $hostname $spooldir 1] != 0} { 
+             if {[remote_delete_directory $hostname $spooldir] != 0} {
                 ts_log_warning "could not remove spool directory $spooldir"
              }
              ts_log_finer "creating directory \"$spooldir\""
-             remote_file_mkdir $hostname $spooldir 1
-             if {[remote_file_isdirectory $hostname $spooldir 1] != 1} {
+             remote_file_mkdir $hostname $spooldir
+             if {[remote_file_isdirectory $hostname $spooldir] != 1} {
                 ts_log_severe "could not create directory \"$spooldir\""
              } 
          }
@@ -2546,9 +2546,9 @@ proc cleanup_spool_dir_for_host {hostname topleveldir subdir} {
 
 # return 0 if not
 # return 1 if is directory
-proc remote_file_isdirectory {hostname dir {win_local_user 0}} {
+proc remote_file_isdirectory {hostname dir} {
   global CHECK_USER
-  start_remote_prog $hostname $CHECK_USER "cd" "$dir" prg_exit_state 60 0 "" "" 1 0 0 1 $win_local_user
+  start_remote_prog $hostname $CHECK_USER "cd" "$dir" prg_exit_state 60 0 "" "" 1 0 0 1
   if { $prg_exit_state == 0 } {
      return 1  
   }
@@ -2560,7 +2560,7 @@ proc remote_file_isdirectory {hostname dir {win_local_user 0}} {
 #     remote_file_mkdir() -- creates remote directory path
 #
 #  SYNOPSIS
-#     remote_file_mkdir { hostname dir {win_local_user 0} } 
+#     remote_file_mkdir { hostname dir }
 #
 #  FUNCTION
 #     Remote mkdir -p $dir call
@@ -2568,7 +2568,6 @@ proc remote_file_isdirectory {hostname dir {win_local_user 0}} {
 #  INPUTS
 #     hostname           - remote host where the mkdir command should be started
 #     dir                - full directory path
-#     {win_local_user 0} - optional parameter which goes into start_remote_prog
 #     {user ""}          - optional parameter which specifies the user. Default
 #                          mkdir user is CHECK_USER
 #     {permissions ""}   - optional parameter which specifies the file permissions
@@ -2577,7 +2576,7 @@ proc remote_file_isdirectory {hostname dir {win_local_user 0}} {
 #  RESULT
 #     command output
 #*******************************************************************************
-proc remote_file_mkdir {hostname dir {win_local_user 0} {user ""} {permissions ""} {prg_exit_state_var ""}} {
+proc remote_file_mkdir {hostname dir {user ""} {permissions ""} {prg_exit_state_var ""}} {
    global CHECK_USER
 
    if {$prg_exit_state_var != ""} {
@@ -2589,7 +2588,7 @@ proc remote_file_mkdir {hostname dir {win_local_user 0} {user ""} {permissions "
    } else {
       set exec_user $user
    }
-   set result [start_remote_prog $hostname $exec_user "mkdir" "-p $dir" prg_exit_state 60 0 "" "" 1 0 0 1 $win_local_user]
+   set result [start_remote_prog $hostname $exec_user "mkdir" "-p $dir" prg_exit_state 60 0 "" "" 1 0 0 1]
    if {$prg_exit_state != 0} {
       ts_log_severe "Cannot create directory $dir as user $exec_user on host $hostname: $result"
    } else {
@@ -2667,12 +2666,12 @@ proc check_for_core_files {hostname path {do_remove 0}} {
    ts_log_fine "looking for core files in directory $path on host $hostname"
 
    # if directory does not (yet) exist, there can be no cores
-   if {![remote_file_isdirectory $hostname $path 1]} {
+   if {![remote_file_isdirectory $hostname $path]} {
       return $nr_of_cores_found
    }
 
    # try to find core files in path (-type f => only find regular files, no directories)
-   set core_files [start_remote_prog $hostname $CHECK_USER "find" "$path -name core -type f -print" prg_exit_state 60 0 "" "" 1 0 0 1 1]
+   set core_files [start_remote_prog $hostname $CHECK_USER "find" "$path -name core -type f -print" prg_exit_state 60 0 "" "" 1 0 0 1]
    if {$prg_exit_state != 0} {
       ts_log_severe "find core files in directory $path on host $hostname failed: $core_files"
    } else {
@@ -2721,7 +2720,7 @@ proc check_for_core_files {hostname path {do_remove 0}} {
 #     remote_delete_directory() -- delete directory on host
 #
 #  SYNOPSIS
-#     remote_delete_directory { hostname path {win_local_user 0} } 
+#     remote_delete_directory { hostname path }
 #
 #  FUNCTION
 #     This procedure is deleting the specified path on the specified host. 
@@ -2733,8 +2732,6 @@ proc check_for_core_files {hostname path {do_remove 0}} {
 #  INPUTS
 #     hostname           - host where commands should be started
 #     path               - full path of directory to delete
-#     {win_local_user 0} - used for windows arch only and used for
-#                          start_remote_prog call 
 #
 #  RESULT
 #     0 on success, -1 on error
@@ -2742,7 +2739,7 @@ proc check_for_core_files {hostname path {do_remove 0}} {
 #  SEE ALSO
 #     file_procedures/delete_directory
 #*******************************************************************************
-proc remote_delete_directory {hostname path {win_local_user 0}} {
+proc remote_delete_directory {hostname path} {
    global CHECK_USER
    global CHECK_TESTSUITE_TRASH CHECK_ADMIN_USER_SYSTEM
    get_current_cluster_config_array ts_config
@@ -2760,7 +2757,7 @@ proc remote_delete_directory {hostname path {win_local_user 0}} {
    }
 
    # verify if directory is visible on the remote machine
-   if {[remote_file_isdirectory $hostname $path $win_local_user] != 1} {
+   if {[remote_file_isdirectory $hostname $path] != 1} {
       ts_log_severe "$hostname: no such directory: \"$path\""
       return -1     
    }
@@ -2772,9 +2769,9 @@ proc remote_delete_directory {hostname path {win_local_user 0}} {
       # If we have no admin user system and we have a root password then do a chown
       if {[have_root_passwd] == 0 && $CHECK_ADMIN_USER_SYSTEM == 0 } {
          # make sure we actually can delete the directory with all its contents.
-         map_special_users $hostname $CHECK_USER $win_local_user
+         map_special_users $hostname $CHECK_USER
          ts_log_fine "doing chown -R $connect_full_user $path on $hostname as user root ..."
-         start_remote_prog $hostname "root" chown "-R $connect_full_user $path" prg_exit_state 180 0 "" "" 1 0 0 1 $win_local_user
+         start_remote_prog $hostname "root" chown "-R $connect_full_user $path" prg_exit_state 180 0 "" "" 1 0 0 1
       }
 
       # we move the directory as CHECK_USER (admin user)
@@ -2782,17 +2779,17 @@ proc remote_delete_directory {hostname path {win_local_user 0}} {
          ts_log_finer "delete_directory - moving \"$path\" to trash folder ..."
          set new_name [file tail $path] 
 
-         start_remote_prog $hostname $CHECK_USER "mv" "$path $ts_config(testsuite_root_dir)/testsuite_trash/$new_name.[timestamp]" prg_exit_state 300 0 "" "" 1 0 0 1 $win_local_user
+         start_remote_prog $hostname $CHECK_USER "mv" "$path $ts_config(testsuite_root_dir)/testsuite_trash/$new_name.[timestamp]" prg_exit_state 300 0 "" "" 1 0 0 1
          if {$prg_exit_state != 0} {
             ts_log_finer "delete_directory - mv error"
             ts_log_finer "delete_directory - try to copy the directory"
-            start_remote_prog $hostname $CHECK_USER "cp" "-r $path $ts_config(testsuite_root_dir)/testsuite_trash/$new_name.[timestamp]" prg_exit_state 300 0 "" "" 1 0 0 1 $win_local_user
+            start_remote_prog $hostname $CHECK_USER "cp" "-r $path $ts_config(testsuite_root_dir)/testsuite_trash/$new_name.[timestamp]" prg_exit_state 300 0 "" "" 1 0 0 1
             if {$prg_exit_state != 0} {
                ts_log_severe "$hostname: could not mv/cp directory \"$path\" to trash folder"
                set return_value -1
             } else {
                ts_log_finer "copy ok -  removing directory"
-               set rm_output [start_remote_prog $hostname $CHECK_USER "rm" "-rf $path" prg_exit_state 300 0 "" "" 1 0 0 1 $win_local_user]
+               set rm_output [start_remote_prog $hostname $CHECK_USER "rm" "-rf $path" prg_exit_state 300 0 "" "" 1 0 0 1]
                if {$prg_exit_state != 0} {
                   ts_log_severe "$hostname ($CHECK_USER): could not remove directory \"$path\"\nexit state =\"$prg_exit_state\"\noutput:\n$rm_output"
                   set return_value -1
@@ -2806,7 +2803,7 @@ proc remote_delete_directory {hostname path {win_local_user 0}} {
          }
       } else {
          ts_log_finer "delete_directory - removing directory \"$path\""
-         set rm_output [start_remote_prog $hostname $CHECK_USER "rm" "-rf $path" prg_exit_state 300 0 "" "" 1 0 0 1 $win_local_user]
+         set rm_output [start_remote_prog $hostname $CHECK_USER "rm" "-rf $path" prg_exit_state 300 0 "" "" 1 0 0 1]
          if {$prg_exit_state != 0} {
             ts_log_severe "$hostname ($CHECK_USER): could not remove directory \"$path\"\nexit state =\"$prg_exit_state\"\noutput:\n$rm_output"
             set return_value -1
@@ -3107,11 +3104,6 @@ proc wait_for_remote_file {hostname user path {mytimeout 60} {raise_error 1} {to
       ts_log_fine "looking for file \"$path\" to vanish on host $hostname"
    }
 
-   set is_windows 0
-   if {[host_conf_get_arch $hostname] == "win32-x86"} {
-      set is_windows 1
-      set method "tradditional"
-   }
    if { $method == "complete_remote"} {
       set exp_cmd [get_binary_path $hostname "expect"]
       if {$exp_cmd != ""} {
@@ -3153,13 +3145,7 @@ proc wait_for_remote_file {hostname user path {mytimeout 60} {raise_error 1} {to
    set dir [file dirname $path]
 
    while {$is_ok == 0} {
-      # It seems that a ls -al on the parent directory flush nfs caches
-      # However on windows hosts the ls -al does not work
-      if {$is_windows == 1} {
-         set output [start_remote_prog $hostname $user "test" "-f $path" prg_exit_state 60 0 "" "" 0 0]
-      } else {
-         set output [start_remote_prog $hostname $user "ls" "-al $dir > /dev/null && test -f $path" prg_exit_state 60 0 "" "" 0 0]
-      }
+      set output [start_remote_prog $hostname $user "ls" "-al $dir > /dev/null && test -f $path" prg_exit_state 60 0 "" "" 0 0]
       if {$to_go_away == 0} {
          # The file must be here
          if {$prg_exit_state == 0} {
@@ -3261,12 +3247,6 @@ proc wait_for_remote_dir { hostname user path { mytimeout 60 } {raise_error 1} {
       ts_log_fine [format "looking for directory \"%s\" on host \"%s\" as user \"%s\" to vanish" $path $hostname $user]
    }
 
-   set is_windows 0
-   if {[host_conf_get_arch $hostname] == "win32-x86"} {
-      set is_windows 1
-      set method "tradditional"
-   }
-
    if {$method == "complete_remote"} {
       set exp_cmd [get_binary_path $hostname "expect"]
       if {$exp_cmd != ""} {
@@ -3306,14 +3286,7 @@ proc wait_for_remote_dir { hostname user path { mytimeout 60 } {raise_error 1} {
    set dir [file dirname $path]
 
    while {$is_ok == 0} {
-      # It seems that a ls -al on the parent directory flush nfs caches
-      # However on windows hosts the ls -al does not work
-      if {$is_windows == 1} {
-         set output [start_remote_prog $hostname $user "test" "-d $path" prg_exit_state 60 0 "" "" 0 0]
-      } else {
-         set output [start_remote_prog $hostname $user "ls" "-al $dir > /dev/null && test -d $path" prg_exit_state 60 0 "" "" 0 0]
-      }
-  
+      set output [start_remote_prog $hostname $user "ls" "-al $dir > /dev/null && test -d $path" prg_exit_state 60 0 "" "" 0 0]
       if {$to_go_away == 0} {
          # The directory must be here
          if {$prg_exit_state == 0} {
@@ -3458,10 +3431,10 @@ proc is_remote_path {hostname user path} {
 #     file_procedures/is_remote_file()
 #     file_procedures/delete_remote_file()
 #*******************************************************************************
-proc delete_remote_file {hostname user path {win_local_user 0}} {
+proc delete_remote_file {hostname user path} {
    if {[is_remote_file $hostname $user $path]} {
       ts_log_fine "deleting file $path on host $hostname as user $user ..."
-      set output [start_remote_prog $hostname $user "rm" $path prg_exit_state 60 0 "" "" 0 0 0 1 $win_local_user]
+      set output [start_remote_prog $hostname $user "rm" $path prg_exit_state 60 0 "" "" 0 0 0 1]
       ts_log_finest $output
       wait_for_remote_file $hostname $user $path 90 1 1
    } else {
@@ -3985,23 +3958,15 @@ proc get_local_spool_dir {host subdir {do_cleanup 1} {only_local 0}} {
    # And as shared spooldirs are causing problems on Windows,
    # we do not support them at all!
    if {$check_do_not_use_spool_config_entries == 1} {
-      if {[resolve_arch $host] == "win32-x86"} {
-         ts_log_finer "\"no_local_spool\" option is set, but we are on Windows - allowing local spool dir"
-      } else {
-         ts_log_finer "\"no_local_spool\" option is set - returning empty spool dir" 
-         return $spooldir
-      }
+      ts_log_finer "\"no_local_spool\" option is set - returning empty spool dir"
+      return $spooldir
    }
 
    if {$check_do_not_use_spool_config_entries == 2 &&
        $is_master_host &&
        $subdir == "qmaster"} {
-      if {[resolve_arch $host] == "win32-x86"} {
-         ts_log_finer "\"no_local_qmaster_spool\" option is set, but we are on Windows - allowing local spool dir"
-      } else {
-         ts_log_finer "\"no_local_qmaster_spool\" option is set - returning empty spool dir" 
-         return $spooldir
-      }
+      ts_log_finer "\"no_local_qmaster_spool\" option is set - returning empty spool dir"
+      return $spooldir
    }
 
    # host might be a virtual host - to query local spooldir we need the real host
@@ -5201,15 +5166,8 @@ proc clear_active_jobs_dir {host} {
    } elseif {[string length $rm_output] == 0} {
       ts_log_finest "No files and subfolders in $spool_dir/active_jobs - have nothing to delete!"
    } else {
-      if {[resolve_arch $host] == "win32-x86"} {
-         # "root" will get mapped to the local administrator by start_remote_prog
-         set rm_user "root"
-      } else {
-         # on Unix/Linux, the $CHECK_USER should have appropriate permissions to delete the files
-         set rm_user $CHECK_USER
-      }
       # delete the files and/or subdirs in the active_jobs directory
-      set rm_output [start_remote_prog $host $rm_user "rm" "-rf $spool_dir/active_jobs/*" prg_exit_state]
+      set rm_output [start_remote_prog $host $CHECK_USER "rm" "-rf $spool_dir/active_jobs/*" prg_exit_state]
       if {$prg_exit_state != 0} {
          ts_log_severe "Couldn't delete $spool_dir/active_jobs/* on host $host\noutput:\n$rm_output"
          set ret 1

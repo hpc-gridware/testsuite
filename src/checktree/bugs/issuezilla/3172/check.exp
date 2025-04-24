@@ -109,7 +109,7 @@ proc issue_3172_test1 {} {
    global CHECK_ACT_LEVEL
 
    foreach host $issue_3172_hosts {
-      set output [start_remote_prog $host $CHECK_USER "mount" "" prg_exit_state 60 0 "" "" 1 0 0 1 1]
+      set output [start_remote_prog $host $CHECK_USER "mount" "" prg_exit_state 60 0 "" "" 1 0 0 1]
       foreach line [split $output "\n"] {
          set words [split $line " \t"]
          if {[string match [lindex $words 2] $issue_3172_nfsdir] == 1 && [string match [lindex $words 4] "nfs4"] == 1} {

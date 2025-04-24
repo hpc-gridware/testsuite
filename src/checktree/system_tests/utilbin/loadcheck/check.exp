@@ -73,12 +73,7 @@ proc get_numb_proc {hostname} {
    global ts_config CHECK_USER
 
    set remote_arch [resolve_arch $hostname]
-   if {$remote_arch == "win32-x86"} {
-      set loadcheck_name "loadcheck.exe"
-   } else {
-      set loadcheck_name "loadcheck"
-   }
-
+   set loadcheck_name "loadcheck"
    set loadcheck_path "$ts_config(product_root)/utilbin/$remote_arch/$loadcheck_name"
    set result [start_remote_prog $hostname $CHECK_USER "$loadcheck_path" "" prg_exit_state]
 

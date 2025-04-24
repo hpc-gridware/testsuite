@@ -65,7 +65,7 @@ proc ge_3474_setup {} {
    global ge_3474_host
 
    # get a random test host
-   set ge_3474_host [host_conf_get_suited_hosts 1 {} {} {win32-x86}]
+   set ge_3474_host [host_conf_get_suited_hosts 1 {} {} {}]
 
    # backup the host local configuration of this host
    get_config ge_3474_host_conf $ge_3474_host

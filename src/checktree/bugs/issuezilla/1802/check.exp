@@ -77,7 +77,7 @@ proc issue_1802_cleanup  {} {
          ts_log_fine "now make user certificate for user $CHECK_USER valid again for 365 days ..."
          ts_log_fine "starting sge_ca $command_options as root user ..."
             
-         set output [start_remote_prog $ts_config(master_host) "root" $sge_ca_bin $command_options ]
+         set output [start_remote_prog $ts_config(master_host) "root" $sge_ca_bin $command_options]
          if {$prg_exit_state != 0} {
             ts_log_severe "sge_ca $command_options exit state is $prg_exit_state\n$output"
          }

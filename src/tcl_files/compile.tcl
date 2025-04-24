@@ -1011,7 +1011,7 @@ proc compile_source_cmake_make_build_dir {compile_hosts report_var {build_3rdpar
       # create a new build directory
       if {![remote_file_isdirectory $host $build_dir]} {
          lappend build_3rdparty_hosts $host
-         set output [remote_file_mkdir $host $build_dir 0 "root" "777" prg_exit_state]
+         set output [remote_file_mkdir $host $build_dir "root" "777" prg_exit_state]
          if {$prg_exit_state == 0} {
             report_task_add_message report $task_nr "Successfully created build directory $build_dir on host $host"
          } else {

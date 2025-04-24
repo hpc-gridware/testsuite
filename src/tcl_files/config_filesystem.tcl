@@ -1132,7 +1132,7 @@ proc fs_config_get_local_base_spool_dir_list_by_fstype {filesystem_type host {do
    foreach fs $fs_list {
       if {[remote_file_isdirectory $host $fs/fs_testsuite] == 0} {
          if {[have_root_passwd] == 0} {
-            remote_file_mkdir $host $fs/fs_testsuite 0 "root" "777"
+            remote_file_mkdir $host $fs/fs_testsuite "root" "777"
          } else {
             ts_log_severe "cannot access directory \"$fs/fs_testsuite\" as user \"$CHECK_USER\" on host \"$host\". It should be possible to create a subdirectory for every testsuite user."
          }
