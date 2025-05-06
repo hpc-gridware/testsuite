@@ -64,20 +64,38 @@ lappend check_functions "dynamic_reprioritization"
 # -------- local test procedures: initialization------------------------------
 
 proc reprioritization_setup {} {
-   global ts_config reprioritization_backup reprioritization_host
+   global ts_config reprioritization_backup reprioritization_host CHECK_USER
 
    set found 0
    foreach host $ts_config(execd_nodes) {
       set num_proc [get_numb_proc $host]
-      if {$num_proc == 1} {
-         ts_log_fine "using host $host for test"
-         set reprioritization_host $host
-         set found 1
-         break
+      if {$num_proc != 1} {
+         ts_log_fine "host $host has $num_proc processors. not suitable for this test"
+         continue;
       }
+
+      set autogroup [start_remote_prog $host $CHECK_USER "cat" "/proc/sys/kernel/sched_autogroup_enabled"]
+
+      if {$autogroup != "0"} {
+         ts_log_fine "autogroup is enabled on $host. not suitable for this test"
+         continue
+      }
+
+      ts_log_fine "using host $host for reprioritization test"
+      set reprioritization_host $host
+      set found 1
+      break
    }
+
    if {$found == 0} {
-      ts_log_config "No host found with only 1 processor. Please re-configure the testsuite setup."
+      # Since kernel 2.6.38 kernel-auto-group is enabled by default. This in essence means that
+      # nice values of processes are ignored because all processes started by execd are part of the same autogroup
+      # where all processes have the same nice value.
+      #
+      # auto-groups can be disabled by setting the kernel parameter /proc/sys/kernel/sched_autogroup_enabled to 0
+      # during boot this can be done by adding the following line to /etc/sysctl.conf:
+      #     kernel.sched_autogroup_enabled = 0
+      ts_log_config "Reconfigure testsuite to use a host with 1 processor and no autogroup enabled (find details as comment in this test)\n"
       return 99
    }
 

@@ -98,7 +98,7 @@ proc reset_schedd_config {} {
    set default_array(flush_submit_sec)                "1"
    set default_array(flush_finish_sec)                "1"
    set default_array(params)                          "none"
-   set default_array(reprioritize_interval)           "00:00:40"
+   set default_array(reprioritize_interval)           "00:00:00"
 
    set default_array(halftime)                        "168"
    set default_array(usage_weight_list)               "cpu=1,mem=0,io=0"

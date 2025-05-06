@@ -75,11 +75,8 @@ proc share_tree_setup  {} {
    }
 
    get_config sharetree_stored_configuration
-   set my_execd_params "SHARETREE_RESERVED_USAGE=true"
-   if {[string compare -nocase "none" $sharetree_stored_configuration(execd_params)] != 0} {
-      append my_execd_params ",$sharetree_stored_configuration(execd_params)"
-   }
-   set myconfig(execd_params) "$my_execd_params"
+   set myconfig(qmaster_params) [add_or_replace_param $sharetree_stored_configuration(qmaster_params) "STREE_SPOOL_INTERVAL" "STREE_SPOOL_INTERVAL=1"]
+   set myconfig(execd_params) [add_or_replace_param $sharetree_stored_configuration(execd_params) "SHARETREE_RESERVED_USAGE" "SHARETREE_RESERVED_USAGE=true"]
    set_config myconfig
 
    foreach elem $ts_config(execd_nodes) {
