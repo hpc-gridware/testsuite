@@ -1170,8 +1170,16 @@ proc init_global_generic_messages {} {
    # messages indicating insufficient user privileges
    lappend messages(index) -210
    lappend messages(index) -211
+   lappend messages(index) -212
+   lappend messages(index) -213
+   lappend messages(index) -214
+   lappend messages(index) -215
    set messages(-210) "*[translate_macro MSG_SGETEXT_MUSTBEMANAGER_S "*"]"
    set messages(-211) "*[translate_macro MSG_SGETEXT_MUSTBEOPERATOR_S "*"]"
+   set messages(-212) "*[translate_macro MSG_SGETEXT_MUSTBEMANAGERFOROP_SS "*" "*"]"
+   set messages(-213) "*[translate_macro MSG_SGETEXT_MUSTBEOPERATORFOROP_SS "*" "*"]"
+   set messages(-214) "*[translate_macro MSG_SGETEXT_MUSTBEMANAGERFORTAR_SS "*" "*"]"
+   set messages(-215) "*[translate_macro MSG_SGETEXT_MUSTBEOPERATORFORTAR_SS "*" "*"]"
 
    # file io problems
    lappend messages(index) -300
@@ -2678,9 +2686,37 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
             set buffer [string trim $expect_out(0,string)]
             set splitline [split $buffer "\n"]
             foreach line $splitline {
-               if {[string match "*$host*\|I\|*using \"$expected_value($host)\" for $name*" $line] ||
-                   [string match "*$host*\|I\|*using $expected_value($host) for $name*" $line]} {
-                  ts_log_fine "$host: Configuration changed: $name = \"$expected_value($host)\""
+
+               # if we have a time string then convert it to sec
+               set search_sec 0
+               set num_colon [llength [split $expected_value($host) ":"]]
+               if {$num_colon == 3} {
+                  set hours 0
+                  set minutes 0
+                  set seconds 0
+                  scan $expected_value($host) "%02d:%02d:%02d" hours minutes seconds
+                  set sec [expr $hours * 3600 + $minutes * 60 + $seconds]
+                  set search_sec 1
+               }
+
+               if {[string match "*$host*\|I\|*using \"$expected_value($host)\" for $name*" $line]} {
+                  # this will match all string based configuration values
+                  # or all values in 9.0.* because also there numbers are quoted
+                  ts_log_fine "$host: Found config string: $name = \"$expected_value($host)\""
+                  set is_host_ok($host) 1
+                  # send CTRL-C to end tail
+                  ts_send $spawn_id "\003"
+               } elseif {[string match "*$host*\|I\|*using $expected_value($host) for $name*" $line]} {
+                  # beginning with v9.1.0 this will match number based configuration values that are not quoted anymore
+                  ts_log_fine "$host: Found config value: $name = $expected_value($host)"
+                  set is_host_ok($host) 1
+                  # send CTRL-C to end tail
+                  ts_send $spawn_id "\003"
+               } elseif {$search_sec == 1 &&
+                         [string match "*$host*\|I\|*using $sec for $name*" $line]} {
+                  # beginning with 9.1.0 all time based values will be converted to sec before output
+                  # this also verfies the CS internal parsing
+                  ts_log_fine "$host: Found time converted to sec: $name = $sec"
                   set is_host_ok($host) 1
                   # send CTRL-C to end tail
                   ts_send $spawn_id "\003"
