@@ -7756,19 +7756,40 @@ proc shutdown_shadowd { hostname } {
 #     sge_procedures/startup_execd()
 #     sge_procedures/startup_shadowd()
 #*******************************
-proc shutdown_all_shadowd { hostname } {
-   global CHECK_ADMIN_USER_SYSTEM
-   global CHECK_USER
+proc shutdown_all_shadowd {hostname} {
    get_current_cluster_config_array ts_config
+   global CHECK_ADMIN_USER_SYSTEM
+   global CHECK_USER CHECK_INSTALL_RC
 
+   # if we are running a root user system, we need root access
+   if {$CHECK_ADMIN_USER_SYSTEM == 0} {
+      if {[have_root_passwd] == -1} {
+         set_root_passwd
+      }
+   }
+
+   # if we are running under systemd control, then use systemctl stop to shutdown the shadowd
+   # BUT: only on non qmaster hosts - on the qmaster host shutting down the master will also stop shadowd
+   # DISABLED for now: No rc-scripts are installed on shadow hosts, see CS-1218
+   if {0 && $CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"] && [host_has_systemd $hostname]} {
+      if {$hostname != $ts_config(master_host)} {
+         set service_name [systemd_get_service_name "qmaster"]
+         ts_log_fine "killing shadowd on host $hostname, via systemctl stop $service_name"
+         set result [start_remote_prog $hostname "root" "systemctl" "stop $service_name"]
+         ts_log_fine $result
+      }
+      return 1
+   }
+
+   # killing of sge_shadowd without systemd
    set num_proc 0
 
    ts_log_fine "shutdown all shadowd daemon for system installed at $ts_config(product_root) ..."
 
-   set index_list [ ps_grep "$ts_config(product_root)" "$hostname" ]
+   set index_list [ps_grep $ts_config(product_root) $hostname]
    set new_index ""
    foreach elem $index_list {
-      if { [ string first "shadowd" $ps_info(string,$elem) ] >= 0 } {
+      if {[string first "shadowd" $ps_info(string,$elem)] >= 0} {
          lappend new_index $elem
       }
    }
@@ -7776,12 +7797,12 @@ proc shutdown_all_shadowd { hostname } {
    ts_log_finest "Number of matching processes: $num_proc"
    foreach elem $new_index {
       ts_log_finest $ps_info(string,$elem)
-      if { [ is_pid_with_name_existing $hostname $ps_info(pid,$elem) "sge_shadowd" ] == 0 } {
-         ts_log_finest "killing process [ set ps_info(pid,$elem) ] ..."
-         if { [ have_root_passwd ] == -1 } {
+      if {[is_pid_with_name_existing $hostname $ps_info(pid,$elem) "sge_shadowd"] == 0} {
+         ts_log_finest "killing process [set ps_info(pid,$elem)] ..."
+         if {[have_root_passwd] == -1} {
             set_root_passwd
          }
-         if { $CHECK_ADMIN_USER_SYSTEM == 0 } {
+         if {$CHECK_ADMIN_USER_SYSTEM == 0} {
              start_remote_prog "$hostname" "root" "kill" "$ps_info(pid,$elem)"
          } else {
              start_remote_prog "$hostname" "$CHECK_USER" "kill" "$ps_info(pid,$elem)"
@@ -8232,7 +8253,7 @@ proc shutdown_daemon { host service } {
 #*******************************
 proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
    global CHECK_USER
-   global CHECK_ADMIN_USER_SYSTEM
+   global CHECK_ADMIN_USER_SYSTEM CHECK_INSTALL_RC
    get_current_cluster_config_array ts_config
 
    exec_shutdown_hooks
@@ -8247,32 +8268,49 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
       shutdown_all_shadowd $sh_host
    }
 
-   # shutdown the execds
-   set qconf_option "-ke all"
-   ts_log_fine "do qconf $qconf_option ..."
-   set result [start_sge_bin "qconf" $qconf_option]
-   ts_log_finest "qconf $qconf_option returned $prg_exit_state"
-   if { $prg_exit_state == 0} {
-      ts_log_finest $result
-      # give the schedd and execd's some time to shutdown
-      wait_for_unknown_load 60 all.q 0
-   } else {
-      ts_log_fine "shutdown_core_system - qconf $qconf_option failed:\n$result"
+   # shutdown the execds via systemd
+   if {$CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"]} {
+      # stop with systemd whatever is possible
+      # daemons on hosts without systemd will be killed in the following code
+      set service [systemd_get_service_name "execd"]
+      foreach host $ts_config(execd_nodes) {
+         if {[host_has_systemd $host]} {
+            set result [start_remote_prog $host "root" "systemctl" "stop $service"]
+         } else {
+            set result [start_sge_bin "qconf" "-ke $host"]
+         }
+         ts_log_fine $result
+      }
    }
 
-   # shutdown qmaster
-   ts_log_fine "do qconf -km ..."
-   set result [start_sge_bin "qconf" "-km"]
-   ts_log_finest "qconf -km returned $prg_exit_state"
-   if {$prg_exit_state == 0} {
-      ts_log_finest $result
-      if {[wait_till_qmaster_is_down $ts_config(master_host)] != 0} {
+   # give execds some time to shutdown
+   wait_for_unknown_load 60 all.q 0
+
+   # shutdown qmaster via systemd
+   set qmaster_shutdown 0
+   if {$CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"]} {
+      if {[host_has_systemd $ts_config(master_host)]} {
+         set service [systemd_get_service_name "qmaster"]
+         set result [start_remote_prog $ts_config(master_host) "root" "systemctl" "stop $service"]
+         set qmaster_shutdown 1
+      }
+   }
+
+   # shutdown qmaster via qconf
+   if {!$qmaster_shutdown} {
+      ts_log_fine "do qconf -km ..."
+      set result [start_sge_bin "qconf" "-km"]
+      ts_log_finest "qconf -km returned $prg_exit_state"
+      if {$prg_exit_state == 0} {
+         ts_log_finest $result
+         if {[wait_till_qmaster_is_down $ts_config(master_host)] != 0} {
+            shutdown_system_daemon $ts_config(master_host) "qmaster"
+         }
+      } else {
+         ts_log_fine "shutdown_core_system - qconf -km failed:\n$result"
+         #No need to wait until timeout if qconf -km failed
          shutdown_system_daemon $ts_config(master_host) "qmaster"
       }
-   } else {
-      ts_log_fine "shutdown_core_system - qconf -km failed:\n$result"
-      #No need to wait until timeout if qconf -km failed
-      shutdown_system_daemon $ts_config(master_host) "qmaster"
    }
 
    shutdown_system_daemon $ts_config(master_host) "execd qmaster"
@@ -8358,11 +8396,11 @@ proc startup_core_system {{only_hooks 0} {with_additional_clusters 0} } {
    global CHECK_ADMIN_USER_SYSTEM
    get_current_cluster_config_array ts_config
 
-   if { [ have_root_passwd ] == -1 } {
+   if {[have_root_passwd] == -1} {
       set_root_passwd
    }
 
-   if { $only_hooks == 0 } {
+   if {$only_hooks == 0} {
       # startup of schedd and qmaster
       startup_qmaster
 
@@ -10040,22 +10078,27 @@ proc switch_execd_spool_dir { host spool_type { force_restart 0 } } {
 #     sge_procedures/startup_qmaster()
 #     sge_procedures/startup_execd()
 #*******************************
-proc startup_shadowd { hostname {env_list ""} } {
-   global CHECK_ADMIN_USER_SYSTEM CHECK_USER
+proc startup_shadowd {hostname {env_list ""}} {
+   global CHECK_ADMIN_USER_SYSTEM CHECK_USER CHECK_INSTALL_RC
    get_current_cluster_config_array ts_config
 
    if {$env_list != ""} {
       upvar $env_list envlist
    }
 
-   if { $CHECK_ADMIN_USER_SYSTEM == 0 } {
-      if { [have_root_passwd] != 0  } {
+   if {$CHECK_ADMIN_USER_SYSTEM == 0} {
+      if {[have_root_passwd] != 0} {
          ts_log_warning "no root password set or ssh not available"
          return -1
       }
       set startup_user "root"
    } else {
       set startup_user $CHECK_USER
+   }
+
+   # if we started qmaster on the master host via systemd, then sge_shadowd is also already running
+   if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $hostname] && $hostname == $ts_config(master_host)} {
+      return 0
    }
 
    ts_log_fine "starting up shadowd on host \"$hostname\" as user \"$startup_user\""

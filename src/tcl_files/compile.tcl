@@ -669,7 +669,7 @@ proc compile_source { { do_only_hooks 0} {compile_only 0} } {
       return -1
    }
 
-   # do we have a unknown host ?
+   # do we have an unknown host ?
    if {[string match "*unknown*" $compile_hosts]} {
       report_add_message report "compile host list contains unknown host: $compile_hosts"
       report_finish report -1
