@@ -1170,16 +1170,19 @@ proc init_global_generic_messages {} {
    # messages indicating insufficient user privileges
    lappend messages(index) -210
    lappend messages(index) -211
-   lappend messages(index) -212
-   lappend messages(index) -213
-   lappend messages(index) -214
-   lappend messages(index) -215
    set messages(-210) "*[translate_macro MSG_SGETEXT_MUSTBEMANAGER_S "*"]"
    set messages(-211) "*[translate_macro MSG_SGETEXT_MUSTBEOPERATOR_S "*"]"
-   set messages(-212) "*[translate_macro MSG_SGETEXT_MUSTBEMANAGERFOROP_SS "*" "*"]"
-   set messages(-213) "*[translate_macro MSG_SGETEXT_MUSTBEOPERATORFOROP_SS "*" "*"]"
-   set messages(-214) "*[translate_macro MSG_SGETEXT_MUSTBEMANAGERFORTAR_SS "*" "*"]"
-   set messages(-215) "*[translate_macro MSG_SGETEXT_MUSTBEOPERATORFORTAR_SS "*" "*"]"
+
+   if {$ts_config(gridengine_version) > 90} {
+      lappend messages(index) -212
+      lappend messages(index) -213
+      lappend messages(index) -214
+      lappend messages(index) -215
+      set messages(-212) "*[translate_macro MSG_SGETEXT_MUSTBEMANAGERFOROP_SS "*" "*"]"
+      set messages(-213) "*[translate_macro MSG_SGETEXT_MUSTBEOPERATORFOROP_SS "*" "*"]"
+      set messages(-214) "*[translate_macro MSG_SGETEXT_MUSTBEMANAGERFORTAR_SS "*" "*"]"
+      set messages(-215) "*[translate_macro MSG_SGETEXT_MUSTBEOPERATORFORTAR_SS "*" "*"]"
+   }
 
    # file io problems
    lappend messages(index) -300

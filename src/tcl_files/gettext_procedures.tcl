@@ -607,6 +607,9 @@ proc update_macro_messages_list {} {
               set line [replace_string $line " sge_X32CFormat " "\"%lx\""]
               set line [replace_string $line " sge_X32CFormat" "\"%lx\""]
               set line [replace_string $line "sge_X32CFormat " "\"%lx\""]
+              set line [replace_string $line " sge_uu32 " "\"%ld\""]
+              set line [replace_string $line "sge_uu32 " "\"%ld\""]
+              set line [replace_string $line " sge_uu32" "\"%ld\""]
            }
            set line [replace_string $line " U32CFormat " "\"%ld\""]
            set line [replace_string $line " U32CFormat" "\"%ld\""]
