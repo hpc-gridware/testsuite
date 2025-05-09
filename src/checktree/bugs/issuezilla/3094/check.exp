@@ -116,9 +116,17 @@ proc issue_3094_test {} {
    global CHECK_ACT_LEVEL
    global issue_3094_host
 
+   if {[is_version_in_range "9.0.6"]} {
+      set test_rss 1
+   } else {
+      set test_rss 0
+   }
+
    # submit a sleeper job
    set run_time 30
    set job_args "-o /dev/null -j y -l h=$issue_3094_host"
+   # test also reserved memory
+   append job_args " -l h_vmem=2G,h_rss=1G"
    append job_args " $ts_config(product_root)/examples/jobs/sleeper.sh $run_time"
    set job_id [submit_job $job_args]
    if {$job_id <= 0} {
@@ -135,19 +143,36 @@ proc issue_3094_test {} {
       return
    }
 
-   # get online cpu usage after 20 secs (> load report interval
+   # get online usage after 20 secs (> load report interval)
+   ts_log_fine "sleeping for 20 seconds to get online usage"
    after 20000
-   get_extended_job_info $job_id
-   set online_cpu $job_info(cpu)
+
+   get_qstat_j_info $job_id
+   set usage_list $qstat_j_info([get_qstat_j_attribute "usage"])
+   parse_name_value_list usage $usage_list
+
+   set online_cpu [transform_cpu $usage(cpu)]
+   set online_maxvmem [transform_memory_value $usage(maxvmem)]
+   set online_maxrss [transform_memory_value $usage(maxrss)]
 
    # wait for job_end
    wait_for_jobend $job_id "" $run_time 0
 
    # get accounting
    get_qacct $job_id
+
    set acct_cpu $qacct_info(cpu)
+   set acct_maxvmem $qacct_info(maxvmem)
+   set acct_maxrss $qacct_info(maxrss)
 
    # check online/accounting cpu depending on runlevel
+   set expected_reserved_cpu 15              ;# expect more than 15 cpu seconds
+   set expected_reserved_maxvmem 2147483648  ;# expect exactly 2G, without reserved: less than 1G
+   set expected_max_maxvmem 1073741824
+   set expected_reserved_maxrss 1073741824   ;# expect exactly 1G, without reserved: less than 512M
+   set expected_max_maxrss 536870912
+
+   # check online/accounting usage depending on runlevel
    switch -exact -- $CHECK_ACT_LEVEL {
       0 {
          set expected_online 0
@@ -155,34 +180,63 @@ proc issue_3094_test {} {
       }
       1 {
          set expected_online 0
-         set expected_acct $run_time
+         set expected_acct 1
       }
       2 {
-         set expected_online 15
+         set expected_online 1
          set expected_acct 0
       }
       3 {
-         set expected_online 15
-         set expected_acct $run_time
+         set expected_online 1
+         set expected_acct 1
       }
    }
 
+   set errors {}
    if {$expected_online == 0} {
       if {$online_cpu > 1} {
-         ts_log_severe "expected no significant online usage, but online usage was $online_cpu"
+         lappend errors "expected no significant online usage, but online usage was $online_cpu"
+      }
+      if {$online_maxvmem > $expected_max_maxvmem} {
+         lappend errors "expected online maxvmem usage < $expected_max_maxvmem, but online maxvmem usage was $online_maxvmem"
+      }
+      if {$test_rss && $online_maxrss > $expected_max_maxrss} {
+         lappend errors "expected online maxrss usage < $expected_max_maxrss, but online maxrss usage was $online_maxrss"
       }
    } else {
-      if {$online_cpu < $expected_online} {
-         ts_log_severe "expected an online cpu usage of at least $expected_online, but online cpu usage was $online_cpu"
+      if {$online_cpu < $expected_reserved_cpu} {
+         lappend errors "expected an online cpu usage of at least $expected_reserved_cpu, but online cpu usage was $online_cpu"
+      }
+      if {$online_maxvmem != $expected_reserved_maxvmem} {
+         lappend errors "expected online maxvmem usage == $expected_reserved_maxvmem, but online maxvmem usage was $online_maxvmem"
+      }
+      if {$test_rss && $online_maxrss != $expected_reserved_maxrss} {
+         lappend errors "expected online maxrss usage == $expected_reserved_maxrss, but online maxrss usage was $online_maxrss"
       }
    }
    if {$expected_acct == 0} {
       if {$acct_cpu > 1} {
-         ts_log_severe "expected no significant accounting cpu usage, but accounting cpu usage was $acct_cpu"
+         lappend errors "expected no significant accounting cpu usage, but accounting cpu usage was $acct_cpu"
+      }
+      if {$acct_maxvmem > $expected_max_maxvmem} {
+         lappend errors "expected accounting maxvmem usage < $expected_max_maxvmem, but accounting maxvmem usage was $acct_maxvmem"
+      }
+      if {$test_rss && $acct_maxrss > $expected_max_maxrss} {
+         lappend errors "expected accounting maxrss usage < $expected_max_maxrss, but accounting maxrss usage was $acct_maxrss"
       }
    } else {
-      if {$acct_cpu < $expected_acct} {
-         ts_log_severe "expected an accounting cpu usage of at least $expected_acct, but accounting cpu usage was $acct_cpu"
+      if {$acct_cpu < $expected_reserved_cpu} {
+         lappend errors "expected an accounting cpu usage of at least $expected_reserved_cpu, but accounting cpu usage was $acct_cpu"
       }
+      if {$acct_maxvmem != $expected_reserved_maxvmem} {
+         lappend errors "expected accounting maxvmem usage == $expected_reserved_maxvmem, but accounting maxvmem usage was $acct_maxvmem"
+      }
+      if {$test_rss && $acct_maxrss != $expected_reserved_maxrss} {
+         lappend errors "expected accounting maxrss usage == $expected_reserved_maxrss, but accounting maxrss usage was $acct_maxrss"
+      }
+   }
+
+   if {[llength $errors] > 0} {
+      ts_log_severe [join $errors "\n"]
    }
 }

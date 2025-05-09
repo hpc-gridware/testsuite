@@ -3775,7 +3775,11 @@ proc qstat_profile {} {
    after 5000
 }
 
-proc transform_memory_value { value } {
+proc transform_memory_value {value} {
+
+   if {$value == "N/A"} {
+      return 0
+   }
 
    set multiplicator 1
    if {[string match "*G*" $value]} {
@@ -3791,6 +3795,7 @@ proc transform_memory_value { value } {
    set new_value [lindex [split $value "GMK"] 0]
    set new_value [expr $new_value * $multiplicator]
    ts_log_fine "value $value transformed to $new_value"
+
    return $new_value
 }
 
