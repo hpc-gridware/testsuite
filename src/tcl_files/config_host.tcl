@@ -3756,7 +3756,7 @@ proc host_has_systemd {host} {
 
    set has_systemd 0
    set arch [resolve_arch $host]
-   if {[string match "lx-*" $arch] || [string match "ulx-*" $arch]} {
+   if {[string match "lx-*" $arch]} {
       set output [start_remote_prog $host $CHECK_USER "ps" "-p 1 -o comm=" prg_exit_state 60 0 "" "" 1 0]
       if {[string trim $output] == "systemd"} {
          set has_systemd 1

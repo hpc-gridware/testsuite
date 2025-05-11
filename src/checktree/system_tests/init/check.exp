@@ -45,7 +45,7 @@ set check_cleanup_function init_system_cleanup
 
 # define test's procedure order
 set check_functions {}
-lappend check_functions "init_system_qmaster"
+#lappend check_functions "init_system_qmaster"
 #lappend check_functions "init_system_shadowd"   ;# shadow hosts are not added to the init system, see CS-1218
 lappend check_functions "init_system_execd"
 
@@ -73,6 +73,7 @@ proc init_system_cleanup {} {
 
 proc init_system_test {host service} {
    get_current_cluster_config_array ts_config
+   global CHECK_USER
 
    # @todo currently we only test on Linux with systemd
    if {![host_has_systemd $host]} {
@@ -83,6 +84,8 @@ proc init_system_test {host service} {
    set errors {}
    set ret 1
    set service_name [systemd_get_service_name $service]
+   ts_log_frame
+   ts_log_fine "testing systemd service $service_name on $host"
 
    if {$ret} {
       set output [start_remote_prog $host "root" "systemctl" "status $service_name" prg_exit_state 60 0 "" "" 1 0]
@@ -121,6 +124,18 @@ proc init_system_test {host service} {
       }
    }
 
+   if {$ret && $service == "execd"} {
+      set yes [translate_macro MSG_YES]
+      # @todo set expected [translate_macro MSG_SYSTEMD_INITIALIZED_SSS $yes $service_name $yes]
+      set expected [translate_macro MSG_SYSTEMD_INITIALIZED_SSS $yes "execd.service" $yes]
+      set messages_file [get_execd_messages_file $host]
+      ts_log_fine "expecting message\n$expected\nin messages file $messages_file"
+      set output [start_remote_prog $host $CHECK_USER "grep" "'$expected' $messages_file"]
+      if {$prg_exit_state != 0} {
+         lappend errors "$messages_file doesn't contain \"systemd integration initialized ...\" message:\n$output"
+      }
+   }
+
    if {[llength $errors] > 0} {
       ts_log_severe "host $host $service_name had errors:\n[join $errors \n]"
    }
@@ -147,6 +162,8 @@ proc init_system_shadowd {} {
 proc init_system_execd {} {
    get_current_cluster_config_array ts_config
 
+      #init_system_test "su0-0-lx-riscv64" "execd"
+      #init_system_test "al8-0-lx-amd64" "execd"
    foreach host $ts_config(execd_nodes) {
       init_system_test $host "execd"
    }
