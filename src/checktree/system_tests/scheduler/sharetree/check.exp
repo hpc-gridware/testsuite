@@ -122,7 +122,7 @@ proc share_tree_setup_level {} {
 
    switch -- $CHECK_ACT_LEVEL {
       0 {
-         set share_tree_job_counter 5 
+         set share_tree_job_counter 10
          set share_tree_percentage_variation 10
       }
       100 {

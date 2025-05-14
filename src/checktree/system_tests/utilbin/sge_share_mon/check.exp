@@ -46,7 +46,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "sge_share_mon"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED SCHEDULER"
 set check_description(0)  "test sge_share_mon without sharetree"
 set check_description(1)  "test sge_share_mon with sharetree"
 
