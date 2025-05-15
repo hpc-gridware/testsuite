@@ -84,7 +84,7 @@ proc display_test_test {} {
             ts_log_fine "xterm returned exit state: $prg_exit_state\nOutput:\n$output"
          } else {
             set disp_result($user,$host) 1
-            ts_log_fine "ok"
+            ts_log_fine "Xterm started on host $host for user $user: status ok"
             # just for fun !!!
             #start_remote_prog $host $user $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e sleep 3" prg_exit_state 25 1
          }

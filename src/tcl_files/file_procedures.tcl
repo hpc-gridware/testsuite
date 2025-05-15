@@ -3516,6 +3516,8 @@ proc init_logfile_wait {hostname logfile {delete_touch 0}} {
       start_remote_prog $hostname $CHECK_USER "touch" $logfile
    }
 
+   ts_log_fine "init_logfile_wait - starting tail -f $logfile on host $hostname"
+
    set sid [open_remote_spawn_process $hostname $CHECK_USER "tail" "-f $logfile"]
    set sp_id [lindex $sid 1]
    ts_log_finest "spawn id: $sp_id"
