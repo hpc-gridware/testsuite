@@ -70,6 +70,11 @@ proc issue_2433_cleanup {} {
 proc issue_2433_queue {} {
    global ts_config CHECK_USER
 
+   # 9.0.x we have a limit for slots
+   if {![is_version_in_range "9.0.0" "9.0.99"]} {
+      return
+   }
+
    # try to create a queue with invalid slot count
    set queue_name "issue_2433_queue"
    set queue(slots) 3000000000
@@ -99,6 +104,11 @@ proc issue_2433_queue {} {
 
 proc issue_2433_pe {} {
    global ts_config CHECK_USER
+
+   # 9.0.x we have a limit for slots
+   if {![is_version_in_range "9.0.0" "9.0.99"]} {
+      return
+   }
 
    # try to create a pe with invalid slot count
    set pe_name "issue_2433_pe"
