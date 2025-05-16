@@ -565,19 +565,19 @@ proc config_mpi_add_default_mpi_list {array_name} {
    lappend config(mpi_list) $mpi
    set config($mpi,template) "mpich"
    set config($mpi,versions) "3.4.3 4.1.3 4.2.3 4.3.0"
-   set config($mpi,archs) "fbsd-amd64 lx-amd64 ulx-amd64 lx-arm64 lx-ppc64le lx-riscv64 lx-s390x"
+   set config($mpi,archs) "lx-amd64 ulx-amd64 lx-arm64 lx-ppc64le lx-riscv64 lx-s390x"
    set config($mpi,do_build) 1
    set mpi "mvapich"
    lappend config(mpi_list) $mpi
    set config($mpi,template) "mvapich"
    set config($mpi,versions) "4.0"
-   set config($mpi,archs) "fbsd-amd64 lx-amd64 ulx-amd64 lx-arm64 lx-ppc64le lx-riscv64 lx-s390x"
+   set config($mpi,archs) "lx-amd64 ulx-amd64 lx-arm64 lx-ppc64le lx-riscv64 lx-s390x"
    set config($mpi,do_build) 1
    set mpi "openmpi"
    lappend config(mpi_list) $mpi
    set config($mpi,template) "openmpi"
    set config($mpi,versions) "4.0.5 4.0.7 4.1.1 4.1.8 5.0.7"
-   set config($mpi,archs) "fbsd-amd64 lx-amd64 ulx-amd64 lx-arm64 lx-ppc64le lx-riscv64 lx-s390x"
+   set config($mpi,archs) "lx-amd64 ulx-amd64 lx-arm64 lx-ppc64le lx-riscv64 lx-s390x"
    set config($mpi,do_build) 1
 
    return 0
@@ -748,7 +748,7 @@ proc mpi_configure_ckpt {} {
 #
 # @param mpi - name of the MPI installation
 ##
-proc mpi_get_arch_list {mpi} {
+proc mpi_get_arch_list {mpi {min_hosts_per_arch 1}} {
    get_current_cluster_config_array ts_config
 
    # get the list of architectures for this mpi from the configuration
@@ -760,11 +760,23 @@ proc mpi_get_arch_list {mpi} {
    foreach node $ts_config(execd_nodes) {
       set arch [resolve_arch $node]
       if {[lsearch -exact $mpi_archs $arch] >= 0} {
-         lappend archs $arch
+         if {[lsearch -exact $archs $arch] < 0} {
+            lappend archs $arch
+            set hosts_per_arch($arch) 1
+         } else {
+            incr hosts_per_arch($arch)
+         }
       }
    }
 
-   return [lsort -unique $archs]
+   set ret_archs {}
+   foreach arch $archs {
+      if {$hosts_per_arch($arch) >= $min_hosts_per_arch} {
+         lappend ret_archs $arch
+      }
+   }
+
+   return $ret_archs
 }
 
 ###
@@ -783,8 +795,8 @@ proc mpi_check_build {mpi version archs} {
    set base_dir [config_mpi_get_mpi_install_dir]
    foreach arch $archs {
       set install_dir "$base_dir/$mpi-$version/$arch"
-      if {[file exists $install_dir]} {
-         ts_log_fine "MPI installation directory $install_dir already exists"
+      if {[file exists "$install_dir/bin/mpicc"]} {
+         ts_log_fine "MPI installation in directory $install_dir already exists"
          continue
       }
 
@@ -828,6 +840,7 @@ proc mpi_build_install {mpi version arch install_dir} {
    }
 
    if {$ret} {
+      ts_log_fine "building $mpi version $version for architecture $arch on host $build_host"
       # build in a local tmp directory
       set dir [get_tmp_directory_name $build_host "build" "tmp" 1]
       remote_file_mkdir $build_host $dir
@@ -841,7 +854,7 @@ proc mpi_build_install {mpi version arch install_dir} {
 
    if {$ret} {
       set spawn_id [lindex $id 1]
-      set timeout 300
+      set timeout 600
       set done 0
       set exit_status -1
       expect {
@@ -921,7 +934,7 @@ proc mpi_build_example {mpi version arch dir} {
    }
 
    if {$ret} {
-      ts_log_fine "building example application for architecture $arch in $dir"
+      ts_log_fine "building example application for architecture $arch on host $build_host in $dir"
       set output [start_remote_prog $build_host $CHECK_USER $build_script $arch prg_exit_state 60 0 $dir myenv 1 0]
       if {$prg_exit_state != 0} {
          ts_log_severe "failed to build example application: $output"
