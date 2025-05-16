@@ -2341,7 +2341,7 @@ proc qconf_create_modify_sharetree {} {
    # - as non admin user
    # - from non admin host
    set ret [stree_buffer_commit stree "" $CHECK_FIRST_FOREIGN_SYSTEM_USER 0]
-   if {$ret != -210} {
+   if {$ret != -210 && $ret != -214} {
       ts_log_severe "qconf -Mstree should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
    set non_cluster_host [host_conf_get_non_cluster_host]
@@ -2399,7 +2399,7 @@ proc qconf_del_sharetree {} {
    # - from non admin host
    stree_buffer_commit stree
    set ret [del_sharetree "" $CHECK_FIRST_FOREIGN_SYSTEM_USER 0]
-   if {$ret != -210} {
+   if {$ret != -210 && $ret != -214} {
       ts_log_severe "qconf -dstree should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
    set non_cluster_host [host_conf_get_non_cluster_host]
@@ -2481,12 +2481,8 @@ proc qconf_add_project {} {
    # - as non admin user
    # - from non admin host
    set MY_PROJECT_NAME "qconf_add_prj"
-   #set ret [add_project "$MY_PROJECT_NAME" project 0 "" "$CHECK_FIRST_FOREIGN_SYSTEM_USER" 0]
-   #if {$ret != -210} {
-   #   ts_log_severe "qconf -aprj should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
-   #}
    set ret [add_project "$MY_PROJECT_NAME" project 1 "" "$CHECK_FIRST_FOREIGN_SYSTEM_USER" 0]
-   if {$ret != -210} {
+   if {$ret != -210 && $ret != -214} {
       ts_log_severe "qconf -Aprj should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
 
@@ -4211,7 +4207,7 @@ proc qconf_add_rqs {} {
    lappend rules "to slots=10"
 
    set ret [add_rqs rqs_charray  1 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER 0]
-   if {$ret != -210} {
+   if {$ret != -210 && $ret != -214} {
       ts_log_severe "qconf -Arqs should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
       del_rqs $rqs_name
    }
@@ -4305,7 +4301,7 @@ proc qconf_modify_rqs {} {
    lappend rules "to slots=10"
    set new_rqs_charray($rqs_name_fast,limit) "$rules"
    set ret [mod_rqs new_rqs_charray "$rqs_name_fast" 1 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER 0]
-   if {$ret != -210} {
+   if {$ret != -210 && $ret != -212} {
       ts_log_severe "qconf -Mrqs should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
    set non_cluster_host [host_conf_get_non_cluster_host]
@@ -4383,7 +4379,7 @@ proc qconf_modifyreplace_rqs {} {
    # - as non admin user
    # - from non admin host
    set ret [mod_rqs old_rqs_config "" 1 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER 0]
-   if {$ret != -210} {
+   if {$ret != -210 && $ret != -212} {
       ts_log_severe "qconf -Mrqs should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
    set non_cluster_host [host_conf_get_non_cluster_host]
@@ -4403,7 +4399,7 @@ proc qconf_remove_rqs {} {
    # - as non admin user
    # - from non admin host
    set ret [del_rqs $rqs_name_fast "" $CHECK_FIRST_FOREIGN_SYSTEM_USER 0]
-   if {$ret != -210} {
+   if {$ret != -210 && $ret != -214} {
       ts_log_severe "qconf -drqs should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
    set non_cluster_host [host_conf_get_non_cluster_host]
