@@ -2692,6 +2692,7 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
 
                # if we have a time string then convert it to sec
                set search_sec 0
+               set sec 0
                set num_colon [llength [split $expected_value($host) ":"]]
                if {$num_colon == 3} {
                   set hours 0
