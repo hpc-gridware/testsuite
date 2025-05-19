@@ -71,7 +71,7 @@ HOSTSLOTS=`cat $PE_HOSTFILE | prepare_host_slots`
 # start a sleeper process on each granted processor
 task=0
 for host in $HOSTSLOTS; do
-   $SGE_ROOT/bin/$ARC/qrsh -inherit -noshell -nostdin -cwd $host $script $task $duration &
+   ssh $host $script $task $duration &
    task=`expr $task + 1`
 done
 echo "master task submitted all sub tasks"
@@ -82,7 +82,7 @@ if [ $master_forks_slaves = "TRUE" ]; then
    echo "master task simulating slave task finished"
 fi
 
-# wait for the pe tasks (qrsh -inherit) to terminate
+# wait for the pe tasks (ssh / wrapped to qrsh -inherit) to terminate
 # we do multiple wait calls, as wait gets interrupted
 # when signals are received, even when they are trapped
 # see tight_integration check, tight_integration_notify

@@ -1,0 +1,133 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+#set check_root_access_needs "yes"
+#set check_need_running_system "no"
+set check_version_range "9.0.6"
+
+# define test's name and run level descriptions
+set check_name            "ssh_wrapper"
+set check_category        "PARALLEL VERIFIED"
+set check_description(0)  "test ssh wrapper for tightly integrated parallel jobs"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function ssh_wrapper_setup
+set check_cleanup_function ssh_wrapper_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "ssh_wrapper_test"
+
+# -------- local test procedures: initialization------------------------------
+
+proc ssh_wrapper_setup {} {
+   get_current_cluster_config_array ts_config
+
+   # need at least 2 exec hosts
+   if {[llength $ts_config(execd_nodes)] < 2} {
+      ts_log_config "need at least 2 execd_nodes"
+      return 99
+   }
+
+   # create a ssh wrapper pe and queue
+   set output [start_sge_bin "qconf" "-Ap $ts_config(product_root)/mpi/ssh-wrapper/ssh-wrapper.pe"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "adding pe from template failed:\n$output"
+      return
+   }
+
+   set q(slots) 4
+   set q(pe_list) "ssh-wrapper.pe"
+   add_queue "test.q" "@allhosts" q
+}
+
+proc ssh_wrapper_cleanup {} {
+   get_current_cluster_config_array ts_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # remove the ssh wrapper pe and queue
+   del_pe "ssh-wrapper.pe"
+   del_queue "test.q" "" 1 1
+}
+
+
+proc ssh_wrapper_test {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ACTUAL_TEST_PATH
+
+   # we want the job to run in a tmp directory and want to see the output
+   set tmp_dir [get_tmp_directory_name]
+   ts_log_fine "creating tmp directory $tmp_dir"
+   remote_file_mkdir $ts_config(master_host) $tmp_dir $CHECK_USER "" prg_exit_state
+   if {$prg_exit_state != 0} {
+      return
+   }
+   foreach host $ts_config(execd_nodes) {
+      if {[wait_for_remote_dir $host $CHECK_USER $tmp_dir] != 0} {
+         return
+      }
+   }
+
+   # start the job using the ssh-wrapper pe
+   set job_opts "-pe ssh-wrapper.pe 8 -wd $tmp_dir -o job.out -j y"
+   set job_args "$CHECK_ACTUAL_TEST_PATH/job.sh $ts_config(testsuite_root_dir)/scripts/pe_task.sh 1 20"
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id > 0} {
+      if {[wait_for_jobstart $job_id "" 10] == 0} {
+         ts_log_fine "job $job_id started"
+         if {[wait_for_jobend $job_id "" 60] == 0} {
+            ts_log_fine "job $job_id finished"
+            # qacct must report 8 tasks
+            if {[get_qacct $job_id qacct_info "" "" 1 8] == 0} {
+               ts_log_fine "qacct reported tasks (master task + 7 slave tasks)"
+               # expect master task and slave tasks all have exited 0
+               if {$qacct_info(exit_status) != "0 0 0 0 0 0 0 0"} {
+                  ts_log_severe "expect all tasks to have exited 0 but exit_status is $qacct_info(exit_status)"
+               }
+               # output job output
+               set output [start_remote_prog $ts_config(master_host) $CHECK_USER "cat" "$tmp_dir/job.out"]
+               ts_log_fine $output
+            }
+         } else {
+            ts_log_fine "job $job_id not finished"
+            delete_job $job_id
+         }
+      } else {
+         ts_log_fine "job $job_id not started"
+         delete_job $job_id
+      }
+   }
+}
+
