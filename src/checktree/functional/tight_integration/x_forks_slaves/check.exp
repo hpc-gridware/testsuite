@@ -1,20 +1,20 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
-#  
+#
 #  Copyright 2024 HPC-Gridware GmbH
-#  
+#
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
 #  You may obtain a copy of the License at
-#  
+#
 #      http://www.apache.org/licenses/LICENSE-2.0
-#  
+#
 #  Unless required by applicable law or agreed to in writing, software
 #  distributed under the License is distributed on an "AS IS" BASIS,
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-#  
+#
 ###########################################################################
 #___INFO__MARK_END_NEW__
 
@@ -45,6 +45,8 @@ set check_cleanup_function x_forks_slaves_cleanup
 # define test's procedure order
 set check_functions {}
 lappend check_functions "x_forks_slaves_basic"
+lappend check_functions "x_forks_slaves_issue_619"
+
 # @todo extend the test
 # add further check_functions, e.g.
 # create a real job using the work binary to burn cpu and/or use memory
@@ -65,17 +67,19 @@ proc x_forks_slaves_setup {} {
    # we need 2 test hosts: a master host and a slave host
    set x_forks_slaves_hosts [host_conf_get_suited_hosts 2]
 
-   # create a test pe and queue
+   # create test pes and queue
    set pe(slots) 100
    set pe(allocation_rule) "4"
    set pe(control_slaves) TRUE
    set pe(job_is_first_task) TRUE
    set pe(master_forks_slaves) TRUE
    set pe(daemon_forks_slaves) TRUE
-   add_pe "test.pe" pe
+   add_pe "test4.pe" pe
+   set pe(allocation_rule) "1"
+   add_pe "test1.pe" pe
 
    set q(slots) 10
-   set q(pe_list) "test.pe"
+   set q(pe_list) "test1.pe test4.pe"
    add_queue "test.q" $x_forks_slaves_hosts q
 }
 
@@ -87,7 +91,8 @@ proc x_forks_slaves_cleanup {} {
    wait_for_end_of_all_jobs
 
    del_queue "test.q" "" 1 1
-   del_pe "test.pe"
+   del_pe "test1.pe"
+   del_pe "test4.pe"
 
    unset -nocomplain x_forks_slaves_hosts
 }
@@ -107,6 +112,7 @@ proc x_forks_slaves_check_limits {job_id host host_type limit} {
 
    # read config file and check limits
    set config [start_remote_prog $host $CHECK_USER "cat" $config_file]
+
    set limit_name [lindex [split $limit "="] 0]
    set limit_value [lindex [split $limit "="] 1]
 
@@ -118,6 +124,8 @@ proc x_forks_slaves_check_limits {job_id host host_type limit} {
          set value [lindex [split $line "="] 1]
          if {[transform_unit $value] != [transform_unit $limit_value]} {
             ts_log_severe "limit $limit_name on $host_type host $host is $value, expected $limit_value"
+         } else {
+            ts_log_fine "limit $limit_name on $host_type host $host is $value, as expected"
          }
       }
    }
@@ -232,7 +240,7 @@ if {0} {
       ts_log_severe "expected $num qrsh commands to succeed and 1 to fail, got $exit_ok and $exit_fail on $host_type host $host"
    }
 }
-   
+
    set qrsh_args "-inherit $host echo one task too many"
 
    set myenv(JOB_ID) $job_id
@@ -256,11 +264,8 @@ proc x_forks_slaves_basic {} {
 
    # submit a job requesting our pe, spawning our 2 hosts, requesting limits
    set output_file [get_tmp_file_name]
-   set job_opts "-pe test.pe 8 -l h_rss=1G -scope master -l h=$master_host"
+   set job_opts "-pe test4.pe 8 -l h_rss=1G -scope master -l h=$master_host"
    append job_opts " -o $output_file -e $output_file"
-
-   # @todo CS-619 overwriting limits in master or slave requests does not yet work
-   # set job_opts "-pe test.pe 8 -scope master -l h_rss=1G -l h=$master_host -scope slave -l h_vmem=2G"
 
    set job_script "$ts_config(testsuite_root_dir)/scripts/pe_job.sh"
    set task_script "$ts_config(testsuite_root_dir)/scripts/pe_task.sh"
@@ -270,12 +275,14 @@ proc x_forks_slaves_basic {} {
       return
    }
 
+   # wait for the job to be running
    wait_for_jobstart $job_id "" 10
+   # give some time for the tasks to be started
+   after 5000
 
    # check the limits
    x_forks_slaves_check_limits $job_id $master_host "master" "h_rss=4G"
    x_forks_slaves_check_limits $job_id $slave_host "slave" "h_rss=4G"
-   #x_forks_slaves_check_limits $job_id $slave_host "h_vmem=8G"
 
    # check how many slave tasks we can start
    x_forks_slaves_check_qrsh_inherit $job_id $master_host "master" 0
@@ -283,8 +290,73 @@ proc x_forks_slaves_basic {} {
 
    ts_log_fine [start_remote_prog $master_host $CHECK_USER "cat" $output_file]
 
-#   wait_for_enter
+   delete_job $job_id
+}
 
+proc x_forks_slaves_issue_619 {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global x_forks_slaves_hosts
+
+   if {![is_version_in_range "9.0.6"]} {
+      ts_log_info "skipping test for issue 619, only fixed in 9.0.6"
+      return
+   }
+
+   set master_host [lindex $x_forks_slaves_hosts 0]
+   set slave_host [lindex $x_forks_slaves_hosts 1]
+
+   # submit a tightly integrated parallel job
+   # we choose a long run time to be sure we can evaluate the limits
+   # and delete it once we are done
+   set job_script "$ts_config(testsuite_root_dir)/scripts/pe_job.sh"
+   set task_script "$ts_config(testsuite_root_dir)/scripts/pe_task.sh"
+   set job_args "$job_script $task_script 1 6000"
+
+   # case 1: submit a job requesting our pe (4 slots on each host),
+   # spawning our 2 hosts, requesting limits
+   set output_file [get_tmp_file_name]
+   set job_opts "-pe test4.pe 8 -scope master -l h_rss=1G -l h=$master_host -scope slave -l h_rss=2G"
+   append job_opts " -o $output_file -e $output_file"
+
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0} {
+      return
+   }
+
+   # wait for the job to be running and give some time for the tasks to be started
+   wait_for_jobstart $job_id "" 10
+   after 5000
+
+   # check the limits
+   # also on the master host we see 2G per task, as we need to take the maximim of master and slave for now
+   x_forks_slaves_check_limits $job_id $master_host "master" "h_rss=8G"
+   x_forks_slaves_check_limits $job_id $slave_host "slave" "h_rss=8G"
+
+   ts_log_fine [start_remote_prog $master_host $CHECK_USER "cat" $output_file]
+   delete_job $job_id
+
+   # case 2: submit a job requesting our pe (1 slots on each host),
+   # spawning our 2 hosts, requesting limits
+   set output_file [get_tmp_file_name]
+   set job_opts "-pe test1.pe 2 -scope master -l h_rss=1G -l h=$master_host -scope slave -l h_rss=2G"
+   append job_opts " -o $output_file -e $output_file"
+
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0} {
+      return
+   }
+
+   # wait for the job to be running and give some time for the tasks to be started
+   wait_for_jobstart $job_id "" 10
+   after 5000
+
+   # check the limits
+   # we only have the master task on the master host, so we see the 1G limit
+   x_forks_slaves_check_limits $job_id $master_host "master" "h_rss=1G"
+   x_forks_slaves_check_limits $job_id $slave_host "slave" "h_rss=2G"
+
+   ts_log_fine [start_remote_prog $master_host $CHECK_USER "cat" $output_file]
    delete_job $job_id
 }
 
