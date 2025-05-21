@@ -85,6 +85,7 @@ proc mpi_basic_setup_level {} {
    } else {
       set mpi_basic_mpi_list [config_mpi_get_mpi_list]
    }
+#   set mpi_basic_mpi_list "openmpi"
 }
 
 proc mpi_basic_cleanup_level {} {
@@ -147,7 +148,7 @@ proc mpi_basic_run_job {mpi version arch dir with_reschedule} {
    if {$with_reschedule} {
       append job_opts " -ckpt testmpi.ckpt"
    }
-   append job_opts " -pe $template.pe 12 -l a='$arch'"
+   append job_opts " -pe $template.pe 8 -l a='$arch'"
    append job_opts " -scope master -l h=$master_host"
    set job_args "$job_script $mpi_binary -o testmpi.csv $work_total"
 
