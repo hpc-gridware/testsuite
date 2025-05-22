@@ -3209,6 +3209,12 @@ proc master_queue_of { job_id {qlist {}}} {
 #*******************************
 proc wait_for_load_from_all_queues { seconds {raise_error 1} } {
    get_current_cluster_config_array ts_config
+   global CHECK_VALGRIND
+
+   if {$CHECK_VALGRIND == "master"} {
+      # re-connect might take longer
+      set seconds [expr $seconds + 60]
+   }
 
    set time [clock seconds]
 
