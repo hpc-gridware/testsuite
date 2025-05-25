@@ -5837,6 +5837,43 @@ proc clear_screen {} {
    }
 }
 
+proc print_list_in_menu {prefix my_list} {
+  puts -nonewline "$prefix"
+  set last_category ""
+  set len 0
+  foreach elem $my_list {
+     incr len [expr [string length $elem] + 1]
+     if {$last_category != "" && $len >= 45} {
+        puts -nonewline "\n                       "
+        set len 0
+     } else {
+        puts -nonewline " "
+     }
+     set last_category $elem
+     puts -nonewline "$elem"
+  }
+  puts ""
+}
+
+proc sec_as_h_m_s {sec} {
+   set isec $sec
+   set days [expr $sec / 86400]
+   set sec [expr $sec % 86400]
+   set hours [expr $sec / 3600]
+   set sec [expr $sec % 3600]
+   set minutes [expr $sec / 60]
+   set seconds [expr $sec % 60]
+   if {$days == 0} {
+      if {$hours == 0 && $minutes == 0 && $seconds == 0} {
+         return "       -"
+      } else {
+         return [format "%02d:%02d:%02d" $hours $minutes $seconds]
+      }
+   } else {
+      return [format "%02d:%02d:%02d:%02d" $days $hours $minutes $seconds]
+   }
+}
+
 proc print_menu_header {} {
   global CHECK_ACT_PATH CHECK_RESULT_DIRS
   global CHECK_USER CHECK_REPORT_FILE
@@ -5862,10 +5899,15 @@ proc print_menu_header {} {
   set test_counts ""
   set test_text ""
   set time_count 0
+
+  # read the runtime from the last time when the test was executed
+  read_check_durations_spoolfile test_durations
+
   foreach elem $dirs {
      set test_name ""
      set check_directories [get_tests_from_checktree $elem]
      set count 0
+     set ttime 0
      foreach test $check_directories {
         if { [is_category_enabled $test] == 0 } {
            set run_test_ok 0
@@ -5874,26 +5916,43 @@ proc print_menu_header {} {
            # test if the check was already successful
            set test_name [get_check_name $test]
            set global_test_name $test_name
+           set time_runlevel 0
            foreach tests_runlevel $tests_runlevels {
+              set time_this_runlevel 0
               if { [ is_level_enabled $tests_runlevel ] == 0 } {
                  set state_text "done"
                  if {![file isfile "$CHECK_RESULT_DIRS(completed)/$global_test_name.res.$tests_runlevel"] &&
                      ![file isfile "$CHECK_RESULT_DIRS(unsupported)/$global_test_name.res.$tests_runlevel"] &&
                      ![file isfile "$CHECK_RESULT_DIRS(failed)/$global_test_name.res.$tests_runlevel"]} {
                     set run_test_ok 1
-                    incr time_count [get_run_level_time $tests_runlevel]
+
+                    if {[info exists test_durations($test,$tests_runlevel)] } {
+                       set time_this_runlevel $test_durations($test,$tests_runlevel)
+                    }
+
+                    incr time_runlevel $time_this_runlevel
+                    incr time_count $time_this_runlevel
                     set state_text "on"
+                 } else {
+                    if {[info exists test_durations($test,$tests_runlevel)] } {
+                       set time_this_runlevel $test_durations($test,$tests_runlevel)
+                    }
                  }
               } else {
+                 if {[info exists test_durations($test,$tests_runlevel)] } {
+                    set time_this_runlevel $test_durations($test,$tests_runlevel)
+                 }
                  set state_text "off"
               }
               if { [string first [get_run_level_name $tests_runlevel] $test_name] < 0 } {
                  append test_name " [get_run_level_name $tests_runlevel]=$state_text"
               }
            }
+           #puts "$test_name $test $time_runlevel [sec_as_h_m_s $time_runlevel]"
            if { $run_test_ok == 1 } {
               # we have to run this check
               incr count 1
+              incr ttime $time_runlevel
            }
         } else {
            set test_name [get_check_name $test]
@@ -5920,11 +5979,11 @@ proc print_menu_header {} {
 
      if { $elem == $CHECK_ACT_PATH } {
         if { $we_have_a_test == 1 } {
-           lappend test_text   " test name: $test_name"
+           lappend test_text   " test; [sec_as_h_m_s $time_this_runlevel]  $test_name"
         }
      } else {
         if { $elem != $CHECK_ACT_PATH } {
-           lappend test_text   "${blank}${count} test(s) in [file tail $elem]"
+           lappend test_text   "${blank}${count}   [sec_as_h_m_s $ttime]  [file tail $elem]"
         }
      }
   }
@@ -5956,24 +6015,17 @@ proc print_menu_header {} {
 
   set selected_levels [ lsort $selected_levels ]
   puts " selected runlevels :  $selected_levels"
-  set my_cats [get_checktree_categories $CHECK_ACT_PATH]
-  puts -nonewline " categories         :  "
-  foreach elem $my_cats {
-     puts -nonewline "$elem "
-  }
-  puts ""
 
-  puts -nonewline " selected categories:  "
-  set CHECK_ENABLED_CATEGORIES [ lsort $CHECK_ENABLED_CATEGORIES]
-  foreach elem $CHECK_ENABLED_CATEGORIES {
-     puts -nonewline "$elem "
-  }
-  puts ""
-  set hours [ expr ( $time_count / 60 ) ]
-  set minutes [ expr (  $time_count % 60 ) ]
+  set all_cats [get_checktree_categories $CHECK_ACT_PATH]
+  print_list_in_menu " categories         : " $all_cats
+
+  set sel_cats [lsort $CHECK_ENABLED_CATEGORIES]
+  print_list_in_menu " selected categories: " $sel_cats
+
   set date_output [ clock format [clock seconds] -format "%D %H:%M:%S" ]
 
-  puts " est. run time      :  $hours h $minutes m (current time: $date_output)"
+  puts " current time       :  $date_output"
+  puts " est. total         :  [sec_as_h_m_s $ttime]"
   puts "==============================================================================="
   foreach elem $test_text {
      puts $elem
