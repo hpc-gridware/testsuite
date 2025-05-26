@@ -1,0 +1,170 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.0.7"
+
+# define test's name and run level descriptions
+set check_name            "qlogin"
+set check_category        "SUBMISSION VERIFIED"
+set check_description(0)  "check interactive submit client qlogin"
+set check_description(1)  "check interactive submit client qrsh without command"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function qlogin_setup
+set check_setup_level_function qlogin_setup_level
+set check_cleanup_level_function qlogin_cleanup_level
+set check_cleanup_function qlogin_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "qlogin_v"
+lappend check_functions "qlogin_V"
+
+# -------- local test procedures: initialization------------------------------
+
+proc qlogin_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_INTERACTIVE_TRANSPORT
+
+   if {$CHECK_INTERACTIVE_TRANSPORT != "default"} {
+      ts_log_config "test doesn't work with TS option interactive $CHECK_INTERACTIVE_TRANSPORT"
+      return 99
+   }
+}
+
+proc qlogin_setup_level {} {
+   global CHECK_ACT_LEVEL
+   global qlogin_submit_method
+
+   switch $CHECK_ACT_LEVEL {
+      0 {
+         set qlogin_submit_method "qlogin"
+      }
+      1 {
+         # qrlogin is passed to submit_with_method, it then calls qrsh without command
+         set qlogin_submit_method "qrlogin"
+      }
+   }
+}
+
+proc qlogin_cleanup_level {} {
+   global qlogin_submit_method
+   unset -nocomplain qlogin_submit_method
+}
+
+proc qlogin_cleanup {} {
+   get_current_cluster_config_array ts_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+proc qlogin_send_expect {sid command result} {
+   set ret 0
+   set sp_id [lindex $sid 1]
+
+   # send command
+   ts_send $sp_id "$command\n"
+   set timeout 10
+   set done 0
+   expect_user {
+      -i $sp_id full_buffer {
+         ts_log_severe "expect full_buffer error while waiting for $result"
+      }
+      -i $sp_id timeout {
+         ts_log_severe "expect timeout error while waiting for $result"
+      }
+      -i $sp_id eof {
+         ts_log_severe "expect eof error while waiting for $result"
+      }
+      -i $sp_id "*\n" {
+         foreach line [split $expect_out(buffer) "\n\r"] {
+            #ts_log_fine "==>$line<=="
+            if {[string trim $line] == $result} {
+               set done 1
+               set ret 1
+            }
+         }
+         if {!$done} {
+            exp_continue
+         }
+      }
+   }
+
+   return $ret
+}
+
+proc qlogin_check_vV {sid} {
+   get_current_cluster_config_array ts_config
+   global qlogin_submit_method
+
+   if {[submit_with_method_read_startup_messages $sid job_id]} {
+      ts_log_fine "$qlogin_submit_method job is running with job id $job_id"
+      if {[submit_with_method_wait_for_shell_response $sid]} {
+         ts_log_fine "shell is responsive"
+         # expect the environment variable from -v being set
+         qlogin_send_expect $sid "echo \$FOO" "BAR"
+         # expect some SGE_* to be set
+         qlogin_send_expect $sid "echo \$JOB_ID" $job_id
+         qlogin_send_expect $sid "echo \$SGE_ROOT" $ts_config(product_root)
+
+         ts_send [lindex $sid 1] "exit\n"
+         wait_for_jobend $job_id "" 10 0
+      }
+   }
+   close_spawn_process $sid
+}
+
+proc qlogin_v {} {
+   get_current_cluster_config_array ts_config
+   global qlogin_submit_method
+
+   set args "-v FOO=BAR"
+
+   set sid [submit_with_method $qlogin_submit_method $args "" "" $ts_config(master_host)]
+   if {$sid != ""} {
+      qlogin_check_vV $sid
+   }
+}
+
+proc qlogin_V {} {
+   get_current_cluster_config_array ts_config
+   global qlogin_submit_method
+
+   set myenv(FOO) "BAR"
+   set args "-V"
+   set sid [submit_with_method $qlogin_submit_method $args "" "" $ts_config(master_host) "" myenv]
+   if {$sid != ""} {
+      qlogin_check_vV $sid
+   }
+}

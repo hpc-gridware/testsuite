@@ -8589,13 +8589,16 @@ proc wait_till_qmaster_is_down {host {timeout 60}} {
 #
 #*******************************
 #
-proc submit_with_method {submit_method options script args tail_host {user ""}} {
+proc submit_with_method {submit_method options script args tail_host {user ""} {env_var ""}} {
    global CHECK_USER
    global CHECK_PROTOCOL_DIR
    get_current_cluster_config_array ts_config
 
    if {$user == ""} {
       set user $CHECK_USER
+   }
+   if {$env_var != ""} {
+      upvar $env_var myenv
    }
 
    # preprocessing args - it is treated as list for some reason - options not.
@@ -8614,7 +8617,7 @@ proc submit_with_method {submit_method options script args tail_host {user ""}} 
          # initialize tail to logfile
          set sid [init_logfile_wait $tail_host $job_output_file]
          # submit job
-         submit_job "-o $job_output_file -j y $options $script $job_args" 1 60
+         submit_job "-o $job_output_file -j y $options $script $job_args" 1 60 "" "" "" 1 "qsub" 1 "qsub_output" {} "" myenv
          # no need to trigger scheduling from 9.0.0 on: we set flush_submit_sec 1
          if {[is_version_in_range "" "9.0.0"]} {
             start_sge_bin "qconf" "-tsm"
@@ -8629,7 +8632,7 @@ proc submit_with_method {submit_method options script args tail_host {user ""}} 
          set cmd_args "-noshell $options $script $job_args"
 #set command ls
 #set cmd_args "-la"
-         set sid [open_remote_spawn_process $ts_config(master_host) $user $command $cmd_args]
+         set sid [open_remote_spawn_process $ts_config(master_host) $user $command $cmd_args 0 "" myenv]
          set sp_id [lindex $sid 1]
 #         log_user 1
          set timeout 60
@@ -8651,6 +8654,38 @@ proc submit_with_method {submit_method options script args tail_host {user ""}} 
          # start_sge_bin "qconf" "-tsm"
          # ts_log_fine "triggered scheduler run"
       }
+
+      qlogin -
+      qrlogin {
+         if {$submit_method == "qlogin"} {
+            set command "$ts_config(product_root)/bin/[resolve_arch $ts_config(master_host)]/qlogin"
+         } else {
+            # qrlogin is qrsh without command
+            set command "$ts_config(product_root)/bin/[resolve_arch $ts_config(master_host)]/qrsh"
+         }
+         # we add the -verbose switch to get messages about job id and job being scheduled
+         set args "-verbose $options"
+         set sid [open_remote_spawn_process $ts_config(master_host) $user $command $args 0 "" myenv]
+         if {$sid != ""} {
+            set sp_id [lindex $sid 1]
+            set timeout 60
+            expect {
+               -i $sp_id full_buffer {
+                  ts_log_severe "expect full_buffer error"
+               }
+               -i $sp_id timeout {
+                  ts_log_severe "timeout"
+               }
+               -i $sp_id eof {
+                  ts_log_severe "got eof"
+               }
+               -i $sp_id -- "_start_mark_:(0)" {
+                  ts_log_fine "remote command started"
+               }
+            }
+         }
+      }
+
       default {
          set sid ""
          ts_log_severe "unknown submit method $submit_method"
@@ -8658,6 +8693,117 @@ proc submit_with_method {submit_method options script args tail_host {user ""}} 
    }
    ts_log_fine "==>submitted job, sid = $sid"
    return $sid
+}
+
+###
+# @brief Wait for verbose messages after submitting a job with qlogin or qrlogin
+#
+# @param sid - session id returned by submit_with_method
+# @param job_id_var - variable name to store the job id, if not empty
+# @return 1 if job was successfully scheduled, 0 on timeout or error
+##
+proc submit_with_method_read_startup_messages {sid {job_id_var ""}} {
+   set ret 0
+
+   if {$job_id_var != ""} {
+      upvar $job_id_var job_id
+   }
+
+   set sp_id [lindex $sid 1]
+   # Got telnet client name from global/local config: builtin
+   # Your job 5 ("QLOGIN") has been submitted
+   # waiting for interactive job to be scheduled ...
+   # Your interactive job 5 has been successfully scheduled.
+   # Establishing builtin session to host ubuntu-22-amd64-1 ...
+   set timeout 60
+   set done 0
+   expect_user {
+      -i $sp_id full_buffer {
+         ts_log_severe "expect full_buffer error"
+      }
+      -i $sp_id timeout {
+         ts_log_severe "timeout"
+      }
+      -i $sp_id eof {
+         ts_log_severe "got eof"
+      }
+      -i $sp_id "*\n" {
+         foreach line [split $expect_out(buffer) "\n"] {
+            set line [string trim $line]
+            if {[string length $line] > 0} {
+               ts_log_fine $line
+               switch -glob $line {
+                  "Your job * has been submitted" {
+                     set job_id [lindex $line 2]
+                  }
+                  "Establishing * session to host *" {
+                     ts_log_fine "interactive job $job_id was started"
+                     set ret 1
+                     set done 1
+                  }
+               }
+            }
+         }
+         if {!$done} {
+            exp_continue
+         }
+      }
+   }
+
+   return $ret
+}
+
+###
+# @brief Wait for shell response after submitting a job with qlogin or qrlogin
+#
+# @param sid - session id returned by submit_with_method
+# @param num_tries - number of tries to send an echo command to the shell, default 5
+# @return 1 if shell response was received, 0 on timeout or error
+##
+proc submit_with_method_wait_for_shell_response {sid {num_tries 5}} {
+   set ret 0
+
+   set sp_id [lindex $sid 1]
+   set timeout 2
+   set done 0
+   log_user 0
+   expect_user {
+      -i $sp_id full_buffer {
+         ts_log_severe "expect full_buffer error while waiting for shell response"
+      }
+      -i $sp_id timeout {
+         if {$num_tries > 0} {
+            # send an echo command and expect to see the output
+            ts_send $sp_id "echo submit_with_method_wait_for_shell_response\n"
+            incr num_tries -1
+            exp_continue
+         } else {
+            ts_log_severe "timeout waiting for shell response"
+         }
+      }
+      -i $sp_id eof {
+         ts_log_severe "got eof while waiting for shell response"
+      }
+      -i $sp_id "*\n" {
+         foreach line [split $expect_out(buffer) "\n\r"] {
+            set line [string trim $line]
+            if {[string length $line] > 0} {
+               #ts_log_fine "==>$line<=="
+               switch $line {
+                  "submit_with_method_wait_for_shell_response" {
+                     set ret 1
+                     set done 1
+                  }
+               }
+            }
+         }
+         if {!$done} {
+            exp_continue
+         }
+      }
+   }
+
+   return $ret
 }
 
 #****** sge_procedures/copy_certificates() **********************************
