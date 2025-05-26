@@ -5294,6 +5294,7 @@ proc check_if_test_cleaned_up {} {
    global ts_config
    global check_name
    global check_do_not_create_local_config
+   global CHECK_INTERACTIVE_TRANSPORT
 
    if {![is_qmaster_alive $ts_config(master_host) [get_qmaster_spool_dir]]} {
       # test must have failed and will trigger a re-install anyway
@@ -5309,6 +5310,11 @@ proc check_if_test_cleaned_up {} {
 
    # noticed, that some test leaves a load_report_time in a local configuration, need to detect which test
    set allowed_attribs "mailer xterm execd_spool_dir"
+   if {$CHECK_INTERACTIVE_TRANSPORT != "default"} {
+      append allowed_attribs " qlogin_command qlogin_daemon"
+      append allowed_attribs " rlogin_command rlogin_daemon"
+      append allowed_attribs " rsh_command rsh_daemon"
+   }
    set errors {}
    foreach host $ts_config(execd_nodes) {
       unset -nocomplain local_conf
