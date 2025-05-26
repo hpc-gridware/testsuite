@@ -3634,36 +3634,29 @@ proc ping_daemon {host port name {max_tries 10}} {
    global CHECK_USER
    get_current_cluster_config_array ts_config
 
-   ts_log_finest "ping_daemon: $name on host $host with port $port"
+   ts_log_finest "ping_daemon: $name on host $host with port $port, max_tries: $max_tries"
 
    # Check the inputs
    if {$name != "qmaster" && $name != "execd"} {
       ts_log_warning "Unknown daemon name: $name. Only 'qmaster' and 'execd' are supported!"
-      return -1 
+      return -1
    }
-
-   # Get the architecture of the host
-   set master_arch [resolve_arch $ts_config(master_host)]
-
-   # Get the location of the architecture dependent qping binary
-   set qping_binary $ts_config(product_root)/bin/${master_arch}/qping
-   ts_log_finest "qping binary: $qping_binary"
 
    # Try to reach the given host
    set tries 0
    while {1} {
-      set output [start_remote_prog $ts_config(master_host) $CHECK_USER \
-              $qping_binary "-info $host $port $name 1"]
+      set output [start_sge_bin "qping" "-info $host $port $name 1" $ts_config(master_host)]
       ts_log_finer $output
-      incr tries 1
+      incr tries
       if {$prg_exit_state == 0 || $tries >= $max_tries} {
          break
       } else {
          after 1000
-      }      
+      }
    }
 
    ts_log_fine "ping_daemon: result is $prg_exit_state with $tries try(s)"
+
    return $prg_exit_state
 }
 
