@@ -5988,7 +5988,7 @@ proc print_menu_header {} {
 
   # handle all checktree directories
   foreach elem $dirs {
-     set test_count 0
+     set test_total 0
      set time_total 0
 
      # handle all tests in a checktree
@@ -5996,7 +5996,7 @@ proc print_menu_header {} {
         set test_name [get_check_name $test]
         lassign [test_get_statistics $test test_durations] test_count do_run_test time_runlevel
         if {$do_run_test == 1} {
-           incr test_count 1
+           incr test_total $test_count
            incr time_total $time_runlevel
         }
      }
@@ -6007,7 +6007,7 @@ proc print_menu_header {} {
         set test_name [get_check_name $elem]
         lappend test_text "   T   [sec_as_h_m_s $time_runlevel]  $test_name"
      } elseif {$elem != $CHECK_ACT_PATH} {
-        lappend test_text "[get_blank_for_number $test_count]${test_count}   [sec_as_h_m_s $time_total]  [file tail $elem]"
+        lappend test_text "[get_blank_for_number $test_total]${test_total}   [sec_as_h_m_s $time_total]  [file tail $elem]"
      }
   }
 
