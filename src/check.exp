@@ -3399,13 +3399,13 @@ proc save_result {path runtime level state} {
    global CHECK_RESULT_DIRS
 
    # only for supported levels
-   if {[is_level_enabled $level] == -1} {
+   if {![is_level_enabled $level]} {
       ts_log_finest "\n--> save_result - info: test level $level not activated, aborting\n"
       return
    }
 
    # only for activated categories
-   if {[is_category_enabled $path] == -1} {
+   if {![is_category_enabled $path]} {
      ts_log_finest "\n--> save_result - info: category not activated, aborting\n"
      return
    }
@@ -3705,11 +3705,11 @@ proc is_level_enabled { level_nr } {
        set level_end [ expr ( $level_start + 99 ) ]
 
        if { ( $level_start <= $level_nr ) && ( $level_nr <= $level_end ) } {
-          return 0
+          return 1
        }
     }
 
-    return -1
+    return 0
 }
 
 
@@ -3722,10 +3722,10 @@ proc is_category_enabled { path } {
    }
    foreach elem $checks_cat {
       if { [ lsearch $CHECK_ENABLED_CATEGORIES $elem] != -1 } {
-         return 0
+         return 1
       }
    }
-   return -1
+   return 0
 }
 
 #                                                             max. column:     |
@@ -3951,11 +3951,11 @@ proc build_checks_to_do_list {list path state} {
    # create list of checks to run
    set checks_to_do {}
    foreach elem $check_directories {
-      if {[is_category_enabled $elem] == 0} {
+      if {[is_category_enabled $elem]} {
          set test_name [get_check_name $elem]
          set tests_runlevels [get_checktree_levels $elem]
          foreach tests_runlevel $tests_runlevels {
-            if {[is_level_enabled $tests_runlevel] == -1} {
+            if {![is_level_enabled $tests_runlevel]} {
                # skip all tests in the wrong runlevel
                continue
             }
@@ -5039,7 +5039,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    # check if this test is enabled for the actual runlevel, test is already done, ...
    foreach level $check_levels {
       # check if this is a global enabled level
-      if {[is_level_enabled $level] == -1} {
+      if {![is_level_enabled $level]} {
          continue
       }
 
@@ -5109,7 +5109,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
             break
          }
 
-         if {[is_level_enabled $level] == -1} {
+         if {![is_level_enabled $level]} {
             continue
          }
 
@@ -5880,6 +5880,85 @@ proc sec_as_h_m_s {sec} {
    }
 }
 
+## @brief get_statistics for a test directory of a checktree
+#
+# Counts the number of tests in a checktree directory that have to be run and
+# returns the total time for these tests to get executed.
+#
+# @param test A checktree directory
+# @param durations_name the name of the durations array
+# @return a list with the number of tests, whether the test has to be run and the total time
+proc test_get_statistics {test durations_name} {
+   global CHECK_MAIN_RESULTS_DIR
+   global CHECK_RESULT_DIRS
+   global ts_checktree
+   upvar $durations_name durations
+
+   set test_name [get_check_name $test]
+   set count 0
+   set do_run_test 0
+   set time_total 0
+
+   # is the tests category enabled?
+   if {[is_category_enabled $test]} {
+      set time_all_runlevel 0
+
+      # handle all potential runlevels
+      foreach runlevel [get_checktree_levels $test] {
+
+         # not enabled or already executed
+         if {![is_level_enabled $runlevel] ||
+             [file isfile "$CHECK_RESULT_DIRS(completed)/$test_name.res.$runlevel"] ||
+             [file isfile "$CHECK_RESULT_DIRS(unsupported)/$test_name.res.$runlevel"] ||
+             [file isfile "$CHECK_RESULT_DIRS(failed)/$test_name.res.$runlevel"]} {
+            continue
+         }
+
+         # do we have a runtime from a previous run
+         set time_runlevel 0
+         if {[info exists durations($test,$runlevel)]} {
+            set time_runlevel $durations($test,$runlevel)
+         }
+
+         # we found a level to be executed
+         set do_run_test 1
+         incr time_all_runlevel $time_runlevel
+      }
+
+      # we have to run this test then increase the total time and test counter
+      if {$do_run_test == 1} {
+         incr count 1
+         incr time_total $time_all_runlevel
+      }
+   }
+
+   return [list $count $do_run_test $time_total]
+}
+
+proc get_blank_for_number {count} {
+   if {$count > 99} {
+      return " "
+   } elseif {$count > 9} {
+      return "  "
+   } else {
+      return "   "
+   }
+}
+
+# do we have a test in local directory?
+proc have_test_in_act_path {} {
+   global CHECK_ACT_PATH
+   global ts_checktree
+
+   if {![info exists ts_checktree($CHECK_ACT_PATH)]} {
+      return 0
+   }
+   if {$ts_checktree($ts_checktree($CHECK_ACT_PATH),test_available) != 1} {
+      return 0
+   }
+   return 1
+}
+
 proc print_menu_header {} {
   global CHECK_ACT_PATH CHECK_RESULT_DIRS
   global CHECK_USER CHECK_REPORT_FILE
@@ -5900,106 +5979,41 @@ proc print_menu_header {} {
   puts " cluster name       :  $ts_config(cluster_name)"
   puts " current dir        :  $CHECK_ACT_PATH ([pwd])"
 
-  set dirs [ get_checktree_dir_names $CHECK_ACT_PATH ]
+  set dirs [get_checktree_dir_names $CHECK_ACT_PATH]
   lappend dirs $CHECK_ACT_PATH
-  set test_counts ""
   set test_text ""
-  set time_count 0
 
   # read the runtime from the last time when the test was executed
   read_check_durations_spoolfile test_durations
 
+  # handle all checktree directories
   foreach elem $dirs {
-     set test_name ""
-     set check_directories [get_tests_from_checktree $elem]
-     set count 0
-     set ttime 0
-     foreach test $check_directories {
-        if { [is_category_enabled $test] == 0 } {
-           set run_test_ok 0
-           set tests_runlevels [get_checktree_levels $test]
+     set test_count 0
+     set time_total 0
 
-           # test if the check was already successful
-           set test_name [get_check_name $test]
-           set global_test_name $test_name
-           set time_runlevel 0
-           foreach tests_runlevel $tests_runlevels {
-              set time_this_runlevel 0
-              if { [ is_level_enabled $tests_runlevel ] == 0 } {
-                 set state_text "done"
-                 if {![file isfile "$CHECK_RESULT_DIRS(completed)/$global_test_name.res.$tests_runlevel"] &&
-                     ![file isfile "$CHECK_RESULT_DIRS(unsupported)/$global_test_name.res.$tests_runlevel"] &&
-                     ![file isfile "$CHECK_RESULT_DIRS(failed)/$global_test_name.res.$tests_runlevel"]} {
-                    set run_test_ok 1
-
-                    if {[info exists test_durations($test,$tests_runlevel)] } {
-                       set time_this_runlevel $test_durations($test,$tests_runlevel)
-                    }
-
-                    incr time_runlevel $time_this_runlevel
-                    incr time_count $time_this_runlevel
-                    set state_text "on"
-                 } else {
-                    if {[info exists test_durations($test,$tests_runlevel)] } {
-                       set time_this_runlevel $test_durations($test,$tests_runlevel)
-                    }
-                 }
-              } else {
-                 if {[info exists test_durations($test,$tests_runlevel)] } {
-                    set time_this_runlevel $test_durations($test,$tests_runlevel)
-                 }
-                 set state_text "off"
-              }
-              if { [string first [get_run_level_name $tests_runlevel] $test_name] < 0 } {
-                 append test_name " [get_run_level_name $tests_runlevel]=$state_text"
-              }
-           }
-           #puts "$test_name $test $time_runlevel [sec_as_h_m_s $time_runlevel]"
-           if { $run_test_ok == 1 } {
-              # we have to run this check
-              incr count 1
-              incr ttime $time_runlevel
-           }
-        } else {
-           set test_name [get_check_name $test]
-           append test_name " (category not enabled)"
-        }
-     }
-     if {$count > 99} {
-        set blank " "
-     } elseif {$count > 9} {
-        set blank "  "
-     } else {
-        set blank "   "
-     }
-     lappend test_counts "$count"
-
-     # do we have a test in local directory?
-     set we_have_a_test 0
-     if { [info exists ts_checktree($CHECK_ACT_PATH)] } {
-        set nr $ts_checktree($CHECK_ACT_PATH)
-        if { $ts_checktree($nr,test_available) == 1 } {
-           set we_have_a_test 1
+     # handle all tests in a checktree
+     foreach test [get_tests_from_checktree $elem] {
+        set test_name [get_check_name $test]
+        lassign [test_get_statistics $test test_durations] test_count do_run_test time_runlevel
+        if {$do_run_test == 1} {
+           incr test_count 1
+           incr time_total $time_runlevel
         }
      }
 
-     if { $elem == $CHECK_ACT_PATH } {
-        if { $we_have_a_test == 1 } {
-           lappend test_text   " test; [sec_as_h_m_s $time_this_runlevel]  $test_name"
-        }
-     } else {
-        if { $elem != $CHECK_ACT_PATH } {
-           lappend test_text   "${blank}${count}   [sec_as_h_m_s $ttime]  [file tail $elem]"
-        }
+     # print test or test-directory
+     if {$elem == $CHECK_ACT_PATH && [have_test_in_act_path]} {
+        lassign [test_get_statistics $elem test_durations] _test_count _do_run_test time_runlevel
+        set test_name [get_check_name $elem]
+        lappend test_text "   T   [sec_as_h_m_s $time_runlevel]  $test_name"
+     } elseif {$elem != $CHECK_ACT_PATH} {
+        lappend test_text "[get_blank_for_number $test_count]${test_count}   [sec_as_h_m_s $time_total]  [file tail $elem]"
      }
   }
 
-  set test_count [llength $test_counts]
   puts "==============================================================================="
 
-
   set possible_levels ""
-
   foreach elem [get_checktree_max_level_count $CHECK_ACT_PATH] {
      set a_level [ get_run_level_name $elem ]
      if { [string first $a_level $possible_levels ] < 0 } {
@@ -6031,7 +6045,7 @@ proc print_menu_header {} {
   set date_output [ clock format [clock seconds] -format "%D %H:%M:%S" ]
 
   puts " current time       :  $date_output"
-  puts " est. total         :  [sec_as_h_m_s $ttime]"
+  puts " est. total         :  [sec_as_h_m_s $time_total]"
   puts "==============================================================================="
   foreach elem $test_text {
      puts $elem
