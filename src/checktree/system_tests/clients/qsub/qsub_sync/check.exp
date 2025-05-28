@@ -461,7 +461,12 @@ proc qsub_sync_failover {} {
       append error_text "\"Qmaster down before qsub -sync y\" FAILED due to an unexpected output\n"
       set error 1
    }
-   startup_qmaster 0
+   # we killed sge_qmaster - couldn't restart it via systemd as systemd doesn't know it is down
+   # just start the binary
+   start_sge_bin "sge_qmaster" "" $ts_config(master_host) "root"
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qmaster could not be started"
+   }
    wait_for_event_client "sched*"
 
    # Qmaster down after qsub -sync y
@@ -504,7 +509,10 @@ proc qsub_sync_failover {} {
    set qmaster_pid [get_qmaster_pid $ts_config(master_host) $spool_dir]
    start_remote_prog "$ts_config(master_host)" "root" "kill" "-9 $qmaster_pid"
 
-   if {[startup_qmaster 0] != 0} {
+   # we killed sge_qmaster - couldn't restart it via systemd as systemd doesn't know it is down
+   # just start the binary
+   start_sge_bin "sge_qmaster" "" $ts_config(master_host) "root"
+   if {$prg_exit_state != 0} {
       ts_log_severe "qmaster could not be started"
    }
    expect {

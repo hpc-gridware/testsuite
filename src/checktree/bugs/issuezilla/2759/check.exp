@@ -34,11 +34,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -47,7 +47,7 @@ set check_category        "EXECUTION VERIFIED"
 set check_description(0)  "stopping an execution daemon does not stop jobs"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 set check_root_access_needs  "yes"
 
 # setup and cleanup functions
@@ -66,12 +66,12 @@ proc issue_2759_setup {} {
 
 proc issue_2759_cleanup {} {
    global ts_config
-   
-   # check if execds are alive, if not start them up   
+
+   # check if execds are alive, if not start them up
    foreach host $ts_config(execd_nodes) {
       if {[is_execd_alive $host] == 0} {
-         startup_execd $host
-         wait_for_load_from_all_queues 60
+         # we shutdown the execd with sgeexecd stop, so we have to start it again with sgeexecd start (i.e. not via systemctl)
+         start_remote_prog $host "root" "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "start"
       }
    }
 
@@ -82,20 +82,20 @@ proc issue_2759_cleanup {} {
 
 #****** issue_2759/issue_2759_test() *********************************************
 #  NAME
-#     issue_2759_test() -- test IZ 2759 / CR 6761993 
+#     issue_2759_test() -- test IZ 2759 / CR 6761993
 #
 #  SYNOPSIS
-#     issue_2759_test { } 
+#     issue_2759_test { }
 #
 #  FUNCTION
-#     Starts some sleeper jobs. Shuts down execd with sgeexecd -stop  
-#     and checks if the jobs and therefore the jobs are killed. 
-# 
-#     Additional test: 
-#     Startup cluster again. Start some sleeper jobs. Stop execd with 
+#     Starts some sleeper jobs. Shuts down execd with sgeexecd -stop
+#     and checks if the jobs and therefore the jobs are killed.
+#
+#     Additional test:
+#     Startup cluster again. Start some sleeper jobs. Stop execd with
 #     sgeexecd -softstop and verify if the jobs are running (they have to be).
-#      
-#     
+#
+#
 #*******************************************************************************
 proc issue_2759_test {} {
    global ts_config CHECK_USER
@@ -112,38 +112,38 @@ proc issue_2759_test {} {
       set job_2 [submit_job "-l h=$host $args"]
       set job_3 [submit_job "-l h=$host $args"]
       set job_4 [submit_job "-l h=$host $args"]
-      
+
       if {$job_1 <= 0 || $job_2 <= 0 || $job_3 <= 0 || $job_4 <= 0} {
          return   ;# error has been raised in submit_job
       }
 
       # wait for jobs to be running
       trigger_scheduling
-      if {[wait_for_jobstart $job_1 "" 20] != 0 || 
-          [wait_for_jobstart $job_2 "" 20] != 0 || 
-          [wait_for_jobstart $job_3 "" 20] != 0 || 
-          [wait_for_jobstart $job_4 "" 20] != 0} {  
+      if {[wait_for_jobstart $job_1 "" 20] != 0 ||
+          [wait_for_jobstart $job_2 "" 20] != 0 ||
+          [wait_for_jobstart $job_3 "" 20] != 0 ||
+          [wait_for_jobstart $job_4 "" 20] != 0} {
          return   ;# error has been raised in wait_for_jobstart
       }
 
-      # store the PIDs from the jobs 
+      # store the PIDs from the jobs
       set shep_pid_list [get_shepherd_pid_list $CHECK_USER $host]
       set pid_list [get_job_pid_list $host $shep_pid_list]
-         
-      ts_log_fine "Following pids have the jobs $pid_list" 
 
-      # stop execd 
+      ts_log_fine "Following pids have the jobs $pid_list"
+
+      # stop execd
       set output [start_remote_prog $host "root" "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "stop" "exit_val" 60]
 
       if {$exit_val != 0} {
-         ts_log_severe "Couldn't stop execution daemon!\n Output: \n $output"
-         return 
+         ts_log_severe "Couldn't stop execution daemon!\n$output"
+         return
       }
-      
-      # check if the shepherds are still running 
+
+      # check if the shepherds are still running
       set starttime [timestamp]
       foreach job_pid $pid_list {
-         set didntstart 1 
+         set didntstart 1
          # waiting a maximum of 30 seconds
          while {[expr [timestamp] - $starttime]< 30} {
             get_ps_info $job_pid $host
@@ -151,12 +151,12 @@ proc issue_2759_test {} {
                ts_log_fine "Not OK: waiting for job to die because of sgeexecd stop!"
                set didntstart 1
             } else {
-               set didntstart 0   
+               set didntstart 0
                ts_log_fine "OK: job seems not to be running!"
                break
             }
-            # we don't want to have the processor to use 100% CPU time 
-            after 1000
+            # we don't want to have the processor to use 100% CPU time
+            after 100
          }
          if {$didntstart == 1} {
             parray ps_info
@@ -168,7 +168,11 @@ proc issue_2759_test {} {
       }
 
       # restart execd, wait for it to be up, expect the jobs do vanish
-      startup_execd $host
+      set output [start_remote_prog $host "root" "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "start" "exit_val" 60]
+      if {$exit_val != 0} {
+         ts_log_severe "Couldn't re-start execution daemon!\n$output"
+         return
+      }
       wait_for_load_from_all_queues 60
       wait_for_end_of_all_jobs 120
    }

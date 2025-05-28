@@ -103,7 +103,7 @@ proc smf_test_qmaster {} {
          startup_daemon $host "qmaster"
       }
    } else {
-      ts_log_config "Qmaster host $host does not support SMF" 
+      ts_log_config "Qmaster host $host does not support SMF"
    }
    wait_for_load_from_all_queues 60
 }
@@ -113,9 +113,9 @@ proc smf_test_shadowd {} {
 
    if {[llength $ts_config(shadowd_hosts)] == 0} {
       ts_log_config "No shadowd hosts in your configuration"
-      return 
+      return
    }
-   
+
    set counter 0
    set smf_hosts ""
    foreach host $ts_config(shadowd_hosts) {
@@ -141,9 +141,9 @@ proc smf_test_execd {} {
 
    if {[llength $ts_config(execd_nodes)] == 0} {
       ts_log_config "No execd hosts in your configuration"
-      return 
+      return
    }
-   
+
    set counter 0
    set smf_hosts ""
    foreach host $ts_config(execd_nodes) {
@@ -173,7 +173,7 @@ proc smf_test_dbwriter {} {
       ts_log_config "No dbwriter host in your configuration"
       return
    }
-   
+
    set host $arco_config(dbwriter_host)
    if {[is_smf_host $host] == 1} {
       smf_generic_test $host "dbwriter"

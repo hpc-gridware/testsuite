@@ -34,11 +34,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -49,7 +49,7 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "test host aliases file"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function host_aliases_test_setup
@@ -66,7 +66,7 @@ lappend check_functions "host_aliases_test_test1"
 
 proc host_aliases_test_setup  {} {
    global ts_config have_host_aliases CHECK_USER host_aliases_host
-   
+
    set host_aliases_host ""
 
    # first try to find host where we can test host aliasing
@@ -87,7 +87,7 @@ proc host_aliases_test_setup  {} {
       ts_log_config "can't run test, host $ts_config(master_host) has no aliases"
       return 99
    }
-   
+
    if { [is_remote_file $ts_config(master_host) $CHECK_USER $ts_config(product_root)/$ts_config(cell)/common/host_aliases] } {
       start_remote_prog $ts_config(master_host) $CHECK_USER "mv" \
          "$ts_config(product_root)/$ts_config(cell)/common/host_aliases $ts_config(product_root)/$ts_config(cell)/common/host_aliases.saved"
@@ -108,7 +108,7 @@ proc host_aliases_test_setup  {} {
 
 proc host_aliases_test_cleanup  {} {
    global ts_config have_host_aliases CHECK_USER
-   
+
    set host_aliases_file "$ts_config(product_root)/$ts_config(cell)/common/host_aliases"
    set fshost [fs_config_get_server_for_path $host_aliases_file 0]
    if {$fshost == ""} {
@@ -202,7 +202,7 @@ proc host_aliases_test_test1 {} {
       ts_log_fine "hostname: \"$result(hostname)\""
       ts_log_fine "sgename:  \"$result(sgename)\""
       ts_log_fine "aliases:  \"$result(aliases)\""
-      
+
       if { $result(sgename) != $aliased_name } {
          ts_log_severe "host aliasing not working!"
       }

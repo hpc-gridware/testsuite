@@ -42,7 +42,7 @@ set check_name                "issue_505"
 set check_description(0)      "check if execd core dumps when fd limit set to value > FD_SETSIZE"
 set check_needs               "init_core_system"      ;# dependencies of this check (name of other check)
 set check_root_access_needs   "yes"
-set check_need_running_system "yes" 
+set check_need_running_system "yes"
 
 # setup and cleanup functions
 set check_setup_level_function "issue_505_setup"
@@ -73,7 +73,7 @@ proc issue_505_cleanup {} {
 #     issue_505_run() -- test host alias file
 #
 #  SYNOPSIS
-#     issue_505_run { } 
+#     issue_505_run { }
 #     1) shutdown all execds
 #     2) startup all execds with a file descriptor limit > FD_SETSIZE
 #     3) execd will core dump when issue 505 is found
@@ -125,7 +125,7 @@ proc issue_505_run {} {
    if {[wait_for_load_from_all_queues 30 0] != 0} {
       append error_text "not all execd did start - this might be issue #505!\n"
    }
-   
+
    # Still any core files in product root ?
    if {[check_for_core_files $ts_config(master_host) $ts_config(product_root) 1]} {
       append error_text "found a core file in \"$ts_config(product_root)\" - this might be issue #505! Core removed!\n"

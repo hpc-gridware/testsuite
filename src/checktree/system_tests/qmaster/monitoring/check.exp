@@ -48,11 +48,11 @@
 #
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -63,7 +63,7 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "check qmaster monitoring"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function qmaster_monitoring_setup
@@ -241,7 +241,7 @@ proc qmaster_monitoring_monitor {id expected_prof type {tail_timeout 20}} {
                         }
                      } ;# switch
                   } ;# valid line
-               } ;# foreach line  
+               } ;# foreach line
             } else { ;# monitoring file
                foreach line [string trim [split $expect_out(0,string) "\n"]] {
                   set line [string trim $line]
@@ -275,7 +275,7 @@ proc qmaster_monitoring_monitor {id expected_prof type {tail_timeout 20}} {
                         }
                      }
                   } ;# valid line
-               } ;# foreach line  
+               } ;# foreach line
             } ;
          } ;# data
       } ;# switch
@@ -313,7 +313,7 @@ proc qmaster_monitoring_monitor {id expected_prof type {tail_timeout 20}} {
          # no check here
       }
       default {
-         # here we shall have expected n messages for the requested thread, 
+         # here we shall have expected n messages for the requested thread,
          # 0 messages for the other ones
          set error 0
          set message "expected $expected_prof monitoring messages to show up, but got"
@@ -329,7 +329,7 @@ proc qmaster_monitoring_monitor {id expected_prof type {tail_timeout 20}} {
             ts_log_severe $message
          }
       }
-   }   
+   }
 }
 
 
@@ -342,12 +342,12 @@ proc qmaster_monitoring_dynamic_qping {} {
    set qping_arch [resolve_arch $qping_host]
    ts_log_fine "starting qping monitor on host $qping_host"
    set id [open_remote_spawn_process $qping_host $CHECK_FIRST_FOREIGN_SYSTEM_USER "$ts_config(product_root)/bin/$qping_arch/qping" "-i $ps_interval -f $ts_config(master_host) $ts_config(commd_port) qmaster 1"]
-   
+
    # wait for monitoring messages - no such messages may show up
    qmaster_monitoring_monitor $id NONE "qping"
 
    set prof "MONITOR_TIME"
-   
+
    ts_log_fine "testing monitoring $prof"
 
 # 1)
@@ -375,11 +375,11 @@ proc qmaster_monitoring_dynamic_qping {} {
 
    # wait for monitoring messages for this thread
    qmaster_monitoring_monitor $id $prof "qping"
-   
+
 # 4)
 # check, whether the set to 0 turns the monitoring off
 #
-   
+
    # switch off monitoring
    set global_conf(qmaster_params) "$prof=0:0:0"
    set_config global_conf
@@ -420,12 +420,12 @@ proc qmaster_monitoring_dynamic {} {
    set spooldir [get_qmaster_spool_dir]
    set id [init_logfile_wait $ts_config(master_host) "$spooldir/messages"]
 
-   
+
    # wait for monitoring messages - no such messages may show up
    qmaster_monitoring_monitor $id NONE "messages"
 
    set prof "MONITOR_TIME"
-   
+
    ts_log_fine "testing monitoring $prof"
 
 # 1)
@@ -491,7 +491,7 @@ proc qmaster_monitoring_dynamic {} {
 
    # no further message may appear
    qmaster_monitoring_monitor $id NONE "messages"
-   
+
 # done, shutdown test
 
    # stop the tail -f
@@ -523,7 +523,7 @@ proc qmaster_monitoring_restart {} {
 
    # wait for monitoring messages
    qmaster_monitoring_monitor $id LISTENERT "messages"
-   
+
    # switch off monitoring
    set global_conf(qmaster_params) "MONITOR_TIME=0:0:0"
    set_config global_conf
@@ -548,7 +548,7 @@ proc qmaster_monitoring_restart_qping {} {
    set qping_arch [resolve_arch $qping_host]
    ts_log_fine "starting qping monitor on host $qping_host"
    set id [open_remote_spawn_process $qping_host $CHECK_FIRST_FOREIGN_SYSTEM_USER "$ts_config(product_root)/bin/$qping_arch/qping" "-i $ps_interval -f $ts_config(master_host) $ts_config(commd_port) qmaster 1"]
-      
+
    # enable some monitoring level
    set global_conf(qmaster_params) "MONITOR_TIME=0:0:1"
    set_config global_conf
@@ -664,7 +664,7 @@ proc qmaster_monitoring_dynamic_file {} {
 
    # no further message may appear
    qmaster_monitoring_monitor $id NONE "file"
-   
+
    # done, shutdown test
    # stop the tail -f
    close_spawn_process $id
@@ -697,7 +697,7 @@ proc qmaster_monitoring_restart_file {} {
 
    # wait for monitoring messages
    qmaster_monitoring_monitor $id LISTENERT "file"
-   
+
    # switch off monitoring
    set global_conf(qmaster_params) "MONITOR_TIME=0:0:0"
    set_config global_conf

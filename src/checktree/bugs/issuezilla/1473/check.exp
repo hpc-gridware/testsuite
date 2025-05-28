@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -46,7 +46,7 @@ set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
 set check_description(0)  "check performance problem when adding/modifying/deleting centries"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 
 # setup and cleanup functions
@@ -141,8 +141,8 @@ proc modify_complex_from_file {filename {time_var dummy} {do_error_check 0}} {
                   } else {
                      ts_log_severe "complex failed: $line"
                   }
-               }   
-            }   
+               }
+            }
          }
       }
       if {$do_error_check == 1 && $changed != 200} {

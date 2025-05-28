@@ -54,6 +54,7 @@ set check_functions           ""
 lappend check_functions       "issue_2895_run"
 
 proc issue_2895_setup {} {
+   get_current_cluster_config_array ts_config
    global CHECK_USER
    global orig_aliases_file
    global host_aliases_test_host
@@ -61,17 +62,23 @@ proc issue_2895_setup {} {
    global must_correct_aliases_file
    global must_restart_qmaster_and_scheduler
 
-   get_current_cluster_config_array ts_config
+   set host_aliases_test_host [host_conf_get_suited_hosts 1 {} {} {} 1]
+   ts_log_fine "test host is $host_aliases_test_host"
+
+   global CHECK_INSTALL_RC
+   if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] &&
+       ([host_has_systemd $ts_config(master_host)] || [host_has_systemd $host_aliases_test_host])} {
+      # the test shuts down sge_qmaster and then an exec host
+      # this does not work through the init scripts
+      ts_log_config "cannot run test when sge_qmaster and/or exec host is started via systemd"
+      return 99
+   }
 
    set host_aliases_test_ip "unknown"
 
    if {[info exists orig_aliases_file]} {
       unset orig_aliases_file
    }
-
-   set host_aliases_test_host [host_conf_get_suited_hosts 1 {} {} {} 1]
-
-   ts_log_fine "test host is $host_aliases_test_host"
 
    set output [start_sge_bin "gethostname" "-all" $host_aliases_test_host "" prg_exit_state 60 "" "utilbin"]
    set lines [split $output "\n"]
@@ -135,7 +142,6 @@ proc issue_2895_cleanup {} {
    }
 
    if {$must_restart_qmaster_and_scheduler != 0} {
-      shutdown_system_daemon $ts_config(master_host) "sched"
       shutdown_system_daemon $ts_config(master_host) "qmaster"
       startup_qmaster
    }

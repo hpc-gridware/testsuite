@@ -157,16 +157,16 @@ proc get_smf_service_state { host service {exit_var prg_exit_state} } {
 
 proc get_sge_fmri {host service {check_fmri 1}} {
    global ts_config CHECK_USER
-   
+
    switch -exact $service {
       "qmaster"  -
       "shadowd"  -
       "execd"    -
       "bdb"      -
-      "dbwriter" { 
-         set fmri "svc:/application/sge/$service:$ts_config(cluster_name)" 
+      "dbwriter" {
+         set fmri "svc:/application/sge/$service:$ts_config(cluster_name)"
       }
-      default { 
+      default {
          #Treat as FMRI
 	 set fmri $service
       }
@@ -186,8 +186,8 @@ proc get_sge_fmri {host service {check_fmri 1}} {
 
 proc smf_kill_and_restart { host service {signal 15} {timeout 30} {kill_restarts 1}} {
    global ts_config CHECK_USER CHECK_ADMIN_USER_SYSTEM
-   
-   if { $CHECK_ADMIN_USER_SYSTEM == 0 } { 
+
+   if { $CHECK_ADMIN_USER_SYSTEM == 0 } {
       if { [have_root_passwd] != 0  } {
          ts_log_warning "no root password set or ssh not available"
          return -1
@@ -196,7 +196,7 @@ proc smf_kill_and_restart { host service {signal 15} {timeout 30} {kill_restarts
    } else {
       set user $CHECK_USER
    }
-   
+
    set old_ctid [string trim [start_remote_prog $host "root" [get_binary_path $host "svcs"] "-H -o CTID svc:/application/sge/$service:$ts_config(cluster_name)"]]
    if {[string match $old_ctid "-"] == 1} {
       ts_log_severe "No CTID for $service. Manually stopped?"
@@ -207,7 +207,7 @@ proc smf_kill_and_restart { host service {signal 15} {timeout 30} {kill_restarts
       ts_log_severe "Got pid=0 for $service - cannot do kill"
       return -1
    }
-   
+
    ts_log_fine "Stopping $service: 'kill -$signal $daemon_pid' on host $host as user $user ..."
    set elapsed 0
    while { $elapsed < $timeout } {
@@ -225,7 +225,7 @@ proc smf_kill_and_restart { host service {signal 15} {timeout 30} {kill_restarts
       ts_log_severe "Timeout $timeout secs: $service on $host is still not down"
       return -1
    }
-   
+
    #KILL RESTART service
    if {$kill_restarts == 1} {
       #SMF RESTARTS DAEMON AUTOMATICALLY
@@ -255,8 +255,8 @@ proc smf_kill_and_restart { host service {signal 15} {timeout 30} {kill_restarts
 	  [smf_check_service_state $host $service "online" 20] == -1} {
 	 return -1
       }
-   }   
-   return 0 
+   }
+   return 0
 }
 
 
@@ -321,7 +321,7 @@ proc smf_wait_until_daemon_gone { host service daemon_pid {timeout 30} {more_inf
 
 proc smf_get_pid {host service} {
    global CHECK_USER
-   
+
    set bin [smf_get_process_name $service]
    set output [start_remote_prog $host $CHECK_USER [get_binary_path $host "svcs"] "-lp $service"]
    foreach line [split $output "\n"] {
@@ -336,10 +336,10 @@ proc smf_get_pid {host service} {
 
 proc smf_stop_over_qconf {host service {timeout 30}} {
    global ts_config CHECK_USER CHECK_ADMIN_USER_SYSTEM
-   
+
    set ret 0
    set path $ts_config(product_root)/$ts_config(cell)/common
-   
+
    if { $CHECK_ADMIN_USER_SYSTEM == 0 } {
       if { [have_root_passwd] != 0  } {
          ts_log_warning "no root password set or ssh not available"
@@ -349,9 +349,9 @@ proc smf_stop_over_qconf {host service {timeout 30}} {
    } else {
       set user $CHECK_USER
    }
-   
+
    set daemon_pid [smf_get_pid $host $service]
-   
+
    #Check execd is known by qmaster
    if {[string match $service "execd"] == 1} {
       set elapsed 0
@@ -369,7 +369,7 @@ proc smf_stop_over_qconf {host service {timeout 30}} {
 	 return -1
       }
    }
-   
+
    #Only qmaster and execd has qconf option
    switch -exact $service {
       "master" -
@@ -425,7 +425,7 @@ proc smf_stop_over_qconf {host service {timeout 30}} {
 	    ts_log_severe "Could restart execd."
 	    return -1
 	 }
-	 #Submit new job to this execd 
+	 #Submit new job to this execd
 	 set jid2 [submit_job "-o /dev/null -j y -q *@$host $ts_config(product_root)/examples/jobs/sleeper.sh 432" 1 60 $host $user "" 0 "qsub"]
 	 if {$jid2 < 0} {
 	    ts_log_severe "Could not submit second sleeper job!"
@@ -488,14 +488,14 @@ proc smf_stop_over_qconf {host service {timeout 30}} {
 
 proc smf_start_svcadm {host service action {flags ""} {wait_for_new_process 0} {timeout 15}} {
    global ts_config
-   
+
    set fmri [get_sge_fmri $host $service]
    if {[string length $fmri] == 0} {
       return -1
    }
    set old_ctid -1
    set args "$action $flags $fmri"
-   
+
    #Setup different actions
    switch -exact $action {
       "enable" {
@@ -520,11 +520,11 @@ proc smf_start_svcadm {host service action {flags ""} {wait_for_new_process 0} {
 	 return -1
       }
    }
-   
+
    ts_log_fine "$text_action $service: 'svcadm $args' on host $host as user root"
    #Run svcadm
    start_remote_prog $host "root" [get_binary_path $host "svcadm"] "$args"
-   
+
    if {$wait_for_new_process == 0} {
       if {$prg_exit_state != 0} {
          ts_log_severe "svcadm $args exit code is: $prg_exit_state"
@@ -560,7 +560,7 @@ proc smf_start_svcadm {host service action {flags ""} {wait_for_new_process 0} {
 
 proc smf_generic_test {host service {timeout 30} {kill_restarts 1}} {
    global ts_config CHECK_USER
-   
+
    set ret 0
    if { [is_smf_host $host] == 0 } {
       ts_log_severe "Your $service host $host does not support SMF. Skipping test."
@@ -573,7 +573,7 @@ proc smf_generic_test {host service {timeout 30} {kill_restarts 1}} {
       ts_log_fine "Aborting current test iteration..."
       return -1
    }
-   
+
    #Register with SMF
    ts_log_fine "Registering $service:$ts_config(cluster_name) service ..."
    set output [start_remote_prog $host "root" [get_binary_path $host "sh"] "-c [get_sge_smf_cmd] register $service $ts_config(cluster_name)" prg_exit_state]
@@ -588,7 +588,7 @@ proc smf_generic_test {host service {timeout 30} {kill_restarts 1}} {
       ts_log_severe "$service service is in '[get_smf_service_state $host $service]' STATE, expected 'online' on host $host"
       return -1
    }
-   
+
    #Advaced restart tests
    set ret [smf_advanced_restart_test $host $service $timeout $kill_restarts]
    if {$ret != 0} {
@@ -615,9 +615,9 @@ proc smf_generic_test {host service {timeout 30} {kill_restarts 1}} {
 
 proc smf_advanced_restart_test {host service {timeout 30} {kill_restarts 1}} {
    global ts_config CHECK_USER
-   
+
    #TODO - would be nice to test reboot behavior, maybe by using a reserved zones in cluster config
-   
+
    ###############
    #STARTUP SCRIPT
    ###############
@@ -640,7 +640,7 @@ proc smf_advanced_restart_test {host service {timeout 30} {kill_restarts 1}} {
    if {[smf_kill_and_restart $host $service 15 $timeout $kill_restarts] != 0} {
       return -1
    }
-   
+
    #Stop using kill -9 - INCORRECT shutdown (SMF always restarts the service)
    if {[smf_kill_and_restart $host $service 9 $timeout 1] != 0} {
       return -1
@@ -683,7 +683,7 @@ proc smf_advanced_restart_test {host service {timeout 30} {kill_restarts 1}} {
 
 proc enable_smf_in_cluster {} {
    global ts_config CHECK_USER arco_config
-   
+
    set host $ts_config(master_host)
    set service "qmaster"
    if {[is_smf_host $host] == 1} {
@@ -716,7 +716,7 @@ proc enable_smf_in_cluster {} {
             return -1
          }
       }
-   } 
+   }
    set service "execd"
    foreach host $ts_config(execd_nodes) {
       if {[is_smf_host $host] == 1} {
@@ -755,7 +755,7 @@ proc smf_startup_cluster {} {
    } else {
       startup_daemon $host "qmaster"
    }
-   
+
    #shadowds
    foreach host $ts_config(shadowd_hosts) {
       if {[is_smf_host $host] == 1} {
@@ -788,7 +788,7 @@ proc startup_cluster {} {
    #qmaster
    set host $ts_config(master_host)
    startup_daemon $host "qmaster"
-   
+
    #shadowds
    foreach host $ts_config(shadowd_hosts) {
       startup_daemon $host "shadowd"
@@ -807,7 +807,7 @@ proc startup_cluster {} {
 
 proc shutdown_whole_cluster {} {
    global ts_config
-   
+
    set host ""
    #shadowds
    foreach host $ts_config(shadowd_hosts) {
@@ -815,7 +815,7 @@ proc shutdown_whole_cluster {} {
          shutdown_daemon $host "shadowd"
       }
    }
-   
+
    #execds
    foreach host $ts_config(execd_nodes) {
       if {$host != "none"} {

@@ -42,7 +42,7 @@ set check_name                "host_aliases_file"
 set check_description(0)      "check if deadlock occurs when ip address is used in host_aliases file"
 set check_needs               "init_core_system"      ;# dependencies of this check (name of other check)
 set check_root_access_needs   "no"
-set check_need_running_system "no" 
+set check_need_running_system "no"
 
 # setup and cleanup functions
 set check_setup_function "host_aliases_file_setup"
@@ -128,7 +128,7 @@ proc host_aliases_file_cleanup {} {
 #     host_aliases_file_run() -- test host alias file
 #
 #  SYNOPSIS
-#     host_aliases_file_run { } 
+#     host_aliases_file_run { }
 #
 #  FUNCTION
 #     Scenario: deadlock if ip address is used in first column of host alias file

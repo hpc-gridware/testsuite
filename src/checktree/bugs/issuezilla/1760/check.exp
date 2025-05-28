@@ -149,7 +149,7 @@ proc issue_1760_check {} {
    }
 
    # Shutdown qmaster
-   shutdown_qmaster $ts_config(master_host) [ get_qmaster_spool_dir ]
+   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
    # Restart qmaster without envlist set
    startup_qmaster 0
 
@@ -234,10 +234,11 @@ proc issue_1760_cleanup {} {
       }
 
       # Shutdown qmaster
-      shutdown_qmaster $ts_config(master_host) [ get_qmaster_spool_dir ]
+      shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
 
       # Restart qmaster without envlist set
       startup_qmaster 0
+      wait_for_load_from_all_queues 60
    }
 
    # Remote fake exechost (created during -Ahgrp?)

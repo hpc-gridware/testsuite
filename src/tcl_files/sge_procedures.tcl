@@ -3521,6 +3521,10 @@ proc wait_for_queue_state {queue state wait_timeout} {
 #     sge_procedures/shutdown_system_daemon()
 #*******************************************************************************
 proc soft_execd_shutdown {host_list {timeout 60}} {
+   return [shutdown_execd $host_list 1 $timeout]
+}
+
+proc shutdown_execd {host_list {soft 0} {timeout 60}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
    global CHECK_INSTALL_RC
@@ -3538,11 +3542,26 @@ proc soft_execd_shutdown {host_list {timeout 60}} {
    # first shutdown the execds
    foreach host $host_list {
       ts_log_fine "shutdown execd pid=$execd_pid($host) on host \"$host\""
-      if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
-         set service_name [systemd_get_service_name "execd"]
-         set output [start_remote_prog $host "root" "systemctl" "stop $service_name"]
+      if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $host] && [systemd_is_service_active $host "execd"]} {
+         ts_log_fine "   via systemd"
+         if {!$soft} {
+            # first stop possibly running jobs / shepherds
+            # @todo once jobs are running in their own slice, stop that one instead
+            if {[systemd_is_service_active $host "shepherds"]} {
+               systemd_stop_service $host "shepherds"
+            }
+         }
+         # now (soft) stop the execd service
+         if {![systemd_stop_service $host "execd"]} {
+            shutdown_system_daemon $host execd
+         }
       } else {
-         set result [start_sge_bin "qconf" "-ke $host" $ts_config(master_host) $CHECK_USER]
+         ts_log_fine "   via qconf -ke\[j\]"
+         set option "-ke"
+         if {!$soft} {
+            append option "j"
+         }
+         set result [start_sge_bin "qconf" "$option $host" $ts_config(master_host) $CHECK_USER]
          if {$prg_exit_state != 0} {
             ts_log_fine "qconf -ke $host returned $prg_exit_state, hard killing execd"
             shutdown_system_daemon $host execd
@@ -3558,7 +3577,7 @@ proc soft_execd_shutdown {host_list {timeout 60}} {
          ts_log_finer "execd on host $host reports 99.99 load value"
          #execd might not be down yet, let's check!
       } else {
-         ts_log_severe "timeout while waiting for unknown load for host $host"
+         ts_log_severe "timeout while waiting for unknown load for host $host:\n[start_sge_bin "qhost -h $host]"
          break
          return -1
       }
@@ -3627,7 +3646,7 @@ proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
    }
 
    while {1} {
-      after 1000
+      after 500
       ts_log_progress
       set result [start_sge_bin "qstat" "-f"]
       if {$prg_exit_state == 0} {
@@ -3693,11 +3712,12 @@ proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
       set runtime [expr [clock seconds] - $time]
       if {$runtime >= $seconds} {
           if {$do_error_check == 1} {
-             ts_log_severe "timeout waiting for load values >= 99 (timeout was $seconds)"
+             ts_log_severe "timeout waiting for load values >= 99 (timeout was $seconds)\n$result"
           }
           return -1
       }
    }
+
    return 0
 }
 
@@ -6956,7 +6976,8 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
       ts_log_finest "using DISPLAY=${CHECK_DISPLAY_OUTPUT}"
       set output [start_remote_prog $start_host $startup_user $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e $ts_config(testsuite_root_dir)/scripts/debug_starter.sh /tmp/out.$CHECK_USER.qmaster.$start_host \"$CHECK_SGE_DEBUG_LEVEL\" $ts_config(product_root)/bin/${arch}/sge_qmaster &" prg_exit_state 60 2 "" envlist]
    } else {
-      if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
+      # if we have an env list, cannot use systemd to startup qmaster
+      if {$env_list == "" && $CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
          set service_name [systemd_get_service_name "qmaster"]
          set output [start_remote_prog $start_host $startup_user "systemctl" "start $service_name"]
       } else {
@@ -6967,6 +6988,8 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
    if {$prg_exit_state != 0} {
       ts_log_severe "Qmaster did not start exit_code=$prg_exit_state output=$output"
       return
+   } else {
+      ts_log_fine $output
    }
 
    # now wait until qmaster is availabe
@@ -7668,11 +7691,9 @@ proc shutdown_qmaster {hostname qmaster_spool_dir {timeout 60}} {
    if {$ps_info($qmaster_pid,error) == 0} {
       # is_pid_with_name_existing does not work if qmaster is running under valgrind
       if {[is_pid_with_name_existing $hostname $qmaster_pid "sge_qmaster"] == 0} {
-         if {$CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"] && [host_has_systemd $hostname]} {
-            set service_name [systemd_get_service_name "qmaster"]
-            ts_log_fine "killing qmaster with pid $qmaster_pid on host $hostname, via systemctl stop $service_name"
-            set result [start_remote_prog $hostname "root" "systemctl" "stop $service_name"]
-            ts_log_fine $result
+         if {$CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"] && [host_has_systemd $hostname] && [systemd_is_service_active $hostname "qmaster"]} {
+            ts_log_fine "killing qmaster with pid $qmaster_pid on host $hostname, via systemd"
+            systemd_stop_service $hostname "qmaster"
          } else {
             ts_log_finest "killing qmaster with pid $qmaster_pid on host $hostname with qconf -km"
             ts_log_finest "do a qconf -km ..."
@@ -7817,12 +7838,10 @@ proc shutdown_all_shadowd {hostname} {
    # if we are running under systemd control, then use systemctl stop to shutdown the shadowd
    # BUT: only on non qmaster hosts - on the qmaster host shutting down the master will also stop shadowd
    # DISABLED for now: No rc-scripts are installed on shadow hosts, see CS-1218
-   if {0 && $CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"] && [host_has_systemd $hostname]} {
+   if {0 && $CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"] && [host_has_systemd $hostname] && [systemd_is_service_active $hostname "qmaster"]} {
       if {$hostname != $ts_config(master_host)} {
-         set service_name [systemd_get_service_name "qmaster"]
-         ts_log_fine "killing shadowd on host $hostname, via systemctl stop $service_name"
-         set result [start_remote_prog $hostname "root" "systemctl" "stop $service_name"]
-         ts_log_fine $result
+         ts_log_fine "killing shadowd on host $hostname, via systemd"
+         systemd_stop_service $hostname "qmaster"
       }
       return 1
    }
@@ -8318,10 +8337,9 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
    if {$CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"]} {
       # stop with systemd whatever is possible
       # daemons on hosts without systemd will be killed in the following code
-      set service [systemd_get_service_name "execd"]
       foreach host $ts_config(execd_nodes) {
-         if {[host_has_systemd $host]} {
-            set result [start_remote_prog $host "root" "systemctl" "stop $service"]
+         if {[host_has_systemd $host] && [systemd_is_service_active $host "execd"]} {
+            systemd_stop_service $host "execd"
          } else {
             set result [start_sge_bin "qconf" "-ke $host"]
          }
@@ -8335,10 +8353,10 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
    # shutdown qmaster via systemd
    set qmaster_shutdown 0
    if {$CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"]} {
-      if {[host_has_systemd $ts_config(master_host)]} {
-         set service [systemd_get_service_name "qmaster"]
-         set result [start_remote_prog $ts_config(master_host) "root" "systemctl" "stop $service"]
-         set qmaster_shutdown 1
+      if {[host_has_systemd $ts_config(master_host)] && [systemd_is_service_active $ts_config(master_host) "qmaster"]} {
+         if {[systemd_stop_service $ts_config(master_host) "qmaster"]} {
+            set qmaster_shutdown 1
+         }
       }
    }
 
@@ -10480,16 +10498,19 @@ proc startup_execd {hostname {envlist ""} {startup_user ""}} {
    }
 
    ts_log_fine "starting up execd on host \"$hostname\" as user \"$startup_user\""
-   if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
+   if {$envlist == "" && $CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $hostname]} {
+      ts_log_fine "   via systemd"
       set service_name [systemd_get_service_name "execd"]
       start_remote_prog $hostname $startup_user "systemctl" "start $service_name"
    } else {
       if {$CHECK_VALGRIND == "execution" && $CHECK_VALGRIND_HOST == $hostname} {
+         ts_log_fine "   via valgrind.sh sge_execd"
          set CHECK_VALGRIND_LAST_DAEMON_RESTART [clock seconds]
          set arch [resolve_arch $hostname]
          set execd_cmd "$ts_config(product_root)/bin/$arch/sge_execd"
          set execd_args ""
       } else {
+         ts_log_fine "   via sgeexecd script"
          set execd_cmd "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd"
          set execd_args "start"
       }
@@ -10969,11 +10990,9 @@ proc remove_from_init_system {host} {
          # 200-254   reserved
          if {$prg_exit_state != 4} {
             # service exists - stop it
-            set output [start_remote_prog $host "root" "systemctl" "is-active $service_name"]
-            if {$prg_exit_state == 0} {
+            if {[systemd_is_service_active $host $service]} {
                # service is running
-               set output [start_remote_prog $host "root" "systemctl" "stop $service_name"]
-               ts_log_finer $output
+               systemd_stop_service $host $service
             }
             # service is enabled - disable it
             set output [start_remote_prog $host "root" "systemctl" "is-enabled $service_name"]
@@ -11027,3 +11046,31 @@ proc remove_all_hosts_from_init_system {} {
    }
 }
 
+proc systemd_is_service_active {host service} {
+   set service_name [systemd_get_service_name $service]
+   set ret 0
+   set output [start_remote_prog $host "root" "systemctl" "is-active $service_name"]
+   if {$prg_exit_state == 0} {
+      set ret 1
+   }
+
+   return $ret
+}
+
+# @todo add functions for is-enabled, ...
+
+proc systemd_stop_service {host service {raise_error 1}} {
+   set ret 1
+   set service_name [systemd_get_service_name $service]
+   set output [start_remote_prog $host "root" "systemctl" "stop $service_name"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "systemctl stop $service_name on host $host failed:\n$output"
+      set ret 0
+   } else {
+      ts_log_fine "systemctl stop $service_name on host $host exited 0:\n$output"
+   }
+
+   return $ret
+}
+
+# @todo add functions for start, enable, disable, ...

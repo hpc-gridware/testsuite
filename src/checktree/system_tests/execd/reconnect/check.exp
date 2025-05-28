@@ -35,11 +35,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -51,21 +51,34 @@ set check_description(0)  "test execd re-connect after changed act_qmaster host 
 
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # define level setup/cleanup
+set check_setup_function "execd_reconnect_setup"
 set check_cleanup_level_function "execd_reconnect_cleanup_level"
 
 
 # define test's procedure order
 set check_functions "execd_reconnect_test"
 
+proc execd_reconnect_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_INSTALL_RC
+
+   if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
+      # the test installs a act_qmaster file with a non resolvable hostname
+      # in case of systemd sge_qmaster is started through the init script which fails in this situation
+      ts_log_config "cannot run test when sge_qmaster is started via systemd"
+      return 99
+   }
+}
+
 #****** check/execd_reconnect_cleanup_level() **********************************
 #  NAME
 #     execd_reconnect_cleanup_level() -- cleanup test procedure
 #
 #  SYNOPSIS
-#     execd_reconnect_cleanup_level { } 
+#     execd_reconnect_cleanup_level { }
 #
 #  FUNCTION
 #     This cleanup level function is doing a qconf call to get the global
@@ -76,14 +89,14 @@ set check_functions "execd_reconnect_test"
 proc execd_reconnect_cleanup_level {} {
    global execd_reconnect_cleanup_level_do_cleanup
    ts_log_fine "cleanup level function ..."
-   
+
    if {[get_config dummy global 10] != 0 || $execd_reconnect_cleanup_level_do_cleanup == 1} {
       # shutdown complete system (execd will never re-connect on error)
       shutdown_core_system
 
       # restart system
       startup_core_system
-  
+
       # wait for loads from execds
       wait_for_load_from_all_queues 60
    } else {
@@ -97,7 +110,7 @@ proc execd_reconnect_cleanup_level {} {
 #     execd_reconnect_test() -- test execd reconnect on qmaster take-over
 #
 #  SYNOPSIS
-#     execd_reconnect_test { } 
+#     execd_reconnect_test { }
 #
 #  FUNCTION
 #     Test steps:
@@ -131,7 +144,7 @@ proc execd_reconnect_test {} {
 
    # read act_qmaster file
    set cur_qmaster_name [get_act_qaster act_qmaster_file_path]
-   
+
    # check that current qmaster is written in the act_qmaster file
    set res_file [resolve_host $cur_qmaster_name]
    set res_master [resolve_host $ts_config(master_host)]
@@ -142,7 +155,7 @@ proc execd_reconnect_test {} {
    # now shutdown qmaster and scheduler
    shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
 
- 
+
    # 2) write unresolvable host name into the file
    set data(0) 1
    set data(1) "not_resolve_able_host"
@@ -163,8 +176,8 @@ proc execd_reconnect_test {} {
    # execds should then try to connect to the unresolvable master host
    set my_timeout [timestamp]
    incr my_timeout 240
-   while { 1 } {
-      set cur_time [timestamp] 
+   while {1} {
+      set cur_time [timestamp]
       set time_diff [expr $my_timeout - $cur_time]
       if {$time_diff <= 0} {
          break
@@ -188,7 +201,7 @@ proc execd_reconnect_test {} {
    if {[wait_for_load_from_all_queues 120] == 0} {
       set execd_reconnect_cleanup_level_do_cleanup 0
    }
-   
+
    set host_load "-"
    qhost_parse output jobs "-l h=$execd_name"
    if {[info exists output(host0,load_avg)]} {
