@@ -312,7 +312,12 @@ proc host_has_munge_server {host} {
             return 0
          }
       }
-      "*bsd-*" -
+      "*bsd-*" {
+         set output [start_remote_prog $host "root" "service" "munged status"]
+         if {$prg_exit_state != 0} {
+            return 0
+         }
+      }
       "xlx-*" {
          set output [start_remote_prog $host "root" "service" "munge status"]
          if {$prg_exit_state != 0} {
@@ -340,7 +345,7 @@ proc lab_test_applications {} {
     # get all test hosts that exist in the host configuration
     set gcs_version $ts_config(gridengine_version)
     set all_hosts $ts_host_config(hostlist)
-    set all_hosts [list h046 fr13-0-fbsd-amd64]
+    # set all_hosts [list h046 fr13-0-fbsd-amd64]
 
     # filter out hosts that are unsupported for the current GCS version and add all zones
     foreach node $all_hosts {
