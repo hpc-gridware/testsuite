@@ -1,0 +1,462 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+
+set check_name "lab_test"
+set check_category "TESTSUITE"
+set check_description(0)  "test all nodes (host + zones) part of the host config if the setup is valid"
+set check_needs ""
+set check_root_access_needs "yes"
+
+# setup and cleanup functions
+set check_setup_level_function lab_test_level_setup
+set check_cleanup_level_function lab_test_level_cleanup
+
+# define test's procedure order
+set check_functions "lab_test_applications"
+
+# -------- local test procedures: initialization------------------------------
+
+proc lab_test_level_setup {} {
+}
+
+proc lab_test_level_cleanup {} {
+}
+
+proc table_print {headers rows {vertical_header 1} {separator "-"}} {
+   # Calculate header column widths
+   set header_widths {}
+   set widths {}
+   foreach header $headers {
+      if {$vertical_header} {
+         lappend header_widths [string length $header]
+      } else {
+         lappend widths [string length $header]
+      }
+   }
+
+   # Initialize widths for cells based on cell data
+   foreach row $rows {
+      set i 0
+      foreach cell $row {
+         set cell_str [string trim $cell]
+         set w [llength $widths]
+         if {$i >= $w} {
+             lappend widths [string length $cell_str]
+         } else {
+             set current_width [lindex $widths $i]
+             set cell_width [string length $cell_str]
+             if {$cell_width > $current_width} {
+                lset widths $i $cell_width
+             }
+         }
+         incr i
+      }
+   }
+
+    # Create separator line
+    set separator_line "+"
+    foreach width $widths {
+        append separator_line [string repeat $separator [expr {$width + 2}]]
+        append separator_line "|"
+    }
+
+    if {$vertical_header} {
+       # Print header vertically (rotated 90 degrees)
+       set max_length [lindex [lsort -integer $header_widths] end]
+       for {set i 0} {$i < $max_length} {incr i} {
+           set line "|"
+           for {set j 0} {$j < [llength $headers]} {incr j} {
+               set head [lindex $headers $j]
+               if {[string length $head] > 0} {
+                  append line " [string index $head 0][string repeat " " [lindex $widths $j]]|"
+               } else {
+                  append line " [string repeat " " [lindex $widths $j]] |"
+               }
+               set new_head [string range $head 1 end]
+               lset headers $j $new_head
+           }
+           puts $line
+       }
+    } else {
+       set line "|"
+       for {set i 0} {$i < [llength $headers]} {incr i} {
+          set h [lindex $headers $i]
+          append line " $h[string repeat " " [expr [lindex $widths $i] - [string length $h]]] |"
+       }
+       puts $line
+    }
+
+    # Print separator line after headers
+    puts $separator_line
+
+    # Print data rows normally
+    foreach row $rows {
+        set padded_row $row
+        while {[llength $padded_row] < [llength $headers]} {
+            lappend padded_row ""
+        }
+
+        set format_str "|"
+        for {set i 0} {$i < [llength $headers]} {incr i} {
+            append format_str " %-[lindex $widths $i]s |"
+        }
+
+        puts [format $format_str {*}$padded_row]
+    }
+
+    # Print final separator line
+    puts $separator_line
+}
+
+# Compare function for sorting host
+proc compare_hosts {a b} {
+   # Compare the architecture first
+   set arch_comp [string compare [lindex $a 1] [lindex $b 1]]
+   if {$arch_comp != 0} {
+      return $arch_comp
+   } else {
+      # If architectures are the same, compare the host names
+      set name_comp [string compare [lindex $a 1] [lindex $b 1]]
+      return $name_comp
+   }
+}
+
+proc host_has_binary_setting {node param} {
+   global CHECK_USER
+   global ts_host_config
+
+   set host [node_get_host $node]
+   set bin_path ""
+   if {[info exists ts_host_config($host,$param)]} {
+      set bin_path $ts_host_config($host,$param)
+   }
+   if {$bin_path == "" || ![is_remote_file $host $CHECK_USER $bin_path]} {
+      ts_log_fine "Host $host has no application defined for the host config parameter $param"
+      return 0
+   }
+   if {![host_has_binary $host $param]} {
+      return 0
+   }
+   return 1
+}
+
+proc host_has_binary {host binary} {
+   set gnuplot_bin [get_binary_path $host $binary 0]
+   if {$gnuplot_bin == $binary} {
+      ts_log_fine "Host $host has no $binary binary"
+      return 0
+   }
+   return 1
+}
+
+proc host_has_expect {host} {
+   return [host_has_binary_setting $host "expect"]
+}
+
+proc host_has_vim {host} {
+   return [host_has_binary_setting $host "vim"]
+}
+
+proc host_has_git {host} {
+   return [host_has_binary $host "git"]
+}
+
+proc host_has_perl {host} {
+   set perl_bin [get_binary_path $host "perl" 0]
+   if {$perl_bin == "perl"} {
+      ts_log_fine "host $host has no perl binary"
+      return 0
+   }
+
+   set perl_output [start_remote_prog $host "root" $perl_bin "-MEnv -e 'exit 0'"]
+   if {$prg_exit_state != 0} {
+      ts_log_fine "perl Env module is not available on host $host"
+      return 0
+   }
+
+   return 1
+}
+
+proc host_get_python_version {host} {
+   # what is the name of the python binary. we prefer python3
+   set python_name "python3"
+   set python_bin [get_binary_path $host $python_name 0]
+   if {$python_bin == $python_name} {
+      set python_name "python"
+      set python_bin [get_binary_path $host $python_name 0]
+      if {$python_bin == $python_name} {
+         ts_log_fine "Host $host has no python3 and no python binary"
+         return "-"
+      }
+   }
+
+   # get the python version
+   set python_output [start_remote_prog $host "root" $python_bin "-c 'import sys; print(sys.version)'"]
+   if {$prg_exit_state != 0} {
+      ts_log_fine "Failed to get Python version of $python_name on host $host"
+      return "-"
+   }
+
+   set token [split $python_output " "]
+   lassign $token python_version _ _ _
+   return $python_version
+}
+
+proc host_get_cpuset {host} {
+   set arch [host_conf_get_arch $host]
+   switch -glob $arch {
+      "ulx-*" -
+      "lx-*" -
+      "xlx-*" {
+         set has_taskset [host_has_binary $host "taskset"]
+         if {$has_taskset} {
+            return "taskset"
+         }
+      }
+      "sol-*" -
+      "osol-*" {
+         set has_psrset [host_has_binary $host "psrset"]
+         if {$has_psrset} {
+            return "psrset"
+         }
+      }
+      "*bsd-*" {
+         set has_cpuset [host_has_binary $host "cpuset"]
+         if {$has_cpuset} {
+            return "cpuset"
+         }
+      }
+      default {
+         return "-"
+      }
+   }
+   return "-"
+}
+
+proc host_has_gnuplot {host} {
+   return [host_has_binary $host "gnuplot"]
+}
+
+proc host_has_xterm {host} {
+   return [host_has_binary $host "xterm"]
+}
+
+proc host_has_strings {host} {
+   return [host_has_binary $host "strings"]
+}
+
+proc host_has_munge_key {host} {
+   global ts_config
+
+   set munge_master_key [start_remote_prog "h007" "root" "cat" "/etc/munge/munge.key"]
+   if {$prg_exit_state != 0} {
+      return 0
+   }
+
+   set munge_key [start_remote_prog $ts_config(master_host) "root" "cat" "/etc/munge/munge.key"]
+   if {$prg_exit_state != 0} {
+      ts_log_fine "Munge key on host $host does not exist"
+      return 0
+   }
+
+   if {$munge_master_key != $munge_key} {
+      ts_log_fine "Munge key on host $host does not match the master key"
+      return 0
+   }
+
+   return 1
+}
+
+proc host_has_munge_server {host} {
+   global ts_config
+
+   set arch [host_conf_get_arch $host]
+   switch -glob $arch {
+      "darwin-*" {
+         set output [start_remote_prog $host "root" "launchctl" "list | grep org.macports.munged"]
+         set olist [split $output " \t"]
+         lassign $olist pid status service
+         if {$pid == "-" || $status != "0"} {
+            return 0
+         }
+      }
+      "ulx-*" -
+      "lx-*" {
+         set output [start_remote_prog $host "root" "systemctl" "status munge"]
+         if {$prg_exit_state != 0} {
+            return 0
+         }
+      }
+      "*bsd-*" -
+      "xlx-*" {
+         set output [start_remote_prog $host "root" "service" "munge status"]
+         if {$prg_exit_state != 0} {
+            return 0
+         }
+      }
+      "unsupported" -
+      default {
+         ts_log_fine "Host $host has unsupported architecture, skipping munge server check"
+         return 0
+      }
+   }
+
+   return 1
+}
+
+proc lab_test_applications {} {
+    global ts_host_config
+    global ts_config
+    global CHECK_USER
+
+    set headers {}
+    set rows {}
+
+    # get all test hosts that exist in the host configuration
+    set gcs_version $ts_config(gridengine_version)
+    set all_hosts $ts_host_config(hostlist)
+    set all_hosts [list h046 fr13-0-fbsd-amd64]
+
+    # filter out hosts that are unsupported for the current GCS version and add all zones
+    foreach node $all_hosts {
+       set host [node_get_host $node]
+       if {$ts_host_config($host,arch,$gcs_version) != "unsupported"} {
+          set all_hosts [concat $all_hosts $ts_host_config($host,zones)]
+       } else {
+          set idx [lsearch -exact $all_hosts $host]
+          if {$idx >= 0} {
+             set all_hosts [lreplace $all_hosts $idx $idx]
+          }
+       }
+    }
+
+    # add field to columns (including header) and columns to rows
+    set first 1
+    foreach node $all_hosts {
+       set host [node_get_host $node]
+       ts_log_fine "Handling node $node"
+       set columns {}
+
+       # add the node name not the host name to get zone names
+       lappend columns $node
+       if {$first} {
+          lappend headers "host"
+       }
+
+       set arch $ts_host_config($host,arch,$gcs_version)
+       lappend columns $arch
+       if {$first} {
+          lappend headers "arch"
+       }
+
+       set has_strings [host_has_strings $host]
+       lappend columns $has_strings
+       if {$first} {
+          lappend headers "strings"
+       }
+
+       set has_expect [host_has_expect $host]
+       lappend columns $has_expect
+       if {$first} {
+          lappend headers "expect"
+       }
+
+       set has_vim [host_has_vim $host]
+       lappend columns $has_vim
+       if {$first} {
+          lappend headers "vim"
+       }
+
+       set has_git [host_has_git $host]
+       lappend columns $has_git
+       if {$first} {
+          lappend headers "git"
+       }
+
+       set has_perl [host_has_perl $host]
+       lappend columns $has_perl
+       if {$first} {
+          lappend headers "perl"
+       }
+
+       set python_version [host_get_python_version $host]
+       lappend columns $python_version
+       if {$first} {
+          lappend headers "python-version"
+       }
+
+       set cpuset_binary [host_get_cpuset $host]
+       lappend columns $cpuset_binary
+       if {$first} {
+          lappend headers "cpuset-binary"
+       }
+
+       set has_gnuplot [host_has_gnuplot $host]
+       lappend columns $has_gnuplot
+       if {$first} {
+          lappend headers "gnuplot"
+       }
+
+       set has_xterm [host_has_xterm $host]
+       lappend columns $has_xterm
+       if {$first} {
+          lappend headers "xterm"
+       }
+
+       set has_munge_key [host_has_munge_key $host]
+       lappend columns $has_munge_key
+       if {$first} {
+          lappend headers "munge-key"
+       }
+
+       set has_munge_server [host_has_munge_server $host]
+       lappend columns $has_munge_server
+       if {$first} {
+          lappend headers "munged"
+       }
+
+       lappend rows $columns
+       set first 0
+    }
+
+    # Group rows by architecture
+    array set arch_groups {}
+    foreach row $rows {
+        set arch [lindex $row 1]
+        lappend arch_groups($arch) $row
+    }
+
+    # Sort each architecture group by compile host status and concatenate results
+    set sorted_rows {}
+    foreach arch [lsort [array names arch_groups]] {
+        set sorted_arch_rows [lsort -command compare_hosts $arch_groups($arch)]
+        set sorted_rows [concat $sorted_rows $sorted_arch_rows]
+    }
+
+    table_print $headers $sorted_rows
+}

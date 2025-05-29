@@ -2257,7 +2257,7 @@ proc get_binary_path {nodename binary {raise_error 1}} {
          # The binary path is not configured in the host configuration, report config warning
          set config_text "No entry for binary \"$binary\" on host \"$hostname\" in host configuration!\n"
          append config_text "Using \"$binary\" binary: \"$binary_path\"\n"
-         ts_log_fine $config_text
+         ts_log_finer $config_text
          # Now add the binary path to the cache
          set cached_binary_path_array($hostname,$binary,$CHECK_USER) $binary_path
          set get_binary_path_recursive_call 0
@@ -2283,8 +2283,8 @@ proc get_binary_path {nodename binary {raise_error 1}} {
       # We have figured out the path from the user's environment
       # The binary path is not configured in the host configuration, report config warning
       set config_text "No entry for binary \"$binary\" on host \"$hostname\" in host configuration!\n"
-      append config_text "INFO: Using \"$binary\" binary from testsuite user`s environment path setting: \"$binary_path\"\n"
-      ts_log_fine $config_text
+      append config_text "Using \"$binary\" binary from testsuite user`s environment path setting: \"$binary_path\"\n"
+      ts_log_finer $config_text
 # TODO(CR): Enhance host configurations and add missing binary path informations. So that no binary path
 # TODO(CR): taken from the user's environment !!! 
 
@@ -2302,7 +2302,7 @@ proc get_binary_path {nodename binary {raise_error 1}} {
             # The binary path is not configured in the host configuration, report config warning
             set config_text "No entry for binary \"$binary\" on host \"$hostname\" in host configuration!\n"
             append config_text "Using \"$binary\" binary from root`s environment path setting: \"$binary_path\"\n"
-            ts_log_info $config_text
+            ts_log_finer $config_text
             # Now add the binary path to the cache
             set cached_binary_path_array($hostname,$binary,root) $binary_path
             set get_binary_path_recursive_call 0

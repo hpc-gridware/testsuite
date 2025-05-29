@@ -125,14 +125,14 @@ proc host_test_test {} {
       set params [host_config_get_host_parameters]
       foreach param $params {
          set is_checked 0
-         ts_log_finer "parameter \"$param\" ..."
+         ts_log_fine "parameter \"$param\" ..."
          switch -exact $param {
             "expect" {
                set is_checked 1
                if {[is_remote_file $host $CHECK_USER $ts_host_config($host,$param)] == 0} {
                   append error_text "node $node expect binary \"$ts_host_config($host,$param)\" not available!\n"
                } else {
-                  ts_log_fine "found expect binary \"$ts_host_config($host,$param)\" on node \"$node\""
+                  ts_log_fine "$node: found $param binary \"$ts_host_config($host,$param)\""
                   set version [start_remote_prog $host $CHECK_USER $ts_host_config($host,$param) "-version"]
                   set version [string trim $version]
                   if {$prg_exit_state != 0} {
