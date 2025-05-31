@@ -319,14 +319,14 @@ proc exec_start_runlevel_hooks { is_starting was_error path } {
    # detect the checktree where the test comes from
    for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       if {[string compare $ts_checktree($i,dir_name) $path] == 0} {
-         ts_log_fine "test comes from checktree node nr. $i ($ts_checktree($i,dir_name))"
+         ts_log_finer "test comes from checktree node nr. $i ($ts_checktree($i,dir_name))"
          set init_node_nr $i
          break
       }
    }
    set start_node_nr 0
    foreach nr [lsort -integer $ts_checktree(0,children)] {
-      ts_log_fine "sub_checks: $nr \"$ts_checktree($nr,dir_name)\""
+      ts_log_finer "sub_checks: $nr \"$ts_checktree($nr,dir_name)\""
       if {$nr < $init_node_nr} {
          set start_node_nr $nr
       }
@@ -343,10 +343,10 @@ proc exec_start_runlevel_hooks { is_starting was_error path } {
             ts_log_fine "Can not execute start_runlevel_hooks ${ii} of checktree $ts_checktree($i,dir_name), proc \"$start_test_hook\" not found"
             return -1
          } else {
-            ts_log_fine "starting test hook \"$start_test_hook\" ..."
+            ts_log_finer "starting test hook \"$start_test_hook\" ..."
             set res [$start_test_hook $is_starting $was_error]
             if { $res != 0 } {
-               ts_log_fine "start_runlevel_hooks hook ${ii} of checktree  $ts_checktree($i,dir_name) failed, proc \"$start_test_hook\" returned $res\n"
+               ts_log_finer "start_runlevel_hooks hook ${ii} of checktree  $ts_checktree($i,dir_name) failed, proc \"$start_test_hook\" returned $res\n"
                incr error_count
             }
          }

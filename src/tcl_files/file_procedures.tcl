@@ -72,40 +72,14 @@ proc test_file { me two} {
   return "test ok"
 }
 
-#                                                             max. column:     |
-#****** file_procedures/get_dir_names() ******
-# 
-#  NAME
-#     get_dir_names -- return all subdirectory names 
-#
-#  SYNOPSIS
-#     get_dir_names { path } 
-#
-#  FUNCTION
-#     read in directory and return a list of subdirectory names 
-#
-#  INPUTS
-#     path - path to read in 
-#
-#  RESULT
-#     list of subdirectory names 
-#
-#  EXAMPLE
-#     set dirs [ get_dir_names /tmp ] 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     file_procedures/get_file_names
-#*******************************
+proc compare_dir_name {a b} {
+   return [string compare [string tolower $a] [string tolower $b]]
+}
+
 proc get_dir_names {path} {
   catch {glob "$path/*"} r1
   set r2 ""
-  foreach filename $r1 {
+  foreach filename [lsort -command compare_dir_name $r1] {
      if {[file isdirectory $filename] == 1 && [string compare [file tail $filename] "CVS"] != 0} {
         lappend r2 [file tail $filename]
      }

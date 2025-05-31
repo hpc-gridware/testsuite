@@ -2573,6 +2573,10 @@ proc setup2 { } {
    }
 }
 
+proc compare_last_dir {a b} {
+   return [string compare [file tail $a] [file tail $b]]
+}
+
 #****** check/enhanced_setup() *************************************************
 #  NAME
 #     enhanced_setup() -- addition testsuite setup
@@ -2737,7 +2741,7 @@ proc build_checktree {} {
    }
    ts_log_fine "reading additional checktrees ..."
    if { $ts_config(additional_checktree_dirs) != "none" } {
-      foreach dir $ts_config(additional_checktree_dirs) {
+      foreach dir [lsort -command compare_last_dir $ts_config(additional_checktree_dirs)] {
          set error [read_checktree_nodes $dir]
          if { $error != 0 } {
             return -1
