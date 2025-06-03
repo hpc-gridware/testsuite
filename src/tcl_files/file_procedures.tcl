@@ -3920,8 +3920,7 @@ proc get_local_spool_dir {host subdir {do_cleanup 1} {only_local 0}} {
 
    set spooldir ""
    set is_master_host 0
-   if {$check_do_not_use_spool_config_entries == 2 &&
-       $subdir == "qmaster"} {
+   if {$check_do_not_use_spool_config_entries == 2 && $subdir == "qmaster"} {
       if {[resolve_host $host] == [resolve_host $ts_config(master_host)]} {
          ts_log_finer "\"no_local_qmaster_spool\" option is set, this is master host"
          set is_master_host 1

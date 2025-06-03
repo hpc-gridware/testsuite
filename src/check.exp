@@ -5216,6 +5216,19 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       }
    }
 
+   if {[coverage_enabled]} {
+      ts_log_fine "Initiating test-epilog for code coverage"
+      set ret [coverage_test_epilog $check_name]
+      if {$ret != 0} {
+         ts_log_fine "Error: coverage_test_epilog returned with $ret"
+         incr error_count 1
+      } else {
+         ts_log_fine "coverage_test_epilog was successfully executed"
+      }
+   } else {
+      ts_log_fine "Code coverage is not enabled, skipping covarage_test_epilog"
+   }
+
    # check the number of busy rlogin sessions
    # it should be 0, or at least not higher than before starting test
    set num_busy_sessions_after_check [get_busy_spawn_rlogin_sessions]
@@ -7161,6 +7174,9 @@ proc source_tcl_files {} {
    ts_source $libdir/control_procedures
    ts_source $libdir/cluster_procedures
    ts_source $libdir/coverage
+   ts_source $libdir/coverage_insure
+   ts_source $libdir/coverage_lcov
+   ts_source $libdir/coverage_tcov
    ts_source $libdir/valgrind
    ts_source $libdir/parser
    ts_source $libdir/parser_xml
@@ -8283,11 +8299,12 @@ for {set i 0} {$i < $argc} {incr i} {
       set help_var [lindex $argv $i]
       set help_var [string trim $help_var]
       foreach cov $help_var {
-         if {$cov == "tcov" || $cov == "insure" || $cov == "emma"} {
+         if {$cov == "lcov" || $cov == "tcov" || $cov == "insure" || $cov == "emma"} {
             lappend CHECK_COVERAGE $cov
             puts " ---> doing code coverage analysis with \"$cov\" <---"
          } else {
             puts "invalid coverage method $cov"
+            testsuite_shutdown 1
          }
       }
       continue
@@ -8536,6 +8553,7 @@ if {$log_to_file} {
 
 if {$CHECK_COVERAGE != {} && $CHECK_COVERAGE_DIR == ""} {
    puts "please specify a coverage profile directory with the option coverage_dir"
+   puts "for method lcov the directory needs to be accessible by root and the code will be built in that dir"
    testsuite_shutdown 1
 }
 

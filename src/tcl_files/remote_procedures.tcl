@@ -1529,8 +1529,7 @@ proc open_remote_spawn_process { hostname
    # we need root access
    if {$real_user != $CHECK_USER} {
       if {[have_root_passwd] == -1} {
-         ts_log_warning "${error_info}\nroot access required" $raise_error
-         return "" 
+         set_root_passwd
       }
    }
 

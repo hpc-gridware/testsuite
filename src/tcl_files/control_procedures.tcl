@@ -2771,7 +2771,16 @@ proc scale_timeout {timeout {does_computation 1} {does_spooling 1} {process_invo
 
    # respect code coverage influence
    # we assume that the process will run slightly slower
-   if {[coverage_enabled]} {
+   if {[coverage_enabled "lcov"]} {
+      # computation will be slower - add 100% overhead
+      if {$does_computation} {
+         set ret [expr $ret * 2.0]
+      }
+
+      # coverage profiles are written per process invocation
+      # multiple files will be written add 3 second overhead per process invocation
+      set ret [expr $ret + $process_invocations * 3]
+   } elseif {[coverage_enabled]} {
       # computation will be slower - add 10% overhead
       if {$does_computation} {
          set ret [expr $ret * 1.10]

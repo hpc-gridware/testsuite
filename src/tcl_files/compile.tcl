@@ -782,6 +782,22 @@ proc compile_source { { do_only_hooks 0} {compile_only 0} } {
       report_add_message report "Skip installation due to previous error\n"
    }
 
+   if {$error_count == 0} {
+      if {[coverage_enabled]} {
+         ts_log_fine "Initiating coverage_build_epilog for code coverage"
+         set ret [coverage_build_epilog]
+         if {$ret != 0} {
+            ts_log_fine "Error: coverage_build_epilog returned with $ret"
+            incr error_count 1
+         } else {
+            ts_log_fine "coverage_build_epilog was successfully executed"
+         }
+      } else {
+         ts_log_fine "Code coverage is not enabled, skipping build-epilog"
+      }
+   }
+
+
    if {$error_count > 0} {
       report_add_message report "Error occured during compilation or pre-installation of binaries"
       report_finish report -1
@@ -927,10 +943,25 @@ proc compile_source_aimk {do_only_hooks compile_hosts report_var {compile_only 0
 }
 
 proc compile_source_cmake_get_build_dir {host} {
-   global ts_host_config ts_config
+   global ts_host_config
+   global ts_config
+   global CHECK_USER
+   global CHECK_COVERAGE
+   global CHECK_COVERAGE_DIR
 
-   # fetch a local build directory
-   set build_dir [get_local_spool_dir $host "build" 0 1]
+   if {[coverage_enabled "lcov"]} {
+      if {$CHECK_COVERAGE_DIR != ""} {
+         # use the configured coverage directory
+         set build_dir "$CHECK_COVERAGE_DIR/$ts_config(commd_port)/$host"
+      } else {
+         # not in the lab and nothing configured - exit and give some information
+         ts_log_info "Code coverage with gcov is enabled but no coverage directory is configured."
+         exit 50
+      }
+   } else {
+      # fetch a local build directory
+      set build_dir [get_local_spool_dir $host "build" 0 1]
+   }
    ts_log_fine "build directory on host $host is $build_dir"
 
    return $build_dir
@@ -1312,10 +1343,17 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
             append args " -DINSTALL_SGE_DOC=OFF"
          }
 
-         # add compile options from the cinfiguration
+         # add compile options from the configuration
          set compile_options [get_compile_options_string]
          if {$compile_options != "none"} {
             append args " $compile_options"
+         }
+
+         # if TS was started with -cov "lcov" then add the required cmake switches
+         if {[coverage_enabled "lcov"]} {
+            append args " -DWITH_LCOV=ON"
+         } else {
+            append args " -DWITH_LCOV=OFF"
          }
 
          # add build type and build id
