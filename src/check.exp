@@ -5218,7 +5218,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
 
    if {[coverage_enabled]} {
       ts_log_fine "Initiating test-epilog for code coverage"
-      set ret [coverage_test_epilog $check_name $check_description($level)]
+      set ret [coverage_test_epilog "$check_name-$level" $check_description($level)]
       if {$ret != 0} {
          ts_log_fine "Error: coverage_test_epilog returned with $ret"
          incr error_count 1
