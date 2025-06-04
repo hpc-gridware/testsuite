@@ -5179,6 +5179,19 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
                incr nr_errors
             }
          }
+
+         if {[coverage_enabled]} {
+            ts_log_fine "Initiating test-epilog for code coverage"
+            set ret [coverage_test_epilog "$check_name-$level" $check_description($level)]
+            if {$ret != 0} {
+               ts_log_fine "Error: coverage_test_epilog returned with $ret"
+               incr error_count 1
+            } else {
+               ts_log_fine "coverage_test_epilog was successfully executed"
+            }
+         } else {
+            ts_log_fine "Code coverage is not enabled, skipping coverage_test_epilog"
+         }
       }
    }
 
@@ -5214,19 +5227,6 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       foreach level $check_levels {
          save_result $path 0 $level "uncompleted"
       }
-   }
-
-   if {[coverage_enabled]} {
-      ts_log_fine "Initiating test-epilog for code coverage"
-      set ret [coverage_test_epilog "$check_name-$level" $check_description($level)]
-      if {$ret != 0} {
-         ts_log_fine "Error: coverage_test_epilog returned with $ret"
-         incr error_count 1
-      } else {
-         ts_log_fine "coverage_test_epilog was successfully executed"
-      }
-   } else {
-      ts_log_fine "Code coverage is not enabled, skipping covarage_test_epilog"
    }
 
    # check the number of busy rlogin sessions
