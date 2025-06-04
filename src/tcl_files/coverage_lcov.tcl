@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2024 HPC-Gridware GmbH
+#  Copyright 2025 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -20,6 +20,9 @@
 
 global lcov_counter
 set lcov_counter 0
+
+global lcov_tests
+array set lcov_tests {}
 
 ## @brief returns a list of compile hosts for the configured test suite
 #
@@ -77,7 +80,7 @@ proc lcov_adapt_permissions {host} {
    set find_output [start_remote_prog $host "root" $find_binary "$build_dir -name \"*.gcda\" -perm 644 -exec chmod 666 {} \\;"]
    if {$prg_exit_state != 0} {
       ts_log_fine $find_output
-      ts_log_error "lcov_adapt_permissions: failed to set permissions for *.gcda files in $build_dir"
+      ts_log_fine "lcov_adapt_permissions: failed to set permissions for *.gcda files in $build_dir"
       return -1
    }
    return 0
@@ -164,12 +167,15 @@ proc lcov_initialize {{clean 0}} {
    global CHECK_COVERAGE_DIR
    global CHECK_RESULT_DIR
    global CHECK_USER
+   global lcov_tests
 
    foreach host [lcov_get_compile_hosts] {
       set build_dir [lcov_get_coverage_build_dir $host]
       set arch [host_conf_get_arch $host]
 
       if {$clean} {
+         array set lcov_tests {}
+
          set rm_output [start_remote_prog $host $CHECK_USER "rm" "$build_dir/*.info"]
          ts_log_fine $rm_output
 
@@ -198,6 +204,7 @@ proc lcov_build_epilog {} {
 
    foreach host [lcov_get_compile_hosts] {
       lcov_init_baseline_zero $host
+      lcov_adapt_permissions $host
    }
    return 0
 }
@@ -221,13 +228,17 @@ proc lcov_check_epilog {test_name check_name} {
 # @param test_name the name of the test that finished
 # @returns 0 on success, -1 on failure
 #
-proc lcov_test_epilog {test_name} {
+proc lcov_test_epilog {test_name test_description} {
+   global lcov_tests
+
+   set lcov_tests($test_name) $test_description
+
    ts_log_fine "lcov_test_epilog: $test_name"
    foreach host [lcov_get_compile_hosts] {
       set build_dir [lcov_get_coverage_build_dir $host]
       lcov_adapt_permissions $host
    }
-   lcov_compute_coverage $test_name
+   lcov_compute_coverage $test_name $test_description
    return 0
 }
 
@@ -256,7 +267,7 @@ proc lcov_join_dirs {} {
 # @param test_name the name of the test for which the coverage data is computed
 # @note if test_name is "final" then the final coverage report is generated
 #
-proc lcov_compute_coverage {{test_name "final"}} {
+proc lcov_compute_coverage {{test_name "final"} {test_description ""}} {
    global CHECK_USER
    global ts_config
    global lcov_counter
@@ -267,6 +278,8 @@ proc lcov_compute_coverage {{test_name "final"}} {
       set arch [host_conf_get_arch $host]
       set lcov_binary [get_binary_path $host "lcov"]
       set genhtml_binary [get_binary_path $host "genhtml"]
+
+      ts_log_fine "lcov_compute_coverage: $test_name - $test_description"
 
       # set permissions of *.gcda files
       lcov_adapt_permissions $host
@@ -295,7 +308,7 @@ proc lcov_compute_coverage {{test_name "final"}} {
 
       # generate the report if triggered manually or after a certain number of tests
       set generate_final_report 0
-      if {$test_name == "final" || $lcov_counter >= 2} {
+      if {$test_name == "final" || $lcov_counter >= 0} {
          set generate_final_report 1
          set lcov_counter 0
       }
@@ -316,7 +329,14 @@ proc lcov_compute_coverage {{test_name "final"}} {
       # generate the final report if requested
       if {$generate_final_report} {
          # create a test specific coverage report
-         set genhtml_cmd_line "--ignore-errors source --demangle-cpp --legend --title \"GCS 9.1.0alpha Code Coverage Report\" --prefix \"/home/ebablick/CS/cs3-0/\" --show-details"
+         set ocs_version [get_version_info version_array]
+         set genhtml_title "$ocs_version LCOV-Report"
+         set genhtml_prefix [file join {*}[lrange [file split $ts_config(source_dir)] 0 end-2]]
+         set genhtml_descr_file [lcov_gen_description_file $host]
+         set genhtml_cmd_line "--ignore-errors source --demangle-cpp --legend --title \"$genhtml_title\" --prefix \"$genhtml_prefix\" --show-details"
+         if {$genhtml_descr_file != ""} {
+            append genhtml_cmd_line " --description-file $genhtml_descr_file --keep-descriptions"
+         }
          append genhtml_cmd_line " $build_dir/$test_name-$arch.info --output-directory $build_dir/report/final-$arch"
 
          ts_log_fine "lcov_compute_coverage: genhtml $genhtml_cmd_line"
@@ -331,4 +351,36 @@ proc lcov_compute_coverage {{test_name "final"}} {
 
       # @todo CS-1306: Combine the coverage data of multiple architectures
    }
+}
+
+proc lcov_gen_description_file {host} {
+   global ts_config
+   global CHECK_COVERAGE_DIR
+   global CHECK_USER
+   global lcov_tests
+   set arch [host_conf_get_arch $host]
+   set gendesc_binary [get_binary_path $host "gendesc"]
+
+   set names [array names lcov_tests]
+   if {[llength $names] == 0} {
+      return ""
+   }
+
+   # write test names and description into a file
+   set in_filename [file join $CHECK_COVERAGE_DIR "lcov-description-$arch.txt"]
+   set fh [open $in_filename "w"]
+   foreach test_name $names {
+      set test_description $lcov_tests($test_name)
+      puts $fh "$test_name"
+      puts $fh "    $test_description"
+   }
+   close $fh
+
+   # generate the lcov description file that will be accepted by lcov
+   set out_filename [file join $CHECK_COVERAGE_DIR "lcov-description-$arch.lcov"]
+   set gendesc_args "--output-filename $out_filename $in_filename"
+   set cp_output [start_remote_prog $host $CHECK_USER $gendesc_binary $gendesc_args]
+   ts_log_fine $cp_output
+
+   return $out_filename
 }

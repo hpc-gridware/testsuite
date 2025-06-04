@@ -236,7 +236,7 @@ proc get_compile_options_string { } {
    }
 
    if {$options != ""} {
-      ts_log_fine "compile options are: \"$options\""
+      ts_log_fine "compile options defined in TS are: \"$options\""
    }
 
    return $options

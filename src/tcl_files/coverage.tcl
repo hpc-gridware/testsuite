@@ -113,7 +113,7 @@ proc coverage_build_epilog {} {
    return 0
 }
 
-proc coverage_test_epilog {test_name} {
+proc coverage_test_epilog {test_name test_description} {
    global CHECK_COVERAGE
 
    ts_log_fine "coverage_test_epilog: $test_name"
@@ -121,7 +121,7 @@ proc coverage_test_epilog {test_name} {
    foreach cov $CHECK_COVERAGE {
       set procname "${cov}_test_epilog"
       if {[info procs $procname] != {}} {
-         set ret [$procname $test_name]
+         set ret [$procname $test_name $test_description]
          if {$ret != 0} {
             ts_log_severe "Error in $procname: $ret"
             return $ret
