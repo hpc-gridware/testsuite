@@ -49,7 +49,7 @@ global proc_id
 set check_name            "issue_1156"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "Test of issue 1156"
-set check_description(1)  ""
+set check_description(1)  "Test of issue 1156"
 
 # define test's dependencies
 set check_needs           "init_core_system"

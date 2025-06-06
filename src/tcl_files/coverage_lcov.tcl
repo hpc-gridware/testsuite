@@ -24,6 +24,9 @@ set lcov_counter 0
 global lcov_tests
 array set lcov_tests {}
 
+global lcov_read_file
+set lcov_read_file 0
+
 ## @brief returns a list of compile hosts for the configured test suite
 #
 # GCOV profiling is enabled during compilations on the compile hosts.
@@ -48,6 +51,14 @@ proc lcov_get_compile_hosts {} {
    return [compile_unify_host_list $compile_hosts]
 }
 
+## @brief returns the base directory for the lcov coverage data
+proc lcov_get_base_dir {} {
+   global ts_config
+   global CHECK_COVERAGE_DIR
+
+   return [file join $CHECK_COVERAGE_DIR $ts_config(commd_port)]
+}
+
 ## @brief returns the directory where the lcov coverage data is stored
 #
 # The directory is based on the configured test suite commd_port and the host name.
@@ -56,10 +67,7 @@ proc lcov_get_compile_hosts {} {
 # @return the directory where the lcov coverage data is stored
 #
 proc lcov_get_coverage_build_dir {host} {
-   global ts_config
-   global CHECK_COVERAGE_DIR
-
-   return [file join $CHECK_COVERAGE_DIR $ts_config(commd_port) $host]
+   return [file join [lcov_get_base_dir] $host]
 }
 
 ## @brief adapts the permissions of *.gcda files in the coverage build directory
@@ -88,16 +96,7 @@ proc lcov_adapt_permissions {host} {
 
 ## @brief returns the lcov command line with all exclude directives
 #
-# The exclude directives are used to exclude directories that should not be part of the coverage report.
-# The directories are:
-# - the _deps directory (cmake dependent projects)
-# - the /home/$CHECK_USER/3rd_party directory (where 3rd party libraries are located)
-# - the build directory (where the build files are located e.g. generated code)
-# - the /opt/rh directory (where C++ compilers are installed and we would see inlined code of C++ headers)
-# - the /usr/include directory (where C++ headers are located)
-# - the /home/$CHECK_USER/3rd_party/qmake directory (where qmake is located)
-# - the /home/$CHECK_USER/3rd_party/test directory (where module tests of cluster scheduler are located)
-# - the /home/$CHECK_USER/3rd_party/../../$ts_config(ext_source_dir)/test directory (where module tests of GCS are located)
+# The exclude/include  directives are used to select what should be part of the coverage report.
 #
 # @param host the host name for which the lcov command line is returned
 # @return the lcov command line with all exclude directives
@@ -106,13 +105,19 @@ proc lcov_exclude_directives {host} {
    global CHECK_USER
    global ts_config
 
+   set source_token [file split $ts_config(source_dir)]
+   set source_dir_minus1 [file join {*}[lrange $source_token 0 end-1]]
+   set source_dir_minus2 [file join {*}[lrange $source_token 0 end-2]]
+
    set build_dir [lcov_get_coverage_build_dir $host]
    set lcov_base_cmd_line "--exclude \"$build_dir/_deps/*\""
    append lcov_base_cmd_line " --exclude \"/home/$CHECK_USER/3rd_party/*\""
    append lcov_base_cmd_line " --exclude \"$build_dir/*\""
-   append lcov_base_cmd_line " --exclude \"$ts_config(source_dir)/3rdparty/qmake/*\""
-   append lcov_base_cmd_line " --exclude \"$ts_config(source_dir)/../test/*\""
-   append lcov_base_cmd_line " --exclude \"$ts_config(source_dir)/../../$ts_config(ext_source_dir)/test/*\""
+   append lcov_base_cmd_line " --exclude \"$ts_config(source_dir)/3rdparty/qmake*\""
+   append lcov_base_cmd_line " --include \"$ts_config(source_dir)/3rdparty/qmake/remote-sge*\""
+   append lcov_base_cmd_line " --exclude \"$ts_config(source_dir)/tools*\""
+   append lcov_base_cmd_line " --exclude \"$source_dir_minus1/test*\""
+   append lcov_base_cmd_line " --exclude \"$source_dir_minus2/gcs-extensions/test*\""
    append lcov_base_cmd_line " --exclude \"/opt/rh/*\""
    append lcov_base_cmd_line " --exclude \"/usr/include/*\""
    return $lcov_base_cmd_line
@@ -230,14 +235,27 @@ proc lcov_check_epilog {test_name check_name} {
 #
 proc lcov_test_epilog {test_name test_description} {
    global lcov_tests
-
-   set lcov_tests($test_name) $test_description
+   global lcov_read_file
 
    ts_log_fine "lcov_test_epilog: $test_name"
+
+   # read file if there is one from a previous TS run
+   if {$lcov_read_file == 0} {
+      set in_filename [file join [lcov_get_base_dir] "lcov-description.txt"]
+      lcov_read_description_file $in_filename
+      set lcov_read_file 1
+   }
+
+   # set the test name and description in the lcov_tests array
+   set lcov_tests($test_name) $test_description
+
+   # adapt permissions of *.gcda files
    foreach host [lcov_get_compile_hosts] {
       set build_dir [lcov_get_coverage_build_dir $host]
       lcov_adapt_permissions $host
    }
+
+   # compute the coverage data for the test
    lcov_compute_coverage $test_name $test_description
    return 0
 }
@@ -353,31 +371,80 @@ proc lcov_compute_coverage {{test_name "final"} {test_description ""}} {
    }
 }
 
+## @brief writes the test names and descriptions into a file
+#
+# This function is called to write the test names and descriptions into a file.
+# The file is used to generate a description file for the lcov tool.
+#
+# @param out_filename the name of the file where the test names and descriptions are written
+# @note the file is written in a format that can be read by the lcov tool
+#
+proc lcov_write_description_file {out_filename} {
+   global lcov_tests
+
+   set fh [open $out_filename "w"]
+   foreach test_name [array names lcov_tests] {
+      set test_description $lcov_tests($test_name)
+      puts $fh "$test_name"
+      puts $fh "    $test_description"
+   }
+   close $fh
+}
+
+## @brief reads the test names and descriptions from a file
+#
+# This function is called to read the test names and descriptions from a file.
+# The file is used to generate a description file for the lcov tool.
+#
+# @param in_filename the name of the file where the test names and descriptions are read from
+#
+proc lcov_read_description_file {in_filename} {
+    global lcov_tests
+
+    if {![file exists $in_filename]} {
+       # no error if the file does not exist
+       return 0
+    }
+
+    set fh [open $in_filename "r"]
+    set test_name ""
+    set is_name 1
+    while {[gets $fh line] >= 0} {
+       if {$is_name} {
+          set name $line
+          set is_name 0
+       } else {
+          set description [string trim $line]
+          set lcov_tests($name) $description
+          set is_name 1
+       }
+    }
+    close $fh
+
+    return 0
+ }
+
+## @brief generates the lcov description file
+#
 proc lcov_gen_description_file {host} {
    global ts_config
-   global CHECK_COVERAGE_DIR
    global CHECK_USER
    global lcov_tests
-   set arch [host_conf_get_arch $host]
    set gendesc_binary [get_binary_path $host "gendesc"]
 
+   # early exit if there is nothing to do
    set names [array names lcov_tests]
    if {[llength $names] == 0} {
       return ""
    }
 
    # write test names and description into a file
-   set in_filename [file join $CHECK_COVERAGE_DIR "lcov-description-$arch.txt"]
-   set fh [open $in_filename "w"]
-   foreach test_name $names {
-      set test_description $lcov_tests($test_name)
-      puts $fh "$test_name"
-      puts $fh "    $test_description"
-   }
-   close $fh
+   set base_dir [lcov_get_base_dir]
+   set in_filename [file join $base_dir "lcov-description.txt"]
+   lcov_write_description_file $in_filename
 
    # generate the lcov description file that will be accepted by lcov
-   set out_filename [file join $CHECK_COVERAGE_DIR "lcov-description-$arch.lcov"]
+   set out_filename [file join $base_dir "lcov-description.lcov"]
    set gendesc_args "--output-filename $out_filename $in_filename"
    set cp_output [start_remote_prog $host $CHECK_USER $gendesc_binary $gendesc_args]
    ts_log_fine $cp_output

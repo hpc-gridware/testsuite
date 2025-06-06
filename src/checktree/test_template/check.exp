@@ -81,8 +81,8 @@ global check_version_range
 # define test's name and run level descriptions
 set check_name            "__TESTSUITE_TEST_NAME"
 set check_category        "OBJECT CENTRY QCONF VERIFIED"
-set check_description(0)  ""
-set check_description(1)  ""
+set check_description(0)  "Test template for testsuite check"
+set check_description(1)  "Test template for testsuite check"
 
 # define test's dependencies
 set check_needs           "init_core_system"

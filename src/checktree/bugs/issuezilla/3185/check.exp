@@ -47,8 +47,8 @@ global check_need_running_system
 # define test's name and run level descriptions
 set check_name            "issue_3185"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
-set check_description(0)  ""
-set check_description(1)  ""
+set check_description(0)  "Issue test for 3185"
+set check_description(1)  "Issue test for 3185"
 
 # define test's dependencies
 set check_needs           "init_core_system" 

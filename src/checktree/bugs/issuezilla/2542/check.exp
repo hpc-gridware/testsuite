@@ -48,7 +48,7 @@ set check_need_running_system "yes"
 set check_name            "issue_2542"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "check limitation concurrent array job task execution"
-set check_description(1)  ""
+set check_description(1)  "check limitation concurrent array job task execution"
 
 # define test's dependencies
 set check_needs           "init_core_system"
