@@ -51,7 +51,6 @@ proc coverage_enabled {{method ""}} {
    global CHECK_COVERAGE
 
    set ret 0
-
    if {$method == ""} {
       if {$CHECK_COVERAGE != {}} {
          set ret 1

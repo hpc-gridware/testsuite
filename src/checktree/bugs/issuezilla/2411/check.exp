@@ -77,7 +77,11 @@ proc issue_2411_setup_level {} {
          set max_count 8000
       }
    }
-   
+   if {[coverage_enabled]} {
+      set max_count 8
+      ts_log_fine "Coverage enabled, setting max_count to $max_count"
+   }
+
    # Add $max_count queues
    
    set count 1
