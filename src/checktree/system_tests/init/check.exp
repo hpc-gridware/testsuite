@@ -125,9 +125,8 @@ proc init_system_test {host service} {
    }
 
    if {$ret && $service == "execd"} {
-      set yes [translate_macro MSG_YES]
-      # @todo set expected [translate_macro MSG_SYSTEMD_INITIALIZED_SSS $yes $service_name $yes]
-      set expected [translate_macro MSG_SYSTEMD_INITIALIZED_SSS $yes "execd.service" $yes]
+      # @todo set expected [translate_macro MSG_SYSTEMD_INITIALIZED_SII $service_name "*"]
+      set expected [translate_macro MSG_SYSTEMD_INITIALIZED_SI $yes "execd.service" "*" "*"]
       set messages_file [get_execd_messages_file $host]
       ts_log_fine "expecting message\n$expected\nin messages file $messages_file"
       set output [start_remote_prog $host $CHECK_USER "grep" "'$expected' $messages_file"]

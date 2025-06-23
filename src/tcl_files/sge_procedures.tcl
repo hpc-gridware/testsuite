@@ -8328,21 +8328,18 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
       return
    }
 
-   # shutdown the shadow daemons
-   foreach sh_host $ts_config(shadowd_hosts) {
-      shutdown_all_shadowd $sh_host
-   }
-
-   # shutdown the execds via systemd
+   # stop with systemd whereever is possible
+   set use_systemd_if_available 0
    if {$CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"]} {
-      # stop with systemd whatever is possible
-      # daemons on hosts without systemd will be killed in the following code
-      foreach host $ts_config(execd_nodes) {
-         if {[host_has_systemd $host] && [systemd_is_service_active $host "execd"]} {
-            systemd_stop_service $host "execd"
-         } else {
-            set result [start_sge_bin "qconf" "-ke $host"]
-         }
+      set use_systemd_if_available 1
+   }
+   foreach host $ts_config(execd_nodes) {
+      if {$use_systemd_if_available && [host_has_systemd $host] && [systemd_is_service_active $host "execd"]} {
+         # shutdown the execds via systemd
+         systemd_stop_service $host "execd"
+      } else {
+         # shutdown via qconf
+         set result [start_sge_bin "qconf" "-ke $host"]
          ts_log_fine $result
       }
    }
@@ -10499,23 +10496,31 @@ proc startup_execd {hostname {envlist ""} {startup_user ""}} {
 
    ts_log_fine "starting up execd on host \"$hostname\" as user \"$startup_user\""
    if {$envlist == "" && $CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $hostname]} {
-      ts_log_fine "   via systemd"
+      ts_log_fine "  -> via systemd"
       set service_name [systemd_get_service_name "execd"]
-      start_remote_prog $hostname $startup_user "systemctl" "start $service_name"
+      set output [start_remote_prog $hostname $startup_user "systemctl" "start $service_name"]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "starting up sge_execd via systemd failed:\n$output"
+      }
    } else {
       if {$CHECK_VALGRIND == "execution" && $CHECK_VALGRIND_HOST == $hostname} {
-         ts_log_fine "   via valgrind.sh sge_execd"
+         ts_log_fine "  -> via valgrind wrapper"
+         set method "valgrind wrapper"
          set CHECK_VALGRIND_LAST_DAEMON_RESTART [clock seconds]
          set arch [resolve_arch $hostname]
          set execd_cmd "$ts_config(product_root)/bin/$arch/sge_execd"
          set execd_args ""
       } else {
-         ts_log_fine "   via sgeexecd script"
+         ts_log_fine "  -> via sgeexecd script"
+         set method "sgeexecd script"
          set execd_cmd "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd"
          set execd_args "start"
       }
 
       set output [start_remote_prog $hostname $startup_user $execd_cmd $execd_args prg_exit_state 60 0 "" my_envlist 1 0]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "starting up sge_execd via $method failed:\n$output"
+      }
    }
 
    return 0
