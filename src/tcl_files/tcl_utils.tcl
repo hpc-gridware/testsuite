@@ -338,6 +338,34 @@ proc add_or_replace_param {input name_only name_value {delimiter ","}} {
    }
 }
 
+##
+# @brief add or replace a parameter in an array attribute
+#
+# Can be used to add or replace a parameter in an array attribute.
+# The parameter "name" is added or replaced with value "value"
+# in the output array. If the input array already contains
+# the attribute, the value is replaced. If the input array does
+# not contain the attribute, it is added to the output array.
+#
+# @param output_array_var the name of the output array variable
+# @param input_array_var the name of the input array variable
+# @param attrib the attribute name in the input and output array (e.g. "execd_params")
+# @param name the name of the parameter to add or replace (e.g. "ACCT_RESERVED_USAGE")
+# @param value the value of the parameter to add or replace (e.g. "TRUE")
+# @param delimiter the delimiter used to separate the parameters (default: ",")
+#
+proc add_or_replace_array_param {output_array_var input_array_var attrib name value {delimiter ","}} {
+   upvar $output_array_var output_array
+   upvar $input_array_var input_array
+
+   if {[info exists input_array($attrib)]} {
+      set input $input_array($attrib)
+   } else {
+      set input "none"
+   }
+   set output_array($attrib) [add_or_replace_param $input $name "$name=$value" $delimiter]
+}
+
 ## @brief copy name/value pairs from an attribute array to a data array for a given object
 #
 # This procedure copies name/value pairs from an attribute array to a data array. The
