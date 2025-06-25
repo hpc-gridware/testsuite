@@ -414,7 +414,6 @@ proc setup_conf {} {
   set params(shepherd_cmd) "none"
   set params(qmaster_params) "none"
   set params(reporting_params) "accounting=true reporting=false flush_time=00:00:05 joblog=true sharelog=00:10:00"
-  set params(execd_params) "none"
   set params(max_aj_instances) "2000"
   set params(max_aj_tasks) "75000"
 
@@ -432,6 +431,9 @@ proc setup_conf {} {
 
 
   set params(execd_params)    "PTF_MIN_PRIORITY=20,PTF_MAX_PRIORITY=0,SET_LIB_PATH=true"
+  if {[ge_has_feature "systemd"]} {
+     append params(execd_params) ",USAGE_COLLECTION=HYBRID"
+  }
   set params(enforce_project) "false"
   set params(projects) "none"
   set params(xprojects) "none"

@@ -708,11 +708,9 @@ proc throughput_setup_level {} {
    set myconfig(loglevel)         "log_warning"
 
    # need to use sharetree reserved usage for sharetree test
-   set my_execd_params "SHARETREE_RESERVED_USAGE=true,SIMULATE_JOBS=true,PDC_INTERVAL=NEVER"
-   if {[string compare -nocase "none" $stored_configuration(execd_params)] != 0} {
-      append my_execd_params ",$stored_configuration(execd_params)"
-   }
-   set myconfig(execd_params) $my_execd_params
+   add_or_replace_array_param myconfig stored_configuration "execd_params" "SHARETREE_RESERVED_USAGE" "true"
+   add_or_replace_array_param myconfig myconfig             "execd_params" "SIMULATE_JOBS" "true"
+   add_or_replace_array_param myconfig myconfig             "execd_params" "PDC_INTERVAL" "NEVER"
 
    # switch on monitoring
    # @todo why in the setup_level_function and not in the setup function?
@@ -906,8 +904,7 @@ proc run_throughput_test {} {
    clean_current_system_status results_list result job_data schedd_data monitoring qstat_data qping_data event_data
 
    # restart qmaster and scheduler - we want to measure their size
-   shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
-   startup_qmaster
+   shutdown_and_restart_qmaster
    wait_for_load_from_all_queues 300
 
    # evaluate path to qevent binary

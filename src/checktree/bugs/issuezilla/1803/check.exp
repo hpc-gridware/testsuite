@@ -110,7 +110,7 @@ proc issue_1803_setup {} {
    # set KEEP_ACTIVE and short load_report_time in execd params
    # do this in the test exec host config, if there is a execd_params entry,
    # if there is none, do it in the global config.
-   if {[info exists issue_1803_host_conf(execd_params)] == 1} {
+   if {[info exists issue_1803_host_conf(execd_params)]} {
       # there is a host local execd_params list set
       set issue_1803_use_local_host 1
       set conf_execd_params $issue_1803_host_conf(execd_params)
@@ -120,18 +120,15 @@ proc issue_1803_setup {} {
    }
 
    # Setting execd_params to KEEP_ACTIVE=true
-   set my_execd_params "KEEP_ACTIVE=true"
-   if {[string compare -nocase "none" $conf_execd_params] != 0} {
-      append my_execd_params ",$conf_execd_params"
-   }
+   set my_execd_params [add_or_replace_param $conf_execd_params "KEEP_ACTIVE" "KEEP_ACTIVE=true"]
 
-   if {$issue_1803_use_local_host == 1} {
+   if {$issue_1803_use_local_host} {
       # modify the test exec host config
       set my_host_conf(execd_params) $my_execd_params
       set_config my_host_conf $issue_1803_test_host
    } else {
       # modify the global config
-      set my_global_conf(execd_params) "$my_execd_params"
+      set my_global_conf(execd_params) $my_execd_params
    }
    ts_log_fine "setting execd_params to \"$my_execd_params\" ..."
    set my_global_conf(load_report_time) "00:00:01"
@@ -181,8 +178,8 @@ proc issue_1803_test {} {
    foreach starter_method $starter_method_list {
       set add_error "starter_method=$starter_method failed:"
 
-      # Setting execd_params to KEEP_ACTIVE=true
-      set myconfig(starter_method) "$starter_method"
+      # Setting starter method
+      set myconfig(starter_method) $starter_method
       ts_log_fine "setting starter_method to \"$starter_method\" ..."
       mod_queue all.q "" myconfig
 

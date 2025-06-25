@@ -97,13 +97,7 @@ proc ge_3474_test {} {
 
    # set a short load report time and PDC_INTERVAL=5 for the test host
    # in its local cluster configuration
-   set conf_execd_params ""
-   if {[info exists ge_3474_host_conf(execd_params)] == 1} {
-      set conf_execd_params $ge_3474_host_conf(execd_params)
-      append conf_execd_params ","
-   }
-   append conf_execd_params "PDC_INTERVAL=5"
-   set my_host_conf(execd_params) "$conf_execd_params"
+   add_or_replace_array_param my_host_conf ge_3474_host_conf "execd_params" "PDC_INTERVAL" "5"
    set my_host_conf(load_report_time) "0:0:03"
    set_config_and_propagate my_host_conf $ge_3474_host
 
@@ -125,13 +119,7 @@ proc ge_3474_test {} {
 
    if {$ret == 1} {
       # set PDC_INTERVAL=NEVER in the execution host local configuration
-      set conf_execd_params ""
-      if {[info exists ge_3474_host_conf(execd_params)] == 1} {
-         set conf_execd_params $ge_3474_host_conf(execd_params)
-         append conf_execd_params ","
-      }
-      append conf_execd_params "PDC_INTERVAL=NEVER"
-      set my_host_conf(execd_params) "$conf_execd_params"
+      add_or_replace_array_param my_host_conf ge_3474_host_conf "execd_params" "PDC_INTERVAL" "NEVER"
       set_config_and_propagate my_host_conf $ge_3474_host
 
       # submit a job to this host

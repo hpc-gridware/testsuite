@@ -34,11 +34,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -47,7 +47,7 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "enhanced job environment variables test"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function "job_environment_enhanced_setup"
@@ -65,7 +65,7 @@ lappend check_functions "job_environment_enhanced_SET_LIB_PATH"
 #     job_environment_enhanced_setup() -- setup the job env test
 #
 #  SYNOPSIS
-#     job_environment_enhanced_setup { } 
+#     job_environment_enhanced_setup { }
 #
 #  FUNCTION
 #     Do required setup for the job environment test for 6.0.
@@ -122,7 +122,7 @@ proc job_environment_enhanced_setup {} {
       startup_execd $job_environment_enhanced_exec_host my_environment $CHECK_USER
    } else {
       set log_text ""
-      startup_execd $job_environment_enhanced_exec_host my_environment 
+      startup_execd $job_environment_enhanced_exec_host my_environment
    }
 
    ts_log_frame
@@ -139,7 +139,7 @@ proc job_environment_enhanced_setup {} {
 #     job_environment_enhanced_cleanup() -- clean up after the job env test
 #
 #  SYNOPSIS
-#     job_environment_enhanced_cleanup { } 
+#     job_environment_enhanced_cleanup { }
 #
 #  FUNCTION
 #     Clean up changes made during the job environment 6.0 test.
@@ -190,7 +190,7 @@ proc job_environment_enhanced_cleanup {} {
 #                                      correctly
 #
 #  SYNOPSIS
-#     job_environment_enhanced_INHERIT_ENV { } 
+#     job_environment_enhanced_INHERIT_ENV { }
 #
 #  FUNCTION
 #     Tests whether the shepherd correctly sets the environment
@@ -280,8 +280,8 @@ proc job_environment_enhanced_INHERIT_ENV {} {
 #     test_job_environment_enhanced_lib_path() -- used by job_environment_enhanced_SET_LIB_PATH
 #
 #  SYNOPSIS
-#     test_job_environment_enhanced_lib_path { error_var execd_params expected_lib_path 
-#     } 
+#     test_job_environment_enhanced_lib_path { error_var execd_params expected_lib_path
+#     }
 #
 #  FUNCTION
 #     starts job with specified execd_params and tests for correct
@@ -340,7 +340,7 @@ proc test_job_environment_enhanced_lib_path {error_var execd_params expected_lib
          return
       }
    } else {
-      # library path should be set 
+      # library path should be set
       set host_arch [resolve_arch $job_environment_enhanced_exec_host]
       if {[string match "*lx*" $host_arch] && $ts_config(commd_port) < 1024} {
          if {![info exists job_env($job_environment_enhanced_libvar)]} {
@@ -387,7 +387,7 @@ proc test_job_environment_enhanced_lib_path {error_var execd_params expected_lib
 #     job_environment_enhanced_qsub_job() -- qsub jobenv.sh
 #
 #  SYNOPSIS
-#     job_environment_enhanced_qsub_job { jobname array arguments } 
+#     job_environment_enhanced_qsub_job { jobname array arguments }
 #
 #  FUNCTION
 #     Submit the jobenv.sh script via qsub and parse the resulting output file.
@@ -444,7 +444,7 @@ proc job_environment_enhanced_qsub_job { jobname array arguments {job_id_array_n
 #     job_environment_enhanced_parse_env_test_output() -- parse jobenv.sh output
 #
 #  SYNOPSIS
-#     job_environment_enhanced_parse_env_test_output { file array } 
+#     job_environment_enhanced_parse_env_test_output { file array }
 #
 #  FUNCTION
 #     Parses the output file from the jobenv.sh script and places the results
@@ -481,7 +481,7 @@ proc job_environment_enhanced_parse_env_test_output {file array} {
          ts_log_finest "variable=\"$variable\", value=\"$value\""
          set job_env_array($variable) $value
          lappend variable_names_list $variable
-      } 
+      }
       set job_env_array(index) $variable_names_list
       delete_remote_file $ts_config(master_host) $CHECK_USER $file
    }
@@ -493,7 +493,7 @@ proc job_environment_enhanced_parse_env_test_output {file array} {
 #                                       correctly
 #
 #  SYNOPSIS
-#     job_environment_enhanced_SET_LIB_PATH { } 
+#     job_environment_enhanced_SET_LIB_PATH { }
 #
 #  FUNCTION
 #     Tests whether the shepherd correctly sets the shared library path
@@ -520,7 +520,7 @@ proc job_environment_enhanced_SET_LIB_PATH {} {
    if {$errors != ""} {
       append error_text "Scenario A failed:\n[string trim $errors]\n"
    }
-  
+
    # test 2
    ts_log_frame
    ts_log_fine "Scenario B:\n"

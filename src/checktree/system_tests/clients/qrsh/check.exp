@@ -1069,19 +1069,9 @@ proc qrsh_qsub_gid {} {
       }
 
       # set parameter USE_QSUB_GID
-      get_config config $host
       get_config saved_config $host
-      if {[info exists config(execd_params)]} {
-         set execd_params $config(execd_params)
-      } else {
-         set execd_params ""
-      }
-
-      if {$execd_params == ""} {
-         set config(execd_params) "USE_QSUB_GID=true"
-      } else {
-         set config(execd_params) "$execd_params,USE_QSUB_GID=true"
-      }
+      unset -nocomplain config
+      add_or_replace_array_param config saved_config "execd_params" "USE_QSUB_GID" "true"
       set_config_and_propagate config $host
 
       # call qsub_gid.sh, gid must be secondary gid
@@ -1091,9 +1081,7 @@ proc qrsh_qsub_gid {} {
          ts_log_severe "qrsh job on host $host was executed with wrong gid, should be $group, output of qrsh job was $output"
       }
 
-      # unset USE_QSUB_GID
-      unset config
-      set config(execd_params) $execd_params
+      # cleanup
       reset_config_and_propagate saved_config $host
    }
 
@@ -1900,9 +1888,9 @@ proc qrsh_pty_yes_redirect {} {
 #
 #  FUNCTION
 #     Tests if "qrsh cat < out.txt" works properly.
-#     To do this, this test starts a 
+#     To do this, this test starts a
 #     "qrsh cat < $SGE_ROOT/man/man1/qdel.1 > $tmpfile",
-#     checks if qrsh ends automatically within 60 seconds and checks if the 
+#     checks if qrsh ends automatically within 60 seconds and checks if the
 #     input- and output-files are identical.
 #     In runlevel long, this is done for hosts of all different architectures
 #     in the test cluster, from all architectures to all architectures.

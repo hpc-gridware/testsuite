@@ -162,7 +162,8 @@ proc usage_setup {} {
 
    # set global config params
    set new_config(load_report_time) "0:0:2"
-   set new_config(execd_params) "$usage_saved_config(execd_params) acct_reserved_usage=1 sharetree_reserved_usage=1"
+   add_or_replace_array_param new_config usage_saved_config "execd_params" "acct_reserved_usage" "1"
+   add_or_replace_array_param new_config new_config         "execd_params" "sharetree_reserved_usage" "1"
    set_config_and_propagate new_config
 
    # create parallel environments

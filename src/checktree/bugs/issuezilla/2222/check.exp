@@ -77,7 +77,7 @@ proc issue_2222_setup {} {
 
    # activate SHARETREE_RESERVED_USAGE,
    # and a shorter load report interval to get usage reports more quickly
-   set new_config(execd_params) "SHARETREE_RESERVED_USAGE=true"
+   add_or_replace_array_param new_config issue_2222_config_backup execd_params "SHARETREE_RESERVED_USAGE" "true"
    set new_config(load_report_time) "0:0:5"
    set_config_and_propagate new_config $issue_2222_host
 

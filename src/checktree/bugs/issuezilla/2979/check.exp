@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global check_need_running_system
 
@@ -50,7 +50,7 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "Check if submitted process is notified with TERM signal before termination is done."
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function issue_2979_setup
@@ -65,10 +65,10 @@ lappend check_functions "issue_2979_test"
 proc issue_2979_setup {} {
    global ts_config
    global issue_2979_host issue_2979_backup
-   
+
    # let's assume we need 2 test hosts
    set issue_2979_host [host_conf_get_suited_hosts]
-   
+
    # we want to modify the global config - make a backup
    get_config issue_2979_backup
 }
@@ -82,7 +82,7 @@ proc issue_2979_cleanup {} {
 
    # restore config
    reset_config_and_propagate issue_2979_backup
-   
+
    # unset our test's global variables
    foreach var "issue_2979_hosts issue_2979_backup" {
       if {[info exists $var]} {
@@ -94,44 +94,41 @@ proc issue_2979_cleanup {} {
 
 #****** check.61/issue_2979_test() *********************************************
 #  NAME
-#     issue_2979_test() -- ??? 
+#     issue_2979_test() -- ???
 #
 #  SYNOPSIS
-#     issue_2979_test { } 
+#     issue_2979_test { }
 #
 #  FUNCTION
-#     Set NOTIFY_KILL=TERM to get the SIGTERM before sending the SIGKILL signal  
-#     to the job. Submit a hard request. Check if this signal is send to 
-#     the process. 
+#     Set NOTIFY_KILL=TERM to get the SIGTERM before sending the SIGKILL signal
+#     to the job. Submit a hard request. Check if this signal is send to
+#     the process.
 #
 #*******************************************************************************
 proc issue_2979_test {} {
    global ts_config CHECK_USER ts_user_config
    global issue_2979_host
-   
-   # set execd parameter NOTIFY_KILL=TERM so that SIGTERM will be 
-   # sent to process 
-   set my_execd_params "KEEP_ACTIVE=true, NOTIFY_KILL=TERM"
+
+   # set execd parameter NOTIFY_KILL=TERM so that SIGTERM will be
+   # sent to process
    get_config act_configuration
-   if { [string compare "none" $act_configuration(execd_params)] != 0 } {
-      append my_execd_params ",$act_configuration(execd_params)"
-   }
-   set myconfig(execd_params) "$my_execd_params"
-   
-   ts_log_fine "setting execd_param to \"$my_execd_params\" ..."
+   add_or_replace_array_param myconfig act_configuration "execd_params" "KEEP_ACTIVE" "true"
+   add_or_replace_array_param myconfig myconfig "execd_params" "NOTIFY_KILL" "TERM"
+
+   ts_log_fine "setting execd_param to \"$myconfig(execd_params)\" ..."
    # change it global
    set_config_and_propagate myconfig
 
    # ----------------------------------------------------------
    # submit a sleeper job with soft realtime limit (-l s_rt=30)
-   # 
-   # SINCE THIS IS NOT A BUG BECAUSE SOFT LIMITS DO NOT END IN A 
-   # NOTIFY_KILL WE HAVE TO SUBMIT A HARD REALTIME LIMIT 
-   # -----------------------------------------------------------  
+   #
+   # SINCE THIS IS NOT A BUG BECAUSE SOFT LIMITS DO NOT END IN A
+   # NOTIFY_KILL WE HAVE TO SUBMIT A HARD REALTIME LIMIT
+   # -----------------------------------------------------------
    set job_id [submit_job "-b y -notify -l hostname=$issue_2979_host -l h_rt=30 sleep 3600"]
-   wait_for_jobstart $job_id "sleep" 100 
+   wait_for_jobstart $job_id "sleep" 100
 
-   # check which signal is sent to job by inspecting trace file 
+   # check which signal is sent to job by inspecting trace file
    # get trace file
    set spool_dir [get_execd_spool_dir $issue_2979_host]
    set jobs_dir $spool_dir/$issue_2979_host/active_jobs/$job_id.1
@@ -139,27 +136,27 @@ proc issue_2979_test {} {
 
    ts_log_fine "reading $trace_file ..."
 
-   # init_logfile_wait 
+   # init_logfile_wait
    init_logfile_wait $issue_2979_host $trace_file
-   # wait  for signal output 
+   # wait  for signal output
    set trace_output [logfile_wait "writing usage file"]
    close_logfile_wait
 
-   # decide if test is failed or not 
-   set trace_output [split $trace_output "\r\n"]   
+   # decide if test is failed or not
+   set trace_output [split $trace_output "\r\n"]
 
-   set signalcntr 0 
+   set signalcntr 0
    set notification_signal "none found"
 
    foreach line_a $trace_output {
       set line [string trim $line_a]
       if { $line != "" } {
-         # check for kill signal 
+         # check for kill signal
          if { [string match "*now sending signal*" $line ] } {
             incr signalcntr 1
             if {$signalcntr == 1} {
                # we are just interested in the notification signal (2 signals are appearing here)
-               set notification_signal [get_string_value_between "signal " " to" $line] 
+               set notification_signal [get_string_value_between "signal " " to" $line]
                set notification_signal [string trim $notification_signal]
             }
          }

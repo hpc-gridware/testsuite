@@ -160,22 +160,16 @@ proc job_start_test {} {
    get_config act_configuration
 
    # Setting execd_params to KEEP_ACTIVE=true
-   set my_execd_params "KEEP_ACTIVE=true"
-   if { [string compare "none" $act_configuration(execd_params)] != 0 } {
-      append my_execd_params ",$act_configuration(execd_params)"
-   }
-   set myconfig(execd_params) "$my_execd_params"
+   add_or_replace_array_param myconfig act_configuration "execd_params" "KEEP_ACTIVE" "true"
    set myconfig(load_report_time) "00:00:02"
-   ts_log_fine "setting execd_param to \"$my_execd_params\" ..."
+   ts_log_fine "setting execd_param to \"$myconfig(execd_params)\" ..."
    set_config myconfig
-
 
    set type_list {}
    lappend type_list "cell"
    lappend type_list "NFS-ROOT2NOBODY"
    lappend type_list "NFS-ROOT2ROOT"
    lappend type_list "local"   ;# this has to be the last one (original testsuite spool directory)
-
 
    set hosts_to_check {}
    foreach host $ts_config(unique_arch_nodes) {

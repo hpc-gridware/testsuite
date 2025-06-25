@@ -32,15 +32,15 @@
 ##########################################################################
 #___INFO__MARK_END__
 
-# JG: TODO: Create chart: actual resource share over time based on 
+# JG: TODO: Create chart: actual resource share over time based on
 #           output of sge_share_mon
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -50,7 +50,7 @@ set check_description(0)  "Testing geee share_tree (functional test)"
 set check_description(100)  "Testing geee share_tree"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function "share_tree_setup"
@@ -75,14 +75,14 @@ proc share_tree_setup  {} {
    }
 
    get_config sharetree_stored_configuration
-   set myconfig(qmaster_params) [add_or_replace_param $sharetree_stored_configuration(qmaster_params) "STREE_SPOOL_INTERVAL" "STREE_SPOOL_INTERVAL=1"]
-   set myconfig(execd_params) [add_or_replace_param $sharetree_stored_configuration(execd_params) "SHARETREE_RESERVED_USAGE" "SHARETREE_RESERVED_USAGE=true"]
+   add_or_replace_array_param myconfig sharetree_stored_configuration "qmaster_params" "STREE_SPOOL_INTERVAL" "1"
+   add_or_replace_array_param myconfig sharetree_stored_configuration "execd_params" "SHARETREE_RESERVED_USAGE" "true"
    set_config myconfig
 
    foreach elem $ts_config(execd_nodes) {
-      disable_queue [get_queue_instance "all.q" "$elem"] 
-   }  
-  
+      disable_queue [get_queue_instance "all.q" "$elem"]
+   }
+
    set test_host [lindex $ts_config(execd_nodes) 0]
    set test_queue [get_queue_instance "test" "$test_host"]
    set change_array(slots) "1"
@@ -95,7 +95,7 @@ proc share_tree_setup  {} {
 
    # delete a possibly existing sharetree
    del_sharetree
- 
+
    # create the sharetree
    stree_buffer_init stree
    stree_buffer_add_node stree "/node1" 8000
@@ -106,7 +106,7 @@ proc share_tree_setup  {} {
    stree_buffer_commit stree
 
    # setup scheduler config
-   get_schedd_config my_config 
+   get_schedd_config my_config
    set my_config(weight_tickets_share) "10000"
    set my_config(job_load_adjustments) "np_load_avg=0.0"
    set my_config(schedule_interval)    "2:0:0"
@@ -134,10 +134,10 @@ proc share_tree_setup_level {} {
 
 proc share_tree_cleanup  {} {
    global ts_config
-   global CHECK_PRODUCT_TYPE 
+   global CHECK_PRODUCT_TYPE
    global prj1_id_list prj2_id_list prj3_id_list
    global sharetree_stored_configuration test_host
- 
+
    # reset the schedd config to enable schedule interval again
    reset_schedd_config
 
@@ -150,7 +150,7 @@ proc share_tree_cleanup  {} {
    # enable all queues again
    foreach elem $ts_config(execd_nodes) {
       enable_queue [get_queue_instance "all.q" $elem]
-   }  
+   }
 
    # remote test quque
    del_queue test $test_host 0 1
@@ -171,7 +171,7 @@ proc share_tree_cleanup  {} {
 proc wait_for_job_tickes {job_id} {
    set my_timeout [timestamp]
    incr my_timeout 300
-   
+
    set last_job_tickets 0
    while {$last_job_tickets == 0 && [timestamp] < $my_timeout} {
       if {![get_extended_job_info $job_id job_info_var]} {
@@ -193,8 +193,8 @@ proc wait_for_job_tickes {job_id} {
 }
 
 proc get_job_tickets {job_list_prj1 job_list_prj2 job_list_prj3 array_name} {
-   upvar $array_name my_tickets   
-   
+   upvar $array_name my_tickets
+
    set job_list ""
    foreach elem $job_list_prj1 {
       lappend job_list $elem
@@ -231,7 +231,7 @@ proc get_ticket_sum {job_list ticket_array_name} {
 
 proc get_normalized_ticket_order {job_list_prj1 job_list_prj2 job_list_prj3 most_prior_project ticket_array_name return_array} {
 
-   upvar  $ticket_array_name my_tickets  
+   upvar  $ticket_array_name my_tickets
    upvar  $return_array my_job_ticket_list
 
    set job_list ""
@@ -276,15 +276,15 @@ proc get_normalized_ticket_order {job_list_prj1 job_list_prj2 job_list_prj3 most
             }
             incr lf_nr 1
          }
-      } 
+      }
    }
-   set my_job_ticket_list(job_count) $lf_nr 
+   set my_job_ticket_list(job_count) $lf_nr
    set my_job_ticket_list(last_prior_job_nr) $last_prj2_nr
-  
+
    set jobs1_count 0
    set jobs2_count 0
    set jobs3_count 0
-   for {set i 0} {$i <= $my_job_ticket_list(last_prior_job_nr)} {incr i 1} {   
+   for {set i 0} {$i <= $my_job_ticket_list(last_prior_job_nr)} {incr i 1} {
       if {$my_job_ticket_list($i,project) == 1} {
          incr jobs1_count 1
       }
@@ -301,7 +301,7 @@ proc get_normalized_ticket_order {job_list_prj1 job_list_prj2 job_list_prj3 most
 
    set all_prj_count [expr $jobs1_count + $jobs2_count + $jobs3_count]
    set my_job_ticket_list(job_sum) $all_prj_count
-   
+
    set all_prj_count_unit [expr $all_prj_count / 100.0]
    set prj1_percentage [expr $jobs1_count / $all_prj_count_unit]
    set prj2_percentage [expr $jobs2_count / $all_prj_count_unit]
@@ -310,12 +310,12 @@ proc get_normalized_ticket_order {job_list_prj1 job_list_prj2 job_list_prj3 most
    set my_job_ticket_list(job_percent_prj1) $prj1_percentage
    set my_job_ticket_list(job_percent_prj2) $prj2_percentage
    set my_job_ticket_list(job_percent_prj3) $prj3_percentage
- 
+
    return $normalized_list
 }
 
 proc get_project_member {prj1 prj2 prj3 job_id} {
-   
+
    foreach elem $prj1 {
       if {$elem == $job_id} {
          return 1
@@ -337,7 +337,7 @@ proc get_project_member {prj1 prj2 prj3 job_id} {
 
 proc share_tree_test {} {
    global ts_config
-   global CHECK_PRODUCT_TYPE 
+   global CHECK_PRODUCT_TYPE
    global share_tree_job_counter CHECK_PROTOCOL_DIR
    global share_tree_percentage_variation
    global prj1_id_list prj2_id_list prj3_id_list
@@ -345,9 +345,9 @@ proc share_tree_test {} {
 
    if {[string compare $CHECK_PRODUCT_TYPE "sgeee"] != 0} {
       ts_log_config "not available for sge system"
-      return 
+      return
    }
-   
+
    trigger_scheduling
 
    disable_queue "$test_queue"
@@ -360,21 +360,21 @@ proc share_tree_test {} {
       lappend prj1_id_list [ submit_job "-e /dev/null -o /dev/null -P project1 $ts_config(testsuite_root_dir)/scripts/sleeper.sh 5 $CHECK_PROTOCOL_DIR"]
       lappend prj2_id_list [ submit_job "-e /dev/null -o /dev/null -P project2 $ts_config(testsuite_root_dir)/scripts/sleeper.sh 5 $CHECK_PROTOCOL_DIR"]
       set last_job [ submit_job "-e /dev/null -o /dev/null -P project3 $ts_config(testsuite_root_dir)/scripts/sleeper.sh 5 $CHECK_PROTOCOL_DIR"]
-      lappend prj3_id_list $last_job      
+      lappend prj3_id_list $last_job
       incr counter -1
    }
 
    wait_for_jobpending $last_job "leeper" 60
 
    trigger_scheduling
-   
+
    wait_for_job_tickes $last_job
 
-   
+
    get_job_tickets $prj1_id_list $prj2_id_list $prj3_id_list tickets
-   
+
    set sorted_tickets [get_normalized_ticket_order  $prj1_id_list $prj2_id_list $prj3_id_list 2 tickets answer ]
-   
+
 
    if {$answer(job_count) != [ expr $share_tree_job_counter * 3]} {
       ts_log_severe "not all jobs in list"
@@ -382,8 +382,8 @@ proc share_tree_test {} {
 
    set ticket_count 0
    for {set i 0} {$i < $answer(job_count)} {incr i 1} {
-       ts_log_fine "($i) tickets: $answer($i,tickets) job_id: $answer($i,job_id) project: $answer($i,project)"  
-       incr ticket_count $answer($i,tickets) 
+       ts_log_fine "($i) tickets: $answer($i,tickets) job_id: $answer($i,job_id) project: $answer($i,project)"
+       incr ticket_count $answer($i,tickets)
    }
    ts_log_fine "SUM of tickets: $ticket_count"
    ts_log_fine "last job of project 2: $answer(last_prior_job_nr)"
@@ -444,7 +444,7 @@ proc share_tree_test {} {
          set file_here [file isfile $CHECK_PROTOCOL_DIR/$job]
          if {$file_here == 0} {
             set done 0
-         } 
+         }
       }
 
       if {$done == 1} {
@@ -478,24 +478,24 @@ proc share_tree_test {} {
    if {[timestamp] >= $my_timeout} {
       ts_log_severe "timeout while waiting for start of jobs"
    }
-     
+
    set prj3_count 0
    foreach job $prj3_id_list {
-      if {[file isfile $CHECK_PROTOCOL_DIR/$job] == 1} {   
+      if {[file isfile $CHECK_PROTOCOL_DIR/$job] == 1} {
          incr prj3_count 1
       }
    }
 
    set prj1_count 0
    foreach job $prj1_id_list {
-      if {[file isfile $CHECK_PROTOCOL_DIR/$job] == 1} {   
+      if {[file isfile $CHECK_PROTOCOL_DIR/$job] == 1} {
          incr prj1_count 1
       }
    }
 
    set prj2_count 0
    foreach job $prj2_id_list {
-      if {[file isfile $CHECK_PROTOCOL_DIR/$job] == 1} {   
+      if {[file isfile $CHECK_PROTOCOL_DIR/$job] == 1} {
          incr prj2_count 1
       }
    }
@@ -506,14 +506,14 @@ proc share_tree_test {} {
 
    set all_prj_count [ expr ( $prj1_count + $prj2_count + $prj3_count ) ]
    ts_log_fine "====================="
-   ts_log_fine "sum: $all_prj_count"  
- 
+   ts_log_fine "sum: $all_prj_count"
+
    set all_prj_count_unit [expr $all_prj_count / 100.0]
 
    set prj1_percentage [expr $prj1_count / $all_prj_count_unit]
    set prj2_percentage [expr $prj2_count / $all_prj_count_unit]
    set prj3_percentage [expr $prj3_count / $all_prj_count_unit]
-  
+
 
    ts_log_fine "project1 % $prj1_percentage"
    ts_log_fine "project2 % $prj2_percentage"
@@ -547,7 +547,7 @@ proc issue_751 {} {
   set prj2_id_list ""
   set prj3_id_list ""
 
-  set host $ts_config(master_host) 
+  set host $ts_config(master_host)
 
    # the bug has only be fixed in maintrunk for 6.1
    # do only raise a warning for ealier versions

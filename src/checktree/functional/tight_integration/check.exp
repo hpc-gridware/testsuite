@@ -1168,7 +1168,8 @@ proc tight_integration_notify {} {
 
    # now set a different kill signal, and expect it to work as before
    get_config config_backup $tight_master_node
-   set config(execd_params) "NOTIFY_KILL=USR1,NOTIFY_SUSP=USR2"
+   add_or_replace_array_param config config_backup "execd_params" "NOTIFY_KILL" "USR1"
+   add_or_replace_array_param config config "execd_params" "NOTIFY_SUSP" "USR2"
    set_config_and_propagate config $tight_master_node
    tight_integration_notify_doit "delete job" "SIGUSR1" "" "delete"
    tight_integration_notify_doit "suspend job" "SIGUSR2" "" "suspend"

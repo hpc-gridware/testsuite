@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -46,7 +46,7 @@ set check_category        "ISSUE USAGE VERIFIED"
 set check_description(0)  "compare usage output of qstat -ext, qstat -ext -g t, qstat -j"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function issue_2419_setup
@@ -71,6 +71,7 @@ proc issue_2419_setup {} {
 
    # set SHARETREE_RESERVED_USAGE
    set config(execd_params) "SHARETREE_RESERVED_USAGE=1"
+   add_or_replace_array_param config issue_2419_backup "execd_params" "SHARETREE_RESERVED_USAGE" "1"
    set_config_and_propagate config
 
    # create a tight pe
