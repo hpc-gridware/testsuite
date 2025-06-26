@@ -35,13 +35,13 @@
 proc install_shadowd {} {
    global ts_config
    global CORE_INSTALLED
-   global check_use_installed_system 
+   global check_use_installed_system
    global CHECK_COMMD_PORT CHECK_ADMIN_USER_SYSTEM CHECK_USER
    global CHECK_DEBUG_LEVEL CHECK_EXECD_INSTALL_OPTIONS
    global CHECK_COMMD_PORT
    global CHECK_MAIN_RESULTS_DIR
 
-   set CORE_INSTALLED "" 
+   set CORE_INSTALLED ""
    read_install_list
 
    set shadowd_hosts [replace_string $ts_config(shadowd_hosts) "none" ""]
@@ -67,7 +67,7 @@ proc install_shadowd {} {
          copy_certificates $shadow_host
       }
    }
- 
+
    foreach shadow_host $shadowd_hosts {
       ts_log_fine "testing shadowd settings for host $shadow_host ..."
       set info [check_shadowd_settings $shadow_host]
@@ -94,7 +94,7 @@ proc install_shadowd {} {
          return
       }
 
-      set remote_arch [resolve_arch $shadow_host]    
+      set remote_arch [resolve_arch $shadow_host]
 
       set HIT_RETURN_TO_CONTINUE       [translate $shadow_host 0 1 0 [sge_macro DISTINST_HIT_RETURN_TO_CONTINUE] ]
       set SHADOWD_INSTALL_COMPLETE     [translate $shadow_host 0 1 0 [sge_macro DISTINST_SHADOWD_INSTALL_COMPLETE] ]
@@ -117,18 +117,18 @@ proc install_shadowd {} {
       set SMF_IMPORT_SERVICE           [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_SMF_IMPORT_SERVICE] ]
       set DO_YOU_WANT_TO_CONTINUE      [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DO_YOU_WANT_TO_CONTINUE] ]
       set REMOVE_OLD_RC_SCRIPT         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_REMOVE_OLD_RC_SCRIPT] ]
-      
+
       ts_log_fine "inst_sge -sm"
 
-      if {$CHECK_ADMIN_USER_SYSTEM == 0} { 
+      if {$CHECK_ADMIN_USER_SYSTEM == 0} {
          set user "root"
       } else {
          set user $CHECK_USER
-         ts_log_fine "--> install as user $CHECK_USER <--" 
+         ts_log_fine "--> install as user $CHECK_USER <--"
       }
       set id [open_remote_spawn_process $shadow_host $user "./inst_sge" "-sm" 0 $ts_config(product_root) "" 1 15 0 1 1]
-      set sp_id [ lindex $id 1 ] 
-     
+      set sp_id [ lindex $id 1 ]
+
       set do_stop 0
       while {$do_stop == 0} {
          flush stdout
@@ -136,9 +136,9 @@ proc install_shadowd {} {
             puts "press RETURN"
             set anykey [wait_for_enter 1]
          }
-     
+
          set timeout 300
-         log_user 1 
+         log_user 1
          expect {
             -i $sp_id full_buffer {
                ts_log_warning "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
@@ -158,8 +158,8 @@ proc install_shadowd {} {
                continue
             }
 
-            -i $sp_id timeout { 
-               ts_log_severe "timeout while waiting for output" 
+            -i $sp_id timeout {
+               ts_log_severe "timeout while waiting for output"
                set do_stop 1
                continue
             }
@@ -186,12 +186,12 @@ proc install_shadowd {} {
                continue
             }
 
-            -i $sp_id $HOSTNAME_KNOWN_AT_MASTER { 
+            -i $sp_id $HOSTNAME_KNOWN_AT_MASTER {
                install_send_answer $sp_id ""
                continue
             }
 
-            -i $sp_id $INSTALL_AS_ADMIN_USER { 
+            -i $sp_id $INSTALL_AS_ADMIN_USER {
                install_send_answer $sp_id $ANSWER_YES
                continue
             }
@@ -212,11 +212,11 @@ proc install_shadowd {} {
                }
             }
 
-            -i $sp_id $INSTALL_SCRIPT { 
+            -i $sp_id $INSTALL_SCRIPT {
                install_send_answer $sp_id $ANSWER_NO
                continue
             }
-            
+
             # SMF startup is always disabled in testsuite
             -i $sp_id -- $SMF_IMPORT_SERVICE {
                install_send_answer $sp_id $ANSWER_NO
@@ -227,7 +227,7 @@ proc install_shadowd {} {
                install_send_answer $sp_id $ANSWER_YES
                continue
             }
-            
+
             -i $sp_id "Error:" {
                ts_log_warning "$expect_out(0,string)"
                close_spawn_process $id
@@ -254,7 +254,7 @@ proc install_shadowd {} {
                lappend CORE_INSTALLED $shadow_host
                write_install_list
                set do_stop 1
-               # If we compiled with code coverage, we have to 
+               # If we compiled with code coverage, we have to
                # wait a little bit before closing the connection.
                # Otherwise the last command executed (infotext)
                # will leave a lockfile lying around.
@@ -276,7 +276,7 @@ proc install_shadowd {} {
 
             -i $sp_id "_exit_status_:(0)" {
                # N1GE 6.0 shadowd installation just stops after starting the shadowd
-               # without further notice. Let's hope inst_sge -sm doesn't exit 0 in 
+               # without further notice. Let's hope inst_sge -sm doesn't exit 0 in
                # case of errors - we wouldn't recognize them!
                set do_stop 1
             }
@@ -298,7 +298,11 @@ proc install_shadowd {} {
       incr my_timeout 60
       set is_running 0
       while {[timestamp] < $my_timeout} {
-         set running_daemons [is_daemon_running $shadow_host "sge_shadowd"]
+         # Expect to see sge_shadowd running.
+         # We migth see multiple processes if the sge_shadowd is starting up/daemonizing
+         # slowly, e.g. due to coverage testing or other instrumentation,
+         # therefore we make is_daemon_running ignore the process count.
+         set running_daemons [is_daemon_running $shadow_host "sge_shadowd" 1]
          if {$running_daemons != 1} {
             ts_log_fine "waiting for running shadowd on host $shadow_host (reported daemons=$running_daemons) ..."
          } else {

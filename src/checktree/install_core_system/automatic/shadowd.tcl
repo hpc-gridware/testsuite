@@ -97,12 +97,12 @@ proc install_shadowd {} {
       foreach shadow_host $shadowd_hosts {
          ts_log_fine "installing shadowd on hosts: $shadow_host ($ts_config(product_type) system)..."
          set my_timeout 500
-         if {$CHECK_ADMIN_USER_SYSTEM == 0} { 
+         if {$CHECK_ADMIN_USER_SYSTEM == 0} {
             set install_user "root"
          } else {
             set install_user $CHECK_USER
          }
-         
+
          set autoinst_config_file "$ts_config(product_root)/autoinst_config_$ts_config(cell)_shadowd_${shadow_host}.conf"
          write_autoinst_config $autoinst_config_file $shadow_host 0 1 0 0 1
 
@@ -122,12 +122,16 @@ proc install_shadowd {} {
             continue
          }
          ts_log_fine "checking shadowd on host $shadow_host ($ts_config(product_type) system) ..."
-         
+
          set my_timeout [timestamp]
          incr my_timeout 60
          set is_running 0
          while {[timestamp] < $my_timeout} {
-            set is_running [is_daemon_running $shadow_host "sge_shadowd"]
+            # Expect to see sge_shadowd running.
+            # We migth see multiple processes if the sge_shadowd is starting up/daemonizing
+            # slowly, e.g. due to coverage testing or other instrumentation,
+            # therefore we make is_daemon_running ignore the process count.
+            set is_running [is_daemon_running $shadow_host "sge_shadowd" 1]
             if {$is_running != 1} {
                ts_log_fine "waiting for running shadowd on host $shadow_host (running=$is_running)..."
             } else {

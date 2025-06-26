@@ -8982,20 +8982,20 @@ proc is_daemon_running { hostname daemon {disable_daemon_count_check 0} } {
          incr daemon_count 1
       }
    }
-   if { $daemon_count > 1 } {
+   if {$daemon_count > 1} {
       set err_text ""
-      append err_text "Host: $hostname -> Found 2 running $daemon in one environment!:\n"
+      append err_text "Host: $hostname -> Found $daemon_count running $daemon in one environment!:\n"
       foreach elem $found_p {
          append err_text "$ps_info(string,$elem)\n"
       }
       append err_text "TODO: This function will not work on threaded daemons running on linux 24 kernel\n"
       if {$disable_daemon_count_check != 0} {
-         ts_log_info "$err_text"
+         ts_log_info $err_text
       } else {
          ts_log_severe $err_text
       }
-
    }
+
    return $daemon_count
 }
 

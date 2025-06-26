@@ -356,7 +356,7 @@ global CHECK_EXPECT_MATCH_MAX_BUFFER   ;# read buffer for expect
 set CHECK_EXPECT_MATCH_MAX_BUFFER [expr 1024 * 1024]
 
 global CHECK_COVERAGE
-set CHECK_COVERAGE {} ;# list of code coverage methods (tcov, insure, or emma)
+set CHECK_COVERAGE {} ;# list of code coverage methods (lcov, tcov, insure, or emma)
 
 global CHECK_COVERAGE_DIR ;# directory for test coverage profiles
 set CHECK_COVERAGE_DIR ""
@@ -7867,7 +7867,7 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "vncserver <num>       starts vnc server on display number <num> at testsuite startup"
       puts "                      and terminates it when shutting down testsuite"
       puts ""
-      puts "coverage <type(s)>    with code coverage analysis, type =\"tcov|insure|emma\""
+      puts "coverage <type(s)>    with code coverage analysis, type =\"lcov|tcov|insure|emma\""
       puts "coverage_dir <dir>    directory for test coverage profiles"
       puts ""
       puts "valgrind <components> with valgrind memory testing"
