@@ -71,7 +71,11 @@ proc limits_setup_level {} {
       0 {
          # apply limits with pdc delivering usage information
          # @todo on Solaris I see a different behavior for both accounting values exit_status and failed
-         set limits_host [host_conf_get_suited_hosts 1 {} {"lx-amd64"}]
+         set limits_host [host_conf_get_suited_hosts 1 {} {"lx-amd64 lx-arm64"}]
+         if {$limits_host eq ""} {
+            ts_log_config "Need a lx-amd64 or lx-arm64 execution host to run this test"
+            return 99
+         }
          set usage_collection "PDC"
       }
       1 {
