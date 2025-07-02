@@ -1,0 +1,220 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+# define test's name and run level descriptions
+set check_name            "limits"
+set check_category        "EXECD LIMITS SYSTEMD VERIFIED"
+set check_description(0)  "apply limits with pdc delivering usage information"
+set check_description(1)  "apply limits with systemd delivering usage information"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function limits_setup
+set check_setup_level_function limits_setup_level
+set check_cleanup_level_function limits_cleanup_level
+set check_cleanup_function limits_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "limits_cpu"
+lappend check_functions "limits_rss"
+lappend check_functions "limits_vmem"
+
+# -------- local test procedures: initialization------------------------------
+
+proc limits_setup {} {
+   get_current_cluster_config_array ts_config
+   global limits_host limits_backup
+
+   # we want to modify the global config - make a backup
+   get_config limits_backup
+
+   # create a test queue
+   set q(slots) 10
+   add_queue "test.q" "@allhosts" q
+}
+
+proc limits_setup_level {} {
+   global CHECK_ACT_LEVEL
+   global limits_host limits_backup
+
+   switch $CHECK_ACT_LEVEL {
+      0 {
+         # apply limits with pdc delivering usage information
+         # @todo on Solaris I see a different behavior for both accounting values exit_status and failed
+         set limits_host [host_conf_get_suited_hosts 1 {} {"lx-amd64"}]
+         set usage_collection "PDC"
+      }
+      1 {
+         # apply limits with systemd delivering usage information
+         if {![ge_has_feature "systemd"]} {
+            ts_log_config "This test requires the systemd integration to be available"
+            return 99
+         }
+         set limits_host [config_get_systemd_host]
+         if {$limits_host eq ""} {
+            ts_log_config "No systemd host found in the current cluster configuration."
+            return 99
+         }
+         set usage_collection "YES"
+      }
+   }
+
+   if {[ge_has_feature "systemd"]} {
+      add_or_replace_array_param conf limits_backup "execd_params" "USAGE_COLLECTION" $usage_collection
+   }
+   # set a short load report time
+   set conf(load_report_time) "0:0:2"
+   set_config_and_propagate conf
+}
+
+proc limits_cleanup_level {} {
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   del_queue "test.q" "" 1 1
+}
+
+proc limits_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global limits_host limits_backup
+
+   # reset the config and wait for execds to get it
+   reset_config_and_propagate limits_backup
+
+   unset -nocomplain limits_host limits_backup
+}
+
+proc limits_set_qlimit {name value} {
+   mod_attr "queue" $name $value "test.q"
+}
+
+proc limits_submit_check {limit} {
+   get_current_cluster_config_array ts_config
+   global limits_host
+
+   # submit a job that should fail due to the limit
+   # we use a worker, it will exceed a cpu limit
+   # and we make it allocate memory to ensure that it will exceed memory limits as well
+   # we need make worker fork multiple processes in order not to run into the per process limit
+   # but get execd to apply the limit
+   # Usage: worker.sh [[time [nprocs] [ntimes] [work_parameter]]]
+   set job_opts "-q test.q -l h=$limits_host"
+   set job_args "$ts_config(product_root)/examples/jobs/worker.sh 60 2"
+   if {$limit eq "h_rss" || $limit eq "h_vmem" || $limit eq "s_rss" || $limit eq "s_vmem"} {
+      # we need to allocate memory (per process) to exceed the limit
+      append job_args " 1 '-mallocM 200'"
+   }
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0} {
+      return
+   }
+   # expect the job to fail within 20 seconds
+   # do not expect to see the job running, it can fail milliseconds after start
+   if {[wait_for_jobend $job_id "" 20 0] != 0} {
+      return
+   }
+
+   get_qacct $job_id
+   switch $limit {
+      "h_cpu" -
+      "h_rss" -
+      "h_vmem" {
+         # in case of hard limits we expect the job to get killed with SIGKILL (9)
+         # this results in exit status 137 (128 + 9)
+         # and the job will be reported as failed
+         set expected_failed 100
+         set expected_exit_status 137
+      }
+      "s_cpu" -
+      "s_rss" -
+      "s_vmem" {
+         # in case of soft limits on memory we expect the job to get killed with SIGXCPU (24)
+         # this results in exit status 152 (128 + 24)
+         # @todo should the job be reported as failed? Or does work exit "gracefully" on SIGXCPU?
+         set expected_failed 0
+         set expected_exit_status 152
+      }
+   }
+
+   # failed can be sth. like "{100 : assumedly after job}" - strip the list part
+   # and we are only interested in the first element
+   set failed [lindex [lindex $qacct_info(failed) 0] 0]
+
+   ts_log_fine "failed:      $failed"
+   ts_log_fine "exit_status: $qacct_info(exit_status)"
+
+   set errors {}
+   if {$failed != $expected_failed} {
+      lappend errors "accounting(failed) should be $expected_failed, but is \"$failed\""
+   }
+   if {$qacct_info(exit_status) != $expected_exit_status} {
+      lappend errors "accounting(exit_status) should be $expected_exit_status, but is $qacct_info(exit_status)"
+   }
+
+   if {[llength $errors] > 0} {
+      ts_log_severe "job $job_id should have run into limit $limit, but accounting had errors:\n[join $errors "\n"]"
+   }
+}
+
+proc limits_cpu {} {
+   limits_set_qlimit "h_cpu" "0:0:10"
+   limits_submit_check "h_cpu"
+   limits_set_qlimit "h_cpu" "INFINITY"
+
+   limits_set_qlimit "s_cpu" "0:0:10"
+   limits_submit_check "s_cpu"
+   limits_set_qlimit "s_cpu" "INFINITY"
+}
+
+proc limits_rss {} {
+   if {![is_version_in_range "9.0.7"]} {
+      ts_log_config "CS-194: add rss limits has only been done for 9.0.7 and later versions"
+   }
+   limits_set_qlimit "h_rss" "400M"
+   limits_submit_check "h_rss"
+   limits_set_qlimit "h_rss" "INFINITY"
+
+   limits_set_qlimit "s_rss" "400M"
+   limits_submit_check "s_rss"
+   limits_set_qlimit "s_rss" "INFINITY"
+}
+
+proc limits_vmem {} {
+   limits_set_qlimit "h_vmem" "400M"
+   limits_submit_check "h_vmem"
+   limits_set_qlimit "h_vmem" "INFINITY"
+
+   limits_set_qlimit "s_vmem" "400M"
+   limits_submit_check "s_vmem"
+   limits_set_qlimit "s_vmem" "INFINITY"
+}
