@@ -71,7 +71,7 @@ proc limits_setup_level {} {
       0 {
          # apply limits with pdc delivering usage information
          # @todo on Solaris I see a different behavior for both accounting values exit_status and failed
-         set limits_host [host_conf_get_suited_hosts 1 {} {"lx-amd64 lx-arm64"}]
+         set limits_host [host_conf_get_suited_hosts 1 {} {"lx-amd64" "lx-arm64"}]
          if {$limits_host eq ""} {
             ts_log_config "Need a lx-amd64 or lx-arm64 execution host to run this test"
             return 99
@@ -89,7 +89,7 @@ proc limits_setup_level {} {
             ts_log_config "No systemd host found in the current cluster configuration."
             return 99
          }
-         set usage_collection "YES"
+         set usage_collection "TRUE"
       }
    }
 
@@ -104,13 +104,13 @@ proc limits_setup_level {} {
 proc limits_cleanup_level {} {
    delete_all_jobs
    wait_for_end_of_all_jobs
-
-   del_queue "test.q" "" 1 1
 }
 
 proc limits_cleanup {} {
    get_current_cluster_config_array ts_config
    global limits_host limits_backup
+
+   del_queue "test.q" "" 1 1
 
    # reset the config and wait for execds to get it
    reset_config_and_propagate limits_backup
@@ -124,6 +124,7 @@ proc limits_set_qlimit {name value} {
 
 proc limits_submit_check {limit} {
    get_current_cluster_config_array ts_config
+   global CHECK_ACT_LEVEL
    global limits_host
 
    # submit a job that should fail due to the limit
@@ -148,45 +149,50 @@ proc limits_submit_check {limit} {
       return
    }
 
-   get_qacct $job_id
-   switch $limit {
-      "h_cpu" -
-      "h_rss" -
-      "h_vmem" {
-         # in case of hard limits we expect the job to get killed with SIGKILL (9)
-         # this results in exit status 137 (128 + 9)
-         # and the job will be reported as failed
-         set expected_failed 100
-         set expected_exit_status 137
+   # When killing of the job due to a limit is done *outside* of OCS control
+   # (per process limit or by systemd), this is not reflected in failed or exit_status.
+   # See also CS-1380.
+   if {$CHECK_ACT_LEVEL == 0} {
+      get_qacct $job_id
+      switch $limit {
+         "h_cpu" -
+         "h_rss" -
+         "h_vmem" {
+            # in case of hard limits we expect the job to get killed with SIGKILL (9)
+            # this results in exit status 137 (128 + 9)
+            # and the job will be reported as failed
+            set expected_failed 100
+            set expected_exit_status 137
+         }
+         "s_cpu" -
+         "s_rss" -
+         "s_vmem" {
+            # in case of soft limits on memory we expect the job to get killed with SIGXCPU (24)
+            # this results in exit status 152 (128 + 24)
+            # @todo should the job be reported as failed? Or does work exit "gracefully" on SIGXCPU?
+            set expected_failed 0
+            set expected_exit_status 152
+         }
       }
-      "s_cpu" -
-      "s_rss" -
-      "s_vmem" {
-         # in case of soft limits on memory we expect the job to get killed with SIGXCPU (24)
-         # this results in exit status 152 (128 + 24)
-         # @todo should the job be reported as failed? Or does work exit "gracefully" on SIGXCPU?
-         set expected_failed 0
-         set expected_exit_status 152
+
+      # failed can be sth. like "{100 : assumedly after job}" - strip the list part
+      # and we are only interested in the first element
+      set failed [lindex [lindex $qacct_info(failed) 0] 0]
+
+      ts_log_fine "failed:      $failed"
+      ts_log_fine "exit_status: $qacct_info(exit_status)"
+
+      set errors {}
+      if {$failed != $expected_failed} {
+         lappend errors "accounting(failed) should be $expected_failed, but is \"$failed\""
       }
-   }
+      if {$qacct_info(exit_status) != $expected_exit_status} {
+         lappend errors "accounting(exit_status) should be $expected_exit_status, but is $qacct_info(exit_status)"
+      }
 
-   # failed can be sth. like "{100 : assumedly after job}" - strip the list part
-   # and we are only interested in the first element
-   set failed [lindex [lindex $qacct_info(failed) 0] 0]
-
-   ts_log_fine "failed:      $failed"
-   ts_log_fine "exit_status: $qacct_info(exit_status)"
-
-   set errors {}
-   if {$failed != $expected_failed} {
-      lappend errors "accounting(failed) should be $expected_failed, but is \"$failed\""
-   }
-   if {$qacct_info(exit_status) != $expected_exit_status} {
-      lappend errors "accounting(exit_status) should be $expected_exit_status, but is $qacct_info(exit_status)"
-   }
-
-   if {[llength $errors] > 0} {
-      ts_log_severe "job $job_id should have run into limit $limit, but accounting had errors:\n[join $errors "\n"]"
+      if {[llength $errors] > 0} {
+         ts_log_severe "job $job_id should have run into limit $limit, but accounting had errors:\n[join $errors "\n"]"
+      }
    }
 }
 
@@ -201,24 +207,40 @@ proc limits_cpu {} {
 }
 
 proc limits_rss {} {
+   global CHECK_ACT_LEVEL
+
    if {![is_version_in_range "9.0.7"]} {
       ts_log_config "CS-194: add rss limits has only been done for 9.0.7 and later versions"
    }
-   limits_set_qlimit "h_rss" "400M"
-   limits_submit_check "h_rss"
-   limits_set_qlimit "h_rss" "INFINITY"
+   # This test does not work with Systemd.
+   # When we set MemoryMax (for h_rss/h_vmem) as well as MemoryHigh (for s_rss/s_vmem)
+   # the memory usage (RSS) will always stay slightly below the limit.
+   # The job will not be signalled.
+   if {$CHECK_ACT_LEVEL == 0} {
+      limits_set_qlimit "h_rss" "400M"
+      limits_submit_check "h_rss"
+      limits_set_qlimit "h_rss" "INFINITY"
 
-   limits_set_qlimit "s_rss" "400M"
-   limits_submit_check "s_rss"
-   limits_set_qlimit "s_rss" "INFINITY"
+      limits_set_qlimit "s_rss" "400M"
+      limits_submit_check "s_rss"
+      limits_set_qlimit "s_rss" "INFINITY"
+   }
 }
 
 proc limits_vmem {} {
-   limits_set_qlimit "h_vmem" "400M"
-   limits_submit_check "h_vmem"
-   limits_set_qlimit "h_vmem" "INFINITY"
+   global CHECK_ACT_LEVEL
 
-   limits_set_qlimit "s_vmem" "400M"
-   limits_submit_check "s_vmem"
-   limits_set_qlimit "s_vmem" "INFINITY"
+   # This test does not work with Systemd.
+   # When we set MemoryMax (for h_rss/h_vmem) as well as MemoryHigh (for s_rss/s_vmem)
+   # the memory usage (RSS) will always stay slightly below the limit.
+   # The job will not be signalled.
+   if {$CHECK_ACT_LEVEL == 0} {
+      limits_set_qlimit "h_vmem" "400M"
+      limits_submit_check "h_vmem"
+      limits_set_qlimit "h_vmem" "INFINITY"
+
+      limits_set_qlimit "s_vmem" "400M"
+      limits_submit_check "s_vmem"
+      limits_set_qlimit "s_vmem" "INFINITY"
+   }
 }
