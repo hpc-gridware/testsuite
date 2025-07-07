@@ -266,6 +266,10 @@ proc host_has_xterm {host} {
    return [host_has_binary $host "xterm"]
 }
 
+proc host_has_tcsh {host} {
+   return [host_has_binary $host "tcsh"]
+}
+
 proc host_has_strings {host} {
    return [host_has_binary $host "strings"]
 }
@@ -345,7 +349,7 @@ proc lab_test_applications {} {
     # get all test hosts that exist in the host configuration
     set gcs_version $ts_config(gridengine_version)
     set all_hosts $ts_host_config(hostlist)
-    # set all_hosts [list h046 fr13-0-fbsd-amd64]
+    # set all_hosts [list fr13-0-fbsd-amd64 h018 h007]
 
     # filter out hosts that are unsupported for the current GCS version and add all zones
     foreach node $all_hosts {
@@ -431,6 +435,12 @@ proc lab_test_applications {} {
        lappend columns $has_xterm
        if {$first} {
           lappend headers "xterm"
+       }
+
+       set has_tcsh [host_has_tcsh $host]
+       lappend columns $has_tcsh
+       if {$first} {
+          lappend headers "tcsh"
        }
 
        set has_munge_key [host_has_munge_key $host]
