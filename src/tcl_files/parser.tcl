@@ -880,6 +880,30 @@ proc repeat_column {input {column 0}} {
 #***************************************************************************
 #
 #                                                             max. column:     |
+
+###
+# @brief transform usage values from text to numeric values
+#
+# This function transforms usage values from text format to numeric values.
+# It distinguishes time values (cpu) from other usage values (e.g. memory)
+# and applies the appropriate transformation.
+#
+# @param usage_value The usage value to be transformed, which can be in the format
+#                    "days:hours:minutes:seconds" for time values or a unit like "MB" for other usage values.
+# @return The transformed value as a numeric value in seconds for time values or as a unit for other usage values.
+#
+proc transform_usage_value {usage_value} {
+   if {[string first ":" $usage_value] > 0} {
+      # this is a time value (cpu or wallclock)
+      set ret [transform_cpu $usage_value]
+   } else {
+      set ret [transform_unit $usage_value]
+   }
+
+   return $ret
+}
+
+
 #****** parser/transform_cpu() ******
 #
 #  NAME
@@ -920,7 +944,7 @@ proc transform_cpu {s_cpu} {
       }
       set cpu [expr $days * 86400 + $hours * 3600 + $minutes * 60 + $seconds]
    }
-   if {[info exists cpu] == 0} {
+   if {![info exists cpu]} {
       return "NA"
    }
 

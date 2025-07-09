@@ -71,7 +71,7 @@ proc config_enable_systemd_cleanup {} {
    wait_for_end_of_all_jobs
 
    # reset config of our test host
-   reset_config_and_propagate config_enable_systemd_backup $config_enable_systemd_hosts
+   reset_config_and_propagate config_enable_systemd_backup config_enable_systemd_hosts
 
    unset -nocomplain config_enable_systemd_hosts config_enable_systemd_backup
 }

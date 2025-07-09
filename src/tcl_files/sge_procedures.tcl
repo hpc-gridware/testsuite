@@ -3303,54 +3303,52 @@ proc wait_for_load_from_all_queues { seconds {raise_error 1} } {
 #     1 - Online usage was reported
 #
 #***************************************************************************
-proc wait_for_online_usage {job_id {mytimeout 60}} {
+proc wait_for_online_usage {job_id {mytimeout 60} {usage_name "cpu"}} {
    # we can't use the index "usage    1" directly in TCL-arrays because of
    # the spaces, have to use it in a variable
-   set usage_name [get_qstat_j_attribute "usage" 1]
+   set usage_attrib [get_qstat_j_attribute "usage" 1]
    set ret        1
    set time       [clock seconds]
 
    while {1} {
-      set usage ""
       # get "qstat -j $job_id" output
       if {[get_qstat_j_info $job_id] == 1} {
-         if {[info exists qstat_j_info($usage_name)] == 1} {
-            # if usage is already reported, save it in a variable.
-            # The code below is prepared for an empty string in $usage
-            set usage $qstat_j_info($usage_name)
+         if {[info exists qstat_j_info($usage_attrib)]} {
+            # parse the usage values
+            parse_name_value_list usage $qstat_j_info($usage_attrib)
          }
       }
 
       # evaluate usage only if it already has been reported
-      if {[string length $usage] > 0} {
-         set cpu_index [string first "cpu=" $usage]
-         set cpu_usage [string range $usage $cpu_index+4 $cpu_index+11]
+      if {[info exists usage($usage_name)]} {
          set remaining_time [expr $time + $mytimeout - [clock seconds]]
-         ts_log_fine "cpu_usage is $cpu_usage, remaining time is $remaining_time s"
+         ts_log_fine "$usage_name usage is $usage($usage_name), remaining time is $remaining_time s"
 
          # transform format 00:01:17 in 77 seconds
-         set cpu_seconds [transform_cpu $cpu_usage]
-         if {[string equal $cpu_seconds "NA"] == 0} {
-            # the cpu usage string contains a value
-            if {$cpu_seconds == 0} {
-               # in principle cpu usage gets reported, but it is still 00:00:00
-               ts_log_finer "got no online usage value so far"
+         if {![string equal $usage($usage_name) "NA"] &&
+             ![string equal $usage($usage_name) "N/A"]} {
+            # the usage string contains a value
+            set usage_value [transform_usage_value $usage($usage_name)]
+            if {$usage_value == 0} {
+               # in principle usage gets reported, but it is still 0
+               ts_log_finer "got no $usage_name online usage value so far"
             } else {
-               # something like 00:00:17 is reported!
-               ts_log_fine "got online usage, fine!"
+               # something is reported!
+               ts_log_fine "got $usage_name online usage $usage_value, fine!"
                break
             }
          }
       }
       # check if timeout time span is already reached
       set runtime [expr [clock seconds] - $time]
-      if {$runtime > 60} {
-         ts_log_fine "got no online usage after 60 s!"
+      if {$runtime > $mytimeout} {
+         ts_log_fine "got no $usage_name online usage within $mytimeout s!"
          set ret 0
          break
       }
-      after 2000
+      after 1000
    }
+
    return $ret
 }
 

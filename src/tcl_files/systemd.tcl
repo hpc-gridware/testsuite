@@ -73,6 +73,36 @@ proc systemd_get_suited_hosts {{num_hosts 1}} {
 }
 
 ###
+# @brief Get non-systemd hosts.
+#
+# Returns a list of hosts from the list of execd nodes which do not have systemd running.
+#
+# @param num_hosts Number of hosts to return, defaults to 1.
+# @returns A list of hosts that do not have systemd running.
+#
+proc systemd_get_non_systemd_hosts {{num_hosts 1}} {
+   get_current_cluster_config_array ts_config
+
+   # gather non-systemd hosts until we have enough or run out of execd nodes
+   set non_systemd_hosts {}
+   foreach host $ts_config(execd_nodes) {
+      if {![host_has_systemd $host]} {
+         lappend non_systemd_hosts $host
+         if {[llength $non_systemd_hosts] >= $num_hosts} {
+            break
+         }
+      }
+   }
+
+   # if we didn't find enough hosts, return an empty list
+   if {[llength $non_systemd_hosts] < $num_hosts} {
+      set non_systemd_hosts {}
+   }
+
+   return $non_systemd_hosts
+}
+
+###
 # @brief Get the systemd job scope for a given job ID, task ID, and optional pe_task_id.
 #
 # Builds the systemd scope unit name for a job based on the provided job ID,

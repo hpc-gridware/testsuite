@@ -1,0 +1,346 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.1.0"
+
+# define test's name and run level descriptions
+set check_name            "config_usage_collection"
+set check_category        "OBJECT QCONF SYSTEMD VERIFIED"
+set check_description(0)  "check execd_params USAGE_COLLECTION"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function config_usage_collection_setup
+set check_cleanup_function config_usage_collection_cleanup
+
+# define test's procedure order
+set check_functions {}
+#lappend check_functions "config_usage_collection_FALSE"
+#lappend check_functions "config_usage_collection_PDC"
+#lappend check_functions "config_usage_collection_HYBRID"
+#lappend check_functions "config_usage_collection_TRUE"
+lappend check_functions "config_usage_collection_change"
+
+# -------- local test procedures: initialization------------------------------
+
+proc config_usage_collection_setup {} {
+   get_current_cluster_config_array ts_config
+   global config_usage_collection_hosts config_usage_collection_backup
+
+   # we need an exec host with systemd
+   set config_usage_collection_hosts(systemd) [systemd_get_suited_hosts]
+   if {$config_usage_collection_hosts(systemd) eq ""} {
+      ts_log_config "No host with systemd found"
+   } else {
+      ts_log_fine "Found systemd host: $config_usage_collection_hosts(systemd)"
+   }
+   set config_usage_collection_hosts(pdc) [systemd_get_non_systemd_hosts]
+   if {$config_usage_collection_hosts(pdc) eq ""} {
+      ts_log_config "No non systemd host found"
+   } else {
+      ts_log_fine "Found non systemd host: $config_usage_collection_hosts(pdc)"
+   }
+
+   foreach type "systemd pdc" {
+      if {$config_usage_collection_hosts($type) ne ""} {
+         # backup the execd_params of the hosts
+         get_config conf_backup $config_usage_collection_hosts($type)
+         set config_usage_collection_backup($type) [array get conf_backup]
+
+         # speed up load reporting
+         set conf(load_report_time) "0:0:2"
+         set_config_and_propagate conf $config_usage_collection_hosts($type)
+      }
+   }
+}
+
+proc config_usage_collection_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global config_usage_collection_hosts config_usage_collection_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # reset config of our test hosts
+   foreach type "systemd pdc" {
+      if {$config_usage_collection_hosts($type) ne ""} {
+         array set conf $config_usage_collection_backup($type)
+         reset_config_and_propagate conf $config_usage_collection_hosts($type)
+      }
+   }
+
+   unset -nocomplain config_usage_collection_hosts config_usage_collection_backup
+}
+
+# test the setting of USAGE_COLLECTION
+# - FALSE: a test job shall not get any usage (except for wallclock)
+# - PDC: a test job shall get usage from PDC (e.g. vmem, maxvmem)
+# - HYBRID: a test job shall get usage from PDC and systemd (all usage values, unfortunately we do not yet
+#           have a systemd specific usage value)
+# - not set or TRUE: a job running on a systemd host shall get usage from systemd (e.g. no vmem)
+#                    and a job running on a non-systemd host shall get usage from PDC
+#
+# - changing the USAGE_COLLECTION value shall not affect running jobs, e.g. test if cpu consumed by a worker
+#   is still increasing after modifying the value
+proc config_usage_collection_FALSE {} {
+   get_current_cluster_config_array ts_config
+   global config_usage_collection_hosts config_usage_collection_backup
+
+   add_or_replace_array_param conf config_usage_collection_backup "execd_params" "USAGE_COLLECTION" "FALSE"
+
+   # check all test hosts
+   foreach type "systemd pdc" {
+      if {$config_usage_collection_hosts($type) ne ""} {
+         set_config_and_propagate conf $config_usage_collection_hosts($type)
+
+         # run a job and expect *no* usage to be reported
+         set job_opts "-l h=$config_usage_collection_hosts($type)"
+         set job_args "$ts_config(product_root)/examples/jobs/worker.sh"
+         set job_id [submit_job "$job_opts $job_args"]
+         if {$job_id <= 0 || [wait_for_jobstart $job_id "" 10] != 0} {
+            continue
+         }
+         if {[wait_for_online_usage $job_id 10]} {
+            ts_log_severe "job $job_id did get online usage, despite USAGE_COLLECTION being disabled"
+         } else {
+            ts_log_fine "job $job_id did not get online usage as expected"
+         }
+
+         # cleanup
+         delete_job $job_id
+      }
+   }
+}
+
+proc config_usage_collection_PDC {} {
+   get_current_cluster_config_array ts_config
+   global config_usage_collection_hosts config_usage_collection_backup
+
+   add_or_replace_array_param conf config_usage_collection_backup "execd_params" "USAGE_COLLECTION" "PDC"
+
+   # check all test hosts
+   foreach type "systemd pdc" {
+      if {$config_usage_collection_hosts($type) ne ""} {
+         set_config_and_propagate conf $config_usage_collection_hosts($type)
+
+         # run a job and expect vmem usage to be reported
+         # systemd does not provide vmem, so when it gets reported, PDC is active
+         set job_opts "-l h=$config_usage_collection_hosts($type)"
+         set job_args "$ts_config(product_root)/examples/jobs/worker.sh"
+         set job_id [submit_job "$job_opts $job_args"]
+         if {$job_id <= 0 || [wait_for_jobstart $job_id "" 10] != 0} {
+            continue
+         }
+         if {[wait_for_online_usage $job_id 10 "vmem"]} {
+            ts_log_fine "job $job_id got vmem online usage"
+         } else {
+            ts_log_severe "job $job_id did not get vmem online usage as expected"
+         }
+
+         # @todo once we have usage values which only systemd provides, we can check for them here
+         #       they may not be reported
+
+         # cleanup
+         delete_job $job_id
+      }
+   }
+}
+
+proc config_usage_collection_HYBRID {} {
+   get_current_cluster_config_array ts_config
+   global config_usage_collection_hosts config_usage_collection_backup
+
+   add_or_replace_array_param conf config_usage_collection_backup "execd_params" "USAGE_COLLECTION" "HYBRID"
+
+   # check all test hosts
+   foreach type "systemd pdc" {
+      if {$config_usage_collection_hosts($type) ne ""} {
+         set_config_and_propagate conf $config_usage_collection_hosts($type)
+
+         # run a job and expect vmem usage to be reported
+         # systemd does not provide vmem, so when it gets reported, PDC is active
+         set job_opts "-l h=$config_usage_collection_hosts($type)"
+         set job_args "$ts_config(product_root)/examples/jobs/worker.sh"
+         set job_id [submit_job "$job_opts $job_args"]
+         if {$job_id <= 0 || [wait_for_jobstart $job_id "" 10] != 0} {
+            continue
+         }
+         if {[wait_for_online_usage $job_id 10 "vmem"]} {
+            ts_log_fine "job $job_id got vmem online usage"
+         } else {
+            ts_log_severe "job $job_id did not get vmem online usage as expected"
+         }
+
+         # @todo once we have usage values which only systemd provides, we can check for them here
+         #       they may only be reported on systemd hosts
+
+
+         # cleanup
+         delete_job $job_id
+      }
+   }
+}
+
+proc config_usage_collection_TRUE {} {
+   get_current_cluster_config_array ts_config
+   global config_usage_collection_hosts config_usage_collection_backup
+
+   add_or_replace_array_param conf config_usage_collection_backup "execd_params" "USAGE_COLLECTION" "TRUE"
+
+   # check all test hosts
+   foreach type "systemd pdc" {
+      if {$config_usage_collection_hosts($type) ne ""} {
+         set_config_and_propagate conf $config_usage_collection_hosts($type)
+
+         # run a job and expect vmem usage to be reported
+         # systemd does not provide vmem, so when it gets reported, PDC is active
+         set job_opts "-l h=$config_usage_collection_hosts($type)"
+         set job_args "$ts_config(product_root)/examples/jobs/worker.sh"
+         set job_id [submit_job "$job_opts $job_args"]
+         if {$job_id <= 0 || [wait_for_jobstart $job_id "" 10] != 0} {
+            continue
+         }
+         # expect vmem to be reported only on the pdc host
+         set have_vmem [wait_for_online_usage $job_id 10 "vmem"]
+         if {$type eq "pdc"} {
+            if {$have_vmem} {
+               ts_log_fine "job $job_id got vmem online usage on pdc host"
+            } else {
+               ts_log_severe "job $job_id did not get vmem online usage as expected on pdc host"
+            }
+         } else {
+            if {$have_vmem} {
+               ts_log_severe "job $job_id should not have got vmem online usage on systemd host"
+            } else {
+               ts_log_fine "job $job_id did not get vmem online usage as expected on systemd host"
+            }
+         }
+
+         # @todo once we have usage values which only systemd provides, we can check for them here
+         #       they may only be reported on systemd hosts
+
+
+         # cleanup
+         delete_job $job_id
+      }
+   }
+}
+
+proc config_usage_collection_get_cpu {job_id} {
+   set ret -1
+
+   if {[get_qstat_j_info $job_id]} {
+      set usage_attrib [get_qstat_j_attribute "usage" 1]
+      if {[info exists qstat_j_info($usage_attrib)]} {
+         # parse the usage values
+         parse_name_value_list usage $qstat_j_info($usage_attrib)
+         if {[info exists usage(cpu)]} {
+            set ret [transform_cpu $usage(cpu)]
+            if {$ret eq "NA"} {
+               set ret -1
+            }
+         }
+      }
+   }
+
+   return $ret
+}
+
+# verify that changing the USAGE_COLLECTION value does not affect running jobs
+# - submit a job with USAGE_COLLECTION set to TRUE
+# - change the value to FALSE
+# - expect cpu usage still to increase
+#
+# - submit a job with USAGE_COLLECTION set to FALSE
+# - change the value to TRUE
+# - expect no usage to be reported
+proc config_usage_collection_change {} {
+   get_current_cluster_config_array ts_config
+   global config_usage_collection_hosts config_usage_collection_backup
+
+   # check all test hosts
+   foreach type "systemd pdc" {
+      if {$config_usage_collection_hosts($type) ne ""} {
+         add_or_replace_array_param conf config_usage_collection_backup "execd_params" "USAGE_COLLECTION" "TRUE"
+         set_config_and_propagate conf $config_usage_collection_hosts($type)
+
+         # run a job and expect cpu usage to be reported
+         set job_opts "-l h=$config_usage_collection_hosts($type)"
+         set job_args "$ts_config(product_root)/examples/jobs/worker.sh"
+         set job_id [submit_job "$job_opts $job_args"]
+         if {$job_id <= 0 || [wait_for_jobstart $job_id "" 10] != 0} {
+            continue
+         }
+         set have_cpu [wait_for_online_usage $job_id 10]
+         if {$have_cpu} {
+            ts_log_fine "job $job_id got vmem online usage on pdc host"
+         } else {
+            ts_log_severe "job $job_id did not get vmem online usage as expected on pdc host"
+            delete_job $job_id
+            continue
+         }
+
+         # switch off usage collection, but this may not affect the running job
+         # this is issue CS-1408
+         add_or_replace_array_param conf config_usage_collection_backup "execd_params" "USAGE_COLLECTION" "FALSE"
+         set_config_and_propagate conf $config_usage_collection_hosts($type)
+
+         set have_cpu [wait_for_online_usage $job_id 10]
+         if {$have_cpu} {
+            ts_log_fine "job $job_id got cpu online usage on pdc host"
+            set cpu_1 [config_usage_collection_get_cpu $job_id]
+            set increased 0
+            for {set i 0} {$i < 5} {incr i} {
+               after 1000
+               set cpu [config_usage_collection_get_cpu $job_id]
+               # expect cpu usage to increase
+               if {$cpu > $cpu_1} {
+                  ts_log_fine "job $job_id cpu usage increased from $cpu_1 to $cpu"
+                  set increased 1
+                  break
+               } else {
+                  ts_log_fine "job $job_id cpu usage did not increase, still at $cpu"
+               }
+            }
+            if {!$increased} {
+               ts_log_severe "job $job_id cpu usage did not increase after config change as expected"
+            }
+         } else {
+            ts_log_severe "job $job_id did not get cpu online usage as expected on pdc host"
+         }
+
+         # cleanup
+         delete_job $job_id
+      }
+   }
+}
+
