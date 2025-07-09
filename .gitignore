@@ -1,7 +1,7 @@
 # tmp files generated during TS run
 src/results/*
 .testsuite_delete*
-config
+#config
 results
 src/tags
 defaults.sav*

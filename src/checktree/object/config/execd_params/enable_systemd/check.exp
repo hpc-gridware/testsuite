@@ -1,0 +1,150 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.1.0"
+
+# define test's name and run level descriptions
+set check_name            "config_enable_systemd"
+set check_category        "OBJECT QCONF SYSTEMD VERIFIED"
+set check_description(0)  "check execd_params ENABLE_SYSTEMD"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function config_enable_systemd_setup
+set check_cleanup_function config_enable_systemd_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "config_enable_systemd_test"
+
+# -------- local test procedures: initialization------------------------------
+
+proc config_enable_systemd_setup {} {
+   get_current_cluster_config_array ts_config
+   global config_enable_systemd_hosts config_enable_systemd_backup
+
+   # we need an exec host with systemd
+   set config_enable_systemd_hosts [systemd_get_suited_hosts]
+   if {$config_enable_systemd_hosts eq ""} {
+      ts_log_config "No host with systemd found, skipping test"
+      return 99
+   }
+
+   # we want to modify the hosts config, make a backup
+   get_config config_enable_systemd_backup $config_enable_systemd_hosts
+}
+
+proc config_enable_systemd_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global config_enable_systemd_hosts config_enable_systemd_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # reset config of our test host
+   reset_config_and_propagate config_enable_systemd_backup $config_enable_systemd_hosts
+
+   unset -nocomplain config_enable_systemd_hosts config_enable_systemd_backup
+}
+
+proc config_enable_systemd_check_job {host job_id expect_running_in_systemd} {
+   # how can we find out if a job is running in systemd?
+   set active [systemd_is_job_active $host $job_id]
+   if {$active} {
+      if {$expect_running_in_systemd} {
+         ts_log_fine "Job $job_id is running in systemd on host $host as expected"
+      } else {
+         ts_log_severe "Job $job_id is running in systemd on host $host, but it should not be"
+         wait_for_enter
+      }
+   } else {
+      if {$expect_running_in_systemd} {
+         ts_log_severe "Job $job_id is not running in systemd on host $host, but it should be"
+         wait_for_enter
+      } else {
+         ts_log_fine "Job $job_id is not running in systemd on host $host as expected"
+      }
+   }
+   # + we can check if it is visible in systemctl
+   # - we could also check output in the shepherd trace file
+   # - we could also check systemd (or PDC) specific usage values
+}
+
+# test the setting of ENABLE_SYSTEMD
+# we are testing on a host having systemd
+# - when it is disabled at job start, a job will not be started with systemd support
+# - when it is disabled while a job is running with systemd support, it will keep systemd support
+# - when it is enabled while a job is running with systemd support, it will not get systemd support
+proc config_enable_systemd_test {} {
+   get_current_cluster_config_array ts_config
+   global config_enable_systemd_hosts config_enable_systemd_backup
+
+   # we use sleeper jobs for testing
+   set job_opts "-l h=$config_enable_systemd_hosts"
+   set job_args "$ts_config(product_root)/examples/jobs/sleeper.sh 300"
+
+   # disable ENABLE_SYSTEMD on the test host and run a job
+   # expect it not to show up in systemd
+   add_or_replace_array_param conf config_enable_systemd_backup "execd_params" "ENABLE_SYSTEMD" "FALSE"
+   set_config_and_propagate conf $config_enable_systemd_hosts
+
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0 || [wait_for_jobstart $job_id "" 10] != 0} {
+      return
+   }
+
+   config_enable_systemd_check_job $config_enable_systemd_hosts $job_id 0
+
+   # enable ENABLE_SYSTEMD on the test host, the job will still not show up in systemd
+   add_or_replace_array_param conf config_enable_systemd_backup "execd_params" "ENABLE_SYSTEMD" "TRUE"
+   set_config_and_propagate conf $config_enable_systemd_hosts
+
+   # wait for some seconds
+   after 10000
+   config_enable_systemd_check_job $config_enable_systemd_hosts $job_id 0
+   delete_job $job_id
+
+   # run another job with ENABLE_SYSTEMD enabled
+   # expect it to show up in systemd
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0 || [wait_for_jobstart $job_id "" 10] != 0} {
+      return
+   }
+   config_enable_systemd_check_job $config_enable_systemd_hosts $job_id 1
+
+
+   # disable ENABLE_SYSTEMD on the test host, give it some time, the job will still show up in systemd
+   add_or_replace_array_param conf config_enable_systemd_backup "execd_params" "ENABLE_SYSTEMD" "FALSE"
+   set_config_and_propagate conf $config_enable_systemd_hosts
+   after 10000
+   config_enable_systemd_check_job $config_enable_systemd_hosts $job_id 1
+}
