@@ -5455,21 +5455,3 @@ proc config_get_best_suited_admin_host {} {
    return $admin_host
 }
 
-###
-# @brief get a host having systemd
-#
-# Returns the first host from the list of execd nodes which has systemd running.
-#
-proc config_get_systemd_host {} {
-   get_current_cluster_config_array ts_config
-
-   set systemd_host ""
-   foreach host $ts_config(execd_nodes) {
-      if {[host_has_systemd $host]} {
-         set systemd_host $host
-         break
-      }
-   }
-
-   return $systemd_host
-}

@@ -77,6 +77,7 @@ proc limits_setup_level {} {
             return 99
          }
          set usage_collection "PDC"
+         set enable_systemd "FALSE"
       }
       1 {
          # apply limits with systemd delivering usage information
@@ -84,17 +85,19 @@ proc limits_setup_level {} {
             ts_log_config "This test requires the systemd integration to be available"
             return 99
          }
-         set limits_host [config_get_systemd_host]
+         set limits_host [systemd_get_suited_hosts]
          if {$limits_host eq ""} {
             ts_log_config "No systemd host found in the current cluster configuration."
             return 99
          }
          set usage_collection "TRUE"
+         set enable_systemd "TRUE"
       }
    }
 
    if {[ge_has_feature "systemd"]} {
       add_or_replace_array_param conf limits_backup "execd_params" "USAGE_COLLECTION" $usage_collection
+      add_or_replace_array_param conf conf "execd_params" "ENABLE_SYSTEMD" $enable_systemd
    }
    # set a short load report time
    set conf(load_report_time) "0:0:2"
