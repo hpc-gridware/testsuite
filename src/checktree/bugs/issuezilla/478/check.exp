@@ -95,7 +95,7 @@ proc issue_478_check {} {
        [string compare $job_name $out_name] != 0} {
       ts_log_fine [format " expeced output: $formatstring" $job_id1 $job_name]
       ts_log_fine "qstat -r output: $qstatoutput"
-      ts_log_severe "qstat -r output is not corrrect for predecessor Jobs"
+      ts_log_severe "qstat -r output is not correct for predecessor Jobs"
       return
    }
 
