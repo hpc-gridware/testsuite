@@ -3312,7 +3312,7 @@ proc wait_for_online_usage {job_id {mytimeout 60} {usage_name "cpu"}} {
 
    while {1} {
       # get "qstat -j $job_id" output
-      if {[get_qstat_j_info $job_id] == 1} {
+      if {[get_qstat_j_info $job_id]} {
          if {[info exists qstat_j_info($usage_attrib)]} {
             # parse the usage values
             parse_name_value_list usage $qstat_j_info($usage_attrib)
@@ -3575,7 +3575,8 @@ proc shutdown_execd {host_list {soft 0} {timeout 60}} {
          ts_log_finer "execd on host $host reports 99.99 load value"
          #execd might not be down yet, let's check!
       } else {
-         ts_log_severe "timeout while waiting for unknown load for host $host:\n[start_sge_bin "qhost -h $host]"
+         set qhost_output [start_sge_bin "qhost" "-h $host"]
+         ts_log_severe "timeout while waiting for unknown load for host $host:\n$qhost_output"
          break
          return -1
       }

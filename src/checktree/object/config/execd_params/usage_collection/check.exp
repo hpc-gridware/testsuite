@@ -44,10 +44,10 @@ set check_cleanup_function config_usage_collection_cleanup
 
 # define test's procedure order
 set check_functions {}
-#lappend check_functions "config_usage_collection_FALSE"
-#lappend check_functions "config_usage_collection_PDC"
-#lappend check_functions "config_usage_collection_HYBRID"
-#lappend check_functions "config_usage_collection_TRUE"
+lappend check_functions "config_usage_collection_FALSE"
+lappend check_functions "config_usage_collection_PDC"
+lappend check_functions "config_usage_collection_HYBRID"
+lappend check_functions "config_usage_collection_TRUE"
 lappend check_functions "config_usage_collection_change"
 
 # -------- local test procedures: initialization------------------------------
@@ -88,7 +88,7 @@ proc config_usage_collection_cleanup {} {
    global config_usage_collection_hosts config_usage_collection_backup
 
    delete_all_jobs
-   wait_for_end_of_all_jobs
+   wait_for_end_of_all_jobs 120
 
    # reset config of our test hosts
    foreach type "systemd pdc" {
@@ -316,7 +316,7 @@ proc config_usage_collection_change {} {
 
          set have_cpu [wait_for_online_usage $job_id 10]
          if {$have_cpu} {
-            ts_log_fine "job $job_id got cpu online usage on pdc host"
+            ts_log_fine "job $job_id got cpu online usage on $type host"
             set cpu_1 [config_usage_collection_get_cpu $job_id]
             set increased 0
             for {set i 0} {$i < 5} {incr i} {
@@ -335,8 +335,38 @@ proc config_usage_collection_change {} {
                ts_log_severe "job $job_id cpu usage did not increase after config change as expected"
             }
          } else {
-            ts_log_severe "job $job_id did not get cpu online usage as expected on pdc host"
+            ts_log_severe "job $job_id did not get cpu online usage as expected on $type host"
          }
+
+         # add restart of execd and expect usage to be updated
+         # we do a soft shutdown
+         shutdown_execd $config_usage_collection_hosts($type) 1
+         startup_execd $config_usage_collection_hosts($type)
+
+         set have_cpu [wait_for_online_usage $job_id 10]
+         if {$have_cpu} {
+            ts_log_fine "job $job_id got cpu online usage on $type host after execd restart"
+            set cpu_1 [config_usage_collection_get_cpu $job_id]
+            set increased 0
+            for {set i 0} {$i < 5} {incr i} {
+               after 1000
+               set cpu [config_usage_collection_get_cpu $job_id]
+               # expect cpu usage to increase
+               if {$cpu > $cpu_1} {
+                  ts_log_fine "job $job_id cpu usage increased from $cpu_1 to $cpu after execd restart"
+                  set increased 1
+                  break
+               } else {
+                  ts_log_fine "job $job_id cpu usage did not increase, still at $cpu after execd restart"
+               }
+            }
+            if {!$increased} {
+               ts_log_severe "job $job_id cpu usage did not increase after config change as expected after execd restart"
+            }
+         } else {
+            ts_log_severe "job $job_id did not get cpu online usage as expected on $type host after execd restart"
+         }
+
 
          # cleanup
          delete_job $job_id
