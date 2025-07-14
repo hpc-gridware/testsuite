@@ -169,3 +169,39 @@ proc systemd_is_job_active {host job_id {task_id 0} {pe_task_id ""}} {
 
    return $ret
 }
+
+###
+# @brief Get a property of a systemd unit.
+#
+# This function retrieves a specific property of a systemd unit by using the
+# `systemctl show` command. It is useful for querying properties like
+# `ActiveState`, `AllowedCPUs`, or any other property that can be queried from
+# systemd.
+#
+# @param host The host to query the systemd property from.
+# @param scope The systemd unit scope to query (e.g., the job scope).
+# @param property The property to retrieve (e.g., `ActiveState`, `AllowedCPUs`).
+# @returns The value of the specified property, or an empty string if the
+#          property could not be retrieved or the command failed.
+# @note systemctl sometimes outputs Unicode or other non-ASCII characters,
+#       so we use `iconv` to convert the output to ASCII.
+proc systemd_get_property {host scope property} {
+   global CHECK_USER
+
+   set args "show --property $property $scope | iconv -f utf-8 -t ascii//TRANSLIT"
+   ts_log_fine "systemctl $args"
+   set output [start_remote_prog $host "root" "systemctl" $args]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "systemctl $args failed:\n$output"
+      return ""
+   }
+
+   # we are only interested in the first line of the output
+   set output [string trim [lindex [split $output "\n"] 0]]
+
+   # we return the value after the first '='
+   set pos [string first "=" $output]
+   set value [string range $output [expr $pos + 1] end]
+
+   return $value
+}
