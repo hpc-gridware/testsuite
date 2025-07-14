@@ -209,7 +209,7 @@ proc job_environment_enhanced_INHERIT_ENV {} {
    ts_log_fine "Testing effects of INHERIT_ENV=false"
 
    # Set INHERIT_ENV=false
-   set new_config(execd_params) "INHERIT_ENV=false"
+   set new_config(execd_params) "INHERIT_ENV=false,KEEP_ACTIVE=ERROR"
    set_config_and_propagate new_config $job_environment_enhanced_exec_host
 
    # Submit job
@@ -241,7 +241,7 @@ proc job_environment_enhanced_INHERIT_ENV {} {
    ts_log_fine "Testing effects of INHERIT_ENV=true"
 
    # Set INHERIT_ENV=true
-   set new_config(execd_params) "INHERIT_ENV=true"
+   set new_config(execd_params) "INHERIT_ENV=true,KEEP_ACTIVE=ERROR"
    set_config_and_propagate new_config $job_environment_enhanced_exec_host
 
    # Submit job
@@ -302,7 +302,7 @@ proc test_job_environment_enhanced_lib_path {error_var execd_params expected_lib
 
    set args "-l h=$job_environment_enhanced_exec_host -o /dev/null -j yes"
 
-   set new_config(execd_params) "$execd_params"
+   set new_config(execd_params) "$execd_params,KEEP_ACTIVE=ERROR"
    set_config_and_propagate new_config $job_environment_enhanced_exec_host
    ts_log_fine "Testing with execd_params set to $new_config(execd_params)"
    ts_log_fine "Expected SGE lib path is \"$expected_lib_path\" on host $job_environment_enhanced_exec_host"

@@ -10496,7 +10496,7 @@ proc startup_execd {hostname {envlist ""} {startup_user ""}} {
    }
 
    ts_log_fine "starting up execd on host \"$hostname\" as user \"$startup_user\""
-   if {$envlist == "" && $CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $hostname]} {
+   if {$envlist == "" && $startup_user eq "root" && $CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $hostname]} {
       ts_log_fine "  -> via systemd"
       set service_name [systemd_get_service_name "execd"]
       set output [start_remote_prog $hostname $startup_user "systemctl" "start $service_name"]
