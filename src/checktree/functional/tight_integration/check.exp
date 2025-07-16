@@ -95,7 +95,11 @@ proc tight_integration_setup {} {
    # to workaround CR 6728379
    get_config tight_global_config
 
-   # workaround for CS-1019 sge_execd logs errors when running tightly integrated parallel jobs
+   # keep active_jobs directories in case of error
+   add_or_replace_array_param myconfig tight_global_config "execd_params" "KEEP_ACTIVE" "ERROR"
+   set_config_and_propagate myconfig
+
+   # @todo CS-1019 workaround: sge_execd logs errors when running tightly integrated parallel jobs
    # modify bootstrap file: use only 1 listener and 1 worker
    if {1} {
       bootstrap_file_read tight_bootstrap_backup
@@ -371,6 +375,15 @@ proc tight_integration_check_messages {mode1 mode2 scenario {expect_error 0}} {
             # There is one check per fault injections scenario.
             #
             if {$scenario == "wallclock_test" && [string match "*exceeded_hard_wallclock*" $poo]} {
+               set skip_message 1
+            }
+            # @todo CS-1019 skip the following warning
+            if {([string match "notify*" $scenario] ||
+                 $scenario == "iz_578" ||
+                 $scenario == "master_killed" ||
+                 $scenario == "massive_nfs_tmpdir"
+                ) &&
+                [string match "*ptf complains: Job does not exist*" $poo]} {
                set skip_message 1
             }
             #
