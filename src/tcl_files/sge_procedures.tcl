@@ -3518,11 +3518,11 @@ proc wait_for_queue_state {queue state wait_timeout} {
 #  SEE ALSO
 #     sge_procedures/shutdown_system_daemon()
 #*******************************************************************************
-proc soft_execd_shutdown {host_list {timeout 60}} {
+proc soft_execd_shutdown {host_list {timeout 120}} {
    return [shutdown_execd $host_list 1 $timeout]
 }
 
-proc shutdown_execd {host_list {soft 0} {timeout 60}} {
+proc shutdown_execd {host_list {soft 0} {timeout 120}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
    global CHECK_INSTALL_RC
