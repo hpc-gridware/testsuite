@@ -115,9 +115,10 @@ proc init_system_test {host service} {
    }
 
    if {$ret} {
-      set myenv(PAGER) "cat"
-      set output [start_remote_prog $host "root" "journalctl" "-u $service_name" prg_exit_state 60 0 "" myenv 1 0]
-      ts_log_fine $output
+      # reduce the journalctl output and do not use the pager - it would hang there
+      set args "-u $service_name --no-pager --no-hostname --no-full"
+      ts_log_fine "calling journalctl with args: $args"
+      set output [start_remote_prog $host "root" "journalctl" $args]
       if {$prg_exit_state != 0} {
          lappend errors "journalctl -u $service_name failed: $output: $output"
          set ret 0
@@ -125,13 +126,12 @@ proc init_system_test {host service} {
    }
 
    if {$ret && $service == "execd"} {
-      # @todo set expected [translate_macro MSG_SYSTEMD_INITIALIZED_SII $service_name "*"]
-      set expected [translate_macro MSG_SYSTEMD_INITIALIZED_SI $yes "execd.service" "*" "*"]
+      set expected [translate_macro MSG_SYSTEMD_INITIALIZED_II ".*" ".*"]
       set messages_file [get_execd_messages_file $host]
       ts_log_fine "expecting message\n$expected\nin messages file $messages_file"
       set output [start_remote_prog $host $CHECK_USER "grep" "'$expected' $messages_file"]
       if {$prg_exit_state != 0} {
-         lappend errors "$messages_file doesn't contain \"systemd integration initialized ...\" message:\n$output"
+         lappend errors "$messages_file doesn't contain \"$expected\":\n$output"
       }
    }
 
