@@ -35,11 +35,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -53,7 +53,7 @@ set check_description(2)  "Starting execd without running qmaster"
 set check_description(3)  "Kill execd with -9 and restart execd"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function startup_execd_setup
@@ -78,6 +78,13 @@ proc startup_execd_cleanup  {} {
 
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   if {[ge_has_feature "systemd"]} {
+      # we start daemons manually here, make sure that after test end
+      # they are all properly running in their systemd units by re-starting the cluster
+      shutdown_core_system 0 1
+      startup_core_system 0 1
+   }
 }
 
 
@@ -87,14 +94,14 @@ proc startup_execd_test1 {} {
 
    set execd_port $ts_config(commd_port)
    incr execd_port 1
-   
+
    set hostname [host_conf_get_suited_hosts]
    set retries 5
    while {$hostname == $ts_config(master_host) && $retries > 0} {
       set hostname [host_conf_get_suited_hosts]
       incr retries -1
    }
-   
+
    ts_log_frame
    ts_log_fine $check_description($CHECK_ACT_LEVEL)
    ts_log_frame
@@ -105,7 +112,7 @@ proc startup_execd_test1 {} {
 
    if { $CHECK_ACT_LEVEL == 0 } {
       set CL_RETVAL_BIND_SOCKET [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_CL_RETVAL_BIND_SOCKET]]
-      
+
       set start_time [timestamp]
       ts_log_fine "Starting second execd on host $hostname (on the running SGE_EXECD_PORT=$execd_port) ..."
       set remote_arch [ resolve_arch $hostname ]
@@ -153,7 +160,7 @@ proc startup_execd_test1 {} {
 #
 #      set CL_RETVAL_ENDPOINT_NOT_UNIQUE [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_CL_RETVAL_ENDPOINT_NOT_UNIQUE]]
 #
-#      
+#
 #      set start_time [timestamp]
 #      ts_log_fine "Starting second execd on host $hostname (on SGE_EXECD_PORT=$reserved_execd_port) ..."
 #      set remote_arch [ resolve_arch $hostname ]
@@ -199,17 +206,17 @@ proc startup_execd_test1 {} {
 
       set CL_RETVAL_CONNECT_ERROR        [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_CL_RETVAL_CONNECT_ERROR]]
       set CL_RETVAL_CONNECTION_NOT_FOUND [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_CL_RETVAL_CONNECTION_NOT_FOUND]]
-      shutdown_system_daemon $ts_config(master_host) "qmaster"
-      shutdown_system_daemon $hostname "execd"
+      shutdown_execd $hostname
+      shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
 
       set start_time [timestamp]
       ts_log_fine "Starting execd on host $hostname (on SGE_EXECD_PORT=$execd_port) ..."
-      set remote_arch [ resolve_arch $hostname ]
+      set remote_arch [resolve_arch $hostname]
 
       set output [start_remote_prog "$hostname" "root" "$ts_config(product_root)/bin/$remote_arch/sge_execd" ""]
       set end_time [timestamp]
 
-      set run_time [ expr ( $end_time - $start_time ) ]
+      set run_time [expr $end_time - $start_time]
 
       set output [string trim $output]
       ts_log_fine "--- output start ---"
@@ -224,7 +231,7 @@ proc startup_execd_test1 {} {
 
       if {[string match "*$CL_RETVAL_CONNECT_ERROR*" $output ]} {
          ts_log_fine "==> Found \"$CL_RETVAL_CONNECT_ERROR\" in output. OK."
-      } elseif {[string match "*$CL_RETVAL_CONNECTION_NOT_FOUND*" $output ]} { 
+      } elseif {[string match "*$CL_RETVAL_CONNECTION_NOT_FOUND*" $output ]} {
          ts_log_fine "==> Found \"$CL_RETVAL_CONNECTION_NOT_FOUND\" in output. OK."
       } else {
          ts_log_severe "can't find \"$CL_RETVAL_CONNECT_ERROR\" or \"$CL_RETVAL_CONNECTION_NOT_FOUND\" output in:\n$output"
@@ -248,8 +255,8 @@ proc startup_execd_test1 {} {
 
    if { $CHECK_ACT_LEVEL == 3 } {
 
-      shutdown_system_daemon $hostname "execd" 0
-      
+      shutdown_execd $hostname
+
       set start_time [timestamp]
       ts_log_fine "Starting execd on host $hostname (on SGE_EXECD_PORT=$execd_port) ..."
       set remote_arch [ resolve_arch $hostname ]
@@ -284,7 +291,7 @@ proc startup_execd_test1 {} {
 
       wait_for_load_from_all_queues 60
    }
-  
+
    set my_timeout [timestamp]
    incr my_timeout 100
    while { [timestamp] < $my_timeout } {
