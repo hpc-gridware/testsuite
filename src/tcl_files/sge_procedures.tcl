@@ -7680,7 +7680,12 @@ proc shutdown_qmaster {hostname qmaster_spool_dir {timeout 60}} {
    ts_log_finest "retrieving data from spool dir $qmaster_spool_dir"
 
    if {$CHECK_VALGRIND == "master" && $timeout < 900} {
+      # it will take much longer for sge_qmaster to shut down when running with valgrind
       set timeout 900
+      # qconf -km also can take significantly longer
+      set km_timeout 180
+   } else {
+      set km_timeout 60
    }
 
    set qmaster_pid [get_qmaster_pid $hostname $qmaster_spool_dir]
@@ -7698,7 +7703,7 @@ proc shutdown_qmaster {hostname qmaster_spool_dir {timeout 60}} {
          } else {
             ts_log_finest "killing qmaster with pid $qmaster_pid on host $hostname with qconf -km"
             ts_log_finest "do a qconf -km ..."
-            set result [start_sge_bin "qconf" "-km"]
+            set result [start_sge_bin "qconf" "-km" "" "" prg_exit_state $km_timeout]
             ts_log_finest $result
          }
          wait_till_qmaster_is_down $hostname $timeout
