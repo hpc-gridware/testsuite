@@ -78,8 +78,12 @@ proc issue_1806_cleanup {} {
 proc issue_1806_run {} {
    global ts_config
 
-   # search for this pattern in messages file from execution client 
-   set pattern [translate_macro MSG_JOB_REAPINGJOBXPTFCOMPLAINSY_US "*" "*"] 
+   # search for this pattern in messages file from execution client
+   if {[is_version_in_range "9.1.0"]} {
+      set pattern [translate_macro MSG_JOB_REAPINGJOBXPTFCOMPLAINSY_SS "*" "*"]
+   } else {
+      set pattern [translate_macro MSG_JOB_REAPINGJOBXPTFCOMPLAINSY_US "*" "*"]
+   }
 
    # get an valid execution host 
    set exechost [host_conf_get_suited_hosts]
