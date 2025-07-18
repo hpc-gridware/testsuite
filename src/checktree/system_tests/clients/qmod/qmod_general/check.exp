@@ -796,46 +796,59 @@ proc qmod_forceaction {} {
       ts_log_severe "job $job_id (grppid: $grppid) is not in suspend state but in \"$state\""
    }
 
-   ts_log_fine "unsuspend job with kill command ..."
-   # unsunspend job per kill command
-   switch -- [resolve_arch $test_host] {
-      "glinux" {
-         foreach pidnr $pid_list {
-            start_remote_prog $test_host $CHECK_USER "kill" "-CONT $pidnr"
+   # the following scenario does not work with systemd
+   #    - the job is suspended (process state T)
+   #    - manually unsuspend the process (group) => the process goes into S state
+   #      BUT: it is in groups freezer, it does *not* run
+   #    - suspending it with qmod -s -force does repeat both the kill -STOP as well as the systemd freeze
+   #      but the process state does not change
+   #      still the process is in freezer and not running
+   #    - manually executing a kill -STOP on the process or the process group does also not change the process state
+   # disabling the scenario
+   if {[ge_has_feature "systemd"] && [host_has_systemd $test_host]} {
+      ts_log_info "skipping manual unsuspend test for systemd host $test_host"
+   } else {
+      ts_log_fine "unsuspend job with kill command ..."
+      # unsunspend job per kill command
+      switch -- [resolve_arch $test_host] {
+         "glinux" {
+            foreach pidnr $pid_list {
+               start_remote_prog $test_host $CHECK_USER "kill" "-CONT $pidnr"
+            }
+         }
+         default {
+            start_remote_prog $test_host $CHECK_USER "kill" "-CONT -$grppid"
          }
       }
-      default {
-         start_remote_prog $test_host $CHECK_USER "kill" "-CONT -$grppid"
+
+      set state [string index [get_suspend_state_of_job $job_id $test_host] 0]
+      ts_log_fine "Job has real state \"$state\""
+
+      if {[string first $state $suspended_states] >= 0} {
+         ts_log_severe "job $job_id (grppid: $grppid) is still in suspend state"
       }
-   }
 
-   set state [string index [get_suspend_state_of_job $job_id $test_host] 0]
-   ts_log_fine "Job has real state \"$state\""
+      # set job in suspend mode (is already in suspend (in SGE system))
+      ts_log_fine "suspend job (queueing system thinks it is still suspended) ..."
+      suspend_job $job_id 0 0
 
-   if {[string first $state $suspended_states] >= 0} {
-      ts_log_severe "job $job_id (grppid: $grppid) is still in suspend state"
-   }
+      set state [string index [get_suspend_state_of_job $job_id $test_host] 0]
+      ts_log_fine "Job has real state \"$state\""
 
-   # set job in suspend mode (is already in suspend (in SGE system))
-   ts_log_fine "suspend job (queueing system thinks it is still suspended) ..."
-   suspend_job $job_id 0 0
+      if {[string first $state $suspended_states] >= 0} {
+         ts_log_severe "job $job_id (grppid: $grppid) is still in suspend state without force flag"
+      }
 
-   set state [string index [get_suspend_state_of_job $job_id $test_host] 0]
-   ts_log_fine "Job has real state \"$state\""
+      # set job in suspend mode (is already in suspend (in SGE system)) with force flag set
+      ts_log_fine "suspend job with force flag ..."
+      suspend_job $job_id 1
 
-   if {[string first $state $suspended_states] >= 0} {
-      ts_log_severe "job $job_id (grppid: $grppid) is still in suspend state without force flag"
-   }
+      set state [string index [get_suspend_state_of_job $job_id $test_host] 0]
+      ts_log_fine "Job has real state \"$state\""
 
-   # set job in suspend mode (is already in suspend (in SGE system)) with force flag set
-   ts_log_fine "suspend job with force flag ..."
-   suspend_job $job_id 1
-
-   set state [string index [get_suspend_state_of_job $job_id $test_host] 0]
-   ts_log_fine "Job has real state \"$state\""
-
-   if {[string first $state $suspended_states] == -1} {
-      ts_log_severe "job $job_id (grppid: $grppid) is still not in suspend state with using force flag"
+      if {[string first $state $suspended_states] == -1} {
+         ts_log_severe "job $job_id (grppid: $grppid) is still not in suspend state with using force flag"
+      }
    }
 
    # ok unsuspend the job
@@ -850,7 +863,7 @@ proc qmod_forceaction {} {
    get_ps_info 0 $test_host
 
    for {set i 0} {$i < $ps_info(proc_count)} {incr i 1} {
-      ts_log_fine "ps_info(pgid,$i)     = $ps_info(pgid,$i), command is \"$ps_info(command,$i)\""
+      #ts_log_fine "ps_info(pgid,$i)     = $ps_info(pgid,$i), command is \"$ps_info(command,$i)\""
 
       if {$ps_info(pgid,$i) == $grppid} {
          ts_log_fine "process $ps_info(pid,$i) is still in ps list"

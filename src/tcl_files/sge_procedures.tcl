@@ -5459,7 +5459,6 @@ proc get_suspend_state_of_job { jobid {host ""} { pidlist pid_list } {do_error_c
    set real_pid [get_grppid_of_job $jobid $host]
    ts_log_fine "grpid is \"$real_pid\" on host \"$host\""
 
-
    set time_now [clock seconds]
    set time_out [expr $time_now + 60]   ;# timeout is 60 seconds
 
