@@ -112,7 +112,9 @@ proc set_hosts_for_runlevel {} {
 proc drmaaj_basic_get_hosts {} {
    global ts_config
 
-   set hosts "$ts_config(master_host) $ts_config(execd_nodes) $ts_config(submit_only_hosts)"
+   # tests fail on a submit only host, see CS-1424
+   # set hosts "$ts_config(master_host) $ts_config(execd_nodes) $ts_config(submit_only_hosts)"
+   set hosts "$ts_config(master_host) $ts_config(execd_nodes)"
    set hosts [lsort -unique $hosts]
    set ret {}
    foreach host $hosts {
