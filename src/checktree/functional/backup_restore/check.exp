@@ -55,7 +55,7 @@ lappend check_functions "backup_restore_check_cluster"
 
 proc backup_restore_setup {} {
    global ts_config CHECK_USER
-   global test_ar
+   global test_ar backup_restore_config
 
    # create a rqs
    set rules {}
@@ -65,6 +65,11 @@ proc backup_restore_setup {} {
 
    # create an advance reservation
    set test_ar [submit_ar "-N TEST_AR -d 3600"]
+
+   # set KEEP_ACTIVE=ERROR to allow debugging of job errors
+   get_config backup_restore_config
+   add_or_replace_array_param myconfig backup_restore_config "execd_params" "KEEP_ACTIVE" "ERROR"
+   set_config_and_propagate myconfig
 }
 
 proc backup_restore_do_backup_restore {} {
@@ -79,9 +84,10 @@ proc backup_restore_do_backup_restore {} {
    } else {
       ts_log_fine "berkeleydb local spooling detected"
    }
-   #ST support file
+   # ST (Service Tags) support file
+   # @todo It is backed up and restored, but do we still need it?
    set st_file "$ts_config(product_root)/$ts_config(cell)/common/st.enabled"
-   set st_file_before [is_remote_file $ts_config(master_host) $CHECK_USER $st_file] 
+   set st_file_before [is_remote_file $ts_config(master_host) $CHECK_USER $st_file]
 
    # Backup Database
    set id [open_remote_spawn_process $remote_host $CHECK_USER "./inst_sge" "-bup" 0 $ts_config(product_root)]
@@ -126,7 +132,7 @@ proc backup_restore_do_backup_restore {} {
             ts_send $sp_id "y\n"
             continue;
          }
-         
+
          # Errors
          -i $sp_id timeout {
             ts_log_severe "$expect_out(0,string)"
@@ -148,11 +154,11 @@ proc backup_restore_do_backup_restore {} {
             close_spawn_process $id
             return
          }
-        
+
          # End of loop
          -i $sp_id "All information is saved in*" {
             break
-         } 
+         }
       }
    }
 
@@ -161,8 +167,8 @@ proc backup_restore_do_backup_restore {} {
 
    #adding a queue
    add_queue "lila.q" "@allhosts" "" 1
-  
-   # TODO Try to restore the database with running master (should not be possible) 
+
+   # TODO Try to restore the database with running master (should not be possible)
 
    shutdown_core_system
 
@@ -177,7 +183,7 @@ proc backup_restore_do_backup_restore {} {
    ts_log_fine "mv $ts_config(product_root)/$ts_config(cell) $ts_config(product_root)/$ts_config(cell)_backup"
    ts_log_fine [start_remote_prog $remote_host $CHECK_USER "mv" "$ts_config(product_root)/$ts_config(cell) $ts_config(product_root)/$ts_config(cell)_backup"]
 
-   # restore from backup 
+   # restore from backup
    set id [open_remote_spawn_process $remote_host $CHECK_USER "./inst_sge" "-rst" 0 $ts_config(product_root)]
    set sp_id [lindex $id 1]
    log_user 1
@@ -219,7 +225,7 @@ proc backup_restore_do_backup_restore {} {
             ts_send $sp_id "y\n"
             continue;
          }
-         
+
          # Errors
          -i $sp_id timeout {
             ts_log_severe "$expect_out(0,string)"
@@ -246,19 +252,26 @@ proc backup_restore_do_backup_restore {} {
             close_spawn_process $id
             return
          }
-         
+
          # End of loop
          -i $sp_id "Your configuration has been restored" {
             break
          }
       }
    }
-   
+
    # close connection to inst_sge
    close_spawn_process $id
 
    # restart the restored cluster
-   startup_core_system  
+
+   # need to wait for some time, have seen errors like:
+   # ocs8012-execd.service: Failed to execute /scratch/joga/clusters/master/default/common/sgeexecd: Text file busy
+
+   ts_log_fine "sleep 5 seconds to wait for the restored cluster to be ready on NFS"
+   after 5000
+
+   startup_core_system
    wait_for_load_from_all_queues 60
 
    set arch [resolve_arch $ts_config(master_host)]
@@ -276,7 +289,7 @@ proc backup_restore_do_backup_restore {} {
       }
    }
 
-   set st_file_after [is_remote_file $ts_config(master_host) $CHECK_USER $st_file] 
+   set st_file_after [is_remote_file $ts_config(master_host) $CHECK_USER $st_file]
    if { $st_file_after != $st_file_before } {
       ts_log_fine "The st.enabled file is not restored!"
       ts_log_severe "restore did not work for ST!"
@@ -310,7 +323,7 @@ proc backup_restore_check_cluster {} {
 
 proc backup_restore_cleanup {} {
    global CHECK_USER ts_config
-   global test_ar
+   global test_ar backup_restore_config
 
    set spooling_method $ts_config(spooling_method)
    set master_spool_dir [get_spool_dir $ts_config(master_host) qmaster]
@@ -346,14 +359,17 @@ proc backup_restore_cleanup {} {
       ts_log_fine [start_remote_prog $remote_host $CHECK_USER "rm" "-rf $ts_config(product_root)/$ts_config(cell)_backup"]
       ts_log_fine "rm -rf -rf $ts_config(product_root)/master_spooling_backup"
       ts_log_fine [start_remote_prog $remote_host $CHECK_USER "rm" "-rf $ts_config(product_root)/master_spooling_backup"]
-      if { $spooling_method == "berkeleydb"} { 
+      if { $spooling_method == "berkeleydb"} {
          ts_log_fine "rm -rf -rf $ts_config(product_root)/spooling_backup"
          ts_log_fine [start_remote_prog $remote_host $CHECK_USER "rm" "-rf $ts_config(product_root)/spooling_backup"]
        }
    }
 
    # cleanup our test objects
+   delete_all_jobs
+   wait_for_end_of_all_jobs
    del_rqs test
    delete_ar $test_ar
+   reset_config_and_propagate backup_restore_config
 }
 
