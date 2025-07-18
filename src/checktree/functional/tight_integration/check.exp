@@ -95,13 +95,18 @@ proc tight_integration_setup {} {
    # to workaround CR 6728379
    get_config tight_global_config
 
-   # keep active_jobs directories in case of error
-   add_or_replace_array_param myconfig tight_global_config "execd_params" "KEEP_ACTIVE" "ERROR"
-   set_config_and_propagate myconfig
+   # Keep active_jobs directories in case of error for easier debugging
+   # They will be deleted again when the cleanup_method reset execd_params.
+   # This leads the the test failing due to error loging, see CS-1422
+   if {0} {
+      add_or_replace_array_param myconfig tight_global_config "execd_params" "KEEP_ACTIVE" "ERROR"
+      set_config_and_propagate myconfig
+   }
 
    # @todo CS-1019 workaround: sge_execd logs errors when running tightly integrated parallel jobs
    # modify bootstrap file: use only 1 listener and 1 worker
-   if {1} {
+   # @todo should no longer be necessary after my fixes (in JG_SYSTEMD_BRANCH so far)
+   if {0} {
       bootstrap_file_read tight_bootstrap_backup
       set bootstrap(listener_threads) 1
       set bootstrap(worker_threads) 1
@@ -378,12 +383,7 @@ proc tight_integration_check_messages {mode1 mode2 scenario {expect_error 0}} {
                set skip_message 1
             }
             # @todo CS-1019 skip the following warning
-            if {([string match "notify*" $scenario] ||
-                 $scenario == "iz_578" ||
-                 $scenario == "master_killed" ||
-                 $scenario == "massive_nfs_tmpdir"
-                ) &&
-                [string match "*ptf complains: Job does not exist*" $poo]} {
+            if {0 && [string match "*ptf complains: Job does not exist" $poo]} {
                set skip_message 1
             }
             #
@@ -582,6 +582,9 @@ proc tight_integration_iz_1916 {} {
       }
 
       # reschedule job
+      # first set it on hold to avoid it getting restarted immediately
+      set result [start_sge_bin "qhold" $jobid]
+      ts_log_fine $result
       ts_log_fine "sending qmod -rj to job $jobid"
       set result [start_sge_bin "qmod" "-rj $jobid"]
 
@@ -1166,6 +1169,7 @@ proc tight_integration_notify {} {
 
    # test notification on job delete
    tight_integration_notify_doit "delete job" "SIGUSR2" "" "delete"
+   # test notification on job suspend
    tight_integration_notify_doit "suspend job" "SIGUSR1" "" "suspend"
 
    # test notification on wallclock limit
