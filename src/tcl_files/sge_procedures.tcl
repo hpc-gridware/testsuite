@@ -6555,7 +6555,7 @@ proc wait_for_end_of_transfer { jobid seconds } {
    set result 0
    set time [clock seconds]
    while {$result == 0} {
-      set qstat_result [get_standard_job_info $jobid ]
+      set qstat_result [get_standard_job_info $jobid]
 
       # qstat_result contains the output of "qstat" without options.
       # search the line of the job we are looking for in this list.
@@ -6597,13 +6597,14 @@ proc wait_for_end_of_transfer { jobid seconds } {
 
       set runtime [expr [clock seconds] - $time]
       if { $runtime >= $seconds } {
-         ts_log_severe "timeout waiting for job \"$jobid\""
+         ts_log_severe "timeout waiting for job \"$jobid\", job is in state $job_state"
          set result -1
          # break out of while loop
          break
       }
       after 1000
    }
+
    return $result
 }
 
