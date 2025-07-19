@@ -35,11 +35,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -50,10 +50,10 @@ set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
 set check_description(0)  "checking all options in job pending state"
 set check_description(1)  "checking all options in job pending and hold state"
 set check_description(2)  "checking all options in job running state"
-set check_description(3)  "checking all options in job running and hold state" 
+set check_description(3)  "checking all options in job running and hold state"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function "qdel_setup"
@@ -124,7 +124,7 @@ proc qdel_setup_level {} {
 }
 
 proc qdel_translate_message {msg {p1 ""} {p2 ""} {p3 ""}} {
-   global ts_config 
+   global ts_config
 
    set ret ""
 
@@ -186,8 +186,8 @@ proc qdel_submit_delete_when_transfered {} {
       # we do this 25 times for every architecture
       set job_script "$ts_config(product_root)/examples/jobs/sleeper.sh"
       set runs 25
-      while {$runs > 0} { 
-         foreach host $ts_config(unique_arch_nodes) { 
+      while {$runs > 0} {
+         foreach host $ts_config(unique_arch_nodes) {
             set qinstance [get_queue_instance "all.q" $host]
             set arguments "-o /dev/null -e /dev/null -q $qinstance"
             set job_id [submit_job "$arguments $job_script"]
@@ -215,30 +215,30 @@ proc qdel_submit_delete_when_transfered {} {
 
 #                                                             max. column:     |
 #****** qdel/are_jobs_deleted() ******
-# 
+#
 #  NAME
-#     are_jobs_deleted -- ??? 
+#     are_jobs_deleted -- ???
 #
 #  SYNOPSIS
-#     are_jobs_deleted { job_list } 
+#     are_jobs_deleted { job_list }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
-#     job_list - ??? 
+#     job_list - ???
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -259,10 +259,10 @@ proc are_jobs_deleted {job_list} {
             incr jobs_deleted 1
          }
       }
-     
+
       ts_log_fine "Jobs_deleted: $del_jobs"
       ts_log_fine "All jobs:     $job_list"
- 
+
       if {$jobs_deleted == [llength $job_list]} {
          return 0
       }
@@ -277,30 +277,30 @@ proc are_jobs_deleted {job_list} {
 
 #                                                             max. column:     |
 #****** qdel/submit_testjobs() ******
-# 
+#
 #  NAME
-#     submit_testjobs -- ??? 
+#     submit_testjobs -- ???
 #
 #  SYNOPSIS
-#     submit_testjobs { { user "" } } 
+#     submit_testjobs { { user "" } }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
-#     { user "" } - ??? 
+#     { user "" } - ???
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -321,13 +321,13 @@ proc submit_testjobs {{user ""} {additional_job_args ""} {testjob_count "4"} {ar
          set jobargs "$jobargs -h"   ;# set hold flag
       }
    }
- 
+
    set jobargs "$additional_job_args $jobargs -q $qdel_qinstance $ts_config(product_root)/examples/jobs/sleeper.sh 3000"
 
    if {$user == ""} {
       set user $CHECK_USER
    }
-  
+
    # no user specified (using local user name (starter of testsuite))
    for {set i 0} {$i < $testjob_count} {incr i} {
       set jobresult [submit_job $jobargs 1 60 "" $user]     ;# submit_job has it's own error handling
@@ -344,7 +344,7 @@ proc submit_testjobs {{user ""} {additional_job_args ""} {testjob_count "4"} {ar
          }
 
          if {$hold_state == 1} {
-            # set hold flag for all jobs 
+            # set hold flag for all jobs
             foreach elem $joblist {
                hold_job $elem
             }
@@ -420,7 +420,7 @@ proc submit_testjobs {{user ""} {additional_job_args ""} {testjob_count "4"} {ar
 #*******************************
 proc qdel_iz_125_case_2 {} {
    global ts_config CHECK_USER
-  
+
    # 2) Submit a job.
    set job_list [submit_testjobs "" "" 1]
 
@@ -533,17 +533,17 @@ proc qdel_iz_125_case_3 {} {
    set output [start_sge_bin "qdel" $delete_list]
 
    # Check now that they have actually been deleted!
-   if {([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job  5] $output] >= 0 || 
+   if {([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job  5] $output] >= 0 ||
         [string first [qdel_translate_message REGISTERED_TASK $CHECK_USER $job  5] $output] >= 0    ) &&
-       ([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job  6] $output] >= 0 || 
+       ([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job  6] $output] >= 0 ||
         [string first [qdel_translate_message REGISTERED_TASK $CHECK_USER $job  6] $output] >= 0    ) &&
-       ([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job  7] $output] >= 0 || 
+       ([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job  7] $output] >= 0 ||
         [string first [qdel_translate_message REGISTERED_TASK $CHECK_USER $job  7] $output] >= 0    ) &&
-       ([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job  8] $output] >= 0 || 
+       ([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job  8] $output] >= 0 ||
         [string first [qdel_translate_message REGISTERED_TASK $CHECK_USER $job  8] $output] >= 0    ) &&
-       ([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job  9] $output] >= 0 || 
+       ([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job  9] $output] >= 0 ||
         [string first [qdel_translate_message REGISTERED_TASK $CHECK_USER $job  9] $output] >= 0    ) &&
-       ([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job 10] $output] >= 0 || 
+       ([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job 10] $output] >= 0 ||
         [string first [qdel_translate_message REGISTERED_TASK $CHECK_USER $job 10] $output] >= 0    )} {
       ts_log_fine "deletion of tasks 5-10 OK"
    } else {
@@ -557,11 +557,11 @@ proc qdel_iz_125_case_3 {} {
 
    # Wait for tasks running; delete tasks 2 - 3.
    set output [start_sge_bin "qdel" $wait_list_delete]
-    
+
    # Check that those tasks have actually been deleted
-   if {([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job 2] $output] >= 0 || 
+   if {([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job 2] $output] >= 0 ||
         [string first [qdel_translate_message REGISTERED_TASK $CHECK_USER $job 2] $output] >= 0    ) &&
-       ([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job 3] $output] >= 0 || 
+       ([string first [qdel_translate_message DELETED_TASK    $CHECK_USER $job 3] $output] >= 0 ||
         [string first [qdel_translate_message REGISTERED_TASK $CHECK_USER $job 3] $output] >= 0    )} {
       ts_log_fine "deletion of tasks 2-3 OK"
    } else {
@@ -575,9 +575,9 @@ proc qdel_iz_125_case_3 {} {
    # Delete here tasks 2 - 5 ; only task 4 should be reported, error state=0
    set delete_list_2_5 "$job.2 $job.3 $job.4 $job.5"
    set output [start_sge_bin "qdel" $delete_list_2_5]
-   
+
    # Check that only task 4 for was deleted.
-   if {([string first [qdel_translate_message DELETED_TASK      $CHECK_USER $job 4] $output] >= 0 || 
+   if {([string first [qdel_translate_message DELETED_TASK      $CHECK_USER $job 4] $output] >= 0 ||
         [string first [qdel_translate_message REGISTERED_TASK   $CHECK_USER $job 4] $output] >= 0    ) &&
         [string first [qdel_translate_message DOESNOTEXIST_TASK $job 2] $output] >= 0 &&
         [string first [qdel_translate_message DOESNOTEXIST_TASK $job 3] $output] >= 0 &&
@@ -607,7 +607,7 @@ proc qdel_iz_125_case_4 {} {
    global ts_config CHECK_USER
    global qdel_host
 
-   # Create queues for -pe jobs 
+   # Create queues for -pe jobs
    set testq(load_thresholds) "np_load_avg=7.00"
    add_queue "test1.q" $qdel_host testq
 
@@ -678,16 +678,23 @@ proc qdel_iz_125_case_5 {} {
    after 10000
 
    # Now delete all of them
-   set output [start_sge_bin "qdel" $jobs]
-  
+   # @todo giving a space separated list works, but according to help output it needs to be a comma separated list.
+   ts_log_fine "calling qdel $jobs"
+   set output [start_sge_bin "qdel" [join $jobs ","]]
+   ts_log_fine $output
+
    # Check that they all actually get deleted.
-   for {set i 0} {$i < $num_jobs} {incr i $step} {
-      set job [lindex $jobs $i]
-      if {[string first [qdel_translate_message DELETED_JOB    $CHECK_USER $job 4] $output] >= 0 || 
-          [string first [qdel_translate_message REGISTERED_JOB $CHECK_USER $job 4] $output] >= 0    } {
-         ts_log_fine "job $i ($job) was deleted"
-      } else {
-         ts_log_severe "qdel on $num_jobs failed, job $i ($job) was not deleted:\n$output"
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qdel on $num_jobs failed:\n$output"
+   } else {
+      for {set i 0} {$i < $num_jobs} {incr i $step} {
+         set job [lindex $jobs $i]
+         if {[string first [qdel_translate_message DELETED_JOB    $CHECK_USER $job 4] $output] >= 0 ||
+             [string first [qdel_translate_message REGISTERED_JOB $CHECK_USER $job 4] $output] >= 0    } {
+            ts_log_fine "job $i ($job) was deleted"
+         } else {
+            ts_log_severe "qdel on $num_jobs failed, job $i ($job) was not deleted:\n$output"
+         }
       }
    }
 
@@ -705,7 +712,7 @@ proc qdel_delete_task_range {} {
    # Now delete all 10 of them
    set output [start_sge_bin "qdel" $job_range]
    ts_log_fine $output
-   if {[string first [qdel_translate_message DELETED_TASKS   $CHECK_USER "1-10:1" $job] $output] >= 0 || 
+   if {[string first [qdel_translate_message DELETED_TASKS   $CHECK_USER "1-10:1" $job] $output] >= 0 ||
        [string first [qdel_translate_message REGISTERED_TASK $CHECK_USER $job 1] $output] >= 0           } {
       ts_log_fine "deletion of $job_range succeeded"
    } else {
@@ -726,12 +733,12 @@ proc qdel_delete_task_range {} {
 
 #                                                             max. column:     |
 #****** qdel/qdel_delete_job_0() ******
-# 
+#
 #  NAME
-#     qdel_delete_job_0 -- ??? 
+#     qdel_delete_job_0 -- ???
 #
 #  SYNOPSIS
-#     qdel_delete_job_0 { } 
+#     qdel_delete_job_0 { }
 #
 #*******************************
 proc qdel_delete_job_0 {} {
@@ -752,12 +759,12 @@ proc qdel_delete_job_0 {} {
 
 #                                                             max. column:     |
 #****** qdel/qdel_help() ******
-# 
+#
 #  NAME
-#     qdel_help -- ??? 
+#     qdel_help -- ???
 #
 #  SYNOPSIS
-#     qdel_help { } 
+#     qdel_help { }
 #
 #*******************************
 proc qdel_help {} {
@@ -776,10 +783,10 @@ proc qdel_help {} {
    set output [string trim $output]
    if {[string first $CHECK_PRODUCT_VERSION_NUMBER $output] < 0} {
       ts_log_severe "version string ($CHECK_PRODUCT_VERSION_NUMBER) not found in qdel -help output:\n$output"
-   } 
- 
+   }
+
    set lines [split $output "\n"]
-   set nr_of_lines [llength $lines] 
+   set nr_of_lines [llength $lines]
 
    if {$nr_of_lines != $qdel_help_lines} {
       ts_log_severe "help output has $nr_of_lines, but expected are $qdel_help_lines lines:\n$output"
@@ -788,29 +795,29 @@ proc qdel_help {} {
 
 #                                                             max. column:     |
 #****** qdel/qdel_job_task_list() ******
-# 
+#
 #  NAME
-#     qdel_job_task_list -- ??? 
+#     qdel_job_task_list -- ???
 #
 #  SYNOPSIS
-#     qdel_job_task_list { } 
+#     qdel_job_task_list { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -847,19 +854,19 @@ proc qdel_job_task_list {} {
       set runtime [expr [timestamp] - $time]
       if {$runtime >= 300} {
          ts_log_severe "timeout while waiting for end of testjobs $job_list"
-         break  
+         break
       }
-   }    
+   }
 }
 
 #                                                             max. column:     |
 #****** Checks/qdel/qdel_delete_unknown_jobid() ******
-# 
+#
 #  NAME
 #     qdel_delete_unknown_jobid -- check deletion of unknown jobs / tasks
 #
 #  SYNOPSIS
-#     qdel_delete_unknown_jobid { } 
+#     qdel_delete_unknown_jobid { }
 #
 #  FUNCTION
 #     Execute qdel commands to delete jobs, tasks and taskranges that
@@ -918,19 +925,19 @@ proc qdel_delete_unknown_jobid_proc {job_list default_output} {
          append qdel_output "\n"
       }
    }
-  
+
    if {[string first "\[" $qdel_output] == 0} {
       ts_log_fine "removing message id from output ..."
       set cut [string first "\]" $qdel_output]
       incr cut 2
-      set qdel_output [string range $qdel_output $cut end] 
+      set qdel_output [string range $qdel_output $cut end]
       ts_log_fine "qsub qdel_output is: \"$qdel_output\""
   }
- 
+
 
    if {$prg_exit_state == 0} {
       ts_log_severe "exit state is 0"
-   } 
+   }
 
    set nr_of_jobs [llength $job_list]
    set qd_out [split $qdel_output "\n"]
@@ -945,7 +952,7 @@ proc qdel_delete_unknown_jobid_proc {job_list default_output} {
       ts_log_fine "removing message id from output ..."
       set cut [string first "\]" $last_job_output]
       incr cut 2
-      set last_job_output [string range $last_job_output $cut end] 
+      set last_job_output [string range $last_job_output $cut end]
       ts_log_fine "qsub last_job_output is: \"$last_job_output\""
    }
 
@@ -956,29 +963,29 @@ proc qdel_delete_unknown_jobid_proc {job_list default_output} {
 
 #                                                             max. column:     |
 #****** qdel/qdel_delete_negative_jobid() ******
-# 
+#
 #  NAME
-#     qdel_delete_negative_jobid -- ??? 
+#     qdel_delete_negative_jobid -- ???
 #
 #  SYNOPSIS
-#     qdel_delete_negative_jobid { } 
+#     qdel_delete_negative_jobid { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -1002,29 +1009,29 @@ proc qdel_delete_negative_jobid {} {
 
 #                                                             max. column:     |
 #****** qdel/qdel_all() ******
-# 
+#
 #  NAME
-#     qdel_all -- ??? 
+#     qdel_all -- ???
 #
 #  SYNOPSIS
-#     qdel_all { } 
+#     qdel_all { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -1039,19 +1046,19 @@ proc qdel_all {} {
    set all_args "'*'"
 
    # submit jobs to delete
-   set job_list_user1 [submit_testjobs] 
+   set job_list_user1 [submit_testjobs]
    ts_log_fine "user 1 has jobs $job_list_user1"
 
    set job_list_user2 [submit_testjobs $CHECK_FIRST_FOREIGN_SYSTEM_USER]
    ts_log_fine "user 2 has jobs $job_list_user2"
-   
+
    # now delete jobs of user 1
    set qdel_output [start_sge_bin "qdel" $all_args]
    if {$prg_exit_state != 0} {
        ts_log_severe "could not delete jobs $job_list_user1 (exit status: $prg_exit_state):\n$qdel_output"
    }
 
-   set time [timestamp] 
+   set time [timestamp]
    while {1} {
       set jobs_deleted 0
       foreach job_id $job_list_user1 {
@@ -1060,7 +1067,7 @@ proc qdel_all {} {
             incr jobs_deleted 1
          }
       }
- 
+
       if {$jobs_deleted == 4} {
          break
       }
@@ -1078,19 +1085,19 @@ proc qdel_all {} {
    foreach job_id $job_list_user2 {
       set result [is_job_running $job_id "qdel_check"]
       if {$result == -1} {
-         ts_log_severe "(3) jobs of different user deleted" 
+         ts_log_severe "(3) jobs of different user deleted"
       }
-   } 
-  
+   }
+
    # now submit new jobs for user 1
-   set job_list_user1 [submit_testjobs]  
+   set job_list_user1 [submit_testjobs]
    ts_log_fine "user 1 has jobs $job_list_user1"
 
    # now delete jobs of user 2
    set result [start_sge_bin "qdel" "$all_args" "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
-   ts_log_fine "qdel_output = \n$result" 
+   ts_log_fine "qdel_output = \n$result"
 
-   set time [timestamp] 
+   set time [timestamp]
    while {1} {
       set jobs_deleted 0
       foreach job_id $job_list_user2 {
@@ -1117,7 +1124,7 @@ proc qdel_all {} {
    foreach job_id $job_list_user1 {
       set result [is_job_running $job_id "qdel_check"]
       if {$result == -1} {
-         ts_log_severe "(4) jobs of different user deleted" 
+         ts_log_severe "(4) jobs of different user deleted"
       }
    }
 
@@ -1153,29 +1160,29 @@ proc qdel_all {} {
 
 #                                                             max. column:     |
 #****** qdel/qdel_uall() ******
-# 
+#
 #  NAME
-#     qdel_uall -- ??? 
+#     qdel_uall -- ???
 #
 #  SYNOPSIS
-#     qdel_uall { } 
+#     qdel_uall { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -1192,7 +1199,7 @@ proc qdel_uall {} {
    # submit jobs to delete
    set job_list_user1 [submit_testjobs]
    ts_log_fine "user 1 has jobs $job_list_user1"
- 
+
    set job_list_user2 [submit_testjobs $CHECK_FIRST_FOREIGN_SYSTEM_USER]
    ts_log_fine "user 2 has jobs $job_list_user2"
 
@@ -1211,16 +1218,16 @@ proc qdel_uall {} {
    foreach job_id $all_jobs {
       set result [is_job_running $job_id "qdel_check"]
       if {$result == -1} {
-         ts_log_severe "(5) jobs of different user deleted" 
+         ts_log_severe "(5) jobs of different user deleted"
       }
-   } 
+   }
 
    # now delete all jobs as user 1 ( manager )
    set result [start_sge_bin "qdel" $uall_args "" $CHECK_USER]
-   ts_log_fine "qdel_output = \n$result" 
+   ts_log_fine "qdel_output = \n$result"
 
    # now check if all jobs are deleted
-   set time [timestamp] 
+   set time [timestamp]
    while {1} {
       set jobs_deleted 0
       foreach job_id $all_jobs {
@@ -1245,29 +1252,29 @@ proc qdel_uall {} {
 
 #                                                             max. column:     |
 #****** qdel/qdel_user_list() ******
-# 
+#
 #  NAME
-#     qdel_user_list -- ??? 
+#     qdel_user_list -- ???
 #
 #  SYNOPSIS
-#     qdel_user_list { } 
+#     qdel_user_list { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -1280,9 +1287,9 @@ proc qdel_user_list {} {
    wait_for_end_of_all_jobs
 
    # submit jobs to delete
-   set job_list_user1 [submit_testjobs]  
+   set job_list_user1 [submit_testjobs]
    ts_log_fine "user 1 has jobs $job_list_user1"
- 
+
    set job_list_user2 [submit_testjobs $CHECK_FIRST_FOREIGN_SYSTEM_USER]
    ts_log_fine "user 2 has jobs $job_list_user2"
 
@@ -1308,7 +1315,7 @@ proc qdel_user_list {} {
       }
    }
 
-   # now delete all jobs as user 2 ( only submit user ) of user 2 ( himself ) 
+   # now delete all jobs as user 2 ( only submit user ) of user 2 ( himself )
    set result [start_sge_bin "qdel" "-u $CHECK_FIRST_FOREIGN_SYSTEM_USER" "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
 
    # now test if his jobs are deleted
@@ -1325,12 +1332,12 @@ proc qdel_user_list {} {
    set result [start_sge_bin "qdel" "-u $CHECK_FIRST_FOREIGN_SYSTEM_USER,$CHECK_USER,$CHECK_SECOND_FOREIGN_SYSTEM_USER" "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
    ts_log_fine "starting qdel -u $CHECK_FIRST_FOREIGN_SYSTEM_USER,$CHECK_USER,$CHECK_SECOND_FOREIGN_SYSTEM_USER"
    ts_log_fine "as user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
-   ts_log_fine "qdel_output = \n$result" 
+   ts_log_fine "qdel_output = \n$result"
 
    # now test if his jobs are deleted
    if {[are_jobs_deleted $job_list_user2] != 0} {
       ts_log_severe "(2) not all jobs of $CHECK_FIRST_FOREIGN_SYSTEM_USER deleted"
-   } 
+   }
 
    # now test if the jobs of user1 and user3 are still here
    set all_jobs "$job_list_user1 $job_list_user3"
@@ -1352,7 +1359,7 @@ proc qdel_user_list {} {
    set qdel_output [start_sge_bin "qdel" "-u $CHECK_FIRST_FOREIGN_SYSTEM_USER,$CHECK_USER,$CHECK_SECOND_FOREIGN_SYSTEM_USER"]
    ts_log_fine "starting qdel -u $CHECK_FIRST_FOREIGN_SYSTEM_USER,$CHECK_USER,$CHECK_SECOND_FOREIGN_SYSTEM_USER"
    ts_log_fine "qdel_result = $prg_exit_state"
-   ts_log_fine "qdel_output = $qdel_output" 
+   ts_log_fine "qdel_output = $qdel_output"
    if {$prg_exit_state != 0} {
       ts_log_severe "Could not delete jobs $job_list_user1 (exit status: $prg_exit_state):\n$qdel_output"
    }
@@ -1374,29 +1381,29 @@ proc qdel_user_list {} {
 
 #                                                             max. column:     |
 #****** qdel/qdel_force() ******
-# 
+#
 #  NAME
-#     qdel_force -- ??? 
+#     qdel_force -- ???
 #
 #  SYNOPSIS
-#     qdel_force { } 
+#     qdel_force { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -1410,7 +1417,7 @@ proc qdel_force {} {
    wait_for_end_of_all_jobs
 
    # unset ENABLE_FORCED_QDEL with set_config
-   get_config saved_array 
+   get_config saved_array
    ts_log_fine "qmaster_params=$saved_array(qmaster_params)"
    set saved_qmaster_params $saved_array(qmaster_params)
    if {$saved_qmaster_params != "none"} {
@@ -1429,7 +1436,7 @@ proc qdel_force {} {
    # shutdown execd
    soft_execd_shutdown $qdel_host
 
-   # now test if his jobs still running or pending 
+   # now test if his jobs still running or pending
    set all_jobs "$job_list_user1 $job_list_user2"
    foreach job_id $all_jobs {
       set result [is_job_running $job_id "qdel_check"]
@@ -1475,7 +1482,7 @@ proc qdel_force {} {
       startup_execd $qdel_host
    }
 
-   # ok - qdel without execd is ok, now check the -f option 
+   # ok - qdel without execd is ok, now check the -f option
 
    # submit jobs to delete
    set job_list_user1 [submit_testjobs]
@@ -1539,7 +1546,7 @@ proc qdel_force {} {
       if {[are_jobs_deleted $job_list_user2] != 0} {
          ts_log_severe "(6) not all jobs of $CHECK_FIRST_FOREIGN_SYSTEM_USER deleted (ENABLE_FORCED_QDEL is not working)"
       }
-   } 
+   }
 
    set change_array(qmaster_params) $saved_qmaster_params
    set_config change_array
@@ -1557,8 +1564,8 @@ proc qdel_force {} {
 #     qdel_delete_large_task
 #
 #  SYNOPSIS
-#     This functions submits a large array job and then 
-#     sends qdel to see if jobs are deleted. This tests for the case 
+#     This functions submits a large array job and then
+#     sends qdel to see if jobs are deleted. This tests for the case
 #     when deleting tasks within a job take a long time and make qmaster
 #     unresponsive.
 #
@@ -1568,7 +1575,7 @@ proc qdel_force {} {
 #*******************************
 proc qdel_delete_large_array {} {
    global ts_config
-    
+
    set hostname [host_conf_get_suited_hosts]
 
    # Submit an array job of 5000 tasks
@@ -1605,7 +1612,7 @@ proc qdel_delete_large_array {} {
 #     delete_by_job_name() -- test helper function for qdel test
 #
 #  SYNOPSIS
-#     delete_by_job_name { submit_name delete_name } 
+#     delete_by_job_name { submit_name delete_name }
 #
 #  FUNCTION
 #     1) submit jobs with -N $submit_name
@@ -1628,7 +1635,7 @@ proc delete_by_job_name {submit_name delete_name} {
    set job_del_list {}
    set job_alive_list {}
    for {set i 0} {$i < $testjob_count} {incr i} {
-      # submit jobs with name "test_job" 
+      # submit jobs with name "test_job"
       set job_list [submit_testjobs "" "" 2 "" 1 $submit_name]
       foreach job $job_list {
          lappend job_del_list $job
@@ -1652,7 +1659,7 @@ proc delete_by_job_name {submit_name delete_name} {
    foreach job $job_del_list {
       wait_for_jobend $job $submit_name 60 0 1
    }
- 
+
    # Other jobs must still be here
    get_extended_job_info ""
    foreach job $job_alive_list {
