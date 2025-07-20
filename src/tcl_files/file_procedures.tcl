@@ -38,37 +38,37 @@ global file_procedure_logfile_wait_sp_id
 global last_file_extention
 #                                                             max. column:     |
 #****** file_procedures/test_file() ******
-# 
+#
 #  NAME
-#     test_file -- test procedure 
+#     test_file -- test procedure
 #
 #  SYNOPSIS
-#     test_file { me two } 
+#     test_file { me two }
 #
 #  FUNCTION
-#     this function is just for test the correct function call 
+#     this function is just for test the correct function call
 #
 #  INPUTS
-#     me  - first output parameter 
-#     two - second output parameter 
+#     me  - first output parameter
+#     two - second output parameter
 #
 #  RESULT
-#     output to stdout: 
+#     output to stdout:
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
 #*******************************
 proc test_file { me two} {
-  ts_log_fine "printing \"$me\" \"$two\". host is [exec hostname]" 
+  ts_log_fine "printing \"$me\" \"$two\". host is [exec hostname]"
   return "test ok"
 }
 
@@ -92,7 +92,7 @@ proc get_dir_names {path} {
 #     get_tmp_directory_name() -- returns temporary directory path
 #
 #  SYNOPSIS
-#     get_tmp_directory_name { { hostname "" } { type "default" } 
+#     get_tmp_directory_name { { hostname "" } { type "default" }
 #     { dir_ext "tmp" } } { not_in_results 0 }
 #
 #  FUNCTION
@@ -145,7 +145,7 @@ proc get_tmp_directory_name {{hostname ""} {type "default"} {dir_ext "tmp"} {not
          } else {
             incr timestamp_sub_index 1
          }
-      } 
+      }
    } else {
       set is_host_local_dir 1
       while {1} {
@@ -159,7 +159,7 @@ proc get_tmp_directory_name {{hostname ""} {type "default"} {dir_ext "tmp"} {not
          }
       }
    }
- 
+
    if {$is_host_local_dir == 0} {
       delete_file_at_startup $file_name
    } else {
@@ -174,8 +174,8 @@ proc get_tmp_directory_name {{hostname ""} {type "default"} {dir_ext "tmp"} {not
 #     analyze_directory_structure() -- analyse files dirs and permissions of dir
 #
 #  SYNOPSIS
-#     analyze_directory_structure { host user path dirs files permissions 
-#     ignore } 
+#     analyze_directory_structure { host user path dirs files permissions
+#     ignore }
 #
 #  FUNCTION
 #     This procedure is analysing the specified directory and returns
@@ -202,7 +202,7 @@ proc get_tmp_directory_name {{hostname ""} {type "default"} {dir_ext "tmp"} {not
 #  RESULT
 #     undefined
 #     specified arrays are updated with information
-#     
+#
 #             dirs  -> list of all sub directories
 #            files  -> list of all files (also from subdirectories)
 #      permissions  -> the permission array has the following structure. Only
@@ -215,7 +215,7 @@ proc get_tmp_directory_name {{hostname ""} {type "default"} {dir_ext "tmp"} {not
 #
 #*******************************************************************************
 proc analyze_directory_structure {host user path dirs files permissions {ignore {}}} {
-   global ts_config 
+   get_current_cluster_config_array ts_config
 
    if {$dirs != ""} {
       upvar $dirs spool_directories
@@ -239,14 +239,14 @@ proc analyze_directory_structure {host user path dirs files permissions {ignore 
    ts_log_fine "analyze directory: \"$path\" as user \"$user\" on host \"$host\""
    set script "$ts_config(testsuite_root_dir)/scripts/analyze_dir.sh"
 
-   
+
    if {$dirs != ""} {
       set tmp [start_remote_prog $host $user $script "$path dirs" prg_exit_state 120 0 "" "" 1 0 0 1]
       set tmp2 [split $tmp "\n"]
       set spool_directories {}
       if {$prg_exit_state == 0} {
          foreach line $tmp2 {
-            set file [string trim $line] 
+            set file [string trim $line]
             if {$file == ""} {
                continue
             }
@@ -274,7 +274,7 @@ proc analyze_directory_structure {host user path dirs files permissions {ignore 
    set spool_files {}
    if {$prg_exit_state == 0} {
       foreach line $tmp2 {
-         set file [string trim $line] 
+         set file [string trim $line]
          if {$file == ""} {
             continue
          }
@@ -322,10 +322,10 @@ proc analyze_directory_structure {host user path dirs files permissions {ignore 
 
 #****** file_procedures/get_tmp_file_name() ************************************
 #  NAME
-#     get_tmp_file_name() -- generate temporary filename 
+#     get_tmp_file_name() -- generate temporary filename
 #
 #  SYNOPSIS
-#     get_tmp_file_name { { hostname "" } { type "default" } { file_ext "tmp" } 
+#     get_tmp_file_name { { hostname "" } { type "default" } { file_ext "tmp" }
 #     } { not_in_results 0 }
 #
 #  FUNCTION
@@ -367,7 +367,7 @@ proc get_tmp_file_name {{hostname ""} {type "default"} {file_ext "tmp"} {not_in_
    } else {
       incr last_file_extention
    }
-   
+
    set timestamp_sub_index $last_file_extention
    if {$not_in_results == 0} {
       # local file operations
@@ -380,7 +380,7 @@ proc get_tmp_file_name {{hostname ""} {type "default"} {file_ext "tmp"} {not_in_
            set file_name "$CHECK_MAIN_RESULTS_DIR/${CHECK_USER}_${hostname}_${type}_$timestamp_appendix.${file_ext}"
            set is_host_local_file 0
          }
-         # break loop when file is not existing (when timestamp has increased)  
+         # break loop when file is not existing (when timestamp has increased)
          if {[file isfile $file_name]} {
             incr timestamp_sub_index 1
          } else {
@@ -393,7 +393,7 @@ proc get_tmp_file_name {{hostname ""} {type "default"} {file_ext "tmp"} {not_in_
       while {1} {
          set timestamp_appendix "[clock seconds]_$timestamp_sub_index"
          set file_name "/tmp/${CHECK_USER}_${hostname}_${type}_$timestamp_appendix.${file_ext}"
-         # break loop when file is not existing (when timestamp has increased)  
+         # break loop when file is not existing (when timestamp has increased)
          if {[is_remote_file $hostname $CHECK_USER $file_name]} {
             incr timestamp_sub_index 1
          } else {
@@ -407,7 +407,7 @@ proc get_tmp_file_name {{hostname ""} {type "default"} {file_ext "tmp"} {not_in_
    } else {
       delete_local_file_at_startup $hostname $file_name
    }
- 
+
    return $file_name
 }
 
@@ -417,34 +417,34 @@ proc get_tmp_file_name {{hostname ""} {type "default"} {file_ext "tmp"} {not_in_
 #     print_xy_array() -- print out an tcl x-y array
 #
 #  SYNOPSIS
-#     print_xy_array { columns rows data_array } 
+#     print_xy_array { columns rows data_array }
 #
 #  FUNCTION
-#     This function can be used to format data like: 
+#     This function can be used to format data like:
 #
 #     set columns "sgetest1 sgetest2 root cr114091"
 #     set rows "es-ergb01-01 balrog"
 #
-#                  | sgetest1 | sgetest2 | root | cr114091 
+#                  | sgetest1 | sgetest2 | root | cr114091
 #     -------------+----------+----------+----------+----------
-#     es-ergb01-01 |      639 |      639 |  739 |      639 
-#     balrog       |     1409 |     1409 | 1659 |     1869 
+#     es-ergb01-01 |      639 |      639 |  739 |      639
+#     balrog       |     1409 |     1409 | 1659 |     1869
 #
 #     The widths of the columns are adjusted according to the widths of the
 #     header and data cells.
 #
-#     By specifying variables for the parametes column_len_var and 
+#     By specifying variables for the parametes column_len_var and
 #     index_len_var, column widths can reused in multiple subsequent calls
 #     of print_xy_array.
 #
 #  INPUTS
 #     columns              - x value list
-#     rows                 - y value list 
+#     rows                 - y value list
 #     data_array           - array with data for e.g. $data($col,$row)
-#     {empty_cell ""}      - value to print for empty cells 
+#     {empty_cell ""}      - value to print for empty cells
 #                            (no value given in data_array)
 #     {column_len_var ""}  - variable to store maximum column length
-#     {index_len_var ""}   - variable to store maximum length of 
+#     {index_len_var ""}   - variable to store maximum length of
 #                            index (first) column
 #
 #  EXAMPLE
@@ -490,7 +490,7 @@ proc print_xy_array {columns rows data_array {empty_cell ""} {column_len_var ""}
 
       # now look at the data in this column
       foreach row $rows {
-         if {[info exists result_array($col,$row)]} { 
+         if {[info exists result_array($col,$row)]} {
             set len [string length $result_array($col,$row)]
             if {$max_column_len($col) < $len} {
                set max_column_len($col) $len
@@ -511,13 +511,13 @@ proc print_xy_array {columns rows data_array {empty_cell ""} {column_len_var ""}
    }
    append output_text "\n"
 
-   # output separating line between header and data 
+   # output separating line between header and data
    # - for index row
    set len [expr $max_index_len + 1]
    for {set i 0} {$i < $len} {incr i} {
       append output_text "-"
    }
-  
+
    # - for data rows
    foreach col $columns {
       append output_text "+"
@@ -553,20 +553,20 @@ proc print_xy_array {columns rows data_array {empty_cell ""} {column_len_var ""}
 #     create_gnuplot_xy_gif() -- create xy chart with gnuplot application
 #
 #  SYNOPSIS
-#     create_gnuplot_xy_gif { data_array_name row_array_name } 
+#     create_gnuplot_xy_gif { data_array_name row_array_name }
 #
 #  FUNCTION
 #     This procedure works only if the gnuplot binary is in the local user path.
 #
 #  INPUTS
-#     data_array_name(output_file) - chart output file (gif format) 
+#     data_array_name(output_file) - chart output file (gif format)
 #     data_array_name(xlabel)      - chart label for x axis
 #     data_array_name(ylabel)      - chart label for y axis
 #     data_array_name(title)       - chart title
 #
 #     row_array_name(ROW,COUNTER,x) - x value for data ROW, position COUNTER
 #     row_array_name(ROW,COUNTER,y) - y value for data ROW, position COUNTER
-#     row_array_name(ROW,drawmode)  - drawmode for data ROW 
+#     row_array_name(ROW,drawmode)  - drawmode for data ROW
 #                                     (="lines", "linespoints", "points", ...)
 #     row_array_name(ROW,title)     - title for data ROW
 #     row_array_name(ROW,show)      - show data ROW ( 0=don't show, 1=show row)
@@ -575,7 +575,7 @@ proc print_xy_array {columns rows data_array {empty_cell ""} {column_len_var ""}
 #     for { set i 0 } { $i < 300 } { incr i 1 }  {
 #        set x [ expr ( $i / 100.00 ) ]
 #        set dr1(0,$i,y) [expr ( sin($x) )]
-#        set dr1(0,$i,x) $x 
+#        set dr1(0,$i,x) $x
 #        set dr1(1,$i,y) [expr ( cos($x) )]
 #        set dr1(1,$i,x) $x
 #     }
@@ -585,7 +585,7 @@ proc print_xy_array {columns rows data_array {empty_cell ""} {column_len_var ""}
 #     set dr1(1,drawmode) "lines"
 #     set dr1(1,title) "cos(x)"
 #     set dr1(1,show) 1
-#  
+#
 #     set test(output_file) [get_tmp_file_name]
 #     set test(xlabel) "x"
 #     set test(ylabel) "y"
@@ -624,7 +624,7 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
    set row_index ""
    while { [info exists rows($datarows,show) ] } {
       lappend row_index $datarows
-      incr datarows 1 
+      incr datarows 1
    }
 
    set command_file [get_tmp_file_name]
@@ -668,7 +668,7 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
    set terminal_type "gif"
    set test_file_name [get_tmp_file_name "" "gnuplot_test"]
    set test_file [open $test_file_name w]
-   puts $test_file "set terminal gif" 
+   puts $test_file "set terminal gif"
    flush $test_file
    close $test_file
    if {!$use_local_host} {
@@ -723,7 +723,7 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
 #     tail_directory_name() -- remove unnecessarily directory path content
 #
 #  SYNOPSIS
-#     tail_directory_name { directory } 
+#     tail_directory_name { directory }
 #
 #  FUNCTION
 #     This function will remove all additional "/" signs inside the given
@@ -734,7 +734,7 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
 #
 #  RESULT
 #     string with clean path
-# 
+#
 #*******************************************************************************
 proc tail_directory_name { directory } {
    set first [file dirname $directory]
@@ -750,7 +750,7 @@ proc tail_directory_name { directory } {
 #     dump_array_data() -- dump array data to stdout
 #
 #  SYNOPSIS
-#     dump_array_data { obj_name obj } 
+#     dump_array_data { obj_name obj }
 #
 #  FUNCTION
 #     This procedure dumps all array data to stdout.
@@ -774,10 +774,10 @@ proc dump_array_data {obj_name obj} {
 
 #****** file_procedures/convert_spool_file_to_html() ***************************
 #  NAME
-#     convert_spool_file_to_html() -- convert array data in spool file to html 
+#     convert_spool_file_to_html() -- convert array data in spool file to html
 #
 #  SYNOPSIS
-#     convert_spool_file_to_html { spoolfile htmlfile { just_return_content 0 }} 
+#     convert_spool_file_to_html { spoolfile htmlfile { just_return_content 0 }}
 #
 #  FUNCTION
 #     This procedure generates a html output file from an array spool file.
@@ -800,7 +800,7 @@ proc convert_spool_file_to_html {spoolfile htmlfile {just_return_content 0}} {
 
    # read in spool file
    read_file $spoolfile file_dat
-   
+
    # get all stored obj_names
    set obj_names [get_all_obj_names file_dat]
 
@@ -826,13 +826,13 @@ proc convert_spool_file_to_html {spoolfile htmlfile {just_return_content 0}} {
          set obj_name_index [ expr ( $tb - 1 ) ]
          set obj_name [lindex $obj_names $obj_name_index]
          set table($tb,BGCOLOR) "#3366FF"
-         set table($tb,FNCOLOR) "#66FFFF"    
+         set table($tb,FNCOLOR) "#66FFFF"
          set table($tb,1) $obj_name
          set table($tb,2) [ format_output "" 75 $obj_data($obj_name)]
       }
       append content [create_html_table table]
       unset table
-      
+
       dump_array_data $obj obj_data
       unset obj_data
    }
@@ -848,10 +848,10 @@ proc convert_spool_file_to_html {spoolfile htmlfile {just_return_content 0}} {
 #     spool_array_to_file() -- spool array data to array spool file
 #
 #  SYNOPSIS
-#     spool_array_to_file { filename obj_name array_name } 
+#     spool_array_to_file { filename obj_name array_name }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #     filename   - file for data spooling
@@ -861,7 +861,7 @@ proc convert_spool_file_to_html {spoolfile htmlfile {just_return_content 0}} {
 #     { remove_backup 0 } - if 1: remove saved data (*.old file)
 #
 #  RESULT
-#     number of changed values 
+#     number of changed values
 #
 #  SEE ALSO
 #     file_procedures/read_array_from_file()
@@ -870,7 +870,7 @@ proc spool_array_to_file { filename obj_name array_name { write_comment 1 } {rem
    upvar $array_name data
 
    ts_log_fine "saving object \"$obj_name\" ..."
-  
+
    spool_array_prepare $filename file_dat
 
    spool_array_add_data $filename $obj_name data $write_comment file_dat
@@ -981,7 +981,7 @@ proc spool_array_finish {filename {data_array spool_array_data} {remove_backup 0
 #     save_file() -- saving array file data to file
 #
 #  SYNOPSIS
-#     save_file {filename array_name} 
+#     save_file {filename array_name}
 #
 #  FUNCTION
 #     This procedure saves the data in the array to the file
@@ -1000,7 +1000,7 @@ proc spool_array_finish {filename {data_array spool_array_data} {remove_backup 0
 #*******************************************************************************
 proc save_file {filename array_name} {
    upvar  $array_name data
-   
+
    set file [open $filename "w"]
    set last_line $data(0)
    for {set i 1} {$i <= $last_line} {incr i} {
@@ -1014,7 +1014,7 @@ proc save_file {filename array_name} {
 #     read_file() -- read file into array (line by line)
 #
 #  SYNOPSIS
-#     read_file {filename array_name {wait_timeout 0}} 
+#     read_file {filename array_name {wait_timeout 0}}
 #
 #  FUNCTION
 #     This procedure reads the content of the given file and saves the lines
@@ -1071,7 +1071,7 @@ proc read_file {filename array_name {wait_timeout 0}} {
 #     get_all_obj_names() -- return object(array) names from array spool file
 #
 #  SYNOPSIS
-#     get_all_obj_names { file_array } 
+#     get_all_obj_names { file_array }
 #
 #  FUNCTION
 #     Returns all object (array) names from an array spool file
@@ -1085,13 +1085,13 @@ proc read_file {filename array_name {wait_timeout 0}} {
 proc get_all_obj_names { file_array } {
    upvar $file_array file_dat
 
-   set obj_names "" 
-  
+   set obj_names ""
+
    for { set i 1 } { $i <= $file_dat(0)  } { incr i 1 } {
       set line $file_dat($i)
       if { [string first "OBJ_START:" $line ] == 0 } {
          set start [string first ":" $line ]
-         set end   [string last ":" $line ] 
+         set end   [string last ":" $line ]
          incr start 1
          incr end -1
          set found_job_name [string range $line $start $end]
@@ -1106,10 +1106,10 @@ proc get_all_obj_names { file_array } {
 #     search_for_obj_start() --  search line of object start in file array
 #
 #  SYNOPSIS
-#     search_for_obj_start { file_array obj_name } 
+#     search_for_obj_start { file_array obj_name }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #     file_array - name of file array (see save_file())
@@ -1124,12 +1124,12 @@ proc get_all_obj_names { file_array } {
 #*******************************************************************************
 proc search_for_obj_start { file_array obj_name } {
    upvar $file_array file_dat
-   
+
    for { set i 1 } { $i <= $file_dat(0)  } { incr i 1 } {
       set line $file_dat($i)
       if { [string first "OBJ_START:" $line ] == 0 } {
          set start [string first ":" $line ]
-         set end   [string last ":" $line ] 
+         set end   [string last ":" $line ]
          incr start 1
          incr end -1
          set found_job_name [string range $line $start $end]
@@ -1147,14 +1147,14 @@ proc search_for_obj_start { file_array obj_name } {
 #     search_for_obj_end() -- search line of object end in file array
 #
 #  SYNOPSIS
-#     search_for_obj_end { file_array obj_name } 
+#     search_for_obj_end { file_array obj_name }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #     file_array - name of file array (see save_file())
-#     obj_name   - name of object 
+#     obj_name   - name of object
 #
 #  RESULT
 #     line number or -1 on error
@@ -1165,12 +1165,12 @@ proc search_for_obj_start { file_array obj_name } {
 #*******************************************************************************
 proc search_for_obj_end { file_array obj_name } {
    upvar $file_array file_dat
-   
+
    for { set i 1 } { $i <= $file_dat(0)  } { incr i 1 } {
       set line $file_dat($i)
       if { [string first "OBJ_END:" $line ] == 0 } {
          set start [string first ":" $line ]
-         set end   [string last ":" $line ] 
+         set end   [string last ":" $line ]
          incr start 1
          incr end -1
          set found_job_name [string range $line $start $end]
@@ -1188,10 +1188,10 @@ proc search_for_obj_end { file_array obj_name } {
 #     unpack_data_line() -- convert file data line to orignial data
 #
 #  SYNOPSIS
-#     unpack_data_line { line } 
+#     unpack_data_line { line }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #     line - data line in file
@@ -1215,7 +1215,7 @@ proc unpack_data_line { line } {
 #     pack_data_line() -- convert data line to file
 #
 #  SYNOPSIS
-#     pack_data_line { line } 
+#     pack_data_line { line }
 #
 #  FUNCTION
 #     do transformation of data to ensure correct data saving
@@ -1238,8 +1238,8 @@ proc pack_data_line { line } {
 #     read_array_from_file() -- read array data from array spool file
 #
 #  SYNOPSIS
-#     read_array_from_file { filename obj_name array_name 
-#     { enable_washing_machine 0 } } 
+#     read_array_from_file { filename obj_name array_name
+#     { enable_washing_machine 0 } }
 #
 #  FUNCTION
 #     This procedure will read the content of an array spool file and store it
@@ -1305,11 +1305,11 @@ proc read_array_from_file {filename obj_name array_name {enable_washing_machine 
 #     read_array_from_file_data() -- read array data from file data array
 #
 #  SYNOPSIS
-#     read_array_from_file_data { file_data obj_name array_name 
-#     { enable_washing_machine 0 } } 
+#     read_array_from_file_data { file_data obj_name array_name
+#     { enable_washing_machine 0 } }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #     file_data                    - file data object name
@@ -1318,16 +1318,16 @@ proc read_array_from_file {filename obj_name array_name {enable_washing_machine 
 #     { enable_washing_machine 0 } - optional: display washing machine
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -1368,17 +1368,17 @@ proc read_array_from_file_data {file_data obj_name array_name {enable_washing_ma
         incr time
      }
      incr wcount
-     
+
   }
   return 0
 }
 
 #****** file_procedures/get_all_subdirectories() *******************************
 #  NAME
-#     get_all_subdirectories() -- returns all subdirectories in path 
+#     get_all_subdirectories() -- returns all subdirectories in path
 #
 #  SYNOPSIS
-#     get_all_subdirectories { path } 
+#     get_all_subdirectories { path }
 #
 #  FUNCTION
 #     This procedure returns a list of all sub directories (recursive) in
@@ -1393,13 +1393,13 @@ proc read_array_from_file_data {file_data obj_name array_name {enable_washing_ma
 #*******************************************************************************
 proc get_all_subdirectories {path} {
   set directories ""
-  set files [get_file_names $path] 
+  set files [get_file_names $path]
   set dirs [get_dir_names $path]
- 
+
   foreach elem $dirs {
      lappend directories "$elem"
   }
-  
+
   foreach element $dirs {
      set sub_dirs [get_all_subdirectories "$path/$element"]
      foreach elem $sub_dirs {
@@ -1414,31 +1414,31 @@ proc get_all_subdirectories {path} {
 # get all file names of path
 #                                                             max. column:     |
 #****** file_procedures/get_file_names() ******
-# 
+#
 #  NAME
-#     get_file_names -- return all file names of directory 
+#     get_file_names -- return all file names of directory
 #
 #  SYNOPSIS
-#     get_file_names { path {ext "*"} } 
+#     get_file_names { path {ext "*"} }
 #
 #  FUNCTION
-#     read in directory and return a list of file names in this directory 
+#     read in directory and return a list of file names in this directory
 #
 #  INPUTS
-#     path - path to read in (directory) 
+#     path - path to read in (directory)
 #     ext  - file extension (default "*")
 #
 #  RESULT
-#     list of file names 
+#     list of file names
 #
 #  EXAMPLE
-#     set files [ get_file_names /tmp ] 
+#     set files [ get_file_names /tmp ]
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     file_procedures/get_dir_names
@@ -1461,7 +1461,7 @@ proc get_file_names {path {ext "*"}} {
 #
 #  SYNOPSIS
 #     generate_html_file { file headliner content { return_text 0 }
-#                          {refresh_time 15} } 
+#                          {refresh_time 15} }
 #
 #  FUNCTION
 #     This procedure creates the html file with the given headline and
@@ -1473,7 +1473,7 @@ proc get_file_names {path {ext "*"}} {
 #     content           - html body
 #     { return_text 0 } - if not 0: return file content
 #     {refresh_time 15} - default refresh time for browser auto reload
-#     
+#
 #
 #  SEE ALSO
 #     file_procedures/generate_html_file()
@@ -1525,7 +1525,7 @@ proc generate_html_file { file headliner content {return_text 0} {refresh_time 0
    }
    flush $h_file
    close $h_file
-   
+
    if { $return_text != 0 } {
       set return_value ""
       foreach line $output {
@@ -1540,7 +1540,7 @@ proc generate_html_file { file headliner content {return_text 0} {refresh_time 0
 #     create_html_table() -- returns tcl array in html format
 #
 #  SYNOPSIS
-#     create_html_table { array_name } 
+#     create_html_table { array_name }
 #
 #  FUNCTION
 #     This procedure tries to transform the given array into an html table
@@ -1565,17 +1565,17 @@ proc generate_html_file { file headliner content {return_text 0} {refresh_time 0
 #     set test_table(1,FNCOLOR) "#66FFFF"
 #     set test_table(1,1) "Host"
 #     set test_table(1,2) "State"
-#   
+#
 #     set test_table(2,BGCOLOR) "#009900"
 #     set test_table(2,FNCOLOR) "#FFFFFF"
 #     set test_table(2,1) "host1"
 #     set test_table(2,2) "ok"
-#     
+#
 #     set test_table(3,BGCOLOR) "#CC0000"
 #     set test_table(3,FNCOLOR) "#FFFFFF"
 #     set test_table(3,1) "host2"
 #     set test_table(3,2) [create_html_link "linktext" "test.html"]
-#   
+#
 #     set my_content    [ create_html_text "Date: [exec date]" ]
 #     append my_content [ create_html_text "some text ..." ]
 #     append my_content [ create_html_table test_table ]
@@ -1594,7 +1594,7 @@ proc create_html_table {array_name {border 0} {align LEFT} {center 1}} {
    if {$center} {
       append back <center>
    }
-   append back "<table BORDER=$border COLS=${table(COLS)} WIDTH=\"80%\" NOSAVE >\n" 
+   append back "<table BORDER=$border COLS=${table(COLS)} WIDTH=\"80%\" NOSAVE >\n"
    for {set row 1} {$row <= $table(ROWS)} {incr row} {
       append back "<tr ALIGN=$align VALIGN=CENTER BGCOLOR=\"$table($row,BGCOLOR)\" NOSAVE>\n"
       for {set col 1} {$col <= $table(COLS)} {incr col} {
@@ -1627,7 +1627,7 @@ proc create_html_table {array_name {border 0} {align LEFT} {center 1}} {
 #     create_html_link() -- create html link
 #
 #  SYNOPSIS
-#     create_html_link { linktext linkref } 
+#     create_html_link { linktext linkref }
 #
 #  FUNCTION
 #     This procedure returns a html format for a "link"
@@ -1647,7 +1647,7 @@ proc create_html_table {array_name {border 0} {align LEFT} {center 1}} {
 #*******************************************************************************
 proc create_html_link {linktext linkref} {
    set back ""
-   append back "<a href=\"$linkref\">$linktext</a>" 
+   append back "<a href=\"$linkref\">$linktext</a>"
    return $back
 }
 
@@ -1656,10 +1656,10 @@ proc create_html_link {linktext linkref} {
 #     create_html_image() -- integrate html image
 #
 #  SYNOPSIS
-#     create_html_image { alternative_text path } 
+#     create_html_image { alternative_text path }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #     alternative_text - alternative text of image
@@ -1682,10 +1682,10 @@ proc create_html_image {alternative_text path} {
 #     create_html_target() -- append html target
 #
 #  SYNOPSIS
-#     create_html_target { target_name } 
+#     create_html_target { target_name }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #     target_name - link, name of target
@@ -1707,13 +1707,13 @@ proc create_html_target {target_name} {
 #     create_html_text() -- create html text
 #
 #  SYNOPSIS
-#     create_html_text { content { center 0 } } 
+#     create_html_text { content { center 0 } }
 #
 #  FUNCTION
 #     This procedure returns a html format for "text"
 #
 #  INPUTS
-#     content      - text 
+#     content      - text
 #     { center 0 } - if not 0: center text
 #
 #  RESULT
@@ -1770,26 +1770,26 @@ proc create_html_line {size {width 100%} {align center}} {
 
 #                                                             max. column:     |
 #****** file_procedures/del_job_files() ******
-# 
+#
 #  NAME
-#     del_job_files -- delete files that conain a specific jobid 
+#     del_job_files -- delete files that conain a specific jobid
 #
 #  SYNOPSIS
-#     del_job_files { jobid job_output_directory expected_file_count } 
+#     del_job_files { jobid job_output_directory expected_file_count }
 #
 #  FUNCTION
-#     This function reads in the job_output_directory and is looking for 
-#     filenames that contain the given jobid. If after a maximum time of 120 
-#     seconds not the number of expected_file_count is reached, a timeout will 
-#     happen. After that the files are deleted. 
+#     This function reads in the job_output_directory and is looking for
+#     filenames that contain the given jobid. If after a maximum time of 120
+#     seconds not the number of expected_file_count is reached, a timeout will
+#     happen. After that the files are deleted.
 #
 #  INPUTS
-#     jobid                - jobid of job which has created the output file 
-#     job_output_directory - path to the directory that contains the output files 
-#     expected_file_count  - number of output files that are expected 
+#     jobid                - jobid of job which has created the output file
+#     job_output_directory - path to the directory that contains the output files
+#     expected_file_count  - number of output files that are expected
 #
 #  RESULT
-#     returns the number of deleted files 
+#     returns the number of deleted files
 #
 #  SEE ALSO
 #     file_procedures/get_dir_names
@@ -1810,7 +1810,7 @@ proc del_job_files {jobid job_output_directory expected_file_count} {
       after 500
    }
 
-   # ok delete the list 
+   # ok delete the list
    ts_log_fine "job \"$jobid\" has written [llength $files] files"
 
    if {[llength $files] >= 1} {
@@ -1854,13 +1854,13 @@ proc del_job_files {jobid job_output_directory expected_file_count} {
 proc create_shell_script {scriptfile host exec_command exec_arguments {cd_dir ""} {envlist ""} {script_path "/bin/sh"}
                           {no_setup 0} {source_settings_file 1} {set_shared_lib_path 0} {without_start_output 0}
                           {without_sge_single_line 0} {disable_stty_echo 0} {no_final_enter 0} {new_grp ""}} {
-   global CHECK_DEBUG_LEVEL 
+   global CHECK_DEBUG_LEVEL
 
    get_current_cluster_config_array ts_config
    if {$envlist != ""} {
       upvar $envlist users_env
    }
-    
+
    set script_tail_name [file tail $scriptfile]
    set_users_environment $host users_env
 
@@ -1934,7 +1934,7 @@ proc create_shell_script {scriptfile host exec_command exec_arguments {cd_dir ""
       }
       append script_content "   SGE_CELL=$ts_config(cell)\n"
       append script_content "   export SGE_CELL\n"
-    
+
       if {$source_settings_file == 1} {
          append script_content "fi\n"
       }
@@ -1961,12 +1961,12 @@ proc create_shell_script {scriptfile host exec_command exec_arguments {cd_dir ""
          append script_content "\n"
       }
 
-      
+
       set user_env_names [array names users_env]
       # save script parts in these two buffers to append them to the script in a defined order
       set set_env_skript ""
       set un_set_env_skript ""
-      
+
       if {[llength $user_env_names] > 0} {
          append set_env_skript "# setup users environment variables\n"
          foreach u_env $user_env_names {
@@ -1977,15 +1977,15 @@ proc create_shell_script {scriptfile host exec_command exec_arguments {cd_dir ""
                 foreach unset_var $vars_to_unset {
                     append un_set_env_skript "unset $unset_var\n"
                 }
-            } else { 
+            } else {
                set u_val $users_env($u_env)
                append set_env_skript "${u_env}=\"${u_val}\"\n"
                append set_env_skript "export ${u_env}\n"
             }
          }
       }
-      
-      
+
+
       # add $un_set_env_skript only if some variables are defined to be unset
       if {$un_set_env_skript != ""} {
          append script_content $un_set_env_skript
@@ -1993,12 +1993,12 @@ proc create_shell_script {scriptfile host exec_command exec_arguments {cd_dir ""
 
       # add the set of defined env variables
       append script_content $set_env_skript
-      
+
       # do a stty -echo ?
       if {$disable_stty_echo != 0} {
          append script_content "stty -echo\n"
       }
-      
+
       if {$without_start_output == 0} {
          append script_content "echo \"_start_mark_:(\$?)\"\n"
       }
@@ -2010,7 +2010,7 @@ proc create_shell_script {scriptfile host exec_command exec_arguments {cd_dir ""
    # don't try to do a which if exec_command contains a space or ;
    append script_content "$exec_command $exec_arguments\n"
 
-   if {$no_setup == 0} { 
+   if {$no_setup == 0} {
       append script_content "exit_val=\"\$?\"\n"
       # do a stty -echo ?
       if {$disable_stty_echo != 0} {
@@ -2028,7 +2028,7 @@ proc create_shell_script {scriptfile host exec_command exec_arguments {cd_dir ""
          append script_content "$termination_string\n"
       }
    }
-  
+
    set catch_return [catch {
        set script [open $scriptfile "w" "0755"]
    }]
@@ -2059,12 +2059,12 @@ proc create_shell_script {scriptfile host exec_command exec_arguments {cd_dir ""
 #     get_file_content() -- read remote/local file with cat command
 #
 #  SYNOPSIS
-#     get_file_content { host user file { file_a "file_array" } } 
+#     get_file_content { host user file { file_a "file_array" } }
 #
 #  FUNCTION
 #     This procedure fills up the file_array with the content of the given
 #     file. file_array(0) contains the number of lines (starting from 1)
-#     file_array(1) - file_array($file_array(0)) contains the lines of the 
+#     file_array(1) - file_array($file_array(0)) contains the lines of the
 #     file.
 #
 #  INPUTS
@@ -2102,7 +2102,7 @@ proc get_file_content {host user file {file_a "file_array"}} {
 #    write_remote_file() -- Write a file on a remote user
 #
 #  SYNOPSIS
-#    write_remote_file { host user file array_name } 
+#    write_remote_file { host user file array_name }
 #
 #  FUNCTION
 #     Stores the content of a data array in the tmp directory (shared directory)
@@ -2115,7 +2115,7 @@ proc get_file_content {host user file {file_a "file_array"}} {
 #    array_name -- array with the content of the file
 #
 #  RESULT
-#     the exit code of the copy command 
+#     the exit code of the copy command
 #
 #  EXAMPLE
 #     set data(0) 2
@@ -2129,10 +2129,10 @@ proc get_file_content {host user file {file_a "file_array"}} {
 #*******************************************************************************
 proc write_remote_file {host user file array_name {permissions ""}} {
    upvar $array_name data
-   
+
    set tmp_file [get_tmp_file_name $host $user]
    save_file $tmp_file data
-   wait_for_remote_file $host $user $tmp_file 
+   wait_for_remote_file $host $user $tmp_file
    start_remote_prog $host $user "cp" "$tmp_file $file"
    if {$permissions != ""} {
       ts_log_fine "setting permissions of file \"$file\" to $permissions"
@@ -2140,28 +2140,28 @@ proc write_remote_file {host user file array_name {permissions ""}} {
    }
    wait_for_remote_file $host $user $file
    return $prg_exit_state
-} 
+}
 
 #                                                             max. column:     |
 #****** file_procedures/get_binary_path() ******
-# 
+#
 #  NAME
-#     get_binary_path -- get host specific binary path 
+#     get_binary_path -- get host specific binary path
 #
 #  SYNOPSIS
-#     get_binary_path { hostname binary } 
+#     get_binary_path { hostname binary }
 #
 #  FUNCTION
-#     This procedure will parse the host configuration file of the 
-#     testsuite. In this file the user can configure his host specific binary 
-#     path names. 
+#     This procedure will parse the host configuration file of the
+#     testsuite. In this file the user can configure his host specific binary
+#     path names.
 #
 #  INPUTS
-#     hostname - hostname where a binary should be found 
-#     binary   - binary name (e.g. expect) 
+#     hostname - hostname where a binary should be found
+#     binary   - binary name (e.g. expect)
 #
 #  RESULT
-#     The full path name of the binary on the given host. The return value 
+#     The full path name of the binary on the given host. The return value
 #     depends on the entries in the testsuite host configuration file.
 #
 #     If there is no entry in the host configuration file the path settings
@@ -2175,7 +2175,7 @@ proc write_remote_file {host user file array_name {permissions ""}} {
 #
 #     The path settings from the users's environments are cached. If a
 #     cached entry is returned the testsuite will not report a configuration
-#     warning. 
+#     warning.
 #
 #     If the binary cannot be found at all the content of the binary argument
 #     is returned.
@@ -2184,7 +2184,7 @@ proc write_remote_file {host user file array_name {permissions ""}} {
 #     file_procedures/get_dir_names
 #*******************************
 
-# This is the cache for users's binary which calls. The cache is erased 
+# This is the cache for users's binary which calls. The cache is erased
 # when the file is (re-)sourced!
 global cached_binary_path_array
 if {[info exists cached_binary_path_array]} {
@@ -2192,7 +2192,7 @@ if {[info exists cached_binary_path_array]} {
 }
 proc get_binary_path {nodename binary {raise_error 1}} {
    global get_binary_path_recursive_call
-   global ts_host_config 
+   global ts_host_config
    global ts_config
    global CHECK_USER
    global cached_binary_path_array
@@ -2223,7 +2223,7 @@ proc get_binary_path {nodename binary {raise_error 1}} {
       return $cached_binary_path_array($hostname,$binary,root)
    }
 
-   # This is for the special xterm binary 
+   # This is for the special xterm binary
    if {$binary == "xterm"} {
       set binary_path [private_get_xterm_path $hostname]
       set binary_path [string trim $binary_path]
@@ -2235,7 +2235,7 @@ proc get_binary_path {nodename binary {raise_error 1}} {
          # Now add the binary path to the cache
          set cached_binary_path_array($hostname,$binary,$CHECK_USER) $binary_path
          set get_binary_path_recursive_call 0
-         return $binary_path 
+         return $binary_path
       }
       ts_log_warning "Cannot find path to binary \"$binary\" on host \"$hostname\"" $raise_error
       set get_binary_path_recursive_call 0
@@ -2247,9 +2247,9 @@ proc get_binary_path {nodename binary {raise_error 1}} {
       set binary_path "/bin/sh"
       set cached_binary_path_array($hostname,$binary,$CHECK_USER) $binary_path
       set get_binary_path_recursive_call 0
-      return $binary_path 
+      return $binary_path
    }
-   
+
    # Try to find out the path from CHECK_USER user's environment
    set binary_path [start_remote_prog $hostname $CHECK_USER "$ts_config(testsuite_root_dir)/scripts/mywhich.sh" $binary prg_exit_state 60 0 "" "" 1 0]
    set binary_path [string trim $binary_path]
@@ -2260,7 +2260,7 @@ proc get_binary_path {nodename binary {raise_error 1}} {
       append config_text "Using \"$binary\" binary from testsuite user`s environment path setting: \"$binary_path\"\n"
       ts_log_finer $config_text
 # TODO(CR): Enhance host configurations and add missing binary path informations. So that no binary path
-# TODO(CR): taken from the user's environment !!! 
+# TODO(CR): taken from the user's environment !!!
 
       # Now add the binary path to the cache
       set cached_binary_path_array($hostname,$binary,$CHECK_USER) $binary_path
@@ -2291,34 +2291,34 @@ proc get_binary_path {nodename binary {raise_error 1}} {
 
 #                                                             max. column:     |
 #****** file_procedures/copy_directory() ******
-# 
+#
 #  NAME
-#     copy_directory -- copy a directory recursively 
+#     copy_directory -- copy a directory recursively
 #
 #  SYNOPSIS
-#     copy_directory { source target } 
+#     copy_directory { source target }
 #
 #  FUNCTION
-#     This procedure will copy the given source directory to the target 
-#     directory. The content of the target dir is deleted if it exists. 
-#     (calling delete_directory, which will make a secure copy in the testsuite 
-#     trash folder). 
+#     This procedure will copy the given source directory to the target
+#     directory. The content of the target dir is deleted if it exists.
+#     (calling delete_directory, which will make a secure copy in the testsuite
+#     trash folder).
 #
 #  INPUTS
-#     source - path to the source directory 
-#     target - path to the target directory 
+#     source - path to the source directory
+#     target - path to the target directory
 #
 #  RESULT
-#     no results 
+#     no results
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     file_procedures/delete_directory
@@ -2328,13 +2328,13 @@ proc copy_directory {source target} {
      # just more security (do not create undefined dirs or something like that)
      ts_log_severe "please use path with size > 10 characters"
      return
-  } 
+  }
 
   if {[string compare $source $target] == 0} {
      ts_log_severe "source and target are equal"
      return
   }
- 
+
   set back [catch {file mkdir $target}]
   if {$back != 0} {
      ts_log_severe "can't create dir \"$target\""
@@ -2359,33 +2359,33 @@ proc copy_directory {source target} {
 
 #                                                             max. column:     |
 #****** file_procedures/cleanup_spool_dir() ******
-# 
+#
 #  NAME
-#     cleanup_spool_dir -- create or cleanup spool directory for master/execd 
+#     cleanup_spool_dir -- create or cleanup spool directory for master/execd
 #
 #  SYNOPSIS
-#     cleanup_spool_dir { topleveldir subdir } 
+#     cleanup_spool_dir { topleveldir subdir }
 #
 #  FUNCTION
-#     This procedure will create or cleanup old entries in the qmaster or execd 
-#     spool directory 
+#     This procedure will create or cleanup old entries in the qmaster or execd
+#     spool directory
 #
 #  INPUTS
-#     topleveldir - path to spool toplevel directory ( updir of qmaster and execd ) 
-#     subdir      - this parameter is master or execd 
+#     topleveldir - path to spool toplevel directory ( updir of qmaster and execd )
+#     subdir      - this parameter is master or execd
 #
 #  RESULT
-#     if ok the procedure returns the correct spool directory. It returns  on 
-#     error 
+#     if ok the procedure returns the correct spool directory. It returns  on
+#     error
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     file_procedures/delete_directory()
@@ -2396,10 +2396,10 @@ proc cleanup_spool_dir {topleveldir subdir} {
    set spooldir "$topleveldir"
 
    ts_log_fine "cleaning spool directory is $spooldir"
-   
+
    if {[file isdirectory $spooldir] == 1} {
       set spooldir "$spooldir/$ts_config(commd_port)"
-      if {[file isdirectory $spooldir] != 1} { 
+      if {[file isdirectory $spooldir] != 1} {
          ts_log_finer "creating directory \"$spooldir\""
          file mkdir $spooldir
          if {[file isdirectory $spooldir] != 1} {
@@ -2417,7 +2417,7 @@ proc cleanup_spool_dir {topleveldir subdir} {
       } else {
          if {[string compare $spooldir ""] != 0 } {
             ts_log_finer "deleting old spool dir entries in \"$spooldir\""
-            if {[delete_directory $spooldir] != 0} { 
+            if {[delete_directory $spooldir] != 0} {
                ts_log_warning "could not remove spool directory $spooldir"
             }
             ts_log_finer "creating directory \"$spooldir\""
@@ -2427,7 +2427,7 @@ proc cleanup_spool_dir {topleveldir subdir} {
             }
          }
       }
-      
+
       ts_log_finer "local spooldir is \"$spooldir\""
    } else {
       ts_log_severe "toplevel spool directory \"$spooldir\" not found"
@@ -2445,10 +2445,10 @@ proc cleanup_spool_dir {topleveldir subdir} {
 #     cleanup_spool_dir_for_host() -- create or cleanup spool directory
 #
 #  SYNOPSIS
-#     cleanup_spool_dir_for_host { hostname topleveldir subdir } 
+#     cleanup_spool_dir_for_host { hostname topleveldir subdir }
 #
 #  FUNCTION
-#     This procedure will create or cleanup old entries in the qmaster or execd 
+#     This procedure will create or cleanup old entries in the qmaster or execd
 #     spool directory
 #
 #  INPUTS
@@ -2457,8 +2457,8 @@ proc cleanup_spool_dir {topleveldir subdir} {
 #     subdir      - this parameter is master or execd
 #
 #  RESULT
-#     if ok the procedure returns the correct spool directory. It returns  on 
-#     error 
+#     if ok the procedure returns the correct spool directory. It returns  on
+#     error
 #
 #  SEE ALSO
 #     file_procedures/cleanup_spool_dir()
@@ -2469,7 +2469,7 @@ proc cleanup_spool_dir_for_host {hostname topleveldir subdir} {
    set spooldir $topleveldir
 
    ts_log_fine "cleanup spool  directory \"$spooldir\" on host \"$hostname\""
-   
+
    if {[remote_file_isdirectory $hostname $spooldir] == 1} {
       set spooldir "$spooldir/$ts_config(commd_port)"
       if {[remote_file_isdirectory $hostname $spooldir] != 1} {
@@ -2481,7 +2481,7 @@ proc cleanup_spool_dir_for_host {hostname topleveldir subdir} {
       }
 
       set spooldir "$spooldir/$subdir"
-      
+
       # spooldir might be shared between multiple hosts - e.g. Solaris zones.
       # clean only the spooldir of the specific exec host.
       if {$subdir == "execd"} {
@@ -2493,7 +2493,7 @@ proc cleanup_spool_dir_for_host {hostname topleveldir subdir} {
           remote_file_mkdir $hostname $spooldir
           if {[remote_file_isdirectory $hostname $spooldir] != 1} {
               ts_log_severe "could not create directory \"$spooldir\""
-          } 
+          }
       } else {
          if {[string compare $spooldir ""] != 0} {
              ts_log_finer "deleting old spool dir entries in \"$spooldir\""
@@ -2504,7 +2504,7 @@ proc cleanup_spool_dir_for_host {hostname topleveldir subdir} {
              remote_file_mkdir $hostname $spooldir
              if {[remote_file_isdirectory $hostname $spooldir] != 1} {
                 ts_log_severe "could not create directory \"$spooldir\""
-             } 
+             }
          }
       }
       ts_log_finer "local spooldir is \"$spooldir\""
@@ -2524,7 +2524,7 @@ proc remote_file_isdirectory {hostname dir} {
   global CHECK_USER
   start_remote_prog $hostname $CHECK_USER "cd" "$dir" prg_exit_state 60 0 "" "" 1 0 0 1
   if { $prg_exit_state == 0 } {
-     return 1  
+     return 1
   }
   return 0
 }
@@ -2545,7 +2545,7 @@ proc remote_file_isdirectory {hostname dir} {
 #     {user ""}          - optional parameter which specifies the user. Default
 #                          mkdir user is CHECK_USER
 #     {permissions ""}   - optional parameter which specifies the file permissions
-#                          of the created dir. (chmod permission parameter) 
+#                          of the created dir. (chmod permission parameter)
 #
 #  RESULT
 #     command output
@@ -2580,7 +2580,7 @@ proc remote_file_mkdir {hostname dir {user ""} {permissions ""} {prg_exit_state_
 #     remote_file_get_mtime() -- get file modification time
 #
 #  SYNOPSIS
-#     remote_file_get_mtime {hostname user path} 
+#     remote_file_get_mtime {hostname user path}
 #
 #  FUNCTION
 #     Returns the file modification time of a file on a certain host.
@@ -2618,7 +2618,7 @@ proc remote_file_get_mtime {hostname user path} {
 #     check_for_core_files() -- search for core files
 #
 #  SYNOPSIS
-#     check_for_core_files { hostname path {do_remove 0} } 
+#     check_for_core_files { hostname path {do_remove 0} }
 #
 #  FUNCTION
 #     This procedure is searching for core files in the specified directory
@@ -2661,7 +2661,7 @@ proc check_for_core_files {hostname path {do_remove 0}} {
             # we need root access to determine file type (file may belong root)
             # and to change owner (for later delete)
             if {[have_root_passwd] == -1} {
-               set_root_passwd 
+               set_root_passwd
             }
 
             # get file info of core file
@@ -2697,9 +2697,9 @@ proc check_for_core_files {hostname path {do_remove 0}} {
 #     remote_delete_directory { hostname path }
 #
 #  FUNCTION
-#     This procedure is deleting the specified path on the specified host. 
+#     This procedure is deleting the specified path on the specified host.
 #     All actions are started as CHECK_USER. If TS has the root
-#     password a chwon -R $CHECK_USER $path is done as root user. 
+#     password a chwon -R $CHECK_USER $path is done as root user.
 #     If the testsuite_trash parameter was specified at TS startup
 #     the directory content is moved to testsuite_trash folder.
 #
@@ -2733,7 +2733,7 @@ proc remote_delete_directory {hostname path} {
    # verify if directory is visible on the remote machine
    if {[remote_file_isdirectory $hostname $path] != 1} {
       ts_log_severe "$hostname: no such directory: \"$path\""
-      return -1     
+      return -1
    }
 
    # we want to be careful not to delete system directories
@@ -2751,7 +2751,7 @@ proc remote_delete_directory {hostname path} {
       # we move the directory as CHECK_USER (admin user)
       if {$CHECK_TESTSUITE_TRASH} {
          ts_log_finer "delete_directory - moving \"$path\" to trash folder ..."
-         set new_name [file tail $path] 
+         set new_name [file tail $path]
 
          start_remote_prog $hostname $CHECK_USER "mv" "$path $ts_config(testsuite_root_dir)/testsuite_trash/$new_name.[timestamp]" prg_exit_state 300 0 "" "" 1 0 0 1
          if {$prg_exit_state != 0} {
@@ -2796,23 +2796,23 @@ proc remote_delete_directory {hostname path} {
 
 #                                                             max. column:     |
 #****** file_procedures/delete_file_at_startup() ******
-# 
+#
 #  NAME
 #     delete_file_at_startup -- remember file for later deletion
 #
 #  SYNOPSIS
-#     delete_file_at_startup { filename } 
+#     delete_file_at_startup { filename }
 #
 #  FUNCTION
 #     This procedure adds the file $filename to the "testsuite delete file".
 #     All files that are listed in the "testsuite delete file" are deleted at
-#     the start of a testrun. 
+#     the start of a testrun.
 #
 #  INPUTS
 #     filename - (full path) file name of file to delete later
 #
 #  RESULT
-#     no results 
+#     no results
 #
 #  SEE ALSO
 #     file_procedures/get_testsuite_delete_filename()
@@ -2830,7 +2830,7 @@ proc delete_file_at_startup {filename {del_file_name ""}} {
        set del_file [open $del_file_name "a"]
    }
    puts $del_file $filename
-   close $del_file    
+   close $del_file
 }
 
 #****** file_procedures/delete_local_file_at_startup() *************************
@@ -2838,12 +2838,12 @@ proc delete_file_at_startup {filename {del_file_name ""}} {
 #     delete_local_file_at_startup() -- remember local file for later deletion
 #
 #  SYNOPSIS
-#     delete_local_file_at_startup { host filename } 
+#     delete_local_file_at_startup { host filename }
 #
 #  FUNCTION
 #     This procedure adds the file $filename to the "testsuite local delete file".
 #     All files that are listed in the "testsuite local delete file" are deleted at
-#     the start of a testrun. 
+#     the start of a testrun.
 #
 #  INPUTS
 #     host     - host where the file must be deleted
@@ -2865,29 +2865,29 @@ proc delete_local_file_at_startup {host filename} {
        set del_file [open $del_file_name "a"]
    }
    puts $del_file "$host:$filename"
-   close $del_file    
+   close $del_file
 }
 
 #                                                             max. column:     |
 #****** file_procedures/delete_file() ******
-# 
+#
 #  NAME
-#     delete_file -- move/copy file to testsuite trashfolder 
+#     delete_file -- move/copy file to testsuite trashfolder
 #
 #  SYNOPSIS
-#     delete_file { filename { do_wait_for_file 1 } } 
+#     delete_file { filename { do_wait_for_file 1 } }
 #
 #  FUNCTION
 #     This procedure will delete the file,
-#     or move it to the testsuite's trashfolder 
-#     (Directory testsuite_trash in the testsuite root directory). 
+#     or move it to the testsuite's trashfolder
+#     (Directory testsuite_trash in the testsuite root directory).
 #
 #  INPUTS
-#     filename             - full path file name of file 
+#     filename             - full path file name of file
 #     {do_wait_for_file 1} - optional wait for file before removing
 #
 #  RESULT
-#     no results 
+#     no results
 #
 #  TODO: use delete_remote_file where ever possible
 #  SEE ALSO
@@ -2904,13 +2904,13 @@ proc delete_file {filename {do_wait_for_file 1}} {
    } else {
       if {[file isfile $filename] != 1} {
          ts_log_finer "delete_file - no such file: \"$filename\""
-         return      
+         return
       }
    }
 
    if {[file isfile $filename] != 1} {
       ts_log_severe "no such file: \"$filename\""
-      return      
+      return
    }
 
    if {$CHECK_TESTSUITE_TRASH} {
@@ -2919,25 +2919,25 @@ proc delete_file {filename {do_wait_for_file 1}} {
       }
    }
 
-   set deleted_file 0 
+   set deleted_file 0
    if {[string length $filename] > 10} {
       if {$CHECK_TESTSUITE_TRASH} {
          ts_log_finer "delete_file - moving \"$filename\" to trash folder ..."
-         set new_name [file tail $filename] 
-         set catch_return [catch { 
+         set new_name [file tail $filename]
+         set catch_return [catch {
             file rename $filename $ts_config(testsuite_root_dir)/testsuite_trash/$new_name.[timestamp]
-         } result] 
+         } result]
          if {$catch_return != 0} {
             ts_log_finer "delete_file - mv error:\n$result"
             ts_log_finer "delete_file - try to copy the file"
-            set catch_return [catch { 
+            set catch_return [catch {
                file copy $filename $ts_config(testsuite_root_dir)/testsuite_trash/$new_name.[timestamp]
-            } result] 
+            } result]
             if {$catch_return != 0} {
               ts_log_severe "could not mv/cp file \"$filename\" to trash folder:\n$result"
             } else {
               ts_log_finer "copy ok - deleting file \"$filename\""
-              set catch_return [catch {file delete -force $filename} result] 
+              set catch_return [catch {file delete -force $filename} result]
               if {$catch_return != 0} {
                  ts_log_severe "could not remove file \"$filename\":\n$result"
               } else {
@@ -2949,7 +2949,7 @@ proc delete_file {filename {do_wait_for_file 1}} {
            set deleted_file 1
          }
       } else {
-        set catch_return [catch {file delete -force $filename} result] 
+        set catch_return [catch {file delete -force $filename} result]
         if {$catch_return != 0} {
            ts_log_severe "could not remove file \"$filename\":\n$result"
         } else {
@@ -2968,25 +2968,25 @@ proc delete_file {filename {do_wait_for_file 1}} {
 
 #                                                             max. column:     |
 #****** file_procedures/wait_for_file() ******
-# 
+#
 #  NAME
-#     wait_for_file -- wait for file to appear/dissappear/... 
+#     wait_for_file -- wait for file to appear/dissappear/...
 #
 #  SYNOPSIS
-#     wait_for_file { path_to_file seconds { to_go_away 0 } 
-#     { do_error_check 1 } } 
+#     wait_for_file { path_to_file seconds { to_go_away 0 }
+#     { do_error_check 1 } }
 #
 #  FUNCTION
-#     Wait a given number of seconds fot the creation or deletion of a file. 
+#     Wait a given number of seconds fot the creation or deletion of a file.
 #
 #  INPUTS
-#     path_to_file         - full path file name of file 
-#     seconds              - timeout in seconds 
-#     { to_go_away 0 }     - flag, (0=wait for creation, 1 wait for deletion) 
-#     { do_error_check 1 } - flag, (0=do not report errors, 1 report errors) 
+#     path_to_file         - full path file name of file
+#     seconds              - timeout in seconds
+#     { to_go_away 0 }     - flag, (0=wait for creation, 1 wait for deletion)
+#     { do_error_check 1 } - flag, (0=do not report errors, 1 report errors)
 #
 #  RESULT
-#     -1 for an unsuccessful waiting, 0 no errors 
+#     -1 for an unsuccessful waiting, 0 no errors
 #
 #  SEE ALSO
 #     file_procedures/delete_directory
@@ -3006,7 +3006,7 @@ proc wait_for_file {path_to_file seconds {to_go_away 0} {do_error_check 1}} {
 
    set time [expr [timestamp] + $seconds]
    set wasok -1
-   
+
    if {$to_go_away == 0} {
       ts_log_finer "Looking for creation of the file \"$path_to_file\" ..."
       while {[timestamp] < $time} {
@@ -3018,7 +3018,7 @@ proc wait_for_file {path_to_file seconds {to_go_away 0} {do_error_check 1}} {
       }
       if {$wasok != 0 && $do_error_check == 1} {
          ts_log_severe "timeout error while waiting for creation of file \"$path_to_file\""
-      } 
+      }
    } else {
       ts_log_finer "Looking for deletion of the file \"$path_to_file\" ..."
       while {[timestamp] < $time}  {
@@ -3030,7 +3030,7 @@ proc wait_for_file {path_to_file seconds {to_go_away 0} {do_error_check 1}} {
       }
       if {$wasok != 0 && $do_error_check == 1} {
          ts_log_severe "timeout error while waiting for deletion file \"$path_to_file\""
-      } 
+      }
    }
    return $wasok
 }
@@ -3041,7 +3041,7 @@ proc wait_for_file {path_to_file seconds {to_go_away 0} {do_error_check 1}} {
 #     wait_for_remote_file() -- waiting for a file to apear (NFS-Check)
 #
 #  SYNOPSIS
-#     wait_for_remote_file { hostname user path { mytimeout 60 } } 
+#     wait_for_remote_file { hostname user path { mytimeout 60 } }
 #
 #  FUNCTION
 #     The function is using the ls command on the remote host. If the command
@@ -3062,7 +3062,7 @@ proc wait_for_file {path_to_file seconds {to_go_away 0} {do_error_check 1}} {
 #  RESULT
 #     0 on success
 #     -1 on error
-#   
+#
 #  SEE ALSO
 #     file_procedures/wait_for_file()
 #     file_procedures/wait_for_remote_dir()
@@ -3114,7 +3114,7 @@ proc wait_for_remote_file {hostname user path {mytimeout 60} {raise_error 1} {to
    # Here starts the old legacy code for the case that expect is not defined in the host
    # configuration
    set is_ok 0
-   set my_mytimeout [expr [timestamp] + $mytimeout] 
+   set my_mytimeout [expr [timestamp] + $mytimeout]
    set have_logged_a_dot 0
    set dir [file dirname $path]
 
@@ -3125,13 +3125,13 @@ proc wait_for_remote_file {hostname user path {mytimeout 60} {raise_error 1} {to
          if {$prg_exit_state == 0} {
             set is_ok 1
             break
-         } 
+         }
       } else {
          # The file must NOT be here
          if {$prg_exit_state != 0} {
             set is_ok 1
             break
-         } 
+         }
       }
       ts_log_progress
       set have_logged_a_dot 1
@@ -3184,7 +3184,7 @@ proc wait_for_remote_file {hostname user path {mytimeout 60} {raise_error 1} {to
 #     wait_for_remote_dir() -- waiting for a file to apear (NFS-Check)
 #
 #  SYNOPSIS
-#     wait_for_remote_dir { hostname user path { mytimeout 60 } } 
+#     wait_for_remote_dir { hostname user path { mytimeout 60 } }
 #
 #  FUNCTION
 #     The function is using the ls command on the remote host. If the command
@@ -3204,7 +3204,7 @@ proc wait_for_remote_file {hostname user path {mytimeout 60} {raise_error 1} {to
 #  RESULT
 #     0 on success
 #     -1 on error
-#   
+#
 #  SEE ALSO
 #     file_procedures/wait_for_file()
 #     file_procedures/wait_for_remote_file()
@@ -3256,7 +3256,7 @@ proc wait_for_remote_dir { hostname user path { mytimeout 60 } {raise_error 1} {
    # Here starts the old legacy code for the case that expect is not defined in the host
    # configuration
    set is_ok 0
-   set my_mytimeout [expr [timestamp] + $mytimeout] 
+   set my_mytimeout [expr [timestamp] + $mytimeout]
    set dir [file dirname $path]
 
    while {$is_ok == 0} {
@@ -3266,13 +3266,13 @@ proc wait_for_remote_dir { hostname user path { mytimeout 60 } {raise_error 1} {
          if {$prg_exit_state == 0} {
             set is_ok 1
             break
-         } 
+         }
       } else {
          # The directory must NOT be here
          if {$prg_exit_state != 0} {
             set is_ok 1
             break
-         } 
+         }
       }
       ts_log_progress
       if {[timestamp] > $my_mytimeout} {
@@ -3303,7 +3303,7 @@ proc wait_for_remote_dir { hostname user path { mytimeout 60 } {raise_error 1} {
 #     is_remote_file() -- check if file exists on remote host
 #
 #  SYNOPSIS
-#     is_remote_file {hostname user path} 
+#     is_remote_file {hostname user path}
 #
 #  FUNCTION
 #     This function is starting an ls command on the remote host as specified
@@ -3334,7 +3334,7 @@ proc is_remote_file {hostname user fpath {be_quiet 0}} {
          ts_log_finest "found file: $hostname:$path"
       }
       return 1;
-   } 
+   }
    if {$be_quiet == 0} {
       ts_log_finest "file not found: $hostname:$path"
    }
@@ -3346,7 +3346,7 @@ proc is_remote_file {hostname user fpath {be_quiet 0}} {
 #     is_remote_path() -- check if path exists on remote host
 #
 #  SYNOPSIS
-#     is_remote_path { hostname user path {be_quiet 0}} 
+#     is_remote_path { hostname user path {be_quiet 0}}
 #
 #  FUNCTION
 #     This function is starting an ls command on the remote host as specified
@@ -3383,7 +3383,7 @@ proc is_remote_path {hostname user path} {
 #     delete_remote_file() -- delete a remote file if existing
 #
 #  SYNOPSIS
-#     delete_remote_file { hostname user path } 
+#     delete_remote_file { hostname user path }
 #
 #  FUNCTION
 #     This function will check if the file (full path name) $path is existing
@@ -3393,10 +3393,10 @@ proc is_remote_path {hostname user path} {
 #  INPUTS
 #     hostname - remote host name
 #     user     - name of user which will delete the file
-#     path     - full path name 
+#     path     - full path name
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     file_procedures/remote_file_mkdir()
@@ -3418,28 +3418,28 @@ proc delete_remote_file {hostname user path} {
 
 #                                                             max. column:     |
 #****** file_procedures/delete_directory() ******
-# 
+#
 #  NAME
-#     delete_directory -- move/copy directory to testsuite trashfolder 
+#     delete_directory -- move/copy directory to testsuite trashfolder
 #
 #  SYNOPSIS
-#     delete_directory { path } 
+#     delete_directory { path }
 #
 #  FUNCTION
 #     This procedure will delete the given directory,
-#     or move it to the testsuite's 
-#     trashfolder (Directory testsuite_trash in the testsuite root directory). 
+#     or move it to the testsuite's
+#     trashfolder (Directory testsuite_trash in the testsuite root directory).
 #
 #  INPUTS
-#     path - full directory path 
+#     path - full directory path
 #
 #  RESULT
-#     -1 on error, 0 ok 
+#     -1 on error, 0 ok
 #
 #  SEE ALSO
 #     file_procedures/delete_directory()
 #*******************************
-proc delete_directory {path} { 
+proc delete_directory {path} {
    global CHECK_USER CHECK_TESTSUITE_TRASH
    get_current_cluster_config_array ts_config
 
@@ -3459,7 +3459,7 @@ proc delete_directory {path} {
 #     init_logfile_wait() -- observe logfiles by using tail functionality (1)
 #
 #  SYNOPSIS
-#     init_logfile_wait { hostname logfile } 
+#     init_logfile_wait { hostname logfile }
 #
 #  FUNCTION
 #     This procedure is using starting an open remote spawn connection
@@ -3530,12 +3530,12 @@ proc init_logfile_wait {hostname logfile {delete_touch 0}} {
 #
 #  SYNOPSIS
 #     logfile_wait {
-#                    { wait_string ""     } 
+#                    { wait_string ""     }
 #                    { mytimeout 60       }
-#                    { close_connection 1 } 
-#                    { add_errors 1       } 
+#                    { close_connection 1 }
+#                    { add_errors 1       }
 #                    { return_err_code "logfile_wait_error" }
-#                  } 
+#                  }
 #
 #  FUNCTION
 #     This procedure is called after an init_logfile_wait() call. It will
@@ -3546,8 +3546,8 @@ proc init_logfile_wait {hostname logfile {delete_touch 0}} {
 #     error.
 #
 #  INPUTS
-#     { wait_string "" }     - if the tail process generates output 
-#                              containing this string the procedure 
+#     { wait_string "" }     - if the tail process generates output
+#                              containing this string the procedure
 #                              returns
 #     { mytimeout 60 }       - timeout in seconds
 #
@@ -3555,12 +3555,12 @@ proc init_logfile_wait {hostname logfile {delete_touch 0}} {
 #
 #     { add_errors 1       } - if 0, don't raise an error condidition
 #
-#     { return_err_code "logfile_wait_error" } 
+#     { return_err_code "logfile_wait_error" }
 #                            - variable where the return
 #                              value is stored:
 #                              0  : no error
 #                              -1 : timeout error
-#                              -2 : full expect buffer 
+#                              -2 : full expect buffer
 #                              -3 : unexpected end of file
 #                              -4 : unexpected end of tail command
 #     {message_line_list {}} - list of messages which should be found in
@@ -3571,9 +3571,9 @@ proc init_logfile_wait {hostname logfile {delete_touch 0}} {
 #
 #
 #  RESULT
-#     This procedure returns the output of the tail command since the 
+#     This procedure returns the output of the tail command since the
 #     init_logfile_wait() call.
-# 
+#
 #  SEE ALSO
 #     file_procedures/init_logfile_wait()
 #     file_procedures/close_logfile_wait()
@@ -3613,7 +3613,7 @@ proc logfile_wait {{wait_string ""} {mytimeout 60} {close_connection 1} {add_err
          }
          set back_value -3
       }
-      -i $sp_id -- "_exit_status_" { 
+      -i $sp_id -- "_exit_status_" {
          if {$add_errors == 1} {
             ts_log_severe "unexpected end of tail command"
          }
@@ -3653,12 +3653,12 @@ proc logfile_wait {{wait_string ""} {mytimeout 60} {close_connection 1} {add_err
                   if {[string match "*$exp_line*" $line] == 1} {
                      ts_log_fine "found expected line: $exp_line"
                      set lines_ok($exp_line) 1
-                  } 
+                  }
                }
             }
             set do_leave 1
             foreach line $message_line_list {
-               if {$lines_ok($line) == 0} { 
+               if {$lines_ok($line) == 0} {
                   set do_leave 0
                   ts_log_fine "still missing: \"$line\""
                } else {
@@ -3689,11 +3689,11 @@ proc logfile_wait {{wait_string ""} {mytimeout 60} {close_connection 1} {add_err
 #     close_logfile_wait() -- close open_spawn_connection id for tail process
 #
 #  SYNOPSIS
-#     close_logfile_wait { } 
+#     close_logfile_wait { }
 #
 #  FUNCTION
 #     This procedure is used for closing an open tail process, started with
-#     init_logfile_wait(), when logfile_wait() is called with 
+#     init_logfile_wait(), when logfile_wait() is called with
 #     "close_connection != 1" parameter.
 #
 #  SEE ALSO
@@ -3711,14 +3711,14 @@ proc close_logfile_wait { } {
 #     washing_machine() -- showing a washing machine ;-)
 #
 #  SYNOPSIS
-#     washing_machine { time { small 0 } } 
+#     washing_machine { time { small 0 } }
 #
 #  FUNCTION
-#     This procedure returns "\r[/|\-] $time [/|\-]", depending on the 
+#     This procedure returns "\r[/|\-] $time [/|\-]", depending on the
 #     given time value.
 #
 #  INPUTS
-#     time      - timout counter 
+#     time      - timout counter
 #     { small } - if > 0 -> just return [/|\-], depending on $time
 #
 #  RESULT
@@ -3727,12 +3727,12 @@ proc close_logfile_wait { } {
 proc washing_machine {time {small 0}} {
    global CHECK_USE_HUDSON
    global DISABLE_WASHING_MACHINE
-   
+
    #No washing machine when running for Hudson
    if {$CHECK_USE_HUDSON == 1 || $DISABLE_WASHING_MACHINE == 1} {
       return
    }
-   
+
    set ani [expr $time % 4]
    switch $ani {
       0 { set output "-" }
@@ -3749,10 +3749,10 @@ proc washing_machine {time {small 0}} {
 
 #****** file_procedures/create_path_aliasing_file() ****************************
 #  NAME
-#     create_path_aliasing_file() -- ??? 
+#     create_path_aliasing_file() -- ???
 #
 #  SYNOPSIS
-#     create_path_aliasing_file { filename data elements } 
+#     create_path_aliasing_file { filename data elements }
 #
 #  FUNCTION
 #     This procedure will create a path aliasing file.
@@ -3764,31 +3764,31 @@ proc washing_machine {time {small 0}} {
 #                arrayname(sub-host,$i)
 #                arrayname(exec-host,$i)
 #                arrayname(replacement,$i)
-#                where $i is the index number of each entry 
+#                where $i is the index number of each entry
 #     elements - nr. of entries (starting from zero)
 #
 #  EXAMPLE
 #     set data(src-path,0)     "/tmp_mnt/"
 #     set data(sub-host,0)     "*"
-#     set data(exec-host,0)    "*" 
+#     set data(exec-host,0)    "*"
 #     set data(replacement,0)  "/home/"
 #     create_path_aliasing_file /tmp/test.txt data 1
-#      
+#
 #  SEE ALSO
 #     file_procedures/create_shell_script()
-#     
-#    
+#
+#
 #*******************************************************************************
 proc create_path_aliasing_file {filename data elements} {
    upvar $data mydata
- 
+
    ts_log_fine "creating path alias file: $filename"
 
 # Path Aliasing File
 # src-path                sub-host   exec-host   replacement
 # /tmp_mnt/                  *          *           /
 # /private/var/automount/    *          *           /
-#     
+#
 # replaces any occurrence of /tmp_mnt/ by /
 # if submitting or executing on any host.
 # Thus paths on nfs server and clients are the same
@@ -3801,7 +3801,7 @@ proc create_path_aliasing_file {filename data elements} {
       return
    }
 
-   set fout [open "$filename" "w"] 
+   set fout [open "$filename" "w"]
    puts $fout "# testsuite automatic generated Path Aliasing File\n# \"$filename\""
    puts $fout "# src-path   sub-host   exec-host   replacement"
    puts $fout "#     /tmp_mnt/    *          *           /"
@@ -3817,13 +3817,13 @@ proc create_path_aliasing_file {filename data elements} {
        if {[info exists mydata(src-path,$i)] != 1} {
           ts_log_severe "array has no (src-path,$i) element"
           break
-       } 
+       }
        set    line "[set mydata(src-path,$i)]\t"
-       append line "[set mydata(sub-host,$i)]\t" 
+       append line "[set mydata(sub-host,$i)]\t"
        append line "[set mydata(exec-host,$i)]\t"
        append line "[set mydata(replacement,$i)]"
        puts $fout $line
-   } 
+   }
    flush $fout
    close $fout
 }
@@ -3833,7 +3833,7 @@ proc create_path_aliasing_file {filename data elements} {
 #     add_to_path_aliasing_file() -- adds entries to the sge_aliases file
 #
 #  SYNOPSIS
-#     add_to_path_aliasing_file { filename data elements } 
+#     add_to_path_aliasing_file { filename data elements }
 #
 #  FUNCTION
 #     This procedure will add entries to the path aliasing file.
@@ -3845,35 +3845,35 @@ proc create_path_aliasing_file {filename data elements} {
 #                arrayname(sub-host,$i)
 #                arrayname(exec-host,$i)
 #                arrayname(replacement,$i)
-#                where $i is the index number of each entry 
+#                where $i is the index number of each entry
 #     elements - nr. of entries (starting from zero)
 #
 #  EXAMPLE
 #     set data(src-path,0)     "/tmp_mnt/"
 #     set data(sub-host,0)     "*"
-#     set data(exec-host,0)    "*" 
+#     set data(exec-host,0)    "*"
 #     set data(replacement,0)  "/home/"
 #     add_to_path_aliasing_file /tmp/test.txt data 1
-#      
+#
 #  SEE ALSO
 #     file_procedures/create_path_aliasing_file()
 #*******************************************************************************
 proc add_to_path_aliasing_file {filename data elements} {
    upvar $data mydata
 
-   set fout [open "$filename" "a"] 
+   set fout [open "$filename" "a"]
 
    for {set i 0} {$i < $elements} {incr i} {
        if {[info exists mydata(src-path,$i)] != 1} {
           ts_log_severe "array has no (src-path,$i) element"
           break
-       } 
+       }
        set    line "[set mydata(src-path,$i)]\t"
-       append line "[set mydata(sub-host,$i)]\t" 
+       append line "[set mydata(sub-host,$i)]\t"
        append line "[set mydata(exec-host,$i)]\t"
        append line "[set mydata(replacement,$i)]"
        puts $fout $line
-   } 
+   }
    close $fout
 }
 
@@ -3896,7 +3896,7 @@ proc check_output_is_tty {} {
 #     get_local_spool_dir() -- get local spool dir for an host
 #
 #  SYNOPSIS
-#     get_local_spool_dir { host subdir {do_cleanup 1} } 
+#     get_local_spool_dir { host subdir {do_cleanup 1} }
 #
 #  FUNCTION
 #     This procedure returns the path to the local spool directory for the given
@@ -3908,13 +3908,13 @@ proc check_output_is_tty {} {
 #     {do_cleanup 1} - if 1: delete spool dir contents
 #
 #  RESULT
-#     path to spool directory 
+#     path to spool directory
 #
 #  SEE ALSO
 #     file_procedures/get_spool_dir()
 #*******************************************************************************
 proc get_local_spool_dir {host subdir {do_cleanup 1} {only_local 0}} {
-   global ts_host_config 
+   global ts_host_config
    global check_do_not_use_spool_config_entries
    get_current_cluster_config_array ts_config
 
@@ -3984,7 +3984,7 @@ proc get_local_spool_dir {host subdir {do_cleanup 1} {only_local 0}} {
 #     get_execd_spooldir() -- get configured execd spool directory
 #
 #  SYNOPSIS
-#     get_execd_spooldir { host type { only_base 0 } } 
+#     get_execd_spooldir { host type { only_base 0 } }
 #
 #  FUNCTION
 #     Returns the spool directory for the host and requested type
@@ -4007,7 +4007,7 @@ proc get_local_spool_dir {host subdir {do_cleanup 1} {only_local 0}} {
 #
 #*******************************************************************************
 proc get_execd_spooldir {host type {only_base 0}} {
-   global ts_host_config 
+   global ts_host_config
    global check_do_not_use_spool_config_entries
    get_current_cluster_config_array ts_config
 
@@ -4017,7 +4017,7 @@ proc get_execd_spooldir {host type {only_base 0}} {
       ts_log_severe "check_do_not_use_spool_config_entries=1 can't set local spool directory"
       return $spooldir
    }
-   
+
    # host might be a virtual host - to query local spooldir we need the real host
    set physical_host [node_get_host $host]
 
@@ -4027,7 +4027,7 @@ proc get_execd_spooldir {host type {only_base 0}} {
          set spooldir "$ts_config(product_root)/$ts_config(cell)/spool"
       }
 
-      "local" { 
+      "local" {
          if {[info exist ts_host_config($physical_host,spooldir)]} {
             set spooldir $ts_host_config($physical_host,spooldir)
          }
@@ -4060,7 +4060,7 @@ proc get_execd_spooldir {host type {only_base 0}} {
 #     get_file_uid() -- get uid of file on host
 #
 #  SYNOPSIS
-#     get_file_uid { user host file } 
+#     get_file_uid { user host file }
 #
 #  FUNCTION
 #     Returns the uid of the given file on the remote host.
@@ -4078,7 +4078,7 @@ proc get_execd_spooldir {host type {only_base 0}} {
 #     file_procedures/get_file_gid()
 #*******************************************************************************
 proc get_file_uid {user host file} {
-   wait_for_remote_file $host $user $file 
+   wait_for_remote_file $host $user $file
    set output [start_remote_prog $host $user ls "-ln $file"]
    set uid [lindex $output 2]
    if {$uid == ""} {
@@ -4093,7 +4093,7 @@ proc get_file_uid {user host file} {
 #     get_dir_uid() -- get uid of dir on host
 #
 #  SYNOPSIS
-#     get_dir_uid { user host dir } 
+#     get_dir_uid { user host dir }
 #
 #  FUNCTION
 #     Returns the uid of the given dir on the remote host.
@@ -4111,7 +4111,7 @@ proc get_file_uid {user host file} {
 #     file_procedures/get_file_gid()
 #*******************************************************************************
 proc get_dir_uid {user host dir} {
-   wait_for_remote_dir $host $user $dir 
+   wait_for_remote_dir $host $user $dir
    set output [start_remote_prog $host $user ls "-ldn $dir"]
    set uid [lindex $output 2]
    if {$uid == ""} {
@@ -4127,7 +4127,7 @@ proc get_dir_uid {user host dir} {
 #     get_file_perm() -- get permission of file on host
 #
 #  SYNOPSIS
-#     get_file_perms { user host file } 
+#     get_file_perms { user host file }
 #
 #  FUNCTION
 #     Returns the permission of the given file on the remote host
@@ -4146,7 +4146,7 @@ proc get_dir_uid {user host dir} {
 #     file_procedures/get_file_gid()
 #*******************************************************************************
 proc get_file_perm {user host file} {
-   wait_for_remote_file $host $user $file 
+   wait_for_remote_file $host $user $file
    set output [start_remote_prog $host $user ls "-l $file"]
    return [lindex $output 0]
 }
@@ -4156,7 +4156,7 @@ proc get_file_perm {user host file} {
 #     get_file_gid() -- get gid of file on host
 #
 #  SYNOPSIS
-#     get_file_gid { user host file } 
+#     get_file_gid { user host file }
 #
 #  FUNCTION
 #     Returns the gid of the given file on the remote host.
@@ -4174,7 +4174,7 @@ proc get_file_perm {user host file} {
 #     file_procedures/get_file_gid()
 #*******************************************************************************
 proc get_file_gid {user host file} {
-   wait_for_remote_file $host $user $file 
+   wait_for_remote_file $host $user $file
    set output [start_remote_prog $host $user ls "-ln $file"]
    set gid [lindex $output 3]
    if {$gid == ""} {
@@ -4189,7 +4189,7 @@ proc get_file_gid {user host file} {
 #     get_dir_gid() -- get gid of dir on host
 #
 #  SYNOPSIS
-#     get_dir_gid { user host dir } 
+#     get_dir_gid { user host dir }
 #
 #  FUNCTION
 #     Returns the gid of the given dir on the remote host.
@@ -4207,7 +4207,7 @@ proc get_file_gid {user host file} {
 #     file_procedures/get_file_gid()
 #*******************************************************************************
 proc get_dir_gid {user host dir} {
-   wait_for_remote_dir $host $user $dir 
+   wait_for_remote_dir $host $user $dir
    set output [start_remote_prog $host $user ls "-ldn $dir"]
    set gid [lindex $output 3]
    if {$gid == ""} {
@@ -4223,7 +4223,7 @@ proc get_dir_gid {user host dir} {
 #     get_spool_dir() -- get the spooldir for qmaster or an exec host
 #
 #  SYNOPSIS
-#     get_spool_dir { host subdir } 
+#     get_spool_dir { host subdir }
 #
 #  FUNCTION
 #     Returns the spool directory for qmaster or an exec host.
@@ -4253,7 +4253,7 @@ proc get_spool_dir {host subdir} {
    if {$spooldir == ""} {
       set spooldir "$ts_config(product_root)/$ts_config(cell)/spool"
       ts_log_finer "host $host has global toplevel spool directory $spooldir"
-   
+
       switch -exact $subdir {
          "qmaster" {
             set spooldir "$spooldir/$subdir"
@@ -4275,17 +4275,17 @@ proc get_spool_dir {host subdir} {
 #     get_bdb_spooldir() -- get configured berkeley db spool directory
 #
 #  SYNOPSIS
-#     get_bdb_spooldir {{host ""}} 
+#     get_bdb_spooldir {{host ""}}
 #
 #  FUNCTION
 #     Returns the directory configured for berkeley db spooling.
 #     If bdb_dir is configured in testsuite setup, this directory will be returned.
 #     Otherwise, a local spool directory for the host will be returned.
-#     If no local spooldirectory is configured, we'll return 
+#     If no local spooldirectory is configured, we'll return
 #     $SGE_ROOT/$SGE_CELL/default/spool/spooldb.
 #
 #  INPUTS
-#     host        - host for lookup of local spool directory. 
+#     host        - host for lookup of local spool directory.
 #                   Default is the master host.
 #     only_local  - do only return local spool directory, no global one.
 #
@@ -4322,7 +4322,7 @@ proc get_bdb_spooldir {{host ""} {only_local 0}} {
 #     get_fstype() -- get filesystem type for a certain path
 #
 #  SYNOPSIS
-#     get_fstype { path {host ""} } 
+#     get_fstype { path {host ""} }
 #
 #  FUNCTION
 #     Returns the type of the filesystem on which a certain <path> resides.
@@ -4341,7 +4341,7 @@ proc get_bdb_spooldir {{host ""} {only_local 0}} {
 #     The filesystem type (e.g. "nfs, nfs4, tmpfs, ufs), or
 #     "unknown" in case of errors.
 #
-# TODO: do not use this function, new fs_config functions should be used, this 
+# TODO: do not use this function, new fs_config functions should be used, this
 # get_fstype will be removed soon.
 #*******************************************************************************
 proc get_fstype {path {host ""} {raise_error 1}} {
@@ -4366,13 +4366,13 @@ proc get_fstype {path {host ""} {raise_error 1}} {
 #     get_jobseqnum() -- get current job sequence number fro jobseqnum file
 #
 #  SYNOPSIS
-#     get_jobseqnum { } 
+#     get_jobseqnum { }
 #
 #  FUNCTION
-#     The function reads in the jobseqnum file from the qmaster spooling 
+#     The function reads in the jobseqnum file from the qmaster spooling
 #     directory and returns the content. If there is a problem reading the
 #     file the procedure returns -1 and reports an error.
-#  
+#
 #  INPUTS
 #
 #  RESULT
@@ -4404,7 +4404,7 @@ proc get_jobseqnum {} {
 #     set_jobseqnum() -- set actual job sequence number
 #
 #  SYNOPSIS
-#     set_jobseqnum { jobseqnum } 
+#     set_jobseqnum { jobseqnum }
 #
 #  FUNCTION
 #     This procedure is used to change the current job sequence file. It will
@@ -4441,16 +4441,16 @@ proc set_jobseqnum {jobseqnum} {
 
 #****** file_procedures/get_additional_config_file_path() **********************
 #  NAME
-#     get_additional_config_file_path() -- get the path to the configuration file 
+#     get_additional_config_file_path() -- get the path to the configuration file
 #                                          of the additional project
 #
 #  SYNOPSIS
-#     get_additional_config_file_name { project_name } 
+#     get_additional_config_file_name { project_name }
 #
 #  FUNCTION
-#     Returns the name of the configuration file for the additional project 
+#     Returns the name of the configuration file for the additional project
 #     if the testsuite configuration file has the path: $config_path/sge.conf,
-#     the function returns the path of the configuration file for the additional 
+#     the function returns the path of the configuration file for the additional
 #     project_name: $config_path/sge.$project_name.conf
 #
 #  INPUTS
@@ -4476,12 +4476,12 @@ proc get_additional_config_file_path {project_name {filename ""}} {
        set last [llength $path_list]
        incr last -1
        # the name of the testsuite config file
-       set config_file_name [lindex $path_list $last]           
+       set config_file_name [lindex $path_list $last]
        set var [split $config_file_name "."]
        set index [llength $var]
        if {$index > 1} {incr index -1}
        # the name of the addtional project config file
-       set add_config_file_name [join [linsert $var $index "$project_name"] "."]  
+       set add_config_file_name [join [linsert $var $index "$project_name"] "."]
        set ret [join [lreplace $path_list $last $last $add_config_file_name ] "/"]
     }
     ts_log_finest "Using configuration file for $project_name: $ret"
@@ -4514,7 +4514,7 @@ proc have_dirs_same_base_dir {dir_name1 dir_name2} {
 #     get_testsuite_delete_filename() -- get filename of TS delete file
 #
 #  SYNOPSIS
-#     get_testsuite_delete_filename { } 
+#     get_testsuite_delete_filename { }
 #
 #  FUNCTION
 #     Returns the (full path) filename for the "testsuite delete file".
@@ -4526,7 +4526,7 @@ proc have_dirs_same_base_dir {dir_name1 dir_name2} {
 #
 #  INPUTS
 #     {get_local_file 0} optional: return filename of deletion file for local
-#                                  deletion files 
+#                                  deletion files
 #     {config_file ""}   optional: return filename of deletion file specified
 #                                  configuration file
 #
@@ -4561,18 +4561,18 @@ proc get_testsuite_delete_filename { {get_local_file 0} {config_file ""}} {
 #     get_uri_hostname() -- return hostname from file URI
 #
 #  SYNOPSIS
-#     get_uri_hostname { uri } 
+#     get_uri_hostname { uri }
 #
 #  FUNCTION
 #     This function is used to get out the hostname from the specified URI.
 #
 #  INPUTS
 #     uri             - URI string (e.g.: "file://HOSTNAME/PATH")
-#     {raise_error 1} - if set != 1: do not report errors 
+#     {raise_error 1} - if set != 1: do not report errors
 #
 #  RESULT
 #     tcl string with hostname or an empty string ("") on error
-#     
+#
 #     If the URI is valid and no hostname is set (e.g.: file:///tmp) the
 #     local host name is returned.
 #
@@ -4589,7 +4589,7 @@ proc get_testsuite_delete_filename { {get_local_file 0} {config_file ""}} {
 #     file_procedures/get_uri_path()
 #     file_procedures/get_uri_scheme()
 #*******************************************************************************
-proc get_uri_hostname { uri {raise_error 1}} { 
+proc get_uri_hostname { uri {raise_error 1}} {
    set scheme [lindex [split $uri ":"] 0]
 
    switch -exact $scheme {
@@ -4614,7 +4614,7 @@ proc get_uri_hostname { uri {raise_error 1}} {
 #     get_uri_scheme() -- return URI scheme
 #
 #  SYNOPSIS
-#     get_uri_scheme { uri } 
+#     get_uri_scheme { uri }
 #
 #  FUNCTION
 #     This function is used to parse the URI scheme of the specified URI string
@@ -4660,7 +4660,7 @@ proc get_uri_scheme { uri {raise_error 1}} {
 #     get_uri_path() -- return path from file URI
 #
 #  SYNOPSIS
-#     get_uri_path { uri } 
+#     get_uri_path { uri }
 #
 #  FUNCTION
 #     This function is used to get the path string from the specified URI.
@@ -4685,7 +4685,7 @@ proc get_uri_scheme { uri {raise_error 1}} {
 #     file_procedures/get_uri_path()
 #     file_procedures/get_uri_scheme()
 #*******************************************************************************
-proc get_uri_path { uri  {raise_error 1} } { 
+proc get_uri_path { uri  {raise_error 1} } {
    set scheme [lindex [split $uri ":"] 0]
    switch -exact $scheme {
       "file" {
@@ -4728,10 +4728,10 @@ proc get_uri_path { uri  {raise_error 1} } {
 #     parse_testsuite_info_file() -- framework for parsing testsuite.info file
 #
 #  SYNOPSIS
-#     parse_testsuite_info_file { user uri info_file } 
+#     parse_testsuite_info_file { user uri info_file }
 #
 #  FUNCTION
-#     This procedure is used to parse a testsuite.info file. 
+#     This procedure is used to parse a testsuite.info file.
 #
 #     A testsuite.info file has following syntax:
 #
@@ -4772,7 +4772,7 @@ proc get_uri_path { uri  {raise_error 1} } {
 #                     "uri",
 #                     "enabled"
 #                     "macro_file_uri"
-#  
+#
 #        version: e.g.: "61u2"
 #
 #  RESULT
@@ -4795,7 +4795,7 @@ proc parse_testsuite_info_file { user uri info_file } {
    set path [get_uri_path $uri]
 
    set testsuite_info_file_name "$path/testsuite.info"
-  
+
    # Check that we have a testsuite.info file
    if {![is_remote_file $host $user $testsuite_info_file_name]} {
       ts_log_severe "$host: Cannot open file \"$testsuite_info_file_name\""
@@ -4835,7 +4835,7 @@ proc parse_testsuite_info_file { user uri info_file } {
       if {[string index $line 0] == "#"} {
          continue
       }
-     
+
       # ignore empty lines
       if {$line == ""} {
          continue
@@ -4846,7 +4846,7 @@ proc parse_testsuite_info_file { user uri info_file } {
          continue
       }
 #      ts_log_fine "line $i: $line"
-      
+
       set was_error 0
       for {set a 0} {$a < [llength $array_names]} {incr a 1} {
          # get the current array name
@@ -4870,7 +4870,7 @@ proc parse_testsuite_info_file { user uri info_file } {
                ts_log_finer "uri host: $uri_host"
                ts_log_finer "uri path: $uri_path"
                if {![is_remote_path $uri_host $user $uri_path]} {
-                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: URI \"$pack_info($pack_info_index,$a_name)\" not correct!" 
+                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: URI \"$pack_info($pack_info_index,$a_name)\" not correct!"
                   incr was_error 1
                   break  ;# stop for loop
                }
@@ -4879,12 +4879,12 @@ proc parse_testsuite_info_file { user uri info_file } {
                set help [string trim [lindex $release 0]]
                set pack_info($pack_info_index,$a_name) $help
                if {![string is integer $help]} {
-                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Major release version should be integer number!" 
+                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Major release version should be integer number!"
                   incr was_error 1
                   break ;# stop for loop
                }
                if {[string length $help] == 0} {
-                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Major release version missing!" 
+                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Major release version missing!"
                   incr was_error 1
                   break ;# stop for loop
                }
@@ -4893,12 +4893,12 @@ proc parse_testsuite_info_file { user uri info_file } {
                set help [string trim [lindex $release 1]]
                set pack_info($pack_info_index,$a_name) $help
                if {![string is integer $help]} {
-                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Minor release version should be integer number!" 
+                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Minor release version should be integer number!"
                   incr was_error 1
                   break ;# stop for loop
                }
                if {[string length $help] == 0} {
-                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Minor release version missing!" 
+                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Minor release version missing!"
                   incr was_error 1
                   break ;# stop for loop
                }
@@ -4907,12 +4907,12 @@ proc parse_testsuite_info_file { user uri info_file } {
                set help [string trim [lindex $release 2]]
                set pack_info($pack_info_index,$a_name) $help
                if {![string is integer $help]} {
-                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Update release version should be integer number!" 
+                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Update release version should be integer number!"
                   incr was_error 1
                   break
                }
                if {[string length $help] == 0} {
-                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Update release version missing!" 
+                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Update release version missing!"
                   incr was_error 1
                   break ;# stop for loop
                }
@@ -4931,7 +4931,7 @@ proc parse_testsuite_info_file { user uri info_file } {
                set help [string tolower [string trim [lindex $columns 3]]]
                set pack_info($pack_info_index,$a_name) $help
                if {![string is boolean $help]} {
-                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Enabled for testing column value should be boolean!" 
+                  ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: Enabled for testing column value should be boolean!"
                   incr was_error 1
                   break ;# stop for loop
                }
@@ -4953,7 +4953,7 @@ proc parse_testsuite_info_file { user uri info_file } {
       set pack_info($pack_info_index,macro_file_uri) "n.a."
       if {[info exists pack_info($pack_info_index,enabled)] && $pack_info($pack_info_index,enabled)} {
          if {[string length $pack_info($pack_info_index,$a_name)] == 0} {
-            ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: No CVS tag specified (enabled for testing)!" 
+            ts_log_severe "Syntax error in line $i of file $testsuite_info_file_name: No CVS tag specified (enabled for testing)!"
             incr was_error 1
             break
          }
@@ -5002,14 +5002,14 @@ proc parse_testsuite_info_file { user uri info_file } {
 #     get_release_packages() -- copy Cluster Scheduler (Grid Engine) distribution to product root
 #
 #  SYNOPSIS
-#     get_release_packages { host user dest_path info_file nr } 
+#     get_release_packages { host user dest_path info_file nr }
 #
 #  FUNCTION
 #     This function is used to copy and unpack the specified Cluster Scheduler (Grid Engine) release
 #     to a destination directory.
 #
 #  INPUTS
-#     host      - hostname where the $dest_path is availabe 
+#     host      - hostname where the $dest_path is availabe
 #     user      - user who is executing commands
 #     dest_path - absolut destination path on $host (Cluster Scheduler (Grid Engine) SGE_ROOT dir)
 #     info_file - array which contains testsuiten.info data
@@ -5083,7 +5083,7 @@ proc get_release_packages { host user dest_path info_file nr} {
                } else {
                   ts_log_fine "ignore $filename ..."
                }
-            } 
+            }
             return 1
          } else {
             ts_log_severe "execute copy from different host than file uri server not yet implemented"
@@ -5158,7 +5158,7 @@ proc clear_active_jobs_dir {host} {
 #     delete_temp_script_files() -- delete temp. generated testsuite files
 #
 #  SYNOPSIS
-#     delete_temp_script_files { { config_file ""} } 
+#     delete_temp_script_files { { config_file ""} }
 #
 #  FUNCTION
 #     This procedure deletes all temp. generated testsuite files stored in the
@@ -5168,7 +5168,7 @@ proc clear_active_jobs_dir {host} {
 #  INPUTS
 #     { config_file ""} - if set the temp files of a different testsuite config
 #                         file are deleted. (Useful if test generates a cloned
-#                         testsuite config file and test starts it up with 
+#                         testsuite config file and test starts it up with
 #                         operate_add_cluster() to delete the temp files for the
 #                         remote cluster)
 #
@@ -5214,7 +5214,7 @@ proc delete_temp_script_files {{config_file ""}} {
    if {$host == ""} {
       set host $local_host
    }
- 
+
    # This might be an old delete tmp file, remove it
    if {[file isfile $temp_del_file_name]} {
       ts_log_fine "file \"$temp_del_file_name\" already exists!"
@@ -5257,7 +5257,7 @@ proc delete_temp_script_files {{config_file ""}} {
    if { $local_host != $host } {
       # The files might be removed on an different server we
       # have to remove them from the remote spawn script cache
-      # Here we get the file content from the renamed file (part 1/2) 
+      # Here we get the file content from the renamed file (part 1/2)
       # This must be done also on the local host!
       get_file_content $host $CHECK_USER $temp_del_file_name del_files_remote
 
@@ -5266,7 +5266,7 @@ proc delete_temp_script_files {{config_file ""}} {
          ts_log_severe "files to delete remote ($del_files_remote(0)) != files to delete local ($del_files(0))"
          return
       }
-   
+
       # Here we remove the file from internal script cache
       # part (2/2)
       for { set i 1} { $i <= $del_files(0) } { incr i 1 } {

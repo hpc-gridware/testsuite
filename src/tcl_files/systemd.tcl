@@ -205,3 +205,103 @@ proc systemd_get_property {host scope property} {
 
    return $value
 }
+
+###
+# @brief Get the cgroup version used by systemd on a host.
+#
+# This function checks the cgroup structure on the host to determine whether
+# it is using cgroup v1 or v2. It looks for the presence of specific directories
+# in `/sys/fs/cgroup` to determine the version.
+#
+# @param host The host to check for the cgroup version.
+# @returns 1 if cgroup v1 is used, 2 if cgroup v2 is used, -1 if the version cannot be determined.
+proc systemd_get_cgroup_version {host} {
+   if {[remote_file_isdirectory $host "/sys/fs/cgroup/systemd"]} {
+      set version 1
+   } elseif {[remote_file_isdirectory $host "/sys/fs/cgroup/system.slice"]} {
+      set version 2
+   } else {
+      ts_log_severe "cannot determine cgroup version for host $host: neither /sys/fs/cgroup/systemd nor /sys/fs/cgroup/systemd.slice exists"
+      set version -1
+   }
+
+   return $version
+}
+
+###
+# @brief Get the name of the toplevel systemd slice for OCS jobs.
+#
+# Returns the default toplevel slice name used by testsuite: `ocs<commd_port>`.
+#
+proc systemd_get_slice_name {} {
+   get_current_cluster_config_array ts_config
+   return "ocs$ts_config(commd_port)"
+}
+
+###
+# @brief Check and clean up leftover systemd job slices.
+#
+# This function checks for leftover systemd job slices on the specified host
+# and attempts to clean them up by stopping the slices.
+#
+# It uses the `systemctl stop` command to stop any slices that match the
+# pattern `ocs$ts_config(commd_port)-jobs-` (the default used by testsuite).
+#
+# @param host The host to check for leftover systemd job slices.
+#
+proc systemd_check_cleanup_job_slices {host} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set cgroup_version [systemd_get_cgroup_version $host]
+   if {$cgroup_version < 0} {
+      return 0
+   }
+
+   # expect everything to be fine
+   set ret 1
+
+   set slice_name [systemd_get_slice_name]
+   if {$cgroup_version == 1} {
+      # systemd v1
+      set slice_path "/sys/fs/cgroup/systemd/${slice_name}.slice/${slice_name}-jobs.slice"
+   } else {
+      # systemd v2
+      set slice_path "/sys/fs/cgroup/${slice_name}.slice/${slice_name}-jobs.slice"
+   }
+
+   ts_log_fine "checking cleanup of systemd slice $slice_path on host $host"
+
+   analyze_directory_structure $host $CHECK_USER $slice_path dirs "" ""
+   #ts_log_fine $dirs
+
+   set pattern "ocs$ts_config(commd_port)-jobs-"
+   #ts_log_fine "looking for leftover systemd job slices with pattern: $pattern"
+   set left_slices {}
+   set errors {}
+   foreach dir $dirs {
+      set pos [string first $pattern $dir]
+      if {$pos >= 0} {
+         set slice [string range $dir $pos end]
+         ts_log_fine "   -> $slice"
+         lappend left_slices $slice
+         set output [start_remote_prog $host "root" "systemctl" "stop $slice"]
+         if {$prg_exit_state != 0} {
+            lappend errors "$slice: $prg_exit_state: $output"
+         }
+         set ret 0
+      }
+   }
+
+   if {[llength $left_slices] > 0} {
+      set msg "Found and removed leftover systemd job slices on host $host: [join $left_slices ", "]"
+      append msg "\nErrors during cleanup:\n"
+      append msg [join $errors "\n"]
+      ts_log_severe $msg
+   } else {
+      ts_log_fine "no leftover systemd job slices found on host $host"
+   }
+
+   return $ret
+}
+

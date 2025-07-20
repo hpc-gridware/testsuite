@@ -5357,6 +5357,17 @@ proc check_if_test_cleaned_up {} {
       set ret 0
    }
 
+   # check if all systemd slices (of pe jobs) have been cleaned up, and repair if not
+   if {[ge_has_feature "systemd"]} {
+      foreach host $ts_config(execd_nodes) {
+         if {[host_has_systemd $host]} {
+            if {![systemd_check_cleanup_job_slices $host]} {
+               set ret 0
+            }
+         }
+      }
+   }
+
    ts_log_fine "verifying the configuration after the $check_name check took [expr [clock seconds] - $start] seconds"
 
    return $ret
