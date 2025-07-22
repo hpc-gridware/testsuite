@@ -305,3 +305,51 @@ proc systemd_check_cleanup_job_slices {host} {
    return $ret
 }
 
+###
+# @brief Check if a systemd service is active.
+#
+# This function checks if a specific systemd service is currently active on the
+# specified host. It uses the `systemctl is-active` command to determine the
+# active state of the service.
+#
+# @param host The host to check the service on.
+# @param service The name of the service to check, e.g., "ocs8012-qmaster.service"
+# @returns 1 if the service is active, 0 otherwise.
+proc systemd_is_service_active {host service} {
+   set service_name [systemd_get_service_name $service]
+   set ret 0
+   set output [start_remote_prog $host "root" "systemctl" "is-active $service_name"]
+   if {$prg_exit_state == 0} {
+      set ret 1
+   }
+
+   return $ret
+}
+
+# @todo add functions for is-enabled, ...
+
+###
+# @brief stop a systemd service.
+#
+# This function stops a specific systemd service on the specified host.
+# It uses the `systemctl stop` command to stop the service.
+#
+# @param host The host where the service should be stopped.
+# @param service The name of the service to stop, e.g., "ocs8012-qmaster.service"
+# @param raise_error If set to 1 (default), raises an error if the stop command fails.
+# @returns 1 if the service was stopped successfully, 0 otherwise.
+proc systemd_stop_service {host service {raise_error 1}} {
+   set ret 1
+   set service_name [systemd_get_service_name $service]
+   set output [start_remote_prog $host "root" "systemctl" "stop $service_name"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "systemctl stop $service_name on host $host failed:\n$output"
+      set ret 0
+   } else {
+      ts_log_fine "systemctl stop $service_name on host $host exited 0:\n$output"
+   }
+
+   return $ret
+}
+
+# @todo add functions for start, enable, disable, ...

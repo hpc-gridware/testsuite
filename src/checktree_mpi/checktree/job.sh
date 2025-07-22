@@ -41,9 +41,11 @@ echo "MPIR_HOME=$MPIR_HOME"
 echo "In $PWD starting mpirun $TASK_SCRIPT $@"
 
 MPIRUN_OPTIONS=""
-echo $MPIR_HOME | grep openmpi > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-    MPIRUN_OPTIONS="$MPIRUN_OPTIONS --oversubscribe"
-fi
+#echo $MPIR_HOME | grep openmpi > /dev/null 2>&1
+#if [ $? -eq 0 ]; then
+#    MPIRUN_OPTIONS="$MPIRUN_OPTIONS --oversubscribe"
+#    MPIRUN_OPTIONS="$MPIRUN_OPTIONS --mca routed binomial"
+#    MPIRUN_OPTIONS="$MPIRUN_OPTIONS -mca plm_rsh_no_tree_spawn true"
+#fi
 
 exec mpirun $MPIRUN_OPTIONS $TASK_SCRIPT "$@"

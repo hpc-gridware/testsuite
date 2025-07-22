@@ -11059,31 +11059,21 @@ proc remove_all_hosts_from_init_system {} {
    }
 }
 
-proc systemd_is_service_active {host service} {
-   set service_name [systemd_get_service_name $service]
-   set ret 0
-   set output [start_remote_prog $host "root" "systemctl" "is-active $service_name"]
-   if {$prg_exit_state == 0} {
-      set ret 1
+###
+# @brief sleep until the specified endtime is reached
+# @param endtime - the time in seconds since epoch when to stop sleeping
+proc sleep_until {endtime} {
+   set now [clock seconds]
+   while {$now < $endtime} {
+      ts_log_finest "waiting until [clock format $endtime], now it is [clock format $now]"
+      after 500
+      set now [clock seconds]
    }
-
-   return $ret
 }
 
-# @todo add functions for is-enabled, ...
-
-proc systemd_stop_service {host service {raise_error 1}} {
-   set ret 1
-   set service_name [systemd_get_service_name $service]
-   set output [start_remote_prog $host "root" "systemctl" "stop $service_name"]
-   if {$prg_exit_state != 0} {
-      ts_log_severe "systemctl stop $service_name on host $host failed:\n$output"
-      set ret 0
-   } else {
-      ts_log_fine "systemctl stop $service_name on host $host exited 0:\n$output"
-   }
-
-   return $ret
+###
+# @brief sleep for the specified number of seconds
+# @param seconds - the number of seconds to sleep
+proc sleep_for_seconds {seconds} {
+   sleep_until [expr [clock seconds] + $seconds]
 }
-
-# @todo add functions for start, enable, disable, ...

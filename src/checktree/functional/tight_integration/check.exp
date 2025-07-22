@@ -199,6 +199,7 @@ proc tight_integration_cleanup {} {
 
 # -------- local test procedures: initialization------------------------------
 
+# @todo rename: it is not only parsing execd messages, but also qmaster
 proc tight_integration_parse_execd_messages {mode} {
    global ts_config CHECK_USER
    global TIGHT_INTEGRATION_ERROR_MESSAGES TIGHT_INTEGRATION_WARNING_MESSAGES
@@ -206,7 +207,10 @@ proc tight_integration_parse_execd_messages {mode} {
    #
    # Parse qmaster message file for warning and error messages. Note that we
    # may pick up old and stale messages as well.
+   # @todo why do we read the old messages at all? Just delete the messages file!
    #
+   ts_log_fine "parsing messages files in mode $mode on [clock format [clock seconds]]"
+
    ts_log_fine "check messages file from qmaster on $tight_master_node..."
    set TIGHT_INTEGRATION_ERROR_MESSAGES("qmaster",$mode) 0
    set TIGHT_INTEGRATION_WARNING_MESSAGES("qmaster",$mode) 0
@@ -298,6 +302,10 @@ proc tight_integration_check_messages {mode1 mode2 scenario {expect_error 0}} {
                     ([string match "*killing job*" $message] == 1 || \
                      [string match "*died through signal KILL*" $message] == 1)} {
             set skip_message 1
+         } elseif {$scenario == "reschedule_test" && \
+                   [string match "*that was not supposed to be there - kill*" $message]} {
+            # @todo remove this special handling once CS-1431 is done
+            set skip_message 1
          }
          #
          # Write out any unexpected error message and header, if required.
@@ -354,7 +362,7 @@ proc tight_integration_check_messages {mode1 mode2 scenario {expect_error 0}} {
       if {$TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode1) != $TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode2)} {
          ts_log_fine "tight integration check produced execd error messages at $execd:"
          append error_text "tight integration check produced execd error messages at $execd:\n"
-         for {set i [expr $TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode1) + 1]} {$i <= $TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode2)} {incr i 1} {
+         for {set i [expr $TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode1) + 1]} {$i <= $TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode2)} {incr i} {
             set message $TIGHT_INTEGRATION_ERROR_MESSAGES($execd,$mode2,$i)
             set mstart [string last "|" $message]
             incr mstart 1
@@ -414,6 +422,9 @@ proc tight_integration_check_messages {mode1 mode2 scenario {expect_error 0}} {
 }
 
 proc tight_integration_init_messages_check {} {
+   global TIGHT_INTEGRATION_ERROR_MESSAGES TIGHT_INTEGRATION_WARNING_MESSAGES
+
+   unset -nocomplain TIGHT_INTEGRATION_ERROR_MESSAGES TIGHT_INTEGRATION_WARNING_MESSAGES
    tight_integration_parse_execd_messages startup
 }
 
@@ -425,10 +436,10 @@ proc tight_integration_messages_check {scenario {expect_error 0}} {
    set sleep_time [expr $report_time - $zero_time]
 
    ts_log_fine "sleeping for $sleep_time seconds to let each execd report its final state ..."
-   after [expr $sleep_time * 1000]
+   sleep_for_seconds $sleep_time
 
-   ts_log_fine "additional sleep of 5 seconds ..."
-   after 5000
+   ts_log_fine "additional sleep of 20 seconds - sometimes it takes a few seconds for additional errors to be logged, e.g. from CS-1019 ..."
+   sleep_for_seconds 20
 
    ts_log_fine "reading messages files ..."
    tight_integration_parse_execd_messages cleanup
@@ -602,11 +613,7 @@ proc tight_integration_iz_1916 {} {
    #
    # Check for warning/error messages and write out.
    #
-   # we expect to have error messages in messages file
-   # probably will be fixed with CR 6244911: qmod -r does not delete the old instance
-   #                                         of a job before a new one is started
-   # TODO: if CR 6244911, test and remove the expect_error 1
-   tight_integration_messages_check reschedule_test 1
+   tight_integration_messages_check reschedule_test
 
    # reset global config
    reset_config_and_propagate org_global_conf
