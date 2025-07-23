@@ -272,24 +272,26 @@ proc systemd_check_cleanup_job_slices {host} {
 
    ts_log_fine "checking cleanup of systemd slice $slice_path on host $host"
 
-   analyze_directory_structure $host $CHECK_USER $slice_path dirs "" ""
-   #ts_log_fine $dirs
-
-   set pattern "ocs$ts_config(commd_port)-jobs-"
-   #ts_log_fine "looking for leftover systemd job slices with pattern: $pattern"
    set left_slices {}
    set errors {}
-   foreach dir $dirs {
-      set pos [string first $pattern $dir]
-      if {$pos >= 0} {
-         set slice [string range $dir $pos end]
-         ts_log_fine "   -> $slice"
-         lappend left_slices $slice
-         set output [start_remote_prog $host "root" "systemctl" "stop $slice"]
-         if {$prg_exit_state != 0} {
-            lappend errors "$slice: $prg_exit_state: $output"
+   if {[remote_file_isdirectory $host $slice_path]} {
+      analyze_directory_structure $host $CHECK_USER $slice_path dirs "" ""
+      #ts_log_fine $dirs
+
+      set pattern "ocs$ts_config(commd_port)-jobs-"
+      #ts_log_fine "looking for leftover systemd job slices with pattern: $pattern"
+      foreach dir $dirs {
+         set pos [string first $pattern $dir]
+         if {$pos >= 0} {
+            set slice [string range $dir $pos end]
+            ts_log_fine "   -> $slice"
+            lappend left_slices $slice
+            set output [start_remote_prog $host "root" "systemctl" "stop $slice"]
+            if {$prg_exit_state != 0} {
+               lappend errors "$slice: $prg_exit_state: $output"
+            }
+            set ret 0
          }
-         set ret 0
       }
    }
 
