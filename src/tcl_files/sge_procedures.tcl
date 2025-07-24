@@ -3279,30 +3279,16 @@ proc wait_for_load_from_all_queues { seconds {raise_error 1} } {
    }
 }
 
-#                                                            max. column:     |
-#****** ge_3747/wait_for_online_usage() ******************************
+###
+# @brief wait_for_online_usage
 #
-#  NAME
-#     wait_for_online_usage() -- wait until a job reports online usage
+# This procedure waits until a given job reports online usage.
 #
-#  SYNOPSIS
-#     proc wait_for_online_usage {job_id {mytimeout 60}}
-#
-#  FUNCTION
-#     Waits until a given job reports online CPU usage. Repeatedly calls
-#     "qstat -j <job_id>" and waits until the "usage    1" contains a
-#     CPU value that is neither "N/A" nor "00:00:00".
-#
-#  INPUTS
-#     job_id    - the job which should be observed
-#     mytimeout - the number of seconds this function should wait for
-#                 online usage to be reported
-#
-#  RESULT
-#     0 - No online usage was reported within timeout seconds
-#     1 - Online usage was reported
-#
-#***************************************************************************
+#  @param job_id    - the job id to wait for online usage
+#  @param mytimeout - the number of seconds to wait for online usage
+#  @param usage_name - the name of the usage variable to wait for (default: "cpu")
+#  @param ja_task_id - the array task id to wait for online usage (default: 1)
+#  @return 0 if no online usage was reported within timeout seconds, 1 if online usage was reported
 proc wait_for_online_usage {job_id {mytimeout 60} {usage_name "cpu"} {ja_task_id 1}} {
    # we can't use the index "usage    1" directly in TCL-arrays because of
    # the spaces, have to use it in a variable
