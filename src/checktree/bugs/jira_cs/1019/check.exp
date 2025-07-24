@@ -1,0 +1,150 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.0.8"
+
+# define test's name and run level descriptions
+set check_name            "cs_1019"
+set check_category        "ARRAY USAGE VERIFIED"
+set check_description(0)  "check if usage of multiple array tasks on one host is still correctly reported, when one of them exits"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs_1019_setup
+set check_cleanup_function cs_1019_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs_1019_test"
+
+# -------- local test procedures: initialization------------------------------
+
+proc cs_1019_setup {} {
+   get_current_cluster_config_array ts_config
+   global cs_1019_hosts cs_1019_backup
+
+   # we need 1 test host
+   set cs_1019_hosts [host_conf_get_suited_hosts]
+
+   # add a queue, first with one slot to start the first task, we'll increase that later
+   set q(slots) 1
+   add_queue "test.q" $cs_1019_hosts q
+
+   # speed up usage reporting
+   get_config cs_1019_backup $cs_1019_hosts
+   set conf(load_report_time) "0:0:2"
+   set_config_and_propagate conf $cs_1019_hosts
+}
+
+proc cs_1019_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global cs_1019_hosts cs_1019_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   del_queue "test.q" "" 1 1
+
+   reset_config_and_propagate cs_1019_backup $cs_1019_hosts
+
+   unset -nocomplain cs_1019_hosts cs_1019_backup
+}
+
+# this test checks one aspect of issue CS-1019:
+# When multiple tasks of an array job are running on a host
+# and a later started task (e.g., 2) has finished, then usage for
+# an earlier started task (e.g., 1) is no longer reported.
+proc cs_1019_test {} {
+   get_current_cluster_config_array ts_config
+   global cs_1019_hosts
+
+   set ok 1
+
+   # submit an array job (2 tasks are enough) into the test queue
+   # we use worker tasks as we want to monitor usage
+   set job_opts "-q test.q -t 1-2"
+   set job_args "$ts_config(product_root)/examples/jobs/worker.sh"
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0} {
+      return
+   }
+
+   # wait for the job (first task) to start and report online usage
+   if {[wait_for_jobstart $job_id "" 10] != 0} {
+      set ok 0
+   }
+   if {$ok && ![wait_for_online_usage $job_id 60 "cpu" 1]} {
+      set ok 0
+   }
+
+   if {$ok} {
+      # now we have one task running, let's increase the queue slots and expect the second task
+      # to run and report usage
+      mod_attr "queue" "slots" 2 "test.q"
+      if {![wait_for_online_usage $job_id 60 "cpu" 2]} {
+         set ok 0
+      }
+   }
+
+   if {$ok} {
+      # delete task 2
+      start_sge_bin "qdel" "$job_id -t 2"
+
+      # wait a little bit
+      sleep_for_seconds 5
+
+      # now verify if usage of the first task is still reported
+      set start_usage [get_online_usage $job_id "cpu" 1]
+      # must have been reported
+      if {$start_usage > 0} {
+         ts_log_fine "last usage reported for $job_id.1: $start_usage"
+         set my_timeout [expr [clock seconds] + 20]
+         while {1} {
+            if {[clock seconds] > $my_timeout} {
+               ts_log_severe "timeout waiting for usage of job $job_id.1 to change"
+               break
+            }
+            # wait for usage to change
+            set usage [get_online_usage $job_id "cpu" 1]
+            if {$usage != $start_usage} {
+               ts_log_fine "usage of job $job_id.1 changed from $start_usage to $usage"
+               break
+            } else {
+               ts_log_fine "usage of job $job_id.1 is still $start_usage"
+            }
+            sleep_for_seconds 2
+         }
+      }
+   }
+
+   delete_job $job_id
+}

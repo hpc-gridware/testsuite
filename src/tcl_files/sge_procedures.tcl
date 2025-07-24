@@ -3303,10 +3303,10 @@ proc wait_for_load_from_all_queues { seconds {raise_error 1} } {
 #     1 - Online usage was reported
 #
 #***************************************************************************
-proc wait_for_online_usage {job_id {mytimeout 60} {usage_name "cpu"}} {
+proc wait_for_online_usage {job_id {mytimeout 60} {usage_name "cpu"} {ja_task_id 1}} {
    # we can't use the index "usage    1" directly in TCL-arrays because of
    # the spaces, have to use it in a variable
-   set usage_attrib [get_qstat_j_attribute "usage" 1]
+   set usage_attrib [get_qstat_j_attribute "usage" $ja_task_id]
    set ret        1
    set time       [clock seconds]
 
@@ -3347,6 +3347,41 @@ proc wait_for_online_usage {job_id {mytimeout 60} {usage_name "cpu"}} {
          break
       }
       after 1000
+   }
+
+   return $ret
+}
+
+###
+# @brief get_online_usage
+#
+# This procedure returns the online usage
+# for a given job id and a usage variable.
+# Optionally an array task id can be specified.
+# The usage value is transformed to a numeric value, e.g.,
+# "00:01:17" is transformed to 77,
+# "1K" is transformed to 1024, etc.
+#
+# @param job_id    - the job id to get the usage for
+# @param name      - the name of the usage variable to get
+# @param ja_task_id - the array task id to get the usage for (default: 1)
+# @return -1 if no usage is available, otherwise the usage value
+proc get_online_usage {job_id name {ja_task_id 1}} {
+   set ret -1
+
+   if {[get_qstat_j_info $job_id]} {
+      set usage_attrib [get_qstat_j_attribute "usage" $ja_task_id]
+      if {[info exists qstat_j_info($usage_attrib)]} {
+         # parse the usage values
+         parse_name_value_list usage $qstat_j_info($usage_attrib)
+         if {[info exists usage($name)]} {
+            if {![string equal $usage($name) "NA"] &&
+                ![string equal $usage($name) "N/A"]} {
+               # the usage string contains a value
+               set ret [transform_usage_value $usage($name)]
+            }
+         }
+      }
    }
 
    return $ret
