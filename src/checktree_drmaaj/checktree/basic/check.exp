@@ -112,10 +112,12 @@ proc set_hosts_for_runlevel {} {
 proc drmaaj_basic_get_hosts {} {
    global ts_config
 
-   # tests fail on a submit only host, see CS-1424
-   # set hosts "$ts_config(master_host) $ts_config(execd_nodes) $ts_config(submit_only_hosts)"
    set hosts "$ts_config(master_host) $ts_config(execd_nodes)"
    set hosts [lsort -unique $hosts]
+   # prefer using a submit-only host - this reproduces CS-1424 qmod -sj on own job fails on submit only host
+   if {[llength $ts_config(submit_only_hosts)] > 0 && $ts_config(submit_only_hosts) != "none"} {
+      set hosts [concat $ts_config(submit_only_hosts) $hosts]
+   }
    set ret {}
    foreach host $hosts {
       if {[host_conf_get_java $host 8 0 1] != "" &&
@@ -273,8 +275,8 @@ proc drmaaj_setup_level {} {
    # get host list depending from run level
    set hosts_in_runlevel [set_hosts_for_runlevel]
 
-   # must forbit reschedule on job exiting with 99
-   # must forbit job error upon job exiting with 100
+   # must forbid reschedule on job exiting with 99
+   # must forbid job error upon job exiting with 100
    # otherwise drmaa_test ST_EXIT_STATUS never finishes
 
    # backup old settings
