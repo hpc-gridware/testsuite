@@ -147,8 +147,7 @@ proc issue_3216_test {} {
    }
 
    # restart qmaster
-   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
-   startup_qmaster
+   shutdown_and_restart_qmaster
    wait_for_load_from_all_queues 60
 
    # wait for both tasks to finish - if we see them having finished,
@@ -190,8 +189,7 @@ proc issue_3216_test_array {} {
    }
 
    # restart qmaster
-   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
-   startup_qmaster
+   shutdown_and_restart_qmaster
    wait_for_load_from_all_queues 60
 
    # wait for both tasks to finish - if we see them having finished,
