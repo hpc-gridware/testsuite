@@ -1,0 +1,265 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.1.0"
+
+# define test's name and run level descriptions
+# @todo tag all tests doing qmod with the QMOD category
+set check_name            "perm_qmod"
+set check_category        "QMOD PERMISSION VERIFIED"
+set check_description(0)  "check permissions of qmod actions"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function perm_qmod_setup
+set check_cleanup_function perm_qmod_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "perm_qmod_job_suspend_resume"
+lappend check_functions "perm_qmod_job_reschedule"
+# @todo add further test scenarios, e.g. queue disable/enable, queue suspend/unsuspend, queue rerun
+
+# -------- local test procedures: initialization------------------------------
+
+proc perm_qmod_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
+   global perm_qmod_manager perm_qmod_operator perm_qmod_user perm_qmod_submit_host perm_qmod_admin_host
+
+   # manager/operator/owner
+   # CHECK_USER is manager (admin)
+   # CHECK_FIRST_FOREIGN_USER is operator
+   # CHECK_SECOND_FOREIGN_USER is ordinary user
+   # @todo we would need a third one being ordinary user but queue owner
+   set perm_qmod_manager $CHECK_USER
+   set perm_qmod_operator $CHECK_FIRST_FOREIGN_SYSTEM_USER
+   set perm_qmod_user $CHECK_SECOND_FOREIGN_SYSTEM_USER
+
+   # submit host and admin host
+   # per_qmod_submit_host is can have the value "none" if no submit host is defined
+   set perm_qmod_submit_host [lindex $ts_config(submit_only_hosts) 0]
+   if {$perm_qmod_submit_host eq "none"} {
+      ts_log_config "no submit only host defined, will have to skip some tests"
+   }
+   set perm_qmod_admin_host [lindex $ts_config(admin_only_hosts) 0]
+   if {$perm_qmod_admin_host eq "none"} {
+      # not exactly the same, an exec host is both submit and admin host
+      # but for testing admin hosts permissions it should be fine
+      set perm_qmod_admin_host [lindex $ts_config(execd_nodes) 0]
+   }
+
+   ts_log_frame
+   ts_log_fine "manager:      $perm_qmod_manager"
+   ts_log_fine "operator:     $perm_qmod_operator"
+   ts_log_fine "user:         $perm_qmod_user"
+   ts_log_fine "admin host:   $perm_qmod_admin_host"
+   ts_log_fine "submit host:  $perm_qmod_submit_host"
+   ts_log_frame
+
+   # setup config
+   add_operator $perm_qmod_operator
+}
+
+proc perm_qmod_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global perm_qmod_manager perm_qmod_operator perm_qmod_user perm_qmod_submit_host perm_qmod_admin_host
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   delete_operator $perm_qmod_operator
+
+   unset -nocomplain perm_qmod_manager perm_qmod_operator perm_qmod_user perm_qmod_submit_host perm_qmod_admin_host
+}
+
+
+proc perm_qmod_job_suspend_resume {} {
+   get_current_cluster_config_array ts_config
+   global perm_qmod_manager perm_qmod_operator perm_qmod_user perm_qmod_submit_host perm_qmod_admin_host
+
+   # submit a job as ordinary user
+   set job_args "$ts_config(product_root)/examples/jobs/sleeper.sh 600"
+   set job_id [submit_job $job_args 1 60 "" $perm_qmod_user]
+   if {$job_id <= 0} {
+      return
+   }
+
+   wait_for_jobstart $job_id "" 10
+
+   set can_continue 1
+
+   # suspend/resume the job as ordinary user from submit host - must succeed
+   # this is CS-1424
+   if {$perm_qmod_submit_host ne "none"} {
+      set output [start_sge_bin "qmod" "-sj $job_id" $perm_qmod_submit_host $perm_qmod_user]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "(1) qmod -sj $job_id as user on submit only host failed with exit code $prg_exit_state:\n$output"
+      } else {
+         set output [start_sge_bin "qmod" "-usj $job_id" $perm_qmod_submit_host $perm_qmod_user]
+         if {$prg_exit_state != 0} {
+            ts_log_severe "(2) qmod -usj $job_id as user on submit only host failed with exit code $prg_exit_state:\n$output"
+            set can_continue 0
+         }
+      }
+   }
+
+   # @todo can't test: suspend/resume as a different ordinary user - must fail
+
+   # suspend/resume the job as operator user from submit host - must fail
+   if {$can_continue && $perm_qmod_submit_host ne "none"} {
+      set output [start_sge_bin "qmod" "-sj $job_id" $perm_qmod_submit_host $perm_qmod_operator]
+      if {$prg_exit_state == 0} {
+         ts_log_severe "(3) qmod -sj $job_id as operator on submit only host should have failed but succeeded:\n$output"
+         # try to unsuspend again (from the admin host, this should succeed)
+         set output [start_sge_bin "qmod" "-usj $job_id" $perm_qmod_admin_host $perm_qmod_operator]
+         if {$prg_exit_state != 0} {
+            ts_log_severe "(4) qmod -usj $job_id as operator on admin host failed with exit code $prg_exit_state:\n$output"
+            set can_continue 0
+         }
+      }
+   }
+
+   # suspend/resume the job as operator user from admin host - must succeed
+   if {$can_continue} {
+      set output [start_sge_bin "qmod" "-sj $job_id" $perm_qmod_admin_host $perm_qmod_operator]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "(5) qmod -sj $job_id as operator on admin host failed with exit code $prg_exit_state:\n$output"
+      } else {
+         set output [start_sge_bin "qmod" "-usj $job_id" $perm_qmod_admin_host $perm_qmod_operator]
+         if {$prg_exit_state != 0} {
+            ts_log_severe "(6) qmod -usj $job_id as operator on admin host failed with exit code $prg_exit_state:\n$output"
+            set can_continue 0
+         }
+      }
+   }
+
+   # cleanup
+   delete_job $job_id
+
+   # submit as operator, try to suspend as user, must be rejected
+   set job_id [submit_job $job_args 1 60 "" $perm_qmod_operator]
+   if {$job_id <= 0} {
+      return
+   }
+
+   set can_continue 1
+   # suspend the job as ordinary user from submit host - must fail
+   if {$perm_qmod_submit_host ne "none"} {
+      set output [start_sge_bin "qmod" "-sj $job_id" $perm_qmod_submit_host $perm_qmod_user]
+      if {$prg_exit_state == 0} {
+         ts_log_severe "(5) qmod -sj $job_id as user on submit only host should have failed:\n$output"
+         set can_continue 0
+      }
+   }
+
+   # suspend the job as ordinary user from admin host - must fail
+   if {$can_continue} {
+      set output [start_sge_bin "qmod" "-sj $job_id" $perm_qmod_admin_host $perm_qmod_user]
+      if {$prg_exit_state == 0} {
+         ts_log_severe "(6) qmod -sj $job_id as user on admin host should have failed:\n$output"
+      }
+   }
+
+   # cleanup
+   delete_job $job_id
+}
+
+proc perm_qmod_job_reschedule {} {
+   get_current_cluster_config_array ts_config
+   global perm_qmod_manager perm_qmod_operator perm_qmod_user perm_qmod_submit_host perm_qmod_admin_host
+
+   # submit a job as ordinary user
+   set job_opts "-r y"
+   set job_args "$ts_config(product_root)/examples/jobs/sleeper.sh 600"
+   set job_id [submit_job "$job_opts $job_args" 1 60 "" $perm_qmod_user]
+   if {$job_id <= 0} {
+      return
+   }
+
+   wait_for_jobstart $job_id "" 10
+
+   # reschedule the job as ordinary user from submit host - must succeed
+   if {$perm_qmod_submit_host ne "none"} {
+      set output [start_sge_bin "qmod" "-rj $job_id" $perm_qmod_submit_host $perm_qmod_user]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "(1) qmod -rj $job_id as user on submit only host failed:\n$output"
+      }
+   }
+
+   # reschedule the job as ordinary user from admin host - must succeed
+   set output [start_sge_bin "qmod" "-rj $job_id" $perm_qmod_admin_host $perm_qmod_user]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "(2) qmod -rj $job_id as user on admin host failed:\n$output"
+   }
+
+   # reschedule the job as operator from submit host - must fail
+   if {$perm_qmod_submit_host ne "none"} {
+      set output [start_sge_bin "qmod" "-rj $job_id" $perm_qmod_submit_host $perm_qmod_operator]
+      if {$prg_exit_state == 0} {
+         ts_log_severe "(3) qmod -rj $job_id as operator on submit only host should have failed but succeeded:\n$output"
+      }
+   }
+
+   # reschedule the job as operator user from admin host - must succeed
+   set output [start_sge_bin "qmod" "-rj $job_id" $perm_qmod_admin_host $perm_qmod_operator]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "(4) qmod -rj $job_id as operator on admin host failed with exit code $prg_exit_state:\n$output"
+   }
+
+   # cleanup
+   delete_job $job_id
+
+   # submit as operator, try to re-run as user, must be rejected
+   set job_id [submit_job $job_args 1 60 "" $perm_qmod_operator]
+   if {$job_id <= 0} {
+      return
+   }
+
+   # reschedule the job as ordinary user from submit host - must fail
+   if {$perm_qmod_submit_host ne "none"} {
+      set output [start_sge_bin "qmod" "-rj $job_id" $perm_qmod_submit_host $perm_qmod_user]
+      if {$prg_exit_state == 0} {
+         ts_log_severe "(5) qmod -rj $job_id as user on submit only host should have failed:\n$output"
+      }
+   }
+
+   # reschedule the job as ordinary user from admin host - must fail
+   set output [start_sge_bin "qmod" "-rj $job_id" $perm_qmod_admin_host $perm_qmod_user]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "(6) qmod -rj $job_id as user on admin host should have failed:\n$output"
+   }
+
+   # cleanup
+   delete_job $job_id
+}
+
