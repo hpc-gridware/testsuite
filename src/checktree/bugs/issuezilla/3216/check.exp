@@ -46,7 +46,7 @@ set check_need_running_system "yes"
 
 # define test's name and run level descriptions
 set check_name            "issue_3216"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "QMOD RESCHEDULE VERIFIED"
 set check_description(0)  "rerun of a tightly integrated parallel array job crashes qmaster after restart"
 
 # define test's dependencies

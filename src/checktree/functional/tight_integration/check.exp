@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "tight_integration"
-set check_category        "PARALLEL SCHEDULER VERIFIED"
+set check_category        "PARALLEL QMOD RESCHEDULE SCHEDULER VERIFIED"
 set check_description(0)  "check tightly integrated parallel jobs submitted with qsub"
 set check_description(1)  "check tightly integrated parallel jobs submitted with qrsh"
 set check_description(2)  "check tightly integrated parallel jobs submitted with qrsh, accounting summary"

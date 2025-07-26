@@ -118,7 +118,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "consumable_resources"
-set check_category        "SCHEDULER QHOST VERIFIED"
+set check_category        "QHOST QMOD RESCHEDULE SCHEDULER VERIFIED"
 set check_description(0)  "Consumable resources on global level"
 set check_description(1)  "Consumable resources on host level"
 set check_description(2)  "Consumable resources on queue level"

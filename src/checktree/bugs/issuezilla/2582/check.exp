@@ -46,9 +46,8 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "issue_2582"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "QMOD VERIFIED"
 set check_description(0)  "qmod does not follow admin host rules"
-set check_description(1)  ""
 
 # define test's dependencies
 set check_needs           "init_core_system"
@@ -89,51 +88,46 @@ proc issue_2582_cleanup {} {
 }
 
 proc issue_2582_test1 {} {
-   global CHECK_ACT_LEVEL
    global cluster_host non_cluster_host
 
-   if {$CHECK_ACT_LEVEL == 0} {
-      ts_log_fine "this is the test for runlevel $CHECK_ACT_LEVEL"
+   # execution "qmod -d all.q@cluster_host_xy from non_cluster_host as a root"
+   ts_log_fine "executing qmod -d all.q@$cluster_host from $non_cluster_host as a root"
+   set result [start_sge_bin "qmod" "-d all.q@$cluster_host" "$non_cluster_host" "root"]
+   ts_log_fine "$result"
+   if {$prg_exit_state == 0} {
+      ts_log_severe "qmod should have failed"
+      start_sge_bin "qmod" "-e all.q@$cluster_host" "$non_cluster_host" "root"
+   } else {
+      ts_log_fine "qmod have failed as expected"
+   }
 
-      # execution "qmod -d all.q@cluster_host_xy from non_cluster_host as a root"
-      ts_log_fine "executing qmod -d all.q@$cluster_host from $non_cluster_host as a root"
-      set result [start_sge_bin "qmod" "-d all.q@$cluster_host" "$non_cluster_host" "root"]
-      ts_log_fine "$result"
-      if {$prg_exit_state == 0} {
-         ts_log_severe "qmod should have failed"
-         start_sge_bin "qmod" "-e all.q@$cluster_host" "$non_cluster_host" "root"
-      } else {
-         ts_log_fine "qmod have failed as expected"
-      }
+   # execution "qmod -help -d all.q@cluster_host_xy from non_cluster_host as a root"
+   ts_log_fine "executing qmod -help -d all.q@$cluster_host from $non_cluster_host as a root"
+   set result [start_sge_bin "qmod" "-help -d all.q@$cluster_host" "$non_cluster_host" "root"]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "qmod should have failed"
+      start_sge_bin "qmod" "-e all.q@$cluster_host" "$non_cluster_host" "root"
+   } else {
+      ts_log_fine "qmod have failed as expected"
+   }
 
-      # execution "qmod -help -d all.q@cluster_host_xy from non_cluster_host as a root"
-      ts_log_fine "executing qmod -help -d all.q@$cluster_host from $non_cluster_host as a root"
-      set result [start_sge_bin "qmod" "-help -d all.q@$cluster_host" "$non_cluster_host" "root"]
-      if {$prg_exit_state == 0} {
-         ts_log_severe "qmod should have failed"
-         start_sge_bin "qmod" "-e all.q@$cluster_host" "$non_cluster_host" "root"
-      } else {
-         ts_log_fine "qmod have failed as expected"
-      }
+   # execution "qmod -help from non_cluster_host as a root"
+   ts_log_fine "executing qmod -help from $non_cluster_host as a root"
+   set result [start_sge_bin "qmod" "-help" "$non_cluster_host" "root"]
+   if {$prg_exit_state == 0} {
+      ts_log_fine "qmod was successful"
+   } else {
+      ts_log_severe "qmod have failed"
+   }
 
-      # execution "qmod -help from non_cluster_host as a root"
-      ts_log_fine "executing qmod -help from $non_cluster_host as a root"
-      set result [start_sge_bin "qmod" "-help" "$non_cluster_host" "root"]
-      if {$prg_exit_state == 0} {
-         ts_log_fine "qmod was successful"
-      } else {
-         ts_log_severe "qmod have failed"
-      }
-
-      # execution "qmod -d all.q@cluster_host_xy from cluster_host as a root"
-      ts_log_fine "executing qmod -d all.q@$cluster_host from $cluster_host as a root"
-      set result [start_sge_bin "qmod" "-d all.q@$cluster_host" "$cluster_host" "root"]
-      ts_log_fine "$result"
-      if {$prg_exit_state == 0} {
-         ts_log_fine "qmod was successful"
-         start_sge_bin "qmod" "-e all.q@$cluster_host" "$cluster_host" "root"
-      } else {
-         ts_log_severe "qmod have failed"
-      }
+   # execution "qmod -d all.q@cluster_host_xy from cluster_host as a root"
+   ts_log_fine "executing qmod -d all.q@$cluster_host from $cluster_host as a root"
+   set result [start_sge_bin "qmod" "-d all.q@$cluster_host" "$cluster_host" "root"]
+   ts_log_fine "$result"
+   if {$prg_exit_state == 0} {
+      ts_log_fine "qmod was successful"
+      start_sge_bin "qmod" "-e all.q@$cluster_host" "$cluster_host" "root"
+   } else {
+      ts_log_severe "qmod have failed"
    }
 }

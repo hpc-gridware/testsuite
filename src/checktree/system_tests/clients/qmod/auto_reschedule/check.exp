@@ -45,7 +45,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "qmod_auto_reschedule"
-set check_category        "PARALLEL RESCHEDULE SCHEDULER VERIFIED"
+set check_category        "PARALLEL QMOD RESCHEDULE SCHEDULER VERIFIED"
 set check_description(0)  "checking auto_reschedule with global reschedule_unknown 00:01:00"
 set check_description(1)  "checking auto_reschedule with global reschedule_unknown 00:00:00"
 set check_description(2)  "checking auto_reschedule with global reschedule_unknown 00:01:00 and ENABLE_RESCHEDULE_KILL"

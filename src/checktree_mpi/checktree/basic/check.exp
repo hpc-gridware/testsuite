@@ -33,7 +33,7 @@ set check_version_range "9.0.5 9.1.0"
 
 # define test's name and run level descriptions
 set check_name            "mpi_basic"
-set check_category        "MPI PARALLEL VERIFIED"
+set check_category        "CHECKPOINTING MPI PARALLEL RESCHEDULE VERIFIED"
 set check_description(0)  "test basic functionality of the MPI tight integration with the latest version of the first configured MPI installation"
 set check_description(100)  "test basic functionality of the MPI tight integration with the latest version of all configured MPI installations"
 set check_description(200)  "test basic functionality of the MPI tight integration with all versions of all configured MPI installations"

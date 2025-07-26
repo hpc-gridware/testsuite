@@ -46,7 +46,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "issue_193"
-set check_category        "ISSUE PARALLEL SCHEDULER VERIFIED"
+set check_category        "ISSUE PARALLEL QMOD SCHEDULER VERIFIED"
 set check_description(0)  "qmod -r should be allowed for operators also"
 
 # define test's dependencies
