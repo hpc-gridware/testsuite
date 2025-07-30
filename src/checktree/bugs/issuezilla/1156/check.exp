@@ -49,7 +49,6 @@ global proc_id
 set check_name            "issue_1156"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "Test of issue 1156"
-set check_description(1)  "Test of issue 1156"
 
 # define test's dependencies
 set check_needs           "init_core_system"
@@ -164,51 +163,47 @@ proc issue_1156_test1 {} {
    global job_host_name
    global proc_id
 
-   if {$CHECK_ACT_LEVEL == 0} {
-      ts_log_fine "this is the test for runlevel $CHECK_ACT_LEVEL"
-
-      # execute "qrsh -v hello=my=world,please=look=behind env"
-      ts_log_fine "executing qrsh -v hello=my=world,please=look=behind env"
-      set report [start_sge_bin "qrsh" "-v hello=my=world,please=look=behind env"]
-      if {$prg_exit_state != 0} {
-         ts_log_severe "qrsh have failed:\n$result"
-         return -1
-      }
-
-      # check whether the output of env contains variable hello=my=world and please=look=behind
-      set result [check_env_output $report]
-      if { $result != 0 } {
-         return -1
-      }
-
-      # execute "qsh -v hello=my=world,please=look=behind -display $CHECK_DISPLAY_OUTPUT -S $script_name"
-      ts_log_fine "starting qsh with display $CHECK_DISPLAY_OUTPUT script $script_name"
-      set proc_id [open_remote_spawn_process $ts_config(master_host) $CHECK_USER qsh "-l h=$job_host_name -v hello=my=world,please=look=behind -display $CHECK_DISPLAY_OUTPUT -S $script_name"]
-      set sp_id [ lindex $proc_id 1 ]
-
-      # wait for host to appear on the remote host
-      set result [wait_for_remote_file $job_host_name $CHECK_USER $report_name]
-      if { $result != 0 } {
-         ts_log_severe "script report file doesnt exist probably qsh failed (bad DISPLAY value, ...)"
-         return -1
-      }
-
-      # read env report file
-      ts_log_fine "reading env report file"
-
-      get_file_content $job_host_name $CHECK_USER $report_name file_array
-      set report ""
-      for {set i 0} {$i < $file_array(0)} {incr i 1} {
-         append report "$file_array($i)\n"
-      } 
-      ts_log_finer "report file content:\n$report\nEOF\n"
-
-      # check whether the output of env contains variable hello=my=world and please=look=behind
-      set result [check_env_output $report]
-      if { $result != 0 } {
-         return -1
-      }
-
-      return 0
+   # execute "qrsh -v hello=my=world,please=look=behind env"
+   ts_log_fine "executing qrsh -v hello=my=world,please=look=behind env"
+   set report [start_sge_bin "qrsh" "-v hello=my=world,please=look=behind env"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qrsh have failed:\n$result"
+      return -1
    }
+
+   # check whether the output of env contains variable hello=my=world and please=look=behind
+   set result [check_env_output $report]
+   if { $result != 0 } {
+      return -1
+   }
+
+   # execute "qsh -v hello=my=world,please=look=behind -display $CHECK_DISPLAY_OUTPUT -S $script_name"
+   ts_log_fine "starting qsh with display $CHECK_DISPLAY_OUTPUT script $script_name"
+   set proc_id [open_remote_spawn_process $ts_config(master_host) $CHECK_USER qsh "-l h=$job_host_name -v hello=my=world,please=look=behind -display $CHECK_DISPLAY_OUTPUT -S $script_name"]
+   set sp_id [ lindex $proc_id 1 ]
+
+   # wait for host to appear on the remote host
+   set result [wait_for_remote_file $job_host_name $CHECK_USER $report_name]
+   if { $result != 0 } {
+      ts_log_severe "script report file doesnt exist probably qsh failed (bad DISPLAY value, ...)"
+      return -1
+   }
+
+   # read env report file
+   ts_log_fine "reading env report file"
+
+   get_file_content $job_host_name $CHECK_USER $report_name file_array
+   set report ""
+   for {set i 0} {$i < $file_array(0)} {incr i 1} {
+      append report "$file_array($i)\n"
+   }
+   ts_log_finer "report file content:\n$report\nEOF\n"
+
+   # check whether the output of env contains variable hello=my=world and please=look=behind
+   set result [check_env_output $report]
+   if { $result != 0 } {
+      return -1
+   }
+
+   return 0
 }
