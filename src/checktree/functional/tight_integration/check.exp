@@ -98,7 +98,7 @@ proc tight_integration_setup {} {
    # Keep active_jobs directories in case of error for easier debugging
    # They will be deleted again when the cleanup_method reset execd_params.
    # This leads the the test failing due to error loging, see CS-1422
-   if {0} {
+   if {1} {
       add_or_replace_array_param myconfig tight_global_config "execd_params" "KEEP_ACTIVE" "ERROR"
       set_config_and_propagate myconfig
    }
