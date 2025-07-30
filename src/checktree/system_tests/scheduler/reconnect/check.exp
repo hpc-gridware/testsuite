@@ -42,8 +42,11 @@ global check_description
 global check_needs
 global check_functions
 global check_root_access_needs
-
 set check_root_access_needs "yes"
+
+# this test doesn't make sense with scheduler thread
+global check_version_range
+set check_version_range {"" "6.0.0"}
 
 # define test's name and run level descriptions
 set check_name            "schedd_reconnect"
@@ -90,9 +93,7 @@ proc schedd_reconnect_cleanup  {} {
    reset_config schedd_reconnect_saved_config
 
    if {$schedd_reconnect_test_globals(restart_master)} {
-      set spooldir [get_qmaster_spool_dir]
-      shutdown_master_and_scheduler $ts_config(master_host) $spooldir
-      startup_qmaster
+      shutdown_and_restart_qmaster
    }
 
    if {[info exists schedd_reconnect_test_globals]} {
