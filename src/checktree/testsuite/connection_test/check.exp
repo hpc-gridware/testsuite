@@ -103,11 +103,19 @@ proc connection_test_test {} {
    foreach session $sessions {
       # get detailed session information
       get_spawn_id_rlogin_session $session connection
-      lappend host_list $connection(hostname)
-      if { [lsearch $user_list $connection(user)] < 0 } {
+      if {[lsearch $host_list $connection(hostname)] < 0} {
+         lappend host_list $connection(hostname)
+      }
+      if {[lsearch $user_list $connection(user)] < 0} {
          lappend user_list $connection(user)
       }
    }
+
+   set host_list [lsort -dictionary -unique $host_list]
+   ts_log_fine "testing hosts $host_list"
+
+   set user_list [lsort -dictionary -unique $user_list]
+   ts_log_fine "testing users $user_list"
 
    ts_log_newline
    ts_log_fine "starting remote echo calls ..."
