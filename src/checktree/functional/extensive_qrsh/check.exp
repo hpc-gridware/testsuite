@@ -51,28 +51,54 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "test parallel qrsh calls from a parent script (with qconf -tsm calls)"
 set check_description(1)  "test parallel qrsh calls from a parent script"
 
-
-
 # define test's dependencies
 set check_needs           "init_core_system" 
 
 # setup and cleanup functions
-set check_setup_level_function extensive_qrsh_setup
-set check_cleanup_level_function extensive_qrsh_cleanup
+set check_setup_function extensive_qrsh_setup
+set check_setup_level_function extensive_qrsh_setup_level
+set check_cleanup_level_function extensive_qrsh_cleanup_level
+set check_cleanup_function extensive_qrsh_cleanup
 
 # define test's procedure order
 set check_functions {}
 lappend check_functions "extensive_qrsh_test"
 
 proc extensive_qrsh_setup {} {
+   global extensive_qrsh_backup
+
+   get_config extensive_qrsh_backup
+
+   # for debugging possible issues
+   add_or_replace_array_param conf extensive_qrsh_backup "execd_params" "KEEP_ACTIVE" "ERROR"
+   set_config_and_propagate conf
+}
+
+proc extensive_qrsh_setup_level {} {
+   get_current_cluster_config_array ts_config
    global CHECK_USER 
+
+   # We want to check accounting,
+   # remove a possibly huge accounting file
+   set accounting_file "$ts_config(product_root)/$ts_config(cell)/common/accounting.jsonl"
+   delete_remote_file $ts_config(master_host) $CHECK_USER $accounting_file
 }
 
 
-proc extensive_qrsh_cleanup {} {
+proc extensive_qrsh_cleanup_level {} {
    get_current_cluster_config_array ts_config
+
    delete_all_jobs
    wait_for_end_of_all_jobs 180
+}
+
+proc extensive_qrsh_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global extensive_qrsh_backup
+
+   reset_config_and_propagate extensive_qrsh_backup
+
+   unset -nocomplain extensive_qrsh_backup
 }
 
 
@@ -80,6 +106,13 @@ proc extensive_qrsh_test {} {
    global CHECK_USER 
    global CHECK_ACT_LEVEL
    get_current_cluster_config_array ts_config
+
+   # figure out the first job id to be used by a qrsh job
+   set job_id [submit_job "-b y sleep 0"]
+   if {$job_id <= 0} {
+      return
+   }
+   set first_job_id [expr $job_id + 1]
 
    set error_text ""
    set user  $CHECK_USER
@@ -115,7 +148,6 @@ proc extensive_qrsh_test {} {
    # If not all qrsh_test.sh (which itself starts $qrsh_count qrsh calls) return within
    # a timeout of 120 seconds the test will fail.
    # NOTE: The timeout of 120 seconds is valid for any output coming in!
-
    set timeout 120
    set line_count 0
    expect {
@@ -187,13 +219,32 @@ proc extensive_qrsh_test {} {
       close_spawn_process $sp_id_map($spawn_id)
    }
 
+  
+   # figure out last job id used by a qrsh job
+   set job_id [submit_job "-b y sleep 0"]
+   if {$job_id > 0} {
+      set last_job_id [expr $job_id - 1]
+
+      # get accounting records and check the failed and exit_status
+      if {[get_qacct_multi $first_job_id $last_job_id qacct_info "" "" 1 "exit_status failed"] == 0} {
+         set task_id "undefined"
+         for {set i $first_job_id} {$i <= $last_job_id} {incr i} {
+            if {[lsearch $qacct_info(index) "$i,$task_id"] < 0} {
+               append error_text "no accounting record for job $i found\n"
+            } else {
+               if {$qacct_info($i,$task_id,exit_status) != 0 ||
+                   $qacct_info($i,$task_id,failed) != 0} {
+                  append error_text "job $i didn't run through as expected:\n"
+                  append error_text "   exit_status = $qacct_info($i,$task_id,exit_status), "
+                  append error_text "   failed = $qacct_info($i,$task_id,failed)\n"
+               }
+            }
+         }
+      }
+   }
+
    if {$error_text != ""} {
       ts_log_severe $error_text
    }
 }
-
-
-
-
-
 
