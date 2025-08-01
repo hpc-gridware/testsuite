@@ -34,11 +34,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global check_need_running_system
 
@@ -52,7 +52,7 @@ set check_description(0)  "test parallel qrsh calls from a parent script (with q
 set check_description(1)  "test parallel qrsh calls from a parent script"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function extensive_qrsh_setup
@@ -76,7 +76,7 @@ proc extensive_qrsh_setup {} {
 
 proc extensive_qrsh_setup_level {} {
    get_current_cluster_config_array ts_config
-   global CHECK_USER 
+   global CHECK_USER
 
    # We want to check accounting,
    # remove a possibly huge accounting file
@@ -103,7 +103,7 @@ proc extensive_qrsh_cleanup {} {
 
 
 proc extensive_qrsh_test {} {
-   global CHECK_USER 
+   global CHECK_USER
    global CHECK_ACT_LEVEL
    get_current_cluster_config_array ts_config
 
@@ -182,11 +182,10 @@ proc extensive_qrsh_test {} {
          foreach line $splitline {
             incr line_count 1
             if {[string match "*qrsh_test.sh script exits now*" $line]} {
-               ts_log_fine "$qrsh_host: qrsh_test.sh script to target host \"$target_host\" finished - ok!" 
+               ts_log_fine "$qrsh_host: qrsh_test.sh script to target host \"$target_host\" finished - ok!"
                set is_host_ok($qrsh_host,$target_host) 1
             }
          }
-         
 
          set wait_host_list {}
          foreach qrsh_host $qrsh_host_list {
@@ -219,13 +218,18 @@ proc extensive_qrsh_test {} {
       close_spawn_process $sp_id_map($spawn_id)
    }
 
-  
+
    # figure out last job id used by a qrsh job
    set job_id [submit_job "-b y sleep 0"]
    if {$job_id > 0} {
       set last_job_id [expr $job_id - 1]
+      # wait for the job to finish
+      wait_for_jobend $job_id "" 10 0
+      # and get its accounting - now we can be sure that all accounting records of our qrsh jobs
+      # have been written
+      get_qacct $job_id
 
-      # get accounting records and check the failed and exit_status
+      # get accounting records of the qrsh jobs and check the failed and exit_status
       if {[get_qacct_multi $first_job_id $last_job_id qacct_info "" "" 1 "exit_status failed"] == 0} {
          set task_id "undefined"
          for {set i $first_job_id} {$i <= $last_job_id} {incr i} {
