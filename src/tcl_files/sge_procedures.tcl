@@ -10874,7 +10874,7 @@ proc shutdown_and_restart_qmaster {} {
 
    shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
    # sometimes the socket can not be re-used immediately
-   after 1000
+   sleep_for_seconds 2
    # startup qmaster with scheduler (if possible)
    startup_qmaster 1
 }

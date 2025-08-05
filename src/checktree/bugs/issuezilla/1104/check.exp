@@ -50,7 +50,7 @@ set check_functions           ""
 lappend check_functions       "issue_1104_run"          ;# functions to call (in order)
 
 # This test saves the local configuration on the master host and removes it.
-# Then it tries to restart the sge_qmaster daemon. The qmaster should start 
+# Then it tries to restart the sge_qmaster daemon. The qmaster should start
 # without local_conf,
 # but writing a Warning to the messages file.
 # After restart the local configuration will be added again.
@@ -69,18 +69,17 @@ proc issue_1104_run {} {
 
    if {![string match $NOTDEFINED [string trim $result]]} {
       ts_log_severe "could not delete local configuration for host $ts_config(master_host)"
-   } 
+   }
 
    # restart qmaster
-   shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
-   startup_qmaster
-  
+   shutdown_and_restart_qmaster
+
    # re-add config of master host from file
    file mkdir "$ts_config(product_root)/tmp"
    set temp_file "$ts_config(product_root)/tmp/$ts_config(master_host)"
    set conf_file [open $temp_file "w"]
    foreach name [array names orig1104_config] {
-      puts $conf_file "$name $orig1104_config($name)" 
+      puts $conf_file "$name $orig1104_config($name)"
    }
    close $conf_file
 
