@@ -208,7 +208,6 @@ proc auto_reschedule_setup {} {
    }
 
    set myconfig(load_report_time)   "00:00:05"
-   set myconfig(max_unheard)        "00:00:10"
 
    if {$global_resch != 0} {
       set global_reschedule_value "00:01:00"
@@ -233,7 +232,17 @@ proc auto_reschedule_setup {} {
 
    #add_or_replace_array_param myconfig stored_configuration "execd_params" "KEEP_ACTIVE" "ERROR"
    set_config_and_propagate myconfig
-   ts_log_fine "changed global config"
+   ts_log_fine "changed global config (1)"
+
+   # We need to change load_report_time and max_unheard in two steps:
+   #   - current load_report_time is 15
+   #   - when we change it, it takes up to 2 load report intervals to change
+   #   - when max_unheard (being considered in sge_qmaster) is lower than load report time
+   #     the host will go into unknown state
+   unset -nocomplain myconfig
+   set myconfig(max_unheard)        "00:00:10"
+   set_config_and_propagate myconfig
+   ts_log_fine "changed global config (2)"
 
    get_config stored_auto_reschedule_host1_config $auto_reschedule_host1
    set myhostconfig(reschedule_unknown) "00:00:30"
