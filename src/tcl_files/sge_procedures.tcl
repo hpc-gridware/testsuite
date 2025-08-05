@@ -11083,8 +11083,13 @@ proc remove_all_hosts_from_init_system {} {
 ###
 # @brief sleep until the specified endtime is reached
 # @param endtime - the time in seconds since epoch when to stop sleeping
-proc sleep_until {endtime} {
+# @param message - optional message to log while sleeping - if not give a default message is printed
+proc sleep_until {endtime {message ""}} {
    set now [clock seconds]
+   if {$message == ""} {
+      set message "sleeping until [clock format $endtime]"
+   }
+   ts_log_fine $message
    while {$now < $endtime} {
       ts_log_finest "waiting until [clock format $endtime], now it is [clock format $now]"
       after 500
@@ -11095,6 +11100,10 @@ proc sleep_until {endtime} {
 ###
 # @brief sleep for the specified number of seconds
 # @param seconds - the number of seconds to sleep
-proc sleep_for_seconds {seconds} {
-   sleep_until [expr [clock seconds] + $seconds]
+# @param message - optional message to log while sleeping - if not give a default message is printed
+proc sleep_for_seconds {seconds {message ""}} {
+   if {$message == ""} {
+      set message "waiting for $seconds seconds"
+   }
+   sleep_until [expr [clock seconds] + $seconds] $message
 }

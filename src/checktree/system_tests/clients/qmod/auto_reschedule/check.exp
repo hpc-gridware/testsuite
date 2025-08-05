@@ -605,5 +605,16 @@ proc auto_reschedule_GE_3331 {} {
    }
 
    startup_execd $auto_reschedule_host1
+
+   # We need to wait for
+   # - the sge_execd to have reported the jobs
+   # - jobs to have been signalled by sge_qmaster as they are not supposed to be there
+   # - jobs to have been cleaned up
+   # The jobs' shepherd processes are not children of the current sge_execd, so cleanup will
+   # only be done by the regular job cleanup mechanism, which is called once a minute.
+   # This means that we need to wait longer than one minute.
+   # If we do not wait, the post check tests will fail on hosts having systemd
+   # as the job is still there and the job scope still exists.
+   sleep_for_seconds 75 "waiting for re-started sge_execd to clean up the still running jobs (75 seconds)"
 }
 
