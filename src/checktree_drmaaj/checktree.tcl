@@ -152,6 +152,14 @@ proc drmaaj_install_binaries { arch_list a_report } {
    set args "$jar $dest"
    
    report_task_add_message report $task_nr "------------------------------------------"
+   report_task_add_message report $task_nr "-> wait for $dest to exist on $ts_config(master_host)"
+   if {[wait_for_remote_dir $ts_config(master_host) $CHECK_USER $dest] != 0} {
+      report_task_add_message report $task_nr "   FAILED"
+   }
+   report_task_add_message report $task_nr "-> wait for $jar to exist on $ts_config(master_host)"
+   if {[wait_for_remote_file $ts_config(master_host) $CHECK_USER $jar] != 0} {
+      report_task_add_message report $task_nr "   FAILED"
+   }
    report_task_add_message report $task_nr "-> $cmd $args"
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER $cmd $args]
    if {$prg_exit_state != 0} {
