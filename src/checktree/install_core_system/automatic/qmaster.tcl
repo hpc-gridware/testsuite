@@ -240,7 +240,10 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
       append auto_config_content "SET_FILE_PERMS=\"false\"\n"
    }
    append auto_config_content "RESCHEDULE_JOBS=\"wait\"\n"
-   append auto_config_content "SCHEDD_CONF=\"1\"\n"
+   # we ignore it since 9.0.0, and do no longer expect it since 9.0.8
+   if {[is_version_in_range "" "9.0.8"]} {
+      append auto_config_content "SCHEDD_CONF=\"1\"\n"
+   }
    append auto_config_content "SHADOW_HOST=\"$ts_config(shadowd_hosts)\"\n"
    append auto_config_content "REMOVE_RC=\"false\"\n"
    append auto_config_content "CSP_RECREATE=\"true\"\n"
