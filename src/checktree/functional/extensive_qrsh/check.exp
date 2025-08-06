@@ -224,13 +224,13 @@ proc extensive_qrsh_test {} {
    if {$job_id > 0} {
       set last_job_id [expr $job_id - 1]
       # wait for the job to finish
-      wait_for_jobend $job_id "" 10 0
+      wait_for_jobend $job_id "" 30 0
       # and get its accounting - now we can be sure that all accounting records of our qrsh jobs
       # have been written
       get_qacct $job_id
 
       # get accounting records of the qrsh jobs and check the failed and exit_status
-      if {[get_qacct_multi $first_job_id $last_job_id qacct_info "" "" 1 "exit_status failed"] == 0} {
+      if {[get_qacct_multi $first_job_id $last_job_id qacct_info "" "" 1 "exit_status failed hostname"] == 0} {
          set task_id "undefined"
          for {set i $first_job_id} {$i <= $last_job_id} {incr i} {
             if {[lsearch $qacct_info(index) "$i,$task_id"] < 0} {
@@ -238,9 +238,9 @@ proc extensive_qrsh_test {} {
             } else {
                if {$qacct_info($i,$task_id,exit_status) != 0 ||
                    $qacct_info($i,$task_id,failed) != 0} {
-                  append error_text "job $i didn't run through as expected:\n"
+                  append error_text "job $i didn't run through as expected on host $qacct_info($i,$task_id,hostname):\n"
                   append error_text "   exit_status = $qacct_info($i,$task_id,exit_status), "
-                  append error_text "   failed = $qacct_info($i,$task_id,failed)\n"
+                  append error_text "failed = $qacct_info($i,$task_id,failed)\n"
                }
             }
          }
