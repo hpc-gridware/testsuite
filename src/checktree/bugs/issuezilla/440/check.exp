@@ -79,7 +79,7 @@ proc issue_440_cleanup {} {
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   unset issue_440_config
+   unset -nocomplain issue_440_config
 }
 
 
@@ -93,28 +93,28 @@ proc issue_440_check_qsub {} {
    set submit_script_path "$ts_config(testsuite_root_dir)/scripts/cmd_line_output.sh"
 
 
-   foreach check_440_host $issue_440_config(host_list) {
-      set end_length [expr 1024 * $issue_440_config(max_kbyte,$check_440_host)]
+   foreach host $issue_440_config(host_list) {
+      set end_length [expr 1024 * $issue_440_config(max_kbyte,$host)]
       set start_length 0
-      set length_list($check_440_host) {}
+      set length_list($host) {}
       while {$start_length <= $end_length} {
          # increment next argument length
-         lappend length_list($check_440_host) $start_length
+         lappend length_list($host) $start_length
          incr start_length 4096
       }
    }
 
    # prepare jobs
-   foreach check_440_host $issue_440_config(host_list) {
-      ts_log_fine "preparing tmp files for jobs on host $check_440_host ..."
-      foreach length $length_list($check_440_host) {
+   foreach host $issue_440_config(host_list) {
+      ts_log_fine "preparing tmp files for jobs on host $host ..."
+      foreach length $length_list($host) {
          # generate job output/error file names
-         set test_info($check_440_host,$length,output_file) [get_tmp_file_name $check_440_host $length output]
-         set test_info($check_440_host,$length,error_file)  [get_tmp_file_name $check_440_host $length error]
+         set test_info($host,$length,output_file) [get_tmp_file_name $host $length output]
+         set test_info($host,$length,error_file)  [get_tmp_file_name $host $length error]
          # generate command line with corrent length
          set arg_name "argument"
-         set command_line "-l h=$check_440_host -S /bin/sh -o $test_info($check_440_host,$length,output_file)"
-         append command_line " -e $test_info($check_440_host,$length,error_file) -N long_cmd $submit_script_path $arg_name"
+         set command_line "-l h=$host -S /bin/sh -o $test_info($host,$length,output_file)"
+         append command_line " -e $test_info($host,$length,error_file) -N long_cmd $submit_script_path $arg_name"
          set arg_length 0
          while {[string length $command_line] < $length} {
             incr arg_length 1
@@ -124,21 +124,21 @@ proc issue_440_check_qsub {} {
             } else {
                append arg_name "_"
             }
-            set command_line "-l h=$check_440_host -S /bin/sh -o $test_info($check_440_host,$length,output_file)"
-            append command_line " -e $test_info($check_440_host,$length,error_file) -N long_cmd $submit_script_path $arg_name"
+            set command_line "-l h=$host -S /bin/sh -o $test_info($host,$length,output_file)"
+            append command_line " -e $test_info($host,$length,error_file) -N long_cmd $submit_script_path $arg_name"
          }
-         set test_info($check_440_host,$length,command_line) $command_line
-         set test_info($check_440_host,$length,arg_name) [string trim $arg_name]
+         set test_info($host,$length,command_line) $command_line
+         set test_info($host,$length,arg_name) [string trim $arg_name]
       }
    }
 
    # submit jobs
    # TODO (CR): use parallel submit_job
-   foreach check_440_host $issue_440_config(host_list) {
-      foreach length $length_list($check_440_host) {
-         ts_log_fine "$check_440_host: submitting job with command line length: [string length $test_info($check_440_host,$length,command_line)] ..."
+   foreach host $issue_440_config(host_list) {
+      foreach length $length_list($host) {
+         ts_log_fine "$host: submitting job with command line length: [string length $test_info($host,$length,command_line)] ..."
          # submit jobs
-         submit_job $test_info($check_440_host,$length,command_line) 1 60 $check_440_host "" "" 0
+         submit_job $test_info($host,$length,command_line) 1 60 $host "" "" 0
       }
    }
 
@@ -146,13 +146,13 @@ proc issue_440_check_qsub {} {
 
 
    # verify job outputs
-   foreach check_440_host $issue_440_config(host_list) {
-      foreach length $length_list($check_440_host) {
+   foreach host $issue_440_config(host_list) {
+      foreach length $length_list($host) {
          # read job output/error files remotely on the execution host (to prevent NFS problems)
-         get_file_content $check_440_host $CHECK_USER $test_info($check_440_host,$length,output_file) f_output
-         get_file_content $check_440_host $CHECK_USER $test_info($check_440_host,$length,error_file) f_error
+         get_file_content $host $CHECK_USER $test_info($host,$length,output_file) f_output
+         get_file_content $host $CHECK_USER $test_info($host,$length,error_file) f_error
 
-         ts_log_fine "analyse job output on host $check_440_host, command line length = $length ..."
+         ts_log_fine "analyse job output on host $host, command line length = $length ..."
 
          set nr_of_lines $f_output(0)
          set output ""
@@ -172,11 +172,11 @@ proc issue_440_check_qsub {} {
 
          # compare argument with job output file content
          set output [string trim $output]
-         if {[string compare $output $test_info($check_440_host,$length,arg_name)] != 0} {
-            append error_text "$check_440_host: job output not equal to commandline input:\n"
-            append error_text "strlen(cmd_line) = [string length $test_info($check_440_host,$length,arg_name)]\n"
-            append error_text "strlen(output)   = [string length $output] on host $check_440_host\n"
-            append error_text "cmd_line: $test_info($check_440_host,$length,arg_name)\noutput: $output\n"
+         if {[string compare $output $test_info($host,$length,arg_name)] != 0} {
+            append error_text "$host: job output not equal to commandline input:\n"
+            append error_text "strlen(cmd_line) = [string length $test_info($host,$length,arg_name)]\n"
+            append error_text "strlen(output)   = [string length $output] on host $host\n"
+            append error_text "cmd_line: $test_info($host,$length,arg_name)\noutput: $output\n"
          }
 
          # check for further errors
@@ -189,7 +189,7 @@ proc issue_440_check_qsub {} {
             append output_errors "$f_error($i)\n"
          }
          if {$got_output_error != 0} {
-            append error_text "$check_440_host: got error output from job script:\n$output_errors\n"
+            append error_text "$host: got error output from job script:\n$output_errors\n"
          }
       }
    }
@@ -198,7 +198,7 @@ proc issue_440_check_qsub {} {
    set back [are_master_and_scheduler_running $ts_config(master_host) [get_qmaster_spool_dir]]
    set expected_result 2
    if {$back != $expected_result} {
-      append error_text "are_master_and_scheduler_running returns $back submit on host $check_440_host"
+      append error_text "are_master_and_scheduler_running returns $back submit on host $host"
    }
 
    if {$error_text != ""} {
@@ -208,36 +208,32 @@ proc issue_440_check_qsub {} {
 
 
 proc issue_440_check_qrsh {} {
+   get_current_cluster_config_array ts_config
    global CHECK_USER
    global issue_440_config
-   global check_440_host
 
-   get_current_cluster_config_array ts_config
-
-   ts_log_info "this check function is disabled until CS-671 is fixed"
-   return
 
    set error_text ""
    set submit_script_path "$ts_config(testsuite_root_dir)/scripts/cmd_line_output.sh"
 
-   foreach check_440_host $issue_440_config(host_list) {
-      set end_length [expr 1024 * $issue_440_config(max_kbyte,$check_440_host)]
+   foreach host $issue_440_config(host_list) {
+      set end_length [expr 1024 * $issue_440_config(max_kbyte,$host)]
       set start_length 0
-      set length_list($check_440_host) {}
+      set length_list($host) {}
       while {$start_length <= $end_length} {
          # increment next argument length
-         lappend length_list($check_440_host) $start_length
+         lappend length_list($host) $start_length
          incr start_length 4096
       }
    }
 
    # prepare jobs
-   foreach check_440_host $issue_440_config(host_list) {
-      ts_log_fine "preparing tmp files for jobs on host $check_440_host ..."
-      foreach length $length_list($check_440_host) {
+   foreach host $issue_440_config(host_list) {
+      ts_log_fine "preparing tmp files for jobs on host $host ..."
+      foreach length $length_list($host) {
          # generate command line with corrent length
          set arg_name "argument"
-         set command_line "-l h=$check_440_host $submit_script_path $arg_name"
+         set command_line "-l h=$host $submit_script_path $arg_name"
          set arg_length 0
          while {[string length $command_line] < $length} {
             incr arg_length 1
@@ -247,32 +243,32 @@ proc issue_440_check_qrsh {} {
             } else {
                append arg_name "_"
             }
-            set command_line "-l h=$check_440_host $submit_script_path $arg_name"
+            set command_line "-l h=$host $submit_script_path $arg_name"
          }
-         set test_info($check_440_host,$length,command_line) $command_line
-         set test_info($check_440_host,$length,arg_name) [string trim $arg_name]
+         set test_info($host,$length,command_line) $command_line
+         set test_info($host,$length,arg_name) [string trim $arg_name]
       }
    }
 
    # submit jobs
    # TODO (CR): Use parallel qrsh submit function
-   foreach check_440_host $issue_440_config(host_list) {
-      set qrsh_command "$ts_config(product_root)/bin/[resolve_arch $check_440_host]/qrsh"
-      foreach length $length_list($check_440_host) {
-         ts_log_fine "$check_440_host: submitting qrsh job with command line length: [string length $test_info($check_440_host,$length,command_line)] ..."
+   foreach host $issue_440_config(host_list) {
+      set qrsh_command "$ts_config(product_root)/bin/[resolve_arch $host]/qrsh"
+      foreach length $length_list($host) {
+         ts_log_fine "$host: submitting qrsh job with command line length: [string length $test_info($host,$length,command_line)] ..."
          # start qrsh job
-         set test_info($check_440_host,$length,output) [start_remote_prog $check_440_host $CHECK_USER $qrsh_command "$test_info($check_440_host,$length,command_line)"]
+         set test_info($host,$length,output) [start_remote_prog $host $CHECK_USER $qrsh_command "$test_info($host,$length,command_line)"]
          if {$prg_exit_state != 0} {
-            append error_text "$check_440_host: error in qrsh job:\nexit status is $prg_exit_state\noutput: $test_info($check_440_host,$length,output)\n"
+            append error_text "$host: error in qrsh job:\nexit status is $prg_exit_state\noutput: $test_info($host,$length,output)\n"
          }
       }
    }
    # verify job outputs
-   foreach check_440_host $issue_440_config(host_list) {
-      foreach length $length_list($check_440_host) {
-         ts_log_fine "analyse qrsh job output on host $check_440_host, command line length = $length ..."
+   foreach host $issue_440_config(host_list) {
+      foreach length $length_list($host) {
+         ts_log_fine "analyse qrsh job output on host $host, command line length = $length ..."
 
-         set output2 [split [string trim $test_info($check_440_host,$length,output)] "\n"]
+         set output2 [split [string trim $test_info($host,$length,output)] "\n"]
          set output ""
          set found_start 0
          foreach out_line $output2 {
@@ -290,11 +286,11 @@ proc issue_440_check_qrsh {} {
 
          # compare argument with job output file content
          set output [string trim $output]
-         if {[string compare $output $test_info($check_440_host,$length,arg_name)] != 0} {
-            append error_text "$check_440_host: job output not equal to commandline input:\n"
-            append error_text "strlen(cmd_line) = [string length $test_info($check_440_host,$length,arg_name)]\n"
-            append error_text "strlen(output)   = [string length $output] on host $check_440_host\n"
-            append error_text "cmd_line: $test_info($check_440_host,$length,arg_name)\noutput: $output\n"
+         if {[string compare $output $test_info($host,$length,arg_name)] != 0} {
+            append error_text "$host: job output not equal to commandline input:\n"
+            append error_text "strlen(cmd_line) = [string length $test_info($host,$length,arg_name)]\n"
+            append error_text "strlen(output)   = [string length $output] on host $host\n"
+            append error_text "cmd_line: $test_info($host,$length,arg_name)\noutput: $output\n"
          }
       }
    }
@@ -303,7 +299,7 @@ proc issue_440_check_qrsh {} {
    set back [are_master_and_scheduler_running $ts_config(master_host) [get_qmaster_spool_dir]]
    set expected_result 2
    if {$back != $expected_result} {
-      append error_text "are_master_and_scheduler_running returns $back submit on host $check_440_host"
+      append error_text "are_master_and_scheduler_running returns $back submit on host $host"
    }
 
    if {$error_text != ""} {
