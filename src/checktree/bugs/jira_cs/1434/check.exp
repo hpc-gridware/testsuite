@@ -1,0 +1,98 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.0.8"
+
+# define test's name and run level descriptions
+set check_name            "cs_1434"
+set check_category        "BUG RESCHEDULE VERIFIED"
+set check_description(0)  "clearing error state of a job leads to event callback error logging in qmaster messages file"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs_1434_setup
+set check_cleanup_function cs_1434_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs_1434_test"
+
+# -------- local test procedures: initialization------------------------------
+
+proc cs_1434_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   # remove the qmaster messages file - we want to evaluate its content
+   set qmaster_messages_file [get_qmaster_messages_file]
+   delete_remote_file $ts_config(master_host) $CHECK_USER $qmaster_messages_file
+   start_remote_prog $ts_config(master_host) $CHECK_USER "touch" $qmaster_messages_file
+}
+
+proc cs_1434_cleanup {} {
+   get_current_cluster_config_array ts_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+
+proc cs_1434_test {} {
+   get_current_cluster_config_array ts_config
+
+   # we expect error logging in the qmaster messages file
+   init_logfile_wait $ts_config(master_host) [get_qmaster_messages_file]
+
+   # run a job which will fail
+   set job_opts "-b y -S /bin/no_such_shell"
+   set job_args "sleep 100"
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id > 0} {
+      # expect the job to fail
+      if {[wait_for_job_state $job_id "Eqw" 20] != "Eqw"} {
+         ts_log_severe "Job $job_id did not enter Eqw state as expected"
+      } else {
+         # clear the error state of the job
+         set output [start_sge_bin "qmod" "-cj $job_id"]
+
+         # if the error is still there we'll see error logging
+         set pattern [translate_macro MSG_MIRROR_CALLBACKFAILED_S "*"]
+         set output [logfile_wait $pattern 20 0 0]
+         if {$logfile_wait_error == 0} {
+            ts_log_severe "CS-1434 is present, got error logging in qmaster messages file:\n$output"
+         }
+      }
+   }
+
+   close_logfile_wait
+   delete_job $job_id
+}
