@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "jsv_issues"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM TESTBIN VERIFIED"
 set check_description(0)  "test special jsv issues"
 
 # define test's dependencies

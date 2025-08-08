@@ -37,7 +37,7 @@ global check_name check_description check_needs check_functions
 global check_category
 global check_root_access_needs
 
-set check_category            "COMPATIBILITY SYSTEM VERIFIED"
+set check_category            "COMPATIBILITY SYSTEM TESTBIN VERIFIED"
 set check_name                "issue_1832"
 set check_description(0)      "comprehensive -hold_jid_ad test"
 set check_needs               "init_core_system"      ;# dependencies of this check (name of other check)
@@ -130,7 +130,7 @@ proc issue_1832_run_master_down  {} {
                   set my_master_start_time [timestamp]
                   incr my_master_start_time 15
               }
-              if { $my_master_start_time > 0 && 
+              if { $my_master_start_time > 0 &&
                    [timestamp] >= $my_master_start_time &&
                    $master_restarted == 0 } {
                  ts_log_fine "starting up qmaster ..."
@@ -138,7 +138,7 @@ proc issue_1832_run_master_down  {} {
                  set master_restarted 1
               }
               if { [string match "*_exit_status_:(*" $line ] } {
-                 ts_log_fine "script terminated!" 
+                 ts_log_fine "script terminated!"
                  set help $line
                  set st [string first "(" $help]
                  set ed [string first ")" $help]

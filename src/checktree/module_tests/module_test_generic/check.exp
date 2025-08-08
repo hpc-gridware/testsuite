@@ -35,24 +35,24 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "no"
 
 # define test's name and run level descriptions
 set check_name            "module_test_generic"
-set check_category        "MODULE VERIFIED COMMLIB"
+set check_category        "MODULE TESTBIN VERIFIED COMMLIB"
 set check_description(0)   "run all generic module tests on master host"
 set check_description(100) "run all generic module tests on all architectures"
 set check_description(200) "run all generic module tests on all hosts"
 
 # define test's dependencies
-set check_needs           "" 
+set check_needs           ""
 
 # setup and cleanup functions
 set check_cleanup_level_function "generic_module_tests_cleanup"
@@ -138,7 +138,7 @@ proc generic_module_tests_setup {} {
 #     generic_module_tests_cleanup() -- cleanup for module tests
 #
 #  SYNOPSIS
-#     generic_module_tests_cleanup { } 
+#     generic_module_tests_cleanup { }
 #
 #  FUNCTION
 #     Used to delete files created by module tests
@@ -159,7 +159,7 @@ proc generic_module_tests_cleanup {} {
 #     generic_module_tests_run() -- run module tests
 #
 #  SYNOPSIS
-#     generic_module_tests_run { } 
+#     generic_module_tests_run { }
 #
 #  FUNCTION
 #     This test runs all supported module tests.

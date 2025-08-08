@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "drmaa"
-set check_category        "API DRMAA VERIFIED JENKINS_DISABLED"
+set check_category        "API DRMAA TESTBIN VERIFIED JENKINS_DISABLED"
 set check_description(0)    "tests available DMRAA lib on one arbitrary host"
 set check_description(101)  "tests to verify DRMAA 1.0 library on one host"
 set check_description(201)  "tests to verify DRMAA 1.0 library on one host of each architecture available"

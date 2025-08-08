@@ -40,7 +40,7 @@ global check_root_access_needs
 # setup and cleanup functions
 set check_cleanup_function issue_1892_cleanup
 
-set check_category            "COMPATIBILITY SYSTEM VERIFIED"
+set check_category            "COMPATIBILITY SYSTEM TESTBIN VERIFIED"
 set check_name                "issue_1892"
 set check_description(0)      "DRMAA crashes during some operations on bulk jobs"
 set check_needs               "init_core_system"      ;# dependencies of this check (name of other check)

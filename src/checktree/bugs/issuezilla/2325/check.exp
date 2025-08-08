@@ -33,21 +33,21 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "issue_2325"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM TESTBIN VERIFIED"
 set check_description(0)  "test drmaa native spec with leading spaces"
 
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_cleanup_function issue_2325_cleanup
