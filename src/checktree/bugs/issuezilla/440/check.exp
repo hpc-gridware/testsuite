@@ -60,8 +60,8 @@ lappend check_functions "issue_440_check_qrsh"
 # -------- local test procedures -----------------------------------------------
 
 proc issue_440_setup {} {
-   global issue_440_config
    get_current_cluster_config_array ts_config
+   global issue_440_config issue_440_remove_accounting
 
    set issue_440_config(host_list) $ts_config(unique_arch_nodes)
 
@@ -70,16 +70,27 @@ proc issue_440_setup {} {
       ts_log_fine "$host: testing with MAX_KBYTE=$issue_440_MAX_KBYTE"
       set issue_440_config(max_kbyte,$host) $issue_440_MAX_KBYTE
    }
+
+   set issue_440_remove_accounting 0
 }
 
 proc issue_440_cleanup {} {
-   global issue_440_config
    get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global issue_440_config issue_440_remove_accounting
 
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   unset -nocomplain issue_440_config
+   # if we ran into CS-1381 the test would leave an accounting file with very long lines qacct cannot parse
+   # remove this accounting file
+   if {$issue_440_remove_accounting == 1} {
+      set accounting_file "$ts_config(product_root)/$ts_config(cell)/common/accounting.jsonl"
+      ts_log_fine "removing accounting file $accounting_file ..."
+      delete_remote_file $ts_config(master_host) $CHECK_USER $accounting_file
+   }
+
+   unset -nocomplain issue_440_config issue_440_remove_accounting
 }
 
 
@@ -157,7 +168,7 @@ proc issue_440_check_qsub {} {
          set nr_of_lines $f_output(0)
          set output ""
          set found_start 0
-         for {set i 1 } { $i <= $nr_of_lines} {incr i 1} {
+         for {set i 1} {$i <= $nr_of_lines} {incr i 1} {
             if {[string match "*_GE_TESTSUITE_SCRIPT_OUTPUT_END_*" $$f_output($i)]} {
                set found_start 0
             }
@@ -210,7 +221,7 @@ proc issue_440_check_qsub {} {
 proc issue_440_check_qrsh {} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
-   global issue_440_config
+   global issue_440_config issue_440_remove_accounting
 
 
    set error_text ""
@@ -257,7 +268,7 @@ proc issue_440_check_qrsh {} {
       foreach length $length_list($host) {
          ts_log_fine "$host: submitting qrsh job with command line length: [string length $test_info($host,$length,command_line)] ..."
          # start qrsh job
-         set test_info($host,$length,output) [start_remote_prog $host $CHECK_USER $qrsh_command "$test_info($host,$length,command_line)"]
+         set test_info($host,$length,output) [start_remote_prog $host $CHECK_USER $qrsh_command "-verbose $test_info($host,$length,command_line)"]
          if {$prg_exit_state != 0} {
             append error_text "$host: error in qrsh job:\nexit status is $prg_exit_state\noutput: $test_info($host,$length,output)\n"
          }
@@ -272,6 +283,30 @@ proc issue_440_check_qrsh {} {
          set output ""
          set found_start 0
          foreach out_line $output2 {
+            if {[string match "Your job * has been *" $out_line]} {
+               set job_id [lindex $out_line 2]
+               # check for issue CS-1381 qacct complains ... accounting records with huge command line entry
+               # either qacct will fail or it will contain accounting records with invalid data, e.g.,
+               # submit_cmd_line (null)
+               if {[get_qacct $job_id] != 0} {
+                  # qacct failed
+                  set issue_440_remove_accounting 1
+               } else {
+                  if {![info exists qacct_info(submit_cmd_line)]} {
+                     # the submit_cmd_line is missing
+                     append error_text "$host: $length: qacct_info(submit_cmd_line) not set for job $job_id\n"
+                     set issue_440_remove_accounting 1
+                  } else {
+                     if {[string first $test_info($host,$length,arg_name) $qacct_info(submit_cmd_line)] < 0} {
+                        # the submit_cmd_line does not contain the full command line
+                        append error_text "$host: $length: qacct_info(submit_cmd_line) does not contain the full arguments:\n"
+                        set issue_440_remove_accounting 1
+                     } else {
+                        ts_log_fine "$host: $length: qacct_info(submit_cmd_line) contains arguments as expected"
+                     }
+                  }
+               }
+            }
             if {[string match "*_GE_TESTSUITE_SCRIPT_OUTPUT_END_*" $out_line]} {
                set found_start 0
             }
