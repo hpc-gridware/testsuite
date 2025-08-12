@@ -187,8 +187,42 @@ proc usage_io_test {} {
       }
    }
 
-   # @todo CS-1450 check iow
+   # check iow
+   if {![info exists usage(iow)]} {
+      lappend errors "iow usage not reported"
+   } else {
+      set iow [transform_usage_value $usage(iow) 1]
+      if {$iow <= 0} {
+         lappend errors "iow ($usage(iow)) usage not reported"
+      }
+      # iow must be lower than wallclock
+      set wallclock [transform_usage_value $usage(wallclock) 1]
+      if {$iow > $wallclock} {
+         lappend errors "iow ($iow) usage is greater than wallclock ($wallclock)"
+      }
+   }
 
-   # cleanup
-   delete_job $job_id
+   # delete job and wait for it to finish
+   delete_job $job_id 1
+
+   # check accounting record
+   get_qacct $job_id
+   foreach attr {io ioops iow} {
+      if {![info exists qacct_info($attr)]} {
+         lappend errors "$attr accounting not reported"
+      } else {
+         # accounting value must be about the same as usage value
+         set usage_value [transform_usage_value $usage($attr) 1]
+         set accounting_value $qacct_info($attr)
+         if {![compare_usage $usage_value $accounting_value]} {
+            lappend errors "$attr accounting ($accounting_value) differs too much from usage ($usage_value)"
+         } else {
+            ts_log_fine "$attr accounting $accounting_value matches usage $usage_value"
+         }
+      }
+   }
+
+   if {[llength $errors] > 0} {
+      ts_log_severe "IO usage test failed with errors:\n[join $errors "\n"]"
+   }
 }

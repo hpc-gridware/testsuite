@@ -890,12 +890,13 @@ proc repeat_column {input {column 0}} {
 #
 # @param usage_value The usage value to be transformed, which can be in the format
 #                    "days:hours:minutes:seconds" for time values or a unit like "MB" for other usage values.
+# @param with_fractional Also consider the fractional part of a usage value, default: no.
 # @return The transformed value as a numeric value in seconds for time values or as a unit for other usage values.
 #
-proc transform_usage_value {usage_value} {
+proc transform_usage_value {usage_value {with_fractional 0}} {
    if {[string first ":" $usage_value] > 0} {
       # this is a time value (cpu or wallclock)
-      set ret [transform_cpu $usage_value]
+      set ret [transform_cpu $usage_value $with_fractional]
    } else {
       set ret [transform_unit $usage_value]
    }
@@ -933,7 +934,16 @@ proc transform_usage_value {usage_value} {
 #  SEE ALSO
 #     ???/???
 #*******************************
-proc transform_cpu {s_cpu} {
+proc transform_cpu {s_cpu {with_fractional 0}} {
+   if {$with_fractional} {
+      set split_cpu [split $s_cpu "."]
+      if {[llength $split_cpu] == 2} {
+         set s_cpu [lindex $split_cpu 0]
+         set fractional [lindex $split_cpu 1]
+      } else {
+         set fractional 0
+      }
+   }
    set num_colon [llength [split $s_cpu ":"]]
    catch {
       if {$num_colon == 4} {
@@ -943,6 +953,9 @@ proc transform_cpu {s_cpu} {
          scan $s_cpu "%02d:%02d:%02d" hours minutes seconds
       }
       set cpu [expr $days * 86400 + $hours * 3600 + $minutes * 60 + $seconds]
+      if {$with_fractional} {
+         append cpu ".$fractional"
+      }
    }
    if {![info exists cpu]} {
       return "NA"

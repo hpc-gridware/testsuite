@@ -3352,7 +3352,7 @@ proc wait_for_online_usage {job_id {mytimeout 60} {usage_name "cpu"} {ja_task_id
 # @param name      - the name of the usage variable to get
 # @param ja_task_id - the array task id to get the usage for (default: 1)
 # @return -1 if no usage is available, otherwise the usage value
-proc get_online_usage {job_id name {ja_task_id 1}} {
+proc get_online_usage {job_id name {ja_task_id 1} {with_fractional 0}} {
    set ret -1
 
    if {[get_qstat_j_info $job_id]} {
@@ -3364,7 +3364,7 @@ proc get_online_usage {job_id name {ja_task_id 1}} {
             if {![string equal $usage($name) "NA"] &&
                 ![string equal $usage($name) "N/A"]} {
                # the usage string contains a value
-               set ret [transform_usage_value $usage($name)]
+               set ret [transform_usage_value $usage($name) $with_fractional]
             }
          }
       }
@@ -11120,7 +11120,7 @@ proc compare_usage {value expected {percent_allowed 1}} {
    set allowed_deviation [expr $expected * $percent_allowed / 100.0]
    set diff [expr abs($value - $expected)]
    set diff_percent [expr $diff / $expected * 100.0]
-   ts_log_fine "usage value \"$value\", expected \"$expected\", differs by $diff_percent percent"
+   ts_log_fine [format "usage value \"%0.6f\", expected \"%0.6f\", differs by %0.3f percent" $value $expected $diff_percent]
    if {$diff <= $allowed_deviation} {
       return 1
    } else {
