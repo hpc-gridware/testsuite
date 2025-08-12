@@ -1,0 +1,194 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.1.0"
+
+# define test's name and run level descriptions
+set check_name            "usage_io"
+set check_category        "ACCOUNTING USAGE VERIFIED"
+set check_description(0)  "Test IO usage reporting and accounting"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function usage_io_setup
+set check_cleanup_function usage_io_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "usage_io_test"
+
+# -------- local test procedures: initialization------------------------------
+
+proc usage_io_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_PROTOCOL_DIR
+   global usage_io_host usage_io_file usage_io_backup
+
+   # we need a directory for writing test data - the CHECK_PROTOCOL_DIR should be on NFS and have sufficient space
+   set usage_io_file "$CHECK_PROTOCOL_DIR/usage_io.out"
+
+   # we need a linux test host and it shall not be the file server
+   set fileserver [fs_config_get_server_for_path $CHECK_PROTOCOL_DIR]
+   if {$fileserver eq ""} {
+      ts_log_severe "Cannot determine file server for path $CHECK_PROTOCOL_DIR"
+      return
+   }
+   set usage_io_host ""
+   foreach host [host_conf_get_cluster_hosts 1 1] {
+      set arch [resolve_arch $host]
+      if {[string match "lx-*" $arch] && $host ne $fileserver} {
+         set usage_io_host $host
+         break
+      }
+   }
+   if {$usage_io_host eq ""} {
+      ts_log_config "Cannot find a linux host for IO usage test"
+      return
+   }
+
+   # remove the old usage file if it exists
+   delete_remote_file $fileserver $CHECK_USER $usage_io_file
+
+   # we want to modify the host's config - make a backup
+   get_config usage_io_backup $usage_io_host
+
+   # want fast usage reporting
+   set conf(load_report_time) "0:0:1"
+   set_config_and_propagate conf $usage_io_host
+}
+
+proc usage_io_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global usage_io_host usage_io_file usage_io_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # remove the usage file
+   # we can just delete it locally - no need to wait
+   if {[file exists $usage_io_file]} {
+      file delete $usage_io_file
+   }
+
+   # restore config if there were execd config modifications
+   if {[info exists usage_io_backup]} {
+      reset_config_and_propagate usage_io_backup $usage_io_host
+   }
+
+   unset -nocomplain usage_io_host usage_io_file usage_io_backup
+}
+
+
+proc usage_io_test {} {
+   get_current_cluster_config_array ts_config
+   global usage_io_host usage_io_file
+
+   ts_log_fine "Testing IO usage reporting on host $usage_io_host with file $usage_io_file"
+
+   # we need to run a job that will write some data (up to 1G) to the file
+   set job_opts "-l h=$usage_io_host"
+   set job_args "$ts_config(testsuite_root_dir)/scripts/dd.sh $usage_io_file [expr 1024 * 1024]"
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0} {
+      return
+   }
+
+   wait_for_jobstart $job_id "" 10
+
+   # wait for the file to read 100M or for one minute
+   ts_log_fine "Waiting for job to write 100 MB or for one minute"
+   set end_time [expr [clock seconds] + 60]
+   set file_size 0
+   set end_file_size [expr 100 * 1024 * 1024]
+   while {[clock seconds] < $end_time} {
+      if {[file exists $usage_io_file]} {
+         set file_size [file size $usage_io_file]
+      }
+      ts_log_fine "File size is now [expr $file_size / 1024.0 / 1024.0] MB"
+      if {$file_size >= $end_file_size} {
+         break
+      }
+      sleep_for_seconds 5
+   }
+
+   # expect the job to be still running
+   if {![is_job_running $job_id ""]} {
+      ts_log_config "Job $job_id is no longer running after writing $file_size bytes to $usage_io_file"
+      return
+   }
+
+   if {![file exists $usage_io_file]} {
+      ts_log_severe "File $usage_io_file has not been written"
+      return
+   }
+
+   # suspend the job to stop it writing and get the actual IO usage
+   suspend_job $job_id
+
+   # wait for a few seconds to be sure to have the latest IO usage and file size
+   sleep_for_seconds 5
+
+   # get current file size
+   set file_size [file size $usage_io_file]
+
+   # get usage values
+   get_qstat_j_info $job_id
+   set usage_attr [get_qstat_j_attribute "usage"]
+   parse_name_value_list usage $qstat_j_info($usage_attr)
+
+   ts_log_fine "Job $job_id usage: $qstat_j_info($usage_attr)"
+   ts_log_fine "File size after job suspension: $file_size bytes"
+
+   set errors {}
+   # check io
+   set expected_io [expr $file_size * 2.0 / 1024.0 / 1024.0 / 1024.0] ;# in GB and we cound both read and write
+   if {![info exists usage(io)]} {
+      lappend errors "io usage not reported"
+   } else {
+      if {![compare_usage $usage(io) $expected_io]} {
+         lappend errors "io usage ($usage(io)) differs too much from expected ($expected_io)"
+      }
+   }
+   # check ioops
+   if {![info exists usage(ioops)]} {
+      lappend errors "ioops usage not reported"
+   } else {
+      if {$usage(ioops) <= 0} {
+         lappend errors "ioops ($usage(ioops)) usage not reported"
+      }
+   }
+
+   # @todo CS-1450 check iow
+
+   # cleanup
+   delete_job $job_id
+}

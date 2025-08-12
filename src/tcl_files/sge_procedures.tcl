@@ -11107,3 +11107,23 @@ proc sleep_for_seconds {seconds {message ""}} {
    }
    sleep_until [expr [clock seconds] + $seconds] $message
 }
+
+###
+# @brief compare a value with an expected value
+#
+# This function compares a value with an expected value and checks if the
+# difference is within the allowed deviation in percent.
+# @param value - the value to compare
+# @param expected - the expected value
+# @param percent_allowed - the allowed deviation in percent, default is 1%
+proc compare_usage {value expected {percent_allowed 1}} {
+   set allowed_deviation [expr $expected * $percent_allowed / 100.0]
+   set diff [expr abs($value - $expected)]
+   set diff_percent [expr $diff / $expected * 100.0]
+   ts_log_fine "usage value \"$value\", expected \"$expected\", differs by $diff_percent percent"
+   if {$diff <= $allowed_deviation} {
+      return 1
+   } else {
+      return 0
+   }
+}
