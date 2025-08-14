@@ -28,7 +28,7 @@ global check_root_access_needs
 global check_need_running_system
 global check_version_range
 
-set check_version_range "9.1.0"
+set check_version_range "9.0.0"
 
 # define test's name and run level descriptions
 set check_name            "usage_io"
@@ -178,27 +178,31 @@ proc usage_io_test {} {
          lappend errors "io usage ($usage(io)) differs too much from expected ($expected_io)"
       }
    }
-   # check ioops
-   if {![info exists usage(ioops)]} {
-      lappend errors "ioops usage not reported"
-   } else {
-      if {$usage(ioops) <= 0} {
-         lappend errors "ioops ($usage(ioops)) usage not reported"
-      }
-   }
 
-   # check iow
-   if {![info exists usage(iow)]} {
-      lappend errors "iow usage not reported"
-   } else {
-      set iow [transform_usage_value $usage(iow) 1]
-      if {$iow <= 0} {
-         lappend errors "iow ($usage(iow)) usage not reported"
+   # beginning with 9.1.0 we have ioops and iow usage attributes
+   if {[is_version_in_range "9.1.0"]} {
+      # check ioops
+      if {![info exists usage(ioops)]} {
+         lappend errors "ioops usage not reported"
+      } else {
+         if {$usage(ioops) <= 0} {
+            lappend errors "ioops ($usage(ioops)) usage not reported"
+         }
       }
-      # iow must be lower than wallclock
-      set wallclock [transform_usage_value $usage(wallclock) 1]
-      if {$iow > $wallclock} {
-         lappend errors "iow ($iow) usage is greater than wallclock ($wallclock)"
+
+      # check iow
+      if {![info exists usage(iow)]} {
+         lappend errors "iow usage not reported"
+      } else {
+         set iow [transform_usage_value $usage(iow) 1]
+         if {$iow <= 0} {
+            lappend errors "iow ($usage(iow)) usage not reported"
+         }
+         # iow must be lower than wallclock
+         set wallclock [transform_usage_value $usage(wallclock) 1]
+         if {$iow > $wallclock} {
+            lappend errors "iow ($iow) usage is greater than wallclock ($wallclock)"
+         }
       }
    }
 
@@ -207,7 +211,12 @@ proc usage_io_test {} {
 
    # check accounting record
    get_qacct $job_id
-   foreach attr {io ioops iow} {
+   if {[is_version_in_range "9.1.0"]} {
+      set io_attrs {io ioops iow}
+   } else {
+      set io_attrs {io}
+   }
+   foreach attr $io_attrs {
       if {![info exists qacct_info($attr)]} {
          lappend errors "$attr accounting not reported"
       } else {

@@ -11127,3 +11127,17 @@ proc compare_usage {value expected {percent_allowed 1}} {
       return 0
    }
 }
+
+###
+# @brief get the date_time spec for job/ar submission from a timestamp
+#
+# This function returns the date_time spec for job/ar submission from a timestamp.
+# It can be used e.g., with the "qsub -a" option to set the submission time
+# or the -a and -e options of the "qrsub" command.
+#
+# @param timestamp - the timestamp in seconds since epoch
+proc get_submit_date_time {timestamp} {
+   set ret [clock format $timestamp -format "%Y%m%d%H%M.%S"]
+
+   return $ret
+}

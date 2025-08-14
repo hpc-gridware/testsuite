@@ -144,10 +144,9 @@ proc submit_ar {args {on_host ""} {as_user ""} {raise_error 1}} {
       }
    }
 
-   # return job id or error code
+   # return ar id or error code
    return $ret_code
 }
-
 
 #                                                             max. column:     |
 #****** sge_ar/delete_all_ars() ******
