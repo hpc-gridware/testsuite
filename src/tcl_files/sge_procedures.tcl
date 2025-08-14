@@ -11141,3 +11141,47 @@ proc get_submit_date_time {timestamp} {
 
    return $ret
 }
+
+###
+# @brief wait for load values to be trashed
+#
+# This function waits for the specified load values to be removed from the
+# execution host load values.
+#
+# @param variables - a list of load values to be removed, e.g. "load1", "load5", "load15"
+# @param hosts     - a list of hosts to check, if not given all execution hosts are checked
+# @param timeout   - the maximum time to wait for the load values to be removed, default is 120 seconds
+proc wait_for_load_values_trashed {variables {hosts {}} {timeout 120}} {
+   get_current_cluster_config_array ts_config
+
+   # optional parameter hosts - if not given: all
+   if {[llength $hosts] == 0} {
+      set hosts $ts_config(execd_nodes)
+   }
+
+   set start_time [clock seconds]
+   while {1} {
+      set references 0
+      foreach host $hosts {
+         get_exechost exechost_info $host
+         foreach var $variables {
+            if {[string first "$var=" $exechost_info(load_values)] >= 0} {
+               ts_log_fine "load value \"$var\" found on host \"$host\""
+               incr references
+            }
+         }
+      }
+      if {$references == 0} {
+         ts_log_fine "all load values trashed on all hosts"
+         break
+      }
+      if {[clock seconds] - $start_time > $timeout} {
+         ts_log_severe "timeout while waiting for load values to be trashed"
+         break
+      }
+      sleep_for_seconds 5
+   }
+   set end_time [clock seconds]
+   ts_log_fine "waited for load values to be trashed for [llength $hosts] hosts for [expr $end_time - $start_time] seconds"
+}
+
