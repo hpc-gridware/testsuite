@@ -5336,6 +5336,7 @@ proc check_if_test_cleaned_up {} {
    foreach host $ts_config(execd_nodes) {
       unset -nocomplain local_conf
       set conf_ret [get_config local_conf $host]
+      ts_log_fine "get_config for $host returned $conf_ret, attributes [array names local_conf]"
       if {$conf_ret == 0} {
          if {$check_do_not_create_local_config} {
             lappend errors "local config $host found, but testsuite was started with option lo_local_config"

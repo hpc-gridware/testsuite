@@ -37,7 +37,7 @@
 #     get_exechost_error() -- error handling for get_exechost
 #
 #  SYNOPSIS
-#     get_exechost_error { result host raise_error } 
+#     get_exechost_error { result host raise_error }
 #
 #  FUNCTION
 #     Does the error handling for get_exechost.
@@ -46,7 +46,7 @@
 #     function call.
 #
 #     The error handling function has been intentionally separated from
-#     get_exechost. While the qconf call and parsing the result is 
+#     get_exechost. While the qconf call and parsing the result is
 #     version independent, the error messages (macros) usually are version
 #     dependent.
 #
@@ -71,7 +71,7 @@ proc get_exechost_error {result host raise_error} {
    set messages(index) "-1 -2"
    set messages(-1) [translate_macro MSG_EXEC_XISNOTANEXECUTIONHOST_S $host]
    set messages(-2) [translate_macro MSG_SGETEXT_CANTRESOLVEHOST_S $host]
- 
+
    # now evaluate return code and raise errors
    set ret [handle_sge_errors "get_exechost" "qconf -se $host" $result messages $raise_error]
 
@@ -220,7 +220,7 @@ proc set_exechost { change_array {host global} {fast_add 1} {on_host ""} {as_use
    get_current_cluster_config_array ts_config
 
    upvar $change_array chgar
- 
+
    set values [array names chgar]
 
    set return_value [get_exechost old_values $host]
@@ -270,7 +270,7 @@ proc set_exechost { change_array {host global} {fast_add 1} {on_host ""} {as_use
       set MODIFIED [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS "*" "*" "*" "*" ]
 
       # User raise_error to report errors or not
-      set master_arch [resolve_arch $ts_config(master_host)]      
+      set master_arch [resolve_arch $ts_config(master_host)]
       set result [handle_vi_edit "$ts_config(product_root)/bin/$master_arch/qconf" "-me $host" $vi_commands $MODIFIED $CHANGED $PROJ_DS_NT_EXST]
 
       # $CHANGED is really success
@@ -279,11 +279,11 @@ proc set_exechost { change_array {host global} {fast_add 1} {on_host ""} {as_use
          set ret 0
       } elseif {  $result == -3 } {
          add_proc_error "set_exechost" -1 "$PROJ_DS_NT_EXST " $raise_error
-         set ret -3 
+         set ret -3
       } elseif { $result != 0 } {
          add_proc_error "set_exechost" -1 "could not modifiy exechost $host" $raise_error
          set ret -1
-      } 
+      }
    }
    return $ret
 }
@@ -308,7 +308,7 @@ proc set_exechost { change_array {host global} {fast_add 1} {on_host ""} {as_use
 #
 #  INPUTS
 #     result      - qconf output
-#     tmpfile     - temp file for qconf -Me 
+#     tmpfile     - temp file for qconf -Me
 #     old_values  - array with values for which qconf -Me has been called
 #     raise_error - do add_proc_error in case of errors
 #
@@ -386,8 +386,8 @@ proc mod_exechost {change_array host {fast_add 1} {on_host ""} {as_user ""} {rai
 #     get_exechost_list() -- get a list of exec hosts
 #
 #  SYNOPSIS
-#     get_exechost_list {output_var {on_host ""} {as_user ""} {raise_error 1} 
-#     } 
+#     get_exechost_list {output_var {on_host ""} {as_user ""} {raise_error 1}
+#     }
 #
 #  FUNCTION
 #     Calls qconf -sel to retrieve a list of execution hosts.
@@ -400,7 +400,7 @@ proc mod_exechost {change_array host {fast_add 1} {on_host ""} {as_user ""} {rai
 #                       output the error message to stdout
 #
 #  RESULT
-#     0 on success, an error code on error. 
+#     0 on success, an error code on error.
 #     For a list of error codes, see sge_procedures/get_sge_error().
 #
 #  SEE ALSO
@@ -418,8 +418,8 @@ proc get_exechost_list {output_var {on_host ""} {as_user ""} {raise_error 1}} {
 #     get_adminhost_list() -- get a list of admin hosts
 #
 #  SYNOPSIS
-#     get_adminhost_list {{on_host ""} {as_user ""} {raise_error 1} 
-#     } 
+#     get_adminhost_list {{on_host ""} {as_user ""} {raise_error 1}
+#     }
 #
 #  FUNCTION
 #     Calls qconf -sel to retrieve a list of admin hosts.
@@ -431,7 +431,7 @@ proc get_exechost_list {output_var {on_host ""} {as_user ""} {raise_error 1}} {
 #                       output the error message to stdout
 #
 #  RESULT
-#     0 on success, an error code on error. 
+#     0 on success, an error code on error.
 #     For a list of error codes, see sge_procedures/get_sge_error().
 #
 #  SEE ALSO
@@ -448,8 +448,8 @@ proc get_adminhost_list {{on_host ""} {as_user ""} {raise_error 1}} {
 #     get_submithost_list() -- get a list of submit hosts
 #
 #  SYNOPSIS
-#     get_submithost_list { {output_var result} {on_host ""} {as_user ""} {raise_error 1} 
-#     } 
+#     get_submithost_list { {output_var result} {on_host ""} {as_user ""} {raise_error 1}
+#     }
 #
 #  FUNCTION
 #     Calls qconf -ss to retrieve a list of submit hosts.
@@ -462,7 +462,7 @@ proc get_adminhost_list {{on_host ""} {as_user ""} {raise_error 1}} {
 #                       output the error message to stdout
 #
 #  RESULT
-#     0 on success, an error code on error. 
+#     0 on success, an error code on error.
 #     For a list of error codes, see sge_procedures/get_sge_error().
 #
 #  SEE ALSO
@@ -484,7 +484,7 @@ proc get_submithost_list {{output_var result} {on_host ""} {as_user ""} {raise_e
 #     get_queue_config_list { {output_var result} {on_host ""} {as_user ""} {arg ""} {raise_error 1}  }
 #
 #  FUNCTION
-#     Calls qconf -sconfl to list of hosts 
+#     Calls qconf -sconfl to list of hosts
 #
 #  INPUTS
 #     output_var      - result will be placed here
@@ -535,7 +535,7 @@ proc get_queue_config_list {{output_var result} {on_host ""} {as_user ""} {arg "
 #     sge_procedures/get_qconf_list()
 #*******************************************************************************
 proc get_processor_list {{output_var result} {on_host ""} {as_user ""} {raise_error 1}} {
-  
+
    upvar $output_var out
 
    return [get_qconf_list "get_processor_list" "-sep" out $on_host $as_user $raise_error]
@@ -694,7 +694,7 @@ proc add_adminhost {host  {on_host ""} {as_user ""} {raise_error 1}} {
 #
 #  RESULT
 #     Returncode for add_adminhost function:
-#       -1: can't resolve hostname "host" 
+#       -1: can't resolve hostname "host"
 #     -999: other error
 #
 #  SEE ALSO
@@ -718,7 +718,7 @@ proc add_adminhost_error {result host on_host raise_error} {
 #     host_get_suspended_states() -- return ps suspended states
 #
 #  SYNOPSIS
-#     host_get_suspended_states { host } 
+#     host_get_suspended_states { host }
 #
 #  FUNCTION
 #     Returns the states characters used by ps to express the suspended state.
@@ -753,7 +753,7 @@ proc host_get_suspended_states {host} {
 #     host_get_running_states() -- return ps running states
 #
 #  SYNOPSIS
-#     host_get_running_states { host } 
+#     host_get_running_states { host }
 #
 #  FUNCTION
 #     Returns the states characters used by ps to express the running state.
@@ -788,7 +788,7 @@ proc host_get_running_states {host} {
 #     host_list_compare() -- compare two host lists
 #
 #  SYNOPSIS
-#     host_list_compare { list_1 list_2 {raise_error 1} } 
+#     host_list_compare { list_1 list_2 {raise_error 1} }
 #
 #  FUNCTION
 #     Compares two host lists.
@@ -850,7 +850,7 @@ proc host_list_compare {list_1 list_2 {raise_error 1} {do_resolve 0}} {
 #     get_FD_SETSIZE_for_host() -- get FD_SETSIZE value for a host
 #
 #  SYNOPSIS
-#     get_FD_SETSIZE_for_host { host } 
+#     get_FD_SETSIZE_for_host { host }
 #
 #  FUNCTION
 #     Starts the test binary test_general on the specified host and parses
@@ -873,9 +873,9 @@ proc get_FD_SETSIZE_for_host { host } {
 
    if {$ts_config(source_dir) == "none"} {
       ts_log_severe "source directory is set to \"none\" - need test binaries for this procedure"
-      return "" 
+      return ""
    }
-   
+
    set binary_path [get_test_or_source_path "test_general" $host]
    if {[is_remote_file $host $CHECK_USER $binary_path 1] == 0} {
       ts_log_severe "binary \"$binary_path\" not found on host \"$host\""
@@ -904,7 +904,7 @@ proc get_FD_SETSIZE_for_host { host } {
 #     get_shell_fd_limit_for_host() -- get /bin/sh limit setting of host
 #
 #  SYNOPSIS
-#     get_shell_fd_limit_for_host { host user {mode "soft"} } 
+#     get_shell_fd_limit_for_host { host user {mode "soft"} }
 #
 #  FUNCTION
 #     This procedure is starting ulimit in the /bin/sh shell to parse
@@ -930,7 +930,7 @@ proc get_shell_fd_limit_for_host { host user {mode "soft"} } {
 
    if {$mode == "soft"} {
       set command "-Sn"
-   } 
+   }
    if {$mode == "hard"} {
       set command "-Hn"
    }

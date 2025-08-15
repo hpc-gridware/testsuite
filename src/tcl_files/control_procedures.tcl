@@ -149,7 +149,7 @@ proc dump_rqs_array_to_tmpfile {change_array hostname} {
             } else {
                incr idx ; set data($idx) "\}"
             }
-            incr idx ; set data($idx) "\{" 
+            incr idx ; set data($idx) "\{"
             incr idx ; set data($idx) "   name $name"
          }
          if {$field == "limit"} {
@@ -159,7 +159,7 @@ proc dump_rqs_array_to_tmpfile {change_array hostname} {
          } else {
             incr idx ; set data($idx) "   $field $value"
          }
-      } 
+      }
 
       incr idx ; set data($idx) "\}"
       set data(0) $idx
@@ -189,7 +189,7 @@ proc dump_rqs_array_to_tmpfile {change_array hostname} {
 #     get_string_value_between() -- string parsing function
 #
 #  SYNOPSIS
-#     get_string_value_between { start end line } 
+#     get_string_value_between { start end line }
 #
 #  FUNCTION
 #     This function will return the content between the strings $start and
@@ -197,10 +197,10 @@ proc dump_rqs_array_to_tmpfile {change_array hostname} {
 #
 #  INPUTS
 #     start - first search parameter (first occurance)
-#     end   - second search parameter 
+#     end   - second search parameter
 #             if $start == $end: (last occurance)
-#             if -1            : get content till end of $line 
-#     line  - string to parse 
+#             if -1            : get content till end of $line
+#     line  - string to parse
 #
 #  RESULT
 #     string
@@ -218,7 +218,7 @@ proc get_string_value_between { start end line } {
       incr pos2 -1
       return [string trim [string range $line $pos1 $pos2]]
    } else {
- 
+
       return [string trim [string range $line $pos1 end]]
    }
 }
@@ -228,7 +228,7 @@ proc get_string_value_between { start end line } {
 #     check_correct_testsuite_setup_user() -- check port setup of user
 #
 #  SYNOPSIS
-#     check_correct_testsuite_setup_user { error_text } 
+#     check_correct_testsuite_setup_user { error_text }
 #
 #  FUNCTION
 #     Check all used ports for this testsuite configuration. This is done by
@@ -249,11 +249,11 @@ proc get_string_value_between { start end line } {
 #     0 on success, 1 on error
 #*******************************************************************************
 proc check_correct_testsuite_setup_user { error_text } {
-   global CHECK_DISPLAY_OUTPUT 
+   global CHECK_DISPLAY_OUTPUT
    global CHECK_USER
    global ts_user_config
    upvar $error_text errors
-   
+
    get_current_cluster_config_array ts_config
    set errors ""
 
@@ -267,7 +267,7 @@ proc check_correct_testsuite_setup_user { error_text } {
       return 1
    }
 
-   set check_ports [get_all_reserved_ports] 
+   set check_ports [get_all_reserved_ports]
    foreach port [checktree_get_required_ports] {
       lappend check_ports $port
    }
@@ -311,8 +311,8 @@ proc check_correct_testsuite_setup_user { error_text } {
 #     build_vi_command() -- build a vi command to set new values
 #
 #  SYNOPSIS
-#     build_vi_command { change_array 
-#     {current_array no_current_array_has_been_passed} } 
+#     build_vi_command { change_array
+#     {current_array no_current_array_has_been_passed} }
 #
 #  FUNCTION
 #     take a name/value array and build a vi command to set new values
@@ -338,14 +338,14 @@ proc build_vi_command { change_array {current_array ""}} {
       return ""
    }
 
-   set vi_commands "" 
+   set vi_commands ""
 
    if {[info exists curar]} {
       # compare the new values to old ones
       foreach elem [array names chgar] {
         # this will quote any / to \/  (for vi - search and replace)
         set newVal $chgar($elem)
-      
+
         if {[info exists curar($elem)]} {
            # if old and new config have the same value, create no vi command,
            # if they differ, add vi command to ...
@@ -414,7 +414,7 @@ proc build_rqs_vi_array { change_array } {
          set newVal1 [split $newVal {/}]
          set newVal [join $newVal1 {\/}]
          if { $field == "limit" } {
-            # delete all rules in this rule set 
+            # delete all rules in this rule set
             lappend vi_commands "/limit\n"
             lappend vi_commands "d?\}?-1\n"
 
@@ -437,15 +437,15 @@ proc build_rqs_vi_array { change_array } {
 # procedures
 #                                                             max. column:     |
 #****** control_procedures/handle_vi_edit() ******
-# 
+#
 #  NAME
-#     handle_vi_edit -- sending vi commands to application 
+#     handle_vi_edit -- sending vi commands to application
 #
 #  SYNOPSIS
-#     handle_vi_edit { prog_binary prog_args vi_command_sequence 
-#     expected_result {additional_expected_result "___ABCDEFG___"} 
-#     {additional_expected_result2 "___ABCDEFG___"} 
-#     {additional_expected_result3 "___ABCDEFG___"}} 
+#     handle_vi_edit { prog_binary prog_args vi_command_sequence
+#     expected_result {additional_expected_result "___ABCDEFG___"}
+#     {additional_expected_result2 "___ABCDEFG___"}
+#     {additional_expected_result3 "___ABCDEFG___"}}
 #     {qconf_error_msg "___ABCDEFG___"}
 #     {raise_error  1} }
 #
@@ -455,38 +455,38 @@ proc build_rqs_vi_array { change_array } {
 #     and parse the application output.
 #
 #  INPUTS
-#     prog_binary                                   - application binary to start 
-#                                                     (e.g. qconf) 
-#     prog_args                                     - application arguments (e.g. 
-#                                                     -mconf) 
-#     vi_command_sequence                           - list of vi command sequences 
-#                                                     (e.g. 
-#                                                     {:%s/^$elem .*$/$elem 10/\n}) 
-#     expected_result                               - program output in no error 
-#                                                     case (e.g. modified) 
-#     {additional_expected_result "___ABCDEFG___"}  - additional expected_result 
-#     {additional_expected_result2 "___ABCDEFG___"} - additional expected_result 
+#     prog_binary                                   - application binary to start
+#                                                     (e.g. qconf)
+#     prog_args                                     - application arguments (e.g.
+#                                                     -mconf)
+#     vi_command_sequence                           - list of vi command sequences
+#                                                     (e.g.
+#                                                     {:%s/^$elem .*$/$elem 10/\n})
+#     expected_result                               - program output in no error
+#                                                     case (e.g. modified)
+#     {additional_expected_result "___ABCDEFG___"}  - additional expected_result
+#     {additional_expected_result2 "___ABCDEFG___"} - additional expected_result
 #     {additional_expected_result3 "___ABCDEFG___"} - additional expected_result
-#     {qconf_error_msg "___ABCDEFG___"}            - qconf error message 
+#     {qconf_error_msg "___ABCDEFG___"}            - qconf error message
 #     {raise_error  1}                                - do ts_log_severe in case of errors
 #
 #
 #  RESULT
-#     0 when the output of the application contents the expected_result 
+#     0 when the output of the application contents the expected_result
 #    -1 on timeout or other error
 #    -2 on additional_expected_result
-#    -3 on additional_expected_result2 
+#    -3 on additional_expected_result2
 #    -4 on additional_expected_result3
 #    -9 on chekcpointing qconf_error_msg
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
 #     @deprecated
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -512,7 +512,7 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
    ts_log_finer "using vi editor on host '$host_for_vi' in path '$vi_env(EDITOR)'"
    # start program (e.g. qconf)
    set id [open_remote_spawn_process $host_for_vi $CHECK_USER $prog_binary "$prog_args" 0 "" vi_env]
-   set sp_id [ lindex $id 1 ] 
+   set sp_id [ lindex $id 1 ]
    if {$CHECK_DEBUG_LEVEL != 0} {
       log_user 1
       set send_speed .001
@@ -520,7 +520,7 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
       log_user 0 ;# set to 1 if you wanna see vi responding
       set send_speed .0005
    }
-   set send_slow "1 $send_speed" 
+   set send_slow "1 $send_speed"
 
    ts_log_finest "now waiting for vi start ..."
    set error 0
@@ -537,7 +537,7 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
          ts_log_severe "unexpected end of file"
       }
 
-      -i $sp_id timeout {  
+      -i $sp_id timeout {
          set error 1
          ts_log_warning "timeout - can't start vi (1)"
       }
@@ -567,7 +567,7 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
          return -9
       }
 
-      -i $sp_id timeout {  
+      -i $sp_id timeout {
          set error 1
          ts_log_warning "timeout - can't start vi (2)"
       }
@@ -592,7 +592,7 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
          set error 1
       }
 
-      -i $sp_id timeout {  
+      -i $sp_id timeout {
          send -s -i $sp_id -- "G"
          incr timeout_count 1
          if { $timeout_count > 60 } {
@@ -605,10 +605,10 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
 
       -i $sp_id  "100%" {
       }
-      
+
       -i $sp_id  "o lines in buffer" {
       }
-      
+
       -i $sp_id  "erminal too wide" {
          ts_log_warning "got terminal to wide vi error"
          set error 1
@@ -699,14 +699,14 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
    }
 
    if { $error == 0 } {
-      
+
       # second waiting: Part II:
       # =======================
       # wait for file time older one second
       # we give an extra waiting time of 100 ms to be sure that
       # the vi takes at least 1 second
       set end_time [expr [clock clicks -milliseconds] + 1100 ]
-      while { [clock clicks -milliseconds] < $end_time } { 
+      while { [clock clicks -milliseconds] < $end_time } {
          after 100
       }
       set run_time [expr [clock clicks -milliseconds] - $start_time]
@@ -786,7 +786,7 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
                set result -7
                exp_continue
             }
-            
+
             -i $sp_id "_exit_status_" {
                ts_log_finest "vi terminated! (3)  (rt=$run_time)"
                if { $result == -100 } {
@@ -795,7 +795,7 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
                   set buffer_message [string range $expect_out(buffer) 0 $pos ]
                   set pos [string last "\n" $buffer_message]
                   incr pos 1
-                  set buffer_message [string range $buffer_message $pos end] 
+                  set buffer_message [string range $buffer_message $pos end]
 
                   set message_txt ""
                   append message_txt "expect_out(buffer)=\"$expect_out(buffer)\""
@@ -844,11 +844,11 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
       if { [string first "A" $elem ] != 0 } {
          set index1 [ string first "." $elem ]
          incr index1 -2
-         set var [ string range $elem 5 $index1 ] 
-        
+         set var [ string range $elem 5 $index1 ]
+
 
          # TODO: CR - the string last $var index1 position setting
-         #            is buggy, because it assumes that the value 
+         #            is buggy, because it assumes that the value
          #            doesn't contain $var.
          #
          #       example: load_sensor /path/load_sensor_script.sh
@@ -856,28 +856,28 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
          #
          #       Value is only used for printing the changes to the user,
          #       so this is not "really" a bug
-         #       
+         #
          set index1 [ string last "$var" $elem ]
          incr index1 [ string length $var]
          incr index1 2
-   
+
          set index2 [ string first "\n" $elem ]
          incr index2 -2
-   
+
          set value [ string range $elem $index1 $index2 ]
          set value [ split $value "\\" ]
          set value [ join $value "" ]
          if { [ string compare $value "*$/" ] == 0 || [ string compare $value "*$/#" ] == 0 } {
             ts_log_finest "--> removing \"$var\" entry"
          } else {
-            if { [ string compare $var "" ] != 0 && [ string compare $value "" ] != 0  } {         
+            if { [ string compare $var "" ] != 0 && [ string compare $value "" ] != 0  } {
                ts_log_finest "--> setting \"$var\" to \"${value}\""
             } else {
                if { [string compare $elem [format "%c" 27]] == 0 } {
-                  ts_log_finest "--> vi command: \"ESC\""    
+                  ts_log_finest "--> vi command: \"ESC\""
                } else {
                   set output [replace_string $elem "\n" "\\n"]
-                  ts_log_finest "--> vi command: \"$output\"" 
+                  ts_log_finest "--> vi command: \"$output\""
                }
             }
          }
@@ -891,29 +891,29 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
    if {$CHECK_DEBUG_LEVEL != 0} {
       log_user 1
    } else {
-      log_user 0 
+      log_user 0
    }
 
    return $result
 }
 
 #****** control_procedures/start_vi_edit() *************************************
-# 
+#
 #  NAME
-#     start_vi_edit -- sending vi commands to application 
+#     start_vi_edit -- sending vi commands to application
 #
 #  SYNOPSIS
-#     start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
+#     start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""}
 #     {user ""}}
 #
 #  FUNCTION
 #     Start the client which uses vi for editing and wait for the command output.
 #
 #  INPUTS
-#     prog_binary          - client binary to start (e.g. qconf) 
-#     prog_args            - client arguments (e.g. -mconf) 
-#     vi_command_sequence  - list of vi command sequences 
-#                            (e.g. {:%s/^$elem .*$/$elem 10/\n}) 
+#     prog_binary          - client binary to start (e.g. qconf)
+#     prog_args            - client arguments (e.g. -mconf)
+#     vi_command_sequence  - list of vi command sequences
+#                            (e.g. {:%s/^$elem .*$/$elem 10/\n})
 #     msg_var              - the array of expected messages
 #     {host ""}            - host on which to execute command - default: any host
 #     {user ""}            - user who shall call command
@@ -922,7 +922,7 @@ proc handle_vi_edit { prog_binary prog_args vi_command_sequence expected_result 
 #     Output of called command.
 #
 #  NOTE
-#     this is overwritten procedure handle_vi_edit with a non fixed count of 
+#     this is overwritten procedure handle_vi_edit with a non fixed count of
 #     messages.
 #*******************************************************************************
 proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} {user ""}} {
@@ -938,18 +938,18 @@ proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
    if {$user == ""} {
       set user $CHECK_USER
    }
-   
+
    set arch [resolve_arch $host]
    set vi_env(EDITOR) [get_binary_path $host "vim"]
    set binary "$ts_config(product_root)/bin/$arch/$prog_binary"
    set result ""
-   
+
    ts_log_finest "using EDITOR=$vi_env(EDITOR)"
    # start program (e.g. qconf)
 
    set id [open_remote_spawn_process $host $user $binary "$prog_args" 0 "" vi_env]
 
-   set sp_id [ lindex $id 1 ] 
+   set sp_id [ lindex $id 1 ]
    if {$CHECK_DEBUG_LEVEL != 0} {
       log_user 1
       set send_speed .001
@@ -957,11 +957,11 @@ proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
       log_user 0 ;# set to 1 if you wanna see vi responding
       set send_speed .0005
    }
-   set send_slow "1 $send_speed" 
+   set send_slow "1 $send_speed"
 
    ts_log_finest "now waiting for vi start ..."
    set error 0
-   
+
    set BUFF_OVERFLOW "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
    set EOF_MSG "unexpected end of file"
    set TMOUT_START "timeout - can't start vi (3)"
@@ -978,7 +978,7 @@ proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
          set result $EOF_MSG
       }
 
-      -i $sp_id timeout {  
+      -i $sp_id timeout {
          set error 1
          set result $TMOUT_START
       }
@@ -999,7 +999,7 @@ proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
          set result $EOF_MSG
       }
 
-      -i $sp_id timeout {  
+      -i $sp_id timeout {
          set error 1
          set result $TMOUT_START
       }
@@ -1013,8 +1013,8 @@ proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
                      close_spawn_process $id
                      return $messages($errno)
                   }
-               }   
-            }            
+               }
+            }
          }
          ts_log_finest "vi should run now ..."
       }
@@ -1038,7 +1038,7 @@ proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
          set error 1
       }
 
-      -i $sp_id timeout {  
+      -i $sp_id timeout {
          send -s -i $sp_id -- "G"
          incr timeout_count 1
          if { $timeout_count > 60 } {
@@ -1051,10 +1051,10 @@ proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
 
       -i $sp_id  "100%" {
       }
-      
+
       -i $sp_id  "o lines in buffer" {
       }
-      
+
       -i $sp_id  "erminal too wide" {
          set WIDE "got terminal to wide vi error"
          set result $WIDE
@@ -1166,7 +1166,7 @@ proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
    # we give an extra waiting time of 100 ms to be sure that
    # the vi takes at least 1 second
    set end_time [expr [clock clicks -milliseconds] + 1100 ]
-   while { [clock clicks -milliseconds] < $end_time } { 
+   while { [clock clicks -milliseconds] < $end_time } {
       after 100
    }
    set run_time [expr [clock clicks -milliseconds] - $start_time]
@@ -1231,11 +1231,11 @@ proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
       if { [string first "A" $elem ] != 0 } {
          set index1 [ string first "." $elem ]
          incr index1 -2
-         set var [ string range $elem 5 $index1 ] 
-        
+         set var [ string range $elem 5 $index1 ]
+
 
          # TODO: CR - the string last $var index1 position setting
-         #            is buggy, because it assumes that the value 
+         #            is buggy, because it assumes that the value
          #            doesn't contain $var.
          #
          #       example: load_sensor /path/load_sensor_script.sh
@@ -1243,28 +1243,28 @@ proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
          #
          #       Value is only used for printing the changes to the user,
          #       so this is not "really" a bug
-         #       
+         #
          set index1 [ string last "$var" $elem ]
          incr index1 [ string length $var]
          incr index1 2
-   
+
          set index2 [ string first "\n" $elem ]
          incr index2 -2
-   
+
          set value [ string range $elem $index1 $index2 ]
          set value [ split $value "\\" ]
          set value [ join $value "" ]
          if { [ string compare $value "*$/" ] == 0 || [ string compare $value "*$/#" ] == 0 } {
             ts_log_finest "--> removing \"$var\" entry"
          } else {
-            if { [ string compare $var "" ] != 0 && [ string compare $value "" ] != 0  } {         
+            if { [ string compare $var "" ] != 0 && [ string compare $value "" ] != 0  } {
                ts_log_finest "--> setting \"$var\" to \"${value}\""
             } else {
                if { [string compare $elem [format "%c" 27]] == 0 } {
-                  ts_log_finest "--> vi command: \"ESC\""    
+                  ts_log_finest "--> vi command: \"ESC\""
                } else {
                   set output [replace_string $elem "\n" "\\n"]
-                  ts_log_finest "--> vi command: \"$output\"" 
+                  ts_log_finest "--> vi command: \"$output\""
                }
             }
          }
@@ -1278,10 +1278,10 @@ proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
    if {$CHECK_DEBUG_LEVEL != 0} {
       log_user 1
    } else {
-      log_user 0 
+      log_user 0
    }
 
-   return $result   
+   return $result
 }
 
 #****** control_procedures/get_uid() *******************************************
@@ -1296,7 +1296,7 @@ proc start_vi_edit {prog_binary prog_args vi_command_sequence msg_var {host ""} 
 #
 #  INPUTS
 #     user - username
-#     host - hostname 
+#     host - hostname
 #
 #  RESULT
 #     string containing user id
@@ -1329,14 +1329,14 @@ proc get_uid { user host } {
 #     get_gid() -- get group id for user on host
 #
 #  SYNOPSIS
-#     get_gid { user host } 
+#     get_gid { user host }
 #
 #  FUNCTION
 #     The function returns the group id of user $user on host $host
 #
 #  INPUTS
-#     user - username 
-#     host - hostname 
+#     user - username
+#     host - hostname
 #
 #  RESULT
 #     string containing group id
@@ -1367,28 +1367,28 @@ proc get_gid { user host } {
 
 #                                                             max. column:     |
 #****** control_procedures/ps_grep() ******
-# 
+#
 #  NAME
-#     ps_grep -- call get_ps_info and return only expected ps information 
+#     ps_grep -- call get_ps_info and return only expected ps information
 #
 #  SYNOPSIS
-#     ps_grep { forwhat { host "local" } { variable ps_info } } 
+#     ps_grep { forwhat { host "local" } { variable ps_info } }
 #
 #  FUNCTION
-#     This procedure will call the get_ps_info procedure. It will parse the 
-#     get_ps_info result for the given strings and return only those process 
-#     ids which match. 
+#     This procedure will call the get_ps_info procedure. It will parse the
+#     get_ps_info result for the given strings and return only those process
+#     ids which match.
 #
 #  INPUTS
-#     forwhat              - search string (e.g. binary name) 
-#     { host "local" }     - host on which the ps command should be called 
-#     { variable ps_info } - variable name to store the result (default ps_info) 
+#     forwhat              - search string (e.g. binary name)
+#     { host "local" }     - host on which the ps command should be called
+#     { variable ps_info } - variable name to store the result (default ps_info)
 #
 #  RESULT
-#     returns a list of indexes where the search string matches the ps output. 
+#     returns a list of indexes where the search string matches the ps output.
 #
 #  EXAMPLE
-# 
+#
 #   set myprocs [ ps_grep "execd" "fangorn" ]
 #
 #   puts "execd's on fangorn index list: $myprocs"
@@ -1398,7 +1398,7 @@ proc get_gid { user host } {
 #   }
 #
 #   output of example:
-# 
+#
 #   execd's on fangorn index list: 34 39 50 59 61
 #   2530   140     1   259 S Sep12  1916 00:00:14 /sge_s/glinux/sge_execd
 #   7700   142     1   339 S Sep13  2024 00:03:49 /vol2/bin/glinux/sge_execd
@@ -1407,10 +1407,10 @@ proc get_gid { user host } {
 #   15085     0     1     0 S Sep14  1904 00:27:04 /vol2/glinux/sgeee_execd
 #
 #  NOTES
-#   look at get_ps_info procedure for more information! 
+#   look at get_ps_info procedure for more information!
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     control_procedures/get_ps_info
@@ -1430,49 +1430,49 @@ proc ps_grep {forwhat {host "local"} {variable ps_info}} {
       }
    }
    return $index_list
-} 
+}
 
 
 
 #                                                             max. column:     |
 #****** control_procedures/get_ps_info() ******
-# 
+#
 #  NAME
-#     get_ps_info -- get ps output on remote or local host 
+#     get_ps_info -- get ps output on remote or local host
 #
 #  SYNOPSIS
-#     get_ps_info { { pid 0 } { host "local"} { variable ps_info } 
-#     {additional_run 0} } 
+#     get_ps_info { { pid 0 } { host "local"} { variable ps_info }
+#     {additional_run 0} }
 #
 #  FUNCTION
-#     This procedure will call ps on the host given and parse the output. All 
-#     information is stored in a special array. If no variable parameter is 
-#     given the array has the name ps_info 
+#     This procedure will call ps on the host given and parse the output. All
+#     information is stored in a special array. If no variable parameter is
+#     given the array has the name ps_info
 #
 #  INPUTS
-#     { pid 0 }            - set pid for ps_info($pid,error) the 
-#                            ps_info([given pid],error) array is always set when 
-#                            the pid is given. You have always access to 
+#     { pid 0 }            - set pid for ps_info($pid,error) the
+#                            ps_info([given pid],error) array is always set when
+#                            the pid is given. You have always access to
 #                            ps_info($pid,error)
 #     { host "master"}     - host on which the ps command should be started
-#     { variable ps_info } - array name where the ps command output should be 
+#     { variable ps_info } - array name where the ps command output should be
 #                            stored the default for this value is "ps_info"
 #     {additional_run 0}   - if it is neccessary to start more than one ps command
-#                            to get the full information this number is used to be 
-#                            able to differ the recursive subcalls. So this 
-#                            parameter is only set when the procedure calls itself 
+#                            to get the full information this number is used to be
+#                            able to differ the recursive subcalls. So this
+#                            parameter is only set when the procedure calls itself
 #                            again.
 #
 #
 #  RESULT
 #     The procedure returns an 2 dimensional array with following entries:
 #
-#     If the parameter pid was set to 12 then ps_info(12,error) exists after 
-#     calling this procedure ps_info(12,error) is set to 0 when the pid 12 exists, 
-#     otherwise it is set to -1 
+#     If the parameter pid was set to 12 then ps_info(12,error) exists after
+#     calling this procedure ps_info(12,error) is set to 0 when the pid 12 exists,
+#     otherwise it is set to -1
 #
 #     when ps_info(12,error) exists the following indicies are available:
-# 
+#
 #     ps_info(12,string)
 #     ps_info(12,index_names)
 #     ps_info(12,pgid)
@@ -1485,7 +1485,7 @@ proc ps_grep {forwhat {host "local"} {variable ps_info}} {
 #     ps_info(12,command)
 #     ps_info(12,nice)
 #
-#     every output of the ps command is stored into these indicies: 
+#     every output of the ps command is stored into these indicies:
 #     (I is the line number (or index) of the output)
 #
 #     ps_info(proc_count)   : number of processes (line count of ps command)
@@ -1494,9 +1494,9 @@ proc ps_grep {forwhat {host "local"} {variable ps_info}} {
 #     ps_info(ppid,I)       : parent pid
 #     ps_info(uid,I)        : user id
 #     ps_info(state,I)      : state
-#     ps_info(stime,I)      : start time 
+#     ps_info(stime,I)      : start time
 #     ps_info(vsz,I)        : virtual size
-#     ps_info(time,I)       : cpu time 
+#     ps_info(time,I)       : cpu time
 #     ps_info(command,I)    : command arguments of process
 #     ps_info(nice,I)       : nice level of the process
 #     ps_info(string,I)     : complete line
@@ -1504,7 +1504,7 @@ proc ps_grep {forwhat {host "local"} {variable ps_info}} {
 #  EXAMPLE
 #
 #     get process group id of pid 3919:
-# 
+#
 #     get_ps_info 3919 fangorn
 #     if {$ps_info(3919,error) == 0} {
 #        puts "process group id of pid 3919 is $ps_info(3919,pgid)"
@@ -1515,23 +1515,23 @@ proc ps_grep {forwhat {host "local"} {variable ps_info}} {
 #
 #
 #     print out all pids on local host:
-#     
-#     get_ps_info 
+#
+#     get_ps_info
 #     for {set i 0} {$i < $ps_info(proc_count) } {incr i 1} {
 #        puts "ps_info(pid,$i)     = $ps_info(pid,$i)"
 #     }
 #
 #  NOTES
 #     o additional_run is for glinux at this time
-#     o additionan_run is a number from 0 up to xxx at the end of the procedure 
-#       it will start again a ps command with other information in order to mix 
+#     o additionan_run is a number from 0 up to xxx at the end of the procedure
+#       it will start again a ps command with other information in order to mix
 #       up the information into one resulting list
 #
 #     o this procedure should run on following platforms:
 #       solaris64, solaris
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     control_procedures/ps_grep
@@ -1542,7 +1542,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
 
    if { [string compare $host "master" ] == 0 } {
       set host $ts_config(master_host)
-   } 
+   }
 
    if {[info exists psinfo]} {
       unset psinfo
@@ -1554,9 +1554,9 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
 
 
    set host_arch [resolve_arch $host]
-   
+
    #puts "arch on host $host is $host_arch"
-   
+
    # ATTENTION: command_pos (args column) must be the last column !!!
    # Testsuite needs at least 61 chars from that column to detect the product root PATH
    # NOTE: On some archs the last column is not truncated, on some archs it is, so please be patient !
@@ -1579,7 +1579,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
          set command_pos 9
          set nice_pos    8
       }
-    
+
       "darwi*" {
          set myenvironment(COLUMNS) "1000"
          set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-awwx -o \"pid=_____pid\" -o \"pgid=_____pgid\" -o \"ppid=_____ppid\" -o \"uid=_____uid\" -o \"state=_____s\" -o \"stime=_____stime\" -o \"vsz=_____vsz\" -o \"time=_____time\" -o \"nice=_____nice\" -o \"command=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
@@ -1613,7 +1613,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
          set command_pos 8
          set nice_pos   -1
       }
- 
+
       "lx2?-*" -
       "ulx24-*" -
       "lx-*" -
@@ -1652,7 +1652,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
             set time_pos    8
             set command_pos 9
             set nice_pos    -1
-         } 
+         }
          if { $additional_run == 1 } {
             # this is the first ps without any size position
             set myenvironment(COLUMNS) "1000"
@@ -1669,7 +1669,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
             set time_pos    9
             set command_pos 10
             set nice_pos    -1
-         } 
+         }
       }
 
       "nbsd-*" {
@@ -1686,7 +1686,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
          set command_pos 8
          set nice_pos    -1
       }
-	
+
       default {
          set result "unknown architecture $host_arch"
          set prg_exit_state 1
@@ -1699,7 +1699,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
          set stime_pos   5
          set vsz_pos     6
          set time_pos    7
-         set command_pos 9 
+         set command_pos 9
          set nice_pos    8
       }
    }
@@ -1725,7 +1725,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       if {[string first $compare_pattern [lindex $help_list $x]] >= 0} {
          break
       }
-         
+
    }
 
    # no header found?
@@ -1733,20 +1733,20 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       ts_log_severe "no usable data from ps command, host=$host, host_arch=$host_arch"
       return
    }
-  
+
    set header [ lindex $help_list $x]
-   
+
    # cut heading garbage and header line
    set ps_list [ lrange $help_list [expr $x + 1] [expr ([llength $help_list]-1)]]
-   
-#   ts_log_fine "index names: \n$index_names" 
+
+#   ts_log_fine "index names: \n$index_names"
 #   ts_log_fine "          1         2         3         4         5         6         7         8         9"
 #   ts_log_fine "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
 #   ts_log_fine "header:\n$header"
-   
+
    set s_index 0
    set indexcount [llength $index_names]
-   foreach index $index_names { 
+   foreach index $index_names {
       incr indexcount -1
       set position1 [string first $index $header]
 #      ts_log_fine "\nstringlength of $index is [string length $index]"
@@ -1755,7 +1755,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       if {$indexcount == 0 } {
          set last_position [expr $myenvironment(COLUMNS) - 1]
       }
-      set first_position $s_index 
+      set first_position $s_index
       set s_index [ expr ($last_position + 1 )]
       #ts_log_fine "position of \"$index\" is from $first_position to $last_position"
       set read_header ""
@@ -1785,7 +1785,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       if {$pid_pos != -1} {
          set pid_index_name [lindex $index_names $pid_pos]
          set act_pid_string [string range $elem $pos1_list($pid_index_name)  $pos2_list($pid_index_name)]
-         set act_pid [string trim $act_pid_string] 
+         set act_pid [string trim $act_pid_string]
       } else {
          set act_pid -1
       }
@@ -1793,85 +1793,85 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       set psinfo($act_pid,error)  0
       set psinfo($act_pid,string) $elem
       set psinfo(string,$process_count) $elem
-      set psinfo($act_pid,index_names) $index_names 
+      set psinfo($act_pid,index_names) $index_names
       set psinfo(pid,$process_count) $act_pid
       #puts "${variable}(pid,$process_count) = $act_pid"
-    
+
 #     PGID
-      if {$gid_pos != -1} { 
+      if {$gid_pos != -1} {
          set name  [lindex $index_names $gid_pos]
          set value_str [string range $elem $pos1_list($name)  $pos2_list($name)]
       } else {
          set value_str "unknown"
       }
-      set value [string trim $value_str] 
-      set psinfo($act_pid,pgid) $value 
+      set value [string trim $value_str]
+      set psinfo($act_pid,pgid) $value
       set psinfo(pgid,$process_count) $value
 
-#     PPID 
-      if {$ppid_pos != -1} { 
+#     PPID
+      if {$ppid_pos != -1} {
          set name  [lindex $index_names $ppid_pos]
          set value_str [string range $elem $pos1_list($name)  $pos2_list($name)]
       } else {
          set value_str "unknown"
       }
-      set value [string trim $value_str] 
-      set psinfo($act_pid,ppid) $value 
+      set value [string trim $value_str]
+      set psinfo($act_pid,ppid) $value
       set psinfo(ppid,$process_count) $value
 
-#     UID 
+#     UID
       if { $uid_pos != -1} {
          set name  [lindex $index_names $uid_pos]
          set value_str [string range $elem $pos1_list($name)  $pos2_list($name)]
       } else {
          set value_str "unknown"
       }
-      set value [string trim $value_str] 
+      set value [string trim $value_str]
       set psinfo($act_pid,uid) $value
       set psinfo(uid,$process_count) $value
- 
-#     STATE 
+
+#     STATE
       if { $state_pos != -1} {
          set name  [lindex $index_names $state_pos]
          set value_str [string range $elem $pos1_list($name)  $pos2_list($name)]
       } else {
          set value_str "unknown"
       }
-      set value [string trim $value_str] 
-      set psinfo($act_pid,state) $value 
+      set value [string trim $value_str]
+      set psinfo($act_pid,state) $value
       set psinfo(state,$process_count) $value
 
-#     STIME 
+#     STIME
       if { $stime_pos  != -1} {
          set name  [lindex $index_names $stime_pos]
          set value_str [string range $elem $pos1_list($name)  $pos2_list($name)]
       } else {
          set value_str "unknown"
       }
-      set value [string trim $value_str] 
-      set psinfo($act_pid,stime) $value 
+      set value [string trim $value_str]
+      set psinfo($act_pid,stime) $value
       set psinfo(stime,$process_count) $value
 
 #     VSZ
-      if { $vsz_pos != -1} {  
+      if { $vsz_pos != -1} {
          set name  [lindex $index_names $vsz_pos]
          set value_str [string range $elem $pos1_list($name)  $pos2_list($name)]
       } else {
          set value_str "unknown"
       }
-      set value [string trim $value_str] 
-      set psinfo($act_pid,vsz) $value 
+      set value [string trim $value_str]
+      set psinfo($act_pid,vsz) $value
       set psinfo(vsz,$process_count) $value
 
 #     TIME
-      if { $time_pos != -1} { 
+      if { $time_pos != -1} {
          set name  [lindex $index_names $time_pos]
          set value_str [string range $elem $pos1_list($name)  $pos2_list($name)]
       } else {
          set value_str "unknown"
       }
-      set value [string trim $value_str] 
-      set psinfo($act_pid,time) $value 
+      set value [string trim $value_str]
+      set psinfo($act_pid,time) $value
       set psinfo(time,$process_count) $value
 
 #     COMMAND
@@ -1889,24 +1889,24 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       set psinfo(proc_count) $process_count
 
 #     NICE
-      if { $nice_pos != -1} { 
+      if { $nice_pos != -1} {
          set name  [lindex $index_names $nice_pos]
          set value_str [string range $elem $pos1_list($name)  $pos2_list($name)]
       } else {
          set value_str "unknown"
       }
-      set value [string trim $value_str] 
-      set psinfo($act_pid,nice) $value 
+      set value [string trim $value_str]
+      set psinfo($act_pid,nice) $value
       set psinfo(nice,$process_count) $value
    }
 
-      
+
 # PID  PGID  PPID   UID S    STIME  VSZ        TIME COMMAND NICE
 
    # here is the merge of more ps commands happening
    switch -- $host_arch {
       "alinux" {
-         if { $additional_run == 0 } { 
+         if { $additional_run == 0 } {
             # calling second ps
             get_ps_info $pid $host ps_add_run 1
             #ts_log_fine "ps_add_run $pid is $ps_add_run($pid,string)"
@@ -1928,17 +1928,17 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
                   set psinfo($act_pid,stime) $ps_add_run($act_pid,stime)
                   #ts_log_fine "        new value psinfo($act_pid,vsz) = $psinfo($act_pid,vsz)"
                   #ts_log_fine "        new value psinfo($act_pid,stime) = $psinfo($act_pid,stime)"
-                  
+
                } else {
                   ts_log_fine "--> value vsz for pid $act_pid not found"
                }
             }
             return
-         } 
-         if { $additional_run == 1 } { 
+         }
+         if { $additional_run == 1 } {
             # second ps run
             return
-         } 
+         }
       }
    }
 }
@@ -1948,7 +1948,7 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
 #     gethostname() -- returns the name of the local host
 #
 #  SYNOPSIS
-#     gethostname { { do_debug_puts 1} {source_dir_path ""} } 
+#     gethostname { { do_debug_puts 1} {source_dir_path ""} }
 #
 #  FUNCTION
 #     returns the name of the local machine (but not "localhost") and uses
@@ -2039,7 +2039,7 @@ proc gethostname { { do_debug_puts 1} {source_dir_path ""} } {
          if { [ string length $newname ] > 0 } {
             ts_log_finest "got hostname_ \"$newname\""
             return $newname
-         } 
+         }
       }
    }
    return "unknown"
@@ -2049,12 +2049,12 @@ proc gethostname { { do_debug_puts 1} {source_dir_path ""} } {
 
 #                                                             max. column:     |
 #****** control_procedures/resolve_arch() ******
-# 
+#
 #  NAME
 #     resolve_arch -- resolve architecture of host
 #
 #  SYNOPSIS
-#     resolve_arch { {node "none"} {use_source_arch 0}} 
+#     resolve_arch { {node "none"} {use_source_arch 0}}
 #
 #  FUNCTION
 #     Resolves the architecture of a given host.
@@ -2095,7 +2095,7 @@ proc resolve_arch {{node "none"} {use_source_arch 0} {source_dir_value ""}} {
       ts_log_severe "user not set, aborting"
       return "unknown"
    }
-  
+
    set util_arch_dir ""
    set store_in_cache 1
    if {[file exists "$ts_config(product_root)/util/arch"] && ! $use_source_arch} {
@@ -2146,7 +2146,7 @@ proc resolve_arch {{node "none"} {use_source_arch 0} {source_dir_value ""}} {
    if { $result != "unknown" && $store_in_cache == 1 } {
       set arch_cache($nr,$host,$use_source_arch,$source_dir_value) [lindex $result 0]
       return $arch_cache($nr,$host,$use_source_arch,$source_dir_value)
-   } else { 
+   } else {
       return [lindex $result 0]
    }
 }
@@ -2175,12 +2175,12 @@ proc parse_arch_output { arch_output } {
       return "unknown"
    }
    set result [lindex $result 0]
- 
+
    if { [ string compare $result "" ] == 0 } {
       ts_log_fine "architecture or file /dist/util/arch\" not found"
       return "unknown"
-   } 
- 
+   }
+
    return $result
 }
 
@@ -2191,7 +2191,7 @@ proc parse_arch_output { arch_output } {
 #     resolve_arch_clear_cache() -- clear cache of resolve_arch()
 #
 #  SYNOPSIS
-#     resolve_arch_clear_cache { } 
+#     resolve_arch_clear_cache { }
 #
 #  FUNCTION
 #     The function resolve_arch caches its results.
@@ -2199,7 +2199,7 @@ proc parse_arch_output { arch_output } {
 #     the architecture strings.
 #
 #     This is for example done after compiling and installing binaries.
-#     In this case the newly installed arch script might return other 
+#     In this case the newly installed arch script might return other
 #     architecture names than the previously installed one.
 #
 #  SEE ALSO
@@ -2216,30 +2216,30 @@ proc resolve_arch_clear_cache {} {
 
 #                                                             max. column:     |
 #****** control_procedures/resolve_build_arch() ******
-# 
+#
 #  NAME
-#     resolve_build_arch -- ??? 
+#     resolve_build_arch -- ???
 #
 #  SYNOPSIS
-#     resolve_build_arch { host } 
+#     resolve_build_arch { host }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
-#     host - ??? 
+#     host - ???
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -2262,7 +2262,7 @@ proc resolve_build_arch { host } {
   }
 
   set result [start_remote_prog $host $CHECK_USER "scripts/compilearch" "-b" prg_exit_state 60 0 $ts_config(source_dir) "" 1 0]
- 
+
   set result [split $result "\n"]
   set result [join $result ""]
   set result [split $result "\r"]
@@ -2280,13 +2280,13 @@ proc resolve_build_arch { host } {
 
 #                                                             max. column:     |
 #****** control_procedures/resolve_lib_path_name() ******
-# 
+#
 #  NAME
 #     resolve_lib_path_name -- Returns the name of the shared library path name
 #                              environment variable
 #
 #  SYNOPSIS
-#     resolve_lib_path_name { host  {use_source_arch 0}} 
+#     resolve_lib_path_name { host  {use_source_arch 0}}
 #
 #  FUNCTION
 #     This function resolves the name of the shared library path name
@@ -2325,7 +2325,7 @@ proc resolve_lib_path_name { host {use_source_arch 0}} {
 
    # try to retrieve architecture
    set result [start_remote_prog $host $CHECK_USER $arch_script "-lib" prg_exit_state 60 0 "" "" 1 0 0]
- 
+
    if {$prg_exit_state != 0} {
       return "unknown"
    }
@@ -2342,7 +2342,7 @@ proc resolve_lib_path_name { host {use_source_arch 0}} {
 #     resolve_build_arch_installed_libs() -- get build arch for libraries
 #
 #  SYNOPSIS
-#     resolve_build_arch_installed_libs { host {raise_error 1} } 
+#     resolve_build_arch_installed_libs { host {raise_error 1} }
 #
 #  FUNCTION
 #     Some architectures are using different lib path. This procedure returns
@@ -2379,7 +2379,7 @@ proc resolve_build_arch_installed_libs {host {raise_error 1}} {
 
    set build_arch [resolve_build_arch $host]
 
-   
+
 
    # we need special handling for some architectures
    switch $build_arch {
@@ -2401,7 +2401,7 @@ proc resolve_build_arch_installed_libs {host {raise_error 1}} {
 
    if { [is_remote_path $host $CHECK_USER $ts_config(source_dir)/$build_arch] == 0 } {
       ts_log_severe "can't find build directory: $ts_config(source_dir)/$build_arch" $raise_error
-   } 
+   }
 
    # update cache
    set resolve_build_arch_installed_libs_cache($host) $build_arch
@@ -2410,31 +2410,31 @@ proc resolve_build_arch_installed_libs {host {raise_error 1}} {
 
 #                                                             max. column:     |
 #****** control_procedures/resolve_host() ******
-# 
+#
 #  NAME
-#     resolve_host -- ??? 
+#     resolve_host -- ???
 #
 #  SYNOPSIS
-#     resolve_host { name { long 0 } } 
+#     resolve_host { name { long 0 } }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
-#     name       - ??? 
-#     { long 0 } - ??? 
+#     name       - ???
+#     { long 0 } - ???
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -2506,17 +2506,17 @@ proc resolve_host_list {hosts {long 0}} {
 #     resolve_queue() -- resolve queue instance name
 #
 #  SYNOPSIS
-#     resolve_queue { queue } 
+#     resolve_queue { queue }
 #
 #  FUNCTION
-#     This function resolves the hostname of the queue instance and returns 
+#     This function resolves the hostname of the queue instance and returns
 #     the corresponding name
 #
 #  INPUTS
 #     queue - queue name e.g. "queue1@testhost"
 #
 #*******************************************************************************
-proc resolve_queue {queue {raise_queue_too_long_error 1}} { 
+proc resolve_queue {queue {raise_queue_too_long_error 1}} {
    set at_sign [string first "@" $queue]
    set new_queue_name $queue
    if { $at_sign >= 0 } {
@@ -2541,7 +2541,7 @@ proc resolve_queue {queue {raise_queue_too_long_error 1}} {
       ts_log_config "The length of the queue name \"$new_queue_name\" will exceed qstat queue name output" $raise_queue_too_long_error
    }
 
-   return $new_queue_name 
+   return $new_queue_name
 }
 
 proc get_schedd_pid {} {
@@ -2568,7 +2568,7 @@ proc parse_cpu_time {s_cpu} {
 
    while {[llength $l_cpu] > 0} {
       scan [lindex $l_cpu 0] "%02d" part
-      
+
       switch [llength $l_cpu] {
          1 {
             incr cpu $part
@@ -2715,8 +2715,8 @@ proc operational_unlock {operation_name {host ""} {lock_location "/tmp"}} {
 #     scale_timeout() -- scale timeout values
 #
 #  SYNOPSIS
-#     scale_timeout { timeout {does_computation 1} {does_spooling 1} 
-#     {process_invocations 1} } 
+#     scale_timeout { timeout {does_computation 1} {does_spooling 1}
+#     {process_invocations 1} }
 #
 #  FUNCTION
 #     Scales a given timeout value depending on setup.
@@ -2728,20 +2728,20 @@ proc operational_unlock {operation_name {host ""} {lock_location "/tmp"}} {
 #  INPUTS
 #     timeout                 - base timeout
 #     {does_computation 1}    - is the tested
-#     {does_spooling 1}       - ??? 
-#     {process_invocations 1} - ??? 
+#     {does_spooling 1}       - ???
+#     {process_invocations 1} - ???
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???

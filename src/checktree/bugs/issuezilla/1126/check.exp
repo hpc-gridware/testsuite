@@ -37,7 +37,7 @@ global check_name check_description check_needs check_functions
 global check_category
 global check_root_access_needs
 
-set check_category            "COMPATIBILITY SYSTEM COMMLIB"
+set check_category            "COMMLIB TESTBIN" ;# @todo VERIFIED?
 set check_name                "issue_1126"
 set check_description(0)      "qmaster clients may not reconnect after qmaster outage"
 set check_needs               "init_core_system"      ;# dependencies of this check (name of other check)
@@ -47,7 +47,7 @@ set check_root_access_needs   "yes"
 # Shutdown of master cannot be done as startup function
 # as availability of system is checked before first check_function
 # is started
-# The restart is established as cleanup function to have it 
+# The restart is established as cleanup function to have it
 # called in any case, even if test fails with tcl error.
 set check_setup_function "issue_1126_setup"
 set check_cleanup_function "issue_1126_restart_master"
@@ -81,7 +81,7 @@ proc issue_1126_run {} {
 
    set server_binary [get_test_or_source_path "test_server_connection" $test_host]
    set server_args "0 $ts_config(commd_port) 10"
-   
+
    set client_sid [open_remote_spawn_process $test_host $CHECK_USER $client_binary $client_args]
    set client_id  [lindex $client_sid 1]
 
@@ -90,11 +90,11 @@ proc issue_1126_run {} {
 
    set both_list "$client_id $server_id"
 
-   
+
    set kbit_count 0
    set in_loop 1
    while {$in_loop} {
-      set timeout 15 
+      set timeout 15
       expect {
          -i $both_list full_buffer {
             ts_log_severe "expect full_buffer error"
@@ -104,14 +104,14 @@ proc issue_1126_run {} {
          }
          -i $both_list timeout {
             ts_log_severe "got timeout"
-            set in_loop 0   
+            set in_loop 0
          }
          -i $both_list eof {
             ts_log_severe "got eof"
-            set in_loop 0   
+            set in_loop 0
          }
          -i $server_id -- "*\n" {
-            set output $expect_out(0,string) 
+            set output $expect_out(0,string)
             set output [split $output "\n"]
             foreach line $output {
                set help [string trim $line]
@@ -119,7 +119,7 @@ proc issue_1126_run {} {
             }
          }
          -i $client_id -- "*\n" {
-            set output $expect_out(0,string) 
+            set output $expect_out(0,string)
             set output [split $output "\n"]
             foreach line $output {
                set help [string trim $line]
@@ -131,7 +131,7 @@ proc issue_1126_run {} {
          }
       }
       if {$kbit_count == 5} {
-         set in_loop 0   
+         set in_loop 0
       }
    }
    close_spawn_process $server_sid
@@ -145,7 +145,7 @@ proc issue_1126_run {} {
    set kbit_count 0
    set in_loop 1
    while {$in_loop} {
-      set timeout 15 
+      set timeout 15
       expect {
          -i $both_list full_buffer {
             ts_log_severe "expect full_buffer error"
@@ -155,14 +155,14 @@ proc issue_1126_run {} {
          }
          -i $both_list timeout {
             ts_log_severe "got timeout - client doesn't reconnect"
-            set in_loop 0   
+            set in_loop 0
          }
          -i $both_list eof {
             ts_log_severe "got eof"
-            set in_loop 0   
+            set in_loop 0
          }
          -i $server_id -- "*\n" {
-            set output $expect_out(0,string) 
+            set output $expect_out(0,string)
             set output [split $output "\n"]
             foreach line $output {
                set help [string trim $line]
@@ -170,7 +170,7 @@ proc issue_1126_run {} {
             }
          }
          -i $client_id -- "*\n" {
-            set output $expect_out(0,string) 
+            set output $expect_out(0,string)
             set output [split $output "\n"]
             foreach line $output {
                set help [string trim $line]
@@ -182,7 +182,7 @@ proc issue_1126_run {} {
          }
       }
       if {$kbit_count == 5} {
-         set in_loop 0   
+         set in_loop 0
       }
    }
 
@@ -192,7 +192,7 @@ proc issue_1126_run {} {
 
 
 proc issue_1126_restart_master {} {
-   global ts_config 
+   global ts_config
 
    startup_qmaster
 }

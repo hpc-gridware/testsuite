@@ -45,7 +45,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "qconf"
-set check_category        "RQS VERIFIED"
+set check_category        "EVENTCLIENT QCONF RQS TESTBIN VERIFIED"
 set check_description(0)  "test all qconf options (test not complete)"
 
 # define test's dependencies
@@ -347,7 +347,7 @@ proc qconf_muser {} {
       }
       # now modify user
       set new_conf(default_project) "NONE"
-      mod_user $test_user new_conf 
+      mod_user $test_user new_conf
       set output [start_sge_bin "qconf" "-suser $test_user"]
       ts_log_fine $output
       if {[string first "mytestproject" $output] >= 0} {
@@ -425,13 +425,13 @@ proc check_exec_conf { host_list attr_name check_value } {
      get_exechost host_config $host
      set host_attr_value $host_config($attr_name)
 
-     ts_log_fine "host \"$host\": $attr_name is set to \"$host_attr_value\"" 
+     ts_log_fine "host \"$host\": $attr_name is set to \"$host_attr_value\""
 
      if { [ string compare $check_value $host_attr_value ] != 0 } {
         ts_log_fine "\"$check_value\" is not \"$host_attr_value\""
-        ts_log_severe "\"$check_value\" is not \"$host_attr_value\"" 
+        ts_log_severe "\"$check_value\" is not \"$host_attr_value\""
      }
-  } 
+  }
 }
 
 # check all queues in queue_list for attr_name and compare it with check_value
@@ -440,13 +440,13 @@ proc check_queue_conf { queue_list attr_name check_value } {
      get_queue $queue q_config
      set q_attr_value $q_config($attr_name)
 
-     ts_log_fine "queue \"$queue\": $attr_name is set to \"$q_attr_value\"" 
+     ts_log_fine "queue \"$queue\": $attr_name is set to \"$q_attr_value\""
 
      if { [ string compare $check_value $q_attr_value ] != 0 } {
         ts_log_fine "\"$check_value\" is not \"$q_attr_value\""
-        ts_log_severe "\"$check_value\" is not \"$q_attr_value\"" 
+        ts_log_severe "\"$check_value\" is not \"$q_attr_value\""
      }
-  } 
+  }
 }
 
 proc qconf_aattr_check {} {
@@ -459,18 +459,18 @@ proc qconf_aattr_check {} {
    set output [start_sge_bin "qconf" "-aattr queue qtype PARALLEL $queue_names"]
    if {$prg_exit_state != 0} {
      ts_log_severe "exit state is not 0"
-   }          
+   }
    ts_log_fine $output
    check_queue_conf $queue_names qtype "BATCH INTERACTIVE PARALLEL"
 
-    
+
    # check queue add parameter list
    check_queue_conf $queue_names load_thresholds "np_load_avg=7.00"
    ts_log_fine "adding qtype PARALLEL to queues $queue_names"
    set output [start_sge_bin "qconf" "-aattr queue load_thresholds \"mem_free=1M\" $queue_names"]
    if {$prg_exit_state != 0} {
      ts_log_severe "exit state is not 0"
-   }          
+   }
    ts_log_fine $output
    check_queue_conf $queue_names load_thresholds "np_load_avg=7.00,mem_free=1M"
 
@@ -481,7 +481,7 @@ proc qconf_aattr_check {} {
    set output [start_sge_bin "qconf" "-aattr exechost user_lists \"deadlineusers\" $ts_config(execd_nodes)"]
    if {$prg_exit_state != 0} {
      ts_log_severe "exit state is not 0"
-   }          
+   }
    ts_log_fine $output
    check_exec_conf $ts_config(execd_nodes) user_lists "deadlineusers"
 
@@ -489,13 +489,13 @@ proc qconf_aattr_check {} {
    set output [start_sge_bin "qconf" "-aattr exechost user_lists \"defaultdepartment\" $ts_config(execd_nodes)"]
    if {$prg_exit_state != 0} {
      ts_log_severe "exit state is not 0"
-   }          
+   }
    ts_log_fine $output
    check_exec_conf $ts_config(execd_nodes) user_lists "deadlineusers defaultdepartment"
 }
 
 proc qconf_Aattr_check {} {
-   global ts_config queue_names 
+   global ts_config queue_names
    global CHECK_ACTUAL_TEST_PATH
 
    # check queue add normal attribute
@@ -510,7 +510,7 @@ proc qconf_Aattr_check {} {
    set output [start_sge_bin "qconf" "-Aattr queue $CHECK_ACTUAL_TEST_PATH/Aattr_file_queue $queue_names"]
    if {$prg_exit_state != 0} {
      ts_log_severe "exit state is not 0"
-   }          
+   }
    ts_log_fine $output
    check_queue_conf $queue_names qtype "BATCH INTERACTIVE PARALLEL"
    check_queue_conf $queue_names load_thresholds "np_load_avg=7.00,mem_free=1M"
@@ -524,7 +524,7 @@ proc qconf_rattr_check {} {
    set output [start_sge_bin "qconf" "-rattr exechost user_lists \"NONE\" $ts_config(execd_nodes)"]
    if {$prg_exit_state != 0} {
      ts_log_severe "exit state is not 0"
-   }          
+   }
    ts_log_fine $output
 
    check_exec_conf $ts_config(execd_nodes) user_lists "NONE"
@@ -533,7 +533,7 @@ proc qconf_rattr_check {} {
    set output [start_sge_bin "qconf" "-rattr queue qtype \"BATCH INTERACTIVE\" $queue_names"]
    if {$prg_exit_state != 0} {
      ts_log_severe "exit state is not 0"
-   }          
+   }
    ts_log_fine $output
    check_queue_conf $queue_names qtype "BATCH INTERACTIVE"
 
@@ -541,7 +541,7 @@ proc qconf_rattr_check {} {
    set output [start_sge_bin "qconf" "-rattr queue load_thresholds \"np_load_avg=7.00\" $queue_names"]
    if {$prg_exit_state != 0} {
      ts_log_severe "exit state is not 0"
-   }          
+   }
    ts_log_fine $output
    check_queue_conf $queue_names load_thresholds "np_load_avg=7.00"
 }
@@ -573,7 +573,7 @@ proc qconf_segfault {} {
 
 proc qconf_se {} {
    global ts_config
-  
+
    # test hosts
    set cluster_host [host_conf_get_suited_hosts]
    set non_cluster_host [host_conf_get_non_cluster_host]
@@ -610,7 +610,7 @@ proc qconf_se {} {
 
 proc qconf_sel {} {
    global ts_config
-  
+
    # test hosts
    set non_cluster_host [host_conf_get_non_cluster_host]
 
@@ -642,7 +642,7 @@ proc qconf_sel {} {
 #  SYNOPSIS
 #     qconf_scal_check { } - Call get_calendar with calendar "always_suspend"
 #                            Then call get_calendar with a wrong calendar name,
-#                            like "wrong_calendar". 
+#                            like "wrong_calendar".
 #
 #  FUNCTION
 #     Check basic functionality of qconf
@@ -683,7 +683,7 @@ proc qconf_scal_check {} {
 #****** qconf/qconf_scall_check() ******
 #
 #  NAME
-#     qconf_scall_check - Check all known calendars 
+#     qconf_scall_check - Check all known calendars
 #
 #  SYNOPSIS
 #     qconf_scall_check { } - Call get_calendar_list
@@ -716,7 +716,7 @@ proc qconf_scall_check {} {
 #
 #  NAME
 #     qconf_sconfl_check - Display a list of hosts  for  which  configurations
-#                          are  available.  
+#                          are  available.
 #
 #  SYNOPSIS
 #     qconf_sconfl_check { } - Call get_config_list
@@ -764,8 +764,8 @@ proc qconf_sconfl_check {} {
 proc qconf_sds_check {} {
 
    global ts_config env queue_names
-   global CHECK_USER 
-  
+   global CHECK_USER
+
    # First do a positive test
    ts_log_fine "1) Doing positive test!"
 
@@ -785,7 +785,7 @@ proc qconf_sds_check {} {
    # seq_no                0,[@allhosts=1]
    ts_log_fine "2) Doing exit code test in case of error!\n"
 
-   set nohost "NONE" 
+   set nohost "NONE"
 
    # Just take the first queue name for testing!
    set queue [lindex $queue_names 0]
@@ -842,7 +842,7 @@ proc qconf_secl_check {} {
 }
 
 #                                               max. column:     | #
-#****** qconf/qconf_sep_check() ******  
+#****** qconf/qconf_sep_check() ******
 #  NAME
 #     qconf_sep_check - Display the processor list
 #
@@ -1115,15 +1115,15 @@ proc qconf_add_delete_manager {} {
 # sge_procedures/get_qconf_show_list_error()
 #*******************************
 proc qconf_add_show_mod_del_queue {} {
-   global ts_config env 
-   global CHECK_USER 
+   global ts_config env
+   global CHECK_USER
 
-   # First add queue "qconf_queue.q". Set the new name to "qconf_queue.q, 
+   # First add queue "qconf_queue.q". Set the new name to "qconf_queue.q,
    # host to $host
 
    set host [host_conf_get_suited_hosts]
    ts_log_fine "Adding queue qconf_queue.q ..."
-   add_queue qconf_queue.q $host new_queue 
+   add_queue qconf_queue.q $host new_queue
 
    #Now test for qconf -sq queue@host
    #qconf -sq q@host | grep complex_values should show NONE
@@ -1137,7 +1137,7 @@ proc qconf_add_show_mod_del_queue {} {
 
    # split each line as listelement
    set op_rows [split $result "\n"]
- 
+
    #test if the complex_values attrib has any value!
    foreach elem $op_rows {
        if {[string first "complex_values" $elem] >=0} {
@@ -1146,7 +1146,7 @@ proc qconf_add_show_mod_del_queue {} {
  				ts_log_fine "qconf -sq queue@host successfull"
  			} else {
             ts_log_severe "qconf -sq queue@host should have output NONE for complex_values, but output was:\n$result"
- 			}		
+ 			}
  			break
  		}
    }
@@ -1171,7 +1171,7 @@ proc qconf_add_show_mod_del_queue {} {
    } else {
       ts_log_fine "result is $result" ;# error raised in mod_queue
    }
- 
+
    # Now modify queue qconf_queue.q slow
    set new_queue(seq_no)  "1"
    ts_log_fine "Modifying information for qconf_queue.q slow..."
@@ -1195,7 +1195,7 @@ proc qconf_add_show_mod_del_queue {} {
       # response from qconf. See IZ 1982
       ts_log_severe "mod_queue with invalid sequence number should have failed, but exit code (from handle_sge_errors) was $result"
    }
- 
+
    # Now clear queue "qconf_queue.q"
    ts_log_fine "Clearing queue qconf_queue.q ... - "
    set result [clear_queue "qconf_queue.q" cq_output]
@@ -1205,7 +1205,7 @@ proc qconf_add_show_mod_del_queue {} {
    } else {
       ts_log_fine "failed" ;# error raised in clear_queue
    }
-   
+
    # Now try to clear it again!
    ts_log_fine "Clearing queue qconf_queue.q again... - "
    set result [clear_queue "qconf_queue.q" cq_output]
@@ -1259,14 +1259,14 @@ proc qconf_add_show_mod_del_queue {} {
 #*******************************
 proc qconf_add_show_delete_host {} {
    global ts_config env CHECK_ACTUAL_TEST_PATH
-   global CHECK_USER 
+   global CHECK_USER
 
    set hosts [host_conf_get_suited_hosts 2]
    set host       [lindex $hosts 0]
    set other_host [lindex $hosts 1]
 
 
-   # First delete host $other_host. 
+   # First delete host $other_host.
    ts_log_fine "Positive test of qconf -dh $other_host...\n"
    set result1 [del_adminhost $other_host]
 
@@ -1286,7 +1286,7 @@ proc qconf_add_show_delete_host {} {
       ts_log_fine "result is $result4"
    }
 
-   # Now show admin hosts 
+   # Now show admin hosts
    ts_log_fine "Positive test of qconf -sh  $other_host...\n"
    set result3 [get_adminhost_list]
 
@@ -1296,7 +1296,7 @@ proc qconf_add_show_delete_host {} {
       ts_log_fine "result is $result3"
    }
 
-  
+
  # Now add back $other_host
    ts_log_fine "Positive test of qconf -ah  $other_host...\n"
    set result5 [add_adminhost $other_host]
@@ -1340,7 +1340,7 @@ proc qconf_add_show_delete_host {} {
 # sge_procedures/get_qconf_show_list_error()
 #*******************************
 proc qconf_add_show_delete_stnode {} {
-   global ts_config env 
+   global ts_config env
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
 
    set hosts [host_conf_get_suited_hosts 2]
@@ -1380,7 +1380,7 @@ proc qconf_add_show_delete_stnode {} {
    } else {
       ts_log_fine "result is $result1"
    }
-  
+
    # Now do a negative test on -astnode, add users again
    ts_log_fine "Adding  30 shares to $CHECK_USER to project $project and 70 shares to $CHECK_FIRST_FOREIGN_SYSTEM_USER again....n"
    set result2 [add_sharetree_node $project $CHECK_USER 30 $CHECK_FIRST_FOREIGN_SYSTEM_USER 70 $host $CHECK_USER 0]
@@ -1420,11 +1420,11 @@ proc qconf_add_show_delete_stnode {} {
       ts_log_fine "result is $result5"
    }
 
-   
+
    # Delete $project/$CHECK_USER
    ts_log_fine "Now  delete user $CHECK_USER from  $project ... \n"
    set result6 [del_sharetree_node $project  $CHECK_USER]
-  
+
    if { ( $result6 == 0 ) } {
       ts_log_fine "qconf -dstnode /$project/$CHECK_USER succeded"
    } else {
@@ -1440,7 +1440,7 @@ proc qconf_add_show_delete_stnode {} {
    } else {
       ts_log_fine "result is $result6"
    }
-   
+
    # Delete users CHECK_USER, CHECK_FIRST_FOREIGN_SYSTEM_USER from userlist
    ts_log_fine "Now  delete user $CHECK_USER from  userlist ... \n"
    del_user $CHECK_USER
@@ -1471,7 +1471,7 @@ proc qconf_add_show_delete_stnode {} {
 #*******************************
 proc qconf_event_client {} {
    global ts_config env
-   global CHECK_USER 
+   global CHECK_USER
 
    set event_client_bin [get_test_or_source_path "qevent" $ts_config(master_host)]
 
@@ -1507,7 +1507,7 @@ proc qconf_event_client {} {
    }
 
    close_spawn_process $event_client_sid
-   
+
    # Restart event client to do a -kec all
 
    # start event client on master host
@@ -1534,7 +1534,7 @@ proc qconf_event_client {} {
 #  SYNOPSIS
 #     qconf_add_delete_modify_calendar { } - First create a calendar, interactively
 #                                            Then modify it and delete it.
-#                                            Then create it in fast add mode, 
+#                                            Then create it in fast add mode,
 #                                            Then delete it again
 #
 #  FUNCTION
@@ -1547,7 +1547,7 @@ proc qconf_event_client {} {
 #*******************************
 proc qconf_add_delete_modify_calendar {} {
    global ts_config env
-   global CHECK_USER 
+   global CHECK_USER
 
    set cal_name "qconf_calendar"
    set new_cal(week)           "mon-sun=0-24=suspended"
@@ -1561,11 +1561,11 @@ proc qconf_add_delete_modify_calendar {} {
    } else {
       ts_log_fine "result is $result0"
    }
-  
+
    set mod_cal(calendar_name)  "$cal_name"
    set mod_cal(week)           "mon-fri=0-23=suspended"
 
-   # Now modify it 
+   # Now modify it
    ts_log_fine "Modify calendar $cal_name ..."
    set result01 [mod_calendar "$cal_name" mod_cal]
 
@@ -1575,7 +1575,7 @@ proc qconf_add_delete_modify_calendar {} {
       ts_log_fine "result is $result01"
    }
 
-   # Now delete it 
+   # Now delete it
    ts_log_fine "Delete calendar $cal_name ..."
    set result1 [del_calendar $cal_name]
 
@@ -1584,7 +1584,7 @@ proc qconf_add_delete_modify_calendar {} {
    } else {
       ts_log_fine "result is $result1"
    }
-  
+
    # Now do a slow add
    ts_log_fine "Add calendar $cal_name slow..."
    set result2 [add_calendar "$cal_name" new_cal 0]
@@ -1625,7 +1625,7 @@ proc qconf_add_delete_modify_calendar {} {
 #     qconf_add_delete_modify_replace_attr { } - First create a temporary queue, qocnf_queue.q
 #                                            Then modify it and delete it.
 #                                            Then create it in slow add mode
-#                                            Then modify it slow and delete it 
+#                                            Then modify it slow and delete it
 #
 #  FUNCTION
 #     Check basic functionality of qconf
@@ -1636,7 +1636,7 @@ proc qconf_add_delete_modify_calendar {} {
 #*******************************
 proc qconf_add_delete_modify_replace_attr {} {
    global ts_config env
-   global CHECK_USER 
+   global CHECK_USER
 
    set queue_name "qconf_queue.q"
    set host [host_conf_get_suited_hosts]
@@ -1664,9 +1664,9 @@ proc qconf_add_delete_modify_replace_attr {} {
       ts_log_info "Negative test qconf -Mattr <emptyfile> Failed! $result01"
    } else {
       ts_log_fine "Negative test:qconf -Mattr <emptyfile> Success!"
-   }   
+   }
 
-   # Now modify attribute slots for obj_spec queue: -mattr queue slots 0 
+   # Now modify attribute slots for obj_spec queue: -mattr queue slots 0
    set attr_name "slots"
    set val "1"
 
@@ -1679,7 +1679,7 @@ proc qconf_add_delete_modify_replace_attr {} {
       ts_log_fine "result is $result01"
    }
 
-   # Now modify non-existent attribute stuff 
+   # Now modify non-existent attribute stuff
    set attr_name "stuff"
    set val "100"
 
@@ -1693,7 +1693,7 @@ proc qconf_add_delete_modify_replace_attr {} {
       # response from qconf. See IZ 1966
       ts_log_fine "result is $result02"
    }
-  
+
    # Now modify its attribute from CLI
    set attr_name "slots"
    set val "1"
@@ -1852,7 +1852,7 @@ proc qconf_add_delete_modify_replace_attr {} {
 #*******************************
 proc qconf_modify_checkpoint {} {
    global ts_config env
-   global CHECK_USER 
+   global CHECK_USER
 
    # First let's create queue qconf_queue.q
    set queue_name "qconf_queue.q"
@@ -2009,7 +2009,7 @@ proc qconf_modify_exechost {} {
      # See IZ 1967 for why this returns wrongly 0
      ts_log_fine "result is $result1"
    }
-   
+
    # Now modify from CLI wrongly
    ts_log_fine "Modify exec host $host from CLI wrongly...\n"
    set result12 [mod_exechost new_exechost_charray $host 0 $host $CHECK_USER 0]
@@ -2029,7 +2029,7 @@ proc qconf_modify_exechost {} {
    } else {
       ts_log_fine "result is $result2"
    }
-  
+
   # Now delete project qconf_test_prj
    ts_log_fine "Delete project $my_project ...\n"
    set result [del_project $my_project]
@@ -2130,7 +2130,7 @@ proc qconf_modify_userlist {} {
    global CHECK_USER
 
    set host [host_conf_get_suited_hosts]
-  
+
    set userlist "qconf_userlist"
    set attribute "entries"
    set value $CHECK_USER
@@ -2210,7 +2210,7 @@ proc qconf_modify_userlist {} {
 # sge_project/get_project_list()
 #*******************************
 proc qconf_modify_sched_conf {} {
-   global ts_config env 
+   global ts_config env
    global CHECK_USER
 
    set host [host_conf_get_suited_hosts]
@@ -2267,10 +2267,10 @@ proc qconf_modify_sched_conf {} {
 #     qconf_issue_2023 - Test for Issue 2023
 #
 #  SYNOPSIS
-#     qconf_issue_2023 { } - 
+#     qconf_issue_2023 { } -
 #
 #  FUNCTION
-#     Check qconf issue 2023 
+#     Check qconf issue 2023
 #
 #*******************************
 proc qconf_issue_2023 {} {
@@ -2278,7 +2278,7 @@ proc qconf_issue_2023 {} {
    global CHECK_USER
 
    set host [host_conf_get_suited_hosts]
-  
+
    set userlist "qconf_userlist"
    set attribute "entries"
    set value "$CHECK_USER"
@@ -2298,7 +2298,7 @@ proc qconf_issue_2023 {} {
 #     qconf_create_modify_sharetree() -- test qconf -Mstree
 #
 #  SYNOPSIS
-#     qconf_create_modify_sharetree { } 
+#     qconf_create_modify_sharetree { }
 #
 #  FUNCTION
 #     Tests qconf -Mstree option.
@@ -2328,8 +2328,8 @@ proc qconf_create_modify_sharetree {} {
    # read in the sharetree - it may only contain the / and the /default nodes
    # with correct number of shares
    stree_buffer_read stree2
-   if {[llength $stree2(index)] != 2 || 
-       [lindex $stree2(index) 0] != "/" || 
+   if {[llength $stree2(index)] != 2 ||
+       [lindex $stree2(index) 0] != "/" ||
        [lindex $stree2(index) 1] != "/default"} {
       ts_log_severe "sharetree should only contain the nodes / and /default, but contains\n$stree2(index)"
    }
@@ -2361,12 +2361,12 @@ proc qconf_create_modify_sharetree {} {
 #     qconf_del_sharetree() -- test qconf -dstree
 #
 #  SYNOPSIS
-#     qconf_del_sharetree { } 
+#     qconf_del_sharetree { }
 #
 #  FUNCTION
 #     Tests qconf -dstree.
 #     Positive test with and without sharetree.
-#     
+#
 #     Negative tests as non admin user and from a non admin host.
 #*******************************************************************************
 proc qconf_del_sharetree {} {
@@ -2427,7 +2427,7 @@ proc qconf_del_sharetree {} {
 #     qconf_add_project() -- test qconf -aprj / -Aprj
 #
 #  SYNOPSIS
-#     qconf_add_project { } 
+#     qconf_add_project { }
 #
 #  FUNCTION
 #     Test adding projects (qconf -aprj and qconf -Aprj).
@@ -2444,7 +2444,7 @@ proc qconf_add_project {} {
    set MY_PROJECT_NAME "qconf_add_prj"
 
    add_project "$MY_PROJECT_NAME" project 0 ;# slow add
-  
+
    del_project "$MY_PROJECT_NAME"
 
    add_project "$MY_PROJECT_NAME"  ;# fast add
@@ -2555,9 +2555,9 @@ proc qconf_brief_exercise {} {
 }
 
 #****** check.exp/qconf_messages_basic_check() *********************************
-# 
+#
 #  NAME
-#     qconf_messages_basic_check - basic test of qconf interfaces and the 
+#     qconf_messages_basic_check - basic test of qconf interfaces and the
 #                                  messages returned by the qconf client.
 #
 #  SYNOPSIS
@@ -2565,18 +2565,18 @@ proc qconf_brief_exercise {} {
 #
 #  FUNCTION
 #     check the basic functionality of qconf command, play with the objects and
-#     the returned messages from qconf client. 
+#     the returned messages from qconf client.
 #
 #  INPUTS
-#     object              - the name of the object 
+#     object              - the name of the object
 #                           [ex.: project, user, hostgroup, queue, ...]
-#     valid_object_params - the array with the valid attributes to check the 
+#     valid_object_params - the array with the valid attributes to check the
 #                           successfull add/mod functions
 #                           object <name> parameter is ignored for this test, but
-#                           can be set to check the name validation (not yet 
+#                           can be set to check the name validation (not yet
 #                           implemented)
 #     {arguments ""}      - array with additional arguments
-#                           expected: 
+#                           expected:
 #                               o name_prefix - i.e. @ for hostgroups
 #                               o hostlist - i.e. for queues
 #
@@ -2671,11 +2671,11 @@ proc qconf_messages_basic_check {object valid_object_params {arguments ""}} {
    }
 
    # aja: TODO: test missing required attribute
-   # aja: TODO: test non-existing attribute   
+   # aja: TODO: test non-existing attribute
 }
 
 #****** check.exp/qconf_check_list() *******************************************
-# 
+#
 #  NAME
 #     qconf_check_list - basic test of qconf get <object> list function.
 #
@@ -2687,15 +2687,15 @@ proc qconf_messages_basic_check {object valid_object_params {arguments ""}} {
 #     exists, or when no object exists
 #
 #  INPUTS
-#     object              - the name of the object 
+#     object              - the name of the object
 #                           [ex.: project, user, hostgroup, queue, ...]
-#     valid_object_params - the array with the valid attributes to check the 
+#     valid_object_params - the array with the valid attributes to check the
 #                           successfull add/mod functions
 #                           object <name> parameter is ignored for this test, but
-#                           can be set to check the name validation (not yet 
+#                           can be set to check the name validation (not yet
 #                           implemented)
 #     {arguments ""}      - array with additional arguments
-#                           expected: 
+#                           expected:
 #                               o name_prefix - i.e. @ for hostgroups
 #                               o hostlist - i.e. for queues
 #     {referencies ""}    - ...
@@ -2763,11 +2763,11 @@ proc qconf_check_list {object valid_object_params {arguments ""} {referencies ""
    }
 
 }
-    
+
 #****** check.exp/qconf_check_wrong_parameter() ********************************
-# 
+#
 #  NAME
-#     qconf_check_wrong_parameter - basic test of qconf mod/add functions 
+#     qconf_check_wrong_parameter - basic test of qconf mod/add functions
 #                                   with the wrong parameter
 #
 #  SYNOPSIS
@@ -2778,17 +2778,17 @@ proc qconf_check_list {object valid_object_params {arguments ""} {referencies ""
 #     exists, or when no object exists
 #
 #  INPUTS
-#     object              - the name of the object 
+#     object              - the name of the object
 #                           [ex.: project, user, hostgroup, queue, ...]
-#     valid_object_params - the array with the valid attributes to check the 
+#     valid_object_params - the array with the valid attributes to check the
 #                           successfull add/mod functions
 #                           object <name> parameter is ignored for this test, but
-#                           can be set to check the name validation (not yet 
+#                           can be set to check the name validation (not yet
 #                           implemented)
 #     attribute           - attribute to change to invoke the wrong parameter
 #                           error
 #     {arguments ""}      - array with additional arguments
-#                           expected: 
+#                           expected:
 #                               o name_prefix - i.e. @ for hostgroups
 #                               o hostlist - i.e. for queues
 #     {value "universalNOTVALIDvalue"} - the wrong value for the attribute
@@ -2833,7 +2833,7 @@ proc qconf_check_wrong_parameter {object valid_object_params attribute {argument
 }
 
 #****** check.exp/explore_expected_arguments() *********************************
-# 
+#
 #  NAME
 #     explore_expected_arguments - set the expected arguments
 #
@@ -2846,7 +2846,7 @@ proc qconf_check_wrong_parameter {object valid_object_params attribute {argument
 #
 #  INPUTS
 #     arguments          - array with additional arguments
-#                           expected: 
+#                           expected:
 #                               o name_prefix - i.e. @ for hostgroups
 #                               o hostlist - i.e. for queues
 #     name_prefix         - variable for name_prefix argument
@@ -2897,12 +2897,12 @@ proc get_object_name_attribute {object} {
 
 #                                                             max. column:     |
 #****** qconf/qconf_backslash_default_space_check() ******
-# 
+#
 #  NAME
 #     qconf_backslash_default_space_check -- tests backslash line continuation
 #
 #  SYNOPSIS
-#     qconf_backslash_default_space_check { } 
+#     qconf_backslash_default_space_check { }
 #
 #  FUNCTION
 #     This function tests the parsing of backslash line continuation in files.
@@ -2919,7 +2919,7 @@ proc get_object_name_attribute {object} {
 #
 #*******************************
 proc qconf_backslash_default_space_check {} {
-   global CHECK_ACTUAL_TEST_PATH CHECK_PRODUCT_TYPE 
+   global CHECK_ACTUAL_TEST_PATH CHECK_PRODUCT_TYPE
    global CHECK_USER ts_config
 
    ts_log_fine "testing qconf default backslash parsing with spaces ..."
@@ -2999,12 +2999,12 @@ proc qconf_backslash_default_space_check {} {
 
 #                                                             max. column:     |
 #****** qconf/qconf_backslash_default_comma_check() ******
-# 
+#
 #  NAME
 #     qconf_backslash_default_comma_check -- tests backslash line continuation
 #
 #  SYNOPSIS
-#     qconf_backslash_default_comma_check { } 
+#     qconf_backslash_default_comma_check { }
 #
 #  FUNCTION
 #     This function tests the parsing of backslash line continuation in files.
@@ -3064,7 +3064,7 @@ proc qconf_backslash_default_comma_check {} {
    foreach userlist $comma_userlists {
       ts_log_fine "parsing userlist file: $userlist"
       start_sge_bin "qconf" "-Au $userlist" $master_host $CHECK_USER
-      
+
       if { $prg_exit_state == 0 } {
          ts_log_severe "error parsing file \"$userlist\" in qconf_backslash_comma_check"
          continue
@@ -3074,12 +3074,12 @@ proc qconf_backslash_default_comma_check {} {
 
 #                                                             max. column:     |
 #****** qconf/qconf_backslash_custom_space_check() ******
-# 
+#
 #  NAME
 #     qconf_backslash_custom_space_check -- tests backslash line continuation
 #
 #  SYNOPSIS
-#     qconf_backslash_custom_space_check { } 
+#     qconf_backslash_custom_space_check { }
 #
 #  FUNCTION
 #     This function tests the parsing of backslash line continuation in files.
@@ -3127,9 +3127,9 @@ proc qconf_backslash_custom_space_check {} {
    # Check backslash parsing with spaces
    set space_queues ""
    catch { set space_queues [glob "$CHECK_ACTUAL_TEST_PATH/backslash_space_queue*"] }
-  
+
    set ADDED    [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SGETEXT_ADDEDTOLIST_SSSS] $CHECK_USER [resolve_host $ts_config(master_host) 1] "(\[@a-zA-Z0-9_-\]+)" "cluster queue"]
- 
+
 
    foreach queue $space_queues {
       ts_log_fine "parsing queue file: $queue"
@@ -3180,12 +3180,12 @@ proc qconf_backslash_custom_space_check {} {
 
 #                                                             max. column:     |
 #****** qconf/qconf_backslash_custom_comma_check() ******
-# 
+#
 #  NAME
 #     qconf_backslash_custom_comma_check -- tests backslash line continuation
 #
 #  SYNOPSIS
-#     qconf_backslash_custom_comma_check { } 
+#     qconf_backslash_custom_comma_check { }
 #
 #  FUNCTION
 #     This function tests the parsing of backslash line continuation in files.
@@ -3233,7 +3233,7 @@ proc qconf_backslash_custom_comma_check {} {
    set comma_queues ""
    catch { set comma_queues [glob "$CHECK_ACTUAL_TEST_PATH/backslash_comma_queue*"] }
    set added_queues ""
-   
+
    set ADDED    [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SGETEXT_ADDEDTOLIST_SSSS] $CHECK_USER [resolve_host $ts_config(master_host) 1] "(\[@a-zA-Z0-9_-\]+)" "cluster queue"]
 
    foreach queue $comma_queues {
@@ -3286,13 +3286,13 @@ proc qconf_backslash_custom_comma_check {} {
 
 #                                                             max. column:     |
 #****** qconf/qconf_backslash_space_output_check() ******
-# 
+#
 #  NAME
 #     qconf_backslash_space_output_check -- tests backslash line continuation in
 #                                     output
 #
 #  SYNOPSIS
-#     qconf_backslash_space_output_check { } 
+#     qconf_backslash_space_output_check { }
 #
 #  FUNCTION
 #     This function tests the outputing of backslash continued lines by qconf.
@@ -3337,7 +3337,7 @@ proc qconf_backslash_space_output_check {} {
 
    ts_log_fine "adding host groups"
 
-   
+
    # Add each of the names as a host group
    foreach name $names {
       ts_log_fine "adding host group: $name"
@@ -3380,7 +3380,7 @@ proc qconf_backslash_space_output_check {} {
          # add by handling vi
          set master_arch [resolve_arch $ts_config(master_host)]
          handle_vi_edit "$ts_config(product_root)/bin/$master_arch/qconf" "-ahgrp $groupname" $vi_commands $ADDED
-         
+
          # Check the output
          # The test suite sets the SGE_SINGLE_LINE variable before every action,
          # so in order to test backslash line continuation, we first have to
@@ -3484,13 +3484,13 @@ proc qconf_backslash_space_output_check {} {
 
 #                                                             max. column:     |
 #****** qconf/qconf_backslash_space_output_check() ******
-# 
+#
 #  NAME
 #     qconf_backslash_comma_output_check -- tests backslash line continuation in
 #                                     output
 #
 #  SYNOPSIS
-#     qconf_backslash_comma_output_check { } 
+#     qconf_backslash_comma_output_check { }
 #
 #  FUNCTION
 #     This function tests the outputing of backslash continued lines by qconf.
@@ -3610,8 +3610,8 @@ proc qconf_backslash_comma_output_check {} {
          # The test suite sets the SGE_SINGLE_LINE variable before every action,
          # so in order to test backslash line continuation, we first have to
          # unset the env var.
-         
-         
+
+
          set output [start_remote_prog $master_host $CHECK_USER $qconf "-se global" prg_exit_state 60 0 "" "" 1 1 0 1 0 1]
 
          # I love TCL.  The next line does the following:
@@ -3719,10 +3719,10 @@ proc qconf_backslash_comma_output_check {} {
 
 #****** check.60/check_double_output() *****************************************
 #  NAME
-#     check_double_output() 
+#     check_double_output()
 #
 #  SYNOPSIS
-#     check_double_output { string1 string2 } 
+#     check_double_output { string1 string2 }
 #
 #  FUNCTION
 #     Search in string2 for a sequence of characters that exactly match multiple
@@ -3732,17 +3732,17 @@ proc qconf_backslash_comma_output_check {} {
 #     the string was found 2 times.
 #
 #  INPUTS
-#     string1 - string which could be 2 time in string1 
-#     string2 - string to search in 
+#     string1 - string which could be 2 time in string1
+#     string2 - string to search in
 #
 #*******************************************************************************
 proc check_double_output { string1 string2 } {
    set index [ string last "$string1" "$string2" ]
    if { $index > 0 } {
-      set string2 [ string range "$string2" 0 $index ] 
+      set string2 [ string range "$string2" 0 $index ]
       if { [ string first "$string1" "$string2" ] >= 0 } {
-         ts_log_severe "detected issue 1767\n$string1 printed 2 or more times" 
-      } 
+         ts_log_severe "detected issue 1767\n$string1 printed 2 or more times"
+      }
    } elseif { $index < 0 } {
       ts_log_severe "qconf doesn't reject invalid values"
    }
@@ -3750,13 +3750,13 @@ proc check_double_output { string1 string2 } {
 
 #****** check.60/qconf_issue1767() *********************************************
 #  NAME
-#     qconf_issue1767()  
+#     qconf_issue1767()
 #
 #  SYNOPSIS
-#     qconf_issue1767 { } 
+#     qconf_issue1767 { }
 #
 #  FUNCTION
-#     Tests for Issue 1767 
+#     Tests for Issue 1767
 #
 #     Some error messages were printed 2 times because a library function was
 #     called which called the ERROR macro and returned an answer_list.
@@ -3766,7 +3766,7 @@ proc check_double_output { string1 string2 } {
 #*******************************************************************************
 proc qconf_issue1767 {} {
    global ts_config CHECK_USER
-   
+
    set master_host [resolve_host $ts_config(master_host)]
 
    set tmp_file1 [ get_tmp_file_name ]
@@ -3787,7 +3787,7 @@ proc qconf_issue1767 {} {
    set result [start_sge_bin "qconf" "-Ap $tmp_file2" $master_host $CHECK_USER]
    check_double_output $REJECTED $result
 
-   #invalid startprocargs 
+   #invalid startprocargs
    set REJECTED [translate $master_host 1 0 0 [ sge_macro  MSG_PE_STARTPROCARGS_SS ] "mytestpe" "unknown variable \"invalid\"" ]
    set result [start_sge_bin "qconf" "-sp mytestpe | sed /start_proc_args/d > $tmp_file1" $master_host $CHECK_USER]
    set result [start_remote_prog $master_host $CHECK_USER "echo" "start_proc_args '\$invalid' >> $tmp_file1"]
@@ -3795,7 +3795,7 @@ proc qconf_issue1767 {} {
    set result [start_sge_bin "qconf" "-Mp $tmp_file1" $master_host $CHECK_USER]
    check_double_output $REJECTED $result
 
-   #invalid stopprocargs 
+   #invalid stopprocargs
    set REJECTED [translate $master_host 1 0 0 [ sge_macro MSG_PE_STOPPROCARGS_SS ] "mytestpe" "unknown variable \"invalid\"" ]
    set result [start_sge_bin "qconf" "-sp mytestpe | sed /stop_proc_args/d > $tmp_file1" $master_host $CHECK_USER]
    set result [start_remote_prog $master_host $CHECK_USER "echo" "stop_proc_args '\$invalid' >> $tmp_file1"]
@@ -3809,7 +3809,7 @@ proc qconf_issue1767 {} {
 #****** qconf/qconf_shgrp_tree_check() ******
 #
 #  NAME
-#     qconf_shgrp_tree_check - Display tree like structure of host group 
+#     qconf_shgrp_tree_check - Display tree like structure of host group
 #
 #  SYNOPSIS
 #     qconf_shgrp_tree_check { } - Call get_shgrp_tree_error for group "@qconf_test"
@@ -3849,7 +3849,7 @@ proc qconf_shgrp_tree_check {} {
 #****** qconf/qconf_shgrp_resolved_check() ******
 #
 #  NAME
-#     qconf_shgrp_resolved_check - Display list of host group 
+#     qconf_shgrp_resolved_check - Display list of host group
 #
 #  SYNOPSIS
 #     qconf_shgrp_resolved_check { } - Call "qconf -shgrp_resolved @qconf_test"
@@ -3981,7 +3981,7 @@ proc qconf_purge_queue {} {
    set new_queue(load_thresholds) "np_load_avg=10"
    add_queue qconf_queue.q $host new_queue
    set qi [get_queue_instance "qconf_queue.q" $host]
-   
+
    # negative test for the testsuite function - it shall only accept
    # queue instances or queue domains
    set ret [purge_queue "cluster_queue" "prolog" "" "" 0]
@@ -4076,29 +4076,29 @@ proc qconf_purge_queue {} {
 
 #                                                             max. column:     |
 #****** qconf/qconf_de_check() ******
-# 
+#
 #  NAME
-#     qconf_de_check -- ??? 
+#     qconf_de_check -- ???
 #
 #  SYNOPSIS
-#     qconf_de_check { } 
+#     qconf_de_check { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -4124,17 +4124,17 @@ proc qconf_de_check {} {
    ts_log_fine "doing qconf -dattr hostgroup hostlist $execd @allhosts:"
    set result [start_sge_bin "qconf" "-dattr hostgroup hostlist $execd @allhosts @qconf_test" $ts_config(master_host) $CHECK_USER]
    ts_log_fine $result
- 
+
    if { $prg_exit_state != 0 } {
       ts_log_severe "could not remove host from hostgroup @allhosts: $result"
    }
 
- 
+
    # Test
    ts_log_fine "doing qconf -de $execd"
    set result [start_sge_bin "qconf" "-de $execd" $ts_config(master_host) $CHECK_USER]
    ts_log_fine $result
-   
+
    set EXEC_HOST_REMOVED [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SGETEXT_REMOVEDFROMLIST_SSSS] $CHECK_USER [resolve_host $ts_config(master_host) 1] [resolve_host $execd 1] "execution host"]
 
    ts_log_fine "looking for : \"$EXEC_HOST_REMOVED\""
@@ -4410,7 +4410,7 @@ proc qconf_remove_rqs {} {
       }
    }
 
-   # delete rqs the first time, should be OK 
+   # delete rqs the first time, should be OK
    ts_log_fine "deleting resource quota set \"$rqs_name_fast\""
    del_rqs $rqs_name_fast
    ts_log_fine "deleting resource quota set \"$rqs_name_cli\""
@@ -4522,7 +4522,7 @@ proc qconf_rqs_Xattr {} {
    }
 
    # rattr/dattr are not rqs specific and need to be tested generally for all objects
-   
+
    # cleanup
    del_rqs $rqs_name1
    del_rqs $rqs_name2
@@ -4562,17 +4562,17 @@ proc qconf_rqs_rattr_qmaster_dump {} {
 
 #****** clients/qconf/qconf_help() **************************************************
 #  NAME
-#     qconf_help() -- Checks return value of qconf -help and qconf with no option 
+#     qconf_help() -- Checks return value of qconf -help and qconf with no option
 #
 #  SYNOPSIS
-#     qconf_help { } 
+#     qconf_help { }
 #
 #  FUNCTION
-#      Performs a qconf -help and checks if the return value is 0. 
-#      Saves the help text and checks if the help text is contained 
-#      in "qconf with no option" output. This can additionally contain 
-#      an error message and it is written on stderr (but this is not 
-#      checked). 
+#      Performs a qconf -help and checks if the return value is 0.
+#      Saves the help text and checks if the help text is contained
+#      in "qconf with no option" output. This can additionally contain
+#      an error message and it is written on stderr (but this is not
+#      checked).
 #
 #*******************************************************************************
 proc qconf_help {} {
@@ -4598,13 +4598,13 @@ proc qconf_help {} {
 #*******************************************************************************
 proc qconf_issue_2383 {} {
    global ts_config
-    
+
    # Create a faulty complex. note that there is NO urgency value
 
-   set wrong_complex(newone) "new STRING  ==  NO  NO NONE "   
+   set wrong_complex(newone) "new STRING  ==  NO  NO NONE "
    # Call set_complex with null_urgency set to "1", the last var
    set result [set_complex wrong_complex 0]
-      
+
    # check that we get the correct error message MSG_CENTRY_NULL_URGENCY
    if {$result != -6 } {
       ts_log_severe "qconf -mc test for IZ 2383 failed"
@@ -4631,12 +4631,12 @@ proc qconf_issue_2383 {} {
 #*******************************************************************************
 proc qconf_issue_2445 {} {
    global ts_config
-  
+
    # Try to modify shell setting to "NONE" via "qconf -mq test_queue.q"
    # set shell to "NONE"
    set change_array(shell) "NONE"
    set result [mod_queue test_queue.q "" change_array 1 "" "" 0]
-   
+
    # check that we get the correct error message MSG_CENTRY_NULL_URGENCY
    if {$result == 0} {
       ts_log_severe "qconf -mq test for IZ 2445 failed.\nExpected qconf to fail, but got result:\n$result"
@@ -4658,7 +4658,7 @@ proc qconf_issue_2445 {} {
    set job_id [submit_job $t_qsub_arguments]
 
    wait_for_job_state $job_id "Eqw" 60
-   
+
    set E_state_ok 0
    set job_state [get_job_state $job_id]
    if {[string compare $job_state "Eqw"] == 0} {
@@ -4675,7 +4675,7 @@ proc qconf_issue_2445 {} {
 
 ############# qconf/qconf_Aconf() *********************************************
 #  NAME
-#     qconf_Aconf() 
+#     qconf_Aconf()
 #
 #  SYNOPSIS
 #     qconf_Aconf{} - tests if modification of already existing config is
@@ -4685,13 +4685,13 @@ proc qconf_issue_2445 {} {
 #     Test adding already existing configuration through qconf -Aconf
 #
 #     After submitting a configuration from a file, we expect a warning
-#     message that the current configuration already exists. Furthermore, 
+#     message that the current configuration already exists. Furthermore,
 #     this configuration should not be modified
 #
 #*******************************************************************************
 proc qconf_Aconf {} {
    global ts_config
-  
+
    # run qconf -Aconf with an already existing configuration
    set result [string trim [start_sge_bin "qconf" "-Aconf $ts_config(master_host)"]]
 
@@ -4725,7 +4725,7 @@ proc qconf_issue_2960 {} {
       ts_log_fine "found directory output in qconf -mc command, good!"
       foreach perm "{555 1} {000 1} {755 0}" {
          set perms [lindex $perm 0]
-         set expected_exit_state [lindex $perm 1] 
+         set expected_exit_state [lindex $perm 1]
          # Now set permissions not writeable
          set output [start_remote_prog $host $user "chmod" "$perms $tmp_dir"]
 
@@ -4753,7 +4753,7 @@ proc qconf_issue_2960 {} {
 #     qconf_delete_admin_user() -- check deleting of manager / operator
 #
 #  SYNOPSIS
-#     qconf_delete_admin_user { } 
+#     qconf_delete_admin_user { }
 #
 #  FUNCTION
 #     Check if deleting a manager or operator fails for the user
@@ -4793,7 +4793,7 @@ proc qconf_delete_admin_user {} {
 
 ############# qconf/qconf_ke() *********************************************
 #  NAME
-#     qconf_ke() 
+#     qconf_ke()
 #
 #  SYNOPSIS
 #     qconf_ke{} - tests that failure to send execd kill signal results
@@ -4803,13 +4803,13 @@ proc qconf_delete_admin_user {} {
 #     try sending a kill execd to a daemon that is already shutdown.
 #
 #     After submitting the kill command we receive an error message stating
-#     that Cluster Scheduler (Grid Engine) failed to send kill command to execd, and we expect the 
+#     that Cluster Scheduler (Grid Engine) failed to send kill command to execd, and we expect the
 #     exit code to be 1
 #
 #*******************************************************************************
 proc qconf_ke {} {
    global ts_config CHECK_USER
-  
+
    # run qconf -ke to initially kill the execd
    set host [host_conf_get_suited_hosts]
    set result [start_sge_bin "qconf" "-ke $host"]
@@ -4819,7 +4819,7 @@ proc qconf_ke {} {
    set master_arch [resolve_arch $ts_config(master_host)]
    set qconf "$ts_config(product_root)/bin/$master_arch/qconf"
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER $qconf "-ke $host" prg_exit_state 60 0 "" "" 1 1 0 1 0 1]
-   
+
    set expected_message [translate_macro MSG_COM_NONOTIFICATION_SSS "failed" "*" "*"]
 
    if {$prg_exit_state == "0"} {

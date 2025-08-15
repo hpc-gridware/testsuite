@@ -8523,6 +8523,11 @@ proc startup_core_system {{only_hooks 0} {with_additional_clusters 0} } {
 
 proc wait_till_qmaster_is_down {host {timeout 60}} {
    get_current_cluster_config_array ts_config
+   global CHECK_VALGRIND
+
+   if {$CHECK_VALGRIND eq "master"} {
+      set timeout 600
+   }
 
    set start_time [clock seconds]
 

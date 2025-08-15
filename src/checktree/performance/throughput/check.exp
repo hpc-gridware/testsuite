@@ -135,7 +135,7 @@ global check_category
 global check_root_access_needs
 
 set check_root_access_needs  "yes"
-set check_category            "PERFORMANCE EVENTCLIENT VERIFIED"
+set check_category            "PERFORMANCE EVENTCLIENT TESTBIN VERIFIED"
 set check_name                "throughput"
 set check_description(0)      "Functional test, submit 500 jobs with enabled queues"
 set check_description(1)      "Functional test, submit 500 jobs with disabled queues"
