@@ -68,8 +68,8 @@ proc qmaster_spooling_setup {} {
    # skip the test for valgrind master
    global CHECK_VALGRIND
    if {$CHECK_VALGRIND == "master"} {
-      ts_log_info "Skipping qmaster_spooling_setup for valgrind master, as it will report all thread local storage as leaked"
-      return
+      ts_log_config "Skipping qmaster_spooling_setup for valgrind master, as it will report all thread local storage as leaked"
+      return 99
    }
 
    if {[is_version_in_range "9.0.0"]} {

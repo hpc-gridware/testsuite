@@ -36,7 +36,7 @@
 global check_name check_description check_needs check_functions
 global check_category
 
-set check_category            "COMPATIBILITY SYSTEM TESTBIN VERIFIED"
+set check_category            "DRMAA TESTBIN VERIFIED"
 set check_name                "issue_1270"
 set check_description(0)      "drmaa_syncronize() doesn't ignore new jobs"
 set check_needs               "init_core_system"      ;# dependencies of this check (name of other check)

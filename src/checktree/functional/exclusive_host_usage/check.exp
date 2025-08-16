@@ -45,7 +45,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "exclusive_host_usage"
-set check_category        "AR RQS SCHEDULER TESTBIN VERIFIED"
+set check_category        "AR DRMAA RQS SCHEDULER TESTBIN VERIFIED"
 set check_description(0)  "test exclusive consumables"
 
 # define test's dependencies

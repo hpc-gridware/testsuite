@@ -7727,8 +7727,9 @@ proc shutdown_qmaster {hostname qmaster_spool_dir {timeout 60}} {
             set result [start_sge_bin "qconf" "-km" "" "" prg_exit_state $km_timeout]
             ts_log_finest $result
          }
-         wait_till_qmaster_is_down $hostname $timeout
-         shutdown_system_daemon $hostname qmaster
+         if {![wait_till_qmaster_is_down $hostname $timeout]} {
+            shutdown_system_daemon $hostname qmaster
+         }
       } else {
          ts_log_severe "qmaster pid $qmaster_pid not found"
          return -1
@@ -8391,7 +8392,7 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
       ts_log_finest "qconf -km returned $prg_exit_state"
       if {$prg_exit_state == 0} {
          ts_log_finest $result
-         if {[wait_till_qmaster_is_down $ts_config(master_host)] != 0} {
+         if {![wait_till_qmaster_is_down $ts_config(master_host)]} {
             shutdown_system_daemon $ts_config(master_host) "qmaster"
          }
       } else {
@@ -8525,7 +8526,7 @@ proc wait_till_qmaster_is_down {host {timeout 60}} {
    get_current_cluster_config_array ts_config
    global CHECK_VALGRIND
 
-   if {$CHECK_VALGRIND eq "master"} {
+   if {$CHECK_VALGRIND eq "master" && $timeout < 600} {
       set timeout 600
    }
 
@@ -8590,17 +8591,19 @@ proc wait_till_qmaster_is_down {host {timeout 60}} {
             append msg $output
          }
          ts_log_info $msg
-         return -1
+         return 0
       }
       if {$nr_of_found_qmaster_processes_or_threads == 0} {
          ts_log_finest "no qmaster processes running"
          ts_log_fine "wait_till_qmaster_is_down: it took [expr [clock seconds] - $start_time] seconds for the sge_qmaster process to vanish"
-         return 0
+         break
       } else {
          ts_log_finest "still qmaster processes running ..."
       }
       after 1000
    }
+
+   return 1
 }
 
 #                                                             max. column:     |
