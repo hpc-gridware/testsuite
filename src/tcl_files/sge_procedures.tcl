@@ -29,7 +29,7 @@
 #
 #  Portions of this code are Copyright 2011 Univa Inc.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -11124,15 +11124,27 @@ proc sleep_for_seconds {seconds {message ""}} {
 # @param value - the value to compare
 # @param expected - the expected value
 # @param percent_allowed - the allowed deviation in percent, default is 1%
+# @return 1 if the value is within the allowed deviation, 0 otherwise
 proc compare_usage {value expected {percent_allowed 1}} {
    set allowed_deviation [expr $expected * $percent_allowed / 100.0]
    set diff [expr abs($value - $expected)]
-   set diff_percent [expr $diff / $expected * 100.0]
-   ts_log_fine [format "usage value \"%0.6f\", expected \"%0.6f\", differs by %0.3f percent" $value $expected $diff_percent]
-   if {$diff <= $allowed_deviation} {
-      return 1
+   if {$expected > 0} {
+      set diff_percent [expr $diff / $expected * 100.0]
+      ts_log_fine [format "usage value \"%0.6f\", expected \"%0.6f\", differs by %0.3f percent" $value $expected $diff_percent]
+      if {$diff <= $allowed_deviation} {
+         return 1
+      } else {
+         return 0
+      }
    } else {
-      return 0
+      # expected has value 0 - we may not divide by 0
+      if {$value == 0} {
+         ts_log_fine "both value and expected are 0 = equal"
+         return 1
+      } else {
+         ts_log_fine "value $value, expected 0, diff percentage is infinity"
+         return 0
+      }
    }
 }
 
