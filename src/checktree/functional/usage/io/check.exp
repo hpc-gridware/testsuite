@@ -63,7 +63,7 @@ proc usage_io_setup {} {
       return
    }
    set usage_io_host ""
-   foreach host [host_conf_get_cluster_hosts 1 1] {
+   foreach host $ts_config(execd_nodes) {
       set arch [resolve_arch $host]
       if {[string match "lx-*" $arch] && $host ne $fileserver} {
          set usage_io_host $host
