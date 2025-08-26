@@ -7038,7 +7038,7 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
    if {$CHECK_VALGRIND == "master"} {
       set CHECK_VALGRIND_LAST_DAEMON_RESTART [clock seconds]
       # wait a little bit for qmaster to be really up and mirror threads having been initialized
-      after 5000
+      sleep_for_seconds 5
    }
 
    return 0
@@ -7693,16 +7693,17 @@ proc get_pid_from_file {host pid_file} {
 proc shutdown_qmaster {hostname qmaster_spool_dir {timeout 60}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER CHECK_ADMIN_USER_SYSTEM
-   global CHECK_VALGRIND CHECK_INSTALL_RC
+   global CHECK_VALGRIND CHECK_VALGRIND_SHUTDOWN_TIMEOUT
+   global CHECK_INSTALL_RC
 
    ts_log_fine "shutdown_qmaster ..."
 
    ts_log_finer "killing qmaster on host $hostname ..."
    ts_log_finest "retrieving data from spool dir $qmaster_spool_dir"
 
-   if {$CHECK_VALGRIND == "master" && $timeout < 900} {
+   if {$CHECK_VALGRIND eq "master" && $timeout < $CHECK_VALGRIND_SHUTDOWN_TIMEOUT} {
       # it will take much longer for sge_qmaster to shut down when running with valgrind
-      set timeout 900
+      set timeout $CHECK_VALGRIND_SHUTDOWN_TIMEOUT
       # qconf -km also can take significantly longer
       set km_timeout 180
    } else {
@@ -7722,8 +7723,7 @@ proc shutdown_qmaster {hostname qmaster_spool_dir {timeout 60}} {
             ts_log_fine "killing qmaster with pid $qmaster_pid on host $hostname, via systemd"
             systemd_stop_service $hostname "qmaster"
          } else {
-            ts_log_finest "killing qmaster with pid $qmaster_pid on host $hostname with qconf -km"
-            ts_log_finest "do a qconf -km ..."
+            ts_log_fine "killing qmaster with pid $qmaster_pid on host $hostname with qconf -km"
             set result [start_sge_bin "qconf" "-km" "" "" prg_exit_state $km_timeout]
             ts_log_finest $result
          }
@@ -8524,10 +8524,10 @@ proc startup_core_system {{only_hooks 0} {with_additional_clusters 0} } {
 
 proc wait_till_qmaster_is_down {host {timeout 60}} {
    get_current_cluster_config_array ts_config
-   global CHECK_VALGRIND
+   global CHECK_VALGRIND CHECK_VALGRIND_SHUTDOWN_TIMEOUT
 
-   if {$CHECK_VALGRIND eq "master" && $timeout < 600} {
-      set timeout 600
+   if {$CHECK_VALGRIND eq "master" && $timeout < $CHECK_VALGRIND_SHUTDOWN_TIMEOUT} {
+      set timeout $CHECK_VALGRIND_SHUTDOWN_TIMEOUT
    }
 
    set start_time [clock seconds]
@@ -8595,7 +8595,11 @@ proc wait_till_qmaster_is_down {host {timeout 60}} {
       }
       if {$nr_of_found_qmaster_processes_or_threads == 0} {
          ts_log_finest "no qmaster processes running"
-         ts_log_fine "wait_till_qmaster_is_down: it took [expr [clock seconds] - $start_time] seconds for the sge_qmaster process to vanish"
+         if {$CHECK_VALGRIND eq "master"} {
+            ts_log_info "wait_till_qmaster_is_down: it took [expr [clock seconds] - $start_time] seconds for the sge_qmaster process to vanish"
+         } else {
+            ts_log_fine "wait_till_qmaster_is_down: it took [expr [clock seconds] - $start_time] seconds for the sge_qmaster process to vanish"
+         }
          break
       } else {
          ts_log_finest "still qmaster processes running ..."
