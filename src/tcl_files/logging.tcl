@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -60,12 +60,12 @@
 #        INFO:    Info message (e.g. testsuite success messages, compile report, etc.)
 #        FINE:    what is now "puts $CHECK_OUTPUT", e.g. steps of a test, "adding pe xyz"
 #        FINER:   details of a test step
-#        FINEST:  debugging output, e.g. command output parsed in expect blocks, 
+#        FINEST:  debugging output, e.g. command output parsed in expect blocks,
 #                 the commands to be sent to vi, etc.
 #
 #     Logging is triggered by calling one of the logging functions
 #     ts_log_severe, ts_log_warning, ... , ts_log_finest.
-#     
+#
 #  SEE ALSO
 #     logging/ts_log_setup()
 #     logging/ts_log_cleanup()
@@ -94,12 +94,12 @@
 #     ts_log_setup() -- setup the logging framework
 #
 #  SYNOPSIS
-#     ts_log_setup { } 
+#     ts_log_setup { }
 #
 #  FUNCTION
 #     Initialize the logging internal data structures.
 #     Setup default behavior of the logging framework:
-#     Loglevel INFO for sending mail, 
+#     Loglevel INFO for sending mail,
 #     FINE for output to stdout,
 #     FINER for logging to file.
 #
@@ -137,7 +137,7 @@ proc ts_log_setup {} {
 #     ts_log_cleanup() -- cleanup / shutdown the logging framework
 #
 #  SYNOPSIS
-#     ts_log_cleanup {} 
+#     ts_log_cleanup {}
 #
 #  FUNCTION
 #     Shutdown the logging framework:
@@ -162,7 +162,7 @@ proc ts_log_cleanup {} {
 #     ts_log_set_level() -- set the output level for a certain media
 #
 #  SYNOPSIS
-#     ts_log_set_level {media level} 
+#     ts_log_set_level {media level}
 #
 #  FUNCTION
 #     Sets the level, up to which logging is done on a certain media.
@@ -215,7 +215,7 @@ proc ts_log_set_level {media level} {
 #*******************************************************************************
 proc ts_log_set_logfile {filename {mode "w"}} {
    global ts_log_logfile
-  
+
    # close currently open logfile
    if {$ts_log_logfile != ""} {
       close $ts_log_logfile
@@ -236,7 +236,7 @@ proc ts_log_set_logfile {filename {mode "w"}} {
 #
 #  FUNCTION
 #     Do logging of a severe error message.
-#     
+#
 #     Severe error means, that with such an error, continuing the current
 #     check will most probably fail, and doesn't make sense.
 #     The current check shall be aborted (see NOTE).
@@ -267,7 +267,7 @@ proc ts_log_set_logfile {filename {mode "w"}} {
 #     Testsuite will finish running the current check in the current runlevel,
 #     but not enter the next runlevel.
 #     When all checks are to be run, an installation (install re_init) will
-#     be done once the current check finished, and the next check will be 
+#     be done once the current check finished, and the next check will be
 #     started.
 #
 #  SEE ALSO
@@ -649,7 +649,7 @@ proc ts_log_progress {{level FINE} {message "."} {isFinal 0}} {
 #*******************************************************************************
 proc ts_log_frame {{level FINE} {line ""}} {
    global ts_log_config
-  
+
    set level [ts_log_get_level_number $level]
    if {$ts_log_config(output) >= $level} {
       if {$line == ""} {
@@ -680,7 +680,7 @@ proc ts_log_frame {{level FINE} {line ""}} {
 #*******************************************************************************
 proc ts_log_newline {{level FINE}} {
    global ts_log_config
-  
+
    set level [ts_log_get_level_number $level]
    if {$ts_log_config(output) >= $level} {
       puts ""
@@ -695,7 +695,7 @@ proc ts_log_newline {{level FINE}} {
 #     ts_log_heading() --  log a heading
 #
 #  SYNOPSIS
-#     ts_log_heading { msg {level FINE} } 
+#     ts_log_heading { msg {level FINE} }
 #
 #  FUNCTION
 #
@@ -708,7 +708,7 @@ proc ts_log_newline {{level FINE}} {
 #     A new line is prepended.
 #
 #  INPUTS
-#     msg          - the log message 
+#     msg          - the log message
 #     {level FINE} - the log level (default is FINE)
 #
 #  RESULT
@@ -731,7 +731,7 @@ proc ts_log_heading { msg {level FINE} } {
 #     ts_log_init_level_map() -- internal function - initialize datastructures
 #
 #  SYNOPSIS
-#     ts_log_init_level_map {} 
+#     ts_log_init_level_map {}
 #
 #  FUNCTION
 #     Initializes the ts_log_level_map.
@@ -772,7 +772,7 @@ proc ts_log_init_level_map {} {
 #     logging/ts_log_get_stacktrace()
 #*******************************************************************************
 proc ts_log_get_function {} {
-   # assume that we got called from ts_private_do_log, 
+   # assume that we got called from ts_private_do_log,
    # called from ts_log, ts_log_severe, ts_log_warning, etc.
    # so we skip our own level, plus 2 other levels
    set stack_level [expr [info level] -3]
@@ -814,7 +814,7 @@ proc ts_log_get_function {} {
 #     logging/ts_log_get_function()
 #*******************************************************************************
 proc ts_log_get_stacktrace {{skip_stack_levels 4}} {
-   # by default assume that we got called from ts_private_log_send_mail, 
+   # by default assume that we got called from ts_private_log_send_mail,
    # called from ts_private_do_log,
    # called from ts_log, ts_log_severe, ts_log_warning, etc.
    # so we skip our own level, plus 3 other levels
@@ -832,7 +832,7 @@ proc ts_log_get_stacktrace {{skip_stack_levels 4}} {
 #     ts_log_get_level_name() -- return name of a logging level
 #
 #  SYNOPSIS
-#     ts_log_get_level_name {level} 
+#     ts_log_get_level_name {level}
 #
 #  FUNCTION
 #     Returns the name of a given logging level.
@@ -874,7 +874,7 @@ proc ts_log_get_level_name {level} {
 #     ts_log_get_level_name() -- return number of a logging level
 #
 #  SYNOPSIS
-#     ts_log_get_level_number {level} 
+#     ts_log_get_level_number {level}
 #
 #  FUNCTION
 #     Returns the number of a given logging level.
@@ -957,7 +957,7 @@ proc ts_log_get_level_abbreviation {level raise_error} {
 #     ts_private_do_log() -- function doing the actual logging work
 #
 #  SYNOPSIS
-#     ts_private_do_log {level message {raise_error 1} {function ""} 
+#     ts_private_do_log {level message {raise_error 1} {function ""}
 #                        {do_output 1} {do_logging 1} {do_mail 1}}
 #
 #  FUNCTION
@@ -1005,7 +1005,7 @@ proc ts_private_do_log {level message {raise_error 1} {function ""} {do_output 1
          wait_for_enter
       }
    }
-   
+
    if {$CHECK_USE_HUDSON == 1} {
       ts_private_log_hudson_output $level $message $raise_error $function
       return
@@ -1015,7 +1015,7 @@ proc ts_private_do_log {level message {raise_error 1} {function ""} {do_output 1
    if {$do_logging} {
       ts_private_log_do_logging $level $message $raise_error $function
    }
-   
+
    # send mail
    if {$do_mail} {
       ts_private_log_send_mail $level $message $raise_error $function
@@ -1031,12 +1031,12 @@ proc ts_private_do_log {level message {raise_error 1} {function ""} {do_output 1
 #
 #  FUNCTION
 #     If called from error logging (level SEVERE, WARNING, or CONFIG),
-#     and raise_error is 1, 
+#     and raise_error is 1,
 #     stores the error description in the global variables
 #     check_errno and check_errstr.
-#     
-#     The error information is used by the testsuite framework to 
-#     figure out, if a check was successfull, and is stored in 
+#
+#     The error information is used by the testsuite framework to
+#     figure out, if a check was successfull, and is stored in
 #     per check information.
 #
 #  INPUTS
@@ -1053,7 +1053,7 @@ proc ts_private_log_store_error {level message raise_error function} {
    global CHECK_CUR_PROC_NAME check_name
    global check_errno check_errstr
    global DISABLE_ADD_PROC_ERROR
-  
+
    # only if error logging is not disabled
    # not during setup
    # only store SEVERE, WARNING, CONFIG (the former "unsupported")
@@ -1237,14 +1237,14 @@ proc ts_private_log_do_logging {level message raise_error function} {
 #     third line
 #     last line
 #     --------------------------------------------------------------------------------
-#     
-#     
+#
+#
 #     Stack Trace:
 #     ============
 #      0: toplevel
 #      1: ts_log_test
-#     
-#     
+#
+#
 #     Testsuite configuration (ts_config):
 #     ====================================
 #     Testsuite configuration setup:                                               "1.14"
@@ -1259,6 +1259,7 @@ proc ts_private_log_send_mail {level message raise_error function} {
    global CHECK_SEND_ERROR_MAILS
    global DISABLE_ADD_PROC_ERROR
    global CHECK_CUR_PREPARATION_PROCEDURE
+   global CHECK_PREVIOUS_TEST
    global ts_private_do_log_recursive
 
    # shall we send mail at all, and for this level?
@@ -1272,9 +1273,9 @@ proc ts_private_log_send_mail {level message raise_error function} {
       return
    }
 
-   # ts_private_do_log could be called recursively, for example, 
+   # ts_private_do_log could be called recursively, for example,
    # if errors occur while sending the error message as mail.
-   # In this case, just output the error message - Otherwise we might 
+   # In this case, just output the error message - Otherwise we might
    # end up in endless recursion.
    if {$ts_private_do_log_recursive} {
       puts ""
@@ -1294,6 +1295,7 @@ proc ts_private_log_send_mail {level message raise_error function} {
    append mail_body "\n"
    append mail_body "Date            : [clock format [clock seconds]]\n"
    append mail_body "check_name      : $check_name\n"
+   append mail_body "previous_check  : $CHECK_PREVIOUS_TEST\n"
    append mail_body "category        : $category\n"
    if {$CHECK_CUR_PREPARATION_PROCEDURE != ""} {
       append mail_body "preparation func: $CHECK_CUR_PREPARATION_PROCEDURE\n"
@@ -1328,11 +1330,11 @@ proc ts_private_log_hudson_output {level message raise_error function {display_h
    global CHECK_HUDSON_OUTPUT
    global CHECK_HUDSON_STACKTRACE
    global ts_log_config
-   
+
    if {$level > $ts_log_config(logging)} {
       return
    }
-   
+
    if {$display_header != 1} {
       append CHECK_HUDSON_OUTPUT $message
    } else {
@@ -1397,7 +1399,7 @@ proc get_ts_log_washing_machine { } {
 # end of private functions
 # ================================================================================
 # some tests
-# call via 
+# call via
 # expect check.exp execute_func ts_log_test
 
 proc ts_log_sub_test {arg1 arg2} {

@@ -406,6 +406,9 @@ set CHECK_HUDSON_STACKTRACE ""
 global CHECK_HIGH_JOBIDS
 set CHECK_HIGH_JOBIDS 0
 
+global CHECK_PREVIOUS_TEST
+set CHECK_PREVIOUS_TEST "-"
+
 global custom_checktree ;# For a custom checktree building, list of checks for which to build checktree
 set custom_checktree {}
 
@@ -4943,6 +4946,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    global check_set_ignore_dependencies
    global ONLY_ONE_LEVEL
    global CHECK_VALGRIND_STOP_ON_ERROR
+   global CHECK_PREVIOUS_TEST
 
    # check if the state_to_run is valid
    if {$state_to_run != "all" &&
@@ -5248,12 +5252,14 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
 
    if {$immediate_return != 0} {
       set CHECK_TEST_RUNNING 0
+      set CHECK_PREVIOUS_TEST $check_name
       ts_log_fine "immediate_return: $immediate_return"
       return $immediate_return
    }
 
    if {$nr_already_done == $no_level_calls && $no_level_calls > 0} {
       set CHECK_TEST_RUNNING 0
+      set CHECK_PREVIOUS_TEST $check_name
       ts_log_fine "nr_already_done == no_level_calls  ($nr_already_done == $no_level_calls)"
       return 1  ;# was done time before
    }
@@ -5292,9 +5298,11 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
          ts_log_info $mail_body 0 "" 0 0 1
       }
       set CHECK_TEST_RUNNING 0
+      set CHECK_PREVIOUS_TEST $check_name
       return 0
    } else {
       set CHECK_TEST_RUNNING 0
+      set CHECK_PREVIOUS_TEST $check_name
       if {$nr_errors == 0} {
          if {$setup_ret == 99} {
             # this means there was only ts_log_config. We will set the test to unsupported
