@@ -1,20 +1,20 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
-#  
+#
 #  Copyright 2024-2025 HPC-Gridware GmbH
-#  
+#
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
 #  You may obtain a copy of the License at
-#  
+#
 #      http://www.apache.org/licenses/LICENSE-2.0
-#  
+#
 #  Unless required by applicable law or agreed to in writing, software
 #  distributed under the License is distributed on an "AS IS" BASIS,
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-#  
+#
 ###########################################################################
 #___INFO__MARK_END_NEW__
 
@@ -52,7 +52,7 @@ set ts_checktree($drmaaj_checktree_nr,start_runlevel_hooks_0)   "drmaaj_test_run
 #set ts_checktree($drmaaj_checktree_nr,required_hosts_hook)    ""
 
 ###
-# @brief 
+# @brief
 ##
 proc drmaaj_compile {compile_hosts a_report} {
    upvar $a_report report
@@ -75,15 +75,15 @@ proc drmaaj_compile_clean { compile_hosts a_report } {
 
 proc drmaaj_build {build_host target a_report {options ""} {drmaaj_build_timeout 120} } {
    global CHECK_USER
-   
+
    upvar $a_report report
 
    set task_nr [report_create_task report "drmaaj_build_$target" $build_host]
    ts_log_fine "creating target \"$target\" on compile host \"$build_host\""
-   
+
    report_task_add_message report $task_nr "------------------------------------------"
    report_task_add_message report $task_nr "-> starting mvn $options $target on host $build_host ..."
-  
+
    # setup environment
    set myenv(JAVA_HOME) [host_conf_get_java $build_host 8 0 1]
    if {$myenv(JAVA_HOME) == ""} {
@@ -92,7 +92,7 @@ proc drmaaj_build {build_host target a_report {options ""} {drmaaj_build_timeout
    }
 
    set source_dir [config_get_drmaaj_source_dir]
-   
+
    set open_spawn [open_remote_spawn_process $build_host $CHECK_USER "mvn" "$options $target" 0 $source_dir env]
 
    set spawn_list [lindex $open_spawn 1]
@@ -109,7 +109,7 @@ proc drmaaj_build {build_host target a_report {options ""} {drmaaj_build_timeout
       -i $spawn_list eof {
          report_task_add_message report $task_nr "got eof \"$build_host\""
       }
-      -i $spawn_list "_exit_status_:(*)" {            
+      -i $spawn_list "_exit_status_:(*)" {
          set error [get_string_value_between "_exit_status_:(" ")" $expect_out(0,string)]
          report_task_add_message report $task_nr "mvn exited with status $error"
       }
@@ -126,7 +126,7 @@ proc drmaaj_build {build_host target a_report {options ""} {drmaaj_build_timeout
          exp_continue
       }
    }
- 
+
    close_spawn_process $open_spawn
    report_finish_task report $task_nr $error
 
@@ -141,16 +141,16 @@ proc drmaaj_build {build_host target a_report {options ""} {drmaaj_build_timeout
 proc drmaaj_install_binaries { arch_list a_report } {
    global CHECK_USER
    global ts_config ts_host_config drmaaj_config
-   
+
    upvar $a_report report
    set task_nr [report_create_task report "drmaaj_install_binaries" $ts_config(master_host)]
-   
+
    set source_dir [config_get_drmaaj_source_dir]
    set jar "$source_dir/target/jdrmaa-1.0.jar"
    set dest "$ts_config(product_root)/lib"
    set cmd "cp"
    set args "$jar $dest"
-   
+
    report_task_add_message report $task_nr "------------------------------------------"
    report_task_add_message report $task_nr "-> wait for $dest to exist on $ts_config(master_host)"
    if {[wait_for_remote_dir $ts_config(master_host) $CHECK_USER $dest] != 0} {

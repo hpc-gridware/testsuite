@@ -93,7 +93,7 @@ proc send_to_spawn_id { sp_id input { no_nl 0 } } {
 proc get_sqlutil_classpath {} {
    global ts_config arco_config
 
-   set jar_list { arco_common.jar jaxb-impl.jar jaxb-api.jar }
+   set jar_list { arco_common.jar jaxb-impl.jar jaxb-jxc.jar  jaxb-xjc.jar }
    set ret ""
 
    set jdbc_driver_path [get_jdbc_driver_path]
@@ -162,30 +162,30 @@ proc get_sqlutil_classpath {} {
 #  SEE ALSO
 #     ???/???
 #*******************************************************************************
-proc sqlutil_create { { user "" } } {
+proc sqlutil_create {{user ""}} {
    global ts_host_config arco_config CHECK_DEBUG_LEVEL
    global CHECK_USER
 
-   if { $user == "" } {
+   if {$user == ""} {
       set user $CHECK_USER
    }
+
    set java_build_host [host_conf_get_java_compile_host]
    ts_log_finest "java build host is \"$java_build_host\""
 
-# TODO - change the method for getting java
-   set cmd [get_binary_path $java_build_host "java16"]
+   set cmd [host_conf_get_java_bin $java_build_host 8 1 1]
    set args "com.sun.grid.util.SQLUtil"
 
    set sql_utilenv(CLASSPATH) [get_sqlutil_classpath]
 
    log_user 0
-   if { $CHECK_DEBUG_LEVEL > 0 } {
+   if {$CHECK_DEBUG_LEVEL > 0} {
       ts_log_fine "CLASSPATH for sqlUtil: $sql_utilenv(CLASSPATH)"
       log_user 1
    }
 
-   set id [open_remote_spawn_process $java_build_host $user "$cmd" "$args" 0 "" sql_utilenv]
-   set sp_id [ lindex $id 1 ]
+   set id [open_remote_spawn_process $java_build_host $user $cmd $args 0 "" sql_utilenv]
+   set sp_id [lindex $id 1]
 
    set error_count 0
    set timeout 60
@@ -217,25 +217,25 @@ proc sqlutil_create { { user "" } } {
          set res 0
        }
       -i $sp_id "*\n" {
-         if { $CHECK_DEBUG_LEVEL > 0 } {
+         if {$CHECK_DEBUG_LEVEL > 0} {
             ts_log_fine  "$expect_out(buffer)"
          }
          exp_continue
       }
    }
 
-   if { $res != 0 } {
-      close_spawn_process $id;
+   if {$res != 0} {
+      close_spawn_process $id
       return $res
    }
 
    # turn the exit on error mechanism off
    set cmd "exitonerror off"
    set res [sqlutil_exec $sp_id "$cmd"]
-   if { $res == 0 } {
+   if {$res == 0} {
       return $id
    } else {
-      close_spawn_process $id;
+      close_spawn_process $id
       return -1
    }
 }
@@ -269,8 +269,7 @@ proc sqlutil_create { { user "" } } {
 #
 #  SEE ALSO
 #*******************************************************************************
-proc sqlutil_connect { sp_id { use_admin_db 0 } } {
-
+proc sqlutil_connect {sp_id {use_admin_db 0}} {
    global arco_config CHECK_DEBUG_LEVEL ts_config
 
    set db_name [get_database_name $use_admin_db]
@@ -278,7 +277,7 @@ proc sqlutil_connect { sp_id { use_admin_db 0 } } {
    set jdbc_driver [get_jdbc_driver]
    set jdbc_url [get_jdbc_url $db_name]
 
-   ts_log_finest "jdbc_url = $jdbc_url"
+   ts_log_fine "connecting to jdbc_url = $jdbc_url"
    set db_user [get_arco_write_user $use_admin_db]
    set db_pw [get_arco_user_pwd $use_admin_db]
 
@@ -286,8 +285,7 @@ proc sqlutil_connect { sp_id { use_admin_db 0 } } {
 
    ts_log_fine "Connect to $jdbc_url as user $db_user"
 
-   return [ sqlutil_exec $sp_id "$cmd"]
-
+   return [sqlutil_exec $sp_id $cmd]
 }
 
 #****** sql_util/sqlutil_exec() **************************************************
@@ -310,33 +308,31 @@ proc sqlutil_connect { sp_id { use_admin_db 0 } } {
 #     -1   -- error
 #     else -- return code of the command
 #*******************************************************************************
-proc sqlutil_exec { sp_id cmd { a_timeout 30 } } {
-
+proc sqlutil_exec {sp_id cmd {a_timeout 30}} {
    global CHECK_DEBUG_LEVEL sqlutil_errors
 
    # split the command into more lines, if the command is too long
    set commd $cmd
-   while { 1 } {
+   while {1} {
       if {[string length $commd] > 250} {
          set pos [string last " " [string range $commd 0 250]]
          send_to_spawn_id $sp_id "[string range $cmd 0 $pos]\\"
          incr pos 1
          set commd [string range $commd $pos end]
       } else {
-         send_to_spawn_id $sp_id "$commd"
+         send_to_spawn_id $sp_id $commd
          break
       }
    }
 
    set timeout $a_timeout
-   if { $CHECK_DEBUG_LEVEL > 0 } {
+   if {$CHECK_DEBUG_LEVEL > 0} {
      log_user 1
    } else {
      log_user 0
    }
 
    expect {
-
       flush stdout
       -i $sp_id full_buffer {
          ts_log_severe "sqlutil_exec - buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"

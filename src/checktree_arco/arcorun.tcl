@@ -38,7 +38,7 @@
 #    get_SWC_USER() -- get the SWC user
 #
 #  SYNOPSIS
-#    get_SWC_USER { { swc_host "" } } 
+#    get_SWC_USER { { swc_host "" } }
 #
 #  FUNCTION
 #    get the SWC user under which privileges will be the web console started
@@ -54,7 +54,7 @@
 #*******************************************************************************
 proc get_SWC_USER { { swc_host "" } } {
    global arco_config
-   
+
    set swc_user ""
    array set swc_version {}
 
@@ -124,11 +124,11 @@ proc get_SWC_USER { { swc_host "" } } {
 
 #****** check/arcorun_change_spooldir_owner() **********************************
 #  NAME
-#    arcorun_change_spooldir_owner() -- change the owner of the arco spool 
+#    arcorun_change_spooldir_owner() -- change the owner of the arco spool
 #                                       directory
 #
 #  SYNOPSIS
-#    arcorun_change_spooldir_owner { owner { a_spool_dir "" } } 
+#    arcorun_change_spooldir_owner { owner { a_spool_dir "" } }
 #
 #  FUNCTION
 #    change the owner of the arco spool directory
@@ -147,9 +147,9 @@ proc get_SWC_USER { { swc_host "" } } {
 #*******************************************************************************
 proc arcorun_change_spooldir_owner { owner { a_spool_dir "" } } {
    global arco_config
-   
+
    set spool_dir [get_local_spool_dir $arco_config(swc_host) arco 0]
-   
+
    if { $spool_dir == "" } {
       ts_log_severe "Can not get local spool dir for host $swc_host"
       return -1
@@ -165,7 +165,7 @@ proc arcorun_change_spooldir_owner { owner { a_spool_dir "" } } {
          return -1
       }
    }
-   
+
    if { $a_spool_dir != "" } {
       upvar $a_spool_dir ret_spool_dir
       set ret_spool_dir $spool_dir
@@ -175,10 +175,10 @@ proc arcorun_change_spooldir_owner { owner { a_spool_dir "" } } {
 
 #****** check/arcorun_exec() **************************************************
 #  NAME
-#    arcorun_exec() -- execute the arcorun util 
+#    arcorun_exec() -- execute the arcorun util
 #
 #  SYNOPSIS
-#    arcorun_exec { args output { timeout 60 } } 
+#    arcorun_exec { args output { timeout 60 } }
 #
 #  FUNCTION
 #     Execute the arcorun util on the host where the arco web application
@@ -197,12 +197,12 @@ proc arcorun_change_spooldir_owner { owner { a_spool_dir "" } } {
 #*******************************************************************************
 proc arcorun_exec {args output {timeout 60}} {
    global ts_config arco_config CHECK_USER
-   
+
    upvar $output my_output
-   
+
    set swc_host $arco_config(swc_host)
    set arco_run_cmd "$ts_config(product_root)/$ts_config(cell)/arco/reporting/arcorun"
-   set my_env(JAVA_HOME) [get_java_home_for_host $swc_host "1.5"]
+   set my_env(JAVA_HOME) [host_conf_get_java $swc_host 8]
    set my_env(SGE_ROOT) "$ts_config(product_root)"
    set my_env(SGE_CELL) "$ts_config(cell)"
    ts_log_fine "---> executing on $swc_host as $CHECK_USER:"

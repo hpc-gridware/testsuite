@@ -85,7 +85,7 @@ proc mpi_basic_setup_level {} {
    } else {
       set mpi_basic_mpi_list [config_mpi_get_mpi_list]
    }
-#   set mpi_basic_mpi_list "openmpi"
+   #set mpi_basic_mpi_list "mpich"
 }
 
 proc mpi_basic_cleanup_level {} {

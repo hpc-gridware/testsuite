@@ -39,7 +39,7 @@
 #     compile_check_compile_hosts() -- check for suited compile host
 #
 #  SYNOPSIS
-#     compile_check_compile_hosts { host_list } 
+#     compile_check_compile_hosts { host_list }
 #
 #  FUNCTION
 #     Goes through the given host list and for every host checks,
@@ -89,10 +89,10 @@ proc compile_check_compile_hosts {host_list} {
 #     compile_host_list() -- build compile host list
 #
 #  SYNOPSIS
-#     compile_host_list { } 
+#     compile_host_list { }
 #
 #  FUNCTION
-#     Builds a list of compile host for all the architectures that are 
+#     Builds a list of compile host for all the architectures that are
 #     required to install the configured test cluster.
 #
 #     Takes into account the
@@ -113,7 +113,7 @@ proc compile_check_compile_hosts {host_list} {
 proc compile_host_list {{binaries_only 0}} {
    global ts_host_config
    global ts_config
-  
+
    set other_hosts {}
    if {$ts_config(submit_only_hosts) != "none"} {
       set other_hosts [concat $other_hosts $ts_config(submit_only_hosts)]
@@ -124,7 +124,7 @@ proc compile_host_list {{binaries_only 0}} {
    if {$ts_config(non_cluster_hosts) != "none"} {
       set other_hosts [concat $other_hosts $ts_config(non_cluster_hosts)]
    }
-   
+
    # build host list according to cluster requirements
    set host_list [concat $ts_config(master_host) $ts_config(execd_hosts) \
                          $ts_config(shadowd_hosts) $other_hosts \
@@ -175,7 +175,7 @@ proc compile_host_list {{binaries_only 0}} {
       if {![info exists compile_host($arch)]} {
          set c_host [compile_search_compile_host $arch]
          if {$c_host == "none"} {
-            ts_log_severe "Cannot determine a compile host for architecture $arch" 
+            ts_log_severe "Cannot determine a compile host for architecture $arch"
             return {}
          } else {
             set compile_host($arch) $c_host
@@ -184,7 +184,7 @@ proc compile_host_list {{binaries_only 0}} {
       }
    }
 
-   # The java compile host may not duplicate the build host for it's architecture, 
+   # The java compile host may not duplicate the build host for it's architecture,
    # it must be also a c build host,
    # so it must be contained in the build host list.
    # With OCS/GCS >= 9.0.0 we separated core product and extensions like the drmaa-java,
@@ -217,7 +217,7 @@ proc compile_host_list {{binaries_only 0}} {
 #     get_compile_options_string() -- return current compile option string
 #
 #  SYNOPSIS
-#     get_compile_options_string { } 
+#     get_compile_options_string { }
 #
 #  FUNCTION
 #     This function returns a string containing the current set aimk compile
@@ -247,10 +247,10 @@ proc get_compile_options_string { } {
 #     compile_unify_host_list() -- remove duplicates and "none" from list
 #
 #  SYNOPSIS
-#     compile_unify_host_list { host_list } 
+#     compile_unify_host_list { host_list }
 #
 #  FUNCTION
-#     Takes a hostlist and removes all duplicate entries as well as 
+#     Takes a hostlist and removes all duplicate entries as well as
 #     "none" entries from it.
 #     The resulting list is sorted.
 #
@@ -283,10 +283,10 @@ proc compile_unify_host_list {host_list} {
 #     compile_search_compile_host() -- search compile host by architecture
 #
 #  SYNOPSIS
-#     compile_search_compile_host { arch } 
+#     compile_search_compile_host { arch }
 #
 #  FUNCTION
-#     Search the testsuite host configuration for a compile host for a 
+#     Search the testsuite host configuration for a compile host for a
 #     certain architecture.
 #
 #  INPUTS
@@ -298,7 +298,7 @@ proc compile_unify_host_list {host_list} {
 #*******************************************************************************
 proc compile_search_compile_host {arch} {
    global ts_host_config
-   
+
    if {$arch != "none"} {
       foreach host $ts_host_config(hostlist) {
          if {[host_conf_get_arch $host] == $arch && [host_conf_is_compile_host $host]} {
@@ -323,7 +323,7 @@ proc compile_rebuild_arch_cache { compile_hosts {al "arch_list"} } {
    set compiled_mail_architectures ""
    foreach elem $compile_hosts {
       set output [resolve_arch $elem 1]
-      lappend arch_list $output 
+      lappend arch_list $output
       append compiled_mail_architectures "\n$elem ($output)"
    }
    ts_log_fine "architectures: $arch_list"
@@ -335,7 +335,7 @@ proc compile_rebuild_arch_cache { compile_hosts {al "arch_list"} } {
 #    compile_depend() -- ???
 #
 #  SYNOPSIS
-#    compile_depend { } 
+#    compile_depend { }
 #
 #  FUNCTION
 #     Executes scripts/zero-depend, aimk --only-depend and aimk depend
@@ -360,17 +360,17 @@ proc compile_rebuild_arch_cache { compile_hosts {al "arch_list"} } {
 proc compile_depend { compile_hosts a_report do_clean } {
    global ts_host_config ts_config
    global CHECK_USER
-   
+
    upvar $a_report report
- 
+
    ts_log_fine "building dependencies ..."
- 
+
    # we prefer building the dependencies on a sol-sparc64 host
    # to avoid automounter issues like having a heading /tmp_mnt in paths
-   set depend_host_name [lindex $compile_hosts 0] 
+   set depend_host_name [lindex $compile_hosts 0]
    foreach help_host $compile_hosts {
       set help_arch [host_conf_get_arch $help_host]
-      if { [ string compare $help_arch "solaris64"] == 0 || 
+      if { [ string compare $help_arch "solaris64"] == 0 ||
            [ string compare $help_arch "sol-sparc64"] == 0 } {
          ts_log_fine "using host $help_host to create dependencies"
          set depend_host_name $help_host
@@ -384,9 +384,9 @@ proc compile_depend { compile_hosts a_report do_clean } {
       report_finish_task report $task_nr -1
       return -1
    }
-   
+
    # clean dependency files (zerodepend)
-   
+
    report_task_add_message report $task_nr "------------------------------------------"
    report_task_add_message report $task_nr "-> starting scripts/zerodepend on host $depend_host_name ..."
    set output [start_remote_prog $depend_host_name $CHECK_USER "scripts/zerodepend" "" prg_exit_state 60 0 $ts_config(source_dir) "" 1 0]
@@ -395,7 +395,7 @@ proc compile_depend { compile_hosts a_report do_clean } {
    report_task_add_message report $task_nr "------------------------------------------"
    report_task_add_message report $task_nr "output:\n$output"
    report_task_add_message report $task_nr "------------------------------------------"
-   
+
    report_finish_task report $task_nr $prg_exit_state
    if { $prg_exit_state != 0 } {
       report_add_message report "------------------------------------------"
@@ -403,11 +403,11 @@ proc compile_depend { compile_hosts a_report do_clean } {
       report_add_message report "------------------------------------------"
       return -1
    }
-   
+
    # clean dependency files (zerodepend) for Univa extensions
 
    if {$ts_config(ext_source_dir) != "none"} {
-   
+
       set task_nr [report_create_task report "zerodepend_uge_extensions" $depend_host_name]
 
       report_task_add_message report $task_nr "------------------------------------------"
@@ -418,7 +418,7 @@ proc compile_depend { compile_hosts a_report do_clean } {
       report_task_add_message report $task_nr "------------------------------------------"
       report_task_add_message report $task_nr "output:\n$output"
       report_task_add_message report $task_nr "------------------------------------------"
-      
+
       report_finish_task report $task_nr $prg_exit_state
       if { $prg_exit_state != 0 } {
          report_add_message report "------------------------------------------"
@@ -498,11 +498,11 @@ proc compile_depend { compile_hosts a_report do_clean } {
 #     wait_for_NFS_after_compile_clean() -- check compile arch dir after clean
 #
 #  SYNOPSIS
-#     wait_for_NFS_after_compile_clean { host_list a_report } 
+#     wait_for_NFS_after_compile_clean { host_list a_report }
 #
 #  FUNCTION
-#     This function checks if the compile arch directory is empty after a 
-#     aimk clean. It also checks that the arch is empty on all used specified 
+#     This function checks if the compile arch directory is empty after a
+#     aimk clean. It also checks that the arch is empty on all used specified
 #     hosts.
 #
 #  INPUTS
@@ -529,7 +529,7 @@ proc wait_for_NFS_after_compile_clean { host_list a_report } {
       set task_nr [report_create_task report "verify compile clean" $host]
       set build_dir_name [resolve_build_arch $host]
       set wait_path  "$ts_config(source_dir)/$build_dir_name"
- 
+
       ts_log_fine "wait path: $ts_config(source_dir)/$build_dir_name"
       set my_timeout [timestamp]
       incr my_timeout 65
@@ -564,7 +564,7 @@ proc wait_for_NFS_after_compile_clean { host_list a_report } {
 #     compile_source() -- compile source code
 #
 #  SYNOPSIS
-#     compile_source { { do_only_hooks 0} } 
+#     compile_source { { do_only_hooks 0} }
 #
 #  FUNCTION
 #     compile all source code
@@ -840,7 +840,7 @@ proc compile_source_aimk {do_only_hooks compile_hosts report_var {compile_only 0
    global check_do_clean_compile
 
    upvar $report_var report
-   
+
    set error_count 0
 
    if {$check_do_clean_compile} {
@@ -985,7 +985,7 @@ proc compile_source_cmake_clean {compile_hosts report_var} {
          report_task_add_message report $task_nr "no local build directory on host $host"
          break
       }
-    
+
       # delete the existing build directory
       if {[remote_file_isdirectory $host $build_dir]} {
          if {$check_do_3rdparty_build} {
@@ -1038,7 +1038,7 @@ proc compile_source_cmake_make_build_dir {compile_hosts report_var {build_3rdpar
          report_task_add_message report $task_nr "no local build directory on host $host"
          break
       }
-    
+
       # create a new build directory
       if {![remote_file_isdirectory $host $build_dir]} {
          lappend build_3rdparty_hosts $host
@@ -1219,7 +1219,7 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
             set status_updated 0
 
             set status_output [print_xy_array $status_cols $status_rows status_array status_max_column_len status_max_index_len]
-            
+
             # show
             clear_screen
             ts_log_frame INFO "================================================================================"
@@ -1275,7 +1275,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
    # - after clean
    # @todo better check if tools are available and only build them if not (and this could be done in cmake itself)
    set build_3rdparty 0
-   
+
    set error_count 0
 
    # if clean build requested: simply delete the build directories
@@ -1289,7 +1289,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
    if {$error_count == 0} {
       incr error_count [compile_source_cmake_make_build_dir $compile_hosts report build_3rdparty_hosts]
    }
-   
+
    # no need to call cmake when compiling with 1t. we will not change any configuration
    # while updates to the CMakeLists.txt files will be taken into account
    if {$error_count == 0 && !$compile_only} {
@@ -1490,7 +1490,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
 #    compile_with_aimk() -- compile with aimk
 #
 #  SYNOPSIS
-#    compile_with_aimk { host_list report task_name { aimk_options "" } } 
+#    compile_with_aimk { host_list report task_name { aimk_options "" } }
 #
 #  FUNCTION
 #     Start the aimk parallel on some hosts
@@ -1754,7 +1754,7 @@ proc compile_with_aimk {host_list a_report task_name {aimk_options ""}} {
 
          # output compile status
          set status_output [print_xy_array $status_cols $status_rows status_array status_max_column_len status_max_index_len]
-         
+
          # show
          clear_screen
          ts_log_frame INFO "================================================================================"
@@ -1786,7 +1786,7 @@ proc compile_with_aimk {host_list a_report task_name {aimk_options ""}} {
 #     get_build_number() -- create a build number
 #
 #  SYNOPSIS
-#     get_build_number { } 
+#     get_build_number { }
 #
 #  FUNCTION
 #     Creates a build number.
@@ -1807,7 +1807,7 @@ proc get_build_number {} {
 #     delete_build_number_object() -- delete object code containing build num
 #
 #  SYNOPSIS
-#     delete_build_number_object { host build } 
+#     delete_build_number_object { host build }
 #
 #  FUNCTION
 #     The function deletes the object code file from the build directory
@@ -1828,7 +1828,7 @@ proc delete_build_number_object {host build} {
 
    if {$ts_config(source_dir) == "none"} {
       ts_log_config "source directory is set to \"none\" - cannot delete a build object"
-      return 
+      return
    }
 
    set arch [resolve_build_arch $host]

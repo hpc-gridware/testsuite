@@ -35,11 +35,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -50,7 +50,7 @@ set check_category        "COMPATIBILITY SYSTEM TESTSUITE VERIFIED"
 set check_description(0)  "testsuite connection test to all hosts"
 
 # define test's dependencies
-set check_needs           "" 
+set check_needs           ""
 
 # setup and cleanup functions
 set check_setup_function connection_test_setup
@@ -66,7 +66,7 @@ global connection_test_saved_slot_count
 # -------- local test procedures: initialization------------------------------
 
 proc connection_test_setup  {} {
-   global ts_config 
+   global ts_config
    ts_log_fine "this is a dummy setup function"
 }
 

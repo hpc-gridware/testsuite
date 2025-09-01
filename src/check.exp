@@ -3926,6 +3926,25 @@ proc sort_tests_by_duration {list} {
    set checks_to_do $sorted_checks_to_do
 }
 
+# when running the INSTALL category, we need to run the
+# "install_core_system" test first, so sort it to the front of the list
+# and keep the other tests in the same order
+proc sort_tests_for_install {list_var} {
+   upvar $list_var checks_to_do
+
+   set new_checks_to_do {}
+   foreach elem $checks_to_do {
+      set check_name [file tail $elem]
+      if {$check_name eq "install_core_system"} {
+         set new_checks_to_do [linsert $new_checks_to_do 0 $elem]
+      } else {
+         lappend new_checks_to_do $elem
+      }
+   }
+
+   set checks_to_do $new_checks_to_do
+}
+
 #                                                             max. column:     |
 #****** check/build_checks_to_do_list ******
 #
@@ -4037,7 +4056,12 @@ proc run_tests {path state_to_run} {
    }
 
    # sort the list of all tests and runlevels by their duration
-   sort_tests_by_duration checks_to_do
+   # unless we are doing an INSTALL run, here we need to use a specific order
+   if {$CHECK_ENABLED_CATEGORIES eq "INSTALL"} {
+      sort_tests_for_install checks_to_do
+   } else {
+      sort_tests_by_duration checks_to_do
+   }
 
    # move the result files from the "completed", "unsupported" or "failed"
    # directories to the "uncompleted" directory

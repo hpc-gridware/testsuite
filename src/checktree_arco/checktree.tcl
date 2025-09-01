@@ -81,9 +81,9 @@ set ARCO_TABLES { sge_job_usage sge_job_log sge_job_request sge_job
                   sge_host_values sge_host
                   sge_department_values sge_department
                   sge_project_values sge_project
-                  sge_user_values sge_user 
+                  sge_user_values sge_user
                   sge_group_values sge_group
-                  sge_share_log 
+                  sge_share_log
                   sge_version
                   sge_statistic_values
                   sge_statistic
@@ -114,10 +114,10 @@ set ARCO_VIEWS { view_ar_time_usage view_job_times_subquery view_job_times view_
 #    arco_compile() -- ???
 #
 #  SYNOPSIS
-#    arco_compile { compile_hosts a_mail_body a_html_body  } 
+#    arco_compile { compile_hosts a_mail_body a_html_body  }
 #
 #  FUNCTION
-#     Compile hook for the ARCo packages 
+#     Compile hook for the ARCo packages
 #
 #  INPUTS
 #    compile_hosts -- list of all compile host
@@ -145,7 +145,7 @@ proc arco_compile { compile_hosts a_report } {
 #    arco_compile_clean() -- compile clean hook for ARCo
 #
 #  SYNOPSIS
-#    arco_compile_clean { compile_hosts a_report } 
+#    arco_compile_clean { compile_hosts a_report }
 #
 #  FUNCTION
 #
@@ -160,13 +160,13 @@ proc arco_compile { compile_hosts a_report } {
 #      else -- failure
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -182,7 +182,7 @@ proc arco_compile_clean { compile_hosts a_report } {
 #    arco_build() -- start the arco build script
 #
 #  SYNOPSIS
-#    arco_build { compile_hosts target a_report } 
+#    arco_build { compile_hosts target a_report }
 #
 #  FUNCTION
 #     starts the arco build script
@@ -208,45 +208,49 @@ proc arco_build { compile_hosts target a_report { ant_options "" } { arco_build_
    global CHECK_OUTPUT CHECK_USER
    global CHECK_HTML_DIRECTORY CHECK_PROTOCOL_DIR
    global ts_config ts_host_config arco_config
-   
+
    upvar $a_report report
- 
+
    if {[llength $compile_hosts] != 1} {
       set build_host [host_conf_get_java_compile_host]
       ts_log_config "There was a problem with compile_hosts list: \"$compile_hosts\", using \"$build_host\" for building arco"
    } else {
       set build_host $compile_hosts
    }
-   
+
    set task_nr [report_create_task report "arco_build_$target" $build_host]
 
    ts_log_fine "creating target \"$target\" on compile host \"$build_host\""
-   
+
    if {$ts_config(source_dir) == "none"} {
       report_task_add_message report $task_nr "source directory is set to \"none\" - cannot build"
       report_finish_task report $task_nr -1
       return -1
    }
 
-   
+
    report_task_add_message report $task_nr "------------------------------------------"
-   report_task_add_message report $task_nr "-> starting arco build.sh $target on host $build_host ..."
-  
+   report_task_add_message report $task_nr "starting arco build.sh $target on host $build_host ..."
+
    # setup environment
-   set env(JAVA_HOME) [get_java_home_for_host $build_host "1.6"]
+   set env(JAVA_HOME) [host_conf_get_java $build_host 8]
    if { $env(JAVA_HOME) == "" } {
-      ts_log_config "Java 1.5. not found on $build_host!"
+      ts_log_config "Java 1.8. not found on $build_host!"
       return -1
    }
    set ind [string first "/java" $env(JAVA_HOME)]
    set java_path [string range $env(JAVA_HOME) 0 $ind]
    set env(ARCH)      [resolve_arch $build_host]
    set env(PATH)      "$java_path:\$PATH"
-   set env(CLASSPATH) "\$CLASSPATH:$ts_config(testsuite_root_dir)/lib/junit.jar"
    append ant_options " -Dsge.root=$ts_config(product_root)"
    append ant_options " -Dsge.srcdir=$ts_config(source_dir)"
    set env(ANT_OPTS) "$ant_options"
-   
+
+   report_task_add_message report $task_nr "environment settings:"
+   foreach attr [array names env] {
+      report_task_add_message report $task_nr "   $attr=$env($attr)"
+   }
+
    if {[coverage_enabled "emma"]} {
       set open_spawn [open_remote_spawn_process $build_host $CHECK_USER "./build.sh" "-emma $target" 0 $arco_config(arco_source_dir) env]
    } else {
@@ -266,7 +270,7 @@ proc arco_build { compile_hosts target a_report { ant_options "" } { arco_build_
       -i $spawn_list eof {
          report_task_add_message report $task_nr "got eof \"$build_host\""
       }
-      -i $spawn_list "_exit_status_:(*)" {            
+      -i $spawn_list "_exit_status_:(*)" {
          set error [get_string_value_between "_exit_status_:(" ")" $expect_out(0,string)]
          report_task_add_message report $task_nr "arco build script exited with status $error"
       }
@@ -283,14 +287,14 @@ proc arco_build { compile_hosts target a_report { ant_options "" } { arco_build_
          exp_continue
       }
    }
- 
+
    close_spawn_process $open_spawn
    report_finish_task report $task_nr $error
 
    if { $error != 0 } {
       ts_log_severe "return state: $error"
       return -1
-   }      
+   }
    return 0
 }
 
@@ -299,7 +303,7 @@ proc arco_build { compile_hosts target a_report { ant_options "" } { arco_build_
 #    arco_get_required_hosts() -- required hosts hook for arco
 #
 #  SYNOPSIS
-#    arco_get_required_hosts { } 
+#    arco_get_required_hosts { }
 #
 #  FUNCTION
 #    return a list of host which are required for the arco checktree
@@ -328,10 +332,10 @@ proc arco_get_required_hosts {} {
 #    arco_install_binaries() -- ???
 #
 #  SYNOPSIS
-#    arco_install_binaries { } 
+#    arco_install_binaries { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #    arch_list   --   list of architectures for which the binaries should be installed
@@ -351,18 +355,18 @@ proc arco_get_required_hosts {} {
 #  SEE ALSO
 #*******************************************************************************
 proc arco_install_binaries { arch_list a_report } {
-   
+
    global CHECK_USER
    global ts_config ts_host_config arco_config
-   
+
    upvar $a_report report
 
 
    set task_nr [ report_create_task report "install_dbwriter_binaries" $ts_config(master_host) ]
-   
+
    set tar $ts_host_config($ts_config(master_host),tar)
    set tar_args "xzf $arco_config(arco_source_dir)/dbwriter/dbwriter.tar.gz -C $ts_config(product_root)"
-   
+
    report_task_add_message report $task_nr "------------------------------------------"
    report_task_add_message report $task_nr "-> $tar $tar_args"
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER "$tar" "$tar_args" prg_exit_state]
@@ -385,7 +389,7 @@ proc arco_install_binaries { arch_list a_report } {
 #    startup_dbwriter() -- startup the dbwriter
 #
 #  SYNOPSIS
-#    startup_dbwriter { { hostname "--" } } 
+#    startup_dbwriter { { hostname "--" } }
 #
 #  FUNCTION
 #    Starts the dbwriter.
@@ -407,11 +411,11 @@ proc arco_install_binaries { arch_list a_report } {
 #*******************************************************************************
 proc startup_dbwriter { { hostname "--" } { debugmode "0" } } {
    global ts_config arco_config CHECK_USER
-   
+
    if { $hostname == "--" } {
       set hostname $arco_config(dbwriter_host)
    }
-   
+
    if { [file exists "$ts_config(product_root)/$ts_config(cell)/spool/dbwriter"] != 1 } {
       set output [start_remote_prog "$hostname" "$CHECK_USER" "mkdir" "-p $ts_config(product_root)/$ts_config(cell)/spool/dbwriter"]
       if { $prg_exit_state != 0 } {
@@ -430,16 +434,16 @@ proc startup_dbwriter { { hostname "--" } { debugmode "0" } } {
    }
 
    set prog "$ts_config(product_root)/$ts_config(cell)/common/sgedbwriter"
-   
-   if {[wait_for_remote_file "$hostname" "$CHECK_USER" "$prog"] == 0} {   
+
+   if {[wait_for_remote_file "$hostname" "$CHECK_USER" "$prog"] == 0} {
       set args ""
       if {$debugmode == 1} {
          append args "-debug_port 8000 -debug "
       }
       append args "start"
-      
+
       set output [start_remote_prog "$hostname" "$CHECK_USER" "$prog" $args prg_exit_state 60 0 "" dbwriter_env]
-      
+
       if {$debugmode == 1} {
         puts "dbwriter has been started in debug mode"
         puts "Connect with a jpda debugger to $hostname (Port 8000)!"
@@ -491,13 +495,13 @@ proc startup_dbwriter { { hostname "--" } { debugmode "0" } } {
 #*******************************************************************************
 proc get_dbwriter_status { { raise_error 1 } { hostname "--" } } {
    global ts_config arco_config CHECK_USER
-   
+
    if { $hostname == "--" } {
       set hostname $arco_config(dbwriter_host)
    }
-   
+
    set prog "$ts_config(product_root)/$ts_config(cell)/common/sgedbwriter"
-   
+
    if { $raise_error } {
       set timeout 60
    } else {
@@ -519,7 +523,7 @@ proc get_dbwriter_status { { raise_error 1 } { hostname "--" } } {
 #    shutdown_dbwriter() -- shutdown the dbwriter
 #
 #  SYNOPSIS
-#    shutdown_dbwriter { { hostname "--" } } 
+#    shutdown_dbwriter { { hostname "--" } }
 #
 #  FUNCTION
 #    This function stop the dbwriter
@@ -535,10 +539,10 @@ proc get_dbwriter_status { { raise_error 1 } { hostname "--" } } {
 #  EXAMPLE
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -608,54 +612,54 @@ proc clean_table { table_name } {
 
 proc arco_clean_oracle_database { { drop 0 } } {
    global ARCO_TABLES ARCO_VIEWS
-   
+
    set id [sqlutil_create]
    if { $id == "-1" } {
       ts_log_severe "Can not create sqlutil"
       return -1
-   }   
+   }
    set sp_id [ lindex $id 1 ]
-   
-   
+
+
    # first of all connect to the admin db and check wether the database exists
    if { [ sqlutil_connect $sp_id 1 ] != 0 } {
       ts_log_severe "Can not connect to admin database"
       close_spawn_process $id;
       return -2
    }
-   
+
    # Ensure that the test database is available
    set arco_write_user [get_arco_write_user]
    set arco_read_user  [get_arco_read_user]
    set sql "SELECT username FROM dba_users WHERE username = '${arco_write_user}'";
    array set result_array {}
    set column_names {}
-   
+
    set res [sqlutil_query $sp_id $sql result_array column_names]
    if { $res == 0 } {
       ts_log_fine "user ${arco_write_user} does not exist => nothing to clean"
       close_spawn_process $id;
       return 0
    }
-   
+
    set result 0
-   
+
    if { $drop } {
       set synonyms [concat $ARCO_TABLES $ARCO_VIEWS]
       foreach synonym $synonyms {
          set synonym [string toupper $synonym]
-         set sql "select SYNONYM_NAME from all_synonyms where SYNONYM_NAME = '$synonym' and OWNER = '${arco_read_user}'" 
+         set sql "select SYNONYM_NAME from all_synonyms where SYNONYM_NAME = '$synonym' and OWNER = '${arco_read_user}'"
          set res [sqlutil_query $sp_id $sql result_array column_names]
          if { $res == 0 } {
             ts_log_fine "synonym $synonym does not exist"
             continue
          } elseif { $res < 0 } {
-            ts_log_severe "Error: Can not query synonym $synonym" 
+            ts_log_severe "Error: Can not query synonym $synonym"
             set result -1
             close_spawn_process $id;
             return -1
          }
-         
+
          set sql "DROP SYNONYM ${arco_read_user}.${synonym}"
          ts_log_fine "drop synonym ${arco_read_user}.${synonym}"
          set res [sqlutil_exec $sp_id $sql]
@@ -666,14 +670,14 @@ proc arco_clean_oracle_database { { drop 0 } } {
          }
       }
    }
-   
+
    # now connect to the test database
    if { [ sqlutil_connect $sp_id 0 ] != 0 } {
       ts_log_severe "Can not connect to database [get_database_name 0]"
       close_spawn_process $id;
       return -2
    }
-   
+
    if { $drop } {
       # drop views and synonyms
       foreach view $ARCO_VIEWS {
@@ -684,11 +688,11 @@ proc arco_clean_oracle_database { { drop 0 } } {
             ts_log_fine "view $view does not exist"
             continue
          } elseif { $res < 0 } {
-            ts_log_severe "Error: Can not query view $view" 
+            ts_log_severe "Error: Can not query view $view"
             set result -1
             break;
          }
-         
+
          set sql "DROP VIEW $view"
          ts_log_fine "drop view ${view}"
          set res [sqlutil_exec $sp_id $sql]
@@ -698,9 +702,9 @@ proc arco_clean_oracle_database { { drop 0 } } {
             break;
          }
       }
-      
+
    }
-   
+
    if { $result == 0 } {
       foreach table $ARCO_TABLES {
          set table [string toupper $table]
@@ -716,7 +720,7 @@ proc arco_clean_oracle_database { { drop 0 } } {
             set result -1
             break;
          }
-         
+
          if { $drop } {
             set sql "DROP TABLE $table"
             ts_log_fine "drop table ${table}"
@@ -728,7 +732,7 @@ proc arco_clean_oracle_database { { drop 0 } } {
             }
          } else {
             if { [ clean_table $table ] == 1 } {
-               set sql "DELETE from $table"
+               set sql "DELETE FROM $table"
                set res [sqlutil_exec $sp_id $sql]
                if { $res != 0 } {
                   ts_log_severe "Error: Can not delete table $table"
@@ -751,7 +755,7 @@ proc arco_clean_oracle_database { { drop 0 } } {
 }
 
 
-proc arco_clean_postgres_database { { drop 0 } } {
+proc arco_clean_postgres_database {{drop 0}} {
    global ARCO_TABLES ARCO_VIEWS
 
    set id [sqlutil_create]
@@ -759,10 +763,10 @@ proc arco_clean_postgres_database { { drop 0 } } {
       ts_log_severe "Can not create sqlutil"
       return -1
    }
-   set sp_id [ lindex $id 1 ]
+   set sp_id [lindex $id 1]
 
    # first of all connect to the admin db and check wether the database exists
-   if { [ sqlutil_connect $sp_id 1 ] != 0 } {
+   if {[sqlutil_connect $sp_id 1] != 0} {
       ts_log_severe "Can not connect to admin database"
       close_spawn_process $id;
       return -2
@@ -866,22 +870,22 @@ proc arco_clean_postgres_database { { drop 0 } } {
 proc arco_clean_mysql_database { { drop 0 } } {
 
 global ARCO_TABLES ARCO_VIEWS
-   
+
    set id [sqlutil_create]
    if { $id == "-1" } {
       ts_log_severe "Can not create sqlutil"
       return -1
-   }   
+   }
    set sp_id [ lindex $id 1 ]
-   
-   
+
+
    # first of all connect to the admin db and check wether the database exists
    if { [ sqlutil_connect $sp_id 1 ] != 0 } {
       ts_log_severe "Can not connect to admin database"
       close_spawn_process $id;
       return -2
    }
-   
+
    # Ensure that the test database is available
    set db_name [get_database_name]
    set sql "select schema_name FROM information_schema.schemata where schema_name = '${db_name}'"
@@ -900,9 +904,9 @@ global ARCO_TABLES ARCO_VIEWS
       close_spawn_process $id;
       return -2
    }
-   
+
    set result 0
-   
+
    if { $drop } {
       # drop views
       foreach view $ARCO_VIEWS {
@@ -917,7 +921,7 @@ global ARCO_TABLES ARCO_VIEWS
             close_spawn_process $id;
             return -1
          }
-         
+
          set sql "DROP VIEW $view"
          ts_log_fine "drop view $view"
          set res [sqlutil_exec $sp_id $sql]
@@ -927,7 +931,7 @@ global ARCO_TABLES ARCO_VIEWS
             return -1
          }
       }
-   }   
+   }
    foreach table $ARCO_TABLES {
       set table [string tolower $table]
       set sql "select table_name, table_schema from information_schema.tables where table_name = '$table' and table_schema = '${db_name}'"
@@ -942,7 +946,7 @@ global ARCO_TABLES ARCO_VIEWS
          close_spawn_process $id
          return -1
       }
-      
+
       if { $drop } {
          set sql "DROP TABLE $table CASCADE"
          ts_log_fine "drop table $table"
@@ -971,7 +975,7 @@ global ARCO_TABLES ARCO_VIEWS
          break;
       }
    }
-   
+
    close_spawn_process $id;
    return $result
 

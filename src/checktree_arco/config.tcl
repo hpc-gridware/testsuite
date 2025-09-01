@@ -56,14 +56,14 @@ proc arco_verify_config {config_array only_check parameter_error_list} {
    global ts_checktree arco_checktree_nr
    upvar $config_array config
    upvar $parameter_error_list param_error_list
-   
+
    arco_config_upgrade_1_1 config
    arco_config_upgrade_1_2 config
    arco_config_upgrade_1_3 config
    arco_config_upgrade_1_4 config
    arco_config_upgrade_1_5 config
 
-   return [verify_config2 config $only_check param_error_list $ts_checktree($arco_checktree_nr,setup_hooks_0_version)]   
+   return [verify_config2 config $only_check param_error_list $ts_checktree($arco_checktree_nr,setup_hooks_0_version)]
 }
 
 #****** config/arco_save_configuration() ***************************************
@@ -71,7 +71,7 @@ proc arco_verify_config {config_array only_check parameter_error_list} {
 #     arco_save_configuration() -- save testsuite configuration (arco_config array)
 #
 #  SYNOPSIS
-#     arco_save_configuration { filename } 
+#     arco_save_configuration { filename }
 #
 #  FUNCTION
 #     This procedure will save the actual arco_config array settings to the
@@ -87,7 +87,7 @@ proc arco_save_configuration { filename } {
    global arco_config ts_checktree arco_checktree_nr
 
    set conf_name $ts_checktree($arco_checktree_nr,setup_hooks_0_name)
-   
+
    if { [ info exists arco_config(version) ] == 0 } {
       puts "no version"
       wait_for_enter
@@ -96,9 +96,9 @@ proc arco_save_configuration { filename } {
 
    # first get old configuration
    read_array_from_file  $filename $conf_name old_config
-   # save old configuration 
+   # save old configuration
    spool_array_to_file $filename "$conf_name.old" old_config
-   spool_array_to_file $filename $conf_name arco_config  
+   spool_array_to_file $filename $conf_name arco_config
    ts_log_fine "new $conf_name saved"
 
    return 0
@@ -109,7 +109,7 @@ proc arco_save_configuration { filename } {
 #     arco_init_config() -- init configuration hook for arco
 #
 #  SYNOPSIS
-#     arco_init_config { config_array } 
+#     arco_init_config { config_array }
 #
 #  FUNCTION
 #     This hook is used to create arco configuration array.
@@ -125,9 +125,9 @@ proc arco_save_configuration { filename } {
 proc arco_init_config { config_array } {
    global arco_config arco_checktree_nr ts_checktree
    global CHECK_CURRENT_WORKING_DIR
-   
+
    upvar $config_array config
-   # arco_config defaults 
+   # arco_config defaults
    set ts_pos 1
    set parameter "version"
    set config($parameter)            "1.0"
@@ -155,7 +155,7 @@ proc arco_init_config { config_array } {
    set config($parameter,onchange)   "stop"
    set config($parameter,pos)        $ts_pos
    incr ts_pos 1
-   
+
    set parameter "database_type"
    set config($parameter)            ""
    set config($parameter,desc)       "ARCO database type"
@@ -182,7 +182,7 @@ proc arco_init_config { config_array } {
    set config($parameter,onchange)   "install"
    set config($parameter,pos)        $ts_pos
    incr ts_pos 1
-   
+
    set parameter "database_name"
    set config($parameter)            ""
    set config($parameter,desc)       "ARCO database name"
@@ -200,7 +200,7 @@ proc arco_init_config { config_array } {
    set config($parameter,onchange)   "install"
    set config($parameter,pos)        $ts_pos
    incr ts_pos 1
-   
+
    set parameter "database_write_user"
    set config($parameter)            ""
    set config($parameter,desc)       "ARCo database user with write access"
@@ -236,7 +236,7 @@ proc arco_init_config { config_array } {
    set config($parameter,onchange)   "install"
    set config($parameter,pos)        $ts_pos
    incr ts_pos 1
-   
+
    set parameter "arco_dbwriter_debug_level"
    set config($parameter)            ""
    set config($parameter,desc)       "dbwriter debug level"
@@ -254,7 +254,7 @@ proc arco_init_config { config_array } {
    set config($parameter,onchange)   "install"
    set config($parameter,pos)        $ts_pos
    incr ts_pos 1
-   
+
    arco_config_upgrade_1_1 config
    arco_config_upgrade_1_2 config
    arco_config_upgrade_1_3 config
@@ -272,7 +272,7 @@ proc arco_config_upgrade_1_1 { config_array } {
       # insert new parameter after arco_dbwriter_interval parameter
       set insert_pos $config(arco_dbwriter_interval,pos)
       incr insert_pos 1
-      
+
       # move positions of following parameters
       set names [array names config "*,pos"]
       foreach name $names {
@@ -280,7 +280,7 @@ proc arco_config_upgrade_1_1 { config_array } {
             set config($name) [ expr ( $config($name) + 1 ) ]
          }
       }
-   
+
       # new parameter l10n_test_locale
       set parameter "swc_host"
       set config($parameter)            ""
@@ -289,24 +289,24 @@ proc arco_config_upgrade_1_1 { config_array } {
       set config($parameter,setup_func) "config_$parameter"
       set config($parameter,onchange)   "install"
       set config($parameter,pos) $insert_pos
-   
+
       # now we have a configuration version 1.1
       set config(version) "1.1"
    }
 }
 
 proc arco_config_upgrade_1_2 { config_array } {
-   
+
    upvar $config_array config
 
    if { $config(version) == "1.1" } {
-   
+
       ts_log_fine "Upgrade to version 1.2"
 
       # delete parameter database_read_user
       set param "database_read_user"
-      set pos $config($param,pos)  
-      
+      set pos $config($param,pos)
+
       array unset config "$param"
       array unset config "$param,desc"
       array unset config "$param,default"
@@ -319,34 +319,34 @@ proc arco_config_upgrade_1_2 { config_array } {
             set config($name) [ expr ( $config($name) - 1 ) ]
          }
       }
-      
+
       # delete parameter database_read_pw
       set param "database_read_pw"
-      set pos $config($param,pos)      
+      set pos $config($param,pos)
       array unset config "$param"
       array unset config "$param,desc"
       array unset config "$param,default"
       array unset config "$param,setup_func"
       array unset config "$param,onchange"
       array unset config "$param,pos"
-      
+
       set names [array names config "*,pos"]
       foreach name $names {
          if { $config($name) >= $pos } {
             set config($name) [ expr ( $config($name) - 1 ) ]
          }
       }
-      
+
       # delete parameter database_schema
       set param "database_schema"
-      set pos $config($param,pos)      
+      set pos $config($param,pos)
       array unset config "$param"
       array unset config "$param,desc"
       array unset config "$param,default"
       array unset config "$param,setup_func"
       array unset config "$param,onchange"
       array unset config "$param,pos"
-      
+
       set names [array names config "*,pos"]
       foreach name $names {
          if { $config($name) >= $pos } {
@@ -357,7 +357,7 @@ proc arco_config_upgrade_1_2 { config_array } {
       # insert new parameter after swc_host parameter
       set insert_pos $config(swc_host,pos)
       incr insert_pos 1
-      
+
       # move positions of following parameters
       set names [array names config "*,pos"]
       foreach name $names {
@@ -365,7 +365,7 @@ proc arco_config_upgrade_1_2 { config_array } {
             set config($name) [ expr ( $config($name) + 1 ) ]
          }
       }
-   
+
       # new parameter l10n_test_locale
       set parameter "jdbc_driver"
       set config($parameter)            ""
@@ -374,14 +374,14 @@ proc arco_config_upgrade_1_2 { config_array } {
       set config($parameter,setup_func) "config_$parameter"
       set config($parameter,onchange)   "install"
       set config($parameter,pos) $insert_pos
-   
+
       # now we have a configuration version 1.2
       set config(version) "1.2"
    }
 }
 
 proc arco_config_upgrade_1_3 { config_array } {
-   
+
    upvar $config_array config
 
    if { $config(version) == "1.2" } {
@@ -419,7 +419,7 @@ proc arco_config_upgrade_1_3 { config_array } {
 }
 
 proc arco_config_upgrade_1_4 { config_array } {
-   
+
    upvar $config_array config
 
    if { $config(version) == "1.3" } {
@@ -438,7 +438,7 @@ proc arco_config_upgrade_1_4 { config_array } {
       set config($parameter,setup_func) "config_$parameter"
       set config($parameter,onchange)   "install"
       set config($parameter,pos) $insert_pos
-      
+
       # now we have a configuration version 1.4
       set config(version) "1.4"
    }
@@ -538,7 +538,7 @@ proc arco_config_upgrade_1_6 {config_array} {
 #     config_*() -- configuration procedures for each parameter
 #
 #  SYNOPSIS
-#     config_* { only_check name config_array } 
+#     config_* { only_check name config_array }
 #
 #  FUNCTION
 #     These procedures are used to configure parameters of arco configuration.
@@ -569,12 +569,12 @@ proc arco_config_upgrade_1_6 {config_array} {
 #*******************************************************************************
 proc config_arco_source_dir { only_check name config_array } {
    global fast_setup
-   
+
    upvar $config_array config
-   
+
    set help_text {  "Enter the full path to ARCo source directory."
                     "The testsuite needs this directory to build ARCo." }
-   
+
    set value [config_generic $only_check $name config $help_text "directory" 0]
 
    if { $value == -1 } { return -1 }
@@ -624,9 +624,9 @@ proc config_database_schema { only_check name config_array } {
 }
 
 proc config_arco_dbwriter_debug_level { only_check name config_array } {
-   
+
    upvar $config_array config
-   
+
    array set levels {
       WARNING ""
       INFO ""
@@ -636,9 +636,9 @@ proc config_arco_dbwriter_debug_level { only_check name config_array } {
 }
 
 proc config_arco_dbwriter_interval { only_check name config_array } {
-   
+
    upvar $config_array config
-   
+
    set help_text {  "Enter the dbwriter interval in seconds, or press >RETURN<"
                     "to use the default value."  }
 
@@ -653,20 +653,20 @@ proc config_swc_host {only_check name config_array} {
    if {$config($name,default) == ""} {
       set config($name,default) $ts_config(master_host)
    }
-         
+
    set swc_host [config_generic $only_check $name config "" "host" 0 1 ]
 
    if { $swc_host == -1 } { return -1 }
 
    if {$fast_setup == 0} {
-      
+
       array set swc_version {}
-      
+
       if {[get_java_web_console_version swc_version $swc_host]  < 0} {
          ts_log_severe "Can not determine version of java webconsole on host $swc_host"
          return -1
       }
-   
+
       set num_version [expr $swc_version(major) * 10000 + $swc_version(minor) * 100 + $swc_version(micro)]
       set exp_version [expr 3 * 10000]
       set err_msg "Version 3.0.0 or higher is required"
@@ -706,10 +706,10 @@ proc config_tablespace_index { only_check name config_array } {
    global ts_db_config
 
    upvar $config_array config
-   
+
    set db_type ""
    if {[info exists ts_db_config($config(database),dbtype)] } { set db_type $ts_db_config($config(database),dbtype) }
-     
+
    switch -- $db_type {
       "mysql" {
          array set choices {}
@@ -722,7 +722,7 @@ proc config_tablespace_index { only_check name config_array } {
          if { [string compare $db_type ""] == 0 } { set allow_null 1 }
          return [config_generic $only_check $name config $help_text "string" $allow_null]
       }
-   }   
+   }
 }
 
 proc config_database { only_check name config_array } {
@@ -763,10 +763,10 @@ proc config_database { only_check name config_array } {
 #     default_config_values() -- set the default values dependent on database type
 #
 #  SYNOPSIS
-#     default_config_values { db_type config_array } 
+#     default_config_values { db_type config_array }
 #
 #  FUNCTION
-#     This procedure will set the default values for parameters dependent on the 
+#     This procedure will set the default values for parameters dependent on the
 #     given database type (tablespace, tablespace_index, database_schema)
 #
 #  INPUTS
@@ -857,7 +857,7 @@ proc get_database_name { { use_admin_db 0 } } {
       global ts_config
       set db_name  "arco_${ts_config(commd_port)}"
    } else {
-      if { $arco_config(version) >= "1.5" } {
+      if {$arco_config(version) >= "1.5"} {
          global ts_db_config
          set db_name $ts_db_config($arco_config(database),dbname)
       } else {
@@ -962,7 +962,7 @@ proc get_database_schema { } {
    global arco_config
    set db_type [get_database_type]
    switch -- $db_type {
-      "oracle" { 
+      "oracle" {
          set db_schema   [get_arco_write_user]
       }
       "mysql" {

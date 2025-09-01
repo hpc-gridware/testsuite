@@ -76,7 +76,7 @@ if {![info exists ts_host_config]} {
 #     host_config_hostlist() -- host configuration setup
 #
 #  SYNOPSIS
-#     host_config_hostlist { only_check name config_array } 
+#     host_config_hostlist { only_check name config_array }
 #
 #  FUNCTION
 #     Testsuite host configuration setup - called from verify_host_config()
@@ -148,7 +148,7 @@ proc host_config_hostlist { only_check name config_array } {
                      set ip_run "$ip.$i"
                      puts -nonewline "\r$ip_run"
                      set result [start_remote_prog $local_host $CHECK_USER "nslookup" $ip_run prg_exit_state 25 0 "" "" 1 0]
-                     set pos1 [string first "Name:" $result]   
+                     set pos1 [string first "Name:" $result]
                      if {$pos1 >= 0} {
                         incr pos1 5
                         set name [string range $result $pos1 end]
@@ -163,7 +163,7 @@ proc host_config_hostlist { only_check name config_array } {
                }
                wait_for_enter
             }
-         } 
+         }
       }
    }
 
@@ -179,7 +179,7 @@ proc host_config_hostlist { only_check name config_array } {
 #     host_config_NFS-ROOT2NOBODY() -- nfs spooling dir setup
 #
 #  SYNOPSIS
-#     host_config_NFS-ROOT2NOBODY { only_check name config_array } 
+#     host_config_NFS-ROOT2NOBODY { only_check name config_array }
 #
 #  FUNCTION
 #     NFS directory which is mounted with root to user nobody mapping setup
@@ -211,10 +211,10 @@ proc host_config_NFS-ROOT2NOBODY { only_check name config_array } {
 #     host_config_NFS-ROOT2ROOT() -- nfs spooling dir setup
 #
 #  SYNOPSIS
-#     host_config_NFS-ROOT2ROOT { only_check name config_array } 
+#     host_config_NFS-ROOT2ROOT { only_check name config_array }
 #
 #  FUNCTION
-#     NFS directory which is mounted with root to user root mapping setup 
+#     NFS directory which is mounted with root to user root mapping setup
 #     - called from verify_host_config()
 #
 #  INPUTS
@@ -243,7 +243,7 @@ proc host_config_NFS-ROOT2ROOT { only_check name config_array } {
 #     host_config_hostlist_show_hosts() -- show host in host configuration
 #
 #  SYNOPSIS
-#     host_config_hostlist_show_hosts { array_name } 
+#     host_config_hostlist_show_hosts { array_name }
 #
 #  FUNCTION
 #     Print hosts
@@ -284,14 +284,14 @@ proc host_config_hostlist_show_hosts {array_name} {
    }
 
    return $hosts
-}  
+}
 
 #****** config_host/host_config_get_host_parameters() **************************
 #  NAME
 #     host_config_get_host_parameters() -- get the list of host parameters
 #
 #  SYNOPSIS
-#     host_config_get_host_parameters { } 
+#     host_config_get_host_parameters { }
 #
 #  FUNCTION
 #     get the list of all parameters needed to configure a host
@@ -377,7 +377,7 @@ proc host_conf_get_host_defaults {varname} {
 #     host_config_display_host_params() -- display the host configuration
 #
 #  SYNOPSIS
-#     host_config_display_host_params { host config_array } 
+#     host_config_display_host_params { host config_array }
 #
 #  FUNCTION
 #     display the list of host parameters and it's values
@@ -471,7 +471,7 @@ proc config_display_hosts { host_list host_index {selected ""} {null_value "none
 
    upvar $host_list hosts
    upvar $host_index indexes
-   
+
    if { [array size hosts] == 1 && [lsearch [array names hosts] "new"] < 0 } {
       config_display_list hosts indexes $selected $null_value
       return
@@ -606,7 +606,7 @@ proc config_display_hosts { host_list host_index {selected ""} {null_value "none
 #     host_config_get_hostlist() -- get the list of host in host configuration
 #
 #  SYNOPSIS
-#     host_config_get_hostlist { array_name result_array {all 1} } 
+#     host_config_get_hostlist { array_name result_array {all 1} }
 #
 #  FUNCTION
 #     Gets the array of hosts with the information if it is compile host
@@ -634,7 +634,7 @@ proc host_config_get_hostlist { config_array result_array { all 1 } } {
    foreach host $config(hostlist) {
       set arch [host_conf_get_arch $host config]
       if { $all == 0 && [string compare "$arch" "unsupported"] == 0 } {
-         continue 
+         continue
       }
       if {[host_conf_is_compile_host $host config]} { append arch "|c" }
       if {[host_conf_is_doc_compile_host $host config]} { append arch "|doc" }
@@ -650,7 +650,7 @@ proc host_config_get_hostlist { config_array result_array { all 1 } } {
 #     host_config_hostlist_get_architectures() -- get architectures
 #
 #  SYNOPSIS
-#     host_config_hostlist_get_architectures { array_name } 
+#     host_config_hostlist_get_architectures { array_name }
 #
 #  FUNCTION
 #     This procedure gets the list of architectures and compile host for each
@@ -665,7 +665,7 @@ proc host_config_get_hostlist { config_array result_array { all 1 } } {
 #     config_host/host_conf_get_arch()
 #*******************************************************************************
 proc host_config_hostlist_get_architectures { config_array result_array } {
-  
+
    upvar $config_array config
    upvar $result_array arch_list
 
@@ -688,10 +688,10 @@ proc host_config_hostlist_get_architectures { config_array result_array } {
 #     host_config_hostlist_add_host() -- add host to host configuration
 #
 #  SYNOPSIS
-#     host_config_hostlist_add_host { array_name { have_host "" } } 
+#     host_config_hostlist_add_host { array_name { have_host "" } }
 #
 #  FUNCTION
-#     This procedure is used to add a host to the testsuite host configuration 
+#     This procedure is used to add a host to the testsuite host configuration
 #
 #  INPUTS
 #     array_name       - ts_host_config
@@ -706,7 +706,7 @@ proc host_config_hostlist_add_host {array_name {have_host ""}} {
    global CHECK_USER
 
    upvar $array_name config
-  
+
    if {$have_host == ""} {
       clear_screen
       puts "\nAdd host to global host configuration"
@@ -720,12 +720,12 @@ proc host_config_hostlist_add_host {array_name {have_host ""}} {
       puts "no hostname entered"
       return -1
    }
-     
+
    if {[lsearch $config(hostlist) $new_host] >= 0} {
       puts "host \"$new_host\" is already in list"
       return -1
    }
-   
+
    set time [timestamp]
    set result [start_remote_prog $new_host $CHECK_USER "echo" "\"hello $new_host\"" prg_exit_state 12 0 "" "" 1 0]
    if {$prg_exit_state != 0} {
@@ -740,7 +740,7 @@ proc host_config_hostlist_add_host {array_name {have_host ""}} {
          set result [start_remote_prog $new_host $CHECK_USER "echo" "\"hello $new_host\"" prg_exit_state $result 0 "" "" 1 0]
       }
    }
-   
+
    if {$prg_exit_state != 0} {
       puts "rlogin to host $new_host doesn't work correctly"
       return -1
@@ -761,14 +761,14 @@ proc host_config_hostlist_add_host {array_name {have_host ""}} {
       if {$prg_exit_state != 0} { set prg_bin "" }
       set vars(${prg}_bin) $prg_bin
    }
-   
+
    foreach param [host_config_get_host_parameters] {
       switch -glob $param {
          arch* {
             set config($new_host,$param) "unsupported"
             if { [string compare $param "arch,$ts_config(gridengine_version)"] == 0 } {
                set config($new_host,$param) $arch
-            } 
+            }
          }
          *compile* { set config($new_host,$param) 0 }
          response_time { set config($new_host,$param) [ expr ( [timestamp] - $time ) ] }
@@ -787,7 +787,7 @@ proc host_config_hostlist_add_host {array_name {have_host ""}} {
 
    if {$have_host == ""} { host_config_hostlist_edit_host config $new_host }
 
-   return 0   
+   return 0
 }
 
 #****** config_host/host_config_hostlist_edit_host() ***************************
@@ -795,7 +795,7 @@ proc host_config_hostlist_add_host {array_name {have_host ""}} {
 #     host_config_hostlist_edit_host() -- edit host in host configuration
 #
 #  SYNOPSIS
-#     host_config_hostlist_edit_host { array_name { has_host "" } } 
+#     host_config_hostlist_edit_host { array_name { has_host "" } }
 #
 #  FUNCTION
 #     This procedure is used for host edition in host configuration
@@ -815,7 +815,7 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
    upvar $array_name config
 
    set goto 0
-   if {$has_host != ""} { set goto $has_host } 
+   if {$has_host != ""} { set goto $has_host }
 
    while {1} {
       clear_screen
@@ -830,9 +830,9 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
          set host $goto
          ts_log_fine $host
       }
- 
+
       if {[string length $host] == 0} { break }
-     
+
       if {[string is integer $host]} {
          incr host -1
          set host [lindex $hostlist $host]
@@ -870,15 +870,15 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
          "tar" -
          "gzip" -
          "ssh" -
-         "loadsensor" { 
+         "loadsensor" {
             set isfile 1
          }
          "spooldir" {
-            set isdir 1 
+            set isdir 1
          }
          "compile" -
          "doc_compile" -
-         "java_compile" { 
+         "java_compile" {
             set help_text ""
             lappend help_text "Use this host for $input of $ts_config(gridengine_version) version?"
             set input "$input,$ts_config(gridengine_version)"
@@ -888,14 +888,14 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
             set choices(1) "yes"
             set choices(0) "no"
          }
-         "zones" { 
+         "zones" {
             set help_text { "Enter a space separated list of zones: " }
             set check_zones 1
             set count 0
          }
          "fr_locale" -
          "ja_locale" -
-         "zh_locale" { 
+         "zh_locale" {
             set help_text { "INFO:"
                             "Enter an environment list to get localized output on that host!"
                             "e.g.: LANG=fr_FR.ISO8859-1 LC_MESSAGES=fr"
@@ -949,7 +949,7 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
             continue
          }
       }
-      
+
       # check for valid directory name
       if {$isdir} {
          set result [start_remote_prog $host $CHECK_USER "cd" "$value" prg_exit_state 12 0 "" "" 1 0]
@@ -965,7 +965,7 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
       if {$islocale == 1} {
          set mem_it $ts_host_config($host,$input)
          set mem_l10n $ts_config(l10n_test_locale)
-       
+
          set ts_config(l10n_test_locale) [string range $input 0 1]
          set ts_host_config($host,$input) $value
 
@@ -975,7 +975,7 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
          set ts_config(l10n_test_locale) mem_l10n
 
          if {$test_result != 0} {
-            puts "l10n errors" 
+            puts "l10n errors"
             wait_for_enter
             continue
          }
@@ -1005,8 +1005,8 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
       wait_for_enter
       continue
    }
-   
-   return 0   
+
+   return 0
 }
 
 #****** config_host/host_config_hostlist_delete_host() *************************
@@ -1014,7 +1014,7 @@ proc host_config_hostlist_edit_host {array_name {has_host ""}} {
 #     host_config_hostlist_delete_host() -- delete host from host configuration
 #
 #  SYNOPSIS
-#     host_config_hostlist_delete_host { array_name } 
+#     host_config_hostlist_delete_host { array_name }
 #
 #  FUNCTION
 #     This procedure is called to delete a host from host configuration
@@ -1039,9 +1039,9 @@ proc host_config_hostlist_delete_host { array_name } {
       set hostlist [host_config_hostlist_show_hosts config]
       puts -nonewline "\nEnter hostname/number or return to exit: "
       set host [wait_for_enter 1]
- 
+
       if {[string length $host] == 0} { break }
-     
+
       if {[string is integer $host]} {
          incr host -1
          set host [lindex $hostlist $host]
@@ -1054,7 +1054,7 @@ proc host_config_hostlist_delete_host { array_name } {
       }
 
       host_config_display_host_params $host config
-      
+
       puts -nonewline "Delete this host? (y/n): "
       set input [wait_for_enter 1]
       if {[string length $input] == 0} { continue }
@@ -1069,7 +1069,7 @@ proc host_config_hostlist_delete_host { array_name } {
       }
    }
 
-   return 0   
+   return 0
 }
 
 #****** config_host/host_config_add_newhost() **********************************
@@ -1077,10 +1077,10 @@ proc host_config_hostlist_delete_host { array_name } {
 #     host_config_add_newhost() -- add host to host configuration
 #
 #  SYNOPSIS
-#     host_config_add_newhost { hostname } 
+#     host_config_add_newhost { hostname }
 #
 #  FUNCTION
-#     This procedure is used to add a host to the testsuite global host configuration 
+#     This procedure is used to add a host to the testsuite global host configuration
 #
 #  INPUTS
 #     hostname - host name
@@ -1105,7 +1105,7 @@ proc host_config_add_newhost { hostname } {
 
       if { $errors == 0 } {
          incr errors [save_host_configuration $ts_config(host_config_file)]
-      } 
+      }
       if { $errors != 0 } {
          set index [lsearch $ts_host_config(hostlist) $hostname]
          if { $index >= 0 } {
@@ -1128,8 +1128,8 @@ proc host_config_add_newhost { hostname } {
 #     verify_host_config() -- verify testsuite host configuration setup
 #
 #  SYNOPSIS
-#     verify_host_config { config_array only_check parameter_error_list 
-#     { force_params "" } } 
+#     verify_host_config { config_array only_check parameter_error_list
+#     { force_params "" } }
 #
 #  FUNCTION
 #     This procedure will verify or enter host setup configuration
@@ -1175,7 +1175,7 @@ proc verify_host_config {config_array only_check parameter_error_list {force_par
 
    set local_host [gethostname]
    if {$local_host == "unknown"} {
-      puts "Could not get local host name" 
+      puts "Could not get local host name"
       return -1
    }
 
@@ -1191,7 +1191,7 @@ proc verify_host_config {config_array only_check parameter_error_list {force_par
 
    for {set param 1} {$param <= $max_pos} {incr param 1} {
       set par [get_configuration_element_name_on_pos config $param]
-      if {$be_quiet == 0} { 
+      if {$be_quiet == 0} {
          puts -nonewline "      $config($par,desc) ..."
          ts_log_progress
       }
@@ -1220,10 +1220,10 @@ proc verify_host_config {config_array only_check parameter_error_list {force_par
                set value [$procedure_name 1 $par config]
                if {$value == -1} {
                   incr errors 1
-                  lappend error_list $par 
+                  lappend error_list $par
                   lappend uninitalized $param
                   ts_log_warning "verify error in procedure \"$procedure_name\" !!!"
-               } 
+               }
             }
          }
       }
@@ -1234,13 +1234,13 @@ proc verify_host_config {config_array only_check parameter_error_list {force_par
       puts "$count parameters are not initialized!"
       puts "Entering setup procedures ..."
       wait_for_enter
-      
+
       foreach pos $uninitalized {
          clear_screen
          set p_name [get_configuration_element_name_on_pos config $pos]
          set procedure_name  $config($p_name,setup_func)
          set default_value   $config($p_name,default)
-       
+
          ts_log_finest "Starting configuration procedure for parameter \"$p_name\" ($config($p_name,pos)) ..."
          set use_default 0
          if {[string length $procedure_name] == 0} {
@@ -1252,21 +1252,21 @@ proc verify_host_config {config_array only_check parameter_error_list {force_par
                if {$only_check == 0} {wait_for_enter}
                set use_default 1
             }
-         } 
+         }
 
          if {$use_default != 0} {
-            # check again if we have value ( force flag) 
+            # check again if we have value ( force flag)
             if {$config($p_name) == ""} {
                # we have no setup procedure
                if {$default_value != ""} {
-                  puts "using default value: \"$default_value\"" 
-                  set config($p_name) $default_value 
+                  puts "using default value: \"$default_value\""
+                  set config($p_name) $default_value
                } else {
                   puts "No setup procedure and no default value found!!!"
                   if {$only_check == 0} {
                      puts -nonewline "Enter value for parameter \"$p_name\": "
                      set value [wait_for_enter 1]
-                     puts "using value: \"$value\"" 
+                     puts "using value: \"$value\""
                      set config($p_name) $value
                   }
                }
@@ -1276,7 +1276,7 @@ proc verify_host_config {config_array only_check parameter_error_list {force_par
             ts_log_finest "starting >$procedure_name< (setup mode) ..."
             set value [$procedure_name 0 $p_name config]
             if {$value != -1} {
-               puts "using value: \"$value\"" 
+               puts "using value: \"$value\""
                set config($p_name) $value
             }
          }
@@ -1286,7 +1286,7 @@ proc verify_host_config {config_array only_check parameter_error_list {force_par
             lappend error_list $p_name
          }
          wait_for_enter
-      } 
+      }
    }
    return $errors
 }
@@ -1296,7 +1296,7 @@ proc verify_host_config {config_array only_check parameter_error_list {force_par
 #     update_ts_host_config_version() -- used for version update of ts_host_config
 #
 #  SYNOPSIS
-#     update_ts_host_config_version { filename } 
+#     update_ts_host_config_version { filename }
 #
 #  FUNCTION
 #     This procedure is called when the versions of the testsuite host configuration
@@ -1322,7 +1322,7 @@ proc update_ts_host_config_version { filename } {
          set ts_host_config($host,zh_locale) ""
       }
       set ts_host_config(version) "1.1"
-     
+
       show_config ts_host_config
       wait_for_enter
       if { [ save_host_configuration $filename] != 0} {
@@ -1334,12 +1334,12 @@ proc update_ts_host_config_version { filename } {
 
    if { [string compare $ts_host_config(version)  "1.1"] == 0 } {
       puts "\ntestsuite host configuration update from 1.1 to 1.2 ..."
-	
+
       foreach host $ts_host_config(hostlist) {
          set ts_host_config($host,ssh) ""
       }
       set ts_host_config(version) "1.2"
-     
+
       show_config ts_host_config
       wait_for_enter
       if { [ save_host_configuration $filename] != 0} {
@@ -1356,7 +1356,7 @@ proc update_ts_host_config_version { filename } {
          set ts_host_config($host,java) ""
       }
       set ts_host_config(version) "1.3"
-     
+
       show_config ts_host_config
       wait_for_enter
       if { [ save_host_configuration $filename] != 0} {
@@ -1373,7 +1373,7 @@ proc update_ts_host_config_version { filename } {
          set ts_host_config($host,zones) ""
       }
       set ts_host_config(version) "1.4"
-     
+
       show_config ts_host_config
       wait_for_enter
       if { [ save_host_configuration $filename] != 0} {
@@ -1408,8 +1408,8 @@ proc update_ts_host_config_version { filename } {
       set ts_host_config($parameter,onchange)   "install"
       set ts_host_config($parameter,pos)        $insert_pos
 
-       
-      # increment position for the second parameter 
+
+      # increment position for the second parameter
       incr insert_pos 1
 
       # parameter 2
@@ -1421,7 +1421,7 @@ proc update_ts_host_config_version { filename } {
       set ts_host_config($parameter,onchange)   "install"
       set ts_host_config($parameter,pos)        $insert_pos
 
- 
+
       # now we have version 1.5
       set ts_host_config(version) "1.5"
 
@@ -1459,7 +1459,7 @@ proc update_ts_host_config_version { filename } {
          unset ts_host_config($host,compile)
       }
       set ts_host_config(version) "1.6"
-     
+
       show_config ts_host_config
       wait_for_enter
       if { [ save_host_configuration $filename] != 0} {
@@ -1478,7 +1478,7 @@ proc update_ts_host_config_version { filename } {
          set myenv(EN_QUIET) "1"
          set java15_bin [start_remote_prog $host $CHECK_USER [get_binary_path $host "csh"] "-c \"source /vol2/resources/en_jdk15 ; $ts_config(testsuite_root_dir)/scripts/mywhich.sh java\"" prg_exit_state 12 0 "" myenv 1 0]
          if { $prg_exit_state != 0 } {
-            set java15_bin "" 
+            set java15_bin ""
          }
          set java15_bin [string trim $java15_bin]
          if { ![file isfile $java15_bin] } {
@@ -1489,7 +1489,7 @@ proc update_ts_host_config_version { filename } {
          set ts_host_config($host,java15) $java15_bin
       }
       set ts_host_config(version) "1.7"
-     
+
       show_config ts_host_config
       wait_for_enter
       if {[save_host_configuration $filename] != 0} {
@@ -1509,7 +1509,7 @@ proc update_ts_host_config_version { filename } {
          set ts_host_config($host,java_compile,61) 0
       }
       set ts_host_config(version) "1.8"
-     
+
       show_config ts_host_config
       wait_for_enter
       if {[save_host_configuration $filename] != 0} {
@@ -1527,7 +1527,7 @@ proc update_ts_host_config_version { filename } {
          set ts_host_config($host,send_speed) 0.0
       }
       set ts_host_config(version) "1.9"
-     
+
       show_config ts_host_config
       wait_for_enter
       if {[save_host_configuration $filename] != 0} {
@@ -1767,7 +1767,7 @@ proc autodetect_ant { host } {
 #      check_java_version { host java_bin version }
 #
 #  FUNCTION
-#     This procedure is called each time java14 java15 and java16 locations are 
+#     This procedure is called each time java14 java15 and java16 locations are
 #     modified in host configuration.
 #
 #  INPUTS
@@ -1806,7 +1806,7 @@ proc autodetect_java { host {version "1.4"} } {
 #     setup_host_config() -- testsuite host configuration initalization
 #
 #  SYNOPSIS
-#     setup_host_config { file { force 0 } } 
+#     setup_host_config { file { force 0 } }
 #
 #  FUNCTION
 #     This procedure will initalize the testsuite host configuration
@@ -1834,7 +1834,7 @@ proc setup_host_config {file {force_params "" } } {
       # got config
       if { [verify_host_config ts_host_config 1 err_list $force_params ] != 0 } {
          # configuration problems
-         foreach elem $err_list { puts "$elem" } 
+         foreach elem $err_list { puts "$elem" }
          puts "Press enter to edit host setup configurations"
          set answer [wait_for_enter 1]
 
@@ -1842,7 +1842,7 @@ proc setup_host_config {file {force_params "" } } {
          while { $not_ok } {
             if { [verify_host_config ts_host_config 0 err_list $force_params ] != 0 } {
                set not_ok 1
-               foreach elem $err_list { puts "error in: $elem" } 
+               foreach elem $err_list { puts "error in: $elem" }
                puts "try again? (y/n)"
                set answer [wait_for_enter 1]
                if { $answer == "n" } {
@@ -1913,7 +1913,7 @@ proc host_conf_get_nodes {host_list} {
 #     host_conf_get_unique_nodes() -- return a unique list of exechosts and zones
 #
 #  SYNOPSIS
-#     host_conf_get_unique_nodes { host_list } 
+#     host_conf_get_unique_nodes { host_list }
 #
 #  FUNCTION
 #     Iterates through host_list and builds a new node list, that contains
@@ -2036,7 +2036,7 @@ proc node_get_ssh {nodename} {
 #     host_conf_get_archs() -- get all archs covered by a list of hosts
 #
 #  SYNOPSIS
-#     host_conf_get_archs { nodelist } 
+#     host_conf_get_archs { nodelist }
 #
 #  FUNCTION
 #     Takes a list of hosts and returns a unique list of the architectures
@@ -2065,7 +2065,7 @@ proc host_conf_get_archs {nodelist} {
 #     host_conf_get_arch_hosts() -- find hosts of certain architectures
 #
 #  SYNOPSIS
-#     host_conf_get_arch_hosts { archs } 
+#     host_conf_get_arch_hosts { archs }
 #
 #  FUNCTION
 #     Returns all hosts configured in the testuite host configuration,
@@ -2109,7 +2109,7 @@ proc host_conf_get_non_cluster_hosts {archs} {
 #     host_conf_get_unused_host() -- find a host not being referenced in our cluster
 #
 #  SYNOPSIS
-#     host_conf_get_unused_host { {raise_error 1} } 
+#     host_conf_get_unused_host { {raise_error 1} }
 #
 #  FUNCTION
 #     Tries to find a host in the testsuite host configuration that
@@ -2146,7 +2146,7 @@ proc host_conf_get_unused_host {{raise_error 1}} {
    }
 
    if {$ret == "" && $raise_error} {
-      ts_log_config "cannot find an unused host having an installed architecture" 
+      ts_log_config "cannot find an unused host having an installed architecture"
    }
 
    return $ret
@@ -2178,11 +2178,11 @@ proc host_conf_get_non_cluster_host {{raise_error 1}} {
 
 #****** config_host/get_java_home_for_host() ***********************************
 #  NAME
-#    get_java_home_for_host() -- Get the java home directory for a host. If no/unknown java 
+#    get_java_home_for_host() -- Get the java home directory for a host. If no/unknown java
 #                                version specified returns java home for java 1.4.
 #
 #  SYNOPSIS
-#    get_java_home_for_host { host {java_version "1.4"} } 
+#    get_java_home_for_host { host {java_version "1.4"} }
 #
 #  FUNCTION
 #     Reads the java home directory for a host from the host configuration
@@ -2192,8 +2192,8 @@ proc host_conf_get_non_cluster_host {{raise_error 1}} {
 #    {java_version "1.4"} -- e.g.: 1.5+ => "15 16"
 #
 #  RESULT
-#     
-#     the java home directory of an empty string if the java is not set 
+#
+#     the java home directory of an empty string if the java is not set
 #     in the host configuration
 #
 #  EXAMPLE
@@ -2229,14 +2229,14 @@ proc get_java_home_for_host { hosti {java_version "1.4"} {raise_error 1}} {
        }
        return ""
     }
-    
+
     set input_len [ string length $input ]
     set java_len  [ string length "/bin/java" ]
-    
+
     set last [ expr ( $input_len - $java_len -1 ) ]
-    
+
     set res [ string range $input 0 $last]
-    
+
     return $res
 }
 
@@ -2245,7 +2245,7 @@ proc get_java_home_for_host { hosti {java_version "1.4"} {raise_error 1}} {
 #    get_jvm_lib_path_for_host() -- Get the absolute libjvm.so path for a host.
 #
 #  SYNOPSIS
-#    get_jvm_lib_path_for_host { host {java_version "1.5+"} } 
+#    get_jvm_lib_path_for_host { host {java_version "1.5+"} }
 #
 #  FUNCTION
 #     returns the absolute libjvm.so path
@@ -2255,8 +2255,8 @@ proc get_java_home_for_host { hosti {java_version "1.4"} {raise_error 1}} {
 #    java_version -- java version to use
 #
 #  RESULT
-#     
-#     the absolute libjvm.so path or an empty string if java is not set 
+#
+#     the absolute libjvm.so path or an empty string if java is not set
 #     in the host configuration
 #
 #  EXAMPLE
@@ -2272,16 +2272,16 @@ proc get_java_home_for_host { hosti {java_version "1.4"} {raise_error 1}} {
 #
 #  SEE ALSO
 #*******************************************************************************
-proc get_jvm_lib_path_for_host { host {java_version "1.5+"} } {
-   set java_home [get_java_home_for_host $host $java_version]
+proc get_jvm_lib_path_for_host { host {java_version "8"} } {
+   set java_home [host_conf_get_java $host $java_version 0 1]
    set arch [host_conf_get_arch $host]
    set jvm_lib_path ""
    switch -glob -- $arch {
       "sol-sparc64" {
          set jvm_lib_path $java_home/jre/lib/sparcv9/server/libjvm.so
-      } 
+      }
       "sol-amd64" -
-      "osol-amd64" { 
+      "osol-amd64" {
          set jvm_lib_path $java_home/jre/lib/amd64/server/libjvm.so
       }
       "sol-x86" {
@@ -2331,7 +2331,7 @@ proc get_testsuite_java_version {{version "1.4"}} {
 #     host_conf_get_cluster_hosts() -- get a list of cluster hosts
 #
 #  SYNOPSIS
-#     host_conf_get_cluster_hosts { } 
+#     host_conf_get_cluster_hosts { }
 #
 #  FUNCTION
 #     Returns a list of all hosts that are part of the given cluster.
@@ -2404,7 +2404,7 @@ proc host_conf_get_cluster_hosts {{with_non_cluster_hosts 0} {with_compile_hosts
 #     host_conf_is_compile_host() -- is a given host compile host?
 #
 #  SYNOPSIS
-#     host_conf_is_compile_host { host {config_var ""} } 
+#     host_conf_is_compile_host { host {config_var ""} }
 #
 #  FUNCTION
 #     Returns if a given host is used as compile host.
@@ -2421,9 +2421,9 @@ proc host_conf_get_cluster_hosts {{with_non_cluster_hosts 0} {with_compile_hosts
 #*******************************************************************************
 proc host_conf_is_compile_host {host {config_var ""}} {
    global ts_config ts_host_config
-   
+
    # we might work on a temporary config
-   if {$config_var == ""} { 
+   if {$config_var == ""} {
       upvar 0 ts_host_config config
    } else {
       upvar 1 $config_var config
@@ -2451,9 +2451,9 @@ proc host_conf_is_compile_host {host {config_var ""}} {
 ##
 proc host_conf_is_doc_compile_host {host {config_var ""}} {
    global ts_config ts_host_config
-   
+
    # we might work on a temporary config
-   if {$config_var == ""} { 
+   if {$config_var == ""} {
       upvar 0 ts_host_config config
    } else {
       upvar 1 $config_var config
@@ -2473,7 +2473,7 @@ proc host_conf_is_doc_compile_host {host {config_var ""}} {
 #     host_conf_is_java_compile_host() -- is a given host compile host for java?
 #
 #  SYNOPSIS
-#     host_conf_is_java_compile_host { host {config_var ""} } 
+#     host_conf_is_java_compile_host { host {config_var ""} }
 #
 #  FUNCTION
 #     Returns if a given host is used as java compile host.
@@ -2490,9 +2490,9 @@ proc host_conf_is_doc_compile_host {host {config_var ""}} {
 #*******************************************************************************
 proc host_conf_is_java_compile_host {host {config_var ""}} {
    global ts_config ts_host_config
-   
+
    # we might work on a temporary config
-   if {$config_var == ""} { 
+   if {$config_var == ""} {
       upvar 0 ts_host_config config
    } else {
       upvar 1 $config_var config
@@ -2512,7 +2512,7 @@ proc host_conf_is_java_compile_host {host {config_var ""}} {
 #     host_conf_get_arch() -- return a host's architecture
 #
 #  SYNOPSIS
-#     host_conf_get_arch { host {config_var ""} } 
+#     host_conf_get_arch { host {config_var ""} }
 #
 #  FUNCTION
 #     Returns the architecture that is configured in the testsuite
@@ -2536,7 +2536,7 @@ proc host_conf_get_arch {hostname {config_var ""}} {
    get_current_cluster_config_array ts_config
 
    # we might work on a temporary config
-   if {$config_var == ""} { 
+   if {$config_var == ""} {
       upvar 0 ts_host_config config
    } else {
       upvar 1 $config_var config
@@ -2561,7 +2561,7 @@ proc host_conf_get_arch {hostname {config_var ""}} {
 #     host_conf_is_known_host() -- is a host configured in testsuite host conf
 #
 #  SYNOPSIS
-#     host_conf_is_known_host { host {config_var ""} } 
+#     host_conf_is_known_host { host {config_var ""} }
 #
 #  FUNCTION
 #     Checks if a given host is configured in the testsuite host configuration.
@@ -2581,7 +2581,7 @@ proc host_conf_is_known_host {host {config_var ""}} {
    global ts_config ts_host_config
 
    # we might work on a temporary config
-   if {$config_var == ""} { 
+   if {$config_var == ""} {
       upvar 0 ts_host_config config
    } else {
       upvar 1 $config_var config
@@ -2602,7 +2602,7 @@ proc host_conf_is_known_host {host {config_var ""}} {
 #     host_conf_is_supported_host() -- is host supported for given GE version
 #
 #  SYNOPSIS
-#     host_conf_is_supported_host { host {config_var ""} } 
+#     host_conf_is_supported_host { host {config_var ""} }
 #
 #  FUNCTION
 #     Checks if the given host is configured in the Cluster Scheduler (Grid Engine) host
@@ -2624,7 +2624,7 @@ proc host_conf_is_supported_host {host {config_var ""}} {
    global ts_config ts_host_config
 
    # we might work on a temporary config
-   if {$config_var == ""} { 
+   if {$config_var == ""} {
       upvar 0 ts_host_config config
    } else {
       upvar 1 $config_var config
@@ -2647,7 +2647,7 @@ proc host_conf_is_supported_host {host {config_var ""}} {
 #     host_conf_53_arch() -- convert any arch string to 53 arch string
 #
 #  SYNOPSIS
-#     host_conf_53_arch { arch } 
+#     host_conf_53_arch { arch }
 #
 #  FUNCTION
 #     Takes an architecture string and tries to convert it to a Cluster Scheduler (Grid Engine)
@@ -2692,7 +2692,7 @@ proc host_conf_53_arch {arch} {
 #     host_conf_60_arch() -- convert any arch string to 60 arch string
 #
 #  SYNOPSIS
-#     host_conf_60_arch { arch } 
+#     host_conf_60_arch { arch }
 #
 #  FUNCTION
 #     Takes an architecture string and tries to convert it to a Cluster Scheduler (Grid Engine)
@@ -2744,7 +2744,7 @@ proc host_conf_60_arch {arch} {
 #     host_conf_61_arch() -- convert any arch string to 61 arch string
 #
 #  SYNOPSIS
-#     host_conf_61_arch { arch } 
+#     host_conf_61_arch { arch }
 #
 #  FUNCTION
 #     Takes an architecture string and tries to convert it to a Cluster Scheduler (Grid Engine)
@@ -2828,7 +2828,7 @@ proc host_conf_get_doc_compile_host {{raise_error 1} {resolve_long 0}} {
 #     host_conf_get_java_compile_host() -- get java compile host
 #
 #  SYNOPSIS
-#     host_conf_get_java_compile_host { {raise_error 1} } 
+#     host_conf_get_java_compile_host { {raise_error 1} }
 #
 #  FUNCTION
 #     Returns the name of the java compile host configured in the host config.
@@ -2877,10 +2877,10 @@ proc host_conf_get_java_compile_host {{raise_error 1} {resolve_long 0}} {
 #     host_conf_get_send_speed() -- get send speed for a certain host
 #
 #  SYNOPSIS
-#     host_conf_get_send_speed {host} 
+#     host_conf_get_send_speed {host}
 #
 #  FUNCTION
-#     Returns the send speed configured for a given host in the testsuite 
+#     Returns the send speed configured for a given host in the testsuite
 #     host configuration.
 #
 #     If the given hostname is a Solaris zone, the send speed configured
@@ -2931,7 +2931,7 @@ proc host_conf_get_send_speed {host_in} {
 #     host_has_newgrp() -- does host have newgrp
 #
 #  SYNOPSIS
-#     host_has_newgrp {host {raise_error 1}} 
+#     host_has_newgrp {host {raise_error 1}}
 #
 #  FUNCTION
 #     Evaluate if a given host has a newgrp command.
@@ -2965,7 +2965,7 @@ proc host_has_newgrp {host {raise_error 1}} {
 #     host_get_id_a_command() -- return the id command for a host
 #
 #  SYNOPSIS
-#     host_get_id_a_command { host } 
+#     host_get_id_a_command { host }
 #
 #  FUNCTION
 #     Returns the id -a equivalent for the given host.
@@ -3002,8 +3002,8 @@ proc host_get_id_a_command {host} {
 #     host_conf_get_suited_hosts() -- get hosts suited for operation
 #
 #  SYNOPSIS
-#     host_conf_get_suited_hosts { {num_hosts 1} {preferred_archs {}} {selected_archs {}} 
-#     {excluded_archs {}} {exclude_qmaster 0} {as_config_error 0}} 
+#     host_conf_get_suited_hosts { {num_hosts 1} {preferred_archs {}} {selected_archs {}}
+#     {excluded_archs {}} {exclude_qmaster 0} {as_config_error 0}}
 #
 #  FUNCTION
 #     Returns hosts from the exec node list, selected by certain criteria.
@@ -3011,7 +3011,7 @@ proc host_get_id_a_command {host} {
 #     For many checks, or for operations like calling a Cluster Scheduler (Grid Engine) binary
 #     (qstat, qconf, ...), we need to decide, on which host to do the check.
 #     This can be done by calling host_conf_get_suited_host.
-#     host_conf_get_suited_host allows filtering the host list following 
+#     host_conf_get_suited_host allows filtering the host list following
 #     certain criteria:
 #        - by preferred architecture:
 #          Hosts will be returned matching these preferred architectures.
@@ -3079,7 +3079,7 @@ proc host_conf_get_suited_hosts {{num_hosts_param 1} {preferred_archs {}} {selec
       ts_log_finer "exclude master host is selected, requesting one additional host ..."
       incr num_hosts 1
    }
-   
+
    # preferred archs as option to the function call will override
    # globally defined preferred archs (through commandline option at testsuite start).
    if {$preferred_archs == {} && $CHECK_PREFERRED_ARCHS != {}} {
@@ -3098,7 +3098,7 @@ proc host_conf_get_suited_hosts {{num_hosts_param 1} {preferred_archs {}} {selec
       } else {
          ts_log_severe $msg
       }
-      return {} 
+      return {}
    }
 
    if {[expr [llength $preferred_hosts] + [llength $remaining_hosts]] < $num_hosts} {
@@ -3141,7 +3141,7 @@ proc host_conf_get_suited_hosts {{num_hosts_param 1} {preferred_archs {}} {selec
 #     host_conf_get_suited_hosts_rebuild_cache() -- initialization (internal)
 #
 #  SYNOPSIS
-#     host_conf_get_suited_hosts_rebuild_cache { } 
+#     host_conf_get_suited_hosts_rebuild_cache { }
 #
 #  FUNCTION
 #     Initializes the caches used by host_conf_get_suited_hosts
@@ -3153,7 +3153,7 @@ proc host_conf_get_suited_hosts {{num_hosts_param 1} {preferred_archs {}} {selec
 proc host_conf_get_suited_hosts_rebuild_cache {} {
    global suited_host_cache suited_arch_cache
    global suited_exec_node_backup
- 
+
    get_current_cluster_config_array ts_config
 
 
@@ -3192,8 +3192,8 @@ proc host_conf_get_suited_hosts_rebuild_cache {} {
 #     host_conf_get_suited_hosts_candidates() -- select possible hosts (internal)
 #
 #  SYNOPSIS
-#     host_conf_get_suited_hosts_candidates { preferred selected excluded 
-#     preferred_var remaining_var } 
+#     host_conf_get_suited_hosts_candidates { preferred selected excluded
+#     preferred_var remaining_var }
 #
 #  FUNCTION
 #     Selects host matching certain criteria.
@@ -3221,7 +3221,7 @@ proc host_conf_get_suited_hosts_candidates {preferred selected excluded preferre
    set preferred_hosts {}
    set remaining_hosts {}
 
-   # check: selected and excluded may not overlap 
+   # check: selected and excluded may not overlap
    foreach arch $selected {
       if {[lsearch -exact $excluded $arch] >= 0} {
          ts_log_severe "selected and excluded architecture list overlap:\nselected: $selected\nexcluded: $excluded"
@@ -3295,8 +3295,8 @@ proc host_conf_get_suited_hosts_candidates {preferred selected excluded preferre
 #     host_conf_get_suited_hosts_select() -- select hosts from candiates (internal)
 #
 #  SYNOPSIS
-#     host_conf_get_suited_hosts_select { num_hosts preferred_hosts 
-#     remaining_hosts } 
+#     host_conf_get_suited_hosts_select { num_hosts preferred_hosts
+#     remaining_hosts }
 #
 #  FUNCTION
 #     Selects hosts from a list of preferred hosts and a list of other
@@ -3338,7 +3338,7 @@ proc host_conf_get_suited_hosts_select {num_hosts preferred_hosts remaining_host
       incr num_hosts -1
    }
 
-   # if we need more hosts than available in the preferred hosts, 
+   # if we need more hosts than available in the preferred hosts,
    # take hosts from the remaining_hosts
    if {$num_hosts > 0} {
       if {$CHECK_DETERMINISTIC_HOST_SELECT} {
@@ -3367,7 +3367,7 @@ proc host_conf_get_suited_hosts_select {num_hosts preferred_hosts remaining_host
 #     host_conf_sort_suited() -- sorting function (internal)
 #
 #  SYNOPSIS
-#     host_conf_sort_suited { a b } 
+#     host_conf_sort_suited { a b }
 #
 #  FUNCTION
 #     Used for sorting hosts by "last used" criteria.
@@ -3496,7 +3496,7 @@ proc host_conf_detect_java_on_host {host} {
          lappend default_locations "/Library/Java/JavaVirtualMachines/jdk-22.jdk/Contents"
       }
       "lx-*" -
-      "ulx-*" - 
+      "ulx-*" -
       "xlx-*" {
          lappend default_locations "/usr/lib/jvm"
          lappend default_locations "/usr/lib64/jvm"
@@ -3566,11 +3566,12 @@ proc host_conf_get_major_java_version {version} {
 #
 # returns the path to a java installation on a specific host
 # having a specific major version (optionally: or a newer version)
-# 
+#
 # @param[in] host
 # @param[in] major version
 # @param[in] optionally: require_jni: java must have include/jni.h, default 0(false)
 # @param[in] optionally: allow_newer: if the exact version is not found, return a newer one? default 0(false)
+# @return path to the java installation (JAVA_HOME) if found, otherwise an empty string
 ##
 proc host_conf_get_java {host major {require_jni 0} {allow_newer 0}} {
    global host_conf_java_cache
@@ -3614,6 +3615,27 @@ proc host_conf_get_java {host major {require_jni 0} {allow_newer 0}} {
    }
 
    return $ret
+}
+
+###
+# @brief returns path to java binary
+#
+# Returns the path to a java binary on a specific host
+# having a specific major version (optionally: or a newer version)
+#
+# @param[in] host
+# @param[in] major version
+# @param[in] optionally: require_jni: java must have include/jni.h, default 0(false)
+# @param[in] optionally: allow_newer: if the exact version is not found, return a newer one? default 0(false)
+# @return path to the java binary if found, otherwise an empty string
+##
+proc host_conf_get_java_bin {host major {require_jni 0} {allow_newer 0}} {
+   set java_bin ""
+   set java_home [host_conf_get_java $host $major $require_jni $allow_newer]
+   if {$java_home != ""} {
+      set java_bin "$java_home/bin/java"
+   }
+   return $java_bin
 }
 
 ###
@@ -3671,7 +3693,7 @@ proc host_conf_get_all_java {host} {
 #
 # returns the name of a host
 # having a specific major Java version installed (optionally: or a newer version)
-# 
+#
 # @param[in] major version
 # @param[in] optionally: require_jni: java must have include/jni.h, default 0(false)
 # @param[in] optionally: allow_newer: if the exact version is not found, return a newer one? default 0(false)

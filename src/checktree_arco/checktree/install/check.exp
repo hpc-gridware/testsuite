@@ -37,7 +37,7 @@
 global CHECK_ACTUAL_TEST_PATH CHECK_TESTSUITE_INSTALL_MODE
 
 global check_name check_description check_needs check_functions
-global check_root_access_needs check_category      
+global check_root_access_needs check_category
 global check_use_installed_system
 
 # This file shows some check spezific things
@@ -55,7 +55,7 @@ lappend check_functions "arco_database_install"
 
 proc arco_database_install {} {
    global arco_config
-   
+
    if { [get_database_type] == "oracle" } {
       oracle_init_arco_db
    } elseif { [get_database_type] == "postgres" } {
@@ -67,82 +67,82 @@ proc arco_database_install {} {
 
 ## ----------- ORACLE ----------------------------------------------------------
 proc oracle_init_arco_db {} {
-   
+
    global ts_config ts_host_config arco_config CHECK_DEBUG_LEVEL
-   
+
 
    set id [sqlutil_create]
    if { $id == "-1" } {
       ts_log_severe "Can not create sqlutil"
       return -2
-   }   
+   }
    set sp_id [ lindex $id 1 ]
-   
+
    # connect to the admin database
    if { [ sqlutil_connect $sp_id 1 ] != 0 } {
-      ts_log_severe "Can not connect to database"      
+      ts_log_severe "Can not connect to database"
       close_spawn_process $id
       return -2
    }
-   
+
    set arco_write_user [get_arco_write_user]
    set sql "SELECT username FROM dba_users WHERE username = '${arco_write_user}'"
-   
-   set res [sqlutil_query $sp_id "$sql" result_array column_names]
+
+   set res [sqlutil_query $sp_id $sql result_array column_names]
    if { $res < 0 } {
       ts_log_severe "can not query arco_write_user"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    } elseif { $res > 0 } {
       # database does exists => drop it
       set sql "DROP USER \"$arco_write_user\" CASCADE"
-      if { [ sqlutil_exec $sp_id "$sql" 120 ] != 0 } {
+      if { [ sqlutil_exec $sp_id $sql 120 ] != 0 } {
          ts_log_severe "Can't drop user $arco_write_user"
-         close_spawn_process $id 
+         close_spawn_process $id
          return -2
       }
    }
-   
+
    set arco_read_user [get_arco_read_user]
    set sql "SELECT username FROM dba_users WHERE username = '${arco_read_user}'"
-   
-   set res [sqlutil_query $sp_id "$sql" result_array column_names]
+
+   set res [sqlutil_query $sp_id $sql result_array column_names]
    if { $res < 0 } {
       ts_log_severe "can not query arco_read_user"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    } elseif { $res > 0 } {
       set sql "DROP USER \"$arco_read_user\" CASCADE"
-      if { [ sqlutil_exec $sp_id "$sql" 120] != 0 } {
+      if { [ sqlutil_exec $sp_id $sql 120] != 0 } {
          ts_log_severe "Can't drop user $arco_read_user"
-         close_spawn_process $id 
+         close_spawn_process $id
          return -2
       }
    }
-   
+
    set    sql "CREATE USER ${arco_write_user} PROFILE \"DEFAULT\" IDENTIFIED BY secret"
    append sql " DEFAULT TABLESPACE \"$arco_config(tablespace)\" TEMPORARY TABLESPACE \"TEMP\" QUOTA UNLIMITED ON \"$arco_config(tablespace)\" "
    if { [string compare $arco_config(tablespace) $arco_config(tablespace_index)] != 0 } {
       append sql " QUOTA UNLIMITED ON \"$arco_config(tablespace_index)\" "
    }
    append sql " ACCOUNT UNLOCK"
-   
-   if { [ sqlutil_exec $sp_id "$sql"] != 0 } {
+
+   if { [ sqlutil_exec $sp_id $sql] != 0 } {
       ts_log_severe "Can't create user $arco_write_user"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    }
-   
+
    # Grant priviliges for arco_write_user
    # from 6.1u4 and 6.2 version we don't need create any synonym privilege for arco_write_user
    set sql "GRANT CREATE ANY SYNONYM, CREATE TABLE, CREATE VIEW, CREATE SESSION TO ${arco_write_user}"
 
-   if { [ sqlutil_exec $sp_id "$sql"] != 0 } {
+   if { [ sqlutil_exec $sp_id $sql] != 0 } {
       ts_log_severe "Can't grant privileges to $arco_write_user"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    }
-   
+
    set    sql "CREATE USER ${arco_read_user} PROFILE \"DEFAULT\" IDENTIFIED BY secret"
    append sql " DEFAULT TABLESPACE \"$arco_config(tablespace)\" TEMPORARY TABLESPACE \"TEMP\" QUOTA 100 M ON \"$arco_config(tablespace)\" "
    if { [string compare $arco_config(tablespace) $arco_config(tablespace_index)] != 0 } {
@@ -150,143 +150,143 @@ proc oracle_init_arco_db {} {
    }
    append sql " ACCOUNT UNLOCK"
 
-   if { [ sqlutil_exec $sp_id "$sql"] != 0 } {
+   if { [ sqlutil_exec $sp_id $sql] != 0 } {
       ts_log_severe "Can't create user $arco_write_user"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    }
-   
+
    # Grant priviliges for arco_write_user
    # from 6.1u4 and 6.2 version we need create synonym privilege for arco_read_user
    set sql "GRANT CREATE SYNONYM, CREATE SESSION TO ${arco_read_user}"
-   if {[sqlutil_exec $sp_id "$sql"] != 0} {
+   if {[sqlutil_exec $sp_id $sql] != 0} {
       ts_log_severe "Can't grant privileges to  $arco_read_user"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    }
-   
-   close_spawn_process $id 
+
+   close_spawn_process $id
    return 0
 }
 
 ## ----------- POSTGRES --------------------------------------------------------
 
 proc postgres_init_arco_db {} {
-   global ts_config ts_host_config arco_config 
+   global ts_config ts_host_config arco_config
    global CHECK_DEBUG_LEVEL
 
-   if { [get_dbwriter_status 0] == 0} {
+   if {[get_dbwriter_status 0] == 0} {
       shutdown_dbwriter
    }
-   
+
    set id [sqlutil_create]
-   if { $id == "-1" } {
+   if {$id == "-1"} {
       ts_log_severe "Can not create sqlutil"
       return -2
-   }   
-   set sp_id [ lindex $id 1 ]
-   
+   }
+   set sp_id [lindex $id 1]
+
    # connect to the admin database
    if {[sqlutil_connect $sp_id 1] != 0} {
-      ts_log_severe "Can not connect to database"      
+      ts_log_severe "Can not connect to database"
       close_spawn_process $id
       return -2
    }
-   
+
    set db_name [get_database_name]
-   set sql "SELECT datname FROM pg_database where datname = '${db_name}'"
-   
+   set sql "SELECT datname FROM pg_database WHERE datname = '${db_name}'"
+
    set column_names {}
    array set result_array {}
    set res [sqlutil_query $sp_id $sql result_array column_names]
    if {$res < 0} {
       ts_log_severe "can not query database name"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    } elseif {$res > 0} {
       # database does exists => drop it
-      set sql "drop database $db_name"
-      if {[sqlutil_exec $sp_id "$sql"] != 0} {
+      set sql "DROP DATABASE $db_name"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
          ts_log_severe "Can't drop database $db_name, may be another user is using this database"
-         close_spawn_process $id 
+         close_spawn_process $id
          return -2
       }
    }
-   
+
    set arco_write_user [get_arco_write_user]
    set sql "SELECT usename FROM pg_user WHERE usename = '${arco_write_user}'"
-   
-   set res [sqlutil_query $sp_id "$sql" result_array column_names]
+
+   set res [sqlutil_query $sp_id $sql result_array column_names]
    if {$res < 0} {
       ts_log_severe "can not query arco_write_user"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    } elseif {$res > 0} {
       #revoke priviledges on tablespace so we can drop the user
       set sql "revoke all on tablespace $arco_config(tablespace) from $arco_write_user"
-      if {[sqlutil_exec $sp_id "$sql"] != 0} {
+      if {[sqlutil_exec $sp_id $sql] != 0} {
          ts_log_severe "Can't revoke priviledges on $arco_config(tablespace) from $arco_write_user"
-         close_spawn_process $id 
+         close_spawn_process $id
          return -2
       }
       # user does exists => drop it
-      set sql "drop user $arco_write_user"
-      if {[sqlutil_exec $sp_id "$sql"] != 0} {
+      set sql "DROP USER $arco_write_user"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
          ts_log_severe "Can't drop user $arco_write_user"
-         close_spawn_process $id 
+         close_spawn_process $id
          return -2
       }
    }
 
    set arco_read_user [get_arco_read_user]
    set sql "SELECT usename FROM pg_user WHERE usename = '${arco_read_user}'"
-   
-   set res [sqlutil_query $sp_id "$sql" result_array column_names]
+
+   set res [sqlutil_query $sp_id $sql result_array column_names]
    if {$res < 0} {
       ts_log_severe "can not query arco_read_user"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    } elseif {$res > 0} {
-      set sql "drop user $arco_read_user"
-      if {[sqlutil_exec $sp_id "$sql"] != 0} {
+      set sql "DROP USER $arco_read_user"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
          ts_log_severe "Can't drop user $arco_read_user"
-         close_spawn_process $id 
+         close_spawn_process $id
          return -2
       }
    }
-   
-   set sql "create user $arco_write_user PASSWORD 'secret'"
-   if {[sqlutil_exec $sp_id "$sql"] < 0} {
+
+   set sql "CREATE USER $arco_write_user PASSWORD 'secret'"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
       ts_log_severe "Can't create user $arco_write_user"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    }
 
-   set sql "grant all on tablespace $arco_config(tablespace) to $arco_write_user"
-   if { [ sqlutil_exec $sp_id "$sql"] != 0 } {
+   set sql "GRANT ALL ON TABLESPACE $arco_config(tablespace) TO $arco_write_user"
+   if {[sqlutil_exec $sp_id $sql] != 0} {
       ts_log_severe "Can't grant privileges to $arco_write_user"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    }
 
-   if { [string compare "$arco_config(tablespace)" "$arco_config(tablespace_index)"] != 0 } {
+   if {[string compare "$arco_config(tablespace)" "$arco_config(tablespace_index)"] != 0} {
       set sql "grant all on tablespace $arco_config(tablespace_index) to $arco_write_user"
-      if { [ sqlutil_exec $sp_id "$sql"] != 0 } {
+      if {[sqlutil_exec $sp_id $sql] != 0} {
          ts_log_severe "Can't grant privileges to $arco_write_user"
-         close_spawn_process $id 
+         close_spawn_process $id
          return -2
       }
-   }   
-   
-   set sql "create user $arco_read_user PASSWORD 'secret'"
-   if {[sqlutil_exec $sp_id "$sql"] < 0} {
+   }
+
+   set sql "CREATE USER $arco_read_user PASSWORD 'secret'"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
       ts_log_severe "Can't create user $arco_read_user"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    }
-   
-   set sql "create database $db_name owner $arco_write_user"
-   if {[sqlutil_exec $sp_id "$sql"] < 0} {
+
+   set sql "CREATE DATABASE $db_name OWNER $arco_write_user"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
       ts_log_severe "Can't create database $db_name"
       close_spawn_process $id
       return -2
@@ -301,30 +301,30 @@ proc postgres_init_arco_db {} {
 
    set sql "SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname = '$arco_config(database_schema)'"
    set res [sqlutil_query $sp_id $sql result_array column_names]
-   if { $res < 0 } {
+   if {$res < 0} {
       ts_log_severe "Can't query schema $arco_config(database_schema)"
       close_spawn_process $id
       return -2
    }
-   if { $res == 0 } {
+   if {$res == 0} {
       # schema doesn't exist, create it
-      set sql "create schema $arco_config(database_schema)"
-      if { [ sqlutil_exec $sp_id "$sql"] != 0 } {
+      set sql "CREATE SCHEMA $arco_config(database_schema)"
+      if {[sqlutil_exec $sp_id $sql] != 0 } {
          ts_log_severe "Can't create schema $arco_config(database_schema)"
          close_spawn_process $id
          return -2
       }
 
       # grant usage on schema to arco_read users
-      set sql "grant usage on schema $arco_config(database_schema) to $arco_read_user"
-      if { [ sqlutil_exec $sp_id "$sql"] != 0 } {
+      set sql "GRANT USAGE ON SCHEMA $arco_config(database_schema) TO $arco_read_user"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
          ts_log_severe "Can't grant usage on $arco_config(database_schema) to $arco_read_user"
          close_spawn_process $id
          return -2
       }
    }
 
-   if { [string compare $arco_config(database_schema) "public"] != 0 } {
+   if {[string compare $arco_config(database_schema) "public"] != 0} {
       # connect to the admin database
       if {[sqlutil_connect $sp_id 1] != 0} {
          ts_log_severe "Can not connect to database $db_name"
@@ -333,16 +333,16 @@ proc postgres_init_arco_db {} {
       }
 
       # alter the arco_write user's search path
-      set sql "alter user $arco_write_user set search_path=$arco_config(database_schema), public"
-      if { [ sqlutil_exec $sp_id "$sql"] != 0 } {
+      set sql "ALTER USER $arco_write_user SET search_path=$arco_config(database_schema), public"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
          ts_log_severe "Can't alter $arco_write_user search_path"
          close_spawn_process $id
          return -2
       }
 
       # alter the arco_read user's search path
-      set sql "alter user $arco_read_user set search_path=$arco_config(database_schema), public"
-      if { [ sqlutil_exec $sp_id "$sql"] != 0 } {
+      set sql "ALTER USER $arco_read_user SET search_path=$arco_config(database_schema), public"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
          ts_log_severe "Can't alter $arco_read_user search_path"
          close_spawn_process $id
          return -2
@@ -356,72 +356,72 @@ proc postgres_init_arco_db {} {
 ## ----------- MySQL --------------------------------------------------------
 proc mysql_init_arco_db {} {
 
-   global ts_config ts_host_config arco_config 
+   global ts_config ts_host_config arco_config
    global CHECK_DEBUG_LEVEL
 
    if { [get_dbwriter_status 0] == 0} {
       shutdown_dbwriter
    }
-   
+
    set id [sqlutil_create]
    if { $id == "-1" } {
       ts_log_severe "Can't create sqlutil"
       return -2
-   }   
+   }
    set sp_id [ lindex $id 1 ]
-   
+
    # connect to the admin database
    if {[sqlutil_connect $sp_id 1] != 0} {
-      ts_log_severe "Can not connect to database"      
+      ts_log_severe "Can not connect to database"
       close_spawn_process $id
       return -2
    }
-   
+
    set db_name [get_database_name]
    set column_names {}
    array set result_array {}
-   
+
    # drop database ${db_name} if exists
    set sql "SELECT schema_name FROM information_schema.schemata where schema_name = '${db_name}'"
    set res [sqlutil_query $sp_id $sql result_array column_names]
    if {$res < 0} {
       ts_log_severe "can not query database name"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    } elseif {$res > 0} {
       # database does exists => drop it
       set sql "drop database $db_name"
-      if {[sqlutil_exec $sp_id "$sql"] != 0} {
+      if {[sqlutil_exec $sp_id $sql] != 0} {
          ts_log_severe "Can't drop database $db_name, may be another user is using this database"
-         close_spawn_process $id 
+         close_spawn_process $id
          return -2
       }
    }
-   
+
    # drop user if exists
    set arco_write_user [get_arco_write_user]
    set sql "SELECT user, host FROM mysql.user WHERE user = '${arco_write_user}'"
-   set res [sqlutil_query $sp_id "$sql" result_array column_names]
+   set res [sqlutil_query $sp_id $sql result_array column_names]
    if {$res < 0} {
       ts_log_severe "Can't query user $arco_write_user"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    } elseif {$res > 0} {
       # user does exists => drop it
       foreach i [ array names result_array ] {
          if { "$result_array($i)" != "${arco_write_user}" } {
-            # revoke user's privileges 
+            # revoke user's privileges
             set sql "REVOKE ALL PRIVILEGES, GRANT OPTION FROM '${arco_write_user}'@'$result_array($i)'"
-            if {[sqlutil_exec $sp_id "$sql"] != 0} {
+            if {[sqlutil_exec $sp_id $sql] != 0} {
                ts_log_severe "Can't revoke privileges from user '$arco_write_user'@'$result_array($i)'"
-               close_spawn_process $id 
+               close_spawn_process $id
 #               return -2
             }
-            # drop user 
+            # drop user
             set sql "drop user '$arco_write_user'@'$result_array($i)'"
-            if {[sqlutil_exec $sp_id "$sql"] != 0} {
+            if {[sqlutil_exec $sp_id $sql] != 0} {
                ts_log_severe "Can't drop user '$arco_write_user'@'$result_array($i)'"
-               close_spawn_process $id 
+               close_spawn_process $id
                return -2
             }
          }
@@ -430,75 +430,75 @@ proc mysql_init_arco_db {} {
 
    set arco_read_user [get_arco_read_user]
    set sql "SELECT user, host FROM mysql.user WHERE user = '${arco_read_user}'"
-   
-   set res [sqlutil_query $sp_id "$sql" result_array column_names]
+
+   set res [sqlutil_query $sp_id $sql result_array column_names]
    if {$res < 0} {
       ts_log_severe "Can't query user $arco_read_user"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    } elseif {$res > 0} {
       foreach i [ array names result_array ] {
          if { "$result_array($i)" != "${arco_read_user}" } {
-            # before dropping the user we have to revoke his privileges 
+            # before dropping the user we have to revoke his privileges
                set sql "REVOKE SELECT, SHOW VIEW on ${db_name}.* FROM '${arco_read_user}'@'$result_array($i)'"
-               if {[sqlutil_exec $sp_id "$sql"] != 0} {
+               if {[sqlutil_exec $sp_id $sql] != 0} {
                   ts_log_severe "Can't revoke privileges from user '${arco_read_user}'@'$result_array($i)'"
-                  close_spawn_process $id 
+                  close_spawn_process $id
 #                  return -2
                }
-            # drop user 
+            # drop user
             set sql "drop user '$arco_read_user'@'$result_array($i)'"
-            if {[sqlutil_exec $sp_id "$sql"] != 0} {
+            if {[sqlutil_exec $sp_id $sql] != 0} {
                ts_log_severe "Can't drop user '$arco_read_user'@'$result_array($i)'"
-               close_spawn_process $id 
+               close_spawn_process $id
                return -2
             }
          }
       }
    }
-  
+
    set sql "create database $db_name"
-   if {[sqlutil_exec $sp_id "$sql"] < 0} {
+   if {[sqlutil_exec $sp_id $sql] < 0} {
       ts_log_severe "Can't create database $db_name"
       close_spawn_process $id
       return -2
    }
 
-   # Note: 
+   # Note:
    # In MySQL database user is identified by the host from which he connects and his username
-   # We have to create users: 'username'@'%' 
+   # We have to create users: 'username'@'%'
    #                          'username'@'database_host' [ mandatory if swc_host = database_host ]
    # The grant statement also creates the user in the database
 
    set hosts {}
    lappend hosts "%"
    lappend hosts [get_database_host]
-    
+
    foreach host $hosts {
       set sql "GRANT ALL on *.* to '$arco_write_user'@'$host' IDENTIFIED BY 'secret' with GRANT OPTION"
-      if {[sqlutil_exec $sp_id "$sql"] < 0} {
+      if {[sqlutil_exec $sp_id $sql] < 0} {
          ts_log_severe "Can't grant privileges to user '$arco_write_user'@'$host'"
-         close_spawn_process $id 
+         close_spawn_process $id
          return -2
       }
    }
 
-   foreach host $hosts { 
+   foreach host $hosts {
       set sql "GRANT SELECT, SHOW VIEW on ${db_name}.* to '$arco_read_user'@'$host' IDENTIFIED BY 'secret'"
-      if {[sqlutil_exec $sp_id "$sql"] < 0} {
+      if {[sqlutil_exec $sp_id $sql] < 0} {
          ts_log_severe "Can't grant privileges to user '$arco_read_user'@'$host'"
-         close_spawn_process $id 
+         close_spawn_process $id
          return -2
       }
    }
-   
+
    set sql "FLUSH PRIVILEGES"
-   if {[sqlutil_exec $sp_id "$sql"] < 0} {
+   if {[sqlutil_exec $sp_id $sql] < 0} {
       ts_log_severe "Can't flush privileges"
-      close_spawn_process $id 
+      close_spawn_process $id
       return -2
    }
-   
+
    close_spawn_process $id
 #   add_proc_error "mysql_init_arco_db" 0 "arco db initialized"
    return 0
