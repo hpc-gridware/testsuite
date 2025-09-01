@@ -62,6 +62,7 @@ proc usage_io_setup {} {
       ts_log_severe "Cannot determine file server for path $CHECK_PROTOCOL_DIR"
       return
    }
+   # @todo in a higher runlevel test on *all* suited hosts
    set usage_io_host ""
    foreach host $ts_config(execd_nodes) {
       set arch [resolve_arch $host]
