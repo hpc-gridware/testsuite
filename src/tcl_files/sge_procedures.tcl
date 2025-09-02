@@ -58,7 +58,7 @@ set module_name "sge_procedures.tcl"
 # handle_sge_errors() -- parse error messages from sge commands
 # check_for_non_cluster_host_error() -- validate host related error code
 # submit_error_job() -- submit job which will get error state
-# submit_wait_type_job() -- submit job and wait for accouting info
+# submit_wait_type_job() -- submit job and wait for accounting info
 # submit_time_job() -- Submit a job with execution time
 # submit_waitjob_job() -- submit job with hold_jid (wait for other job)
 # get_loadsensor_path() -- get loadsensor for host
@@ -1560,7 +1560,7 @@ proc submit_error_job { jobargs } {
 
 #****** sge_procedures/submit_wait_type_job() **********************************
 #  NAME
-#     submit_wait_type_job() -- submit job and wait for accouting info
+#     submit_wait_type_job() -- submit job and wait for accounting info
 #
 #  SYNOPSIS
 #     submit_wait_type_job { job_type host user {variable qacct_info} }
@@ -1568,7 +1568,7 @@ proc submit_error_job { jobargs } {
 #  FUNCTION
 #     This function can be used to submit different job types (standard
 #     qsub job, qsh, qrsh, qrlogin, qlogin and tight integrated jobs) and
-#     wait for the jobs to appear in the accouting file. The function
+#     wait for the jobs to appear in the accounting file. The function
 #     returns the job id of the job.
 #
 #  INPUTS
