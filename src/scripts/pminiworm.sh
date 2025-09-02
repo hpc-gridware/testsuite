@@ -106,7 +106,7 @@ while [ $# -gt 0 ]; do
      shift
      QSUB_OPTIONS=$@
      break
-   else 
+   else
      echo "unknown option $1"
      exit 1
    fi
@@ -115,7 +115,7 @@ done
 
 NAME=W$job_index
 
-# started by SGE or manually 
+# started by SGE or manually
 if [ "$JOB_ID" = "" ]; then
    echo "submitting $NAME"
 else
@@ -132,12 +132,18 @@ job_index=`expr $job_index + 1`
 
 cmd="$QSUB -N $NAME $QSUB_OPTIONS $script -s $SLEEP -i $job_index -m $max_job_index -e $script -- $QSUB_OPTIONS"
 echo "execute $cmd"
-$cmd
-while [ "x$?" != "x0" ]; do
-   echo "pminiworm.sh: qsub failed - retrying .." >&2
-   sleep $SLEEP
-   $cmd
+output=`$cmd`
+exit_status=$?
+
+while [ $exit_status -ne 0 ]; do
+   echo "pminiworm.sh: qsub failed $exit_status - retrying .." >&2
+   echo "$output" >&2
+   sleep 1
+   output=`$cmd`
+   exit_status=$?
 done
+
+exit 0
 
 
 

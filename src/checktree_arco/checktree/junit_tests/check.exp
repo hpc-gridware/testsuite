@@ -37,13 +37,13 @@
 global CHECK_ACTUAL_TEST_PATH CHECK_TESTSUITE_INSTALL_MODE
 
 global check_name check_description check_needs check_functions
-global check_root_access_needs check_category      
+global check_root_access_needs check_category
 global check_use_installed_system check
 
 # This file shows some check spezific things
 set check_root_access_needs    "yes"
 set check_name                 "arco_junit"
-set check_category             "COMPATIBILITY SYSTEM L10N VERIFIED"
+set check_category             "DBWRITER"
 set check_description(0)       "executes the ARCo junit tests"
 set check_needs                "arco_database_install"         ;# dependencies of this check (name of other check)
 
@@ -102,7 +102,7 @@ proc arco_junit_check {} {
    append cmd_args " -e 's%@@JDBC_URL@@%${jdbc_url}%g'"
    append cmd_args " -e 's%@@JDBC_USER@@%${write_user}%g'"
    append cmd_args " -e 's%@@JDBC_PASSWORD@@%${write_user_pw}%g'"
-   
+
    append cmd_args " -e 's%@@READONLY_USER@@%${read_user}%g'"
    append cmd_args " -e 's%@@READONLY_USER_PWD@@%${read_user_pw}%g'"
    append cmd_args " -e 's%@@SCHEMA@@%${db_schema}%g'"
@@ -114,30 +114,31 @@ proc arco_junit_check {} {
    append cmd_args " $arco_config(arco_source_dir)/dbwriter/test/DBWriterTestConfig.properties.template"
    append cmd_args " > $file_name"
 
-   set dbwriter_host $arco_config(dbwriter_host)
+   set test_host [host_conf_get_java_compile_host]
 
-   report_add_message report "running build script on dbwriter host \"$dbwriter_host\""
+   report_add_message report "running build script on test host \"$test_host\""
    report_add_message report "Creating junit config file $file_name"
-   report_add_message report "$dbwriter_host: $cmd $cmd_args"
+   report_add_message report "$test_host: $cmd $cmd_args"
 
-   ts_log_fine "${dbwriter_host}:${CHECK_USER} starting $cmd $cmd_args ..."
-   set output [start_remote_prog $dbwriter_host $CHECK_USER $cmd "$cmd_args"]
-   if { $prg_exit_state != 0 } {
+   ts_log_fine "${test_host}:${CHECK_USER} starting $cmd $cmd_args ..."
+   set output [start_remote_prog $test_host $CHECK_USER $cmd "$cmd_args"]
+   if {$prg_exit_state != 0} {
       report_add_message report "sed of DBWriterTestConfig.properties.template failed, exit state $prg_exit_state"
       report_add_message report "$output"
       report_finish report -1
       ts_log_severe "sed of DBWriterTestConfig.properties.template failed"
       return -1
    }
-   
+
    set ant_options "-Ddbwriter.test.config_file=$file_name"
    append ant_options " -Duse.classpath.from.sge.root=true"
+   # @todo we need to add the path to junit to the classpath, either here or in `arco_build()`
    append ant_options " -Dsge.root=$ts_config(product_root)"
 
    ts_log_fine "starting ant test ..."
-   set res [arco_build $dbwriter_host "test" report $ant_options 180]
-   
-   if { $res != 0 } {
+   set res [arco_build $test_host "test" report $ant_options 180]
+
+   if {$res != 0} {
       report_add_message report "ARCo junit tests failed"
       report_finish report -1
       ts_log_severe "ARCo junit tests failed"

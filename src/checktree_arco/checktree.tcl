@@ -574,7 +574,7 @@ proc shutdown_dbwriter { { hostname "--" } } {
          }
       }
    } else {
-      puts "Can not shutdown dbwriter, $prog does not exists"
+      ts_log_fine "Can not shutdown dbwriter, $prog does not exists"
       return -1
    }
 }
@@ -785,7 +785,7 @@ proc arco_clean_postgres_database {{drop 0}} {
    }
 
    # now connect to the test database
-   if { [ sqlutil_connect $sp_id 0 ] != 0 } {
+   if {[sqlutil_connect $sp_id 0] != 0} {
       ts_log_severe "Can not connect to database $db_name"
       close_spawn_process $id;
       return -2
@@ -793,14 +793,14 @@ proc arco_clean_postgres_database {{drop 0}} {
 
    set result 0
 
-   if { $drop } {
+   if {$drop} {
       # drop views
       foreach view $ARCO_VIEWS {
          set view [string tolower $view]
 
-         set sql "select viewname from pg_views where viewname = '$view'";
+         set sql "SELECT viewname FROM pg_views WHERE viewname = '$view'";
          set res [sqlutil_query $sp_id $sql result_array column_names]
-         if { $res == 0 } {
+         if {$res == 0} {
             ts_log_fine "view $view does not exist"
             continue
          } elseif { $res < 0 } {
@@ -810,9 +810,9 @@ proc arco_clean_postgres_database {{drop 0}} {
          }
 
          set sql "DROP VIEW $view"
-         ts_log_fine "drop view $view"
+         ts_log_fine $sql
          set res [sqlutil_exec $sp_id $sql]
-         if { $res != 0 } {
+         if {$res != 0} {
             ts_log_severe "Error: Can not drop view $VIEW"
             close_spawn_process $id;
             return -1
@@ -821,33 +821,34 @@ proc arco_clean_postgres_database {{drop 0}} {
    }
    foreach table $ARCO_TABLES {
       set table [string tolower $table]
-      set sql "select tablename, schemaname, tableowner from pg_tables where tablename = '$table'"
+      set sql "SELECT tablename, schemaname, tableowner FROM pg_tables WHERE tablename = '$table'"
       array set result_array {}
       set column_names {}
       set res [sqlutil_query $sp_id $sql result_array column_names]
-      if { $res == 0 } {
+      if {$res == 0} {
          ts_log_fine "table $table does not exist"
          continue
-      } elseif { $res < 0 } {
+      } elseif {$res < 0} {
          ts_log_severe "Error: Can not query table $table"
          close_spawn_process $id
          return -1
       }
 
-      if { $drop } {
+      if {$drop} {
          set sql "DROP TABLE $table CASCADE"
-         ts_log_fine "drop table $table"
+         ts_log_fine $sql
          set res [sqlutil_exec $sp_id $sql]
-         if { $res != 0 } {
+         if {$res != 0} {
             ts_log_severe "Error: Can not drop table $table"
             set result -1
             break;
          }
       } else {
-         if { [ clean_table $table ] == 1 } {
-            set sql "DELETE from $table"
+         if {[clean_table $table] == 1} {
+            set sql "DELETE FROM $table"
+            ts_log_fine $sql
             set res [sqlutil_exec $sp_id $sql]
-            if { $res != 0 } {
+            if {$res != 0} {
                ts_log_severe "Error: Can not delete table $table"
                set result -1
                break;
@@ -856,7 +857,7 @@ proc arco_clean_postgres_database {{drop 0}} {
       }
       set sql "COMMIT"
       set res [sqlutil_exec $sp_id $sql]
-      if { $res != 0 } {
+      if {$res != 0} {
          ts_log_severe "Error: Commit failed"
          set result -1
          break;
@@ -867,7 +868,7 @@ proc arco_clean_postgres_database {{drop 0}} {
    return $result
 }
 
-proc arco_clean_mysql_database { { drop 0 } } {
+proc arco_clean_mysql_database {{drop 0}} {
 
 global ARCO_TABLES ARCO_VIEWS
 

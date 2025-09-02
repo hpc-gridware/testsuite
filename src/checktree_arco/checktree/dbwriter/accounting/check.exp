@@ -39,11 +39,10 @@ global check_description
 global check_needs
 global check_functions
 global check_root_access_needs
-global FLUSH_TIME
 
 # define test's name and run level descriptions
 set check_name            "accounting"
-set check_category        "COMPATIBILITY SYSTEM JOB_SYNC VERIFIED"
+set check_category        "DBWRITER JOB_SYNC VERIFIED"
 set check_description(0)  "Comparing the output of qacct with the content of the ARCo database"
 
 # define test's dependencies
@@ -62,22 +61,24 @@ lappend check_functions "issue_113_test"
 proc accounting_setup {} {
    global ts_config
    global accounting_backup
-   global FLUSH_TIME
 
    # we want to modify the global config - make a backup
    get_config accounting_backup
 
-   # set flush time to suitable value
-   ts_log_fine "setting configuration (flush time)"
-   set FLUSH_TIME "05"
-   set new_conf(reporting_params) "accounting=true reporting=true flush_time=00:00:$FLUSH_TIME joblog=true sharelog=00:00:00"
+   # enable reporting
+   set delimiter " "
+   add_or_replace_array_param new_conf accounting_backup reporting_params "reporting" "true" $delimiter
+   # for now dbwriter uses the old reporting file format
+   add_or_replace_array_param new_conf new_conf reporting_params "old_reporting" "true" $delimiter
    set_config new_conf
 
-   # start dbwriter
-   ts_log_fine "starting dbwriter"
-   set res [startup_dbwriter]
-   if { $res != 0 } {
-      return -1
+   # start dbwriter if necessary
+   if {[get_dbwriter_status 0] != 0} {
+      ts_log_fine "starting dbwriter"
+      set res [startup_dbwriter]
+      if {$res != 0} {
+         return -1
+      }
    }
 }
 
@@ -87,8 +88,7 @@ proc accounting_cleanup {} {
 
    # shutdown dbwriter
    ts_log_fine "shutdowning dbwriter"
-   if { [shutdown_dbwriter] != 0 } {
-      ts_log_severe "can not stop dbwriter"
+   if {[shutdown_dbwriter] != 0} {
       return -1
    }
 
@@ -101,13 +101,6 @@ proc accounting_cleanup {} {
    # unset our test's global variables
    if {[info exists "accounting_backup"]} {
       unset "accounting_backup"
-   }
-
-   if { [get_dbwriter_status 0] == 0 } {
-      if { [shutdown_dbwriter] != 0 } {
-         ts_log_severe "Can not stop dbwriter"
-         return -1
-}
    }
 
    # clean data from arco database
@@ -176,7 +169,6 @@ proc issue_113_test {} {
    global ts_config CHECK_USER
    global accounting_hosts
    global CHECK_ACT_LEVEL
-   global FLUSH_TIME
 
    if {$CHECK_ACT_LEVEL == 0} {
       ts_log_fine "this is the test for runlevel $CHECK_ACT_LEVEL"
@@ -261,7 +253,7 @@ proc issue_113_test {} {
          } else {
             set next_loop [expr $next_loop - 1]
             ts_log_progress
-            after [expr $FLUSH_TIME * 1000]
+            sleep_for_seconds 5
          }
       }
       close_spawn_process $id;

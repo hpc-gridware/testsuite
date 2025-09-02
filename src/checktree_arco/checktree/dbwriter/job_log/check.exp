@@ -33,31 +33,23 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name        
-global check_category    
-global check_description 
-global check_needs       
-global check_functions 
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "arco_dbwriter_job_log"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "DBWRITER VERIFIED"
 set check_description(0)  "test the import of job log information"
-set check_description(1)  "test the import of the accouting information"
-set check_description(2)  ""
-set check_description(3)  ""
-set check_description(4)  ""
-set check_description(5)  ""
-set check_description(6)  ""
-set check_description(7)  ""
-set check_description(8)  ""
-
+set check_description(1)  "test the import of the accounting information"
 
 # define test's dependencies
-set check_needs           "init_core_system arco_database_install" 
+set check_needs           "init_core_system arco_database_install"
 
 # setup and cleanup functions
 set check_setup_function arco_dbwriter_job_log_setup
@@ -73,31 +65,28 @@ proc arco_dbwriter_job_log_setup  {} {
    global ts_config CHECK_FIRST_FOREIGN_SYSTEM_USER
    global sqlutil_id sqlutil_sp_id
    global arco_dbwriter_job_log_org_config
-   
+
    set sqlutil_id ""
-   
+
    ts_log_fine "Create sqlutil as $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    set sqlutil_id [sqlutil_create $CHECK_FIRST_FOREIGN_SYSTEM_USER]
-   if { $sqlutil_id == "-1" } {
+   if {$sqlutil_id == "-1"} {
       ts_log_severe "Can not create sqlutil"
       set sqlutil_id ""
       return -1
-   }   
-   set sqlutil_sp_id [ lindex $sqlutil_id 1 ]
+   }
+   set sqlutil_sp_id [lindex $sqlutil_id 1]
 
-   if { [ sqlutil_connect $sqlutil_sp_id] != 0 } {
+   if {[sqlutil_connect $sqlutil_sp_id] != 0} {
       ts_log_severe "Can not connect to database"
       close_spawn_process $sqlutil_id;
       set sqlutil_id ""
       return -2
    }
-   
+
    ts_log_fine "sqlutil created ($sqlutil_id)"
-   
-   # setup reporting params (enable job_log)
-   if {[info exists arco_dbwriter_job_log_org_config]} {
-      unset arco_dbwriter_job_log_org_config
-   }
+
+   # we change the reporting params - make a backup
    get_config arco_dbwriter_job_log_org_config
 }
 
@@ -116,26 +105,26 @@ proc arco_dbwriter_job_log_cleanup  {} {
    }
    set sqlutil_id ""
    set sqlutil_sp_id ""
-   
+
    reset_config arco_dbwriter_job_log_org_config
 
-   if { [get_dbwriter_status 0] == 0 } {
-      if { [shutdown_dbwriter] != 0 } {
-         ts_log_severe "Can not stop dbwriter"
+   if {[get_dbwriter_status 0] == 0} {
+      if {[shutdown_dbwriter] != 0} {
          return -1
       }
    }
+
+   unset -nocomplain sqlutil_id sqlutil_sp_id arco_dbwriter_job_log_org_config
 }
-
-
 
 proc arco_dbwriter_job_log_execute {} {
    global ts_config CHECK_ACT_LEVEL
    global check_description
    global sqlutil_sp_id
-   
+   global arco_dbwriter_job_log_org_config
+
    ts_log_fine $check_description($CHECK_ACT_LEVEL)
-   
+
    switch -- $CHECK_ACT_LEVEL {
       0 {
          set joblog "true"
@@ -148,24 +137,29 @@ proc arco_dbwriter_job_log_execute {} {
          return -1
       }
    }
-   
-   set config(reporting_params) "accounting=true reporting=true flush_time=00:00:10 joblog=$joblog sharelog=00:10:00"
-   set_config config
-   
-   if { [get_dbwriter_status 0] == 0 } {
-      if { [shutdown_dbwriter] != 0 } {
+
+   # enable reporting
+   set delimiter " "
+   add_or_replace_array_param new_conf accounting_backup reporting_params "reporting" "true" $delimiter
+   # for now dbwriter uses the old reporting file format
+   add_or_replace_array_param new_conf new_conf reporting_params "old_reporting" "true" $delimiter
+   add_or_replace_array_param new_conf new_conf reporting_params "joblog" $joblog $delimiter
+   set_config new_conf
+
+   if {[get_dbwriter_status 0] == 0} {
+      if {[shutdown_dbwriter] != 0} {
          ts_log_severe "Can not stop dbwriter"
          return -1
       }
    }
 
-   if { [arco_clean_database] < 0 } {
+   if {[arco_clean_database] < 0} {
       ts_log_severe "arco_dbwriter_job_log_reusesetup" -1 "Can not clean arco database"
       return -1
    }
 
-   if { [get_dbwriter_status 0] != 0 } {
-      if {[startup_dbwriter] != 0 } {
+   if {[get_dbwriter_status 0] != 0} {
+      if {[startup_dbwriter] != 0} {
          ts_log_severe "Can not start dbwriter"
          return -1
       }
@@ -176,35 +170,35 @@ proc arco_dbwriter_job_log_execute {} {
                   args           "-o /dev/null -e /dev/null $SGE_ROOT/examples/jobs/sleeper.sh 5"
                   sge_job_count  1
    }
-   
+
    lappend jobs { j_job_name     "array_job"
                   args           "-o /dev/null -e /dev/null -t 1-10 $SGE_ROOT/examples/jobs/sleeper.sh 5"
                   sge_job_count  10
    }
-               
+
 
    foreach jobdef $jobs {
       array set job {}    ;# Reset the job array
       array set job $jobdef
-      
+
       if {[arco_job_run job] != 0} {
          return -1
       }
-      
+
       if {[arco_query_job $sqlutil_sp_id job $job(sge_job_count)] < 0} {
          return -1
       }
-      
+
       if {[arco_query_job_usage $sqlutil_sp_id job]  < 0} {
          return -1
       }
-      
+
       # check the job usage values
       for {set task_index 0} {$task_index < $job(task_count)} {incr task_index} {
          set task(j_job_number)  $job($task_index,j_job_number)
          set task(j_task_number) $job($task_index,j_task_number)
          set task(j_job_name)    $job($task_index,j_job_name)
-         
+
          if { $job(task_count) > 1 && $task(j_task_number) == "-1" } {
             # the task with task_number -1 does not have a usage record
             continue
@@ -225,13 +219,13 @@ proc arco_dbwriter_job_log_execute {} {
             ts_log_severe "Got no exit status for job [arco_job_to_string task]"
          }
       }
-      
+
       if { $CHECK_ACT_LEVEL == 0 } {
          if { [arco_query_job_log $sqlutil_sp_id job] != 0 } {
             return -1
          }
       }
-   }   
+   }
    return 0
 }
 

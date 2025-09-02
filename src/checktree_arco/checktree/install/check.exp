@@ -43,7 +43,7 @@ global check_use_installed_system
 # This file shows some check spezific things
 set check_root_access_needs  "yes"
 set check_name          "arco_database_install"
-set check_category      "INSTALL COMPATIBILITY SYSTEM L10N VERIFIED"
+set check_category      "DBWRITER INSTALL VERIFIED"
 set check_description(0)   "install the arco database"
 set check_needs         "init_core_system"                              ;# dependencies of this check (name of other check)
 set check_functions     ""                              ;# functions to call (in order)
