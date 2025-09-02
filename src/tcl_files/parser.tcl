@@ -3822,21 +3822,40 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
             }
          }
          if {$has_binding} {
-            # if core binding is present then there are more lines for m_topology, m_core, m_socket, m_thread,m m_topology_inuse
-            switch -- $line {
-               22 - 23 - 24 - 25 - 26 {
-                  set attr [ split $elem "="]
-                  lassign $attr heading value
-                  set val [ split $heading ":"]
-                  lassign $val dom nam
-                  set plain(host$job,$nam) $value
+            if {[is_version_in_range "9.1.0"]} {
+               # if core binding is present then there are more lines for m_topology, m_core, m_socket, m_thread
+               switch -- $line {
+                  22 - 23 - 24 - 25 {
+                     set attr [ split $elem "="]
+                     lassign $attr heading value
+                     set val [ split $heading ":"]
+                     lassign $val dom nam
+                     set plain(host$job,$nam) $value
 
+                  }
                }
-            }
-            # switch to next job, increment counter
-            if { $line == 26} {
-                  incr job 1
-                  set line 0
+               # switch to next job, increment counter
+               if {$line == 25} {
+                     incr job 1
+                     set line 0
+               }
+            } else {
+               # if core binding is present then there are more lines for m_topology, m_core, m_socket, m_thread, m_topology_inuse
+               switch -- $line {
+                  22 - 23 - 24 - 25 - 26 {
+                     set attr [ split $elem "="]
+                     lassign $attr heading value
+                     set val [ split $heading ":"]
+                     lassign $val dom nam
+                     set plain(host$job,$nam) $value
+
+                  }
+               }
+               # switch to next job, increment counter
+               if {$line == 26} {
+                     incr job 1
+                     set line 0
+               }
             }
          } elseif {$has_binding_scheduler} {
             # if core binding is present then there are more lines for m_topology, m_core, m_socket, m_thread
