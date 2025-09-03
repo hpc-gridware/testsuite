@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -125,8 +125,14 @@ proc arco_dbwriter_performance_cleanup  {} {
    global sqlutil_id sqlutil_sp_id
    global arco_dbwriter_performance_org_config
 
+   # prevent new jobs from starting to speed up deletion
+   disable_queue "all.q"
+   delete_all_jobs 0
+   # the running jobs might just have submitted new jobs ...
+   sleep_for_seconds 5
    delete_all_jobs
-   wait_for_end_of_all_jobs 60
+   wait_for_end_of_all_jobs 120
+   enable_queue "all.q"
 
    if {$sqlutil_id != ""} {
       close_spawn_process $sqlutil_id;
@@ -185,8 +191,9 @@ proc arco_dbwriter_performance_execute {} {
    }
 
    # we want to have jobs running over the whole test time
-   # assume very little overheead (0)
-   set job_count [expr $test_time / $job_sleep_time]
+   # assume 0.1s overhead - the cluster might then run empty near the end
+   set job_count [expr int($test_time / 1000 / ($job_sleep_time + 0.1))]
+   ts_log_fine "each miniworm will submit $job_count jobs"
 
    set job_script "$ts_config(testsuite_root_dir)/scripts/pminiworm.sh"
    set job_args "$job_script -e $job_script -s $job_sleep_time -m $job_count -- "
@@ -197,8 +204,15 @@ proc arco_dbwriter_performance_execute {} {
    qstat_g_c_plain_parse qstat_info
 
    # we want to fill all (most) cluster slots
-   set jobs_per_project_user [expr $qstat_info(all.q,avail) / [llength $projects] / [llength $users]]
+   # in runlevel 0 (functional test) we limit the number of jobs per user and project to 10
+   set jobs_per_project_user [expr int($qstat_info(all.q,avail) / [llength $projects] / [llength $users])]
+   if {$CHECK_ACT_LEVEL == 0 && $jobs_per_project_user > 10} {
+      set jobs_per_project_user 10
+   }
+   ts_log_fine "submitting $jobs_per_project_user jobs per user and project"
 
+   # we want the jobs to start when we start measuring, submit them with disabled queues
+   disable_queue "all.q"
    foreach project $projects {
       foreach user $users {
          for {set i 0} {$i < $jobs_per_project_user} {incr i} {
@@ -210,20 +224,21 @@ proc arco_dbwriter_performance_execute {} {
          }
       }
    }
+   enable_queue "all.q"
+   trigger_scheduling
 
    set cycle_time [expr 60 * 1000]
-   while { $test_time > 0 } {
-
+   while {$test_time > 0} {
       set res [time "arco_dbwriter_performance_query $sqlutil_sp_id"]
       set needed_time [lindex $res 0]
       set needed_time [expr $needed_time / 1000]
-      set sleep_time [expr $cycle_time - $needed_time ]
+      set sleep_time [expr $cycle_time - $needed_time]
 
 
-      set seconds [expr $test_time / 1000 ]
-      set minutes [expr $seconds / 60 ]
-      set hours [expr $minutes / 60 ]
-      set minutes [expr $minutes % 60 ]
+      set seconds [expr $test_time / 1000]
+      set minutes [expr $seconds / 60]
+      set hours [expr $minutes / 60]
+      set minutes [expr $minutes % 60]
       set seconds [expr $seconds % 60]
       ts_log_fine [format "Remaining time %02d:%02d:%02d" ${hours} ${minutes} ${seconds}]
 
@@ -234,8 +249,7 @@ proc arco_dbwriter_performance_execute {} {
    return 0
 }
 
-
-proc arco_dbwriter_performance_query { sqlutil_sp_id } {
+proc arco_dbwriter_performance_query {sqlutil_sp_id} {
    global CHECK_DEBUG_LEVEL
 
    set sql "select num_value from view_statistic where time_end = (select max(time_end) from view_statistic where variable = 'lines_per_second')"
@@ -244,8 +258,7 @@ proc arco_dbwriter_performance_query { sqlutil_sp_id } {
    if { $res <= 0 } {
       ts_log_fine "Got no statistics from db"
    } else {
-      ts_log_fine "Current dbwriter performance is $rows(0,0) lines/second"
+      ts_log_fine "Current dbwriter performance is [format "%.0f" $rows(0,0)] lines/second"
    }
 }
-
 
