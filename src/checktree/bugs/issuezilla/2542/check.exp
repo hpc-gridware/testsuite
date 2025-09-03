@@ -46,9 +46,8 @@ set check_need_running_system "yes"
 
 # define test's name and run level descriptions
 set check_name            "issue_2542"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "ARRAY QSUB VERIFIED"
 set check_description(0)  "check limitation concurrent array job task execution"
-set check_description(1)  "check limitation concurrent array job task execution"
 
 # define test's dependencies
 set check_needs           "init_core_system"
@@ -103,7 +102,17 @@ proc issue_2542_check_funcionality {} {
      ts_log_fine "${running_tasks_count} tasks are running."
    }
 
-   return
+   # test if it is reported in qstat -j <job_id>
+   if {[is_version_in_range "9.0.9"]} {
+      get_qstat_j_info $job_id
+      if {![info exists qstat_j_info(task_concurrency)]} {
+         ts_log_severe "task concurrency is not reported by qstat -j $job_id"
+      } else {
+         if {$qstat_j_info(task_concurrency) != 2} {
+            ts_log_severe "task_concurrency should be 2 but qstat -j $job_id reports $qstat_j_info(task_concurrency)"
+         }
+      }
+   }
 }
 
 proc issue_2542_check_bad_tc_number {} {
@@ -114,8 +123,6 @@ proc issue_2542_check_bad_tc_number {} {
    if {${job_id} > -1} {
        ts_log_severe "submit job should have failed"
    }
-
-   return
 }
 
 proc issue_2542_check_tc_with_non_array_job {} {
@@ -126,8 +133,6 @@ proc issue_2542_check_tc_with_non_array_job {} {
    if {${job_id} > -1} {
        ts_log_severe "submit job should have failed"
    }
-
-   return
 }
 
 proc issue_2542_check_qalter_tc {} {
@@ -171,8 +176,6 @@ proc issue_2542_check_qalter_tc {} {
       ts_log_fine "${expected}"
       ts_log_severe "Verification of positive value of -tc option doesn't work"
    }
-
-   return
 }
 
 proc issue_2542_check_qalter_tc_with_non_array_job {} {
@@ -189,6 +192,4 @@ proc issue_2542_check_qalter_tc_with_non_array_job {} {
       ts_log_fine "${expected}"
       ts_log_severe "Verification whether altered job is array job doesn't work"
    }
-
-   return
 }
