@@ -1,0 +1,148 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+#set check_root_access_needs "yes"
+#set check_need_running_system "no"
+set check_version_range "9.0.9"
+
+# define test's name and run level descriptions
+set check_name            "cs_1505"
+set check_category        "BUG INTERACTIVE VERIFIED"
+set check_description(0)  "verify if prolog/epilog/pe_start/pe_stop work correctly with interactive jobs"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs_1505_setup
+set check_cleanup_function cs_1505_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs_1505_sequential"
+lappend check_functions "cs_1505_parallel"
+
+# -------- local test procedures: initialization------------------------------
+
+proc cs_1505_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH CHECK_USER
+   global cs_1505_tmp_dir
+
+   # we need a tmp directory where prolog, epilog, ... will write their log files
+   set cs_1505_tmp_dir [get_tmp_directory_name]
+   ts_log_fine "Using temporary directory $cs_1505_tmp_dir"
+   remote_file_mkdir $ts_config(master_host) $cs_1505_tmp_dir
+   foreach host $ts_config(execd_nodes) {
+      wait_for_remote_dir $host $CHECK_USER $cs_1505_tmp_dir
+   }
+
+   # we need one host and at least 2 slots for the parallel test
+   # use a linux host - the issue apparently did not happen on Solaris hosts, not sure about other OSes
+   set hostname [host_conf_get_suited_hosts 1 {} {"lx-amd64" "lx-arm64"}]
+   if {$hostname == ""} {
+      ts_log_config "need a linux host for this test"
+      return 99
+   }
+
+   # create a pe with start and stop procedure
+   set pe(slots) 999
+   set pe(start_proc_args) "$CHECK_ACTUAL_TEST_PATH/pe_start.sh $cs_1505_tmp_dir"
+   set pe(stop_proc_args)  "$CHECK_ACTUAL_TEST_PATH/pe_stop.sh $cs_1505_tmp_dir"
+   add_pe "test.pe" pe
+
+   # create a queue with prolog and epilog
+   # and having the pe
+   set q(slots) 2
+   set q(prolog) "$CHECK_ACTUAL_TEST_PATH/prolog.sh $cs_1505_tmp_dir"
+   set q(epilog) "$CHECK_ACTUAL_TEST_PATH/epilog.sh $cs_1505_tmp_dir"
+   set q(pe_list) "test.pe"
+   add_queue "test.q" $hostname q
+}
+
+proc cs_1505_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global cs_1505_tmp_dir
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   del_queue "test.q" "" 1 1
+   del_pe "test.pe"
+
+   unset -nocomplain cs_1505_tmp_dir
+}
+
+
+proc cs_1505_sequential {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global cs_1505_tmp_dir
+
+   set job_opts "-q test.q"
+   set output [start_sge_bin "qrsh" "$job_opts hostname"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qrsh failed with exit code $prg_exit_state: $output"
+      # queues will have been set into error state
+      start_sge_bin "qmod" "-cq test.q"
+   } else {
+      ts_log_fine "qrsh succeeded: $output"
+      # now check if prolog and epilog worked (wrote files)
+      set hostname [string trim $output]
+      wait_for_remote_file $hostname $CHECK_USER "$cs_1505_tmp_dir/prolog.log"
+      wait_for_remote_file $hostname $CHECK_USER "$cs_1505_tmp_dir/epilog.log"
+   }
+   # the epilog might still be running when qrsh exits, wait until it is really done
+   wait_for_end_of_all_jobs
+}
+
+proc cs_1505_parallel {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global cs_1505_tmp_dir
+
+   set job_opts "-pe test.pe 2"
+   set output [start_sge_bin "qrsh" "$job_opts hostname"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qrsh failed with exit code $prg_exit_state: $output"
+      wait_for_enter
+      # queues will have been set into error state
+      start_sge_bin "qmod" "-cq test.q"
+   } else {
+      ts_log_fine "qrsh succeeded: $output"
+      # now check if the pe start and stop procedure worked (wrote files)
+      set hostname [string trim $output]
+      wait_for_remote_file $hostname $CHECK_USER "$cs_1505_tmp_dir/pe_start.log"
+      wait_for_remote_file $hostname $CHECK_USER "$cs_1505_tmp_dir/pe_stop.log"
+   }
+   # the epilog might still be running when qrsh exits, wait until it is really done
+   wait_for_end_of_all_jobs
+}
+
