@@ -4547,7 +4547,6 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
    set start_time [clock seconds]
    set total_check_duration 0
 
-   delete_temp_script_files
    # get lock
    #lock_testsuite
 
@@ -5273,6 +5272,9 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    if {![check_if_test_cleaned_up]} {
       incr nr_errors
    }
+
+   # remove temporary files and directories created by the test
+   delete_temp_script_files
 
    if {$immediate_return != 0} {
       set CHECK_TEST_RUNNING 0
