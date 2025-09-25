@@ -3644,13 +3644,19 @@ proc ping_daemon {host port name {max_tries 10}} {
    # Try to reach the given host
    set tries 0
    while {1} {
+      # With TLS encryption qping can fail if the clocks are out of sync and
+      # time on an execution host (creating a new certificate) is later than
+      # time on the master host (where we call qping),
+      # as the certificate will *not yet* be valid.
+      # For now we increase the sleep time to make sure we see a valid certificate after some time.
       set output [start_sge_bin "qping" "-info $host $port $name 1" $ts_config(master_host)]
       ts_log_finer $output
       incr tries
       if {$prg_exit_state == 0 || $tries >= $max_tries} {
          break
       } else {
-         after 1000
+         ts_log_fine "qping try $tries failed:\n$output"
+         sleep_for_seconds 5
       }
    }
 

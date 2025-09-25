@@ -110,9 +110,9 @@ proc test_qsh_ar_switch {} {
    trigger_scheduling
 
    #job should be running
-   set run_result [wait_for_jobstart $job_id  $job_name 20]
+   set run_result [wait_for_jobstart $job_id $job_name 20]
    if {$run_result != 0} {
-       ts_log_severe "job was not scheduled to with ar option"
+      ts_log_severe "job was not scheduled with ar option"
    }
    ts_log_fine "delete AR: $ar_id and job should ends soon"
    delete_ar $ar_id
@@ -122,12 +122,12 @@ proc test_qsh_ar_switch {} {
    set args  "-ar $ar_id -N $job_name $default_args"
    set job_id [submit_job $args 0 60 "" "" "" 1 $cmd]
    if {$job_id > 0} {
-      ts_log_severe "interactive job should not be submited"
+      ts_log_severe "interactive job should not be submitted"
       delete_job $job_id
       return
    }
-   ts_log_fine "${job_name}_ar_switch OK"
 
+   ts_log_fine "${job_name}_ar_switch OK"
 }
 
 proc test_qrsh_ar_switch {} {
