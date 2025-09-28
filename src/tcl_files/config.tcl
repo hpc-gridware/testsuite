@@ -3111,10 +3111,11 @@ proc config_product_feature { only_check name config_array } {
    array set sge_features {
       csp "Certificate Security Protocol"
       munge "Munge Authentication"
+      tls "TLS commlib encryption"
       none "no special product features"
    }
 
-   set value [config_generic $only_check $name config "" "choice" 1 1 sge_features]
+   set value [config_generic $only_check $name config "" "choice" 1 "1+" sge_features]
 
    return $value
 }
@@ -5455,3 +5456,12 @@ proc config_get_best_suited_admin_host {} {
    return $admin_host
 }
 
+proc config_has_product_feature {feature} {
+   global ts_config
+
+   set ret 0
+   if {[lsearch -exact $ts_config(product_feature) $feature] >= 0} {
+      set ret 1
+   }
+   return $ret
+}

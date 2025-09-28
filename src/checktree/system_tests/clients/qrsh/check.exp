@@ -97,7 +97,10 @@ proc qrsh_setup {} {
       }
       200 {
          # get one suited host from each architecture for testing
-         set qrsh_hostlist $ts_config(unique_arch_nodes)
+         # @todo we should have one host per arch and OS (type and version)
+         # for now use the whole list of execution nodes
+         #set qrsh_hostlist $ts_config(unique_arch_nodes)
+         set qrsh_hostlist $ts_config(execd_nodes)
       }
    }
 

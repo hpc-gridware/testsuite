@@ -81,7 +81,7 @@ proc make_user_cert {} {
 
    if { !$check_use_installed_system } {
       # create testsuite user certificates for csp mode
-       if {$ts_config(product_feature) == "csp"} {
+       if {[config_has_product_feature "csp"]} {
           ts_log_fine "removing poss. existing user_file.txt \"$CHECK_MAIN_RESULTS_DIR/user_file.txt\" ..."
           set result [ start_remote_prog "$ts_config(master_host)" "$CHECK_USER" "rm" "$CHECK_MAIN_RESULTS_DIR/user_file.txt" ]
           ts_log_fine $result

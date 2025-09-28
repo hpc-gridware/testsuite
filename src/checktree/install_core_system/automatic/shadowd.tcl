@@ -58,9 +58,13 @@ proc install_shadowd {} {
       set my_csp_host_list ""
 
       # are we installing secure Cluster Scheduler (Grid Engine)?
-      if {$ts_config(product_feature) == "csp"} {
+      if {[config_has_product_feature "csp"]} {
          set feature_install_options "-csp"
          set my_csp_host_list $shadowd_hosts
+      }
+
+      if {[config_has_product_feature "tls"]} {
+         set feature_install_options "-tls"
       }
 
       # if $my_csp_host_list != "" we copy certificates

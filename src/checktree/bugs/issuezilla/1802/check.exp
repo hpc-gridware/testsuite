@@ -34,11 +34,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -49,7 +49,7 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED CSP"
 set check_description(0)  "check csp error messages by using sge_ca -renew_ca option"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_cleanup_function issue_1802_cleanup
@@ -64,7 +64,7 @@ lappend check_functions "issue_1802_test"
 proc issue_1802_cleanup  {} {
    global ts_config CHECK_USER
 
-   if {[string match "*csp*" $ts_config(product_feature)] == 1} {
+   if {[config_has_product_feature "csp"]} {
       ts_log_fine "cleanup ..."
 
       ts_log_fine "starting qstat -f ..."
@@ -76,7 +76,7 @@ proc issue_1802_cleanup  {} {
 
          ts_log_fine "now make user certificate for user $CHECK_USER valid again for 365 days ..."
          ts_log_fine "starting sge_ca $command_options as root user ..."
-            
+
          set output [start_remote_prog $ts_config(master_host) "root" $sge_ca_bin $command_options]
          if {$prg_exit_state != 0} {
             ts_log_severe "sge_ca $command_options exit state is $prg_exit_state\n$output"
@@ -119,7 +119,7 @@ proc issue_1802_test {} {
 
    # This test is only working for csp systems, so only act if the csp feature
    # is enabled ...
-   if {[string match "*csp*" $ts_config(product_feature)] != 1} {
+   if {![config_has_product_feature "csp"]} {
       ts_log_config "This test only works for csp Cluster Scheduler (Grid Engine) systems - break"
    } else {
       set sge_ca_bin "$ts_config(product_root)/util/sgeCA/sge_ca"
@@ -139,7 +139,7 @@ proc issue_1802_test {} {
       set command_options "-days -1 -renew $CHECK_USER"
       ts_log_fine "now make user certificate for user $CHECK_USER invalid ..."
       ts_log_fine "starting sge_ca $command_options as root user ..."
-      
+
       set output [start_remote_prog $ts_config(master_host) "root" $sge_ca_bin $command_options]
       if {$prg_exit_state != 0} {
          ts_log_severe "sge_ca $command_options exit state is $prg_exit_state, expected 0\n$output"
@@ -150,7 +150,7 @@ proc issue_1802_test {} {
       ts_log_fine "exit state of qstat: $prg_exit_state"
       if {$prg_exit_state == 0} {
          ts_log_severe "qstat exit state is $prg_exit_state, should be != 0\n$output"
-         return 
+         return
       }
 
       set nr_of_lines 0

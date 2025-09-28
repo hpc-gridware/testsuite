@@ -59,7 +59,7 @@ proc munge_setup {} {
    global CHECK_CMAKE_BUILD_TYPE
    global munge_host
 
-   if {$ts_config(product_feature) != "munge"} {
+   if {![config_has_product_feature "munge"]} {
       ts_log_config "test requires munge authentication to be enabled"
       return 99
    }

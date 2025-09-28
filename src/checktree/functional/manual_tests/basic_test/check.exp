@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global check_need_running_system
 
@@ -74,7 +74,7 @@ lappend check_functions "basic_test_set"
 # -------- local test procedures: initialization------------------------------
 proc basic_setup_level {} {
    global CHECK_ACT_LEVEL
-   global ts_config ts_config_backup 
+   global ts_config ts_config_backup
    global basic_hosts basic_host_set basic_host_select
    global basic_test_identificator
    global system_was_alive
@@ -223,7 +223,7 @@ proc basic_cluster_configure {host} {
    if {[string first "win" $arch] == 0} {
       set ts_config(master_host) $basic_master_host_for_win
       set ts_config(all_nodes) "$ts_config(master_host) $host"
-      if {"$ts_config_backup(product_feature)" == "none"} {
+      if {![config_has_product_feature "csp"]} {
          set ts_config(product_feature) "csp"
       }
    } else {

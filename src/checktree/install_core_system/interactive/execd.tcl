@@ -34,29 +34,29 @@
 
 #                                                             max. column:     |
 #****** install_core_system/install_execd() ******
-# 
+#
 #  NAME
-#     install_execd -- ??? 
+#     install_execd -- ???
 #
 #  SYNOPSIS
-#     install_execd { } 
+#     install_execd { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -71,7 +71,7 @@ proc install_execd {{report_var report}} {
    global CHECK_INSTALL_RC
 
    set CORE_INSTALLED ""
-   set INST_VERSION 0 
+   set INST_VERSION 0
    set LOCAL_ALREADY_CHECKED 0
 
    upvar $report_var report
@@ -81,7 +81,7 @@ proc install_execd {{report_var report}} {
    set report_host [get_test_host report $curr_task_nr]
 
    set execd_port [expr $ts_config(commd_port) + 1]
- 
+
    read_install_list
 
    set script_version [start_remote_prog $ts_config(master_host) $CHECK_USER "cat" "$ts_config(product_root)/inst_sge | grep \"SCRIPT_VERSION\" | cut -d\\\" -f2" ] ;#"
@@ -107,7 +107,7 @@ proc install_execd {{report_var report}} {
             ts_log_fine $result
          }
       }
-      if {$ts_config(product_feature) == "csp"} {
+      if {[config_has_product_feature "csp"]} {
          set feature_install_options "-csp"
          set my_csp_host_list $ts_config(execd_nodes)
          if {$ts_config(admin_only_hosts) != "none"} {
@@ -134,8 +134,11 @@ proc install_execd {{report_var report}} {
             }
          }
       }
+      if {[config_has_product_feature "tls"]} {
+         set feature_install_options "-tls"
+      }
    }
- 
+
    foreach exec_host $ts_config(execd_nodes) {
       ts_log_fine "installing execd on host $exec_host ($ts_config(product_type) system) ..."
       if {[lsearch $ts_config(execd_nodes) $exec_host] == -1} {
@@ -143,7 +146,7 @@ proc install_execd {{report_var report}} {
          ts_log_severe $msg
          test_report report $curr_task_nr $report_id result [get_result_failed]
          test_report report $curr_task_nr $report_id value $msg
-         return 
+         return
       }
       if {$check_use_installed_system != 0} {
          puts "no need to install execd on hosts \"$ts_config(execd_nodes)\", noinst parameter is set"
@@ -168,7 +171,7 @@ proc install_execd {{report_var report}} {
          return
       }
 
-      set remote_arch [resolve_arch $exec_host]    
+      set remote_arch [resolve_arch $exec_host]
       set sensor_file [get_loadsensor_path $exec_host]
       if {[string compare $sensor_file ""] != 0} {
          ts_log_fine "installing load sensor:"
@@ -188,7 +191,7 @@ proc install_execd {{report_var report}} {
          set arguments "$sensor_file $ts_config(product_root)/bin/$remote_arch/qloadsensor"
          set result [start_remote_prog $fs_host $copy_user "cp" "$arguments" prg_exit_state 60 0 "" "" 1 0 0 1 1]
          ts_log_fine "result: $result"
-         ts_log_fine "copy exit state: $prg_exit_state" 
+         ts_log_fine "copy exit state: $prg_exit_state"
       }
 
       set HIT_RETURN_TO_CONTINUE       [translate $exec_host 0 1 0 [sge_macro DISTINST_HIT_RETURN_TO_CONTINUE] ]
@@ -222,12 +225,12 @@ proc install_execd {{report_var report}} {
       ts_log_fine "install_execd $CHECK_EXECD_INSTALL_OPTIONS $feature_install_options"
 
       if {$CHECK_ADMIN_USER_SYSTEM} {
-         ts_log_fine "--> install as user $CHECK_USER <--" 
+         ts_log_fine "--> install as user $CHECK_USER <--"
          set install_user $CHECK_USER
       } else {
          set install_user "root"
       }
-      ts_log_fine "--> starting install script as user \"$install_user\" <--" 
+      ts_log_fine "--> starting install script as user \"$install_user\" <--"
 
       # wait for act qmaster file
       wait_for_remote_file $exec_host $install_user "$ts_config(product_root)/$ts_config(cell)/common/act_qmaster" 90
@@ -237,10 +240,10 @@ proc install_execd {{report_var report}} {
 
       log_user 1
 
-      set sp_id [ lindex $id 1 ] 
+      set sp_id [ lindex $id 1 ]
 
       set timeout 300
-     
+
       set do_stop 0
       while {$do_stop == 0} {
          flush stdout
@@ -248,12 +251,12 @@ proc install_execd {{report_var report}} {
              puts "-->testsuite: press RETURN (main) or enter \"break\" to stop"
              set anykey [wait_for_enter 1]
              if { [string match "*break*" $anykey] } {
-                break  
+                break
              }
          }
-     
+
          set timeout 600
-         log_user 1 
+         log_user 1
          expect {
             -i $sp_id full_buffer {
                set msg "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
@@ -276,7 +279,7 @@ proc install_execd {{report_var report}} {
                continue
             }
 
-            -i $sp_id timeout { 
+            -i $sp_id timeout {
                ts_log_severe "timeout while waiting for output"
                set do_stop 1
                continue
@@ -300,7 +303,7 @@ proc install_execd {{report_var report}} {
                return
             }
 
-            -i $sp_id $USE_CONFIGURATION_PARAMS { 
+            -i $sp_id $USE_CONFIGURATION_PARAMS {
                install_send_answer $sp_id $ANSWER_YES
                continue
             }
@@ -346,7 +349,7 @@ proc install_execd {{report_var report}} {
             -i $sp_id $CELL_NAME_FOR_EXECD {
                install_send_answer $sp_id $ts_config(cell)
                continue
-            } 
+            }
 
             -i $sp_id $CELL_NAME_FOR_EXECD_2 {
                install_send_answer $sp_id $ts_config(cell)
@@ -417,7 +420,7 @@ proc install_execd {{report_var report}} {
                continue
             }
 
-            -i $sp_id $ADD_DEFAULT_QUEUE_INSTANCE { 
+            -i $sp_id $ADD_DEFAULT_QUEUE_INSTANCE {
                install_send_answer $sp_id $ANSWER_YES "13"
                continue
             }
@@ -428,7 +431,7 @@ proc install_execd {{report_var report}} {
                continue
             }
 
-            -i $sp_id $CHECK_ADMINUSER_ACCOUNT_ANSWER { 
+            -i $sp_id $CHECK_ADMINUSER_ACCOUNT_ANSWER {
                install_send_answer $sp_id $ANSWER_YES "13"
                continue
             }

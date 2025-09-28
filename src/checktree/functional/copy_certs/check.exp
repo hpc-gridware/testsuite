@@ -54,10 +54,10 @@ proc copy_certs_setup {} {
 
    # inst_sge -copycerts does only make sense when we have either CSP mode,
    # or we have windows hosts in the cluster (requires having certificates).
-   # inst_sge -copycerts currently doesn't output an error in this case, 
+   # inst_sge -copycerts currently doesn't output an error in this case,
    # once this is fixed, we can handle getting the correct error message here,
    # see Issue xyz
-   if {[lsearch -exact $ts_config(product_feature) "csp"] < 0} {
+   if {![config_has_product_feature "csp"]} {
       ts_log_fine "inst_sge -copycerts does not work without CSP mode or Windows host in the cluster"
       return
    }
@@ -84,7 +84,7 @@ proc copy_certs_setup {} {
    set hostcount 0
 
    if {$all_hosts != ""} {
-      # start submithost install 
+      # start submithost install
       set id [open_remote_spawn_process $remote_host $CHECK_USER "./inst_sge" "-copycerts \"$all_hosts\"" 0 $ts_config(product_root)]
       set sp_id [ lindex $id 1 ]
       set do_log_output 0 ;# _LOG
@@ -111,7 +111,7 @@ proc copy_certs_setup {} {
             -i $sp_id $CELL_NAME_FOR_EXECD {
                ts_log_fine "\n -->testsuite: sending $ts_config(cell)"
                set input "$ts_config(cell)\n"
-     
+
                if {$do_log_output == 1} {
                   ts_log_fine "-->testsuite: press RETURN (CELL_NAME_FOR_QMASTER)"
                   set anykey [wait_for_enter 1]
@@ -166,7 +166,7 @@ proc copy_certs_setup {} {
                   ts_log_fine "\n -->testsuite: sending y (yes)"
                   set input "y\n"
                }
-     
+
                if {$do_log_output == 1} {
                   ts_log_fine "-->testsuite: press RETURN (CSP_COPY_CMD)"
                   set anykey [wait_for_enter 1]
@@ -175,25 +175,25 @@ proc copy_certs_setup {} {
                continue
             }
             -i $sp_id "Copying certificates is complete!" {
-               ts_log_fine "copy successful" 
-               break   
+               ts_log_fine "copy successful"
+               break
             }
             # Errors
             -i $sp_id "No CSP system installed!" {
-               ts_log_info "No csp system, copy not necessary and possible" 
-               break   
+               ts_log_info "No csp system, copy not necessary and possible"
+               break
             }
             -i $sp_id "The certificate copy failed!" {
-               ts_log_info "copy failed" 
-               continue   
+               ts_log_info "copy failed"
+               continue
             }
             -i $sp_id "Certificates couldn't be copied!" {
-               ts_log_info "rsh is not working" 
-               continue   
+               ts_log_info "rsh is not working"
+               continue
             }
             -i $sp_id "Permission denied" {
                ts_log_info "rsh is working but copy error happened"
-               continue   
+               continue
             }
 
             -i $sp_id timeout {

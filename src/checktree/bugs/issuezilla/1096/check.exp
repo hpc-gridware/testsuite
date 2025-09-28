@@ -55,7 +55,7 @@ lappend check_functions       "issue_1096_run"
 
 proc issue_1096_shutdown_master {} {
    global ts_config
-   if { $ts_config(product_feature) == "csp" } {
+   if {[config_has_product_feature "csp"]} {
       ts_log_fine "this is csp system skipping shutdown of core system ..."
    } else {
       shutdown_core_system
@@ -64,7 +64,7 @@ proc issue_1096_shutdown_master {} {
 proc issue_1096_run {} {
    global ts_config CHECK_USER
 
-   if { $ts_config(product_feature) == "csp" } {
+   if {[config_has_product_feature "csp"]} {
       ts_log_config "This test does not work on csp systems"
    } else {
       ts_log_fine "try to start qmaster on port $ts_config(reserved_port) ..."
@@ -107,7 +107,7 @@ proc issue_1096_run {} {
 
 proc issue_1096_cleanup {} {
    global ts_config
-   if { $ts_config(product_feature) == "csp" } {
+   if {[config_has_product_feature "csp"]} {
       ts_log_fine "nothing to cleanup"
    } else {
       startup_core_system

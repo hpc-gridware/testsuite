@@ -34,11 +34,11 @@
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global check_need_running_system
 
@@ -56,7 +56,7 @@ set check_description(200)  "upgrade test 61x to 62x (run all scenarios)"
 
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_level_function current_version_upgrade_setup
@@ -113,7 +113,7 @@ proc current_version_upgrade_setup {} {
          break
       }
    }
-   
+
    if {$found_packages == 0} {
       ts_log_config "No binary packages availabe - cannot run test!"
       return 99
@@ -125,7 +125,7 @@ proc current_version_upgrade_setup {} {
    set current_version_test_var(backup_file)      ""
    set current_version_test_var(backup_cell_file) ""
    set current_version_test_var(backup_host)      ""
-   set current_version_test_var(cloned_results)   {} 
+   set current_version_test_var(cloned_results)   {}
    set current_version_test_var(cloned_default_files) {}
 
    set current_version_test_var(test_modes) {}
@@ -176,7 +176,7 @@ proc current_version_upgrade_setup {} {
 
             if {$found >= 0 && [expr $found + 1] < [llength $rotation_list]} {
                incr found 1
-               set next_mode [lindex $rotation_list $found] 
+               set next_mode [lindex $rotation_list $found]
             } else {
                set next_mode [lindex $rotation_list 0]
             }
@@ -195,7 +195,7 @@ proc current_version_upgrade_setup {} {
 #############################################################################
 #         set current_version_test_var(test_modes) "standard"
 #         set current_version_test_var(test_features) "ijs"
-#         set current_version_test_var(test_spoolings) "classic_NFS" 
+#         set current_version_test_var(test_spoolings) "classic_NFS"
 #############################################################################
       }
       200 {
@@ -213,7 +213,7 @@ proc current_version_upgrade_restore { host root_backup_file cell_backup_file bd
       set install_user "root"
    } else {
       set install_user $CHECK_USER
-      ts_log_fine "--> install as user $CHECK_USER <--" 
+      ts_log_fine "--> install as user $CHECK_USER <--"
    }
 
    if {$root_backup_file != ""} {
@@ -246,12 +246,12 @@ proc current_version_upgrade_restore { host root_backup_file cell_backup_file bd
    }
 
    if {$bdb_backup_file != ""} {
-      # restore original bdb dir 
+      # restore original bdb dir
       set bdb_backup_host $ts_config(master_host)
       set db_dir [get_bdb_spooldir $ts_config(master_host) 1]
       ts_log_fine "restoring original bdb directory \"$db_dir\" ..."
       set tar_command "[get_binary_path $bdb_backup_host "tar"] -xvPf $bdb_backup_file"
-      ts_log_fine "command: $bdb_backup_host $CHECK_USER cd $db_dir ; $tar_command" 
+      ts_log_fine "command: $bdb_backup_host $CHECK_USER cd $db_dir ; $tar_command"
       # for some reasons we have to wait (NFS?)
       ts_log_fine "wait for 60 seconds ..."
       after 60000
@@ -277,7 +277,7 @@ proc current_version_upgrade_backup { host root_backup_file cell_backup_file bdb
       set install_user "root"
    } else {
       set install_user $CHECK_USER
-      ts_log_fine "--> install as user $CHECK_USER <--" 
+      ts_log_fine "--> install as user $CHECK_USER <--"
    }
 
 # Backup currently works for NFS spooling of qmaster (classic and berkeleydb)
@@ -348,7 +348,7 @@ proc current_version_upgrade_backup { host root_backup_file cell_backup_file bdb
 
 proc current_version_upgrade_detect_rpc_bdb_host {} {
    get_current_cluster_config_array ts_config
- 
+
    set possbile_rpc_hosts {}
    foreach host [get_all_hosts] {
       set host_ok 1
@@ -379,7 +379,7 @@ proc current_version_upgrade_cleanup {} {
       set install_user "root"
    } else {
       set install_user $CHECK_USER
-      ts_log_fine "--> install as user $CHECK_USER <--" 
+      ts_log_fine "--> install as user $CHECK_USER <--"
    }
 
    if {$current_version_test_var(backup_done) == true} {
@@ -392,7 +392,7 @@ proc current_version_upgrade_cleanup {} {
       }
 
       remote_file_mkdir $backup_host "$ts_config(product_root)"
-    
+
       # restore original system
       if {[current_version_upgrade_restore $backup_host $current_version_test_var(backup_file) \
            $current_version_test_var(backup_cell_file) $current_version_test_var(backup_bdb_file) ] != 0} {
@@ -432,7 +432,7 @@ proc current_version_upgrade_cleanup {} {
 
 proc  current_version_upgrade_log { log_var line } {
    upvar $log_var buffer
-  
+
    ts_log_fine $line
    append buffer "$line\n"
 }
@@ -445,12 +445,12 @@ proc current_version_upgrade_test {} {
 
    set test_log ""
    set user $CHECK_USER
-   
+
    if {$CHECK_ADMIN_USER_SYSTEM == 0} {
       set install_user "root"
    } else {
       set install_user $CHECK_USER
-      ts_log_fine "--> install as user $CHECK_USER <--" 
+      ts_log_fine "--> install as user $CHECK_USER <--"
    }
 
    # get release information array from ge_packages_uri file
@@ -477,7 +477,7 @@ proc current_version_upgrade_test {} {
    set current_version_test_var(shutdown_done) true
 
    # Prepare backup directory and select backup host (NFS server host)
-   set backup_dir [get_tmp_directory_name "" "default" "backup"] 
+   set backup_dir [get_tmp_directory_name "" "default" "backup"]
    set backup_host [fs_config_get_server_for_path $backup_dir 0]
    ts_log_fine "creating backup of sge root in \"$backup_dir\""
    ts_log_fine "doing backup on host \"$backup_host\""
@@ -493,9 +493,9 @@ proc current_version_upgrade_test {} {
    # Wait that backup dir is available on qmaster host
    wait_for_remote_dir $ts_config(master_host) $user $backup_dir
    wait_for_remote_dir $ts_config(master_host) $CHECK_USER $backup_dir
-   
 
-  
+
+
 
    # Create subdir in backup directory for the saved configuration of the upgraded GE installation
    set saved_config_dir $backup_dir/old_cluster_backup
@@ -549,11 +549,11 @@ proc current_version_upgrade_test {} {
 
          foreach rotate_install_mode $rotate_mode_list {
             switch -exact $rotate_install_mode {
-               "standard" {   
-                  # no csp, install user is "root" (admin user is test user) 
+               "standard" {
+                  # no csp, install user is "root" (admin user is test user)
                }
-               "csp" {   
-                  # csp,    install user is "root" (admin user is test user) 
+               "csp" {
+                  # csp,    install user is "root" (admin user is test user)
                }
                default {
                   ts_log_severe "unexpected install mode \"$rotate_install_mode\""
@@ -568,7 +568,7 @@ proc current_version_upgrade_test {} {
                   get_current_cluster_config_array clone_config_array
                   set clone_config_array(gridengine_version) "$rel_info($i,major_release)$rel_info($i,minor_release)"
                   set clone_config_array(results_dir) "$clone_config_array(results_dir)/results_clone_$rel_info($i,version)"
- 
+
                   # store results dir in cleanup info array for the cleanup procedure
                   if {[lsearch -exact $current_version_test_var(cloned_results) $clone_config_array(results_dir)] < 0} {
                      lappend current_version_test_var(cloned_results) $clone_config_array(results_dir)
@@ -578,7 +578,7 @@ proc current_version_upgrade_test {} {
                   set clone_config_array(source_dir) "none"
                   set clone_config_array(additional_config) "none"
                   set clone_config_array(additional_checktree_dirs) "none"
-               
+
                   set modified_shadows 0
                   switch -exact $rotate_spooling_method {
                      "classic_NFS" {
@@ -657,16 +657,16 @@ proc current_version_upgrade_test {} {
                   }
 
                   switch -exact $rotate_features_setup {
-                     "no_jmx_no_ijs" {    
+                     "no_jmx_no_ijs" {
                         # no new ijs
                         append additional_switches " interactive rtools"
                         set enable_interactive_job_support 0
                      }
-                     "jmx" {    
+                     "jmx" {
                         append additional_switches " interactive rtools"
                         set enable_interactive_job_support 0
                      }
-                     "ijs" {  
+                     "ijs" {
                         # enable new interactive job support
                         set enable_interactive_job_support 1
                      }
@@ -678,13 +678,13 @@ proc current_version_upgrade_test {} {
                   }
 
                   switch -exact $rotate_install_mode {
-                     "standard" {   
-                        # no csp, install user is "root" (admin user is test user) 
+                     "standard" {
+                        # no csp, install user is "root" (admin user is test user)
                         set clone_config_array(product_feature) "none"
                      }
-                     "csp" {   
-                        # 
-                        # csp,    install user is "root" (admin user is test user) 
+                     "csp" {
+                        #
+                        # csp,    install user is "root" (admin user is test user)
                         set clone_config_array(product_feature) "csp"
                      }
 
@@ -693,7 +693,7 @@ proc current_version_upgrade_test {} {
                         return
                      }
                   }
-                  
+
 
                   ts_log_frame
                   current_version_upgrade_log test_log "testing $rel_info($i,version) ($rel_info($i,description)) upgrade to $cur_version(detected_version) ($cur_version(full))..."
@@ -787,8 +787,8 @@ proc current_version_upgrade_test {} {
                   }
                   ts_log_fine "job \"$add_settings_result(job_id)\" was running on master host local spool execd!"
 
-                  # Now doing backup of configuration 
-                  # $save_config_file_path - contains the path to the save config script 
+                  # Now doing backup of configuration
+                  # $save_config_file_path - contains the path to the save config script
                   # $saved_config_dir - config save dir
                   set result [remote_delete_directory $ts_config(master_host) "$saved_config_dir"]
                   if {$result != 0} {
@@ -812,7 +812,7 @@ proc current_version_upgrade_test {} {
 
 
                   # Shutdown the cluster
-                  set ret_val [operate_add_cluster $cloned_config_file "kill" 180 "" rpc_retval 1 $additional_switches] 
+                  set ret_val [operate_add_cluster $cloned_config_file "kill" 180 "" rpc_retval 1 $additional_switches]
                   if {$ret_val != 0} {
                      ts_log_severe "error shutting down sge version which should be upgraded! Test abort!\nTest log:\n$test_log\n"
                      return
@@ -918,7 +918,7 @@ proc current_version_upgrade_perform_execd_update { host bckp_dir ts_config_arra
       set install_user "root"
    } else {
       set install_user $CHECK_USER
-      ts_log_fine "--> install as user $CHECK_USER <--" 
+      ts_log_fine "--> install as user $CHECK_USER <--"
    }
 
    set id [open_remote_spawn_process $host $install_user "./inst_sge" "-upd-execd -noremote" 0 "$ts_config(product_root)"]
@@ -937,26 +937,26 @@ proc current_version_upgrade_perform_execd_update { host bckp_dir ts_config_arra
          set return_value 1
       }
 
-      -i $sp_id eof { 
-         ts_log_severe "unexpected eof" 
+      -i $sp_id eof {
+         ts_log_severe "unexpected eof"
          set return_value 1
       }
 
-      -i $sp_id timeout { 
+      -i $sp_id timeout {
          if {[info exists expect_out(buffer)]} {
             set buffer_output [format_array expect_out]
          } else {
             set buffer_output "n.a."
          }
-         ts_log_severe "timeout while waiting for output\n$buffer_output" 
+         ts_log_severe "timeout while waiting for output\n$buffer_output"
          set return_value 1
       }
-     
+
       -i $sp_id -- "_exit_status_:(0)" {
          set script_exit_0_found 1
          append install_output $expect_out(buffer)
          exp_continue
-      } 
+      }
 
       -i $sp_id -- "*(_END_OF_FILE_)" {
          append install_output $expect_out(buffer)
@@ -964,7 +964,7 @@ proc current_version_upgrade_perform_execd_update { host bckp_dir ts_config_arra
       }
       -i $sp_id default {
          ts_log_severe "undefined behaviour: $expect_out(buffer)"
-         set return_value 1         
+         set return_value 1
       }
    }
    if {$script_exit_0_found != 1} {
@@ -972,7 +972,7 @@ proc current_version_upgrade_perform_execd_update { host bckp_dir ts_config_arra
       set return_value 1
    }
    log_user $old_log_user
-   close_spawn_process $id 
+   close_spawn_process $id
    return $return_value
 }
 
@@ -994,7 +994,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
       set install_user "root"
    } else {
       set install_user $CHECK_USER
-      ts_log_fine "--> install as user $CHECK_USER <--" 
+      ts_log_fine "--> install as user $CHECK_USER <--"
    }
 
 
@@ -1016,7 +1016,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
    set ENTER_ADMIN_MAIL             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_ADMIN_MAIL] "*"]
    set ENTER_ADMIN_MAIL_SINCE_U3    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_ADMIN_MAIL_SINCE_U3] "*"]
    set SMF_IMPORT_SERVICE           [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_SMF_IMPORT_SERVICE] ]
-   set DNS_DOMAIN_QUESTION          [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DNS_DOMAIN_QUESTION] ] 
+   set DNS_DOMAIN_QUESTION          [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DNS_DOMAIN_QUESTION] ]
    set ACCEPT_CONFIGURATION         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ACCEPT_CONFIGURATION] ]
    set ENTER_OVERRIDE_PROTECTION    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINT_ENTER_OVERRIDE_PROTECTION] ]
    set INSTALL_SCRIPT               [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_INSTALL_SCRIPT] "*" ]
@@ -1045,7 +1045,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
    set WILL_NOT_VERIFY_FILE_PERMISSIONS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_WILL_NOT_VERIFY_FILE_PERMISSIONS] ]
    set DO_NOT_VERIFY_FILE_PERMISSIONS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DO_NOT_VERIFY_FILE_PERMISSIONS] ]
    set DONT_KNOW_HOW_TO_TEST_FOR_LOCAL_FS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DONT_KNOW_HOW_TO_TEST_FOR_LOCAL_FS]]
-   
+
    # Certificate Authority
    set ENTER_CA_COUNTRY_CODE        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINT_ENTER_CA_COUNTRY_CODE]]
    set ENTER_CA_STATE               [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINT_ENTER_CA_STATE]]
@@ -1087,8 +1087,8 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          set return_value 1
       }
 
-      -i $sp_id eof { 
-         ts_log_severe "unexpected eof" 
+      -i $sp_id eof {
+         ts_log_severe "unexpected eof"
          set return_value 1
       }
 
@@ -1097,28 +1097,28 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          set return_value 1
       }
 
-      -i $sp_id timeout { 
+      -i $sp_id timeout {
          if {[info exists expect_out(buffer)]} {
             set buffer_output [format_array expect_out]
          } else {
             set buffer_output "n.a."
          }
-         ts_log_severe "timeout while waiting for output\n$buffer_output" 
+         ts_log_severe "timeout while waiting for output\n$buffer_output"
          set return_value 1
       }
 
-      -i $sp_id -- "orry" { 
+      -i $sp_id -- "orry" {
          ts_log_severe "wrong root password"
          set return_value 1
       }
 
-      -i $sp_id -- "issing" { 
+      -i $sp_id -- "issing" {
          ts_log_severe "missing binary error"
          set return_value 1
       }
       -i $sp_id -- "CRITICAL*\n" {
          append install_output $expect_out(buffer)
-         ts_log_severe "found critical error: \"$expect_out(buffer)\"" 
+         ts_log_severe "found critical error: \"$expect_out(buffer)\""
          log_user 1
          exp_continue
       }
@@ -1155,7 +1155,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          exp_continue
       }
 
-      -i $sp_id -- $LICENSE_AGREEMENT { 
+      -i $sp_id -- $LICENSE_AGREEMENT {
          ts_log_fine "\n -->testsuite: sending >$ANSWER_YES<"
          if {$do_log_output == 1} {
             puts "press RETURN"
@@ -1311,7 +1311,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          exp_continue
       }
 
-      -i $sp_id -- $INSTALL_AS_ADMIN_USER { 
+      -i $sp_id -- $INSTALL_AS_ADMIN_USER {
          ts_log_fine "\n -->testsuite: sending >$ANSWER_YES<"
          if {$do_log_output == 1} {
             puts "press RETURN"
@@ -1368,7 +1368,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
 
       -i $sp_id -- $UNIQUE_CLUSTER_NAME {
 
-         # INFO cluster name has to be transfered 
+         # INFO cluster name has to be transfered
          ts_log_fine "\n -->testsuite: sending cluster_name >$ts_config(cluster_name)<"
          if {$do_log_output == 1} {
             puts "press RETURN"
@@ -1397,7 +1397,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          exp_continue
       }
 
-      -i $sp_id -- $VERIFY_FILE_PERMISSIONS2 { 
+      -i $sp_id -- $VERIFY_FILE_PERMISSIONS2 {
          set input "$ANSWER_YES"
          ts_log_fine "\n -->testsuite: sending >$input<"
          if {$do_log_output == 1} {
@@ -1432,7 +1432,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
           append install_output $expect_out(buffer)
          log_user 1
          exp_continue
-      } 
+      }
 
       -i $sp_id -- $CHOOSE_SPOOLING_METHOD {
          set spooling_method $ts_config(spooling_method)
@@ -1500,7 +1500,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
             if {$do_log_output == 1} {
                puts "press RETURN"
                set anykey [wait_for_enter 1]
-            } 
+            }
             ts_send $sp_id "$spooldir\n"
          }
          append install_output $expect_out(buffer)
@@ -1509,13 +1509,13 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
       }
 
       -i $sp_id -- $DATABASE_DIR_NOT_ON_LOCAL_FS {
-          ts_log_config "configured database directory not on local disk\nPlease run testsuite setup and configure Berkeley DB server and/or directory" 
+          ts_log_config "configured database directory not on local disk\nPlease run testsuite setup and configure Berkeley DB server and/or directory"
           set return_value 1
       }
 
       -i $sp_id -- $IJS_SELECTION {
          if {$new_ijs == 1} {
-            set my_answer $ANSWER_NO  
+            set my_answer $ANSWER_NO
          } else {
             set my_answer $ANSWER_YES
          }
@@ -1663,7 +1663,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          exp_continue
       }
 
-      -i $sp_id -- $ENTER_ADMIN_MAIL { 
+      -i $sp_id -- $ENTER_ADMIN_MAIL {
          if { $ts_config(report_mail_to) == "none" } {
             set admin_mail "${CHECK_USER}@${CHECK_DNS_DOMAINNAME}"
          } else {
@@ -1680,7 +1680,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          exp_continue
       }
 
-      -i $sp_id -- $ENTER_ADMIN_MAIL_SINCE_U3 { 
+      -i $sp_id -- $ENTER_ADMIN_MAIL_SINCE_U3 {
          if { $ts_config(report_mail_to) == "none" } {
             set admin_mail "${CHECK_USER}@${CHECK_DNS_DOMAINNAME}"
          } else {
@@ -1748,7 +1748,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          exp_continue
       }
 
-      -i $sp_id -- $DNS_DOMAIN_QUESTION { 
+      -i $sp_id -- $DNS_DOMAIN_QUESTION {
          ts_log_fine "\n -->testsuite: sending >$ANSWER_YES<"
          if {$do_log_output == 1} {
             puts "press RETURN"
@@ -1812,12 +1812,12 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
               puts "press RETURN"
               set anykey [wait_for_enter 1]
          }
-         ts_log_config "We received a rsh/ssh failure. This error happends, if the rsh/ssh connection\nto any execution host was not possible, due to the missing permissions for user\nroot to connect via rsh/ssh without entering a password. This warning shows,\nthat the tested error handling code is working. To prevent this warning make\nsure the you qmaster host allows rsh/ssh connction for root without asking for\na password." 
+         ts_log_config "We received a rsh/ssh failure. This error happends, if the rsh/ssh connection\nto any execution host was not possible, due to the missing permissions for user\nroot to connect via rsh/ssh without entering a password. This warning shows,\nthat the tested error handling code is working. To prevent this warning make\nsure the you qmaster host allows rsh/ssh connction for root without asking for\na password."
          append install_output $expect_out(buffer)
          log_user 1
          exp_continue
       }
-      
+
       -i $sp_id -- $USE_EXISTING_SPOOLING {
          ts_log_fine "matched correct spooling question!"
          ts_log_fine "\n -->testsuite: sending >$ANSWER_NO< (use spooling method - OK)"
@@ -1831,7 +1831,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          exp_continue
       }
 
-      -i $sp_id -- $CA_RECREATE { 
+      -i $sp_id -- $CA_RECREATE {
          ts_log_fine "\n -->testsuite: sending >$ANSWER_NO<"
          if {$do_log_output == 1} {
             puts "press RETURN"
@@ -1843,7 +1843,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          exp_continue
       }
 
-      -i $sp_id -- $ENTER_CA_COUNTRY_CODE { 
+      -i $sp_id -- $ENTER_CA_COUNTRY_CODE {
          ts_log_fine "\n -->testsuite: sending >DE<"
          if {$do_log_output == 1} {
             puts "press RETURN"
@@ -1855,7 +1855,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          exp_continue
       }
 
-      -i $sp_id -- $ENTER_CA_STATE { 
+      -i $sp_id -- $ENTER_CA_STATE {
          ts_log_fine "\n -->testsuite: sending >Bavaria<"
          if {$do_log_output == 1} {
             puts "press RETURN"
@@ -1867,7 +1867,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          exp_continue
       }
 
-      -i $sp_id -- $ENTER_CA_LOCATION { 
+      -i $sp_id -- $ENTER_CA_LOCATION {
          ts_log_fine "\n -->testsuite: sending >Regensburg<"
          if {$do_log_output == 1} {
             puts "press RETURN"
@@ -1879,7 +1879,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          exp_continue
       }
 
-      -i $sp_id -- $ENTER_CA_ORGANIZATION { 
+      -i $sp_id -- $ENTER_CA_ORGANIZATION {
          ts_log_fine "\n -->testsuite: sending >Sun Microsystems<"
          if {$do_log_output == 1} {
             puts "press RETURN"
@@ -1903,7 +1903,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          exp_continue
       }
 
-      -i $sp_id -- $ENTER_CA_ADMIN_EMAIL { 
+      -i $sp_id -- $ENTER_CA_ADMIN_EMAIL {
          if { $ts_config(report_mail_to) == "none" } {
             set CA_admin_mail "${CHECK_USER}@${CHECK_DNS_DOMAINNAME}"
          } else {
@@ -1925,7 +1925,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
          append install_output $expect_out(buffer)
          log_user 1
          exp_continue
-      }       
+      }
 
       -i $sp_id -- "*(_END_OF_FILE_)" {
          append install_output $expect_out(buffer)
@@ -1933,7 +1933,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
       }
       -i $sp_id default {
          ts_log_severe "undefined behaviour: $expect_out(buffer)"
-         set return_value 1         
+         set return_value 1
       }
    }
 
@@ -1944,7 +1944,7 @@ proc current_version_upgrade_perform_update { bckp_dir ts_config_array new_ijs} 
    }
    log_user $old_log_user
    ts_log_fine "return value of upgrade: $return_value"
-   close_spawn_process $id 
+   close_spawn_process $id
    return $return_value
 }
 

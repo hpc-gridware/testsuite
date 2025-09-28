@@ -172,11 +172,14 @@ proc install_qmaster {{report_var report}} {
    set REMOVE_OLD_RC_SCRIPT         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_REMOVE_OLD_RC_SCRIPT]]
 
    set feature_install_options ""
-   if {$ts_config(product_feature) == "csp"} {
+   if {[config_has_product_feature "csp"]} {
       append feature_install_options "-csp"
    }
-   if {$ts_config(product_feature) == "munge"} {
+   if {[config_has_product_feature "munge"]} {
       append feature_install_options "-munge"
+   }
+   if {[config_has_product_feature "tls"]} {
+      append feature_install_options "-tls"
    }
 
    ts_log_fine "install_qmaster $CHECK_QMASTER_INSTALL_OPTIONS $feature_install_options"

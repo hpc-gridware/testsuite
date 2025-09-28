@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global check_need_running_system
 
@@ -205,7 +205,7 @@ proc auto_install_cluster_configure {host case} {
       set ts_config(master_host) $auto_install_master_host_for_win
       set ts_config(shadowd_hosts) $ts_config(master_host)
       set ts_config(all_nodes) "$ts_config(master_host) $host"
-      if {"$ts_config_backup(product_feature)" == "none"} {
+      if {![config_has_product_feature "csp"]} {
          set ts_config(product_feature) "csp"
       }
    } else {
@@ -271,7 +271,7 @@ proc auto_install_test {report_var} {
    install_execd
 
    sge_check_auto_install_logs report
-  
+
    if {[sge_check_system_running report]} {
       sge_qhost report
       sge_qstat report

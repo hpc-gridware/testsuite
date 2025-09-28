@@ -1505,7 +1505,7 @@ proc check_for_non_cluster_host_error {errno access} {
    get_current_cluster_config_array ts_config
 
    # in csp mode, a non cluster host will get csp error
-   if {$ts_config(product_feature) == "csp" && $errno == -100} {
+   if {[config_has_product_feature "csp"] && $errno == -100} {
       return 1
    }
 

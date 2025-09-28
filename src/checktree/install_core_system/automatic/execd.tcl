@@ -50,29 +50,29 @@ proc autoinst_statistics {} {
 }
 #                                                             max. column:     |
 #****** install_core_system/install_execd() ******
-# 
+#
 #  NAME
-#     install_execd -- ??? 
+#     install_execd -- ???
 #
 #  SYNOPSIS
-#     install_execd { } 
+#     install_execd { }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -87,9 +87,9 @@ proc install_execd {} {
    global ts_config
 
    set CORE_INSTALLED ""
-   set INST_VERSION 0 
-   set LOCAL_ALREADY_CHECKED 0 
- 
+   set INST_VERSION 0
+   set LOCAL_ALREADY_CHECKED 0
+
    read_install_list
 
    #string trimrigth $params in start_remote_prog removed the \" -> ", so we need \\\"
@@ -113,7 +113,7 @@ proc install_execd {} {
             ts_log_fine $result
          }
       }
-      if {$ts_config(product_feature) == "csp"} {
+      if {[config_has_product_feature "csp"]} {
          set feature_install_options "-csp"
          set my_csp_host_list $ts_config(execd_nodes)
          if {$ts_config(submit_only_hosts) != "none"} {
@@ -132,6 +132,9 @@ proc install_execd {} {
             }
             copy_certificates $exec_host
          }
+      }
+      if {[config_has_product_feature "tls"]} {
+         set feature_install_options "-tls"
       }
    }
 
@@ -227,21 +230,21 @@ proc install_execd {} {
    set monitor_time 0
    while {!$error && $finished_install < [llength $ts_config(execd_nodes)]} {
       # output some statistics
-      autoinst_statistics 
+      autoinst_statistics
 
       # start installation, when
       # - we have not yet exceeded the parallel install limit
       # - there are hosts to install left
       while {$running_install < $parallel_install && [llength $pending_install] > 0} {
          # output some statistics
-         autoinst_statistics 
+         autoinst_statistics
 
          # select host to install
          set exec_host [lindex $pending_install 0]
          set pending_install [lrange $pending_install 1 end]
          ts_log_fine "installing execd on host $exec_host ($ts_config(product_type) system) ..."
 
-         # start auto install for this host 
+         # start auto install for this host
          set install_options "$CHECK_EXECD_INSTALL_OPTIONS $feature_install_options -auto $autoconfig_files($exec_host) -noremote"
          set id [open_remote_spawn_process $exec_host $install_user "./install_execd" "$install_options" 0 $ts_config(product_root) "" 0 15 0 1]
          set spawn_id [lindex $id 1]
@@ -285,7 +288,7 @@ proc install_execd {} {
             set spawn_list [lreplace $spawn_list $pos $pos]
             set pos [lsearch -exact $remote_spawn_list $id]
             set remote_spawn_list [lreplace $remote_spawn_list $pos $pos]
-            
+
             # check exist status
             set exit_status [get_string_value_between "_exit_status_:(" ")" [string trim $expect_out(0,string)]]
             set host_name $spawn_host_map($spawn_id)
