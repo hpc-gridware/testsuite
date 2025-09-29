@@ -5853,7 +5853,9 @@ proc get_qstat_j_info {jobid {my_variable qstat_j_info} {add_switch ""} {host ""
 }
 
 proc get_qstat_j_attribute {name {task 1}} {
-   if {[is_version_in_range "9.0.8"]} {
+   if {[is_version_in_range "9.1.0"]} {
+      return [format "%-17s %11d" $name $task]
+   } elseif {[is_version_in_range "9.0.8"]} {
       return [format "%-16s %11d" $name $task]
    } elseif {[ge_has_feature "resource-maps" 1]} {
       return [format "%-12s %11d" $name $task]

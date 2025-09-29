@@ -346,27 +346,33 @@ proc parse_qrstat {ar_id {output qrstat_info} {plain_output qrstat_output} {host
       return -1
    }
 
-   set    match_text(id)                id*
-   set    match_text(name)              name*
-   set    match_text(owner)             owner*
-   set    match_text(state)             state*
-   set    match_text(start_time)        start_time*
-   set    match_text(end_time)          end_time*
-   set    match_text(duration)          duration*
-   set    match_text(submission_time)   submission_time*
-   set    match_text(group)             group*
-   set    match_text(account)           account*
-   set    match_text(resource_list)     resource_list*
-   set    match_text(granted_slots_list)   granted_slots_list*
-   set    match_text(granted_parallel_environment)   granted_parallel_environment*
-   set    match_text(checkpoint_name)   checkpoint_name*
-   set    match_text(mail_options)      mail_options*
-   set    match_text(mail_list)         mail_list*
-   set    match_text(acl_list)          acl_list*
-   set    match_text(xacl_list)         xacl_list*
-   set    match_text(error_handling)    error_handling*
-   set    match_text(master_hard_queue_list)    "master hard queue_list*"
-   set    match_text(message)           message*
+   if {[is_version_in_range "9.1.0"]} {
+      set attribute_name "exec_queue_list"
+   } else {
+      set attribute_name "granted_slots_list"
+   }
+
+   set match_text(id)                id*
+   set match_text(name)              name*
+   set match_text(owner)             owner*
+   set match_text(state)             state*
+   set match_text(start_time)        start_time*
+   set match_text(end_time)          end_time*
+   set match_text(duration)          duration*
+   set match_text(submission_time)   submission_time*
+   set match_text(group)             group*
+   set match_text(account)           account*
+   set match_text(resource_list)     resource_list*
+   set match_text($attribute_name)   "$attribute_name*"
+   set match_text(granted_parallel_environment)   granted_parallel_environment*
+   set match_text(checkpoint_name)   checkpoint_name*
+   set match_text(mail_options)      mail_options*
+   set match_text(mail_list)         mail_list*
+   set match_text(acl_list)          acl_list*
+   set match_text(xacl_list)         xacl_list*
+   set match_text(error_handling)    error_handling*
+   set match_text(master_hard_queue_list)    "master hard queue_list*"
+   set match_text(message)           message*
 
    set lines [split $result "\n"]
    foreach line $lines {
