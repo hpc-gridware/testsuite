@@ -571,9 +571,15 @@ proc check_option_pe {} {
       return
    }
 
+   if {[is_version_in_range "9.1.0"]} {
+      set attribute_name "exec_queue_list"
+   } else {
+      set attribute_name "granted_slots_list"
+   }
+
    ts_log_fine "qrstat -ar $ar_id\n"
-   set check_values(granted_parallel_environment)   "qrsub_pe slots 3"
-   set check_values(granted_slots_list)             "all.q@*=1,all.q@*=1,all.q@*=1"
+   set check_values(granted_parallel_environment) "qrsub_pe slots 3"
+   set check_values($attribute_name) "all.q@*=1,all.q@*=1,all.q@*=1"
    set ret [parse_qrstat_check $ar_id check_values]
    if {$ret != 0 } {
       return
@@ -593,9 +599,14 @@ proc check_option_q {} {
       return
    }
 
+   if {[is_version_in_range "9.1.0"]} {
+      set attribute_name "exec_queue_list"
+   } else {
+      set attribute_name "granted_slots_list"
+   }
 
    ts_log_fine "qrstat -ar $ar_id\n"
-   set check_values(granted_slots_list)                     "$qinstance=1"
+   set check_values($attribute_name) "$qinstance=1"
    set ret [parse_qrstat_check $ar_id check_values]
    if {$ret != 0 } {
       return
@@ -655,6 +666,11 @@ proc check_option_u {} {
 proc check_option_masterq {} {
    global ts_config
 
+   if {[is_version_in_range "9.1.0"]} {
+      set attribute_name "exec_queue_list"
+   } else {
+      set attribute_name "granted_slots_list"
+   }
    foreach host $ts_config(execd_nodes) {
       set masterq "all.q@$host"
       set args " -pe mytestpe 1 -masterq $masterq -d 1000"
@@ -663,7 +679,7 @@ proc check_option_masterq {} {
          return
       }
       set check_values(master_hard_queue_list) "${masterq}*"
-      set check_values(granted_slots_list)     "${masterq}*=1"
+      set check_values($attribute_name) "${masterq}*=1"
       set ret [parse_qrstat_check $ar_id check_values]
       if {$ret != 0 } {
          return
