@@ -65,12 +65,19 @@ global resource_quota_test_host
 global resource_quota_test_qname
 
 proc resource_quota_setup  {} {
-   global ts_config resource_quota_test_host resource_quota_test_qname
+   global ts_config resource_quota_test_host resource_quota_test_qname host_backup
 
    set resource_quota_test_host [lindex $ts_config(execd_nodes) 0]
-   set resource_quota_test_qname "resource_quota.q"
+
+   # backup
+   get_exechost host_backup $resource_quota_test_host
+
+   # adapt slots on host level
+   set host_config(complex_values) "slots=1000"
+   set_exechost host_config $resource_quota_test_host
 
    # create test queue
+   set resource_quota_test_qname "resource_quota.q"
    set queue_settings(slots) 1000
    set queue_settings(load_thresholds) "np_load_avg=11.75"
    add_queue $resource_quota_test_qname $resource_quota_test_host queue_settings
@@ -78,7 +85,7 @@ proc resource_quota_setup  {} {
 }
 
 proc resource_quota_cleanup  {} {
-   global ts_config resource_quota_test_host resource_quota_test_qname
+   global ts_config resource_quota_test_host resource_quota_test_qname host_backup
 
    del_queue $resource_quota_test_qname $resource_quota_test_host 0 1
 
@@ -88,6 +95,8 @@ proc resource_quota_cleanup  {} {
          del_rqs $elem
       }
    }
+
+   set_exechost host_backup $resource_quota_test_host
 }
 
 proc resource_quota_dynamic_limit {} {
