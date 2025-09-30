@@ -150,6 +150,8 @@ proc consumable_resources_setup {} {
    global consumable_resources_saved_slot_count
    global consumable_complex_backup
    global consumable_host_config_setup
+   global host_backup1
+   global host_backup2
 
    # backup complex - we will modify it during the test
    get_complex consumable_complex_backup
@@ -157,7 +159,17 @@ proc consumable_resources_setup {} {
    set consumable_resources_test_hosts [host_conf_get_suited_hosts 2]
    set consumable_resources_saved_slot_count ""
    set host_a [lindex $consumable_resources_test_hosts 0]
+   set host_b [lindex $consumable_resources_test_hosts 1]
    get_config consumable_host_config_setup $host_a
+
+   # backup
+   get_exechost host_backup1 $host_a
+   get_exechost host_backup1 $host_b
+
+   # adapt slots on host level
+   set host_config(complex_values) "slots=1000"
+   set_exechost host_config $host_a
+   set_exechost host_config $host_b
 
    set queue_list {}
    foreach host $ts_config(execd_nodes) {
@@ -191,10 +203,16 @@ proc consumable_resources_cleanup {} {
    global consumable_resources_saved_slot_count
    global consumable_complex_backup
    global consumable_host_config_setup
+   global host_backup1
+   global host_backup2
 
    delete_all_jobs
    wait_for_end_of_all_jobs
+
    set host_a [lindex $consumable_resources_test_hosts 0]
+   set host_b [lindex $consumable_resources_test_hosts 1]
+   set_exechost host_backup1 $host_a
+   set_exechost host_backup2 $host_a
 
    set queue_list {}
    foreach host $ts_config(execd_nodes) {
@@ -548,7 +566,7 @@ proc consumable_resources_test {} {
       get_exechost orig_host_a_host $host_a
 
       # modify complex_values of host_a host
-      set host_a_host(complex_values) "test2=5,test3=5"
+      set host_a_host(complex_values) "test2=5,test3=5,slots=1000"
       set_exechost host_a_host $host_a
       check_qhost_broken "test2=1" 1
 
@@ -714,7 +732,7 @@ proc consumable_resources_test {} {
       # get original host_a host coniguration
       get_exechost orig_host_a_host $host_a
        # modify complex_values of host_a host
-      set host_a_host(complex_values) "test1=3"
+      set host_a_host(complex_values) "test1=3,slots=1000"
       set_exechost host_a_host $host_a
 
       set queue_settings(complex_values) "test1=1"
@@ -848,7 +866,7 @@ proc consumable_resources_test {} {
       # get original host_a host coniguration
       get_exechost orig_host_a_host $host_a
       # modify complex_values of host_a host
-      set host_a_host(complex_values) "test1=4"
+      set host_a_host(complex_values) "test1=4,slots=1000"
       set_exechost host_a_host $host_a
 
       set queue_settings(complex_values) "test1=3"
@@ -903,7 +921,7 @@ proc consumable_resources_test {} {
       # get original host_a host coniguration
       get_exechost orig_host_a_host $host_a
        # modify complex_values of host_a host
-      set host_a_host(complex_values) "test1=4"
+      set host_a_host(complex_values) "test1=4,slots=1000"
       set_exechost host_a_host $host_a
 
       set queue_settings(complex_values) "test1=3"
@@ -991,7 +1009,7 @@ proc consumable_resources_test {} {
       # get original host_a host coniguration
       get_exechost orig_host_a_host $host_a
        # modify complex_values of host_a host
-      set host_a_host(complex_values) "test1=10"
+      set host_a_host(complex_values) "test1=10,slots=1000"
       set_exechost host_a_host $host_a
 
       set queue_settings(complex_values) "test1=5"
@@ -1131,7 +1149,7 @@ proc consumable_resources_test {} {
       # get original host_a host coniguration
       get_exechost orig_host_a_host $host_a
        # modify complex_values of host_a host
-      set host_a_host(complex_values) "test1=10,test2=10"
+      set host_a_host(complex_values) "test1=10,test2=10,slots=1000"
       set_exechost host_a_host $host_a
 
       set queue_settings(complex_values) "test1=5,test2=5"
