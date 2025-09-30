@@ -134,9 +134,6 @@ proc install_execd {{report_var report}} {
             }
          }
       }
-      if {[config_has_product_feature "tls"]} {
-         set feature_install_options "-tls"
-      }
    }
 
    foreach exec_host $ts_config(execd_nodes) {

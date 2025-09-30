@@ -73,13 +73,14 @@ proc install_qmaster {} {
 
    set feature_install_options ""
    if {[config_has_product_feature "csp"]} {
-      append feature_install_options "-csp"
-   }
-   if {[config_has_product_feature "munge"]} {
-      append feature_install_options "-munge"
-   }
-   if {[config_has_product_feature "tls"]} {
-      append feature_install_options "-tls"
+      append feature_install_options " -csp"
+   } else {
+      if {[config_has_product_feature "munge"]} {
+         append feature_install_options " -munge"
+      }
+      if {[config_has_product_feature "tls"]} {
+         append feature_install_options " -tls"
+      }
    }
 
    set my_timeout 500

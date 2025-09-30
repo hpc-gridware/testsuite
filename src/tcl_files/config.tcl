@@ -3108,11 +3108,14 @@ proc config_product_feature { only_check name config_array } {
 
    upvar $config_array config
 
-   array set sge_features {
-      csp "Certificate Security Protocol"
-      munge "Munge Authentication"
-      tls "TLS commlib encryption"
-      none "no special product features"
+   set sge_features(none) "no special product features"
+   if {$config(gridengine_version) < 90} {
+      set sge_features(csp) "Certificate Security Protocol"
+   } else {
+      if {$config(gridengine_version) >= 91} {
+         set sge_features(munge) "Munge Authentication"
+         set sge_features(tls) "TLS commlib encryption"
+      }
    }
 
    set value [config_generic $only_check $name config "" "choice" 1 "1+" sge_features]

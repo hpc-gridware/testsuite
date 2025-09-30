@@ -63,10 +63,6 @@ proc install_shadowd {} {
          set my_csp_host_list $shadowd_hosts
       }
 
-      if {[config_has_product_feature "tls"]} {
-         set feature_install_options "-tls"
-      }
-
       # if $my_csp_host_list != "" we copy certificates
       foreach shadow_host $my_csp_host_list {
          if {$shadow_host == $ts_config(master_host)} {

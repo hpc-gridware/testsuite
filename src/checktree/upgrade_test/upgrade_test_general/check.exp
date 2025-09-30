@@ -435,9 +435,11 @@ proc upgrade_test_upgrade_run_script { bckp_dir } {
    set feature_install_options ""
    if {[config_has_product_feature "csp"]} {
       append feature_install_options "-csp"
-   }
-   if {[config_has_product_feature "tls"]} {
-      append feature_install_options "-tls"
+   } else {
+      if {[config_has_product_feature "tls"]} {
+         append feature_install_options "-tls"
+      }
+      # @todo what about munge?
    }
 
    set do_log_output 0

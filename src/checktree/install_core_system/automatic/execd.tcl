@@ -133,9 +133,6 @@ proc install_execd {} {
             copy_certificates $exec_host
          }
       }
-      if {[config_has_product_feature "tls"]} {
-         set feature_install_options "-tls"
-      }
    }
 
    # handle install re_init case
