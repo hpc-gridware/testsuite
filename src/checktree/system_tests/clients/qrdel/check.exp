@@ -97,7 +97,6 @@ proc qrdel_setup {} {
 
    # change arusers
    add_user_to_access_list $CHECK_FIRST_FOREIGN_SYSTEM_USER "arusers"
-
 }
 
 proc qrdel_cleanup {} {
