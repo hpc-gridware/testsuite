@@ -68,9 +68,17 @@ proc per_job_consumables_setup {} {
    global job_consumables_hosts
    global job_args ar_args
    global per_job_consumables_complex_backup
+   global host_config_backup1 host_config_backup2 host_config_backup3
 
    set job_consumables_hosts [host_conf_get_suited_hosts 3]
+   get_exechost host_config_backup1 [lindex $job_consumables_hosts 0]
+   get_exechost host_config_backup2 [lindex $job_consumables_hosts 1]
+   get_exechost host_config_backup3 [lindex $job_consumables_hosts 2]
 
+   set host_config(complex_values) "slots=1000"
+   set_exechost host_config [lindex $job_consumables_hosts 0]
+   set_exechost host_config [lindex $job_consumables_hosts 1]
+   set_exechost host_config [lindex $job_consumables_hosts 2]
 
    set pe(slots)             "999"
    set pe(allocation_rule)   "\$round_robin"
@@ -102,6 +110,7 @@ proc per_job_consumables_setup {} {
 proc per_job_consumables_cleanup {} {
    global job_consumables_hosts
    global per_job_consumables_complex_backup
+   global host_config_backup1 host_config_backup2 host_config_backup3
 
    delete_all_jobs
    wait_for_end_of_all_jobs
@@ -125,6 +134,10 @@ proc per_job_consumables_cleanup {} {
    enable_queue "all.q"
 
    reset_schedd_config
+
+   set_exechost host_config_backup1 [lindex $job_consumables_hosts 0]
+   set_exechost host_config_backup2 [lindex $job_consumables_hosts 1]
+   set_exechost host_config_backup3 [lindex $job_consumables_hosts 2]
 }
 
 proc per_job_consumables_run_test {scenario max_jobs_running slots_per_job {add_job_args ""}} {
@@ -179,7 +192,7 @@ proc per_job_consumables_run_test_ar {scenario max_jobs_running slots_per_job {a
       set add_job_args "$add_job_args $slots_per_job"
       set expected_reserved_slots [expr $expected_used_slots * $max_jobs_running]
    }
-   # test if consumable limitis enforced for ars
+   # test if consumable limits enforced for ars
    set submitted_ars 0
    while {$submitted_ars < $max_jobs_running} {
       set ar_id [submit_ar "$ar_args_used"]
@@ -245,8 +258,9 @@ proc per_job_consumables_hosts {} {
    global job_consumables_hosts
 
    set test_host [lindex $job_consumables_hosts 0]
+   get_exechost host_config_backup $test_host
 
-   set host_config(complex_values) "jobs=2"
+   set host_config(complex_values) "jobs=2,slots=1000"
    set_exechost host_config "$test_host"
 
    per_job_consumables_run_test "sequential" 2 1
@@ -257,7 +271,7 @@ proc per_job_consumables_hosts {} {
    per_job_consumables_run_test_ar "parallel jobs with round_robin" 2 2 "-pe round_robin"
    per_job_consumables_run_test_ar "parallel jobs with fill_up" 2 2 "-pe fill_up"
 
-   set host_config(complex_values) "none"
+   set host_config(complex_values) $host_config_backup(complex_values)
    set_exechost host_config "$test_host"
 }
 
@@ -320,7 +334,9 @@ proc per_job_consumables_master_task {} {
    ts_log_fine "first_host $first_host"
    ts_log_fine "master_host $master_host"
 
-   set host_config(complex_values) "jobs=1"
+   get_exechost master_host_config $master_host
+
+   set host_config(complex_values) "jobs=1,slots=1000"
    set_exechost host_config $master_host
 
    # 1) try with fill_up. This job must run on the master host
@@ -361,7 +377,7 @@ proc per_job_consumables_master_task {} {
    }
    delete_job $job_id 1
 
-   set host_config(complex_values) "none"
+   set host_config(complex_values) $master_host_config(complex_values)
    set_exechost host_config $master_host
 }
 
@@ -372,8 +388,9 @@ proc per_job_consumables_master_task_rqs {} {
    set master_host [get_short_hostname [lindex $job_consumables_hosts 2]]
    ts_log_fine "first_host $first_host"
    ts_log_fine "master_host $master_host"
+   get_exechost master_host_config $master_host
 
-   set host_config(complex_values) "jobs=10"
+   set host_config(complex_values) "jobs=10,slots=1000"
    set_exechost host_config $first_host
    set_exechost host_config $master_host
 
@@ -422,7 +439,7 @@ proc per_job_consumables_master_task_rqs {} {
 
    del_rqs $rqs_name
 
-   set host_config(complex_values) "none"
+   set host_config(complex_values) $master_host_config(complex_values)
    set_exechost host_config "$first_host"
    set_exechost host_config "$master_host"
 }
