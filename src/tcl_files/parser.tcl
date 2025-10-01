@@ -3880,7 +3880,9 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
 proc plain_gdr_parse { output_var } {
    upvar $output_var plain
 
-   if {[is_version_in_range "9.0.5"]} {
+   if {[is_version_in_range "9.1.0"]} {
+      set job_lines 3
+   } elseif {[is_version_in_range "9.0.5"]} {
       set job_lines 4
    } else {
       set job_lines 6

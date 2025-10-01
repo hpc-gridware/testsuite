@@ -198,7 +198,9 @@ proc submit_cmd_options {} {
       lappend options "-ar $ar_id"
    }
    lappend options "-b yes"
-   lappend options "-binding set linear:1"
+   if {![is_version_in_range "9.1.0"]} {
+      lappend options "-binding set linear:1"
+   }
    lappend options "-C XX"
    lappend options "-ckpt testcheckpointobject -c s"
    lappend options "-dl 202010101111.11"
