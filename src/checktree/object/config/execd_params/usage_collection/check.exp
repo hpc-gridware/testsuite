@@ -60,12 +60,14 @@ proc config_usage_collection_setup {} {
    set config_usage_collection_hosts(systemd) [systemd_get_suited_hosts]
    if {$config_usage_collection_hosts(systemd) eq ""} {
       ts_log_config "No host with systemd found"
+      return 99
    } else {
       ts_log_fine "Found systemd host: $config_usage_collection_hosts(systemd)"
    }
    set config_usage_collection_hosts(pdc) [systemd_get_non_systemd_hosts]
    if {$config_usage_collection_hosts(pdc) eq ""} {
       ts_log_config "No non systemd host found"
+      return 99
    } else {
       ts_log_fine "Found non systemd host: $config_usage_collection_hosts(pdc)"
    }
