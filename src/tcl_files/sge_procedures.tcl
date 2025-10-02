@@ -342,7 +342,8 @@ proc get_qmaster_spool_dir {} {
 # @param[in] feature - name of the feature.
 #     Supported feature strings are:
 #     "new-interactive-job-support"
-#     "core-binding"
+#     "binding-in-execd"
+#     "binding-in-scheduler"
 #     "exclusive-host-usage"
 #     "resource-maps"
 # @param[in] quiet - if false (0) then the function outputs if the feature is available, else it is quiet
@@ -370,10 +371,19 @@ proc ge_has_feature {feature {quiet 0}} {
                set result 1
             }
          }
-         "core-binding" {
+         "binding-in-execd" {
             get_complex complex_array
 
-            if {[info exists complex_array(m_topology)]} {
+            if {[info exists complex_array(m_topology_inuse)]} {
+               set result 1
+            } else {
+               set result 0
+            }
+         }
+         "binding-in-scheduler" {
+            get_complex complex_array
+
+            if {[info exists complex_array(m_topology)] && ![info exists complex_array(m_topology_inuse)]} {
                set result 1
             } else {
                set result 0

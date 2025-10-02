@@ -3797,7 +3797,7 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
 
    # split plain output on each new line
    set plain_split [ split $plainoutput "\n" ]
-   set has_binding [ge_has_feature "core-binding"]
+   set has_binding [ge_has_feature "binding-in-execd"]
 
    set inc 0
    set job 0

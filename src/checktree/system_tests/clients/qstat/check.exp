@@ -325,7 +325,7 @@ proc qstat_help {} {
    set qstat_help_lines 41
 
    # in 6.2u5 there is an additional "-cb" line
-   if {[ge_has_feature "core-binding"]} {
+   if {[ge_has_feature "binding-in-execd"]} {
       set qstat_help_lines 42
    }
 

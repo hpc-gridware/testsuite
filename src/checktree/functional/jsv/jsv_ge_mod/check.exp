@@ -280,7 +280,11 @@ proc jsv_ge_mod_ac {} {
 }
 
 proc jsv_ge_mod_binding {} {
-   jsv_ge_mod "binding" "-binding linear:1"
+   set jsv_has_binding [ge_has_feature "binding-in-execd"]
+
+   if {$jsv_has_binding} {
+      jsv_ge_mod "binding" "-binding linear:1"
+   }
 }
 
 proc jsv_ge_mod_A {} {

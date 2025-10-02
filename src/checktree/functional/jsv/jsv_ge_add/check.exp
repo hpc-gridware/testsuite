@@ -111,7 +111,7 @@ proc jsv_ge_add_setup {} {
    global jsv_has_binding
 
    # check if jsv is available
-   set jsv_has_binding [ge_has_feature "core-binding"]
+   set jsv_has_binding [ge_has_feature "binding-in-execd"]
 
    # get base path of scripts
    set jsv_base_path $ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_ge_add
