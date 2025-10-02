@@ -1,0 +1,193 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+#set check_root_access_needs "yes"
+#set check_need_running_system "no"
+set check_version_range "9.1.0"
+
+# define test's name and run level descriptions
+set check_name            "cert_lifetime"
+set check_category        "SECURITY TLS VERIFIED"
+set check_description(0)  "test certificate lifetime handling with TLS encryption"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cert_lifetime_setup
+set check_cleanup_function cert_lifetime_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cert_lifetime_test"
+
+# -------- local test procedures: initialization------------------------------
+
+proc cert_lifetime_setup {} {
+   get_current_cluster_config_array ts_config
+   global cert_lifetime_host cert_lifetime_backup
+
+   # requires product_feature "tls" to be enabled in the config
+   if {![config_has_product_feature "tls"]} {
+      ts_log_config "TLS not enabled - skipping test"
+      return 99
+   }
+
+   # we test with one host
+   set cert_lifetime_host [host_conf_get_suited_hosts]
+
+   # we will modify the bootstrap file - make a backup
+   bootstrap_file_read cert_lifetime_backup
+}
+
+proc cert_lifetime_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global cert_lifetime_host cert_lifetime_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # restore the bootstrap file
+   bootstrap_file_write cert_lifetime_backup 1
+
+   unset -nocomplain cert_lifetime_host cert_lifetime_backup
+}
+
+proc cert_lifetime_qrsh_and_check {hostname cert_path expected_lifetime {not_before 0}} {
+   set ok 1
+
+   # call qrsh
+   set output [start_sge_bin "qrsh" "hostname"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qrsh hostname failed:\n$output"
+      set ok 0
+   } else {
+      ts_log_fine $output
+   }
+
+   # expect cerfificate and key to have been generated with the default lifetime (1 year)
+   if {$ok} {
+      set ok [get_cert_info $hostname $cert_path cert_info]
+   }
+   if {$ok} {
+      if {$cert_info(lifetime) != $expected_lifetime} {
+         set msg "expected certificate lifetime to be $expected_lifetime, got $cert_info(lifetime)"
+         append msg "\nNot Before: $cert_info(not_before) ($cert_info(not_before_epoch))"
+         append msg "\nNot After:  $cert_info(not_after) ($cert_info(not_after_epoch))"
+         ts_log_severe $msg
+         set ok 0
+      }
+      if {$not_before != 0} {
+         if {$cert_info(not_before_epoch) < $not_before} {
+            set msg "expected certificate not_before time to be >= $not_before, got $cert_info(not_before) ($cert_info(not_before_epoch))"
+            ts_log_severe $msg
+            set ok 0
+         }
+      }
+   }
+
+   return $ok
+}
+
+proc cert_lifetime_test {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global cert_lifetime_host
+
+   set ok 1
+
+   # get paths for certificate and key
+   set cert_path [get_tls_cert_path $cert_lifetime_host $CHECK_USER]
+   set key_path [get_tls_key_path $cert_lifetime_host $CHECK_USER]
+   set default_lifetime [get_tls_default_lifetime]
+
+   # remove certificate and key
+   delete_remote_file $cert_lifetime_host $CHECK_USER $cert_path
+   delete_remote_file $cert_lifetime_host $CHECK_USER $key_path
+
+   # call qrsh
+   # expect certificate and key to have been generated with the default lifetime
+   if {$ok} {
+      set ok [cert_lifetime_qrsh_and_check $cert_lifetime_host $cert_path $default_lifetime]
+   }
+
+   # remove certificate and key, set earliest start time for the new certificate (with some 20 seconds leeway)
+   if {$ok} {
+      delete_remote_file $cert_lifetime_host $CHECK_USER $cert_path
+      delete_remote_file $cert_lifetime_host $CHECK_USER $key_path
+      set not_before [expr [clock seconds] - 20]
+   }
+
+   # set a short lifetime (e.g. the minimum, 2 minutes)
+   if {$ok} {
+      set lifetime 120
+      set bs(security_params) "certificate_lifetime=$lifetime"
+      bootstrap_file_write bs
+   }
+
+   # call qrsh
+   # expect certificate and key to have been generated with the short lifetime
+   if {$ok} {
+      set ok [cert_lifetime_qrsh_and_check $cert_lifetime_host $cert_path $lifetime $not_before]
+   }
+
+   # wait until the certificate is expired
+   if {$ok} {
+      sleep_for_seconds 100 "waiting until certificate is about to expire..."
+      # expect to get a new certificate with later not_before time
+      set not_before [expr [clock seconds] - 20]
+   }
+
+   # call qrsh
+   # expect certificate and key to have been regenerated with the short lifetime
+   if {$ok} {
+      set ok [cert_lifetime_qrsh_and_check $cert_lifetime_host $cert_path $lifetime $not_before]
+   }
+
+   # remove certificate and key
+   if {$ok} {
+      delete_remote_file $cert_lifetime_host $CHECK_USER $cert_path
+      delete_remote_file $cert_lifetime_host $CHECK_USER $key_path
+      set not_before [expr [clock seconds] - 20]
+   }
+
+   # remove the short lifetime setting
+   if {$ok} {
+      set lifetime 120
+      set bs(security_params) ""
+      bootstrap_file_write bs
+   }
+
+   # call qrsh
+   # expect certificate and key to have been generated with the default lifetime (1 year)
+   if {$ok} {
+      set ok [cert_lifetime_qrsh_and_check $cert_lifetime_host $cert_path $default_lifetime $not_before]
+   }
+}

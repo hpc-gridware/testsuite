@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2024 HPC-Gridware GmbH
+#  Copyright 2024-2025 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -52,10 +52,17 @@ proc bootstrap_file_read {{array_var "bootstrap"}} {
 ###
 # @brief write the bootstrap file to an array
 #
+# Reads the existing bootstrap file,
+# replaces entries with the values from the given array,
+# re-writes the bootstrap file.
+# If entries are given as empty string, these entries will be removed from the new bootstrap file.
+#
 # @param array_var the name of the array containing the bootstrap values
+# @param remove_additional optional, if set (1) will remove entries from the bootstrap file which
+#                          are not mentioned in the new bootstrap array
 # @return 1 if the file was written successfully, 0 otherwise
 ##
-proc bootstrap_file_write {{array_var "bootstrap"}} {
+proc bootstrap_file_write {{array_var "bootstrap"} {remove_additional 0}} {
    get_current_cluster_config_array ts_config
    upvar $array_var new_bootstrap
 
@@ -68,14 +75,29 @@ proc bootstrap_file_write {{array_var "bootstrap"}} {
    if {$ret} {
       # overwrite the existing values with the new ones
       foreach name [array names new_bootstrap] {
-         set bootstrap($name) $new_bootstrap($name)
+         if {[string length $new_bootstrap($name)] == 0} {
+            # remove empty entries
+            unset -nocomplain bootstrap($name)
+         } else {
+            set bootstrap($name) $new_bootstrap($name)
+         }
+      }
+
+      # if requested then remove additional entries which are not in the new array
+      if {$remove_additional} {
+         # remove entries which are not in the new array
+         foreach name [array names bootstrap] {
+            if {![info exists new_bootstrap($name)]} {
+               unset -nocomplain bootstrap($name)
+            }
+         }
       }
 
       # write the new values to the file
       set idx 0
       incr idx ; set data($idx) "# Version: [get_version_info]"
       incr idx ; set data($idx) "# modified by testsuite"
-      
+
       foreach name [lsort [array names bootstrap]] {
          incr idx ; set data($idx) [format "%-24s %s" $name $bootstrap($name)]
       }

@@ -7260,6 +7260,7 @@ proc source_tcl_files {} {
    ts_source $libdir/display
    ts_source $libdir/simhost
    ts_source $libdir/systemd
+   ts_source $libdir/security
 
    # source a user private tcl file, e.g. to contain a
    ts_source $libdir/private
