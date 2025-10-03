@@ -1,0 +1,233 @@
+#___INFO__MARK_BEGIN__
+##########################################################################
+#
+#  The Contents of this file are made available subject to the terms of
+#  the Sun Industry Standards Source License Version 1.2
+#
+#  Sun Microsystems Inc., March, 2001
+#
+#
+#  Sun Industry Standards Source License Version 1.2
+#  =================================================
+#  The contents of this file are subject to the Sun Industry Standards
+#  Source License Version 1.2 (the "License"); You may not use this file
+#  except in compliance with the License. You may obtain a copy of the
+#  License at http://gridengine.sunsource.net/Gridengine_SISSL_license.html
+#
+#  Software provided under this License is provided on an "AS IS" basis,
+#  WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING,
+#  WITHOUT LIMITATION, WARRANTIES THAT THE SOFTWARE IS FREE OF DEFECTS,
+#  MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE, OR NON-INFRINGING.
+#  See the License for the specific provisions governing your rights and
+#  obligations concerning the Software.
+#
+#  The Initial Developer of the Original Code is: Sun Microsystems, Inc.
+#
+#  Copyright: 2001 by Sun Microsystems, Inc.
+#
+#  All Rights Reserved.
+#
+#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#
+##########################################################################
+#___INFO__MARK_END__
+
+# Define the global variables to give them back
+global check_name
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global ts_config
+global check_category
+
+set check_root_access_needs "yes"
+
+# define test's name and run level descriptions
+set check_name            "qconf_add_remove_queues"
+set check_category        "QCONF VERIFIED"
+set check_description(0)  "test all qconf massive queue add/remove operations"
+
+# define test's dependencies
+set check_needs        "init_core_system"       ;# dependencies of this check (name of other check)
+
+global qconf_original_host_groups qconf_original_usersets
+# setup and cleanup functions
+set check_setup_function "qconf_setup"
+set check_cleanup_function "qconf_cleanup"
+
+# define test's procedure order
+set check_functions     ""
+lappend check_functions "qconf_addqueues"             ;# functions to call (in order)
+lappend check_functions "qconf_removequeues"
+
+proc qconf_setup {} {
+   global ts_config CHECK_USER
+   global qconf_original_host_groups qconf_original_usersets qconf_orig_queues qconf_project qconf_sched_config qconf_userlist
+   global backup_allhosts
+   global queue_names
+   global qconf_setup_complex_backup
+
+   if {[llength $ts_config(execd_nodes)] < 2} {
+      ts_log_config "need at least 2 execd hosts for this check"
+      return 99
+   }
+
+   get_complex qconf_setup_complex_backup
+
+   set queue_names ""
+   set MAX 1000
+   for {set i 0} {$i < $MAX}  {incr i 1} {
+      lappend queue_names "q.$i"
+   }
+
+   # host group setup for GE >= 6.0
+   # we'll create additional host groups later on - remember the list of hostgroups
+   # for cleanup
+   set output [start_sge_bin qconf -shgrpl]
+   set output [string trim $output]
+   set qconf_original_host_groups {}
+   foreach hg $output {
+      ts_log_fine "saving known hostgroup \"$hg\" for cleanup procedure"
+      lappend qconf_original_host_groups $hg
+   }
+
+   # create a test hostgroup
+   set qconf_hgrp_setup(group_name) "@qconf_test"
+   set qconf_hgrp_setup(hostlist)   "$ts_config(execd_nodes)"
+   add_hostgroup "@qconf_test" qconf_hgrp_setup
+
+   get_userset_list output
+   set output [string trim $output]
+   set qconf_original_usersets {}
+   foreach user $output {
+      lappend qconf_original_usersets $user
+      ts_log_fine "saving known userset \"$output\" for cleanup procedure"
+   }
+
+   # Save initial queue list; make it a global var, to be used in cleanup
+   get_queue_list qconf_orig_queues
+
+   set qconf_project "qconf_project"
+   ts_log_fine "Create project $qconf_project ...\n"
+   set result [add_project $qconf_project]
+
+   ts_log_fine "Create userlist qconf_userlist ...\n"
+   add_access_list $CHECK_USER qconf_userlist
+
+   ts_log_fine "Save existing scheduler config ...\n"
+   get_schedd_config qconf_sched_config
+}
+
+proc qconf_cleanup {} {
+   global ts_config
+   global qconf_original_host_groups qconf_original_usersets qconf_orig_queues qconf_sched_config
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER qconf_prj_setup
+   global qconf_setup_complex_backup
+
+   ts_log_fine "cleanup ..."
+
+   # in GE >= 6.0: cleanup hostgroups
+   set output [start_sge_bin qconf -shgrpl]
+   set output [string trim $output]
+   foreach hg $output {
+      ts_log_fine "testing hostgroup \"$hg\" ..."
+      if {[lsearch -exact $qconf_original_host_groups $hg] < 0} {
+         ts_log_fine "deleting unexpected hostgroup \"$hg\" ..."
+         del_hostgroup $hg
+      }
+   }
+
+   ts_log_fine "Delete userlist qconf_userlist ...\n"
+   set result [start_sge_bin "qconf" "-dul qconf_userlist" "" ""]
+
+   set output [start_sge_bin qconf -sul]
+   set output [string trim $output]
+   foreach userg $output {
+      ts_log_fine "testing userset \"$userg\" ..."
+      if { [lsearch -exact $qconf_original_usersets $userg] < 0 } {
+         ts_log_fine "deleting unexpected usergroup \"$userg\" ..."
+         set res [start_sge_bin qconf "-dul $userg"]
+         ts_log_fine $res
+      }
+   }
+
+   # The original stuff is here
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   # Delete stuff I created
+   del_manager "qconf_user" "" "" 0
+
+   # Get list of new queues. Those created during the
+   # tests will be deleted here.
+
+   get_queue_list qconf_new_queues
+
+   ts_log_fine "Deleting queues created during qconf..."
+   foreach elem  $qconf_orig_queues {
+      foreach new_elem $qconf_new_queues {
+         if { $elem == $new_elem } {
+            continue
+         } else {
+	         del_queue $new_elem ""
+         }
+      }
+   }
+
+   # Re-set it back
+   set my_project "qconf_project"
+   ts_log_fine "Delete project $my_project ..."
+   set result [del_project $my_project "" "" 0]
+
+   # Set sched back to what it was....
+   ts_log_fine "Set scheduler to original config ..."
+   set result [mod_schedd_config qconf_sched_config]
+
+   # Re-set resource quota sets
+   if {[get_rqs_list rqs_names "" "" 0] == 0} {
+      foreach elem $rqs_names {
+         ts_log_fine "Removing resource quota sets $elem ...\n"
+         del_rqs $elem
+      }
+   }
+
+   reset_complex qconf_setup_complex_backup
+   unset qconf_setup_complex_backup
+
+   # sometimes exec hosts "stuff" and "universalNOTVALIDvalue" are left over
+   start_sge_bin "qconf" "-de stuff"
+   start_sge_bin "qconf" "-de universalNOTVALIDvalue"
+}
+
+proc qconf_addqueues {} {
+   global ts_config
+   global queue_names test_host
+
+   set q_param(load_thresholds)       "np_load_avg=7.00"
+
+   set test_host [host_conf_get_suited_hosts]
+
+   set count 0
+   foreach queue $queue_names {
+      if { $count > 50 } {
+         ts_log_fine "adding queue \"$queue\" with vi"
+         add_queue $queue $test_host q_param 0
+         set count 0
+      } else {
+         ts_log_fine "adding queue \"$queue\" with file"
+         add_queue $queue $test_host q_param
+      }
+      incr count 1
+   }
+}
+
+proc qconf_removequeues {} {
+   global ts_config
+   global queue_names test_host
+
+   foreach queue $queue_names {
+     ts_log_fine "deleting queue \"$queue\""
+     del_queue $queue $test_host 0 1
+   }
+}

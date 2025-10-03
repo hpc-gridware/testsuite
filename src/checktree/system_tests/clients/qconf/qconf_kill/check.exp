@@ -1,0 +1,112 @@
+#___INFO__MARK_BEGIN__
+##########################################################################
+#
+#  The Contents of this file are made available subject to the terms of
+#  the Sun Industry Standards Source License Version 1.2
+#
+#  Sun Microsystems Inc., March, 2001
+#
+#
+#  Sun Industry Standards Source License Version 1.2
+#  =================================================
+#  The contents of this file are subject to the Sun Industry Standards
+#  Source License Version 1.2 (the "License"); You may not use this file
+#  except in compliance with the License. You may obtain a copy of the
+#  License at http://gridengine.sunsource.net/Gridengine_SISSL_license.html
+#
+#  Software provided under this License is provided on an "AS IS" basis,
+#  WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING,
+#  WITHOUT LIMITATION, WARRANTIES THAT THE SOFTWARE IS FREE OF DEFECTS,
+#  MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE, OR NON-INFRINGING.
+#  See the License for the specific provisions governing your rights and
+#  obligations concerning the Software.
+#
+#  The Initial Developer of the Original Code is: Sun Microsystems, Inc.
+#
+#  Copyright: 2001 by Sun Microsystems, Inc.
+#
+#  All Rights Reserved.
+#
+#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#
+##########################################################################
+#___INFO__MARK_END__
+
+# Define the global variables to give them back
+global check_name
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global ts_config
+global check_category
+
+set check_root_access_needs "yes"
+
+# define test's name and run level descriptions
+set check_name            "qconf_kill"
+set check_category        "QCONF VERIFIED"
+set check_description(0)  "test all qconf options (test not complete)"
+
+# define test's dependencies
+set check_needs        "init_core_system"       ;# dependencies of this check (name of other check)
+
+# setup and cleanup functions
+set check_setup_function "qconf_kill_setup"
+set check_cleanup_function "qconf_kill_cleanup"
+
+# define test's procedure order
+set check_functions     ""
+lappend check_functions "qconf_kill_ke"
+
+proc qconf_kill_setup {} {
+   global ts_config CHECK_USER
+}
+
+proc qconf_kill_cleanup {} {
+   global ts_config CHECK_USER
+}
+
+############# qconf/qconf_ke() *********************************************
+#  NAME
+#     qconf_ke()
+#
+#  SYNOPSIS
+#     qconf_ke{} - tests that failure to send execd kill signal results
+#                  in a correct exit code.
+#
+#  FUNCTION
+#     try sending a kill execd to a daemon that is already shutdown.
+#
+#     After submitting the kill command we receive an error message stating
+#     that Cluster Scheduler (Grid Engine) failed to send kill command to execd, and we expect the
+#     exit code to be 1
+#
+#*******************************************************************************
+proc qconf_kill_ke {} {
+   global ts_config CHECK_USER
+
+   # select a host to shutdown
+   set host [host_conf_get_suited_hosts]
+
+   # run qconf -ke to initially kill the execd
+   set master_arch [resolve_arch $ts_config(master_host)]
+   set qconf "$ts_config(product_root)/bin/$master_arch/qconf"
+   set output [start_remote_prog $ts_config(master_host) $CHECK_USER $qconf "-ke $host" prg_exit_state 60 0 "" "" 1 1 0 1 0 1]
+
+   # waiting for unknown state is not sufficient because the state is set before execd is down
+   wait_for_queue_state "all.q@$host" "au" 60
+
+   # second kill attempts has to return with exit code 1
+   set output [start_remote_prog $ts_config(master_host) $CHECK_USER $qconf "-ke $host" prg_exit_state 60 0 "" "" 1 1 0 1 0 1]
+
+   # check exit code
+   if {$prg_exit_state == 0} {
+      ts_log_severe "qconf_ke test failed.\nExpected qconf to return exit code other than 0, but got result: $prg_exit_state"
+   } else {
+      ts_log_fine "qconf_ke test successful"
+   }
+
+   # restart the execd on host that was shutdown
+   startup_execd $host
+}

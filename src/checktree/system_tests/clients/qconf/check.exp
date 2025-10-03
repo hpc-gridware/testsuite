@@ -59,8 +59,6 @@ set check_cleanup_function "qconf_cleanup"
 
 # define test's procedure order
 set check_functions     ""
-lappend check_functions "qconf_addqueues"             ;# functions to call (in order)
-lappend check_functions "qconf_removequeues"
 lappend check_functions "qconf_auser"
 lappend check_functions "qconf_duser"
 lappend check_functions "qconf_Auser"
@@ -75,7 +73,6 @@ lappend check_functions "qconf_sel"
 #lappend check_functions "qconf_aattr_check"
 #lappend check_functions "qconf_rattr_check"
 #lappend check_functions "qconf_Aattr_check"
-
 
 # Show options DONE
 lappend check_functions "qconf_scal_check"   ;# List calendars
@@ -135,7 +132,6 @@ lappend check_functions "qconf_issue_2445"              ;# TS case for IZ 2445
 lappend check_functions "qconf_help"                    ;# TS case for qconf [-help] return values
 lappend check_functions "qconf_Aconf"                   ;# TS case for qconf -Aconf with already existing configuration
 lappend check_functions "qconf_delete_admin_user"       ;# deleting manager or operator must fail for root and admin user
-lappend check_functions "qconf_ke"	                    ;# TS case for qconf -ke with already shutdown daemon
 
 lappend check_functions "qconf_issue_2960"
 
@@ -384,38 +380,6 @@ proc qconf_Muser {} {
 
       # now delete user
       del_user "$test_user"
-   }
-}
-
-proc qconf_addqueues {} {
-   global ts_config
-   global queue_names test_host
-
-   set q_param(load_thresholds)       "np_load_avg=7.00"
-
-   set test_host [host_conf_get_suited_hosts]
-
-   set count 0
-   foreach queue $queue_names {
-      if { $count > 50 } {
-         ts_log_fine "adding queue \"$queue\" with vi"
-         add_queue $queue $test_host q_param 0
-         set count 0
-      } else {
-         ts_log_fine "adding queue \"$queue\" with file"
-         add_queue $queue $test_host q_param
-      }
-      incr count 1
-   }
-}
-
-proc qconf_removequeues {} {
-   global ts_config
-   global queue_names test_host
-
-   foreach queue $queue_names {
-     ts_log_fine "deleting queue \"$queue\""
-     del_queue $queue $test_host 0 1
    }
 }
 
@@ -4789,45 +4753,4 @@ proc qconf_delete_admin_user {} {
          break
       }
    }
-}
-
-############# qconf/qconf_ke() *********************************************
-#  NAME
-#     qconf_ke()
-#
-#  SYNOPSIS
-#     qconf_ke{} - tests that failure to send execd kill signal results
-#                  in a correct exit code.
-#
-#  FUNCTION
-#     try sending a kill execd to a daemon that is already shutdown.
-#
-#     After submitting the kill command we receive an error message stating
-#     that Cluster Scheduler (Grid Engine) failed to send kill command to execd, and we expect the
-#     exit code to be 1
-#
-#*******************************************************************************
-proc qconf_ke {} {
-   global ts_config CHECK_USER
-
-   # run qconf -ke to initially kill the execd
-   set host [host_conf_get_suited_hosts]
-   set result [start_sge_bin "qconf" "-ke $host"]
-
-   wait_for_queue_state "all.q@$host" "au" 60
-
-   set master_arch [resolve_arch $ts_config(master_host)]
-   set qconf "$ts_config(product_root)/bin/$master_arch/qconf"
-   set output [start_remote_prog $ts_config(master_host) $CHECK_USER $qconf "-ke $host" prg_exit_state 60 0 "" "" 1 1 0 1 0 1]
-
-   set expected_message [translate_macro MSG_COM_NONOTIFICATION_SSS "failed" "*" "*"]
-
-   if {$prg_exit_state == "0"} {
-      ts_log_severe "qconf_ke test failed.\nExpected qconf to return exit code other than 0, but got result:\n$prg_exit_state"
-   } else {
-      ts_log_fine "qconf_ke test successful"
-   }
-
-   #restart the execd on host that was shutdown
-   startup_execd $host
 }
