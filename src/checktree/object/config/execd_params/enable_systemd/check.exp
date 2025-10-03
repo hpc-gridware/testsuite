@@ -84,12 +84,12 @@ proc config_enable_systemd_check_job {host job_id expect_running_in_systemd} {
          ts_log_fine "Job $job_id is running in systemd on host $host as expected"
       } else {
          ts_log_severe "Job $job_id is running in systemd on host $host, but it should not be"
-         wait_for_enter
+         #wait_for_enter
       }
    } else {
       if {$expect_running_in_systemd} {
          ts_log_severe "Job $job_id is not running in systemd on host $host, but it should be"
-         wait_for_enter
+         #wait_for_enter
       } else {
          ts_log_fine "Job $job_id is not running in systemd on host $host as expected"
       }
