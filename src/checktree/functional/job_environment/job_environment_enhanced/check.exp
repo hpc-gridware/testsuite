@@ -202,6 +202,13 @@ proc job_environment_enhanced_cleanup {} {
 proc job_environment_enhanced_INHERIT_ENV {} {
    global env job_environment_enhanced_exec_host
 
+   # CS-1536 the execd_params INHERIT_ENV=FALSE does not have effect on qrsh (with command)
+   # has been fixed with OCS 9.0.9
+   set do_qrsh_test 0
+   if {[is_version_in_range "9.0.9"]} {
+      set do_qrsh_test 1
+   }
+
    set args "-l h=$job_environment_enhanced_exec_host -j yes"
 
    set errors ""
@@ -222,6 +229,19 @@ proc job_environment_enhanced_INHERIT_ENV {} {
       append errors "\nFailed submitting job, with INHERIT_ENV=false"
    }
 
+   # Test with qrsh
+   if {$do_qrsh_test} {
+      set output [start_sge_bin "qrsh" "-l h=$job_environment_enhanced_exec_host env"]
+      if {$prg_exit_state != 0} {
+         append errors "\nqrsh job failed, with INHERIT_ENV=false"
+      } else {
+         parse_name_value_list qrsh_env $output "\n"
+         if {[info exists qrsh_env(THISIS)]} {
+            append errors "\nEnvironment variable was inherited to qrsh when it shouldn't have been, with INHERIT_ENV=false"
+         }
+      }
+   }
+
    ts_log_fine "Testing effects of execd_params=none, after INHERIT_ENV=false"
 
    # Set exced_params=none
@@ -236,6 +256,19 @@ proc job_environment_enhanced_INHERIT_ENV {} {
       }
    } else {
       append errors "\nFailed submitting job, with execd_params=none after INHERIT_ENV=false"
+   }
+
+   # Test with qrsh
+   if {$do_qrsh_test} {
+      set output [start_sge_bin "qrsh" "-l h=$job_environment_enhanced_exec_host env"]
+      if {$prg_exit_state != 0} {
+         append errors "\nqrsh job failed, with execd_params=none after INHERIT_ENV=false"
+      } else {
+         parse_name_value_list qrsh_env $output "\n"
+         if {![info exists qrsh_env(THISIS)]} {
+            append errors "\nEnvironment variable was not inherited to qrsh, with execd_params=none after INHERIT_ENV=false"
+         }
+      }
    }
 
    ts_log_fine "Testing effects of INHERIT_ENV=true"
@@ -254,6 +287,19 @@ proc job_environment_enhanced_INHERIT_ENV {} {
       append errors "\nFailed submitting job, with INHERIT_ENV=true"
    }
 
+   # Test with qrsh
+   if {$do_qrsh_test} {
+      set output [start_sge_bin "qrsh" "-l h=$job_environment_enhanced_exec_host env"]
+      if {$prg_exit_state != 0} {
+         append errors "\nqrsh job failed, with INHERIT_ENV=true"
+      } else {
+         parse_name_value_list qrsh_env $output "\n"
+         if {![info exists qrsh_env(THISIS)]} {
+            append errors "\nEnvironment variable was not inherited to qrsh, with INHERIT_ENV=true"
+         }
+      }
+   }
+
    ts_log_fine "Testing effects of execd_params=none, after INHERIT_ENV=true"
 
    # Set exced_params=none
@@ -268,6 +314,19 @@ proc job_environment_enhanced_INHERIT_ENV {} {
       }
    } else {
       append errors "\nFailed submitting job, with execd_params=none after INHERIT_ENV=true"
+   }
+
+   # Test with qrsh
+   if {$do_qrsh_test} {
+      set output [start_sge_bin "qrsh" "-l h=$job_environment_enhanced_exec_host env"]
+      if {$prg_exit_state != 0} {
+         append errors "\nqrsh job failed, with execd_params=none after INHERIT_ENV=true"
+      } else {
+         parse_name_value_list qrsh_env $output "\n"
+         if {![info exists qrsh_env(THISIS)]} {
+            append errors "\nEnvironment variable was not inherited to qrsh, with execd_params=none after INHERIT_ENV=true"
+         }
+      }
    }
 
    if {$errors != ""} {
