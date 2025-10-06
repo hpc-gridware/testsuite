@@ -58,6 +58,7 @@ set check_cleanup_function qhost_cleanup
 
 # define test's procedure order
 set check_functions {}
+
 lappend check_functions "qhost_issue1306"
 lappend check_functions "test_issue132"
 lappend check_functions "test_issue132_h"
@@ -65,7 +66,6 @@ lappend check_functions "test_issue132_j"
 lappend check_functions "test_issue132_u"
 lappend check_functions "test_issue132_l"
 lappend check_functions "test_issue132_F"
-
 lappend check_functions "test_issue245"
 lappend check_functions "qhost_l_with_multiple_attributes"
 

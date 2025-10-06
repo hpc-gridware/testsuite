@@ -3798,6 +3798,7 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
    # split plain output on each new line
    set plain_split [ split $plainoutput "\n" ]
    set has_binding [ge_has_feature "binding-in-execd"]
+   set has_binding_scheduler [ge_has_feature "binding-in-scheduler"]
 
    set inc 0
    set job 0
@@ -3831,6 +3832,22 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
             }
             # switch to next job, increment counter
             if { $line == 26} {
+                  incr job 1
+                  set line 0
+            }
+         } elseif {$has_binding_scheduler} {
+            # if core binding is present then there are more lines for m_topology, m_core, m_socket, m_thread
+            switch -- $line {
+                22 - 23 - 24 - 25 {
+                  set attr [ split $elem "="]
+                  lassign $attr heading value
+                  set val [ split $heading ":"]
+                  lassign $val dom nam
+                  set plain(host$job,$nam) $value
+                }
+            }
+            # switch to next job, increment counter
+            if { $line == 25} {
                   incr job 1
                   set line 0
             }
