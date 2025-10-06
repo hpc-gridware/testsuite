@@ -85,11 +85,23 @@ set TIGHT_INTEGRATION_FUNCTIONAL_DURATION 10
 set TIGHT_INTEGRATION_MASSIVE_SLOTS 200
 set TIGHT_INTEGRATION_MASSIVE_DURATION 120
 
+global host_config_backup
+
 proc tight_integration_setup {} {
    global ts_config
    global TIGHT_INTEGRATION_FUNCTIONAL_SLOTS
    global tight_masterq tight_master_node
    global tight_global_config tight_boostrap_backup
+   global host_config_backup
+
+   # increase slots capacity
+   foreach host $ts_config(execd_nodes) {
+      get_exechost host_config_bkup $host
+      set host_config_backup($host) $host_config_bkup(complex_values)
+
+      set host_cfg(complex_values)  "slots=5000"
+      set_exechost host_cfg $host
+   }
 
    # we have to set a short load report time
    # to workaround CR 6728379
@@ -119,7 +131,6 @@ proc tight_integration_setup {} {
    # as we have exec hosts
    set num_hosts [llength $ts_config(execd_nodes)]
    set TIGHT_INTEGRATION_FUNCTIONAL_SLOTS $num_hosts
-
    set tight_master_node $ts_config(master_host)
    set tight_masterq [get_queue_instance "tight.q" $tight_master_node]
 
@@ -179,6 +190,13 @@ proc tight_integration_setup_level {} {
 proc tight_integration_cleanup {} {
    global ts_config
    global tight_global_config tight_bootstrap_backup
+   global host_config_backup
+
+   # restore complex_values
+   foreach host $ts_config(execd_nodes) {
+      set host_cfg(complex_values) $host_config_backup($host)
+      set_exechost host_cfg $host
+   }
 
    reset_config_and_propagate tight_global_config
 
