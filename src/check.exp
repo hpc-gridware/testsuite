@@ -7216,6 +7216,7 @@ proc source_tcl_files {} {
    ts_source $libdir/config_database
    ts_source $libdir/config_filesystem
 
+   ts_source $libdir/binding
    ts_source $libdir/compile
    ts_source $libdir/file_procedures
    ts_source $libdir/gettext_procedures

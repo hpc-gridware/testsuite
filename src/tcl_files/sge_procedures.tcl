@@ -1426,6 +1426,7 @@ proc handle_sge_errors {procedure command result messages_var {raise_error 1} {p
 
    # remove trailing garbage
    set result [string trim $result]
+
    # try to find error message
    foreach errno $messages(index) {
       if {[lsearch -exact $ignore_id_list $errno] != -1} {

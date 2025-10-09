@@ -3081,12 +3081,15 @@ proc qstat_F_plain_parse {  output {params ""} {user ""} {add_args ""}} {
       # Else, it is a jobid.
 
       set id [lindex $single_white_space_string 0]
+      set two_ids [lrange $single_white_space_string 0 1]
 
-      if { [regexp "\[a-zA-Z\]{2}:\[a-zA-Z_\]+=\[a-zA-Z._0-9/\]+" $id] } {; # complexes values
-         regsub "\=" $id " " complex_attribute_value ; # get the complex attribute and value
-         set complex_attribute [lindex $complex_attribute_value 0]
-         set value [lindex $complex_attribute_value 1]
-         set qstat_output($queue_name,$complex_attribute) $value
+      if {[regexp {([a-zA-Z]{2}):([a-zA-Z_]+)=([a-zA-Z]+) \(([a-zA-Z]+)\)} "$two_ids" all dom name value in_use]} {
+         # matches dom:name=value (in_use)
+         set qstat_output($queue_name,${dom}:$name) $value
+         set qstat_output($queue_name,${dom}:${name}_in_use) $in_use
+      } elseif {[regexp {([a-zA-Z]{2}):([a-zA-Z_]+)=([a-zA-Z._0-9/]+)} $id all dom name value]} {
+         # matches dom:name=value
+         set qstat_output($queue_name,${dom}:$name) $value
       } elseif { [regexp "\[a-zA-Z\]" $id] } {  ; # queue listing
          set delta 0
          set qstat_output($id,qname) [lindex $single_white_space_string [expr 0 + $delta]]

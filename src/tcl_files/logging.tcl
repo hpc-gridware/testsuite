@@ -284,6 +284,10 @@ proc ts_log_severe {message {raise_error 1} {function ""} {do_output 1} {do_logg
    ts_private_do_log SEVERE $message $raise_error $function $do_output $do_logging $do_mail
 }
 
+proc ts_log_error {message {raise_error 1} {function ""} {do_output 1} {do_logging 1} {do_mail 1}} {
+   ts_private_do_log SEVERE $message $raise_error $function $do_output $do_logging $do_mail
+}
+
 #****** logging/ts_log_warning() *******************************************************
 #  NAME
 #     ts_log_warning() -- log a warning message
