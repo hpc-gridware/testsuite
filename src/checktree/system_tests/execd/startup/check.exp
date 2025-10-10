@@ -207,7 +207,7 @@ proc startup_execd_test1 {} {
       set CL_RETVAL_CONNECT_ERROR        [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_CL_RETVAL_CONNECT_ERROR]]
       set CL_RETVAL_CONNECTION_NOT_FOUND [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_CL_RETVAL_CONNECTION_NOT_FOUND]]
       shutdown_execd $hostname
-      shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
+      shutdown_qmaster
 
       set start_time [timestamp]
       ts_log_fine "Starting execd on host $hostname (on SGE_EXECD_PORT=$execd_port) ..."

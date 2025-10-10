@@ -85,7 +85,7 @@ proc issue_1760_check {} {
    set envlist(SGE_COMMLIB_DEBUG_RESOLVE) "$issue_1760_fake_host"
 
    # Shutdown qmaster
-   shutdown_qmaster $ts_config(master_host) [ get_qmaster_spool_dir ]
+   shutdown_qmaster
 
    # Restart qmaster with envlist set
    startup_qmaster 0 envlist
@@ -149,7 +149,7 @@ proc issue_1760_check {} {
    }
 
    # Shutdown qmaster
-   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
+   shutdown_qmaster
    # Restart qmaster without envlist set
    startup_qmaster 0
 
@@ -215,7 +215,7 @@ proc issue_1760_cleanup {} {
    # Remove leftover objects
    if {($issue_1760_milestone >= 1) && ($issue_1760_milestone < 6)} {
       # Shutdown qmaster
-      shutdown_qmaster $ts_config(master_host) [ get_qmaster_spool_dir ]
+      shutdown_qmaster
 
       # Restart qmaster with envlist set
       startup_qmaster 0 envlist
@@ -234,7 +234,7 @@ proc issue_1760_cleanup {} {
       }
 
       # Shutdown qmaster
-      shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
+      shutdown_qmaster
 
       # Restart qmaster without envlist set
       startup_qmaster 0

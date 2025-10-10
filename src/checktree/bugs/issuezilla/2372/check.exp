@@ -104,7 +104,7 @@ proc issue_2372_setup {} {
    set_config global_conf
 
    # shutdown qmaster & scheduler
-   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
+   shutdown_qmaster
 
    # restart qmaster with test environment variable SGE_TEST_SPOOLING_WAIT_TIME
    ts_log_fine "restarting qmaster (and scheduler) with slow spooling options enabled when qping -dump client is connected!"
@@ -117,13 +117,13 @@ proc issue_2372_cleanup {} {
    global ts_config
    global issue_2372_backup issue_2372_cl_ping issue_2372_gdi_timeout issue_2372_gdi_retries
 
-   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
+   shutdown_qmaster
 
    # restore config
    ts_log_fine "restarting qmaster and restore default settings"
    startup_qmaster 0
    reset_config issue_2372_backup
-   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
+   shutdown_qmaster
 
    ts_log_fine "restarting qmaster and scheduler with default settings"
    startup_qmaster

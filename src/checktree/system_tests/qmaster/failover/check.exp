@@ -121,7 +121,7 @@ proc check_queue_state {} {
    #
    # Start from scratch to obtain with defined state.
    #
-   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
+   shutdown_qmaster
    #
    # ... start over and sync with execd's.
    #
@@ -163,8 +163,7 @@ proc check_queue_state {} {
    #
    # Shutdown and restart qmaster
    #
-   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
-   startup_qmaster 0
+   shutdown_and_restart_qmaster
    #
    # Give execd's some time to re-register with new qmaster and
    # update load report and queue status.

@@ -69,7 +69,7 @@ proc issue_2028_setup {} {
    # backup jobseqnum
    # we have to shutdown qmaster to force it to write the jobseqnum file
    set qmaster_spool_dir [get_qmaster_spool_dir]
-   shutdown_qmaster $ts_config(master_host) $qmaster_spool_dir
+   shutdown_qmaster
 
    set issue_2028_backup_seqno [get_jobseqnum]
 
@@ -152,8 +152,7 @@ proc issue_2028_test {} {
    }
 
    # shutdown and restart qmaster
-   shutdown_master_and_scheduler $ts_config(master_host) $qmaster_spool_dir
-   startup_qmaster
+   shutdown_and_restart_qmaster
 
    # submit some jobs - must be successfull
    set id_list [issue_2028_submit "after wraparound and qmaster restart"]

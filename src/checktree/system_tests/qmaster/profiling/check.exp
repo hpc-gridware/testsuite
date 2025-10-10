@@ -27,17 +27,17 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -48,7 +48,7 @@ set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "check qmaster profiling"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function qmaster_profiling_setup
@@ -167,7 +167,7 @@ proc qmaster_profiling_monitor {info_text id expected_prof {tail_timeout 70}} {
                      }
                   } ;# switch
                } ;# valid line
-            } ;# foreach line  
+            } ;# foreach line
          } ;# data
       } ;# switch
 
@@ -199,7 +199,7 @@ proc qmaster_profiling_monitor {info_text id expected_prof {tail_timeout 70}} {
          # no check here
       }
       default {
-         # here we shall have expected n messages for the requested thread, 
+         # here we shall have expected n messages for the requested thread,
          # 0 messages for the other ones
          set message "expected $expected_prof profiling messages to show up, but got"
          set prof_strings "PROF_SIGNAL PROF_LISTENER PROF_DELIVER PROF_TEVENT"
@@ -240,7 +240,7 @@ proc qmaster_profiling_dynamic {} {
    set prof_strings "PROF_LISTENER PROF_DELIVER PROF_TEVENT"
    foreach prof $prof_strings {
       ts_log_fine "testing profiling $prof"
-   
+
       # switch on profiling
       set global_conf(qmaster_params) "$prof=true"
       set_config global_conf
@@ -277,11 +277,8 @@ proc qmaster_profiling_restart {} {
    # wait for PROF messages to show up
    qmaster_profiling_monitor "call 5" $id PROF_LISTENER
 
-   # shutdown qmaster
-   shutdown_qmaster $ts_config(master_host) $spooldir
-
-   # restart qmaster
-   startup_qmaster 0
+   # shutdown and restart qmaster
+   shutdown_and_restart_qmaster
 
    # wait for PROF messages
    qmaster_profiling_monitor "call 7" $id PROF_LISTENER

@@ -108,8 +108,7 @@ proc schedd_reconnect_test {} {
    set error_text ""
 
    # shutdown and restart qmaster
-   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
-   startup_qmaster 0
+   shutdown_and_restart_qmaster
 
    set mytimeout [timestamp]
    incr mytimeout 120

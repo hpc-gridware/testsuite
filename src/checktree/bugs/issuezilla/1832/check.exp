@@ -125,7 +125,7 @@ proc issue_1832_run_master_down  {} {
               ts_log_fine $line
               if { [string match "ddd*" $line] && $master_down == 0} {
                   ts_log_fine "shutting down qmaster ..."
-                  shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
+                  shutdown_qmaster
                   set master_down 1
                   set my_master_start_time [timestamp]
                   incr my_master_start_time 15

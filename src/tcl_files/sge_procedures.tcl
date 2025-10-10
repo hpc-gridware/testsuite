@@ -116,8 +116,6 @@ set module_name "sge_procedures.tcl"
 # startup_scheduler() -- ???
 # startup_daemon - starts the SGE daemon specified by the argument
 # are_master_and_scheduler_running -- ???
-# shutdown_master_and_scheduler -- ???
-# shutdown_scheduler() -- ???
 # is_scheduler_alive() -- ???
 # is_qmaster_alive() -- check if qmaster process is running
 # is_execd_alive() -- check if execd process is running
@@ -6965,7 +6963,6 @@ proc wait_for_jobend {jobid jobname seconds {runcheck 1} {wait_for_end 0} {raise
 #
 #  SEE ALSO
 #     sge_procedures/shutdown_core_system()
-#     sge_procedures/shutdown_master_and_scheduler()
 #     sge_procedures/shutdown_all_shadowd()
 #     sge_procedures/shutdown_system_daemon()
 #     sge_procedures/startup_qmaster()
@@ -7230,112 +7227,7 @@ proc are_master_and_scheduler_running { hostname qmaster_spool_dir } {
 }
 
 
-# kills master and scheduler on the given hostname
 #                                                             max. column:     |
-#****** sge_procedures/shutdown_master_and_scheduler() ******
-#
-#  NAME
-#     shutdown_master_and_scheduler -- ???
-#
-#  SYNOPSIS
-#     shutdown_master_and_scheduler { hostname qmaster_spool_dir }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     hostname          - ???
-#     qmaster_spool_dir - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     sge_procedures/shutdown_core_system()
-#     sge_procedures/shutdown_master_and_scheduler()
-#     sge_procedures/shutdown_all_shadowd()
-#     sge_procedures/shutdown_system_daemon()
-#     sge_procedures/startup_qmaster()
-#     sge_procedures/startup_execd()
-#     sge_procedures/startup_shadowd()
-#*******************************
-proc shutdown_master_and_scheduler {hostname qmaster_spool_dir} {
-   get_current_cluster_config_array ts_config
-
-   shutdown_qmaster $hostname $qmaster_spool_dir
-}
-
-#****** sge_procedures/shutdown_scheduler() ************************************
-#  NAME
-#     shutdown_scheduler() -- ???
-#
-#  SYNOPSIS
-#     shutdown_scheduler { hostname qmaster_spool_dir }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     hostname          - ???
-#     qmaster_spool_dir - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************************************************************
-proc shutdown_scheduler {hostname qmaster_spool_dir} {
-   global CHECK_USER CHECK_ADMIN_USER_SYSTEM
-   get_current_cluster_config_array ts_config
-
-   ts_log_fine "shutdown_scheduler ..."
-
-   ts_log_finer "killing scheduler on host $hostname ..."
-   ts_log_finest "retrieving data from spool dir $qmaster_spool_dir"
-
-
-
-   set scheduler_pid [ get_scheduler_pid $hostname $qmaster_spool_dir ]
-
-   get_ps_info $scheduler_pid $hostname
-   if { ($ps_info($scheduler_pid,error) == 0) } {
-      if { [ is_pid_with_name_existing $hostname $scheduler_pid "sge_schedd" ] == 0 } {
-         ts_log_finest "shutdown schedd with pid $scheduler_pid on host $hostname"
-         ts_log_finest "do a qconf -ks ..."
-         set result [start_sge_bin "qconf" "-ks"]
-         ts_log_finest $result
-         after 1500
-         shutdown_system_daemon $hostname sched
-      } else {
-         ts_log_severe "scheduler pid $scheduler_pid not found"
-         set scheduler_pid -1
-      }
-   } else {
-      ts_log_severe "ps_info failed (1), pid=$scheduler_pid"
-      set scheduler_pid -1
-   }
-
-   ts_log_finest "done."
-}
 #****** sge_procedures/is_scheduler_alive() ************************************
 #  NAME
 #     is_scheduler_alive() -- ???
@@ -7703,11 +7595,18 @@ proc get_pid_from_file {host pid_file} {
 #  SEE ALSO
 #     ???/???
 #*******************************************************************************
-proc shutdown_qmaster {hostname qmaster_spool_dir {timeout 60}} {
+proc shutdown_qmaster {{hostname ""} {qmaster_spool_dir ""} {timeout 60}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER CHECK_ADMIN_USER_SYSTEM
    global CHECK_VALGRIND CHECK_VALGRIND_SHUTDOWN_TIMEOUT
    global CHECK_INSTALL_RC
+
+   if {$hostname eq ""} {
+      set hostname $ts_config(master_host)
+   }
+   if {$qmaster_spool_dir eq ""} {
+      set qmaster_spool_dir [get_qmaster_spool_dir]
+   }
 
    ts_log_fine "shutdown_qmaster ..."
 
@@ -7784,7 +7683,6 @@ proc shutdown_qmaster {hostname qmaster_spool_dir {timeout 60}} {
 #
 #  SEE ALSO
 #     sge_procedures/shutdown_core_system()
-#     sge_procedures/shutdown_master_and_scheduler()
 #     sge_procedures/shutdown_all_shadowd()
 #     sge_procedures/shutdown_system_daemon()
 #     sge_procedures/startup_qmaster()
@@ -7857,7 +7755,6 @@ proc shutdown_shadowd { hostname } {
 #
 #  SEE ALSO
 #     sge_procedures/shutdown_core_system()
-#     sge_procedures/shutdown_master_and_scheduler()
 #     sge_procedures/shutdown_all_shadowd()
 #     sge_procedures/shutdown_system_daemon()
 #     sge_procedures/startup_qmaster()
@@ -7972,7 +7869,6 @@ proc shutdown_all_shadowd {hostname} {
 #
 #  SEE ALSO
 #     sge_procedures/shutdown_core_system()
-#     sge_procedures/shutdown_master_and_scheduler()
 #     sge_procedures/shutdown_all_shadowd()
 #     sge_procedures/shutdown_bdb_rpc()
 #     sge_procedures/shutdown_system_daemon()
@@ -8133,7 +8029,6 @@ proc is_pid_with_name_existing {host pid proc_name} {
 #
 #  SEE ALSO
 #     sge_procedures/shutdown_core_system()
-#     sge_procedures/shutdown_master_and_scheduler()
 #     sge_procedures/shutdown_all_shadowd()
 #     sge_procedures/shutdown_system_daemon()
 #     sge_procedures/startup_qmaster()
@@ -8271,7 +8166,6 @@ proc shutdown_system_daemon { host typelist { do_term_signal_kill_first 1 } } {
 #
 #  SEE ALSO
 #     sge_procedures/shutdown_core_system()
-#     sge_procedures/shutdown_master_and_scheduler()
 #     sge_procedures/shutdown_all_shadowd()
 #     sge_procedures/shutdown_system_daemon()
 #     sge_procedures/startup_qmaster()
@@ -8289,7 +8183,7 @@ proc shutdown_daemon { host service } {
             ts_log_severe "Can't stop $service on host $host. Qmaster host is only $ts_config(master_host)"
             return -1
          }
-         return [shutdown_qmaster $host [get_qmaster_spool_dir]]
+         return [shutdown_qmaster $host]
       }
       "shadow" -
       "shadowd" {
@@ -8350,7 +8244,6 @@ proc shutdown_daemon { host service } {
 #  SEE ALSO
 #     sge_procedures/shutdown_core_system()
 #     sge_procedures/startup_core_system()
-#     sge_procedures/shutdown_master_and_scheduler()
 #     sge_procedures/shutdown_all_shadowd()
 #     sge_procedures/shutdown_system_daemon()
 #     sge_procedures/startup_qmaster()
@@ -10331,7 +10224,6 @@ proc switch_execd_spool_dir { host spool_type { force_restart 0 } } {
 #
 #  SEE ALSO
 #     sge_procedures/shutdown_core_system()
-#     sge_procedures/shutdown_master_and_scheduler()
 #     sge_procedures/shutdown_all_shadowd()
 #     sge_procedures/shutdown_system_daemon()
 #     sge_procedures/startup_qmaster()
@@ -10519,7 +10411,6 @@ proc check_shadowd_settings { shadowd_host } {
 #
 #  SEE ALSO
 #     sge_procedures/shutdown_core_system()
-#     sge_procedures/shutdown_master_and_scheduler()
 #     sge_procedures/shutdown_all_shadowd()
 #     sge_procedures/shutdown_system_daemon()
 #     sge_procedures/startup_qmaster()
@@ -10890,14 +10781,13 @@ proc get_daemon_pid { host service } {
 #     A newly restarted qmaster as side effect.
 #
 #  SEE ALSO
-#     sge_procedures/shutdown_master_and_scheduler()
 #     sge_procedures/startup_qmaster()
 #*******************************************************************************
 
 proc shutdown_and_restart_qmaster {} {
    global ts_config
 
-   shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
+   shutdown_qmaster
    # sometimes the socket can not be re-used immediately
    sleep_for_seconds 2
    # startup qmaster with scheduler (if possible)

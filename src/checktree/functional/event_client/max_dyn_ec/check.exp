@@ -140,7 +140,7 @@ proc max_dyn_ec_default {} {
    set expected_message [translate_macro MSG_SET_MAXDYNEVENTCLIENT_U "*"]
    set exceeds_message [translate_macro MSG_CONF_NR_DYNAMIC_EVENT_CLIENT_EXCEEDS_MAX_FILEDESCR_U "*"]
 
-   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
+   shutdown_qmaster
    init_logfile_wait $ts_config(master_host) [get_qmaster_messages_file]
    startup_qmaster
 

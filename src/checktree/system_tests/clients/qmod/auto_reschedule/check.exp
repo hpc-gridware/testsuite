@@ -356,7 +356,7 @@ proc auto_reschedule_unknown_check_master {} {
       }
    }
 
-   shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
+   shutdown_qmaster
 
    ts_log_fine "master and scheduler must be down now"
 

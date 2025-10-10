@@ -153,8 +153,7 @@ proc execd_reconnect_test {} {
    }
 
    # now shutdown qmaster and scheduler
-   shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
-
+   shutdown_qmaster
 
    # 2) write unresolvable host name into the file
    set data(0) 1

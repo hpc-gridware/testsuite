@@ -462,8 +462,7 @@ proc share_tree_test {} {
       } else {
          # Try if spooling with running jobs is working
          if {$nr_of_jobs == 5} {
-            shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
-            startup_qmaster
+            shutdown_and_restart_qmaster
 
             trigger_scheduling
             if {![wait_for_job_tickes $last_job]} {

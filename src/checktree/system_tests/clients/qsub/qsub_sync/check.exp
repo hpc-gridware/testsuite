@@ -301,7 +301,7 @@ proc qsub_sync_failover {} {
    set timeout 120
 
    # qconf -km before qsub -sync y
-   shutdown_master_and_scheduler $ts_config(master_host) $spool_dir
+   shutdown_qmaster $ts_config(master_host) $spool_dir
    set output [start_sge_bin "qsub" "-sync y $ts_config(product_root)/examples/jobs/sleeper.sh 10" $host $CHECK_USER]
    set text [translate_macro MSG_GDI_UNABLE_TO_CONNECT_SUS "qmaster" "*" "*"]
    set text2 [translate_macro MSG_GDI_CANT_SEND_MSG_TO_PORT_ON_HOST_SUSS "qmaster" "*" "*" "*"]
@@ -339,7 +339,7 @@ proc qsub_sync_failover {} {
    set recon 0
    set text [translate_macro MSG_JAPI_QMASTER_DOWN]
    set text2 [translate_macro MSG_JAPI_RECONNECTED]
-   shutdown_master_and_scheduler $ts_config(master_host) $spool_dir
+   shutdown_qmaster $ts_config(master_host) $spool_dir
    set timeout 660  ;# reconnect time might take some time
    # (TODO: reconfigure delayed job reporting time for execd somehow to speedup this test)
    ts_log_fine "now waiting for qsub -sync job finished (this might take up to 10 minutes)"

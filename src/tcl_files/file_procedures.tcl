@@ -4427,13 +4427,15 @@ proc set_jobseqnum {jobseqnum} {
    set ret 0
    set qmaster_spool_dir [get_qmaster_spool_dir]
 
-   shutdown_master_and_scheduler $ts_config(master_host) $qmaster_spool_dir
+   shutdown_qmaster
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER "echo" "$jobseqnum > $qmaster_spool_dir/jobseqnum"]
    if {$prg_exit_state == 0} {
       set ret 1
    } else {
       ts_log_severe "setting job sequence number failed:\n$output"
    }
+   # avoid socket reuse issue
+   sleep_for_seconds 2
    startup_qmaster
 
    return $ret

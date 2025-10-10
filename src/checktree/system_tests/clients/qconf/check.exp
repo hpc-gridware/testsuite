@@ -4203,8 +4203,7 @@ proc qconf_add_rqs {} {
    if {$result == -120 || $result == -121} {
       ts_log_warning "adding a rqs with invalid filter rule probably crashed qmaster - stopping qconf test"
       # try to repair things
-      shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
-      startup_qmaster 0
+      shutdown_and_restart_qmaster
    }
    # in case the invalid rqs has been created - delete it
    del_rqs $rqs_name_invalid "" "" 0

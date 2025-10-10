@@ -67,7 +67,7 @@ proc issue_1126_setup {} {
 proc issue_1126_shutdown_master {} {
    global ts_config
 
-   shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
+   shutdown_qmaster
 }
 
 proc issue_1126_run {} {

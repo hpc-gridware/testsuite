@@ -272,7 +272,7 @@ proc valgrind_shutdown_daemon {} {
             shutdown_system_daemon $host "shadowd"
          }
          # shutdown qmaster, allow 10 minutes for the shutdown, dumping valgrind data can take some time
-         shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir] 900
+         shutdown_qmaster "" "" 900
       }
       "execution" {
          shutdown_system_daemon $CHECK_VALGRIND_HOST "execd"

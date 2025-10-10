@@ -497,7 +497,7 @@ proc drmaa_check_additional_interfaces { } {
    global CHECK_USER drmaa_binary_name level_host_list
 
    # shutdown qmaster
-   shutdown_master_and_scheduler $ts_config(master_host) [get_qmaster_spool_dir]
+   shutdown_qmaster
 
    foreach host $level_host_list {
       # this test must fail when qmaster is down

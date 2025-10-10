@@ -6363,16 +6363,15 @@ proc get_user_input { what } {
 #     { shutdown 0 } - 0 -> do shutdown (otherwise only do startup)
 #
 #*******************************************************************************
-proc restart_debug_daemons { { shutdown 0 } } {
+proc restart_debug_daemons {{shutdown 0}} {
    global daemon_debug master_debug schedd_debug
    global ts_config
 
-   if { [ have_root_passwd ] != 0 } {
+   if {[have_root_passwd] != 0} {
       set_root_passwd
    }
-   if { $shutdown == 0 } {
-      set spooldir [get_qmaster_spool_dir]
-      shutdown_master_and_scheduler $ts_config(master_host) $spooldir
+   if {$shutdown == 0} {
+      shutdown_qmaster
       valgrind_analyse_copy_files
    }
    startup_qmaster

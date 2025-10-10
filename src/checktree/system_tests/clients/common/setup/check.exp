@@ -33,11 +33,11 @@
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -48,7 +48,7 @@ set check_category        "COMPATIBILITY SYSTEM QHOST QQUOTA VERIFIED"
 set check_description(0)  "test setup (startup) of clients in certain error situations"
 
 # define test's dependencies
-set check_needs           "init_core_system display_test" 
+set check_needs           "init_core_system display_test"
 
 # setup and cleanup functions
 set check_setup_function client_setup_setup
@@ -140,14 +140,14 @@ proc client_setup_test_bootstrap {} {
    # test clients with non existing bootstrap file
    set config_file "$ts_config(product_root)/$ts_config(cell)/common/bootstrap"
    file copy $config_file ${config_file}.bak
-   file delete $config_file 
+   file delete $config_file
    # wait for NFS ...
    foreach host $ts_config(execd_nodes) {
       wait_for_remote_file $host $CHECK_USER $config_file 90 1 1
    }
    client_setup_do_test "no bootstrap file" -300
    file copy "$config_file.bak" $config_file
-   file delete "$config_file.bak" 
+   file delete "$config_file.bak"
 
    # wait for NFS ...
    foreach host $ts_config(execd_nodes) {
@@ -158,7 +158,7 @@ proc client_setup_test_bootstrap {} {
 proc client_setup_test_act_qmaster {} {
    global ts_config
    global CHECK_USER
-   
+
    # test clients with non existing act_qmaster file
    set config_file_2 "$ts_config(product_root)/$ts_config(cell)/common/act_qmaster"
    file copy $config_file_2 ${config_file_2}.bak
@@ -170,7 +170,7 @@ proc client_setup_test_act_qmaster {} {
    client_setup_do_test "no act_qmaster file" -301
    file copy "$config_file_2.bak" $config_file_2
    file delete "$config_file_2.bak"
-    
+
    # wait for NFS ...
    foreach host $ts_config(execd_nodes) {
       wait_for_remote_file $host $CHECK_USER $config_file_2 90 1 0
@@ -183,7 +183,7 @@ proc client_setup_test_qmaster_down {} {
    global CHECK_USER
 
    # test clients with qmaster down
-   shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
+   shutdown_qmaster
    set did_shutdown 1
    client_setup_do_test "qmaster down" "-120 -121"
 }
