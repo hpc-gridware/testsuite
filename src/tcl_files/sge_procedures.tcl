@@ -3216,7 +3216,7 @@ proc master_queue_of { job_id {qlist {}}} {
 #     sge_procedures/wait_for_jobpending()
 #     sge_procedures/wait_for_jobend()
 #*******************************
-proc wait_for_load_from_all_queues { seconds {raise_error 1} } {
+proc wait_for_load_from_all_queues {{seconds 60} {raise_error 1}} {
    get_current_cluster_config_array ts_config
    global CHECK_VALGRIND
 
@@ -3273,7 +3273,8 @@ proc wait_for_load_from_all_queues { seconds {raise_error 1} } {
            }
          }
 
-         if { $failed == 0 } {
+         if {$failed == 0} {
+            ts_log_fine "  -> done after [expr [clock seconds] - $time] seconds"
             return 0
          }
       } else {
@@ -3281,7 +3282,7 @@ proc wait_for_load_from_all_queues { seconds {raise_error 1} } {
       }
 
       set runtime [expr [clock seconds] - $time]
-      if { $runtime >= $seconds } {
+      if {$runtime >= $seconds} {
           ts_log_severe "timeout waiting for load values < 99. last qstat output was: $result" $raise_error
           return -1
       }

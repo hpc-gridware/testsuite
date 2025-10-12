@@ -28,7 +28,7 @@ global check_root_access_needs
 global check_need_running_system
 global check_version_range
 
-#set check_root_access_needs "yes"
+set check_root_access_needs "yes"
 #set check_need_running_system "no"
 set check_version_range "9.1.0"
 
@@ -46,7 +46,9 @@ set check_cleanup_function cert_lifetime_cleanup
 
 # define test's procedure order
 set check_functions {}
-lappend check_functions "cert_lifetime_test"
+lappend check_functions "cert_lifetime_qrsh"
+lappend check_functions "cert_renew_qmaster"
+lappend check_functions "cert_renew_execd"
 
 # -------- local test procedures: initialization------------------------------
 
@@ -77,26 +79,18 @@ proc cert_lifetime_cleanup {} {
    # restore the bootstrap file
    bootstrap_file_write cert_lifetime_backup 1
 
+   # restart the cluster to make sure all components use the restored bootstrap file
+   shutdown_core_system
+   startup_core_system
+
    unset -nocomplain cert_lifetime_host cert_lifetime_backup
 }
 
-proc cert_lifetime_qrsh_and_check {hostname cert_path expected_lifetime {not_before 0}} {
-   set ok 1
+proc cert_lifetime_check_certificate {hostname cert_path expected_lifetime {not_before 0}} {
+   set ok [get_cert_info $hostname $cert_path cert_info]
 
-   # call qrsh
-   set output [start_sge_bin "qrsh" "hostname"]
-   if {$prg_exit_state != 0} {
-      ts_log_severe "qrsh hostname failed:\n$output"
-      set ok 0
-   } else {
-      ts_log_fine $output
-   }
-
-   # expect cerfificate and key to have been generated with the default lifetime (1 year)
    if {$ok} {
-      set ok [get_cert_info $hostname $cert_path cert_info]
-   }
-   if {$ok} {
+      ts_log_fine "certificate is valid from $cert_info(not_before) ($cert_info(not_before_epoch)) to $cert_info(not_after) ($cert_info(not_after_epoch)), lifetime $cert_info(lifetime) seconds"
       if {$cert_info(lifetime) != $expected_lifetime} {
          set msg "expected certificate lifetime to be $expected_lifetime, got $cert_info(lifetime)"
          append msg "\nNot Before: $cert_info(not_before) ($cert_info(not_before_epoch))"
@@ -116,16 +110,41 @@ proc cert_lifetime_qrsh_and_check {hostname cert_path expected_lifetime {not_bef
    return $ok
 }
 
-proc cert_lifetime_test {} {
+proc cert_lifetime_qrsh_and_check {hostname cert_path expected_lifetime {not_before 0}} {
+   set ok 1
+
+   # call qrsh
+   set output [start_sge_bin "qrsh" "hostname"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qrsh hostname failed:\n$output"
+      set ok 0
+   } else {
+      ts_log_fine $output
+   }
+
+   # expect cerfificate and key to have been generated with the default lifetime (1 year)
+   if {$ok} {
+      set ok [cert_lifetime_check_certificate $hostname $cert_path $expected_lifetime $not_before]
+   }
+
+   return $ok
+}
+
+proc cert_lifetime_qrsh {} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
    global cert_lifetime_host
 
+   if {1} {
+      # skip test as we currently do not cache client / qrsh certificates
+      return
+   }
+
    set ok 1
 
    # get paths for certificate and key
-   set cert_path [get_tls_cert_path $cert_lifetime_host $CHECK_USER]
-   set key_path [get_tls_key_path $cert_lifetime_host $CHECK_USER]
+   set cert_path [get_tls_cert_path $cert_lifetime_host "qrsh" $CHECK_USER]
+   set key_path [get_tls_key_path $cert_lifetime_host "qrsh" $CHECK_USER]
    set default_lifetime [get_tls_default_lifetime]
 
    # remove certificate and key
@@ -180,7 +199,6 @@ proc cert_lifetime_test {} {
 
    # remove the short lifetime setting
    if {$ok} {
-      set lifetime 120
       set bs(security_params) ""
       bootstrap_file_write bs
    }
@@ -191,3 +209,256 @@ proc cert_lifetime_test {} {
       set ok [cert_lifetime_qrsh_and_check $cert_lifetime_host $cert_path $default_lifetime $not_before]
    }
 }
+
+proc cert_renew_qmaster {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set ok 1
+
+   # get paths for certificate and key
+   set cert_path [get_tls_cert_path $ts_config(master_host) "qmaster"]
+   set key_path [get_tls_key_path $ts_config(master_host) "qmaster"]
+   set default_lifetime [get_tls_default_lifetime]
+
+   if {$ok} {
+      ts_log_fine "TEST 1: check if certificates are generated with the default lifetime"
+      # shutdown qmaster
+      shutdown_qmaster
+
+      # remove certificate and key
+      delete_remote_file $ts_config(master_host) $CHECK_USER $cert_path
+      delete_remote_file $ts_config(master_host) "root" $key_path
+
+      # start_qmaster and expect certificates to have default lifetime
+      startup_qmaster
+      set ok [cert_lifetime_check_certificate $ts_config(master_host) $cert_path $default_lifetime]
+
+      # test clients using the new certificate
+      if {$ok} {
+         set output [start_sge_bin "qstat" "-f"]
+         if {$prg_exit_state != 0} {
+            ts_log_severe "qstat -f failed:\n$output"
+            set ok 0
+         }
+      }
+
+      # wait for execds to reconnect
+      if {$ok && [wait_for_load_from_all_queues] < 0} {
+         set ok 0
+      }
+   }
+
+   if {$ok} {
+      ts_log_fine "TEST 2: check if certificates are generated with a short lifetime"
+      # shutdown qmaster
+      set qmaster_shutdown_time [clock seconds]
+      shutdown_qmaster
+
+      # delete certificates
+      delete_remote_file $ts_config(master_host) $CHECK_USER $cert_path
+      delete_remote_file $ts_config(master_host) "root" $key_path
+
+      # set short lifetime in bootstrap file
+      set lifetime 120
+      set bs(security_params) "certificate_lifetime=$lifetime"
+      bootstrap_file_write bs
+
+      # start qmaster and expect execds to reconnect to the qmaster using a new certificate
+      startup_qmaster
+      set qmaster_start_time [clock seconds]
+
+      # check for the short lifetime
+      set ok [cert_lifetime_check_certificate $ts_config(master_host) $cert_path $lifetime $qmaster_shutdown_time]
+
+      # test clients reconnecting with a new certificate
+      if {$ok} {
+         set output [start_sge_bin "qstat" "-f"]
+         if {$prg_exit_state != 0} {
+            ts_log_severe "qstat -f failed:\n$output"
+            set ok 0
+         }
+      }
+
+      # wait for execds to reconnect
+      if {$ok && [wait_for_load_from_all_queues] < 0} {
+         set ok 0
+      }
+   }
+
+   if {$ok} {
+      ts_log_fine "TEST 3: check if certificates are renewed after expiration"
+      # wait for certificate to have expired and been renewed
+      set wait_time [expr 120 - ([clock seconds] - $qmaster_start_time)]
+      sleep_for_seconds $wait_time "waiting $wait_time seconds until certificate is about to expire..."
+
+      # check lifetime of the new certificate - and later than the previous one
+      set not_before [expr $qmaster_start_time + 60]
+      set ok [cert_lifetime_check_certificate $ts_config(master_host) $cert_path $lifetime $not_before]
+
+      # test clients reconnecting with a new certificate
+      if {$ok} {
+         set output [start_sge_bin "qstat" "-f"]
+         if {$prg_exit_state != 0} {
+            ts_log_severe "qstat -f failed:\n$output"
+            set ok 0
+         }
+      }
+
+      # execds must still be connected
+      if {$ok && [wait_for_load_from_all_queues] < 0} {
+         set ok 0
+      }
+   }
+
+   if {$ok} {
+      ts_log_fine "TEST 4: check if certificates are generated with the default lifetime after removing the short lifetime setting"
+      # shutdown qmaster
+      set qmaster_shutdown_time [clock seconds]
+      shutdown_qmaster
+
+      # delete certificates
+      delete_remote_file $ts_config(master_host) $CHECK_USER $cert_path
+      delete_remote_file $ts_config(master_host) "root" $key_path
+
+      # remove short lifetime in bootstrap file
+      set bs(security_params) ""
+      bootstrap_file_write bs
+
+      # start qmaster and expect execds to reconnect to the qmaster using a new certificate
+      startup_qmaster
+
+      # check for the default lifetime
+      set ok [cert_lifetime_check_certificate $ts_config(master_host) $cert_path $default_lifetime $qmaster_shutdown_time]
+
+      # check clients reconnecting with a new certificate
+      if {$ok} {
+         set output [start_sge_bin "qstat" "-f"]
+         if {$prg_exit_state != 0} {
+            ts_log_severe "qstat -f failed:\n$output"
+            set ok 0
+         }
+      }
+
+      # wait for execds to reconnect
+      if {$ok && [wait_for_load_from_all_queues] < 0} {
+         set ok 0
+      }
+   }
+}
+
+proc cert_renew_check_execd_connection {execd_host} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set ret 1
+
+   set execd_port [expr $ts_config(commd_port) + 1]
+   set opts "-info $execd_host $execd_port execd 1"
+   set output [start_sge_bin "qping" $opts]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qping $opts failed:\n$output"
+      set ret 0
+   } else {
+      ts_log_fine $output
+   }
+
+   return $ret
+}
+
+proc cert_renew_execd {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set ok 1
+
+   # select a test host
+   set execd_host [host_conf_get_suited_hosts]
+
+   # get paths for certificate and key
+   set cert_path [get_tls_cert_path $execd_host "execd"]
+   set key_path [get_tls_key_path $execd_host "execd"]
+   set default_lifetime [get_tls_default_lifetime]
+
+   if {$ok} {
+      ts_log_fine "TEST 1: check if certificates are generated with the default lifetime"
+      # check default lifetime
+      set ok [cert_lifetime_check_certificate $execd_host $cert_path $default_lifetime]
+
+      if {$ok} {
+         # test if we can connect to the execd commlib server
+         set ok [cert_renew_check_execd_connection $execd_host]
+      }
+   }
+
+   if {$ok} {
+      ts_log_fine "TEST 2: check if certificates are generated with a short lifetime"
+      # shutdown execd
+      set shutdown_time [clock seconds]
+      shutdown_execd $execd_host
+
+      # delete certificates
+      delete_remote_file $execd_host $CHECK_USER $cert_path
+      delete_remote_file $execd_host "root" $key_path
+
+      # set short lifetime in bootstrap file
+      set lifetime 120
+      set bs(security_params) "certificate_lifetime=$lifetime"
+      bootstrap_file_write bs
+
+      # start execd and expect it to reconnect to the qmaster
+      startup_execd $execd_host
+      set startup_time [clock seconds]
+
+      # check lifetime
+      set ok [cert_lifetime_check_certificate $execd_host $cert_path $lifetime $shutdown_time]
+
+      if {$ok} {
+         # test if we can connect to the execd commlib server
+         set ok [cert_renew_check_execd_connection $execd_host]
+      }
+   }
+
+   if {$ok} {
+      ts_log_fine "TEST 3: check if certificates are renewed after expiration"
+
+      # wait for certificate to have expired and been renewed
+      set wait_time [expr 120 - ([clock seconds] - $startup_time)]
+      sleep_for_seconds $wait_time "waiting $wait_time seconds until certificate is about to expire..."
+
+      # check lifetime of the new certificate - and later than the previous one
+      set not_before [expr $startup_time + 60]
+      set ok [cert_lifetime_check_certificate $execd_host $cert_path $lifetime $not_before]
+
+      if {$ok} {
+         # test if we can connect to the execd commlib server
+         set ok [cert_renew_check_execd_connection $execd_host]
+      }
+   }
+
+   if {$ok} {
+      ts_log_fine "TEST 4: check if certificates are generated with the default lifetime after removing the short lifetime setting"
+      # shutdown execd
+      set shutdown_time [clock seconds]
+      shutdown_execd $execd_host
+
+      # delete certificates
+      delete_remote_file $execd_host $CHECK_USER $cert_path
+      delete_remote_file $execd_host "root" $key_path
+
+      # remove short lifetime in bootstrap file
+      set bs(security_params) ""
+      bootstrap_file_write bs
+
+      # start execd
+      startup_execd $execd_host
+
+      # check for the default lifetime
+      set ok [cert_lifetime_check_certificate $execd_host $cert_path $default_lifetime $shutdown_time]
+      if {$ok} {
+         # test if we can connect to the execd commlib server
+         set ok [cert_renew_check_execd_connection $execd_host]
+      }
+   }
+}
+

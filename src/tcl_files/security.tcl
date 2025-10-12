@@ -22,17 +22,19 @@
 # @brief get the path to the TLS certificate file
 #
 # @param hostname  hostname where the certificate is located
+# @param component component name (qmaster, execd, qrsh)
 # @param user      user owning the certificate (default: daemon certificate)
 # @return path to the TLS certificate file
-proc get_tls_cert_path {hostname {user ""}} {
+proc get_tls_cert_path {hostname component {user ""}} {
    get_current_cluster_config_array ts_config
 
    if {$user eq ""} {
       # daemon certificate
-      set cert "$ts_config(product_root)/$ts_config(cell)/common/certs/$hostname.pem"
+      set cert "$ts_config(product_root)/$ts_config(cell)/common/certs/${component}_${hostname}.pem"
    } else {
+      # @todo only if we enable caching of user (qrsh) certificates
       set home_dir [get_home_dir_path $user]
-      set cert "$home_dir/.ocs/certs/$hostname.pem"
+      set cert "$home_dir/.ocs/certs/$component.pem"
    }
 
    return $cert
@@ -42,17 +44,19 @@ proc get_tls_cert_path {hostname {user ""}} {
 # @brief get the path to the TLS private key file
 #
 # @param hostname  hostname where the private key is located
+# @param component component name (qmaster, execd, qrsh)
 # @param user      user owning the private key (default: daemon private key)
 # @return path to the TLS private key file
-proc get_tls_key_path {hostname {user ""}} {
+proc get_tls_key_path {hostname component {user ""}} {
    get_current_cluster_config_array ts_config
 
    if {$user eq ""} {
       # daemon certificate
-      set cert "/var/lib/ocs/private/$hostname.pem"
+      set cert "/var/lib/ocs/private/${component}_${hostname}.pem"
    } else {
+      # @todo only if we enable caching of user (qrsh) certificates
       set home_dir [get_home_dir_path $user]
-      set cert "$home_dir/.ocs/private/$hostname.pem"
+      set cert "$home_dir/.ocs/private/$component.pem"
    }
 
    return $cert
