@@ -123,10 +123,9 @@ proc issue_2372_cleanup {} {
    ts_log_fine "restarting qmaster and restore default settings"
    startup_qmaster 0
    reset_config issue_2372_backup
-   shutdown_qmaster
 
    ts_log_fine "restarting qmaster and scheduler with default settings"
-   startup_qmaster
+   shutdown_and_restart_qmaster
 
    # unset our test's global variables
    foreach var "issue_2372_backup" {
