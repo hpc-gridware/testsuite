@@ -115,7 +115,7 @@ proc extensive_qrsh_test {} {
    set first_job_id [expr $job_id + 1]
 
    set error_text ""
-   set user  $CHECK_USER
+   set user $CHECK_USER
 
    set test_script "$ts_config(testsuite_root_dir)/scripts/qrsh_test.sh"
    set qrsh_count 15

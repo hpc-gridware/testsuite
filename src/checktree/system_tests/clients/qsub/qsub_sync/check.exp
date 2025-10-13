@@ -195,7 +195,7 @@ proc qsub_sync_with_option {option is_array} {
    if {$is_array == 1} {
       set jobargs "-t 1-2"
    }
-   append jobargs " -sync $option -o /dev/null -e /dev/null -j y $ts_config(testsuite_root_dir)/scripts/qsub_exit.sh 5"
+   append jobargs " -sync $option -o /dev/null -e /dev/null $ts_config(testsuite_root_dir)/scripts/qsub_exit.sh 5"
    set result [start_sge_bin "qsub" $jobargs]
 
    # translate macros for messages that we might get
@@ -467,6 +467,8 @@ proc qsub_sync_failover {} {
    if {$prg_exit_state != 0} {
       ts_log_severe "qmaster could not be started"
    }
+   # let qmaster finish startup after daemonizing
+   after 5000
    wait_for_event_client "sched*"
 
    # Qmaster down after qsub -sync y
@@ -515,6 +517,8 @@ proc qsub_sync_failover {} {
    if {$prg_exit_state != 0} {
       ts_log_severe "qmaster could not be started"
    }
+   # let qmaster finish startup after daemonizing
+   after 5000
    expect {
       -i $sp_id timeout {
          append error_text "Timeout in \"Qmaster down after qsub -sync y\" test\n"
