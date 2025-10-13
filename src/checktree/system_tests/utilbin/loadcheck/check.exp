@@ -73,6 +73,7 @@ proc get_numb_proc {hostname} {
    global ts_config CHECK_USER
 
    set remote_arch [resolve_arch $hostname]
+   set arch [get_arch]
    set loadcheck_name "loadcheck"
    set loadcheck_path "$ts_config(product_root)/utilbin/$remote_arch/$loadcheck_name"
    set result [start_remote_prog $hostname $CHECK_USER "$loadcheck_path" "" prg_exit_state]
@@ -98,36 +99,6 @@ proc get_numb_proc {hostname} {
    return $numproc
 }
 
-
-#                                                             max. column:     |
-#****** loadcheck/check_numb_proc() ******
-# 
-#  NAME
-#     check_numb_proc -- ??? 
-#
-#  SYNOPSIS
-#     check_numb_proc { } 
-#
-#  FUNCTION
-#     ??? 
-#
-#  INPUTS
-#
-#  RESULT
-#     ??? 
-#
-#  EXAMPLE
-#     ??? 
-#
-#  NOTES
-#     ??? 
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
 proc check_numb_proc {} {
    global ts_config
 

@@ -235,6 +235,26 @@ proc host_get_topology {hostname} {
    return "NONE"
 }
 
+## @brief Get the topology in use of a host
+#
+# The topology is fetched from the m_topology complex attribute of the host.
+# This is the topology that is actually used by the host
+#
+# @param hostname The hostname to query
+# @return The topology string or "NONE" if not found
+#
+proc host_get_topology_in_use {hostname} {
+   array set host_array {}
+   get_load_values host_array {m_topology, m_topology_in_use}
+
+   set hostname [get_short_hostname $hostname]
+   if {[info exists host_array($hostname,m_topology_in_use)]} {
+      return $host_array($hostname,m_topology_in_use)
+   }
+   return "NONE"
+}
+
+
 ## @brief Wait for a host to report a specific fake topology
 #
 # This is useful after changing the fake topology of a host via topology_file part of the
@@ -260,5 +280,97 @@ proc host_wait_for_fake_topology {hostname expected_topology {timeout 60}} {
    }
    ts_log_severe "Host $hostname did not report expected fake topology within $timeout seconds. Expected: $expected_topology, got: $topo"
    return 0
+}
+
+## @brief Get the architecture of the local host
+#
+proc get_arch {} {
+   get_current_cluster_config_array ts_config
+
+   # get architecture of local host by executing the arch script
+   set root_dir $ts_config(product_root)
+   if {[catch {exec "$root_dir/util/arch"} output] == 0} {
+      return $output
+   }
+
+   return "unknown"
+}
+
+## @brief Get the path to the loadcheck binary
+#
+proc get_loadcheck_path {} {
+   get_current_cluster_config_array ts_config
+
+   # find loadcheck binary
+   set arch [get_arch]
+   set loadcheck_path "$ts_config(product_root)/utilbin/$arch/loadcheck"
+   return $loadcheck_path
+}
+
+## @brief Get all files in a directory
+#
+# Returns a list of files (not directories) in the given directory.
+# If the directory does not exist or is empty, an empty list is returned.
+#
+# @param dir The directory to list
+# @return A list of files in the directory
+#
+proc get_files_in_directory {dir} {
+    set files [glob -nocomplain -directory $dir *]
+    set result {}
+    foreach f $files {
+        if {[file isfile $f]} {
+            lappend result $f
+        }
+    }
+    return $result
+}
+
+## @brief Check if a string has equal number of opening and closing brackets
+#
+# This function checks if the given string has an equal number of opening
+# and closing brackets of the specified type.
+#
+# @param str The string to check
+# @param open_char The opening bracket character
+# @param close_char The closing bracket character
+# @return 1 if equal, 0 if not equal
+#
+proc has_equal_brackets {str open_char close_char} {
+    set open_count 0
+    set close_count 0
+    foreach char [split $str ""] {
+        if {$char == $open_char} {
+            incr open_count
+        } elseif {$char == $close_char} {
+            incr close_count
+        }
+    }
+    return [expr {$open_count == $close_count}]
+}
+
+## @brief Get hardware node statistics from a topology string
+#
+# This function counts the occurrences of each hardware component in the
+# given topology string and stores the results in the specified array.
+# The array is filled with the following structure:
+#
+#   array_name(letter) = count
+#
+# where letter is one of S, C, E, T, N, X, Y and count is the number of
+# occurrences of that letter in the topology string.
+#
+# @param internal_topo_string The topology string to analyze
+# @param array_name Name of the array to store the results in
+#
+proc get_hardware_node_stats {internal_topo_string array_name} {
+   upvar $array_name stats
+
+   foreach letter [split $internal_topo_string ""] {
+      if {[string first $letter "SCETNXY"] < 0} {
+         continue
+      }
+      incr stats($letter)
+   }
 }
 
