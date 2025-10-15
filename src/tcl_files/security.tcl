@@ -41,6 +41,16 @@ proc get_tls_cert_path {hostname component {user ""}} {
 }
 
 ###
+# @brief get the directory where the TLS private keys are stored
+#
+# @return path to the TLS private key directory
+proc get_tls_key_dir {} {
+   get_current_cluster_config_array ts_config
+
+   return "/var/lib/ocs/$ts_config(commd_port)/private"
+}
+
+###
 # @brief get the path to the TLS private key file
 #
 # @param hostname  hostname where the private key is located
@@ -52,14 +62,15 @@ proc get_tls_key_path {hostname component {user ""}} {
 
    if {$user eq ""} {
       # daemon certificate
-      set cert "/var/lib/ocs/private/${component}_${hostname}.pem"
+      set key_dir [get_tls_key_dir]
+      set key "$key_dir/${component}_${hostname}.pem"
    } else {
       # @todo only if we enable caching of user (qrsh) certificates
       set home_dir [get_home_dir_path $user]
-      set cert "$home_dir/.ocs/private/$component.pem"
+      set key "$home_dir/.ocs/private/$component.pem"
    }
 
-   return $cert
+   return $key
 }
 
 ###

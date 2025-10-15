@@ -60,6 +60,16 @@ proc kill_running_system {} {
       foreach host [get_all_hosts] {
          wait_for_remote_dir $host $CHECK_USER "$ts_config(product_root)/$ts_config(cell)" 60 1 1
       }
+      # delete the TLS keys of the old cluster
+      if {[config_has_product_feature "tls"]} {
+         foreach host [get_all_hosts] {
+            set key_dir [get_tls_key_dir]
+            set output [start_remote_prog $host "root" "rm" "-rf $key_dir"]
+            if {$prg_exit_state != 0} {
+               ts_log_severe "removing $key_dir failed:\n$output"
+            }
+         }
+      }
    }
 }
 
