@@ -29,7 +29,7 @@ global check_version_range
 
 #set check_root_access_needs "yes"
 #set check_need_running_system "no"
-set check_version_range "9.0.5 9.1.0"
+set check_version_range "9.0.5 9.2.0"
 
 # define test's name and run level descriptions
 set check_name            "mpi_basic"
@@ -150,6 +150,7 @@ proc mpi_basic_run_job {mpi version arch dir with_reschedule} {
    }
    append job_opts " -pe $template.pe 8 -l a='$arch'"
    append job_opts " -scope master -l h=$master_host"
+   # append job_opts " -bunit T -bamount 1 -binstance pe"
    set job_args "$job_script $mpi_binary -o testmpi.csv $work_total"
 
    # create the output file and tail -f to it
@@ -356,6 +357,11 @@ proc mpi_basic_functional {{with_reschedule 0}} {
       ts_log_frame
       ts_log_fine "testing $mpi"
 
+      # intel-mpi mpich mvapich openmpi
+      #if {$mpi != "openmpi"} {
+      #   continue
+      #}
+
       # create the pe and link it to the queue
       if {![mpi_configure_pe $mpi]} {
          continue
@@ -366,7 +372,7 @@ proc mpi_basic_functional {{with_reschedule 0}} {
 
       foreach version $mpi_versions {
          ts_log_frame
-         ts_log_fine "testing version $version"
+         ts_log_fine "testing $mpi version $version"
 
          # figure out available architectures and make sure that the MPI is installed
          # possibly build and install it

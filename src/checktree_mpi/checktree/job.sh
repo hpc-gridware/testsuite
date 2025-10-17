@@ -32,13 +32,26 @@ if [ -z "$MPIR_HOME" ]; then
     echo "MPIR_HOME is not set"
     exit 1
 fi
+echo "MPIR_HOME=$MPIR_HOME"
 
 PATH=$MPIR_HOME/bin:$PATH
 export PATH
+echo "PATH=$PATH"
+
+LD_LIBRARY_PATH="$MPIR_HOME/lib:$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH
+echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 
 echo "Job $JOB_ID"
-echo "MPIR_HOME=$MPIR_HOME"
-echo "In $PWD starting mpirun $TASK_SCRIPT $@"
+
+taskset="not available"
+type taskset >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+   taskset=`taskset -pc $$`
+fi
+echo "taskset output: $taskset"
+
+echo "Starting in $PWD: mpirun $TASK_SCRIPT $@"
 
 MPIRUN_OPTIONS=""
 #echo $MPIR_HOME | grep openmpi > /dev/null 2>&1

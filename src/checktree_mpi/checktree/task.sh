@@ -31,5 +31,5 @@ ARCH=`$SGE_ROOT/util/arch`
 #LD_LIBRARY_PATH="$BASEDIR/$ARCH/lib:$LD_LIBRARY_PATH"
 #export LD_LIBRARY_PATH
 
-echo "in $PWD starting ./testmpi-$ARCH $@"
+echo "Starting in $PWD: ./testmpi-$ARCH $@"
 exec ./testmpi-$ARCH "$@"
