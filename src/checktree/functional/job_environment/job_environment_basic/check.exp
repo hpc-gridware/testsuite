@@ -87,6 +87,16 @@ proc job_environment_basic_setup {} {
    global job_environment_basic_exec_host
    global job_environment_basic_queue
    global job_environment_basic_config
+   global host_config_backup
+
+   # increase slots capacity
+   foreach host $ts_config(execd_nodes) {
+      get_exechost host_config_bkup $host
+      set host_config_backup($host) $host_config_bkup(complex_values)
+
+      set host_cfg(complex_values)  "slots=5000"
+      set_exechost host_cfg $host
+   }
 
    set job_environment_basic_exec_host [host_conf_get_suited_hosts 1 {sol-amd64 sol-sparc64 sol-x86 sol-sparc} {} {} 1]
    set job_environment_basic_queue [get_queue_instance "all.q" $job_environment_basic_exec_host]
@@ -122,6 +132,13 @@ proc job_environment_basic_cleanup {} {
    global job_environment_basic_config
    global job_environment_basic_exec_host
    global job_environment_basic_queue
+   global host_config_backup
+
+   # restore complex_values
+   foreach host $ts_config(execd_nodes) {
+      set host_cfg(complex_values) $host_config_backup($host)
+      set_exechost host_cfg $host
+   }
 
    ts_log_fine "cleanup ..."
    delete_all_jobs
@@ -466,8 +483,6 @@ proc job_environment_basic_var_test {missing {extra ""}} {
    lappend known_variables "SGE_O_HOME"
    lappend known_variables "SGE_O_HOST"
    lappend known_variables "SGE_O_LOGNAME"
-   # SGE_O_MAIL is only set when mail is correctly configured on the submit host
-   # lappend known_variables "SGE_O_MAIL"
    lappend known_variables "SGE_O_PATH"
    lappend known_variables "SGE_O_SHELL"
 
@@ -516,6 +531,11 @@ proc job_environment_basic_var_test {missing {extra ""}} {
    lappend known_variables "SGE_STDIN_PATH"
    lappend known_variables "SGE_QMASTER_PORT"
    lappend known_variables "SGE_EXECD_PORT"
+   if {[is_version_in_range "9.1.0"]} {
+      lappend known_variables "SGE_BINDING_TOPOLOGY"
+      lappend known_variables "SGE_BINDING_CPUSET"
+      lappend known_variables "SGE_BINDING_INSTANCE"
+   }
 
    # Build list of allowed_variables
    set allowed_variables "TZ"
@@ -525,6 +545,8 @@ proc job_environment_basic_var_test {missing {extra ""}} {
    lappend allowed_variables "ARCH"
    lappend allowed_variables "TERM"
    lappend allowed_variables "PWD"
+   # SGE_O_MAIL is only set when mail is correctly configured on the submit host
+   lappend allowed_variables "SGE_O_MAIL"
 
    ts_log_fine "checking number of environment variables ..."
 
