@@ -72,6 +72,19 @@ lappend check_functions "issue_1059_test"
 proc issue_1059_setup {} {
    get_current_cluster_config_array ts_config
    global issue_1059_hosts issue_1059_backup
+   global host_config_backup
+
+   # we use 3 hosts and 3 queue instances per host
+   set issue_1059_hosts [host_conf_get_suited_hosts 3]
+
+   # increase slots capacity
+   foreach host $issue_1059_hosts {
+      get_exechost host_config_bkup $host
+      set host_config_backup($host) $host_config_bkup(complex_values)
+
+      set host_cfg(complex_values)  "slots=5000"
+      set_exechost host_cfg $host
+   }
 
    # we need a PE with round_robin allocation rule
    set pe(slots) 999
@@ -79,8 +92,6 @@ proc issue_1059_setup {} {
    set pe(job_is_first_task) "TRUE"
    add_pe "test.pe" pe
 
-   # we use 3 hosts and 3 queue instances per host
-   set issue_1059_hosts [host_conf_get_suited_hosts 3]
    set q(slots) 1
    set q(pe_list) "test.pe"
    add_queue "test1.q" $issue_1059_hosts q
@@ -94,6 +105,7 @@ proc issue_1059_setup {} {
 proc issue_1059_cleanup {} {
    get_current_cluster_config_array ts_config
    global issue_1059_hosts issue_1059_backup
+   global host_config_backup
 
    delete_all_jobs
    wait_for_end_of_all_jobs
@@ -105,6 +117,12 @@ proc issue_1059_cleanup {} {
    del_queue "test2.q" "" 1 1
    del_queue "test3.q" "" 1 1
    del_pe "test.pe"
+
+   # restore complex_values
+   foreach host $issue_1059_hosts {
+      set host_cfg(complex_values) $host_config_backup($host)
+      set_exechost host_cfg $host
+   }
 
    unset -nocomplain issue_1059_hosts issue_1059_backup
 }
