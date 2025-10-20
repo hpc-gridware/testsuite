@@ -63,9 +63,19 @@ lappend check_functions "x_forks_slaves_issue_619"
 proc x_forks_slaves_setup {} {
    get_current_cluster_config_array ts_config
    global x_forks_slaves_hosts
+   global host_config_backup
 
    # we need 2 test hosts: a master host and a slave host
    set x_forks_slaves_hosts [host_conf_get_suited_hosts 2]
+
+   # increase slots capacity
+   foreach host $x_forks_slaves_hosts {
+      get_exechost host_config_bkup $host
+      set host_config_backup($host) $host_config_bkup(complex_values)
+
+      set host_cfg(complex_values)  "slots=5000"
+      set_exechost host_cfg $host
+   }
 
    # create test pes and queue
    set pe(slots) 100
@@ -86,6 +96,13 @@ proc x_forks_slaves_setup {} {
 proc x_forks_slaves_cleanup {} {
    get_current_cluster_config_array ts_config
    global x_forks_slaves_hosts
+   global host_config_backup
+
+   # restore complex_values
+   foreach host $x_forks_slaves_hosts {
+      set host_cfg(complex_values) $host_config_backup($host)
+      set_exechost host_cfg $host
+   }
 
    delete_all_jobs
    wait_for_end_of_all_jobs
