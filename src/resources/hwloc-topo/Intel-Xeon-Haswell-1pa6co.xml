@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topology SYSTEM "hwloc2.dtd">
+<topology version="2.0">
+  <object type="Machine" os_index="0" cpuset="0x0000003f" complete_cpuset="0x0000003f" allowed_cpuset="0x0000003f" nodeset="0x00000001" complete_nodeset="0x00000001" allowed_nodeset="0x00000001" gp_index="1">
+    <info name="DMIProductName" value="PowerEdge R430"/>
+    <info name="DMIProductVersion" value=""/>
+    <info name="DMIBoardVendor" value="Dell Inc."/>
+    <info name="DMIBoardName" value="03XKDV"/>
+    <info name="DMIBoardVersion" value="A00"/>
+    <info name="DMIChassisVendor" value="Dell Inc."/>
+    <info name="DMIChassisType" value="23"/>
+    <info name="DMIChassisVersion" value=""/>
+    <info name="DMIChassisAssetTag" value=""/>
+    <info name="DMIBIOSVendor" value="Dell Inc."/>
+    <info name="DMIBIOSVersion" value="2.8.0"/>
+    <info name="DMIBIOSDate" value="05/23/2018"/>
+    <info name="DMISysVendor" value="Dell Inc."/>
+    <info name="Backend" value="Linux"/>
+    <info name="OSName" value="Linux"/>
+    <info name="OSRelease" value="4.19.0-5-amd64"/>
+    <info name="OSVersion" value="#1 SMP Debian 4.19.37-5 (2019-06-19)"/>
+    <info name="HostName" value="ma"/>
+    <info name="Architecture" value="x86_64"/>
+    <info name="hwlocVersion" value="2.1.0a1-git"/>
+    <info name="ProcessName" value="lstopo"/>
+    <object type="Package" os_index="0" cpuset="0x0000003f" complete_cpuset="0x0000003f" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="3">
+      <info name="CPUVendor" value="GenuineIntel"/>
+      <info name="CPUFamilyNumber" value="6"/>
+      <info name="CPUModelNumber" value="63"/>
+      <info name="CPUModel" value="Intel(R) Xeon(R) CPU E5-2603 v3 @ 1.60GHz"/>
+      <info name="CPUStepping" value="2"/>
+      <object type="NUMANode" os_index="0" cpuset="0x0000003f" complete_cpuset="0x0000003f" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="34" local_memory="33635201024">
+        <page_type size="4096" count="8211719"/>
+        <page_type size="2097152" count="0"/>
+        <page_type size="1073741824" count="0"/>
+      </object>
+      <object type="L3Cache" cpuset="0x0000003f" complete_cpuset="0x0000003f" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="8" cache_size="15728640" depth="3" cache_linesize="64" cache_associativity="20" cache_type="0">
+        <info name="Inclusive" value="1"/>
+        <object type="L2Cache" cpuset="0x00000001" complete_cpuset="0x00000001" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="7" cache_size="262144" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L1Cache" cpuset="0x00000001" complete_cpuset="0x00000001" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="5" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+            <info name="Inclusive" value="0"/>
+            <object type="L1iCache" cpuset="0x00000001" complete_cpuset="0x00000001" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="6" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+              <info name="Inclusive" value="0"/>
+              <object type="Core" os_index="0" cpuset="0x00000001" complete_cpuset="0x00000001" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="2">
+                <object type="PU" os_index="0" cpuset="0x00000001" complete_cpuset="0x00000001" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="4"/>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object type="L2Cache" cpuset="0x00000002" complete_cpuset="0x00000002" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="13" cache_size="262144" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L1Cache" cpuset="0x00000002" complete_cpuset="0x00000002" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="11" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+            <info name="Inclusive" value="0"/>
+            <object type="L1iCache" cpuset="0x00000002" complete_cpuset="0x00000002" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="12" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+              <info name="Inclusive" value="0"/>
+              <object type="Core" os_index="1" cpuset="0x00000002" complete_cpuset="0x00000002" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="9">
+                <object type="PU" os_index="1" cpuset="0x00000002" complete_cpuset="0x00000002" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="10"/>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object type="L2Cache" cpuset="0x00000004" complete_cpuset="0x00000004" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="18" cache_size="262144" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L1Cache" cpuset="0x00000004" complete_cpuset="0x00000004" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="16" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+            <info name="Inclusive" value="0"/>
+            <object type="L1iCache" cpuset="0x00000004" complete_cpuset="0x00000004" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="17" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+              <info name="Inclusive" value="0"/>
+              <object type="Core" os_index="2" cpuset="0x00000004" complete_cpuset="0x00000004" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="14">
+                <object type="PU" os_index="2" cpuset="0x00000004" complete_cpuset="0x00000004" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="15"/>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object type="L2Cache" cpuset="0x00000008" complete_cpuset="0x00000008" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="23" cache_size="262144" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L1Cache" cpuset="0x00000008" complete_cpuset="0x00000008" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="21" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+            <info name="Inclusive" value="0"/>
+            <object type="L1iCache" cpuset="0x00000008" complete_cpuset="0x00000008" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="22" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+              <info name="Inclusive" value="0"/>
+              <object type="Core" os_index="3" cpuset="0x00000008" complete_cpuset="0x00000008" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="19">
+                <object type="PU" os_index="3" cpuset="0x00000008" complete_cpuset="0x00000008" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="20"/>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object type="L2Cache" cpuset="0x00000010" complete_cpuset="0x00000010" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="28" cache_size="262144" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L1Cache" cpuset="0x00000010" complete_cpuset="0x00000010" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="26" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+            <info name="Inclusive" value="0"/>
+            <object type="L1iCache" cpuset="0x00000010" complete_cpuset="0x00000010" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="27" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+              <info name="Inclusive" value="0"/>
+              <object type="Core" os_index="4" cpuset="0x00000010" complete_cpuset="0x00000010" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="24">
+                <object type="PU" os_index="4" cpuset="0x00000010" complete_cpuset="0x00000010" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="25"/>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object type="L2Cache" cpuset="0x00000020" complete_cpuset="0x00000020" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="33" cache_size="262144" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L1Cache" cpuset="0x00000020" complete_cpuset="0x00000020" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="31" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+            <info name="Inclusive" value="0"/>
+            <object type="L1iCache" cpuset="0x00000020" complete_cpuset="0x00000020" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="32" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+              <info name="Inclusive" value="0"/>
+              <object type="Core" os_index="5" cpuset="0x00000020" complete_cpuset="0x00000020" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="29">
+                <object type="PU" os_index="5" cpuset="0x00000020" complete_cpuset="0x00000020" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="30"/>
+              </object>
+            </object>
+          </object>
+        </object>
+      </object>
+    </object>
+    <object type="Bridge" gp_index="53" bridge_type="0-1" depth="0" bridge_pci="0000:[00-0b]">
+      <object type="Bridge" gp_index="40" bridge_type="1-1" depth="1" bridge_pci="0000:[01-01]" pci_busid="0000:00:01.0" pci_type="0604 [8086:2f02] [8086:0000] 02" pci_link_speed="7.876923">
+        <info name="PCIVendor" value="Intel Corporation"/>
+        <info name="PCIDevice" value="Xeon E7 v3/Xeon E5 v3/Core i7 PCI Express Root Port 1"/>
+        <object type="PCIDev" gp_index="42" pci_busid="0000:01:00.0" pci_type="0104 [1000:005d] [1028:1f49] 02" pci_link_speed="7.876923">
+          <info name="PCIVendor" value="LSI Logic / Symbios Logic"/>
+          <info name="PCIDevice" value="MegaRAID SAS-3 3108 [Invader]"/>
+          <object type="OSDev" gp_index="55" name="sda" subtype="Disk" osdev_type="0">
+            <info name="Size" value="390070272"/>
+            <info name="SectorSize" value="512"/>
+            <info name="LinuxDeviceID" value="8:0"/>
+            <info name="Vendor" value="DELL"/>
+            <info name="Model" value="PERC_H730_Mini"/>
+            <info name="Revision" value="4.24"/>
+            <info name="SerialNumber" value="644a842018efa5001cb85ffc17838200"/>
+          </object>
+        </object>
+      </object>
+      <object type="PCIDev" gp_index="50" pci_busid="0000:00:11.4" pci_type="0106 [8086:8d62] [1028:0639] 05" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Intel Corporation"/>
+        <info name="PCIDevice" value="C610/X99 series chipset sSATA Controller [AHCI mode]"/>
+      </object>
+      <object type="Bridge" gp_index="47" bridge_type="1-1" depth="1" bridge_pci="0000:[07-0b]" pci_busid="0000:00:1c.1" pci_type="0604 [8086:8d12] [1028:0639] d5" pci_link_speed="0.250000">
+        <info name="PCIVendor" value="Intel Corporation"/>
+        <info name="PCIDevice" value="C610/X99 series chipset PCI Express Root Port #2"/>
+        <object type="Bridge" gp_index="44" bridge_type="1-1" depth="2" bridge_pci="0000:[08-0b]" pci_busid="0000:07:00.0" pci_type="0604 [1912:001d] [1912:001d] 00" pci_link_speed="0.250000">
+          <info name="PCIVendor" value="Renesas Technology Corp."/>
+          <info name="PCIDevice" value="SH7758 PCIe Switch [PS]"/>
+          <object type="Bridge" gp_index="41" bridge_type="1-1" depth="3" bridge_pci="0000:[09-0a]" pci_busid="0000:08:00.0" pci_type="0604 [1912:001d] [1912:001d] 00" pci_link_speed="0.250000">
+            <info name="PCIVendor" value="Renesas Technology Corp."/>
+            <info name="PCIDevice" value="SH7758 PCIe Switch [PS]"/>
+            <object type="Bridge" gp_index="38" bridge_type="1-1" depth="4" bridge_pci="0000:[0a-0a]" pci_busid="0000:09:00.0" pci_type="0604 [1912:001a] [1912:001a] 00" pci_link_speed="0.250000">
+              <info name="PCIVendor" value="Renesas Technology Corp."/>
+              <info name="PCIDevice" value="SH7758 PCIe-PCI Bridge [PPB]"/>
+              <object type="PCIDev" gp_index="43" pci_busid="0000:0a:00.0" pci_type="0300 [102b:0534] [1028:0639] 01" pci_link_speed="0.000000">
+                <info name="PCIVendor" value="Matrox Electronics Systems Ltd."/>
+                <info name="PCIDevice" value="G200eR2"/>
+              </object>
+            </object>
+          </object>
+        </object>
+      </object>
+      <object type="Bridge" gp_index="52" bridge_type="1-1" depth="1" bridge_pci="0000:[02-02]" pci_busid="0000:00:1c.2" pci_type="0604 [8086:8d14] [1028:0639] d5" pci_link_speed="0.500000">
+        <info name="PCIVendor" value="Intel Corporation"/>
+        <info name="PCIDevice" value="C610/X99 series chipset PCI Express Root Port #3"/>
+        <object type="PCIDev" gp_index="39" pci_busid="0000:02:00.0" pci_type="0200 [14e4:165f] [1028:0639] 00" pci_link_speed="0.500000">
+          <info name="PCIVendor" value="Broadcom Limited"/>
+          <info name="PCIDevice" value="NetXtreme BCM5720 Gigabit Ethernet PCIe"/>
+          <object type="OSDev" gp_index="59" name="eth0" osdev_type="2">
+            <info name="Address" value="44:a8:42:1a:fa:38"/>
+          </object>
+        </object>
+        <object type="PCIDev" gp_index="49" pci_busid="0000:02:00.1" pci_type="0200 [14e4:165f] [1028:0639] 00" pci_link_speed="0.500000">
+          <info name="PCIVendor" value="Broadcom Limited"/>
+          <info name="PCIDevice" value="NetXtreme BCM5720 Gigabit Ethernet PCIe"/>
+          <object type="OSDev" gp_index="57" name="eth1" osdev_type="2">
+            <info name="Address" value="44:a8:42:1a:fa:39"/>
+          </object>
+        </object>
+      </object>
+      <object type="Bridge" gp_index="45" bridge_type="1-1" depth="1" bridge_pci="0000:[03-03]" pci_busid="0000:00:1c.3" pci_type="0604 [8086:8d16] [1028:0639] d5" pci_link_speed="0.500000">
+        <info name="PCIVendor" value="Intel Corporation"/>
+        <info name="PCIDevice" value="C610/X99 series chipset PCI Express Root Port #4"/>
+        <object type="PCIDev" gp_index="35" pci_busid="0000:03:00.0" pci_type="0200 [14e4:165f] [1028:0639] 00" pci_link_speed="0.500000">
+          <info name="PCIVendor" value="Broadcom Limited"/>
+          <info name="PCIDevice" value="NetXtreme BCM5720 Gigabit Ethernet PCIe"/>
+          <object type="OSDev" gp_index="58" name="eth2" osdev_type="2">
+            <info name="Address" value="44:a8:42:1a:fa:3a"/>
+          </object>
+        </object>
+        <object type="PCIDev" gp_index="46" pci_busid="0000:03:00.1" pci_type="0200 [14e4:165f] [1028:0639] 00" pci_link_speed="0.500000">
+          <info name="PCIVendor" value="Broadcom Limited"/>
+          <info name="PCIDevice" value="NetXtreme BCM5720 Gigabit Ethernet PCIe"/>
+          <object type="OSDev" gp_index="56" name="eth3" osdev_type="2">
+            <info name="Address" value="44:a8:42:1a:fa:3b"/>
+          </object>
+        </object>
+      </object>
+      <object type="PCIDev" gp_index="36" pci_busid="0000:00:1f.2" pci_type="0106 [8086:8d02] [1028:0639] 05" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Intel Corporation"/>
+        <info name="PCIDevice" value="C610/X99 series chipset 6-Port SATA Controller [AHCI mode]"/>
+        <object type="OSDev" gp_index="54" name="sr0" subtype="Removable Media Device" osdev_type="0">
+          <info name="Size" value="1048575"/>
+          <info name="SectorSize" value="512"/>
+          <info name="LinuxDeviceID" value="11:0"/>
+          <info name="Model" value="PLDS_DVD+_-RW_DS-8ABSH"/>
+          <info name="Revision" value="AD51"/>
+          <info name="SerialNumber" value="MTT6M7363951T53TZA00"/>
+        </object>
+      </object>
+    </object>
+  </object>
+</topology>

@@ -1,0 +1,1892 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topology SYSTEM "hwloc2.dtd">
+<topology version="2.0">
+  <object type="Machine" os_index="0" cpuset="0xffffffff,0xffffffff,0xffffffff,0xffffffff" complete_cpuset="0xffffffff,0xffffffff,0xffffffff,0xffffffff" allowed_cpuset="0xffffffff,0xffffffff,0xffffffff,0xffffffff" nodeset="0x0000000f" complete_nodeset="0x0000000f" allowed_nodeset="0x0000000f" gp_index="1">
+    <info name="DMIProductName" value="HPE_CRAY_EX235A"/>
+    <info name="DMIProductVersion" value="1.4.5"/>
+    <info name="DMIBoardVendor" value="HPE"/>
+    <info name="DMIBoardName" value="HPE CRAY EX235A"/>
+    <info name="DMIBoardVersion" value="BPNC"/>
+    <info name="DMIBoardAssetTag" value="UNKNOWN"/>
+    <info name="DMIChassisVendor" value="HPE"/>
+    <info name="DMIChassisType" value="17"/>
+    <info name="DMIChassisVersion" value="HPE Cray EX Supercomputers"/>
+    <info name="DMIChassisAssetTag" value="UNKNOWN"/>
+    <info name="DMIBIOSVendor" value="HPE"/>
+    <info name="DMIBIOSVersion" value="1.4.5"/>
+    <info name="DMIBIOSDate" value="01-11-2023"/>
+    <info name="DMISysVendor" value="HPE"/>
+    <info name="Backend" value="Linux"/>
+    <info name="LinuxCgroup" value="/"/>
+    <info name="OSName" value="Linux"/>
+    <info name="OSRelease" value="4.18.0-372.9.1.el8.x86_64"/>
+    <info name="OSVersion" value="#1 SMP Fri Apr 15 22:12:19 EDT 2022"/>
+    <info name="HostName" value="x1000c6s4b1n0"/>
+    <info name="Architecture" value="x86_64"/>
+    <info name="hwlocVersion" value="2.9.0"/>
+    <info name="ProcessName" value="lt-lstopo-no-graphics"/>
+    <object type="Package" os_index="0" cpuset="0xffffffff,0xffffffff,0xffffffff,0xffffffff" complete_cpuset="0xffffffff,0xffffffff,0xffffffff,0xffffffff" nodeset="0x0000000f" complete_nodeset="0x0000000f" gp_index="3">
+      <info name="CPUModel" value="AMD EPYC 7A53 64-Core Processor                "/>
+      <info name="CPUVendor" value="AuthenticAMD"/>
+      <info name="CPUFamilyNumber" value="25"/>
+      <info name="CPUModelNumber" value="48"/>
+      <info name="CPUStepping" value="1"/>
+      <object type="Group" cpuset="0x0000ffff,,0x0000ffff" complete_cpuset="0x0000ffff,,0x0000ffff" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="463" kind="1001" subkind="0">
+        <object type="NUMANode" os_index="0" cpuset="0x0000ffff,,0x0000ffff" complete_cpuset="0x0000ffff,,0x0000ffff" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="459" local_memory="66358632448">
+          <page_type size="4096" count="16200838"/>
+          <page_type size="2097152" count="0"/>
+          <page_type size="1073741824" count="0"/>
+        </object>
+        <object type="L3Cache" os_index="0" cpuset="0x000000ff,,0x000000ff" complete_cpuset="0x000000ff,,0x000000ff" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="9" cache_size="33554432" depth="3" cache_linesize="64" cache_associativity="16" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L2Cache" os_index="0" cpuset="0x00000001,,0x00000001" complete_cpuset="0x00000001,,0x00000001" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="8" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="0" cpuset="0x00000001,,0x00000001" complete_cpuset="0x00000001,,0x00000001" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="6" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="0" cpuset="0x00000001,,0x00000001" complete_cpuset="0x00000001,,0x00000001" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="7" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="0" cpuset="0x00000001,,0x00000001" complete_cpuset="0x00000001,,0x00000001" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="2">
+                  <object type="PU" os_index="0" cpuset="0x00000001" complete_cpuset="0x00000001" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="5"/>
+                  <object type="PU" os_index="64" cpuset="0x00000001,,0x0" complete_cpuset="0x00000001,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="395"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="1" cpuset="0x00000002,,0x00000002" complete_cpuset="0x00000002,,0x00000002" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="15" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="1" cpuset="0x00000002,,0x00000002" complete_cpuset="0x00000002,,0x00000002" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="13" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="1" cpuset="0x00000002,,0x00000002" complete_cpuset="0x00000002,,0x00000002" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="14" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="1" cpuset="0x00000002,,0x00000002" complete_cpuset="0x00000002,,0x00000002" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="10">
+                  <object type="PU" os_index="1" cpuset="0x00000002" complete_cpuset="0x00000002" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="12"/>
+                  <object type="PU" os_index="65" cpuset="0x00000002,,0x0" complete_cpuset="0x00000002,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="396"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="2" cpuset="0x00000004,,0x00000004" complete_cpuset="0x00000004,,0x00000004" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="21" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="2" cpuset="0x00000004,,0x00000004" complete_cpuset="0x00000004,,0x00000004" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="19" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="2" cpuset="0x00000004,,0x00000004" complete_cpuset="0x00000004,,0x00000004" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="20" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="2" cpuset="0x00000004,,0x00000004" complete_cpuset="0x00000004,,0x00000004" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="16">
+                  <object type="PU" os_index="2" cpuset="0x00000004" complete_cpuset="0x00000004" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="18"/>
+                  <object type="PU" os_index="66" cpuset="0x00000004,,0x0" complete_cpuset="0x00000004,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="397"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="3" cpuset="0x00000008,,0x00000008" complete_cpuset="0x00000008,,0x00000008" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="27" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="3" cpuset="0x00000008,,0x00000008" complete_cpuset="0x00000008,,0x00000008" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="25" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="3" cpuset="0x00000008,,0x00000008" complete_cpuset="0x00000008,,0x00000008" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="26" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="3" cpuset="0x00000008,,0x00000008" complete_cpuset="0x00000008,,0x00000008" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="22">
+                  <object type="PU" os_index="3" cpuset="0x00000008" complete_cpuset="0x00000008" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="24"/>
+                  <object type="PU" os_index="67" cpuset="0x00000008,,0x0" complete_cpuset="0x00000008,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="398"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="4" cpuset="0x00000010,,0x00000010" complete_cpuset="0x00000010,,0x00000010" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="33" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="4" cpuset="0x00000010,,0x00000010" complete_cpuset="0x00000010,,0x00000010" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="31" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="4" cpuset="0x00000010,,0x00000010" complete_cpuset="0x00000010,,0x00000010" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="32" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="4" cpuset="0x00000010,,0x00000010" complete_cpuset="0x00000010,,0x00000010" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="28">
+                  <object type="PU" os_index="4" cpuset="0x00000010" complete_cpuset="0x00000010" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="30"/>
+                  <object type="PU" os_index="68" cpuset="0x00000010,,0x0" complete_cpuset="0x00000010,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="399"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="5" cpuset="0x00000020,,0x00000020" complete_cpuset="0x00000020,,0x00000020" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="39" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="5" cpuset="0x00000020,,0x00000020" complete_cpuset="0x00000020,,0x00000020" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="37" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="5" cpuset="0x00000020,,0x00000020" complete_cpuset="0x00000020,,0x00000020" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="38" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="5" cpuset="0x00000020,,0x00000020" complete_cpuset="0x00000020,,0x00000020" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="34">
+                  <object type="PU" os_index="5" cpuset="0x00000020" complete_cpuset="0x00000020" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="36"/>
+                  <object type="PU" os_index="69" cpuset="0x00000020,,0x0" complete_cpuset="0x00000020,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="400"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="6" cpuset="0x00000040,,0x00000040" complete_cpuset="0x00000040,,0x00000040" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="45" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="6" cpuset="0x00000040,,0x00000040" complete_cpuset="0x00000040,,0x00000040" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="43" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="6" cpuset="0x00000040,,0x00000040" complete_cpuset="0x00000040,,0x00000040" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="44" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="6" cpuset="0x00000040,,0x00000040" complete_cpuset="0x00000040,,0x00000040" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="40">
+                  <object type="PU" os_index="6" cpuset="0x00000040" complete_cpuset="0x00000040" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="42"/>
+                  <object type="PU" os_index="70" cpuset="0x00000040,,0x0" complete_cpuset="0x00000040,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="401"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="7" cpuset="0x00000080,,0x00000080" complete_cpuset="0x00000080,,0x00000080" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="51" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="7" cpuset="0x00000080,,0x00000080" complete_cpuset="0x00000080,,0x00000080" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="49" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="7" cpuset="0x00000080,,0x00000080" complete_cpuset="0x00000080,,0x00000080" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="50" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="7" cpuset="0x00000080,,0x00000080" complete_cpuset="0x00000080,,0x00000080" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="46">
+                  <object type="PU" os_index="7" cpuset="0x00000080" complete_cpuset="0x00000080" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="48"/>
+                  <object type="PU" os_index="71" cpuset="0x00000080,,0x0" complete_cpuset="0x00000080,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="402"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="Bridge" gp_index="679" bridge_type="0-1" depth="0" bridge_pci="0000:[d0-d1]">
+            <object type="PCIDev" gp_index="621" pci_busid="0000:d0:00.0" pci_type="0600 [1022:14bb] [1022:14bb] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="604" pci_busid="0000:d0:00.2" pci_type="0806 [1022:5308] [1022:5308] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="563" pci_busid="0000:d0:01.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="500" pci_busid="0000:d0:02.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="599" pci_busid="0000:d0:07.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="Bridge" gp_index="488" bridge_type="1-1" depth="1" bridge_pci="0000:[d1-d1]" pci_busid="0000:d0:07.1" pci_type="0604 [1022:14bf] [1022:14bf] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <object type="PCIDev" gp_index="591" pci_busid="0000:d1:00.0" pci_type="0380 [1002:7408] [1002:0b0c] 00" pci_link_speed="31.507692">
+                <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD/ATI]"/>
+                <info name="PCIDevice" value="Aldebaran"/>
+                <object type="OSDev" gp_index="694" name="renderD132" osdev_type="1"/>
+                <object type="OSDev" gp_index="698" name="card4" osdev_type="1"/>
+                <object type="OSDev" gp_index="709" name="rsmi4" subtype="RSMI" osdev_type="1">
+                  <info name="Backend" value="RSMI"/>
+                  <info name="GPUVendor" value="AMD"/>
+                  <info name="GPUModel" value="AMD INSTINCT MI200 (MCM) OAM LC MBA HPE C2"/>
+                  <info name="AMDSerial" value="692224001590"/>
+                  <info name="AMDUUID" value="68a7e4d9d8539f5b"/>
+                  <info name="XGMIHiveID" value="bac53b896800dc20"/>
+                  <info name="RSMIVRAMSize" value="67092480"/>
+                  <info name="RSMIVisibleVRAMSize" value="67092480"/>
+                  <info name="RSMIGTTSize" value="262899364"/>
+                  <info name="XGMIPeers" value="rsmi0 rsmi1 rsmi2 rsmi3 rsmi5 rsmi6 rsmi7 "/>
+                </object>
+                <object type="OSDev" gp_index="717" name="opencl0d4" subtype="OpenCL" osdev_type="5">
+                  <info name="Backend" value="OpenCL"/>
+                  <info name="OpenCLDeviceType" value="GPU"/>
+                  <info name="GPUVendor" value="Advanced Micro Devices, Inc."/>
+                  <info name="GPUModel" value="gfx90a:sramecc+:xnack-"/>
+                  <info name="OpenCLPlatformIndex" value="0"/>
+                  <info name="OpenCLPlatformName" value="AMD Accelerated Parallel Processing"/>
+                  <info name="OpenCLPlatformDeviceIndex" value="4"/>
+                  <info name="OpenCLComputeUnits" value="110"/>
+                  <info name="OpenCLGlobalMemorySize" value="67092480"/>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object type="L3Cache" os_index="1" cpuset="0x0000ff00,,0x0000ff00" complete_cpuset="0x0000ff00,,0x0000ff00" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="58" cache_size="33554432" depth="3" cache_linesize="64" cache_associativity="16" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L2Cache" os_index="8" cpuset="0x00000100,,0x00000100" complete_cpuset="0x00000100,,0x00000100" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="57" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="8" cpuset="0x00000100,,0x00000100" complete_cpuset="0x00000100,,0x00000100" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="55" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="8" cpuset="0x00000100,,0x00000100" complete_cpuset="0x00000100,,0x00000100" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="56" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="8" cpuset="0x00000100,,0x00000100" complete_cpuset="0x00000100,,0x00000100" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="52">
+                  <object type="PU" os_index="8" cpuset="0x00000100" complete_cpuset="0x00000100" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="54"/>
+                  <object type="PU" os_index="72" cpuset="0x00000100,,0x0" complete_cpuset="0x00000100,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="403"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="9" cpuset="0x00000200,,0x00000200" complete_cpuset="0x00000200,,0x00000200" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="64" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="9" cpuset="0x00000200,,0x00000200" complete_cpuset="0x00000200,,0x00000200" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="62" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="9" cpuset="0x00000200,,0x00000200" complete_cpuset="0x00000200,,0x00000200" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="63" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="9" cpuset="0x00000200,,0x00000200" complete_cpuset="0x00000200,,0x00000200" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="59">
+                  <object type="PU" os_index="9" cpuset="0x00000200" complete_cpuset="0x00000200" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="61"/>
+                  <object type="PU" os_index="73" cpuset="0x00000200,,0x0" complete_cpuset="0x00000200,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="404"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="10" cpuset="0x00000400,,0x00000400" complete_cpuset="0x00000400,,0x00000400" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="70" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="10" cpuset="0x00000400,,0x00000400" complete_cpuset="0x00000400,,0x00000400" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="68" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="10" cpuset="0x00000400,,0x00000400" complete_cpuset="0x00000400,,0x00000400" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="69" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="10" cpuset="0x00000400,,0x00000400" complete_cpuset="0x00000400,,0x00000400" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="65">
+                  <object type="PU" os_index="10" cpuset="0x00000400" complete_cpuset="0x00000400" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="67"/>
+                  <object type="PU" os_index="74" cpuset="0x00000400,,0x0" complete_cpuset="0x00000400,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="405"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="11" cpuset="0x00000800,,0x00000800" complete_cpuset="0x00000800,,0x00000800" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="76" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="11" cpuset="0x00000800,,0x00000800" complete_cpuset="0x00000800,,0x00000800" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="74" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="11" cpuset="0x00000800,,0x00000800" complete_cpuset="0x00000800,,0x00000800" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="75" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="11" cpuset="0x00000800,,0x00000800" complete_cpuset="0x00000800,,0x00000800" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="71">
+                  <object type="PU" os_index="11" cpuset="0x00000800" complete_cpuset="0x00000800" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="73"/>
+                  <object type="PU" os_index="75" cpuset="0x00000800,,0x0" complete_cpuset="0x00000800,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="406"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="12" cpuset="0x00001000,,0x00001000" complete_cpuset="0x00001000,,0x00001000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="82" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="12" cpuset="0x00001000,,0x00001000" complete_cpuset="0x00001000,,0x00001000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="80" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="12" cpuset="0x00001000,,0x00001000" complete_cpuset="0x00001000,,0x00001000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="81" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="12" cpuset="0x00001000,,0x00001000" complete_cpuset="0x00001000,,0x00001000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="77">
+                  <object type="PU" os_index="12" cpuset="0x00001000" complete_cpuset="0x00001000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="79"/>
+                  <object type="PU" os_index="76" cpuset="0x00001000,,0x0" complete_cpuset="0x00001000,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="407"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="13" cpuset="0x00002000,,0x00002000" complete_cpuset="0x00002000,,0x00002000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="88" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="13" cpuset="0x00002000,,0x00002000" complete_cpuset="0x00002000,,0x00002000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="86" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="13" cpuset="0x00002000,,0x00002000" complete_cpuset="0x00002000,,0x00002000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="87" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="13" cpuset="0x00002000,,0x00002000" complete_cpuset="0x00002000,,0x00002000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="83">
+                  <object type="PU" os_index="13" cpuset="0x00002000" complete_cpuset="0x00002000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="85"/>
+                  <object type="PU" os_index="77" cpuset="0x00002000,,0x0" complete_cpuset="0x00002000,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="408"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="14" cpuset="0x00004000,,0x00004000" complete_cpuset="0x00004000,,0x00004000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="94" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="14" cpuset="0x00004000,,0x00004000" complete_cpuset="0x00004000,,0x00004000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="92" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="14" cpuset="0x00004000,,0x00004000" complete_cpuset="0x00004000,,0x00004000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="93" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="14" cpuset="0x00004000,,0x00004000" complete_cpuset="0x00004000,,0x00004000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="89">
+                  <object type="PU" os_index="14" cpuset="0x00004000" complete_cpuset="0x00004000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="91"/>
+                  <object type="PU" os_index="78" cpuset="0x00004000,,0x0" complete_cpuset="0x00004000,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="409"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="15" cpuset="0x00008000,,0x00008000" complete_cpuset="0x00008000,,0x00008000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="100" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="15" cpuset="0x00008000,,0x00008000" complete_cpuset="0x00008000,,0x00008000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="98" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="15" cpuset="0x00008000,,0x00008000" complete_cpuset="0x00008000,,0x00008000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="99" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="15" cpuset="0x00008000,,0x00008000" complete_cpuset="0x00008000,,0x00008000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="95">
+                  <object type="PU" os_index="15" cpuset="0x00008000" complete_cpuset="0x00008000" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="97"/>
+                  <object type="PU" os_index="79" cpuset="0x00008000,,0x0" complete_cpuset="0x00008000,,0x0" nodeset="0x00000001" complete_nodeset="0x00000001" gp_index="410"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="Bridge" gp_index="680" bridge_type="0-1" depth="0" bridge_pci="0000:[d4-d6]">
+            <object type="PCIDev" gp_index="494" pci_busid="0000:d4:00.0" pci_type="0600 [1022:14bb] [1022:14bb] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="477" pci_busid="0000:d4:00.2" pci_type="0806 [1022:5308] [1022:5308] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="634" pci_busid="0000:d4:01.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="Bridge" gp_index="528" bridge_type="1-1" depth="1" bridge_pci="0000:[d5-d5]" pci_busid="0000:d4:01.1" pci_type="0604 [1022:14be] [1022:1234] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <object type="PCIDev" gp_index="665" pci_busid="0000:d5:00.0" pci_type="0200 [17db:0501] [17db:0000] 02" pci_link_speed="31.507692">
+                <info name="PCIVendor" value="Cray Inc"/>
+                <object type="OSDev" gp_index="687" name="hsn2" osdev_type="2">
+                  <info name="Address" value="02:00:00:00:1b:90"/>
+                </object>
+              </object>
+            </object>
+            <object type="PCIDev" gp_index="577" pci_busid="0000:d4:02.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="472" pci_busid="0000:d4:07.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="Bridge" gp_index="564" bridge_type="1-1" depth="1" bridge_pci="0000:[d6-d6]" pci_busid="0000:d4:07.1" pci_type="0604 [1022:14bf] [1022:14bf] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <object type="PCIDev" gp_index="631" pci_busid="0000:d6:00.0" pci_type="0380 [1002:7408] [1002:0b0c] 00" pci_link_speed="31.507692">
+                <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD/ATI]"/>
+                <info name="PCIDevice" value="Aldebaran"/>
+                <object type="OSDev" gp_index="689" name="card5" osdev_type="1"/>
+                <object type="OSDev" gp_index="702" name="renderD133" osdev_type="1"/>
+                <object type="OSDev" gp_index="710" name="rsmi5" subtype="RSMI" osdev_type="1">
+                  <info name="Backend" value="RSMI"/>
+                  <info name="GPUVendor" value="AMD"/>
+                  <info name="GPUModel" value="AMD INSTINCT MI200 (MCM) OAM LC MBA HPE C2"/>
+                  <info name="AMDSerial" value="692224001590"/>
+                  <info name="AMDUUID" value="e36ac86da8af0f71"/>
+                  <info name="XGMIHiveID" value="bac53b896800dc20"/>
+                  <info name="RSMIVRAMSize" value="67092480"/>
+                  <info name="RSMIVisibleVRAMSize" value="67092480"/>
+                  <info name="RSMIGTTSize" value="262899364"/>
+                  <info name="XGMIPeers" value="rsmi0 rsmi1 rsmi2 rsmi3 rsmi4 rsmi6 rsmi7 "/>
+                </object>
+                <object type="OSDev" gp_index="718" name="opencl0d5" subtype="OpenCL" osdev_type="5">
+                  <info name="Backend" value="OpenCL"/>
+                  <info name="OpenCLDeviceType" value="GPU"/>
+                  <info name="GPUVendor" value="Advanced Micro Devices, Inc."/>
+                  <info name="GPUModel" value="gfx90a:sramecc+:xnack-"/>
+                  <info name="OpenCLPlatformIndex" value="0"/>
+                  <info name="OpenCLPlatformName" value="AMD Accelerated Parallel Processing"/>
+                  <info name="OpenCLPlatformDeviceIndex" value="5"/>
+                  <info name="OpenCLComputeUnits" value="110"/>
+                  <info name="OpenCLGlobalMemorySize" value="67092480"/>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object type="Bridge" gp_index="674" bridge_type="0-1" depth="0" bridge_pci="0000:[90-93]">
+          <object type="PCIDev" gp_index="664" pci_busid="0000:90:00.0" pci_type="0600 [1022:1480] [1022:1480] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse Root Complex"/>
+          </object>
+          <object type="PCIDev" gp_index="643" pci_busid="0000:90:00.2" pci_type="0806 [1022:164f] [1022:164f] 01" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Milan IOMMU"/>
+          </object>
+          <object type="PCIDev" gp_index="603" pci_busid="0000:90:01.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="545" pci_busid="0000:90:02.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="482" pci_busid="0000:90:03.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="620" pci_busid="0000:90:04.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="561" pci_busid="0000:90:05.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="Bridge" gp_index="653" bridge_type="1-1" depth="1" bridge_pci="0000:[91-91]" pci_busid="0000:90:05.1" pci_type="0604 [1022:1483] [1022:1234] 00" pci_link_speed="0.250000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse GPP Bridge"/>
+            <object type="PCIDev" gp_index="630" pci_busid="0000:91:00.0" pci_type="0200 [8086:1537] [ffff:0000] 03" pci_link_speed="0.250000">
+              <info name="PCIVendor" value="Intel Corporation"/>
+              <info name="PCIDevice" value="I210 Gigabit Backplane Connection"/>
+              <object type="OSDev" gp_index="686" name="enp145s0" osdev_type="2">
+                <info name="Address" value="00:40:a6:87:44:c0"/>
+              </object>
+            </object>
+          </object>
+          <object type="PCIDev" gp_index="638" pci_busid="0000:90:07.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="Bridge" gp_index="530" bridge_type="1-1" depth="1" bridge_pci="0000:[92-92]" pci_busid="0000:90:07.1" pci_type="0604 [1022:1484] [1022:1484] 00" pci_link_speed="31.507692">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse Internal PCIe GPP Bridge 0 to bus[E:B]"/>
+            <object type="PCIDev" gp_index="602" pci_busid="0000:92:00.0" pci_type="1300 [1022:148a] [1022:148a] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Function"/>
+            </object>
+            <object type="PCIDev" gp_index="586" pci_busid="0000:92:00.2" pci_type="1080 [1022:1498] [1022:1498] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse PTDMA"/>
+            </object>
+          </object>
+          <object type="PCIDev" gp_index="580" pci_busid="0000:90:08.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="Bridge" gp_index="670" bridge_type="1-1" depth="1" bridge_pci="0000:[93-93]" pci_busid="0000:90:08.1" pci_type="0604 [1022:1484] [1022:1484] 00" pci_link_speed="31.507692">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse Internal PCIe GPP Bridge 0 to bus[E:B]"/>
+            <object type="PCIDev" gp_index="572" pci_busid="0000:93:00.0" pci_type="1300 [1022:1485] [1022:1485] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse Reserved SPP"/>
+            </object>
+            <object type="PCIDev" gp_index="553" pci_busid="0000:93:00.2" pci_type="1080 [1022:1498] [1022:1498] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse PTDMA"/>
+            </object>
+          </object>
+        </object>
+      </object>
+      <object type="Group" cpuset="0xffff0000,,0xffff0000" complete_cpuset="0xffff0000,,0xffff0000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="464" kind="1001" subkind="0">
+        <object type="NUMANode" os_index="1" cpuset="0xffff0000,,0xffff0000" complete_cpuset="0xffff0000,,0xffff0000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="460" local_memory="67637260288">
+          <page_type size="4096" count="16513003"/>
+          <page_type size="2097152" count="0"/>
+          <page_type size="1073741824" count="0"/>
+        </object>
+        <object type="L3Cache" os_index="2" cpuset="0x00ff0000,,0x00ff0000" complete_cpuset="0x00ff0000,,0x00ff0000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="107" cache_size="33554432" depth="3" cache_linesize="64" cache_associativity="16" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L2Cache" os_index="16" cpuset="0x00010000,,0x00010000" complete_cpuset="0x00010000,,0x00010000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="106" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="16" cpuset="0x00010000,,0x00010000" complete_cpuset="0x00010000,,0x00010000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="104" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="16" cpuset="0x00010000,,0x00010000" complete_cpuset="0x00010000,,0x00010000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="105" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="16" cpuset="0x00010000,,0x00010000" complete_cpuset="0x00010000,,0x00010000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="101">
+                  <object type="PU" os_index="16" cpuset="0x00010000" complete_cpuset="0x00010000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="103"/>
+                  <object type="PU" os_index="80" cpuset="0x00010000,,0x0" complete_cpuset="0x00010000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="411"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="17" cpuset="0x00020000,,0x00020000" complete_cpuset="0x00020000,,0x00020000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="113" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="17" cpuset="0x00020000,,0x00020000" complete_cpuset="0x00020000,,0x00020000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="111" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="17" cpuset="0x00020000,,0x00020000" complete_cpuset="0x00020000,,0x00020000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="112" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="17" cpuset="0x00020000,,0x00020000" complete_cpuset="0x00020000,,0x00020000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="108">
+                  <object type="PU" os_index="17" cpuset="0x00020000" complete_cpuset="0x00020000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="110"/>
+                  <object type="PU" os_index="81" cpuset="0x00020000,,0x0" complete_cpuset="0x00020000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="412"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="18" cpuset="0x00040000,,0x00040000" complete_cpuset="0x00040000,,0x00040000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="119" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="18" cpuset="0x00040000,,0x00040000" complete_cpuset="0x00040000,,0x00040000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="117" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="18" cpuset="0x00040000,,0x00040000" complete_cpuset="0x00040000,,0x00040000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="118" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="18" cpuset="0x00040000,,0x00040000" complete_cpuset="0x00040000,,0x00040000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="114">
+                  <object type="PU" os_index="18" cpuset="0x00040000" complete_cpuset="0x00040000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="116"/>
+                  <object type="PU" os_index="82" cpuset="0x00040000,,0x0" complete_cpuset="0x00040000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="413"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="19" cpuset="0x00080000,,0x00080000" complete_cpuset="0x00080000,,0x00080000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="125" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="19" cpuset="0x00080000,,0x00080000" complete_cpuset="0x00080000,,0x00080000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="123" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="19" cpuset="0x00080000,,0x00080000" complete_cpuset="0x00080000,,0x00080000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="124" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="19" cpuset="0x00080000,,0x00080000" complete_cpuset="0x00080000,,0x00080000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="120">
+                  <object type="PU" os_index="19" cpuset="0x00080000" complete_cpuset="0x00080000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="122"/>
+                  <object type="PU" os_index="83" cpuset="0x00080000,,0x0" complete_cpuset="0x00080000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="414"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="20" cpuset="0x00100000,,0x00100000" complete_cpuset="0x00100000,,0x00100000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="131" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="20" cpuset="0x00100000,,0x00100000" complete_cpuset="0x00100000,,0x00100000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="129" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="20" cpuset="0x00100000,,0x00100000" complete_cpuset="0x00100000,,0x00100000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="130" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="20" cpuset="0x00100000,,0x00100000" complete_cpuset="0x00100000,,0x00100000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="126">
+                  <object type="PU" os_index="20" cpuset="0x00100000" complete_cpuset="0x00100000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="128"/>
+                  <object type="PU" os_index="84" cpuset="0x00100000,,0x0" complete_cpuset="0x00100000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="415"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="21" cpuset="0x00200000,,0x00200000" complete_cpuset="0x00200000,,0x00200000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="137" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="21" cpuset="0x00200000,,0x00200000" complete_cpuset="0x00200000,,0x00200000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="135" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="21" cpuset="0x00200000,,0x00200000" complete_cpuset="0x00200000,,0x00200000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="136" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="21" cpuset="0x00200000,,0x00200000" complete_cpuset="0x00200000,,0x00200000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="132">
+                  <object type="PU" os_index="21" cpuset="0x00200000" complete_cpuset="0x00200000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="134"/>
+                  <object type="PU" os_index="85" cpuset="0x00200000,,0x0" complete_cpuset="0x00200000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="416"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="22" cpuset="0x00400000,,0x00400000" complete_cpuset="0x00400000,,0x00400000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="143" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="22" cpuset="0x00400000,,0x00400000" complete_cpuset="0x00400000,,0x00400000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="141" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="22" cpuset="0x00400000,,0x00400000" complete_cpuset="0x00400000,,0x00400000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="142" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="22" cpuset="0x00400000,,0x00400000" complete_cpuset="0x00400000,,0x00400000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="138">
+                  <object type="PU" os_index="22" cpuset="0x00400000" complete_cpuset="0x00400000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="140"/>
+                  <object type="PU" os_index="86" cpuset="0x00400000,,0x0" complete_cpuset="0x00400000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="417"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="23" cpuset="0x00800000,,0x00800000" complete_cpuset="0x00800000,,0x00800000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="149" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="23" cpuset="0x00800000,,0x00800000" complete_cpuset="0x00800000,,0x00800000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="147" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="23" cpuset="0x00800000,,0x00800000" complete_cpuset="0x00800000,,0x00800000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="148" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="23" cpuset="0x00800000,,0x00800000" complete_cpuset="0x00800000,,0x00800000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="144">
+                  <object type="PU" os_index="23" cpuset="0x00800000" complete_cpuset="0x00800000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="146"/>
+                  <object type="PU" os_index="87" cpuset="0x00800000,,0x0" complete_cpuset="0x00800000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="418"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="Bridge" gp_index="677" bridge_type="0-1" depth="0" bridge_pci="0000:[c8-c9]">
+            <object type="PCIDev" gp_index="520" pci_busid="0000:c8:00.0" pci_type="0600 [1022:14bb] [1022:14bb] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="495" pci_busid="0000:c8:00.2" pci_type="0806 [1022:5308] [1022:5308] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="658" pci_busid="0000:c8:01.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="595" pci_busid="0000:c8:02.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="492" pci_busid="0000:c8:07.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="Bridge" gp_index="585" bridge_type="1-1" depth="1" bridge_pci="0000:[c9-c9]" pci_busid="0000:c8:07.1" pci_type="0604 [1022:14bf] [1022:14bf] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <object type="PCIDev" gp_index="485" pci_busid="0000:c9:00.0" pci_type="0380 [1002:7408] [1002:0b0c] 00" pci_link_speed="31.507692">
+                <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD/ATI]"/>
+                <info name="PCIDevice" value="Aldebaran"/>
+                <object type="OSDev" gp_index="695" name="renderD130" osdev_type="1"/>
+                <object type="OSDev" gp_index="699" name="card2" osdev_type="1"/>
+                <object type="OSDev" gp_index="707" name="rsmi2" subtype="RSMI" osdev_type="1">
+                  <info name="Backend" value="RSMI"/>
+                  <info name="GPUVendor" value="AMD"/>
+                  <info name="GPUModel" value="AMD INSTINCT MI200 (MCM) OAM LC MBA HPE C2"/>
+                  <info name="AMDSerial" value="692135004843"/>
+                  <info name="AMDUUID" value="592e50cba2c66199"/>
+                  <info name="XGMIHiveID" value="bac53b896800dc20"/>
+                  <info name="RSMIVRAMSize" value="67092480"/>
+                  <info name="RSMIVisibleVRAMSize" value="67092480"/>
+                  <info name="RSMIGTTSize" value="262899364"/>
+                  <info name="XGMIPeers" value="rsmi0 rsmi1 rsmi3 rsmi4 rsmi5 rsmi6 rsmi7 "/>
+                </object>
+                <object type="OSDev" gp_index="715" name="opencl0d2" subtype="OpenCL" osdev_type="5">
+                  <info name="Backend" value="OpenCL"/>
+                  <info name="OpenCLDeviceType" value="GPU"/>
+                  <info name="GPUVendor" value="Advanced Micro Devices, Inc."/>
+                  <info name="GPUModel" value="gfx90a:sramecc+:xnack-"/>
+                  <info name="OpenCLPlatformIndex" value="0"/>
+                  <info name="OpenCLPlatformName" value="AMD Accelerated Parallel Processing"/>
+                  <info name="OpenCLPlatformDeviceIndex" value="2"/>
+                  <info name="OpenCLComputeUnits" value="110"/>
+                  <info name="OpenCLGlobalMemorySize" value="67092480"/>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object type="L3Cache" os_index="3" cpuset="0xff000000,,0xff000000" complete_cpuset="0xff000000,,0xff000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="156" cache_size="33554432" depth="3" cache_linesize="64" cache_associativity="16" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L2Cache" os_index="24" cpuset="0x01000000,,0x01000000" complete_cpuset="0x01000000,,0x01000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="155" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="24" cpuset="0x01000000,,0x01000000" complete_cpuset="0x01000000,,0x01000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="153" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="24" cpuset="0x01000000,,0x01000000" complete_cpuset="0x01000000,,0x01000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="154" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="24" cpuset="0x01000000,,0x01000000" complete_cpuset="0x01000000,,0x01000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="150">
+                  <object type="PU" os_index="24" cpuset="0x01000000" complete_cpuset="0x01000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="152"/>
+                  <object type="PU" os_index="88" cpuset="0x01000000,,0x0" complete_cpuset="0x01000000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="419"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="25" cpuset="0x02000000,,0x02000000" complete_cpuset="0x02000000,,0x02000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="162" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="25" cpuset="0x02000000,,0x02000000" complete_cpuset="0x02000000,,0x02000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="160" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="25" cpuset="0x02000000,,0x02000000" complete_cpuset="0x02000000,,0x02000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="161" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="25" cpuset="0x02000000,,0x02000000" complete_cpuset="0x02000000,,0x02000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="157">
+                  <object type="PU" os_index="25" cpuset="0x02000000" complete_cpuset="0x02000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="159"/>
+                  <object type="PU" os_index="89" cpuset="0x02000000,,0x0" complete_cpuset="0x02000000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="420"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="26" cpuset="0x04000000,,0x04000000" complete_cpuset="0x04000000,,0x04000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="168" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="26" cpuset="0x04000000,,0x04000000" complete_cpuset="0x04000000,,0x04000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="166" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="26" cpuset="0x04000000,,0x04000000" complete_cpuset="0x04000000,,0x04000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="167" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="26" cpuset="0x04000000,,0x04000000" complete_cpuset="0x04000000,,0x04000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="163">
+                  <object type="PU" os_index="26" cpuset="0x04000000" complete_cpuset="0x04000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="165"/>
+                  <object type="PU" os_index="90" cpuset="0x04000000,,0x0" complete_cpuset="0x04000000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="421"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="27" cpuset="0x08000000,,0x08000000" complete_cpuset="0x08000000,,0x08000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="174" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="27" cpuset="0x08000000,,0x08000000" complete_cpuset="0x08000000,,0x08000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="172" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="27" cpuset="0x08000000,,0x08000000" complete_cpuset="0x08000000,,0x08000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="173" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="27" cpuset="0x08000000,,0x08000000" complete_cpuset="0x08000000,,0x08000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="169">
+                  <object type="PU" os_index="27" cpuset="0x08000000" complete_cpuset="0x08000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="171"/>
+                  <object type="PU" os_index="91" cpuset="0x08000000,,0x0" complete_cpuset="0x08000000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="422"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="28" cpuset="0x10000000,,0x10000000" complete_cpuset="0x10000000,,0x10000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="180" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="28" cpuset="0x10000000,,0x10000000" complete_cpuset="0x10000000,,0x10000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="178" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="28" cpuset="0x10000000,,0x10000000" complete_cpuset="0x10000000,,0x10000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="179" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="28" cpuset="0x10000000,,0x10000000" complete_cpuset="0x10000000,,0x10000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="175">
+                  <object type="PU" os_index="28" cpuset="0x10000000" complete_cpuset="0x10000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="177"/>
+                  <object type="PU" os_index="92" cpuset="0x10000000,,0x0" complete_cpuset="0x10000000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="423"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="29" cpuset="0x20000000,,0x20000000" complete_cpuset="0x20000000,,0x20000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="186" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="29" cpuset="0x20000000,,0x20000000" complete_cpuset="0x20000000,,0x20000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="184" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="29" cpuset="0x20000000,,0x20000000" complete_cpuset="0x20000000,,0x20000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="185" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="29" cpuset="0x20000000,,0x20000000" complete_cpuset="0x20000000,,0x20000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="181">
+                  <object type="PU" os_index="29" cpuset="0x20000000" complete_cpuset="0x20000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="183"/>
+                  <object type="PU" os_index="93" cpuset="0x20000000,,0x0" complete_cpuset="0x20000000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="424"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="30" cpuset="0x40000000,,0x40000000" complete_cpuset="0x40000000,,0x40000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="192" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="30" cpuset="0x40000000,,0x40000000" complete_cpuset="0x40000000,,0x40000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="190" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="30" cpuset="0x40000000,,0x40000000" complete_cpuset="0x40000000,,0x40000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="191" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="30" cpuset="0x40000000,,0x40000000" complete_cpuset="0x40000000,,0x40000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="187">
+                  <object type="PU" os_index="30" cpuset="0x40000000" complete_cpuset="0x40000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="189"/>
+                  <object type="PU" os_index="94" cpuset="0x40000000,,0x0" complete_cpuset="0x40000000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="425"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="31" cpuset="0x80000000,,0x80000000" complete_cpuset="0x80000000,,0x80000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="198" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="31" cpuset="0x80000000,,0x80000000" complete_cpuset="0x80000000,,0x80000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="196" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="31" cpuset="0x80000000,,0x80000000" complete_cpuset="0x80000000,,0x80000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="197" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="31" cpuset="0x80000000,,0x80000000" complete_cpuset="0x80000000,,0x80000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="193">
+                  <object type="PU" os_index="31" cpuset="0x80000000" complete_cpuset="0x80000000" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="195"/>
+                  <object type="PU" os_index="95" cpuset="0x80000000,,0x0" complete_cpuset="0x80000000,,0x0" nodeset="0x00000002" complete_nodeset="0x00000002" gp_index="426"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="Bridge" gp_index="678" bridge_type="0-1" depth="0" bridge_pci="0000:[cc-ce]">
+            <object type="PCIDev" gp_index="475" pci_busid="0000:cc:00.0" pci_type="0600 [1022:14bb] [1022:14bb] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="660" pci_busid="0000:cc:00.2" pci_type="0806 [1022:5308] [1022:5308] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="614" pci_busid="0000:cc:01.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="Bridge" gp_index="508" bridge_type="1-1" depth="1" bridge_pci="0000:[cd-cd]" pci_busid="0000:cc:01.1" pci_type="0604 [1022:14be] [1022:1234] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <object type="PCIDev" gp_index="644" pci_busid="0000:cd:00.0" pci_type="0200 [17db:0501] [17db:0000] 02" pci_link_speed="31.507692">
+                <info name="PCIVendor" value="Cray Inc"/>
+                <object type="OSDev" gp_index="685" name="hsn1" osdev_type="2">
+                  <info name="Address" value="02:00:00:00:1b:d0"/>
+                </object>
+              </object>
+            </object>
+            <object type="PCIDev" gp_index="556" pci_busid="0000:cc:02.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="654" pci_busid="0000:cc:07.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="Bridge" gp_index="543" bridge_type="1-1" depth="1" bridge_pci="0000:[ce-ce]" pci_busid="0000:cc:07.1" pci_type="0604 [1022:14bf] [1022:14bf] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <object type="PCIDev" gp_index="612" pci_busid="0000:ce:00.0" pci_type="0380 [1002:7408] [1002:0b0c] 00" pci_link_speed="31.507692">
+                <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD/ATI]"/>
+                <info name="PCIDevice" value="Aldebaran"/>
+                <object type="OSDev" gp_index="691" name="card3" osdev_type="1"/>
+                <object type="OSDev" gp_index="703" name="renderD131" osdev_type="1"/>
+                <object type="OSDev" gp_index="708" name="rsmi3" subtype="RSMI" osdev_type="1">
+                  <info name="Backend" value="RSMI"/>
+                  <info name="GPUVendor" value="AMD"/>
+                  <info name="GPUModel" value="AMD INSTINCT MI200 (MCM) OAM LC MBA HPE C2"/>
+                  <info name="AMDSerial" value="692135004843"/>
+                  <info name="AMDUUID" value="f6fc648dec13cee1"/>
+                  <info name="XGMIHiveID" value="bac53b896800dc20"/>
+                  <info name="RSMIVRAMSize" value="67092480"/>
+                  <info name="RSMIVisibleVRAMSize" value="67092480"/>
+                  <info name="RSMIGTTSize" value="262899364"/>
+                  <info name="XGMIPeers" value="rsmi0 rsmi1 rsmi2 rsmi4 rsmi5 rsmi6 rsmi7 "/>
+                </object>
+                <object type="OSDev" gp_index="716" name="opencl0d3" subtype="OpenCL" osdev_type="5">
+                  <info name="Backend" value="OpenCL"/>
+                  <info name="OpenCLDeviceType" value="GPU"/>
+                  <info name="GPUVendor" value="Advanced Micro Devices, Inc."/>
+                  <info name="GPUModel" value="gfx90a:sramecc+:xnack-"/>
+                  <info name="OpenCLPlatformIndex" value="0"/>
+                  <info name="OpenCLPlatformName" value="AMD Accelerated Parallel Processing"/>
+                  <info name="OpenCLPlatformDeviceIndex" value="3"/>
+                  <info name="OpenCLComputeUnits" value="110"/>
+                  <info name="OpenCLGlobalMemorySize" value="67092480"/>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object type="Bridge" gp_index="673" bridge_type="0-1" depth="0" bridge_pci="0000:[60-62]">
+          <object type="PCIDev" gp_index="496" pci_busid="0000:60:00.0" pci_type="0600 [1022:1480] [1022:1480] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse Root Complex"/>
+          </object>
+          <object type="PCIDev" gp_index="478" pci_busid="0000:60:00.2" pci_type="0806 [1022:164f] [1022:164f] 01" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Milan IOMMU"/>
+          </object>
+          <object type="PCIDev" gp_index="635" pci_busid="0000:60:01.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="578" pci_busid="0000:60:02.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="518" pci_busid="0000:60:03.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="656" pci_busid="0000:60:04.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="593" pci_busid="0000:60:05.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="473" pci_busid="0000:60:07.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="Bridge" gp_index="565" bridge_type="1-1" depth="1" bridge_pci="0000:[61-61]" pci_busid="0000:60:07.1" pci_type="0604 [1022:1484] [1022:1484] 00" pci_link_speed="31.507692">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse Internal PCIe GPP Bridge 0 to bus[E:B]"/>
+            <object type="PCIDev" gp_index="667" pci_busid="0000:61:00.0" pci_type="1300 [1022:148a] [1022:148a] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Function"/>
+            </object>
+            <object type="PCIDev" gp_index="648" pci_busid="0000:61:00.2" pci_type="1080 [1022:1498] [1022:1498] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse PTDMA"/>
+            </object>
+          </object>
+          <object type="PCIDev" gp_index="611" pci_busid="0000:60:08.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="Bridge" gp_index="503" bridge_type="1-1" depth="1" bridge_pci="0000:[62-62]" pci_busid="0000:60:08.1" pci_type="0604 [1022:1484] [1022:1484] 00" pci_link_speed="31.507692">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse Internal PCIe GPP Bridge 0 to bus[E:B]"/>
+            <object type="PCIDev" gp_index="632" pci_busid="0000:62:00.0" pci_type="1300 [1022:1485] [1022:1485] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse Reserved SPP"/>
+            </object>
+            <object type="PCIDev" gp_index="615" pci_busid="0000:62:00.2" pci_type="1080 [1022:1498] [1022:1498] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse PTDMA"/>
+            </object>
+          </object>
+        </object>
+      </object>
+      <object type="Group" cpuset="0x0000ffff,,0x0000ffff,0x0" complete_cpuset="0x0000ffff,,0x0000ffff,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="465" kind="1001" subkind="0">
+        <object type="NUMANode" os_index="2" cpuset="0x0000ffff,,0x0000ffff,0x0" complete_cpuset="0x0000ffff,,0x0000ffff,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="461" local_memory="67637260288">
+          <page_type size="4096" count="16513003"/>
+          <page_type size="2097152" count="0"/>
+          <page_type size="1073741824" count="0"/>
+        </object>
+        <object type="L3Cache" os_index="4" cpuset="0x000000ff,,0x000000ff,0x0" complete_cpuset="0x000000ff,,0x000000ff,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="205" cache_size="33554432" depth="3" cache_linesize="64" cache_associativity="16" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L2Cache" os_index="32" cpuset="0x00000001,,0x00000001,0x0" complete_cpuset="0x00000001,,0x00000001,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="204" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="32" cpuset="0x00000001,,0x00000001,0x0" complete_cpuset="0x00000001,,0x00000001,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="202" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="32" cpuset="0x00000001,,0x00000001,0x0" complete_cpuset="0x00000001,,0x00000001,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="203" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="32" cpuset="0x00000001,,0x00000001,0x0" complete_cpuset="0x00000001,,0x00000001,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="199">
+                  <object type="PU" os_index="32" cpuset="0x00000001,0x0" complete_cpuset="0x00000001,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="201"/>
+                  <object type="PU" os_index="96" cpuset="0x00000001,,,0x0" complete_cpuset="0x00000001,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="427"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="33" cpuset="0x00000002,,0x00000002,0x0" complete_cpuset="0x00000002,,0x00000002,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="211" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="33" cpuset="0x00000002,,0x00000002,0x0" complete_cpuset="0x00000002,,0x00000002,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="209" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="33" cpuset="0x00000002,,0x00000002,0x0" complete_cpuset="0x00000002,,0x00000002,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="210" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="33" cpuset="0x00000002,,0x00000002,0x0" complete_cpuset="0x00000002,,0x00000002,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="206">
+                  <object type="PU" os_index="33" cpuset="0x00000002,0x0" complete_cpuset="0x00000002,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="208"/>
+                  <object type="PU" os_index="97" cpuset="0x00000002,,,0x0" complete_cpuset="0x00000002,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="428"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="34" cpuset="0x00000004,,0x00000004,0x0" complete_cpuset="0x00000004,,0x00000004,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="217" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="34" cpuset="0x00000004,,0x00000004,0x0" complete_cpuset="0x00000004,,0x00000004,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="215" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="34" cpuset="0x00000004,,0x00000004,0x0" complete_cpuset="0x00000004,,0x00000004,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="216" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="34" cpuset="0x00000004,,0x00000004,0x0" complete_cpuset="0x00000004,,0x00000004,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="212">
+                  <object type="PU" os_index="34" cpuset="0x00000004,0x0" complete_cpuset="0x00000004,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="214"/>
+                  <object type="PU" os_index="98" cpuset="0x00000004,,,0x0" complete_cpuset="0x00000004,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="429"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="35" cpuset="0x00000008,,0x00000008,0x0" complete_cpuset="0x00000008,,0x00000008,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="223" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="35" cpuset="0x00000008,,0x00000008,0x0" complete_cpuset="0x00000008,,0x00000008,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="221" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="35" cpuset="0x00000008,,0x00000008,0x0" complete_cpuset="0x00000008,,0x00000008,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="222" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="35" cpuset="0x00000008,,0x00000008,0x0" complete_cpuset="0x00000008,,0x00000008,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="218">
+                  <object type="PU" os_index="35" cpuset="0x00000008,0x0" complete_cpuset="0x00000008,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="220"/>
+                  <object type="PU" os_index="99" cpuset="0x00000008,,,0x0" complete_cpuset="0x00000008,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="430"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="36" cpuset="0x00000010,,0x00000010,0x0" complete_cpuset="0x00000010,,0x00000010,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="229" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="36" cpuset="0x00000010,,0x00000010,0x0" complete_cpuset="0x00000010,,0x00000010,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="227" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="36" cpuset="0x00000010,,0x00000010,0x0" complete_cpuset="0x00000010,,0x00000010,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="228" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="36" cpuset="0x00000010,,0x00000010,0x0" complete_cpuset="0x00000010,,0x00000010,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="224">
+                  <object type="PU" os_index="36" cpuset="0x00000010,0x0" complete_cpuset="0x00000010,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="226"/>
+                  <object type="PU" os_index="100" cpuset="0x00000010,,,0x0" complete_cpuset="0x00000010,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="431"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="37" cpuset="0x00000020,,0x00000020,0x0" complete_cpuset="0x00000020,,0x00000020,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="235" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="37" cpuset="0x00000020,,0x00000020,0x0" complete_cpuset="0x00000020,,0x00000020,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="233" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="37" cpuset="0x00000020,,0x00000020,0x0" complete_cpuset="0x00000020,,0x00000020,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="234" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="37" cpuset="0x00000020,,0x00000020,0x0" complete_cpuset="0x00000020,,0x00000020,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="230">
+                  <object type="PU" os_index="37" cpuset="0x00000020,0x0" complete_cpuset="0x00000020,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="232"/>
+                  <object type="PU" os_index="101" cpuset="0x00000020,,,0x0" complete_cpuset="0x00000020,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="432"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="38" cpuset="0x00000040,,0x00000040,0x0" complete_cpuset="0x00000040,,0x00000040,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="241" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="38" cpuset="0x00000040,,0x00000040,0x0" complete_cpuset="0x00000040,,0x00000040,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="239" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="38" cpuset="0x00000040,,0x00000040,0x0" complete_cpuset="0x00000040,,0x00000040,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="240" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="38" cpuset="0x00000040,,0x00000040,0x0" complete_cpuset="0x00000040,,0x00000040,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="236">
+                  <object type="PU" os_index="38" cpuset="0x00000040,0x0" complete_cpuset="0x00000040,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="238"/>
+                  <object type="PU" os_index="102" cpuset="0x00000040,,,0x0" complete_cpuset="0x00000040,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="433"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="39" cpuset="0x00000080,,0x00000080,0x0" complete_cpuset="0x00000080,,0x00000080,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="247" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="39" cpuset="0x00000080,,0x00000080,0x0" complete_cpuset="0x00000080,,0x00000080,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="245" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="39" cpuset="0x00000080,,0x00000080,0x0" complete_cpuset="0x00000080,,0x00000080,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="246" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="39" cpuset="0x00000080,,0x00000080,0x0" complete_cpuset="0x00000080,,0x00000080,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="242">
+                  <object type="PU" os_index="39" cpuset="0x00000080,0x0" complete_cpuset="0x00000080,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="244"/>
+                  <object type="PU" os_index="103" cpuset="0x00000080,,,0x0" complete_cpuset="0x00000080,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="434"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="Bridge" gp_index="681" bridge_type="0-1" depth="0" bridge_pci="0000:[d8-d9]">
+            <object type="PCIDev" gp_index="573" pci_busid="0000:d8:00.0" pci_type="0600 [1022:14bb] [1022:14bb] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="554" pci_busid="0000:d8:00.2" pci_type="0806 [1022:5308] [1022:5308] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="514" pci_busid="0000:d8:01.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="652" pci_busid="0000:d8:02.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="548" pci_busid="0000:d8:07.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="Bridge" gp_index="636" bridge_type="1-1" depth="1" bridge_pci="0000:[d9-d9]" pci_busid="0000:d8:07.1" pci_type="0604 [1022:14bf] [1022:14bf] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <object type="PCIDev" gp_index="542" pci_busid="0000:d9:00.0" pci_type="0380 [1002:7408] [1002:0b0c] 00" pci_link_speed="31.507692">
+                <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD/ATI]"/>
+                <info name="PCIDevice" value="Aldebaran"/>
+                <object type="OSDev" gp_index="693" name="renderD134" osdev_type="1"/>
+                <object type="OSDev" gp_index="696" name="card6" osdev_type="1"/>
+                <object type="OSDev" gp_index="711" name="rsmi6" subtype="RSMI" osdev_type="1">
+                  <info name="Backend" value="RSMI"/>
+                  <info name="GPUVendor" value="AMD"/>
+                  <info name="GPUModel" value="AMD INSTINCT MI200 (MCM) OAM LC MBA HPE C2"/>
+                  <info name="AMDSerial" value="692224001991"/>
+                  <info name="AMDUUID" value="ae274a4d531bb0bc"/>
+                  <info name="XGMIHiveID" value="bac53b896800dc20"/>
+                  <info name="RSMIVRAMSize" value="67092480"/>
+                  <info name="RSMIVisibleVRAMSize" value="67092480"/>
+                  <info name="RSMIGTTSize" value="262899364"/>
+                  <info name="XGMIPeers" value="rsmi0 rsmi1 rsmi2 rsmi3 rsmi4 rsmi5 rsmi7 "/>
+                </object>
+                <object type="OSDev" gp_index="719" name="opencl0d6" subtype="OpenCL" osdev_type="5">
+                  <info name="Backend" value="OpenCL"/>
+                  <info name="OpenCLDeviceType" value="GPU"/>
+                  <info name="GPUVendor" value="Advanced Micro Devices, Inc."/>
+                  <info name="GPUModel" value="gfx90a:sramecc+:xnack-"/>
+                  <info name="OpenCLPlatformIndex" value="0"/>
+                  <info name="OpenCLPlatformName" value="AMD Accelerated Parallel Processing"/>
+                  <info name="OpenCLPlatformDeviceIndex" value="6"/>
+                  <info name="OpenCLComputeUnits" value="110"/>
+                  <info name="OpenCLGlobalMemorySize" value="67092480"/>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object type="L3Cache" os_index="5" cpuset="0x0000ff00,,0x0000ff00,0x0" complete_cpuset="0x0000ff00,,0x0000ff00,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="254" cache_size="33554432" depth="3" cache_linesize="64" cache_associativity="16" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L2Cache" os_index="40" cpuset="0x00000100,,0x00000100,0x0" complete_cpuset="0x00000100,,0x00000100,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="253" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="40" cpuset="0x00000100,,0x00000100,0x0" complete_cpuset="0x00000100,,0x00000100,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="251" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="40" cpuset="0x00000100,,0x00000100,0x0" complete_cpuset="0x00000100,,0x00000100,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="252" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="40" cpuset="0x00000100,,0x00000100,0x0" complete_cpuset="0x00000100,,0x00000100,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="248">
+                  <object type="PU" os_index="40" cpuset="0x00000100,0x0" complete_cpuset="0x00000100,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="250"/>
+                  <object type="PU" os_index="104" cpuset="0x00000100,,,0x0" complete_cpuset="0x00000100,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="435"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="41" cpuset="0x00000200,,0x00000200,0x0" complete_cpuset="0x00000200,,0x00000200,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="260" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="41" cpuset="0x00000200,,0x00000200,0x0" complete_cpuset="0x00000200,,0x00000200,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="258" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="41" cpuset="0x00000200,,0x00000200,0x0" complete_cpuset="0x00000200,,0x00000200,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="259" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="41" cpuset="0x00000200,,0x00000200,0x0" complete_cpuset="0x00000200,,0x00000200,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="255">
+                  <object type="PU" os_index="41" cpuset="0x00000200,0x0" complete_cpuset="0x00000200,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="257"/>
+                  <object type="PU" os_index="105" cpuset="0x00000200,,,0x0" complete_cpuset="0x00000200,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="436"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="42" cpuset="0x00000400,,0x00000400,0x0" complete_cpuset="0x00000400,,0x00000400,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="266" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="42" cpuset="0x00000400,,0x00000400,0x0" complete_cpuset="0x00000400,,0x00000400,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="264" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="42" cpuset="0x00000400,,0x00000400,0x0" complete_cpuset="0x00000400,,0x00000400,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="265" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="42" cpuset="0x00000400,,0x00000400,0x0" complete_cpuset="0x00000400,,0x00000400,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="261">
+                  <object type="PU" os_index="42" cpuset="0x00000400,0x0" complete_cpuset="0x00000400,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="263"/>
+                  <object type="PU" os_index="106" cpuset="0x00000400,,,0x0" complete_cpuset="0x00000400,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="437"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="43" cpuset="0x00000800,,0x00000800,0x0" complete_cpuset="0x00000800,,0x00000800,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="272" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="43" cpuset="0x00000800,,0x00000800,0x0" complete_cpuset="0x00000800,,0x00000800,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="270" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="43" cpuset="0x00000800,,0x00000800,0x0" complete_cpuset="0x00000800,,0x00000800,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="271" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="43" cpuset="0x00000800,,0x00000800,0x0" complete_cpuset="0x00000800,,0x00000800,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="267">
+                  <object type="PU" os_index="43" cpuset="0x00000800,0x0" complete_cpuset="0x00000800,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="269"/>
+                  <object type="PU" os_index="107" cpuset="0x00000800,,,0x0" complete_cpuset="0x00000800,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="438"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="44" cpuset="0x00001000,,0x00001000,0x0" complete_cpuset="0x00001000,,0x00001000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="278" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="44" cpuset="0x00001000,,0x00001000,0x0" complete_cpuset="0x00001000,,0x00001000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="276" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="44" cpuset="0x00001000,,0x00001000,0x0" complete_cpuset="0x00001000,,0x00001000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="277" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="44" cpuset="0x00001000,,0x00001000,0x0" complete_cpuset="0x00001000,,0x00001000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="273">
+                  <object type="PU" os_index="44" cpuset="0x00001000,0x0" complete_cpuset="0x00001000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="275"/>
+                  <object type="PU" os_index="108" cpuset="0x00001000,,,0x0" complete_cpuset="0x00001000,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="439"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="45" cpuset="0x00002000,,0x00002000,0x0" complete_cpuset="0x00002000,,0x00002000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="284" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="45" cpuset="0x00002000,,0x00002000,0x0" complete_cpuset="0x00002000,,0x00002000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="282" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="45" cpuset="0x00002000,,0x00002000,0x0" complete_cpuset="0x00002000,,0x00002000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="283" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="45" cpuset="0x00002000,,0x00002000,0x0" complete_cpuset="0x00002000,,0x00002000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="279">
+                  <object type="PU" os_index="45" cpuset="0x00002000,0x0" complete_cpuset="0x00002000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="281"/>
+                  <object type="PU" os_index="109" cpuset="0x00002000,,,0x0" complete_cpuset="0x00002000,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="440"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="46" cpuset="0x00004000,,0x00004000,0x0" complete_cpuset="0x00004000,,0x00004000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="290" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="46" cpuset="0x00004000,,0x00004000,0x0" complete_cpuset="0x00004000,,0x00004000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="288" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="46" cpuset="0x00004000,,0x00004000,0x0" complete_cpuset="0x00004000,,0x00004000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="289" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="46" cpuset="0x00004000,,0x00004000,0x0" complete_cpuset="0x00004000,,0x00004000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="285">
+                  <object type="PU" os_index="46" cpuset="0x00004000,0x0" complete_cpuset="0x00004000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="287"/>
+                  <object type="PU" os_index="110" cpuset="0x00004000,,,0x0" complete_cpuset="0x00004000,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="441"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="47" cpuset="0x00008000,,0x00008000,0x0" complete_cpuset="0x00008000,,0x00008000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="296" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="47" cpuset="0x00008000,,0x00008000,0x0" complete_cpuset="0x00008000,,0x00008000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="294" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="47" cpuset="0x00008000,,0x00008000,0x0" complete_cpuset="0x00008000,,0x00008000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="295" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="47" cpuset="0x00008000,,0x00008000,0x0" complete_cpuset="0x00008000,,0x00008000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="291">
+                  <object type="PU" os_index="47" cpuset="0x00008000,0x0" complete_cpuset="0x00008000,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="293"/>
+                  <object type="PU" os_index="111" cpuset="0x00008000,,,0x0" complete_cpuset="0x00008000,,,0x0" nodeset="0x00000004" complete_nodeset="0x00000004" gp_index="442"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="Bridge" gp_index="682" bridge_type="0-1" depth="0" bridge_pci="0000:[dc-de]">
+            <object type="PCIDev" gp_index="533" pci_busid="0000:dc:00.0" pci_type="0600 [1022:14bb] [1022:14bb] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="516" pci_busid="0000:dc:00.2" pci_type="0806 [1022:5308] [1022:5308] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="470" pci_busid="0000:dc:01.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="Bridge" gp_index="562" bridge_type="1-1" depth="1" bridge_pci="0000:[dd-dd]" pci_busid="0000:dc:01.1" pci_type="0604 [1022:14be] [1022:1234] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <object type="PCIDev" gp_index="499" pci_busid="0000:dd:00.0" pci_type="0200 [17db:0501] [17db:0000] 02" pci_link_speed="31.507692">
+                <info name="PCIVendor" value="Cray Inc"/>
+                <object type="OSDev" gp_index="684" name="hsn3" osdev_type="2">
+                  <info name="Address" value="02:00:00:00:1b:91"/>
+                </object>
+              </object>
+            </object>
+            <object type="PCIDev" gp_index="608" pci_busid="0000:dc:02.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="510" pci_busid="0000:dc:07.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="Bridge" gp_index="598" bridge_type="1-1" depth="1" bridge_pci="0000:[de-de]" pci_busid="0000:dc:07.1" pci_type="0604 [1022:14bf] [1022:14bf] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <object type="PCIDev" gp_index="468" pci_busid="0000:de:00.0" pci_type="0380 [1002:7408] [1002:0b0c] 00" pci_link_speed="31.507692">
+                <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD/ATI]"/>
+                <info name="PCIDevice" value="Aldebaran"/>
+                <object type="OSDev" gp_index="700" name="renderD135" osdev_type="1"/>
+                <object type="OSDev" gp_index="704" name="card7" osdev_type="1"/>
+                <object type="OSDev" gp_index="712" name="rsmi7" subtype="RSMI" osdev_type="1">
+                  <info name="Backend" value="RSMI"/>
+                  <info name="GPUVendor" value="AMD"/>
+                  <info name="GPUModel" value="AMD INSTINCT MI200 (MCM) OAM LC MBA HPE C2"/>
+                  <info name="AMDSerial" value="692224001991"/>
+                  <info name="AMDUUID" value="a37b0a881a408c8d"/>
+                  <info name="XGMIHiveID" value="bac53b896800dc20"/>
+                  <info name="RSMIVRAMSize" value="67092480"/>
+                  <info name="RSMIVisibleVRAMSize" value="67092480"/>
+                  <info name="RSMIGTTSize" value="262899364"/>
+                  <info name="XGMIPeers" value="rsmi0 rsmi1 rsmi2 rsmi3 rsmi4 rsmi5 rsmi6 "/>
+                </object>
+                <object type="OSDev" gp_index="720" name="opencl0d7" subtype="OpenCL" osdev_type="5">
+                  <info name="Backend" value="OpenCL"/>
+                  <info name="OpenCLDeviceType" value="GPU"/>
+                  <info name="GPUVendor" value="Advanced Micro Devices, Inc."/>
+                  <info name="GPUModel" value="gfx90a:sramecc+:xnack-"/>
+                  <info name="OpenCLPlatformIndex" value="0"/>
+                  <info name="OpenCLPlatformName" value="AMD Accelerated Parallel Processing"/>
+                  <info name="OpenCLPlatformDeviceIndex" value="7"/>
+                  <info name="OpenCLComputeUnits" value="110"/>
+                  <info name="OpenCLGlobalMemorySize" value="67092480"/>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object type="Bridge" gp_index="672" bridge_type="0-1" depth="0" bridge_pci="0000:[30-32]">
+          <object type="PCIDev" gp_index="532" pci_busid="0000:30:00.0" pci_type="0600 [1022:1480] [1022:1480] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse Root Complex"/>
+          </object>
+          <object type="PCIDev" gp_index="515" pci_busid="0000:30:00.2" pci_type="0806 [1022:164f] [1022:164f] 01" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Milan IOMMU"/>
+          </object>
+          <object type="PCIDev" gp_index="469" pci_busid="0000:30:01.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="607" pci_busid="0000:30:02.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="552" pci_busid="0000:30:03.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="490" pci_busid="0000:30:04.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="625" pci_busid="0000:30:05.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="507" pci_busid="0000:30:07.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="Bridge" gp_index="597" bridge_type="1-1" depth="1" bridge_pci="0000:[31-31]" pci_busid="0000:30:07.1" pci_type="0604 [1022:1484] [1022:1484] 00" pci_link_speed="31.507692">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse Internal PCIe GPP Bridge 0 to bus[E:B]"/>
+            <object type="PCIDev" gp_index="498" pci_busid="0000:31:00.0" pci_type="1300 [1022:148a] [1022:148a] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Function"/>
+            </object>
+            <object type="PCIDev" gp_index="481" pci_busid="0000:31:00.2" pci_type="1080 [1022:1498] [1022:1498] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse PTDMA"/>
+            </object>
+          </object>
+          <object type="PCIDev" gp_index="646" pci_busid="0000:30:08.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="Bridge" gp_index="536" bridge_type="1-1" depth="1" bridge_pci="0000:[32-32]" pci_busid="0000:30:08.1" pci_type="0604 [1022:1484] [1022:1484] 00" pci_link_speed="31.507692">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse Internal PCIe GPP Bridge 0 to bus[E:B]"/>
+            <object type="PCIDev" gp_index="669" pci_busid="0000:32:00.0" pci_type="1300 [1022:1485] [1022:1485] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse Reserved SPP"/>
+            </object>
+            <object type="PCIDev" gp_index="559" pci_busid="0000:32:00.1" pci_type="1080 [1022:1486] [1022:1486] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse Cryptographic Coprocessor PSPCPP"/>
+            </object>
+            <object type="PCIDev" gp_index="650" pci_busid="0000:32:00.2" pci_type="1080 [1022:1498] [1022:1498] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse PTDMA"/>
+            </object>
+            <object type="PCIDev" gp_index="540" pci_busid="0000:32:00.3" pci_type="0c03 [1022:148c] [1022:148c] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship USB 3.0 Host Controller"/>
+            </object>
+            <object type="PCIDev" gp_index="627" pci_busid="0000:32:00.4" pci_type="0403 [1022:1487] [1022:1487] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse HD Audio Controller"/>
+            </object>
+          </object>
+        </object>
+      </object>
+      <object type="Group" cpuset="0xffff0000,,0xffff0000,0x0" complete_cpuset="0xffff0000,,0xffff0000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="466" kind="1001" subkind="0">
+        <object type="NUMANode" os_index="3" cpuset="0xffff0000,,0xffff0000,0x0" complete_cpuset="0xffff0000,,0xffff0000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="462" local_memory="67575795712">
+          <page_type size="4096" count="16497997"/>
+          <page_type size="2097152" count="0"/>
+          <page_type size="1073741824" count="0"/>
+        </object>
+        <object type="L3Cache" os_index="6" cpuset="0x00ff0000,,0x00ff0000,0x0" complete_cpuset="0x00ff0000,,0x00ff0000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="303" cache_size="33554432" depth="3" cache_linesize="64" cache_associativity="16" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L2Cache" os_index="48" cpuset="0x00010000,,0x00010000,0x0" complete_cpuset="0x00010000,,0x00010000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="302" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="48" cpuset="0x00010000,,0x00010000,0x0" complete_cpuset="0x00010000,,0x00010000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="300" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="48" cpuset="0x00010000,,0x00010000,0x0" complete_cpuset="0x00010000,,0x00010000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="301" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="48" cpuset="0x00010000,,0x00010000,0x0" complete_cpuset="0x00010000,,0x00010000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="297">
+                  <object type="PU" os_index="48" cpuset="0x00010000,0x0" complete_cpuset="0x00010000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="299"/>
+                  <object type="PU" os_index="112" cpuset="0x00010000,,,0x0" complete_cpuset="0x00010000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="443"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="49" cpuset="0x00020000,,0x00020000,0x0" complete_cpuset="0x00020000,,0x00020000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="309" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="49" cpuset="0x00020000,,0x00020000,0x0" complete_cpuset="0x00020000,,0x00020000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="307" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="49" cpuset="0x00020000,,0x00020000,0x0" complete_cpuset="0x00020000,,0x00020000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="308" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="49" cpuset="0x00020000,,0x00020000,0x0" complete_cpuset="0x00020000,,0x00020000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="304">
+                  <object type="PU" os_index="49" cpuset="0x00020000,0x0" complete_cpuset="0x00020000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="306"/>
+                  <object type="PU" os_index="113" cpuset="0x00020000,,,0x0" complete_cpuset="0x00020000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="444"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="50" cpuset="0x00040000,,0x00040000,0x0" complete_cpuset="0x00040000,,0x00040000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="315" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="50" cpuset="0x00040000,,0x00040000,0x0" complete_cpuset="0x00040000,,0x00040000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="313" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="50" cpuset="0x00040000,,0x00040000,0x0" complete_cpuset="0x00040000,,0x00040000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="314" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="50" cpuset="0x00040000,,0x00040000,0x0" complete_cpuset="0x00040000,,0x00040000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="310">
+                  <object type="PU" os_index="50" cpuset="0x00040000,0x0" complete_cpuset="0x00040000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="312"/>
+                  <object type="PU" os_index="114" cpuset="0x00040000,,,0x0" complete_cpuset="0x00040000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="445"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="51" cpuset="0x00080000,,0x00080000,0x0" complete_cpuset="0x00080000,,0x00080000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="321" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="51" cpuset="0x00080000,,0x00080000,0x0" complete_cpuset="0x00080000,,0x00080000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="319" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="51" cpuset="0x00080000,,0x00080000,0x0" complete_cpuset="0x00080000,,0x00080000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="320" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="51" cpuset="0x00080000,,0x00080000,0x0" complete_cpuset="0x00080000,,0x00080000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="316">
+                  <object type="PU" os_index="51" cpuset="0x00080000,0x0" complete_cpuset="0x00080000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="318"/>
+                  <object type="PU" os_index="115" cpuset="0x00080000,,,0x0" complete_cpuset="0x00080000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="446"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="52" cpuset="0x00100000,,0x00100000,0x0" complete_cpuset="0x00100000,,0x00100000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="327" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="52" cpuset="0x00100000,,0x00100000,0x0" complete_cpuset="0x00100000,,0x00100000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="325" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="52" cpuset="0x00100000,,0x00100000,0x0" complete_cpuset="0x00100000,,0x00100000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="326" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="52" cpuset="0x00100000,,0x00100000,0x0" complete_cpuset="0x00100000,,0x00100000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="322">
+                  <object type="PU" os_index="52" cpuset="0x00100000,0x0" complete_cpuset="0x00100000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="324"/>
+                  <object type="PU" os_index="116" cpuset="0x00100000,,,0x0" complete_cpuset="0x00100000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="447"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="53" cpuset="0x00200000,,0x00200000,0x0" complete_cpuset="0x00200000,,0x00200000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="333" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="53" cpuset="0x00200000,,0x00200000,0x0" complete_cpuset="0x00200000,,0x00200000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="331" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="53" cpuset="0x00200000,,0x00200000,0x0" complete_cpuset="0x00200000,,0x00200000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="332" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="53" cpuset="0x00200000,,0x00200000,0x0" complete_cpuset="0x00200000,,0x00200000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="328">
+                  <object type="PU" os_index="53" cpuset="0x00200000,0x0" complete_cpuset="0x00200000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="330"/>
+                  <object type="PU" os_index="117" cpuset="0x00200000,,,0x0" complete_cpuset="0x00200000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="448"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="54" cpuset="0x00400000,,0x00400000,0x0" complete_cpuset="0x00400000,,0x00400000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="339" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="54" cpuset="0x00400000,,0x00400000,0x0" complete_cpuset="0x00400000,,0x00400000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="337" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="54" cpuset="0x00400000,,0x00400000,0x0" complete_cpuset="0x00400000,,0x00400000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="338" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="54" cpuset="0x00400000,,0x00400000,0x0" complete_cpuset="0x00400000,,0x00400000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="334">
+                  <object type="PU" os_index="54" cpuset="0x00400000,0x0" complete_cpuset="0x00400000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="336"/>
+                  <object type="PU" os_index="118" cpuset="0x00400000,,,0x0" complete_cpuset="0x00400000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="449"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="55" cpuset="0x00800000,,0x00800000,0x0" complete_cpuset="0x00800000,,0x00800000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="345" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="55" cpuset="0x00800000,,0x00800000,0x0" complete_cpuset="0x00800000,,0x00800000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="343" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="55" cpuset="0x00800000,,0x00800000,0x0" complete_cpuset="0x00800000,,0x00800000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="344" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="55" cpuset="0x00800000,,0x00800000,0x0" complete_cpuset="0x00800000,,0x00800000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="340">
+                  <object type="PU" os_index="55" cpuset="0x00800000,0x0" complete_cpuset="0x00800000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="342"/>
+                  <object type="PU" os_index="119" cpuset="0x00800000,,,0x0" complete_cpuset="0x00800000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="450"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="Bridge" gp_index="675" bridge_type="0-1" depth="0" bridge_pci="0000:[c0-c1]">
+            <object type="PCIDev" gp_index="569" pci_busid="0000:c0:00.0" pci_type="0600 [1022:14bb] [1022:14bb] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="550" pci_busid="0000:c0:00.2" pci_type="0806 [1022:5308] [1022:5308] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="509" pci_busid="0000:c0:01.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="647" pci_busid="0000:c0:02.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="544" pci_busid="0000:c0:07.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="Bridge" gp_index="629" bridge_type="1-1" depth="1" bridge_pci="0000:[c1-c1]" pci_busid="0000:c0:07.1" pci_type="0604 [1022:14bf] [1022:14bf] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <object type="PCIDev" gp_index="537" pci_busid="0000:c1:00.0" pci_type="0380 [1002:7408] [1002:0b0c] 00" pci_link_speed="31.507692">
+                <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD/ATI]"/>
+                <info name="PCIDevice" value="Aldebaran"/>
+                <object type="OSDev" gp_index="690" name="renderD128" osdev_type="1"/>
+                <object type="OSDev" gp_index="701" name="card0" osdev_type="1"/>
+                <object type="OSDev" gp_index="705" name="rsmi0" subtype="RSMI" osdev_type="1">
+                  <info name="Backend" value="RSMI"/>
+                  <info name="GPUVendor" value="AMD"/>
+                  <info name="GPUModel" value="AMD INSTINCT MI200 (MCM) OAM LC MBA HPE C2"/>
+                  <info name="AMDSerial" value="692135005360"/>
+                  <info name="AMDUUID" value="55f8c1df77d11198"/>
+                  <info name="XGMIHiveID" value="bac53b896800dc20"/>
+                  <info name="RSMIVRAMSize" value="67092480"/>
+                  <info name="RSMIVisibleVRAMSize" value="67092480"/>
+                  <info name="RSMIGTTSize" value="262899364"/>
+                  <info name="XGMIPeers" value="rsmi1 rsmi2 rsmi3 rsmi4 rsmi5 rsmi6 rsmi7 "/>
+                </object>
+                <object type="OSDev" gp_index="713" name="opencl0d0" subtype="OpenCL" osdev_type="5">
+                  <info name="Backend" value="OpenCL"/>
+                  <info name="OpenCLDeviceType" value="GPU"/>
+                  <info name="GPUVendor" value="Advanced Micro Devices, Inc."/>
+                  <info name="GPUModel" value="gfx90a:sramecc+:xnack-"/>
+                  <info name="OpenCLPlatformIndex" value="0"/>
+                  <info name="OpenCLPlatformName" value="AMD Accelerated Parallel Processing"/>
+                  <info name="OpenCLPlatformDeviceIndex" value="0"/>
+                  <info name="OpenCLComputeUnits" value="110"/>
+                  <info name="OpenCLGlobalMemorySize" value="67092480"/>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object type="L3Cache" os_index="7" cpuset="0xff000000,,0xff000000,0x0" complete_cpuset="0xff000000,,0xff000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="352" cache_size="33554432" depth="3" cache_linesize="64" cache_associativity="16" cache_type="0">
+          <info name="Inclusive" value="0"/>
+          <object type="L2Cache" os_index="56" cpuset="0x01000000,,0x01000000,0x0" complete_cpuset="0x01000000,,0x01000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="351" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="56" cpuset="0x01000000,,0x01000000,0x0" complete_cpuset="0x01000000,,0x01000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="349" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="56" cpuset="0x01000000,,0x01000000,0x0" complete_cpuset="0x01000000,,0x01000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="350" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="56" cpuset="0x01000000,,0x01000000,0x0" complete_cpuset="0x01000000,,0x01000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="346">
+                  <object type="PU" os_index="56" cpuset="0x01000000,0x0" complete_cpuset="0x01000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="348"/>
+                  <object type="PU" os_index="120" cpuset="0x01000000,,,0x0" complete_cpuset="0x01000000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="451"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="57" cpuset="0x02000000,,0x02000000,0x0" complete_cpuset="0x02000000,,0x02000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="358" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="57" cpuset="0x02000000,,0x02000000,0x0" complete_cpuset="0x02000000,,0x02000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="356" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="57" cpuset="0x02000000,,0x02000000,0x0" complete_cpuset="0x02000000,,0x02000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="357" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="57" cpuset="0x02000000,,0x02000000,0x0" complete_cpuset="0x02000000,,0x02000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="353">
+                  <object type="PU" os_index="57" cpuset="0x02000000,0x0" complete_cpuset="0x02000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="355"/>
+                  <object type="PU" os_index="121" cpuset="0x02000000,,,0x0" complete_cpuset="0x02000000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="452"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="58" cpuset="0x04000000,,0x04000000,0x0" complete_cpuset="0x04000000,,0x04000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="364" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="58" cpuset="0x04000000,,0x04000000,0x0" complete_cpuset="0x04000000,,0x04000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="362" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="58" cpuset="0x04000000,,0x04000000,0x0" complete_cpuset="0x04000000,,0x04000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="363" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="58" cpuset="0x04000000,,0x04000000,0x0" complete_cpuset="0x04000000,,0x04000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="359">
+                  <object type="PU" os_index="58" cpuset="0x04000000,0x0" complete_cpuset="0x04000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="361"/>
+                  <object type="PU" os_index="122" cpuset="0x04000000,,,0x0" complete_cpuset="0x04000000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="453"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="59" cpuset="0x08000000,,0x08000000,0x0" complete_cpuset="0x08000000,,0x08000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="370" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="59" cpuset="0x08000000,,0x08000000,0x0" complete_cpuset="0x08000000,,0x08000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="368" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="59" cpuset="0x08000000,,0x08000000,0x0" complete_cpuset="0x08000000,,0x08000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="369" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="59" cpuset="0x08000000,,0x08000000,0x0" complete_cpuset="0x08000000,,0x08000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="365">
+                  <object type="PU" os_index="59" cpuset="0x08000000,0x0" complete_cpuset="0x08000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="367"/>
+                  <object type="PU" os_index="123" cpuset="0x08000000,,,0x0" complete_cpuset="0x08000000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="454"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="60" cpuset="0x10000000,,0x10000000,0x0" complete_cpuset="0x10000000,,0x10000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="376" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="60" cpuset="0x10000000,,0x10000000,0x0" complete_cpuset="0x10000000,,0x10000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="374" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="60" cpuset="0x10000000,,0x10000000,0x0" complete_cpuset="0x10000000,,0x10000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="375" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="60" cpuset="0x10000000,,0x10000000,0x0" complete_cpuset="0x10000000,,0x10000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="371">
+                  <object type="PU" os_index="60" cpuset="0x10000000,0x0" complete_cpuset="0x10000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="373"/>
+                  <object type="PU" os_index="124" cpuset="0x10000000,,,0x0" complete_cpuset="0x10000000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="455"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="61" cpuset="0x20000000,,0x20000000,0x0" complete_cpuset="0x20000000,,0x20000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="382" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="61" cpuset="0x20000000,,0x20000000,0x0" complete_cpuset="0x20000000,,0x20000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="380" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="61" cpuset="0x20000000,,0x20000000,0x0" complete_cpuset="0x20000000,,0x20000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="381" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="61" cpuset="0x20000000,,0x20000000,0x0" complete_cpuset="0x20000000,,0x20000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="377">
+                  <object type="PU" os_index="61" cpuset="0x20000000,0x0" complete_cpuset="0x20000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="379"/>
+                  <object type="PU" os_index="125" cpuset="0x20000000,,,0x0" complete_cpuset="0x20000000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="456"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="62" cpuset="0x40000000,,0x40000000,0x0" complete_cpuset="0x40000000,,0x40000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="388" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="62" cpuset="0x40000000,,0x40000000,0x0" complete_cpuset="0x40000000,,0x40000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="386" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="62" cpuset="0x40000000,,0x40000000,0x0" complete_cpuset="0x40000000,,0x40000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="387" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="62" cpuset="0x40000000,,0x40000000,0x0" complete_cpuset="0x40000000,,0x40000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="383">
+                  <object type="PU" os_index="62" cpuset="0x40000000,0x0" complete_cpuset="0x40000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="385"/>
+                  <object type="PU" os_index="126" cpuset="0x40000000,,,0x0" complete_cpuset="0x40000000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="457"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="L2Cache" os_index="63" cpuset="0x80000000,,0x80000000,0x0" complete_cpuset="0x80000000,,0x80000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="394" cache_size="524288" depth="2" cache_linesize="64" cache_associativity="8" cache_type="0">
+            <info name="Inclusive" value="1"/>
+            <object type="L1Cache" os_index="63" cpuset="0x80000000,,0x80000000,0x0" complete_cpuset="0x80000000,,0x80000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="392" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="1">
+              <info name="Inclusive" value="0"/>
+              <object type="L1iCache" os_index="63" cpuset="0x80000000,,0x80000000,0x0" complete_cpuset="0x80000000,,0x80000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="393" cache_size="32768" depth="1" cache_linesize="64" cache_associativity="8" cache_type="2">
+                <info name="Inclusive" value="0"/>
+                <object type="Core" os_index="63" cpuset="0x80000000,,0x80000000,0x0" complete_cpuset="0x80000000,,0x80000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="389">
+                  <object type="PU" os_index="63" cpuset="0x80000000,0x0" complete_cpuset="0x80000000,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="391"/>
+                  <object type="PU" os_index="127" cpuset="0x80000000,,,0x0" complete_cpuset="0x80000000,,,0x0" nodeset="0x00000008" complete_nodeset="0x00000008" gp_index="458"/>
+                </object>
+              </object>
+            </object>
+          </object>
+          <object type="Bridge" gp_index="676" bridge_type="0-1" depth="0" bridge_pci="0000:[c4-c6]">
+            <object type="PCIDev" gp_index="640" pci_busid="0000:c4:00.0" pci_type="0600 [1022:14bb] [1022:14bb] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="622" pci_busid="0000:c4:00.2" pci_type="0806 [1022:5308] [1022:5308] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="583" pci_busid="0000:c4:01.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="Bridge" gp_index="471" bridge_type="1-1" depth="1" bridge_pci="0000:[c5-c5]" pci_busid="0000:c4:01.1" pci_type="0604 [1022:14be] [1022:1234] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <object type="PCIDev" gp_index="609" pci_busid="0000:c5:00.0" pci_type="0200 [17db:0501] [17db:0000] 02" pci_link_speed="31.507692">
+                <info name="PCIVendor" value="Cray Inc"/>
+                <object type="OSDev" gp_index="688" name="hsn0" osdev_type="2">
+                  <info name="Address" value="02:00:00:00:1b:d1"/>
+                </object>
+              </object>
+            </object>
+            <object type="PCIDev" gp_index="522" pci_busid="0000:c4:02.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="PCIDev" gp_index="616" pci_busid="0000:c4:07.0" pci_type="0600 [1022:14bd] [0000:0000] 00" pci_link_speed="0.000000">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            </object>
+            <object type="Bridge" gp_index="511" bridge_type="1-1" depth="1" bridge_pci="0000:[c6-c6]" pci_busid="0000:c4:07.1" pci_type="0604 [1022:14bf] [1022:14bf] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <object type="PCIDev" gp_index="582" pci_busid="0000:c6:00.0" pci_type="0380 [1002:7408] [1002:0b0c] 00" pci_link_speed="31.507692">
+                <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD/ATI]"/>
+                <info name="PCIDevice" value="Aldebaran"/>
+                <object type="OSDev" gp_index="692" name="card1" osdev_type="1"/>
+                <object type="OSDev" gp_index="697" name="renderD129" osdev_type="1"/>
+                <object type="OSDev" gp_index="706" name="rsmi1" subtype="RSMI" osdev_type="1">
+                  <info name="Backend" value="RSMI"/>
+                  <info name="GPUVendor" value="AMD"/>
+                  <info name="GPUModel" value="AMD INSTINCT MI200 (MCM) OAM LC MBA HPE C2"/>
+                  <info name="AMDSerial" value="692135005360"/>
+                  <info name="AMDUUID" value="55ee1007ce53c3d3"/>
+                  <info name="XGMIHiveID" value="bac53b896800dc20"/>
+                  <info name="RSMIVRAMSize" value="67092480"/>
+                  <info name="RSMIVisibleVRAMSize" value="67092480"/>
+                  <info name="RSMIGTTSize" value="262899364"/>
+                  <info name="XGMIPeers" value="rsmi0 rsmi2 rsmi3 rsmi4 rsmi5 rsmi6 rsmi7 "/>
+                </object>
+                <object type="OSDev" gp_index="714" name="opencl0d1" subtype="OpenCL" osdev_type="5">
+                  <info name="Backend" value="OpenCL"/>
+                  <info name="OpenCLDeviceType" value="GPU"/>
+                  <info name="GPUVendor" value="Advanced Micro Devices, Inc."/>
+                  <info name="GPUModel" value="gfx90a:sramecc+:xnack-"/>
+                  <info name="OpenCLPlatformIndex" value="0"/>
+                  <info name="OpenCLPlatformName" value="AMD Accelerated Parallel Processing"/>
+                  <info name="OpenCLPlatformDeviceIndex" value="1"/>
+                  <info name="OpenCLComputeUnits" value="110"/>
+                  <info name="OpenCLGlobalMemorySize" value="67092480"/>
+                </object>
+              </object>
+            </object>
+          </object>
+        </object>
+        <object type="Bridge" gp_index="671" bridge_type="0-1" depth="0" bridge_pci="0000:[00-02]">
+          <object type="PCIDev" gp_index="566" pci_busid="0000:00:00.0" pci_type="0600 [1022:1480] [1022:1480] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse Root Complex"/>
+          </object>
+          <object type="PCIDev" gp_index="546" pci_busid="0000:00:00.2" pci_type="0806 [1022:164f] [1022:164f] 01" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Milan IOMMU"/>
+          </object>
+          <object type="PCIDev" gp_index="504" pci_busid="0000:00:01.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="641" pci_busid="0000:00:02.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="587" pci_busid="0000:00:03.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="524" pci_busid="0000:00:04.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="662" pci_busid="0000:00:05.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="539" pci_busid="0000:00:07.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="Bridge" gp_index="626" bridge_type="1-1" depth="1" bridge_pci="0000:[01-01]" pci_busid="0000:00:07.1" pci_type="0604 [1022:1484] [1022:1484] 00" pci_link_speed="31.507692">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse Internal PCIe GPP Bridge 0 to bus[E:B]"/>
+            <object type="PCIDev" gp_index="534" pci_busid="0000:01:00.0" pci_type="1300 [1022:148a] [1022:148a] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Function"/>
+            </object>
+            <object type="PCIDev" gp_index="517" pci_busid="0000:01:00.2" pci_type="1080 [1022:1498] [1022:1498] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse PTDMA"/>
+            </object>
+          </object>
+          <object type="PCIDev" gp_index="479" pci_busid="0000:00:08.0" pci_type="0600 [1022:1482] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse PCIe Dummy Host Bridge"/>
+          </object>
+          <object type="Bridge" gp_index="570" bridge_type="1-1" depth="1" bridge_pci="0000:[02-02]" pci_busid="0000:00:08.1" pci_type="0604 [1022:1484] [1022:1484] 00" pci_link_speed="31.507692">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Starship/Matisse Internal PCIe GPP Bridge 0 to bus[E:B]"/>
+            <object type="PCIDev" gp_index="502" pci_busid="0000:02:00.0" pci_type="1300 [1022:1485] [1022:1485] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse Reserved SPP"/>
+            </object>
+            <object type="PCIDev" gp_index="484" pci_busid="0000:02:00.2" pci_type="1080 [1022:1498] [1022:1498] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship/Matisse PTDMA"/>
+            </object>
+            <object type="PCIDev" gp_index="575" pci_busid="0000:02:00.3" pci_type="0c03 [1022:148c] [1022:148c] 00" pci_link_speed="31.507692">
+              <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+              <info name="PCIDevice" value="Starship USB 3.0 Host Controller"/>
+            </object>
+          </object>
+          <object type="PCIDev" gp_index="655" pci_busid="0000:00:14.0" pci_type="0c05 [1022:790b] [1022:790b] 61" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="FCH SMBus Controller"/>
+          </object>
+          <object type="PCIDev" gp_index="526" pci_busid="0000:00:14.3" pci_type="0601 [1022:790e] [1022:790e] 51" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="FCH LPC Bridge"/>
+          </object>
+          <object type="PCIDev" gp_index="610" pci_busid="0000:00:18.0" pci_type="0600 [1022:1650] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Milan Data Fabric; Function 0"/>
+          </object>
+          <object type="PCIDev" gp_index="501" pci_busid="0000:00:18.1" pci_type="0600 [1022:1651] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Milan Data Fabric; Function 1"/>
+          </object>
+          <object type="PCIDev" gp_index="592" pci_busid="0000:00:18.2" pci_type="0600 [1022:1652] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Milan Data Fabric; Function 2"/>
+          </object>
+          <object type="PCIDev" gp_index="483" pci_busid="0000:00:18.3" pci_type="0600 [1022:1653] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Milan Data Fabric; Function 3"/>
+          </object>
+          <object type="PCIDev" gp_index="574" pci_busid="0000:00:18.4" pci_type="0600 [1022:1654] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Milan Data Fabric; Function 4"/>
+          </object>
+          <object type="PCIDev" gp_index="663" pci_busid="0000:00:18.5" pci_type="0600 [1022:1655] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Milan Data Fabric; Function 5"/>
+          </object>
+          <object type="PCIDev" gp_index="555" pci_busid="0000:00:18.6" pci_type="0600 [1022:1656] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Milan Data Fabric; Function 6"/>
+          </object>
+          <object type="PCIDev" gp_index="642" pci_busid="0000:00:18.7" pci_type="0600 [1022:1657] [0000:0000] 00" pci_link_speed="0.000000">
+            <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+            <info name="PCIDevice" value="Milan Data Fabric; Function 7"/>
+          </object>
+        </object>
+      </object>
+    </object>
+    <object type="Bridge" gp_index="683" bridge_type="0-1" depth="0" bridge_pci="0000:[ff-ff]">
+      <object type="PCIDev" gp_index="551" pci_busid="0000:ff:00.0" pci_type="0600 [1022:14d0] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="639" pci_busid="0000:ff:00.1" pci_type="0600 [1022:14d1] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="531" pci_busid="0000:ff:00.2" pci_type="0600 [1022:14d2] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="619" pci_busid="0000:ff:00.3" pci_type="0600 [1022:14d3] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="513" pci_busid="0000:ff:00.4" pci_type="0600 [1022:14d4] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="601" pci_busid="0000:ff:00.5" pci_type="0600 [1022:14d5] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="491" pci_busid="0000:ff:00.6" pci_type="0600 [1022:14d6] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="584" pci_busid="0000:ff:00.7" pci_type="0600 [1022:14d7] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="489" pci_busid="0000:ff:01.0" pci_type="0600 [1022:14d0] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="581" pci_busid="0000:ff:01.1" pci_type="0600 [1022:14d1] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="467" pci_busid="0000:ff:01.2" pci_type="0600 [1022:14d2] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="560" pci_busid="0000:ff:01.3" pci_type="0600 [1022:14d3] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="651" pci_busid="0000:ff:01.4" pci_type="0600 [1022:14d4] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="541" pci_busid="0000:ff:01.5" pci_type="0600 [1022:14d5] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="628" pci_busid="0000:ff:01.6" pci_type="0600 [1022:14d6] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="523" pci_busid="0000:ff:01.7" pci_type="0600 [1022:14d7] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="624" pci_busid="0000:ff:02.0" pci_type="0600 [1022:14d0] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="521" pci_busid="0000:ff:02.1" pci_type="0600 [1022:14d1] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="606" pci_busid="0000:ff:02.2" pci_type="0600 [1022:14d2] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="497" pci_busid="0000:ff:02.3" pci_type="0600 [1022:14d3] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="590" pci_busid="0000:ff:02.4" pci_type="0600 [1022:14d4] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="480" pci_busid="0000:ff:02.5" pci_type="0600 [1022:14d5] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="571" pci_busid="0000:ff:02.6" pci_type="0600 [1022:14d6] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="661" pci_busid="0000:ff:02.7" pci_type="0600 [1022:14d7] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="568" pci_busid="0000:ff:03.0" pci_type="0600 [1022:14d0] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="659" pci_busid="0000:ff:03.1" pci_type="0600 [1022:14d1] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="549" pci_busid="0000:ff:03.2" pci_type="0600 [1022:14d2] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="637" pci_busid="0000:ff:03.3" pci_type="0600 [1022:14d3] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="529" pci_busid="0000:ff:03.4" pci_type="0600 [1022:14d4] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="618" pci_busid="0000:ff:03.5" pci_type="0600 [1022:14d5] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="512" pci_busid="0000:ff:03.6" pci_type="0600 [1022:14d6] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="600" pci_busid="0000:ff:03.7" pci_type="0600 [1022:14d7] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="506" pci_busid="0000:ff:04.0" pci_type="0600 [1022:14d0] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="596" pci_busid="0000:ff:04.1" pci_type="0600 [1022:14d1] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="487" pci_busid="0000:ff:04.2" pci_type="0600 [1022:14d2] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="579" pci_busid="0000:ff:04.3" pci_type="0600 [1022:14d3] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="668" pci_busid="0000:ff:04.4" pci_type="0600 [1022:14d4] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="558" pci_busid="0000:ff:04.5" pci_type="0600 [1022:14d5] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="649" pci_busid="0000:ff:04.6" pci_type="0600 [1022:14d6] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="538" pci_busid="0000:ff:04.7" pci_type="0600 [1022:14d7] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="645" pci_busid="0000:ff:05.0" pci_type="0600 [1022:14d0] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="535" pci_busid="0000:ff:05.1" pci_type="0600 [1022:14d1] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="623" pci_busid="0000:ff:05.2" pci_type="0600 [1022:14d2] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="519" pci_busid="0000:ff:05.3" pci_type="0600 [1022:14d3] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="605" pci_busid="0000:ff:05.4" pci_type="0600 [1022:14d4] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="493" pci_busid="0000:ff:05.5" pci_type="0600 [1022:14d5] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="589" pci_busid="0000:ff:05.6" pci_type="0600 [1022:14d6] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="476" pci_busid="0000:ff:05.7" pci_type="0600 [1022:14d7] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="588" pci_busid="0000:ff:06.0" pci_type="0600 [1022:14d0] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="474" pci_busid="0000:ff:06.1" pci_type="0600 [1022:14d1] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="567" pci_busid="0000:ff:06.2" pci_type="0600 [1022:14d2] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="657" pci_busid="0000:ff:06.3" pci_type="0600 [1022:14d3] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="547" pci_busid="0000:ff:06.4" pci_type="0600 [1022:14d4] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="633" pci_busid="0000:ff:06.5" pci_type="0600 [1022:14d5] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="527" pci_busid="0000:ff:06.6" pci_type="0600 [1022:14d6] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="617" pci_busid="0000:ff:06.7" pci_type="0600 [1022:14d7] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="525" pci_busid="0000:ff:07.0" pci_type="0600 [1022:14d0] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="613" pci_busid="0000:ff:07.1" pci_type="0600 [1022:14d1] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="505" pci_busid="0000:ff:07.2" pci_type="0600 [1022:14d2] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="594" pci_busid="0000:ff:07.3" pci_type="0600 [1022:14d3] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="486" pci_busid="0000:ff:07.4" pci_type="0600 [1022:14d4] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="576" pci_busid="0000:ff:07.5" pci_type="0600 [1022:14d5] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="666" pci_busid="0000:ff:07.6" pci_type="0600 [1022:14d6] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+      <object type="PCIDev" gp_index="557" pci_busid="0000:ff:07.7" pci_type="0600 [1022:14d7] [0000:0000] ff" pci_link_speed="0.000000">
+        <info name="PCIVendor" value="Advanced Micro Devices, Inc. [AMD]"/>
+      </object>
+    </object>
+  </object>
+  <distances2 type="NUMANode" nbobjs="4" kind="5" name="NUMALatency" indexing="os">
+    <indexes length="8">0 1 2 3 </indexes>
+    <u64values length="30">10 12 12 12 12 10 12 12 12 12 </u64values>
+    <u64values length="18">10 12 12 12 12 10 </u64values>
+  </distances2>
+  <distances2 type="OSDev" nbobjs="8" kind="9" name="XGMIBandwidth" indexing="gp">
+    <indexes length="32">705 706 707 708 709 710 711 712 </indexes>
+    <u64values length="72">1000000 100000 100000 100000 100000 100000 100000 100000 100000 1000000 </u64values>
+    <u64values length="71">100000 100000 100000 100000 100000 100000 100000 100000 1000000 100000 </u64values>
+    <u64values length="71">100000 100000 100000 100000 100000 100000 100000 1000000 100000 100000 </u64values>
+    <u64values length="71">100000 100000 100000 100000 100000 100000 1000000 100000 100000 100000 </u64values>
+    <u64values length="71">100000 100000 100000 100000 100000 1000000 100000 100000 100000 100000 </u64values>
+    <u64values length="71">100000 100000 100000 100000 1000000 100000 100000 100000 100000 100000 </u64values>
+    <u64values length="29">100000 100000 100000 1000000 </u64values>
+  </distances2>
+  <distances2 type="OSDev" nbobjs="8" kind="5" name="XGMIHops" indexing="gp">
+    <indexes length="32">705 706 707 708 709 710 711 712 </indexes>
+    <u64values length="20">0 1 1 1 1 1 1 1 1 0 </u64values>
+    <u64values length="20">1 1 1 1 1 1 1 1 0 1 </u64values>
+    <u64values length="20">1 1 1 1 1 1 1 0 1 1 </u64values>
+    <u64values length="20">1 1 1 1 1 1 0 1 1 1 </u64values>
+    <u64values length="20">1 1 1 1 1 0 1 1 1 1 </u64values>
+    <u64values length="20">1 1 1 1 0 1 1 1 1 1 </u64values>
+    <u64values length="8">1 1 1 0 </u64values>
+  </distances2>
+  <support name="discovery.pu"/>
+  <support name="discovery.numa"/>
+  <support name="discovery.numa_memory"/>
+  <support name="discovery.disallowed_pu"/>
+  <support name="discovery.disallowed_numa"/>
+  <support name="discovery.cpukind_efficiency"/>
+  <support name="custom.exported_support"/>
+  <cpukind cpuset="0xffffffff,0xffffffff,0xffffffff,0xffffffff">
+    <info name="FrequencyMaxMHz" value="3541"/>
+  </cpukind>
+</topology>
