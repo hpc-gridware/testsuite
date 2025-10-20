@@ -62,10 +62,21 @@ lappend check_functions "issue_2759_test"
 
 proc issue_2759_setup {} {
    global ts_config
+   global host_config_backup
+
+   # increase slots capacity
+   foreach host $ts_config(execd_nodes) {
+      get_exechost host_config_bkup $host
+      set host_config_backup($host) $host_config_bkup(complex_values)
+
+      set host_cfg(complex_values)  "slots=5000"
+      set_exechost host_cfg $host
+   }
 }
 
 proc issue_2759_cleanup {} {
    global ts_config
+   global host_config_backup
 
    # check if execds are alive, if not start them up
    foreach host $ts_config(execd_nodes) {
@@ -73,6 +84,12 @@ proc issue_2759_cleanup {} {
          # we shutdown the execd with sgeexecd stop, so we have to start it again with sgeexecd start (i.e. not via systemctl)
          start_remote_prog $host "root" "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "start"
       }
+   }
+
+   # restore complex_values
+   foreach host $ts_config(execd_nodes) {
+      set host_cfg(complex_values) $host_config_backup($host)
+      set_exechost host_cfg $host
    }
 
    delete_all_jobs
