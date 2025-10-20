@@ -65,6 +65,16 @@ lappend check_functions "per_host_consumable_rsmap_parallel"
 proc per_host_consumable_setup {} {
    get_current_cluster_config_array ts_config
    global phc_complex_backup
+   global host_config_backup
+
+   # increase slots capacity
+   foreach host $ts_config(execd_nodes) {
+      get_exechost host_config_bkup $host
+      set host_config_backup($host) $host_config_bkup(complex_values)
+
+      set host_cfg(complex_values)  "slots=5000"
+      set_exechost host_cfg $host
+   }
 
    # backup complex
    get_complex phc_complex_backup
@@ -92,6 +102,13 @@ proc per_host_consumable_setup_level {} {
    get_current_cluster_config_array ts_config
    global CHECK_ACT_LEVEL
    global phc_host_backup phc_capacity_hosts phc_consumable_type phc_ar phc_is_rqs
+   global host_config_backup
+
+   # restore complex_values
+   foreach host $ts_config(execd_nodes) {
+      set host_cfg(complex_values) $host_config_backup($host)
+      set_exechost host_cfg $host
+   }
 
    switch $CHECK_ACT_LEVEL {
       0 {
