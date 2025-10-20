@@ -62,6 +62,16 @@ lappend check_functions "issue_2822_test"
 proc issue_2822_setup {} {
    global ts_config
    global issue_2822_hosts
+   global host_config_backup
+
+   # increase slots capacity
+   foreach host $ts_config(execd_nodes) {
+      get_exechost host_config_bkup $host
+      set host_config_backup($host) $host_config_bkup(complex_values)
+
+      set host_cfg(complex_values)  "slots=5000"
+      set_exechost host_cfg $host
+   }
 
    # we need 2 test hosts
    set issue_2822_hosts [host_conf_get_suited_hosts 2]
@@ -87,6 +97,13 @@ proc issue_2822_setup {} {
 proc issue_2822_cleanup {} {
    global ts_config
    global issue_2822_hosts
+   global host_config_backup
+
+   # restore complex_values
+   foreach host $ts_config(execd_nodes) {
+      set host_cfg(complex_values) $host_config_backup($host)
+      set_exechost host_cfg $host
+   }
 
    delete_all_jobs
    wait_for_end_of_all_jobs
