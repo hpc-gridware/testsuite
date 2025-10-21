@@ -132,6 +132,13 @@ proc get_cert_info {hostname cert_path {cert_info_var "cert_info"} {user ""}} {
       set ret 0
    }
 
+   # wait for the certificate file to be visible (on NFS)
+   if {$ret} {
+      if {[wait_for_remote_file $hostname $user $cert_path] < 0} {
+         set ret 0
+      }
+   }
+
    # get certificate info as text
    if {$ret} {
       set openssl_args "x509 -noout -text -in $cert_path"
