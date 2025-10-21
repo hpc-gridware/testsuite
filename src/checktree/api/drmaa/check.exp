@@ -74,10 +74,20 @@ global drmaa_binary_name
 
 proc drmaa_setup {} {
    global drmaa_config current_drmaa_mode ts_config host_list
+   global host_config_backup
 
    # must forbit reschedule on job exiting with 99
    # must forbit job error upon job exiting with 100
    # otherwise drmaa_test ST_EXIT_STATUS never finishes
+
+    # increase slots capacity
+   foreach host $ts_config(execd_nodes) {
+      get_exechost host_config_bkup $host
+      set host_config_backup($host) $host_config_bkup(complex_values)
+
+      set host_cfg(complex_values)  "slots=5000"
+      set_exechost host_cfg $host
+   }
 
    # backup old settings
    get_config drmaa_config
@@ -93,9 +103,17 @@ proc drmaa_setup {} {
 proc drmaa_cleanup  {} {
    global backup_qmaster_params drmaa_config ts_config current_drmaa_mode
    global CHECK_USER env
+   global host_config_backup
 
+   # delete all jobs that might be still running
    delete_all_jobs
    wait_for_end_of_all_jobs 60
+
+   # restore complex_values
+   foreach host $ts_config(execd_nodes) {
+      set host_cfg(complex_values) $host_config_backup($host)
+      set_exechost host_cfg $host
+   }
 
    # undo configuration changes that were made for this test
    reset_config drmaa_config
