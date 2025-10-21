@@ -65,7 +65,18 @@ set check_functions {}
 lappend check_functions "extensive_qrsh_test"
 
 proc extensive_qrsh_setup {} {
+   get_current_cluster_config_array ts_config
    global extensive_qrsh_backup
+   global host_config_backup
+
+   # increase slots capacity
+   foreach host $ts_config(execd_nodes) {
+      get_exechost host_config_bkup $host
+      set host_config_backup($host) $host_config_bkup(complex_values)
+
+      set host_cfg(complex_values)  "slots=5000"
+      set_exechost host_cfg $host
+   }
 
    get_config extensive_qrsh_backup
 
@@ -77,6 +88,13 @@ proc extensive_qrsh_setup {} {
 proc extensive_qrsh_setup_level {} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
+   global host_config_backup
+
+   # restore complex_values
+   foreach host $ts_config(execd_nodes) {
+      set host_cfg(complex_values) $host_config_backup($host)
+      set_exechost host_cfg $host
+   }
 
    # We want to check accounting,
    # remove a possibly huge accounting file
