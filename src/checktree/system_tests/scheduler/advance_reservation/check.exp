@@ -78,6 +78,16 @@ proc scheduler_advance_reservation_setup {} {
    global global_consumable host_consumable
    global host_complex queue_complex
    global scheduler_advance_reservation_complex_backup
+   global host_config_backup
+
+   # increase slots capacity
+   foreach host $ts_config(execd_nodes) {
+      get_exechost host_config_bkup $host
+      set host_config_backup($host) $host_config_bkup(complex_values)
+
+      set host_cfg(complex_values)  "slots=5000"
+      set_exechost host_cfg $host
+   }
 
    get_complex scheduler_advance_reservation_complex_backup
    set test_host [host_conf_get_suited_hosts]
@@ -112,10 +122,9 @@ proc scheduler_advance_reservation_setup {} {
    set config(complex_values) "$global_consumable=4"
    set_exechost config "global"
 
-
    set test_hosts [host_conf_get_suited_hosts 2]
 
-   set config(complex_values) "$host_complex=bla"
+   set config(complex_values) "$host_complex=bla,slots=5000"
    set_exechost config [lindex $test_hosts 0]
 
    # add complex_queue_name
