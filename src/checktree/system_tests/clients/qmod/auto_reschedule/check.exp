@@ -121,10 +121,20 @@ proc auto_reschedule_setup {} {
    global queue1 queue2 queue3 queue4 auto_reschedule_host1 auto_reschedule_host2
    global stored_configuration
    global stored_auto_reschedule_host1_config global_resch reschedule_kill reschedule_slave
+   global host_config_backup
 
    if {[llength $ts_config(execd_nodes)] < 2} {
       ts_log_config "Need at least 2 execd nodes for this test"
       return 99
+   }
+
+   # increase slots capacity
+   foreach host $ts_config(execd_nodes) {
+      get_exechost host_config_bkup $host
+      set host_config_backup($host) $host_config_bkup(complex_values)
+
+      set host_cfg(complex_values)  "slots=5000"
+      set_exechost host_cfg $host
    }
 
    # This test only works if auto_reschedule_host2 is not the testsuite host
@@ -263,9 +273,16 @@ proc auto_reschedule_cleanup {} {
    global stored_auto_reschedule_host1_config
    global CHECK_USER
    global CHECK_ACT_LEVEL
+   global host_config_backup
 
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   # restore complex_values
+   foreach host $ts_config(execd_nodes) {
+      set host_cfg(complex_values) $host_config_backup($host)
+      set_exechost host_cfg $host
+   }
 
    reset_schedd_config
 
