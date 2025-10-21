@@ -64,51 +64,27 @@ lappend check_functions "reschedule_qsh_qlogin_qrsh_qrlogin"
 lappend check_functions "reschedule_pe_jobs"
 lappend check_functions "reschedule_deleted_job"
 
-# -------- local test procedures -----------------------------------------------
-#
-#                                                             max. column:     |
-#
-#****** check/reschedule_setup() ******
-#  NAME
-#     reschedule_setup -- ???
-#
-#  SYNOPSIS
-#     reschedule_setup { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
-#
 proc reschedule_setup {} {
    global ts_config
    global pe_names pe_alloc_rule
    global rerun_host no_rerun_host
    global rerun_queue rerun_queue2 no_rerun_queue
    global stored_configuration
-
+   global host_config_backup
 
    if {[llength $ts_config(execd_nodes)] < 2} {
       ts_log_config "Need at least 2 execd for this test"
       return 99
    }
 
+   # increase slots capacity
+   foreach host $ts_config(execd_nodes) {
+      get_exechost host_config_bkup $host
+      set host_config_backup($host) $host_config_bkup(complex_values)
+
+      set host_cfg(complex_values)  "slots=5000"
+      set_exechost host_cfg $host
+   }
 
    # we'll do qrsh without command, and qsh
    # these are known not to work on some architectures
@@ -186,44 +162,20 @@ proc reschedule_setup {} {
    }
 }
 
-#
-#                                                             max. column:     |
-#
-#****** check/reschedule_cleanup() ******
-#  NAME
-#     reschedule_cleanup -- ???
-#
-#  SYNOPSIS
-#     reschedule_cleanup { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
-#
 proc reschedule_cleanup {} {
    global ts_config
    global rerun_queue rerun_queue2 no_rerun_queue rerun_host no_rerun_host
    global stored_configuration pe_names
+   global host_config_backup
 
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   # restore complex_values
+   foreach host $ts_config(execd_nodes) {
+      set host_cfg(complex_values) $host_config_backup($host)
+      set_exechost host_cfg $host
+   }
 
    reset_schedd_config
    reset_config_and_propagate stored_configuration
