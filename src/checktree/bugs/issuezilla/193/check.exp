@@ -91,14 +91,24 @@ proc issue193_setup {} {
    global ts_config pe_names pe_alloc_rule ts_user_config
    global rerun_queue no_rerun_queue rerun_host no_rerun_host
    global stored_configuration rerun_queue2
+   global host_config_backup
 
    if {[llength $ts_config(execd_nodes)] < 2} {
       ts_log_config "need at least 2 execd hosts for this test"
       return 99
    }
 
-
    set hosts [host_conf_get_suited_hosts 2]
+
+   # increase slots capacity
+   foreach host $hosts {
+      get_exechost host_config_bkup $host
+      set host_config_backup($host) $host_config_bkup(complex_values)
+
+      set host_cfg(complex_values)  "slots=5000"
+      set_exechost host_cfg $host
+   }
+
    set rerun_host    [lindex $hosts 0]
    set no_rerun_host [lindex $hosts 1]
    #set rerun_host    "ub20-0-lx-amd64"
@@ -163,6 +173,48 @@ proc issue193_setup {} {
       add_pe $elem new_peobj
       assign_queues_with_pe_object $rerun_queue2 $no_rerun_host $elem
       assign_queues_with_pe_object $rerun_queue $rerun_host $elem
+   }
+}
+
+proc issue193_cleanup {} {
+   global ts_config
+   global rerun_queue no_rerun_queue rerun_host no_rerun_host
+   global stored_configuration rerun_queue2
+   global pe_names pe_alloc_rule ts_user_config
+   global host_config_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   trigger_scheduling
+
+   # restore complex_values
+   foreach host $ge_3306_host {
+      set host_cfg(complex_values) $host_config_backup($host)
+      set_exechost host_cfg $host
+   }
+
+   reset_schedd_config
+   reset_config stored_configuration
+   ts_log_fine "removing checkpointobjects ..."
+   del_ckpt "qmod_with_r"
+   del_ckpt "qmod_without_r"
+
+   foreach elem $pe_names {
+      del_pe $elem
+   }
+
+   ts_log_fine "removing queues ..."
+   del_queue $rerun_queue $rerun_host 0 1
+   del_queue $no_rerun_queue $no_rerun_host 0 1
+   del_queue $rerun_queue2 $no_rerun_host 0 1
+
+   ts_log_fine "enabling queues ..."
+   foreach host $ts_config(execd_nodes) {
+      enable_queue [get_queue_instance "all.q" $host]
+   }
+
+   if {[delete_operator $ts_user_config(first_foreign_user)] != 0} {
+      ts_log_severe "Unable to delete operator $ts_user_config(first_foreign_user)"
    }
 }
 
@@ -683,37 +735,3 @@ proc issue193_deleted_job {} {
 }
 
 
-proc issue193_cleanup {} {
-   global ts_config
-   global rerun_queue no_rerun_queue rerun_host no_rerun_host
-   global stored_configuration rerun_queue2
-   global pe_names pe_alloc_rule ts_user_config
-
-   delete_all_jobs
-   wait_for_end_of_all_jobs
-   trigger_scheduling
-
-   reset_schedd_config
-   reset_config stored_configuration
-   ts_log_fine "removing checkpointobjects ..."
-   del_ckpt "qmod_with_r"
-   del_ckpt "qmod_without_r"
-
-   foreach elem $pe_names {
-      del_pe $elem
-   }
-
-   ts_log_fine "removing queues ..."
-   del_queue $rerun_queue $rerun_host 0 1
-   del_queue $no_rerun_queue $no_rerun_host 0 1
-   del_queue $rerun_queue2 $no_rerun_host 0 1
-
-   ts_log_fine "enabling queues ..."
-   foreach host $ts_config(execd_nodes) {
-      enable_queue [get_queue_instance "all.q" $host]
-   }
-
-   if {[delete_operator $ts_user_config(first_foreign_user)] != 0} {
-      ts_log_severe "Unable to delete operator $ts_user_config(first_foreign_user)"
-   }
-}
