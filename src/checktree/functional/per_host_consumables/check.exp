@@ -72,7 +72,7 @@ proc per_host_consumable_setup {} {
       get_exechost host_config_bkup $host
       set host_config_backup($host) $host_config_bkup(complex_values)
 
-      set host_cfg(complex_values)  "slots=5000"
+      set host_cfg(complex_values) "slots=5000"
       set_exechost host_cfg $host
    }
 
@@ -106,7 +106,7 @@ proc per_host_consumable_setup_level {} {
 
    # restore complex_values
    foreach host $ts_config(execd_nodes) {
-      set host_cfg(complex_values) $host_config_backup($host)
+      set host_cfg(complex_values) "$host_config_backup($host),slots=5000"
       set_exechost host_cfg $host
    }
 
