@@ -92,16 +92,17 @@ proc issue193_setup {} {
    global rerun_queue no_rerun_queue rerun_host no_rerun_host
    global stored_configuration rerun_queue2
    global host_config_backup
+   global test_hosts
 
    if {[llength $ts_config(execd_nodes)] < 2} {
       ts_log_config "need at least 2 execd hosts for this test"
       return 99
    }
 
-   set hosts [host_conf_get_suited_hosts 2]
+   set test_hosts [host_conf_get_suited_hosts 2]
 
    # increase slots capacity
-   foreach host $hosts {
+   foreach host $test_hosts {
       get_exechost host_config_bkup $host
       set host_config_backup($host) $host_config_bkup(complex_values)
 
@@ -109,8 +110,8 @@ proc issue193_setup {} {
       set_exechost host_cfg $host
    }
 
-   set rerun_host    [lindex $hosts 0]
-   set no_rerun_host [lindex $hosts 1]
+   set rerun_host    [lindex $test_hosts 0]
+   set no_rerun_host [lindex $test_hosts 1]
    #set rerun_host    "ub20-0-lx-amd64"
    #set no_rerun_host "ce8-0-lx-amd64"
 
@@ -182,13 +183,14 @@ proc issue193_cleanup {} {
    global stored_configuration rerun_queue2
    global pe_names pe_alloc_rule ts_user_config
    global host_config_backup
+   global test_hosts
 
    delete_all_jobs
    wait_for_end_of_all_jobs
    trigger_scheduling
 
    # restore complex_values
-   foreach host $ge_3306_host {
+   foreach host $test_hosts {
       set host_cfg(complex_values) $host_config_backup($host)
       set_exechost host_cfg $host
    }
