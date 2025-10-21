@@ -53,6 +53,7 @@ lappend check_functions "scope_slave_issue"
 proc cs_577_setup {} {
    get_current_cluster_config_array ts_config
    global cs_577_hosts cs_577_host_backup cs_577_complex_backup
+   global host_config_backup
 
    # need 3 hosts
    set cs_577_hosts [host_conf_get_suited_hosts 2 {} {} {} 1]
@@ -71,9 +72,9 @@ proc cs_577_setup {} {
    set h1 [lindex $cs_577_hosts 0]
    set h2 [lindex $cs_577_hosts 1]
 
-   set eh(complex_values) "pmem=3G"
+   set eh(complex_values) "pmem=3G,slots=5000"
    set_exechost eh $h1
-   set eh(complex_values) "pmem=1G"
+   set eh(complex_values) "pmem=1G,slots=5000"
    set_exechost eh $h2
 
    # create a pe and queue
