@@ -131,7 +131,7 @@ proc per_host_consumable_setup_level {} {
          set phc_capacity_hosts [host_conf_get_suited_hosts 2]
          set test_hosts $phc_capacity_hosts
          set phc_consumable_type "hc"
-         set complex_values "phc_int=2,phc_rsmap=2(A B)"
+         set complex_values "phc_int=2,phc_rsmap=2(A B),slots=5000"
       }
       3 -
       5 {
@@ -139,7 +139,7 @@ proc per_host_consumable_setup_level {} {
          set phc_capacity_hosts [host_conf_get_suited_hosts 2]
          set test_hosts $phc_capacity_hosts
          set phc_consumable_type "hc"
-         set complex_values "phc_int=3,phc_rsmap=3(A B C)"
+         set complex_values "phc_int=3,phc_rsmap=3(A B C),slots=5000"
       }
    }
 
