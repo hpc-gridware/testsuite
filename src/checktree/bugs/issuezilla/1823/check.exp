@@ -120,31 +120,35 @@ proc LSB_lockfile_test {} {
                    ts_log_fine $output
 
                    ts_log_fine "ok"
-                   ts_log_fine "try to start sge_execd as user $CHECK_USER ..."
-                   set output [start_remote_prog $exec_host $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "start" "exit_val" $my_timeout ]
-                   if {$exit_val != 0} {
-                      ts_log_fine $output
-                      ts_log_severe "failed - rc-script runs into any error, tried to start as user $CHECK_USER on host $exec_host"
-                      return
-                   }
-                   wait_for_load_from_all_queues 60
-                   ts_log_fine "ok"
-                   ts_log_fine "checking /var/lock/subsys/sgeexecd file ..."
-                   set output [start_remote_prog $exec_host $CHECK_USER "ls" "-la /var/lock/subsys | grep sgeexecd" "exit_val" $my_timeout]
-                   if {$exit_val == 0} {
-                      ts_log_severe "failed - /var/lock/subsys/sgeexecd may not be created by user $CHECK_USER on host $exec_host!"
-                      return
-                   }
-                   ts_log_fine $output
 
-                   ts_log_fine "ok"
-                   ts_log_fine "try to stop sge_execd as user $CHECK_USER ..."
-                   set output [start_remote_prog $exec_host $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "stop" "exit_val" $my_timeout]
-                   if {$exit_val != 0} {
-                      ts_log_severe "failed - rc-script runs into any error on host $exec_host, tried to stop as $CHECK_USER"
-                      return
+                   # with TLS encryption we cannot start sge_qmaster as non-priviledged user - it needs to read in /var/lib/ocs/...
+                   if {![config_has_product_feature "tls"]} {
+                      ts_log_fine "try to start sge_execd as user $CHECK_USER ..."
+                      set output [start_remote_prog $exec_host $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "start" "exit_val" $my_timeout ]
+                      if {$exit_val != 0} {
+                         ts_log_fine $output
+                         ts_log_severe "failed - rc-script runs into any error, tried to start as user $CHECK_USER on host $exec_host"
+                         return
+                      }
+                      wait_for_load_from_all_queues
+                      ts_log_fine "ok"
+                      ts_log_fine "checking /var/lock/subsys/sgeexecd file ..."
+                      set output [start_remote_prog $exec_host $CHECK_USER "ls" "-la /var/lock/subsys | grep sgeexecd" "exit_val" $my_timeout]
+                      if {$exit_val == 0} {
+                         ts_log_severe "failed - /var/lock/subsys/sgeexecd may not be created by user $CHECK_USER on host $exec_host!"
+                         return
+                      }
+                      ts_log_fine $output
+
+                      ts_log_fine "ok"
+                      ts_log_fine "try to stop sge_execd as user $CHECK_USER ..."
+                      set output [start_remote_prog $exec_host $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "stop" "exit_val" $my_timeout]
+                      if {$exit_val != 0} {
+                         ts_log_severe "failed - rc-script runs into any error on host $exec_host, tried to stop as $CHECK_USER"
+                         return
+                      }
+                      ts_log_fine $output
                    }
-                   ts_log_fine $output
 
                    ts_log_fine "ok"
                    ts_log_fine "try to start sge_execd as user root ..."
@@ -155,7 +159,7 @@ proc LSB_lockfile_test {} {
                       return
                    }
                    ts_log_fine $output
-                   wait_for_load_from_all_queues 60
+                   wait_for_load_from_all_queues
 
                    ts_log_fine "ok"
                    ts_log_fine "checking /var/lock/subsys/sgeexecd file ..."
