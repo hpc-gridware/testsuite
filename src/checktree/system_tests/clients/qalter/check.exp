@@ -39,7 +39,7 @@ global check_root_access_needs
 set check_root_access_needs "yes"
 
 set check_name         "qalter"
-set check_category     "COMPATIBILITY SYSTEM L10N VERIFIED JENKINS_DISABLED"
+set check_category     "QALTER VERIFIED JENKINS_DISABLED"
 set check_description(0)  "check every qalter option"
 set check_needs        "init_core_system"       ;# dependencies of this check (name of other check)
 
@@ -91,6 +91,7 @@ lappend check_functions "qalter_iz_2575"
 lappend check_functions "qalter_help"
 lappend check_functions "qhold_help"
 lappend check_functions "qrls_help"
+lappend check_functions "qalter_when"
 
 proc qalter_setup {} {
    global CHECK_JOB_OUTPUT_DIR
@@ -2109,4 +2110,52 @@ proc qrls_help {} {
    test_help_and_usage "qrls"
 }
 
+proc qalter_when {} {
+   # Here we test the qalter -when syntax.
+   # Functional tests are in ......
+
+
+   # submit a job which can run
+   set job_opts "-o /dev/null -e /dev/null -b y"
+   set job_args "sleep 1000"
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0} {
+      return
+   }
+
+   # -when now
+   set output [start_sge_bin "qalter" "-when now -N TEST_WHEN_NOW $job_id"]
+   # if it is an OCS cluster, expect to get an error message
+   if {![ge_has_feature "gcs"]} {
+      if {$prg_exit_state == 0} {
+         ts_log_severe "qalter -when now did not fail on OCS cluster, but reported:\n$output"
+      }
+      delete_job $job_id
+      return
+   }
+
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qalter -when now failed:\n$output"
+   }
+
+   # -when on_reschedule
+   set output [start_sge_bin "qalter" "-when on_reschedule -N TEST_WHEN_ON_RESCHEDULE $job_id"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qalter -when on_reschedule failed:\n$output"
+   }
+
+   # -when with invalid name
+   set output [start_sge_bin "qalter" "-when invalid_name -N TEST_WHEN_INVALID_NAME $job_id"]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "qalter -when with invalid name did not fail as expected:\n$output"
+   }
+
+   # without -when
+   set output [start_sge_bin "qalter" "-N TEST_WHEN_NO_WHEN $job_id"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qalter without -when failed:\n$output"
+   }
+
+   delete_job $job_id 1
+}
 
