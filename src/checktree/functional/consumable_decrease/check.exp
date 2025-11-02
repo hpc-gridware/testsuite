@@ -30,7 +30,7 @@ global check_version_range
 
 #set check_root_access_needs "yes"
 #set check_need_running_system "no"
-set check_version_range {"9.0.9" "9.1.0"} ;# not yet merged into master branch
+set check_version_range "9.0.9"
 
 # define test's name and run level descriptions
 set check_name            "consumable_dec"
