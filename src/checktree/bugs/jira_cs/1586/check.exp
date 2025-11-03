@@ -1,0 +1,129 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.0.9"
+
+# define test's name and run level descriptions
+set check_name            "issue_1586"
+set check_category        "CENTRY VERIFIED"
+set check_description(0)  "Check if re-debiting after consumable change works correctly"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function issue_1586_setup
+set check_cleanup_function issue_1586_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "issue_1586_test"
+
+# -------- local test procedures: initialization------------------------------
+
+proc issue_1586_setup {} {
+   get_current_cluster_config_array ts_config
+   global issue_1586_complex_backup issue_1586_global_host_backup
+
+   # we create complex variables - backup + create + capacity
+   get_complex issue_1586_complex_backup
+   set complex(lic) "lic INT <= YES YES 0 0"
+   set_complex complex
+   get_exechost issue_1586_global_host_backup "global"
+   set eh(complex_values) "lic=10"
+   set_exechost eh "global"
+
+   # create a pe and queue
+   set pe(slots) 999
+   set pe(allocation_rule) 2
+   add_pe "test.pe" pe
+
+   set q(slots) 2
+   set q(pe_list) "test.pe"
+   add_queue "test.q" "@allhosts" q
+}
+
+proc issue_1586_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global issue_1586_complex_backup issue_1586_global_host_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   del_queue "test.q" "" 1 1
+   del_pe "test.pe"
+
+   set_exechost issue_1586_global_host_backup "global"
+   reset_complex issue_1586_complex_backup
+
+   unset -nocomplain issue_1586_hosts issue_1586_backup
+}
+
+proc issue_1586_check_consumable {expected scenario} {
+   qstat_F_plain_parse qstat_info "lic"
+   # qstat_info(queue_list)                     = all.q@centos-7-amd64-2 all.q@rocky-8-amd64-1 ...
+   # qstat_info(test.q@centos-7-amd64-2,arch)   = ulx-amd64
+   # qstat_info(test.q@centos-7-amd64-2,gc:lic) = 8
+   # ...
+   set q [lindex $qstat_info(queue_list) 0]
+   set value $qstat_info($q,gc:lic)
+   ts_log_fine "$scenario: lic has a remaining capacity of $value, expected $expected"
+   if {$value != $expected} {
+      ts_log_severe "$scenario: lic has a remaining capacity of $value, expected $expected"
+   }
+}
+
+proc issue_1586_test {} {
+   get_current_cluster_config_array ts_config
+   global issue_1586_hosts
+
+   # submit job that uses 4 slots (2 per host) and 1 lic per slot
+   set job_opts "-pe test.pe 4 -l lic=1 -b y"
+   set job_args "sleep 600"
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0} {
+      return
+   }
+
+   # now 4 lic should be in use, 6 lic should be free
+   issue_1586_check_consumable 6 "after job submission"
+
+   # modify the default value of lic from 0 to 1 - this should not change any booking,
+   # as we have already booked 1 lic per slot
+   set ce(name) "lic"
+   set ce(default) 1
+   ce_mod ce
+
+   # now 4 lic should be in use, 6 lic should be free
+   issue_1586_check_consumable 6 "after consumable modification"
+
+   # cleanup
+   delete_job $job_id
+}
