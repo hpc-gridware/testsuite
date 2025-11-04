@@ -76,7 +76,7 @@ proc simhost_init {} {
    set num_hosts 0
    #set hosts {}
    foreach host [split [string trim $output] "\n"] {
-      #ts_log_fine $host  
+      #ts_log_fine $host
       lappend hosts [string trim $host]
       #incr num_hosts
       #if {$num_hosts > 10} {
