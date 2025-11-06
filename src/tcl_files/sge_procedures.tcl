@@ -4864,6 +4864,7 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}}
       set messages(DELETED1)       [translate_macro MSG_JOB_DELETETASK_SUU "*" "*" "*"]
       set messages(DELETED2)       [translate_macro MSG_JOB_DELETEX_SSU "*" "job" "*" ]
       set messages(UNABLETOSYNC)   [translate_macro MSG_COM_NOSYNCEXECD_SU $user "*"]
+      set messages(DOESNOTEXIST)   [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS "*" "*"]
    }
 
    set result -100
@@ -4924,6 +4925,10 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}}
           -i $sp_id $messages(UNABLETOSYNC) {
             ts_log_severe "$messages(UNABLETOSYNC)" $raise_error
             set result -1
+          }
+          -i $sp_id $messages(DOESNOTEXIST) {
+            ts_log_info "$messages(DOESNOTEXIST)" $raise_error
+            set result 0
           }
           -i default {
              if {[info exists expect_out(buffer)]} {
@@ -11068,6 +11073,51 @@ proc get_submit_date_time {timestamp} {
    set ret [clock format $timestamp -format "%Y%m%d%H%M.%S"]
 
    return $ret
+}
+
+###
+# @brief wait for load values to appear
+#
+# This function waits for the specified load values to appear
+# on the specified execution hosts.
+#
+# @param variables - a list of load values to be removed, e.g. "load1", "load5", "load15"
+# @param hosts     - a list of hosts to check, if not given all execution hosts are checked
+# @param timeout   - the maximum time to wait for the load values to be removed, default is 120 seconds
+proc wait_for_load_values {variables {hosts {}} {timeout 120}} {
+   get_current_cluster_config_array ts_config
+
+   # optional parameter hosts - if not given: all
+   if {[llength $hosts] == 0} {
+      set hosts $ts_config(execd_nodes)
+   }
+
+   set references_expected [expr [llength $variables] * [llength $hosts]]
+
+   set start_time [clock seconds]
+   while {1} {
+      set references 0
+      foreach host $hosts {
+         get_exechost exechost_info $host
+         foreach var $variables {
+            if {[string first "$var=" $exechost_info(load_values)] >= 0} {
+               ts_log_fine "load value \"$var\" found on host \"$host\""
+               incr references
+            }
+         }
+      }
+      if {$references == $references_expected} {
+         ts_log_fine "all load values appeared on all hosts"
+         break
+      }
+      if {[clock seconds] - $start_time > $timeout} {
+         ts_log_severe "timeout while waiting for load values to appear"
+         break
+      }
+      sleep_for_seconds 5
+   }
+   set end_time [clock seconds]
+   ts_log_fine "waited for [llength $variables] load values to appear on [llength $hosts] hosts for [expr $end_time - $start_time] seconds"
 }
 
 ###
