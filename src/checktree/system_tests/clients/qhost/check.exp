@@ -74,13 +74,6 @@ lappend check_functions "qhost_l_with_multiple_attributes"
 proc qhost_setup {} {
    get_current_cluster_config_array ts_config
    global qhost_config_old
-   global host_config_backup
-
-   # restore complex_values
-   foreach host $ts_config(execd_nodes) {
-      set host_cfg(complex_values) $host_config_backup($host)
-      set_exechost host_cfg $host
-   }
 
    # save old config
    get_config qhost_config_old
@@ -94,7 +87,6 @@ proc qhost_setup {} {
 proc qhost_cleanup {} {
    get_current_cluster_config_array ts_config
    global qhost_config_old
-   global host_config_backup
 
    #  ensure no jobs are running
    delete_all_jobs
@@ -102,13 +94,6 @@ proc qhost_cleanup {} {
 
    # restore the old config
    reset_config_and_propagate qhost_config_old
-
-   # restore complex_values
-   foreach host $ts_config(execd_nodes) {
-      set host_cfg(complex_values) $host_config_backup($host)
-      set_exechost host_cfg $host
-   }
-
 
    unset -nocomplain qhost_config_old
 }
