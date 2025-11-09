@@ -1,0 +1,148 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+#set check_root_access_needs "yes"
+#set check_need_running_system "no"
+set check_version_range "9.0.0"
+
+# define test's name and run level descriptions
+set check_name            "issue_1593"
+set check_category        "BUG PARALLEL SCHEDULER VERIFIED"
+set check_description(0)  "Test issue_1593: yyyy"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function issue_1593_setup
+set check_cleanup_function issue_1593_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "issue_1593_jift_t"
+lappend check_functions "issue_1593_jift_f"
+lappend check_functions "issue_1593_jift_f_rr"
+
+# -------- local test procedures: initialization------------------------------
+
+proc issue_1593_setup {} {
+   get_current_cluster_config_array ts_config
+   global issue_1593_hosts issue_1593_backup issue_1593_complex_backup
+
+   # let's assume we need 2 test hosts
+   set issue_1593_hosts [host_conf_get_suited_hosts 2]
+
+   # enable schedd_job_info
+   set sconf(schedd_job_info) "true"
+   set_schedd_config sconf
+
+   # add a q_type complex
+   get_complex issue_1593_complex_backup
+   set complex(q_type) "q_type RESTRING == YES NO NONE 0"
+   set_complex complex
+
+   # create a pe and two queues
+   set pe(slots) 999
+   set pe(allocation_rule) 2
+   set pe(control_slaves) "true"
+   set pe(job_is_first_task) "true"
+   set pe(ign_sreq_on_mhost) "true"
+   add_pe "jift_t.pe" pe
+   set pe(job_is_first_task) "false"
+   add_pe "jift_f.pe" pe
+   set pe(allocation_rule) "\$round_robin"
+   add_pe "jift_f_rr.pe" pe
+
+   set q(slots) 10
+   set q(pe_list) "jift_t.pe jift_f.pe jift_f_rr.pe"
+   set q(complex_values) "q_type=int"
+   add_queue "int.q" [lindex $issue_1593_hosts 0] q
+   set q(complex_values) "q_type=high"
+   add_queue "high.q" [lindex $issue_1593_hosts 1] q
+
+   disable_queue "all.q"
+}
+
+proc issue_1593_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global issue_1593_hosts issue_1593_backup issue_1593_complex_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # delete queues and pe
+   del_queue "int.q" "" 1 1
+   del_queue "high.q" "" 1 1
+   del_pe "jift_t.pe"
+   del_pe "jift_f.pe"
+   del_pe "jift_f_rr.pe"
+
+   # restore complex
+   reset_complex issue_1593_complex_backup
+
+   # restore scheduler config
+   reset_schedd_config
+
+   enable_queue "all.q"
+
+   unset -nocomplain issue_1593_hosts issue_1593_backup issue_1593_complex_backup
+}
+
+
+proc issue_1593_test {pe} {
+   get_current_cluster_config_array ts_config
+   global issue_1593_hosts
+
+   set job_opts "-pe $pe 4 -scope master -l q_type=high -scope slave -l q_type=int -b y"
+   set job_args "sleep 600"
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $job_id "" 10] != 0} {
+      # job was not scheduled - error raised in wait_for_jobstart
+   }
+
+   delete_job $job_id 1
+}
+
+proc issue_1593_jift_t {} {
+   issue_1593_test "jift_t.pe"
+}
+
+proc issue_1593_jift_f {} {
+   issue_1593_test "jift_f.pe"
+}
+
+proc issue_1593_jift_f_rr {} {
+   issue_1593_test "jift_f_rr.pe"
+}
+
