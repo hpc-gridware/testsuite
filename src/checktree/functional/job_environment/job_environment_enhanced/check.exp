@@ -360,6 +360,7 @@ proc job_environment_enhanced_INHERIT_ENV {} {
 proc test_job_environment_enhanced_lib_path {error_var execd_params expected_lib_path} {
    global job_environment_enhanced_exec_host job_environment_enhanced_libvar ts_config
    upvar $error_var errors
+   set errors ""
 
    set args "-l h=$job_environment_enhanced_exec_host -o /dev/null -j yes"
 
