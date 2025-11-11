@@ -98,7 +98,7 @@ proc job_environment_basic_setup {} {
       set_exechost host_cfg $host
    }
 
-   set job_environment_basic_exec_host [host_conf_get_suited_hosts 1 {sol-amd64 sol-sparc64 sol-x86 sol-sparc} {} {} 1]
+   set job_environment_basic_exec_host [host_conf_get_suited_hosts 1]
    set job_environment_basic_queue [get_queue_instance "all.q" $job_environment_basic_exec_host]
 
    get_config job_environment_basic_config $job_environment_basic_exec_host
@@ -398,15 +398,23 @@ proc job_environment_basic_qsh_job { array arguments } {
    # wait for host to appear on the remote host
    wait_for_remote_file $job_environment_basic_exec_host $CHECK_USER $script_name
 
+   set ret 1
    ts_log_fine "starting qsh $arguments -q $job_environment_basic_queue -S $script_name ..."
-   set output [start_sge_bin "qsh" "$arguments -q $job_environment_basic_queue -S $script_name"]
-   ts_log_fine $output
+   set output [start_sge_bin "qsh" "$arguments -q $job_environment_basic_queue -S $script_name" $job_environment_basic_exec_host]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "starting qsh job failed:\n$output"
+      set ret 0
+   } else {
+      ts_log_fine $output
 
-   # check results
-   job_environment_basic_parse_env_test_output $CHECK_PROTOCOL_DIR/job_env.out job_env_array
+      # check results
+      job_environment_basic_parse_env_test_output $CHECK_PROTOCOL_DIR/job_env.out job_env_array
+   }
 
    # cleanup
    file delete $script_name
+
+   return $ret
 }
 
 #****** job_environment_basic_amount() ***********************************************
@@ -686,10 +694,11 @@ proc job_environment_basic_JOB_NAME {{stand_alone 1}} {
    job_environment_basic_check_env_value "REQUEST" "newnam" job_env(REQUEST)
 
    ts_log_fine "\nqsh ..."
-   job_environment_basic_qsh_job job_env ""
-   job_environment_basic_check_env_value "JOB_NAME" "INTERACTIVE" job_env(JOB_NAME)
-   job_environment_basic_check_env_value "REQNAME" "INTERACTIVE" job_env(REQNAME)
-   job_environment_basic_check_env_value "REQUEST" "INTERACTIVE" job_env(REQUEST)
+   if {[job_environment_basic_qsh_job job_env ""]} {
+      job_environment_basic_check_env_value "JOB_NAME" "INTERACTIVE" job_env(JOB_NAME)
+      job_environment_basic_check_env_value "REQNAME" "INTERACTIVE" job_env(REQNAME)
+      job_environment_basic_check_env_value "REQUEST" "INTERACTIVE" job_env(REQUEST)
+   }
 
 #   can't test qlogin, need password to login !!!
 #   ts_log_fine "\nqlogin ..."
@@ -780,7 +789,7 @@ proc job_environment_basic_amount_uninherited {} {
       ts_log_severe [string trim $errors]
    }
    if {$warnings != ""} {
-      ts_log_config [string trim $warnings]
+      ts_log_info [string trim $warnings]
    }
 }
 
