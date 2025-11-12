@@ -98,7 +98,7 @@ proc consumable_dec_setup_level {} {
       1 {
          # define complex capacity on an exec host
          set consumable_dec_instance_type "exechost"
-         set consumable_dec_instance [host_conf_get_suited_hosts 1]
+         set consumable_dec_instance [resolve_host [host_conf_get_suited_hosts 1] 1]
          unset -nocomplain consumable_dec_backup
          get_exechost consumable_dec_backup $consumable_dec_instance
          replace_attr exechost "complex_values" $complex_values $consumable_dec_instance
@@ -106,7 +106,7 @@ proc consumable_dec_setup_level {} {
       2 {
          # define complex capacity in a queue instance
          set consumable_dec_instance_type "queue"
-         set host [host_conf_get_suited_hosts 1]
+         set host [resolve_host [host_conf_get_suited_hosts 1] 1]
          set consumable_dec_instance "test.q@${host}"
          get_queue $consumable_dec_instance consumable_dec_backup
          replace_attr queue "complex_values" $complex_values $consumable_dec_instance
@@ -155,7 +155,7 @@ proc consumable_dec_check_consumable {name expected_value situation} {
    switch $consumable_dec_instance_type {
       "global" {
          # use any queue instance
-         set queue "test.q@[lindex $ts_config(execd_nodes) 0]"
+         set queue "test.q@[resolve_host [lindex $ts_config(execd_nodes) 0] 1]"
          set level "gc"
       }
       "exechost" {
@@ -187,7 +187,6 @@ proc consumable_dec_check_consumable {name expected_value situation} {
 
 proc consumable_dec_submit_check {job_opts name expected_empty submit_value expected_after_submit new_value expected_after_qalter expected_after_qdel} {
    get_current_cluster_config_array ts_config
-   global consumable_dec_instance
 
    set ok 1
    # check consumable usage before submit
@@ -251,7 +250,6 @@ proc consumable_dec_submit_check {job_opts name expected_empty submit_value expe
 
 proc consumable_dec_sequential {} {
    get_current_cluster_config_array ts_config
-   global consumable_dec_instance consumable_dec_backup
 
    # options of consumable_dec_submit_check:
    #   additional job_opts
@@ -284,7 +282,6 @@ proc consumable_dec_sequential {} {
 
 proc consumable_dec_array {} {
    get_current_cluster_config_array ts_config
-   global consumable_dec_instance consumable_dec_backup
 
    # options of consumable_dec_submit_check:
    #   additional job_opts
@@ -318,7 +315,7 @@ proc consumable_dec_array {} {
 
 proc consumable_dec_parallel {} {
    get_current_cluster_config_array ts_config
-   global consumable_dec_instance consumable_dec_instance_type consumable_dec_backup
+   global consumable_dec_instance_type
 
    # typical license request, per job consumable
    consumable_dec_submit_check "-pe test.pe 2" "test_int_j" 10 1 9 0 10 10
