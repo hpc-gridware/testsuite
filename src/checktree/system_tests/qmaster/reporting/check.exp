@@ -694,6 +694,9 @@ proc reporting_complex_change_test {} {
    global reporting_file reporting_test_host
    global reporting_format_config
 
+   # we will see the fully qualified hostname in reporting records
+   set qualified_hostname [resolve_host $reporting_test_host 1]
+
    # assign consumable to our test host
    set exechost(complex_values) "F001=2,F002=2"
    set_exechost exechost $reporting_test_host
@@ -718,9 +721,9 @@ proc reporting_complex_change_test {} {
    set_complex complex
 
    # expect all consumables to be reported
-   set output [reporting_read_consumable_records "host_consumable"]
+   set output [reporting_read_consumable_records "host_consumable" $qualified_hostname]
    reporting_check_consumable_records $output "queue_consumable" "reporting" {"F003=0.000000=2.000000" "slots=0.000000=1.000000"}
-   reporting_check_consumable_records $output "host_consumable" "" {"F001=0.000000=2.000000" "F002=0.000000=2.000000"}
+   reporting_check_consumable_records $output "host_consumable" $qualified_hostname {"F001=0.000000=2.000000" "F002=0.000000=2.000000"}
 
    # =======================================================================
    ts_log_fine "Scenario 2: New behavior, no variables configured to report"
@@ -735,7 +738,7 @@ proc reporting_complex_change_test {} {
    set_complex complex
 
    # expect no host or queue consumables to be reported
-   reporting_read_consumable_records "*_consumable" 0
+   reporting_read_consumable_records "*_consumable" "" 0
 
    # ============================================================================
    ts_log_fine "Scenario 3: New behavior, only configured variables are reported"
@@ -750,9 +753,9 @@ proc reporting_complex_change_test {} {
 
    # expect only F002 being reported as host value
    # expect no queue values being reported
-   set output [reporting_read_consumable_records "host_consumable"]
-   reporting_check_consumable_records $output "host_consumable" "" {"F002=0.000000=2.000000"}
-   reporting_check_consumable_records $output "host_consumable" "" {"F001="} 0
+   set output [reporting_read_consumable_records "host_consumable" $qualified_hostname]
+   reporting_check_consumable_records $output "host_consumable" $qualified_hostname {"F002=0.000000=2.000000"}
+   reporting_check_consumable_records $output "host_consumable" $qualified_hostname {"F001="} 0
    reporting_check_consumable_records $output "queue_consumable" "reporting" {"F003=" "slots="} 0 0
    # shutdown tail -f
    close_logfile_wait
@@ -763,15 +766,23 @@ proc reporting_complex_change_test {} {
    set_exechost exechost $reporting_test_host
 }
 
-proc reporting_read_consumable_records {type_pattern {expect_records 1}} {
+proc reporting_read_consumable_records {type_pattern name {expect_records 1}} {
    global CHECK_ACT_LEVEL
 
    # read data from reporting file, wait for queue_consumable record
    # logfile_wait shall not raise errors - we do our own check
    if {$CHECK_ACT_LEVEL == 0} {
-      set pattern ":$type_pattern:"
+      set pattern ":$type_pattern:$name"
    } else {
       set pattern ",\"type\":\"$type_pattern\","
+      switch $type_pattern {
+         "queue_consumable" {
+            append pattern "\"qname\":\"$name\","
+         }
+         "host_consumable" {
+            append pattern "\"hostname\":\"$name\","
+         }
+      }
    }
    set output [logfile_wait $pattern 10 0 0]
 
@@ -792,22 +803,29 @@ proc reporting_read_consumable_records {type_pattern {expect_records 1}} {
    return [string trim $output]
 }
 
-proc reporting_check_consumable_records {output type queue consumables {expect_consumable 1} {expect_pattern 1}} {
+proc reporting_check_consumable_records {output type name consumables {expect_consumable 1} {expect_pattern 1}} {
    global CHECK_ACT_LEVEL
 
    ts_log_frame
-   ts_log_fine "$type $queue $consumables $expect_consumable $expect_pattern"
+   ts_log_fine "$type|$name|$consumables|$expect_consumable|$expect_pattern"
 
    # if we got the expected data in the reporting file
    if {$CHECK_ACT_LEVEL == 0} {
       set pattern ":$type:"
-      if {$queue != ""} {
-         append pattern "$queue:"
+      if {$name != ""} {
+         append pattern "$name:"
       }
    } else {
       set pattern ",\"type\":\"$type\","
-      if {$queue != ""} {
-         append pattern "\"qname\":\"$queue\","
+      if {$name != ""} {
+         switch $type {
+            "queue_consumable" {
+               append pattern "\"qname\":\"$name\","
+            }
+            "host_consumable" {
+               append pattern "\"hostname\":\"$name\","
+            }
+         }
       }
    }
    if {$output != ""} {
@@ -869,6 +887,9 @@ proc reporting_consumables_test {} {
    global reporting_file reporting_test_host
    global reporting_format_config
 
+   # we will see the fully qualified hostname in reporting records
+   set qualified_hostname [resolve_host $reporting_test_host 1]
+
    # set the complex variable F002 - it might not have been properly reset
    # by previous check_function
    set complex(F002) "F002 INT <= YES YES 0 0"
@@ -901,15 +922,15 @@ proc reporting_consumables_test {} {
    set job_id [submit_job "$job_args $job_script"]
    wait_for_jobstart $job_id "" 10 1 1
    # expect all host and queue consumables to be reported
-   set output [reporting_read_consumable_records "queue_consumable"]
-   reporting_check_consumable_records $output "host_consumable" "" {"F001=1.000000=2.000000" "F002=0.000000=2.000000"}
-   reporting_check_consumable_records $output "queue_consumable" "" {"F003=0.000000=2.000000" "slots=1.000000=1.000000"}
+   set output [reporting_read_consumable_records "queue_consumable" "reporting"]
+   reporting_check_consumable_records $output "host_consumable" $qualified_hostname {"F001=1.000000=2.000000" "F002=0.000000=2.000000"}
+   reporting_check_consumable_records $output "queue_consumable" "reporting" {"F003=0.000000=2.000000" "slots=1.000000=1.000000"}
    wait_for_jobend $job_id "" 25
 
    # expect all host and queue consumables to be reported
-   set output [reporting_read_consumable_records "queue_consumable"]
-   reporting_check_consumable_records $output "host_consumable" "" {"F001=0.000000=2.000000" "F002=0.000000=2.000000"}
-   reporting_check_consumable_records $output "queue_consumable" "" {"F003=0.000000=2.000000" "slots=0.000000=1.000000"}
+   set output [reporting_read_consumable_records "queue_consumable" "reporting"]
+   reporting_check_consumable_records $output "host_consumable" $qualified_hostname {"F001=0.000000=2.000000" "F002=0.000000=2.000000"}
+   reporting_check_consumable_records $output "queue_consumable" "reporting" {"F003=0.000000=2.000000" "slots=0.000000=1.000000"}
 
    # =======================================================================
    ts_log_fine "Scenario 2: New behavior, no variables configured to report"
@@ -923,10 +944,10 @@ proc reporting_consumables_test {} {
    set job_id [submit_job "$job_args $job_script"]
    wait_for_jobstart $job_id "" 10 1 1
    # expect no host or queue consumables to be reported
-   reporting_read_consumable_records "*_consumable" 0
+   reporting_read_consumable_records "*_consumable" "" 0
    wait_for_jobend $job_id "" 25
    # expect no host or queue consumables to be reported
-   reporting_read_consumable_records "*_consumable" 0
+   reporting_read_consumable_records "*_consumable" "" 0
 
    # =============================================================================
    ts_log_fine "Scenario 3: New behavior, we expect F001 and slots to be reported"
@@ -944,19 +965,19 @@ proc reporting_consumables_test {} {
    wait_for_jobstart $job_id "" 10 1 1
    # expect F001 to be reported as host consumable, F002 not being reported
    # expect slots to be reported as queue consumable
-   set output [reporting_read_consumable_records "queue_consumable"]
-   reporting_check_consumable_records $output "host_consumable" "" {"F001=1.000000=2.000000"}
-   reporting_check_consumable_records $output "host_consumable" "" {"F002="} 0
-   reporting_check_consumable_records $output "queue_consumable" "" {"slots=1.000000=1.000000"}
-   reporting_check_consumable_records $output "queue_consumable" "" {"F003="} 0
+   set output [reporting_read_consumable_records "queue_consumable" "reporting"]
+   reporting_check_consumable_records $output "host_consumable" $qualified_hostname {"F001=1.000000=2.000000"}
+   reporting_check_consumable_records $output "host_consumable" $qualified_hostname {"F002="} 0
+   reporting_check_consumable_records $output "queue_consumable" "reporting" {"slots=1.000000=1.000000"}
+   reporting_check_consumable_records $output "queue_consumable" "reporting" {"F003="} 0
    wait_for_jobend $job_id "" 25
    # expect F001 to be reported as host consumable, F002 not being reported
    # expect slots to be reported as queue consumable
-   set output [reporting_read_consumable_records "queue_consumable"]
-   reporting_check_consumable_records $output "host_consumable" "" {"F001=0.000000=2.000000"}
-   reporting_check_consumable_records $output "host_consumable" "" {"F002="} 0
-   reporting_check_consumable_records $output "queue_consumable" "" {"slots=0.000000=1.000000"}
-   reporting_check_consumable_records $output "queue_consumable" "" {"F003="} 0
+   set output [reporting_read_consumable_records "queue_consumable" "reporting"]
+   reporting_check_consumable_records $output "host_consumable" $qualified_hostname {"F001=0.000000=2.000000"}
+   reporting_check_consumable_records $output "host_consumable" $qualified_hostname {"F002="} 0
+   reporting_check_consumable_records $output "queue_consumable" "reporting" {"slots=0.000000=1.000000"}
+   reporting_check_consumable_records $output "queue_consumable" "reporting" {"F003="} 0
 
    # reset reporting_variables
    set exechost(report_variables) "NONE"
@@ -970,31 +991,31 @@ proc reporting_consumables_test {} {
    # add F001, F002, and slots to the reporting variables
    set exechost(report_variables) "F001,F002,slots"
    set exechost(complex_values)  "F001=2,F002=2"
-   set_exechost exechost
+   set_exechost exechost "global"
 
    # Submit the test job
    set job_id [submit_job "$job_args $job_script"]
    wait_for_jobstart $job_id "" 10 1 1
    # expect F001 to be reported as host consumable, F002 not being reported
    # expect slots to be reported as queue consumable
-   set output [reporting_read_consumable_records "queue_consumable"]
-   reporting_check_consumable_records $output "host_consumable" "" {"F001=1.000000=2.000000"}
-   reporting_check_consumable_records $output "host_consumable" "" {"F002="} 0
-   reporting_check_consumable_records $output "queue_consumable" "" {"slots=1.000000=1.000000"}
-   reporting_check_consumable_records $output "queue_consumable" "" {"F003="} 0
+   set output [reporting_read_consumable_records "queue_consumable" "reporting"]
+   reporting_check_consumable_records $output "host_consumable" "global" {"F001=1.000000=2.000000"}
+   reporting_check_consumable_records $output "host_consumable" "global" {"F002="} 0
+   reporting_check_consumable_records $output "queue_consumable" "reporting" {"slots=1.000000=1.000000"}
+   reporting_check_consumable_records $output "queue_consumable" "reporting" {"F003="} 0
    wait_for_jobend $job_id "" 25
    # expect F001 to be reported as host consumable, F002 not being reported
    # expect slots to be reported as queue consumable
-   set output [reporting_read_consumable_records "queue_consumable"]
-   reporting_check_consumable_records $output "host_consumable" "" {"F001=0.000000=2.000000"}
-   reporting_check_consumable_records $output "host_consumable" "" {"F002="} 0
-   reporting_check_consumable_records $output "queue_consumable" "" {"slots=0.000000=1.000000"}
-   reporting_check_consumable_records $output "queue_consumable" "" {"F003="} 0
+   set output [reporting_read_consumable_records "queue_consumable" "reporting"]
+   reporting_check_consumable_records $output "host_consumable" "global" {"F001=0.000000=2.000000"}
+   reporting_check_consumable_records $output "host_consumable" "global" {"F002="} 0
+   reporting_check_consumable_records $output "queue_consumable" "reporting" {"slots=0.000000=1.000000"}
+   reporting_check_consumable_records $output "queue_consumable" "reporting" {"F003="} 0
 
    # reset reporting_variables
    set exechost(report_variables) "NONE"
    set exechost(complex_values)  "NONE"
-   set_exechost exechost
+   set_exechost exechost "global"
 
    # shutdown tail -f
    close_logfile_wait
