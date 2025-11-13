@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -58,21 +58,23 @@ lappend check_functions       "issue_check_unsuspended_queue" ;# functions
 
 proc issue_1741_setup  {} {
    global ts_config
-   global check_host
+   global issue_1741_host
 
-   set check_host [host_conf_get_suited_hosts]
+   set issue_1741_host [host_conf_get_suited_hosts]
 }
 
 proc issue_1741_cleanup {} {
-   global check_host
+   global issue_1741_host
 
    delete_all_jobs
    wait_for_end_of_all_jobs
 
    # delete queues (if not) in different order (a b) or (b a)
-   del_queue "a.q" $check_host  0 1 "" "" 0
-   del_queue "b.q" $check_host  0 1 "" "" 0
-   del_queue "a.q" $check_host  0 1 "" "" 0
+   del_queue "a.q" $issue_1741_host  0 1 "" "" 0
+   del_queue "b.q" $issue_1741_host  0 1 "" "" 0
+   del_queue "a.q" $issue_1741_host  0 1 "" "" 0
+
+   unset -nocomplain issue_1741_host
 }
 
 #
@@ -98,20 +100,21 @@ proc issue_1741_cleanup {} {
 
 proc issue_1741_run {} {
    global ts_config
+   global issue_1741_host
 
-   set check_host [host_conf_get_suited_hosts]
+   set issue_1741_host [host_conf_get_suited_hosts]
 
    set queue_settings(slots) 1
    set queue_settings(load_thresholds) "np_load_avg=11.75"
-   add_queue "b.q" $check_host queue_settings
+   add_queue "b.q" $issue_1741_host queue_settings
 
    set queue_settings(slots) 1
    set queue_settings(load_thresholds) "np_load_avg=11.75"
    set queue_settings(subordinate_list) "b.q=1"
-   add_queue "a.q" $check_host queue_settings
+   add_queue "a.q" $issue_1741_host queue_settings
 
-   set aq [get_queue_instance "a.q" $check_host]
-   set bq [get_queue_instance "b.q" $check_host]
+   set aq [get_queue_instance "a.q" $issue_1741_host]
+   set bq [get_queue_instance "b.q" $issue_1741_host]
 
    set job_id1 [submit_job "-o /dev/null -j y -q $bq $ts_config(product_root)/examples/jobs/sleeper.sh 100"]
    wait_for_jobstart $job_id1 "Sleeper" 20 1 1
@@ -121,14 +124,15 @@ proc issue_1741_run {} {
    wait_for_queue_state $bq "S" 60
 
    shutdown_and_restart_qmaster
+   wait_for_load_from_all_queues
 
    wait_for_queue_state $bq "S" 60
 
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   del_queue "a.q" $check_host  0 1
-   del_queue "b.q" $check_host  0 1
+   del_queue "a.q" $issue_1741_host  0 1
+   del_queue "b.q" $issue_1741_host  0 1
 }
 
 #****** check.60/issue_use_different_names() ***********************************
@@ -149,7 +153,7 @@ proc issue_1741_run {} {
 #*******************************************************************************
 proc issue_use_different_names {} {
    global ts_config
-   global check_host
+   global issue_1741_host
 
    # same test as "issue_1741_run" but queues
    # has another alphabetical order:
@@ -165,15 +169,15 @@ proc issue_use_different_names {} {
 
    set queue_settings(slots) 1
    set queue_settings(load_thresholds) "np_load_avg=11.75"
-   add_queue "a.q" $check_host queue_settings
+   add_queue "a.q" $issue_1741_host queue_settings
 
    set queue_settings(slots) 1
    set queue_settings(load_thresholds) "np_load_avg=11.75"
    set queue_settings(subordinate_list) "a.q=1"
-   add_queue "b.q" $check_host queue_settings
+   add_queue "b.q" $issue_1741_host queue_settings
 
-   set aq [get_queue_instance "a.q" $check_host]
-   set bq [get_queue_instance "b.q" $check_host]
+   set aq [get_queue_instance "a.q" $issue_1741_host]
+   set bq [get_queue_instance "b.q" $issue_1741_host]
 
    set job_id1 [submit_job "-o /dev/null -j y -q $aq $ts_config(product_root)/examples/jobs/sleeper.sh 100"]
    wait_for_jobstart $job_id1 "Sleeper" 20 1 1
@@ -183,14 +187,15 @@ proc issue_use_different_names {} {
    wait_for_queue_state $aq "S" 60
 
    shutdown_and_restart_qmaster
+   wait_for_load_from_all_queues
 
    wait_for_queue_state $aq "S" 60
 
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   del_queue "b.q" $check_host  0 1
-   del_queue "a.q" $check_host  0 1
+   del_queue "b.q" $issue_1741_host  0 1
+   del_queue "a.q" $issue_1741_host  0 1
 }
 
 #****** check.60/issue_use_different_order() ***********************************
@@ -207,25 +212,25 @@ proc issue_use_different_names {} {
 #*******************************************************************************
 proc issue_use_different_order {} {
    global ts_config
-   global check_host
+   global issue_1741_host
 
    # same test as "issue_1741_run" but queues
    # has another creation order of queues
 
    set queue_settings(slots) 1
    set queue_settings(load_thresholds) "np_load_avg=11.75"
-   add_queue "a.q" $check_host queue_settings
+   add_queue "a.q" $issue_1741_host queue_settings
 
    set queue_settings(slots) 1
    set queue_settings(load_thresholds) "np_load_avg=11.75"
-   add_queue "b.q" $check_host queue_settings
+   add_queue "b.q" $issue_1741_host queue_settings
 
    # modify a.q
    set queue_settings(subordinate_list)  "b.q=1"
    mod_queue "a.q" "" queue_settings
 
-   set aq [get_queue_instance "a.q" $check_host]
-   set bq [get_queue_instance "b.q" $check_host]
+   set aq [get_queue_instance "a.q" $issue_1741_host]
+   set bq [get_queue_instance "b.q" $issue_1741_host]
 
    set job_id1 [submit_job "-o /dev/null -j y -q $bq $ts_config(product_root)/examples/jobs/sleeper.sh 100"]
    wait_for_jobstart $job_id1 "Sleeper" 20 1 1
@@ -235,14 +240,15 @@ proc issue_use_different_order {} {
    wait_for_queue_state $bq "S" 60
 
    shutdown_and_restart_qmaster
+   wait_for_load_from_all_queues
 
    wait_for_queue_state $bq "S" 60
 
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   del_queue "a.q" $check_host  0 1
-   del_queue "b.q" $check_host  0 1
+   del_queue "a.q" $issue_1741_host  0 1
+   del_queue "b.q" $issue_1741_host  0 1
 }
 
 
@@ -264,7 +270,7 @@ proc issue_use_different_order {} {
 #*******************************************************************************
 proc issue_check_unsuspended_queue {} {
    global ts_config
-   global check_host
+   global issue_1741_host
 
    # this test checks if subordinate queue remains in
    # unsuspended state
@@ -276,15 +282,15 @@ proc issue_check_unsuspended_queue {} {
 
    set queue_settings(slots) 1
    set queue_settings(load_thresholds) "np_load_avg=11.25"
-   add_queue "b.q" $check_host queue_settings
+   add_queue "b.q" $issue_1741_host queue_settings
 
    set queue_settings(slots) 1
    set queue_settings(load_thresholds) "np_load_avg=11.25"
    set queue_settings(subordinate_list) "b.q=1"
-   add_queue "a.q" $check_host queue_settings
+   add_queue "a.q" $issue_1741_host queue_settings
 
-   set aq [get_queue_instance "a.q" $check_host]
-   set bq [get_queue_instance "b.q" $check_host]
+   set aq [get_queue_instance "a.q" $issue_1741_host]
+   set bq [get_queue_instance "b.q" $issue_1741_host]
 
    # start a job in subordinate b.q
    set job_id [submit_job "-o /dev/null -j y -q $bq $ts_config(product_root)/examples/jobs/sleeper.sh 240"]
@@ -293,7 +299,7 @@ proc issue_check_unsuspended_queue {} {
    shutdown_and_restart_qmaster
 
    # now job in a.q is expected to run/finish after qmaster restart
-   wait_for_load_from_all_queues 60
+   wait_for_load_from_all_queues
 
    # check queue state of b.q
    set state [get_queue_state $bq]
@@ -310,8 +316,8 @@ proc issue_check_unsuspended_queue {} {
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   del_queue "a.q" $check_host  0 1
-   del_queue "b.q" $check_host  0 1
+   del_queue "a.q" $issue_1741_host  0 1
+   del_queue "b.q" $issue_1741_host  0 1
 }
 
 
@@ -329,22 +335,22 @@ proc issue_check_unsuspended_queue {} {
 #*******************************************************************************
 proc issue_check_unsuspended_queue_with_more_slots {} {
    global ts_config
-   global check_host
+   global issue_1741_host
 
    # this test checks if subordinate queue remains in
    # unsuspended state
 
    set queue_settings(slots) 1
    set queue_settings(load_thresholds) "np_load_avg=11.25"
-   add_queue "b.q" $check_host queue_settings
+   add_queue "b.q" $issue_1741_host queue_settings
 
    set queue_settings(slots) 2
    set queue_settings(load_thresholds) "np_load_avg=11.25"
    set queue_settings(subordinate_list) "b.q=2"
-   add_queue "a.q" $check_host queue_settings
+   add_queue "a.q" $issue_1741_host queue_settings
 
-   set aq [get_queue_instance "a.q" $check_host]
-   set bq [get_queue_instance "b.q" $check_host]
+   set aq [get_queue_instance "a.q" $issue_1741_host]
+   set bq [get_queue_instance "b.q" $issue_1741_host]
 
    # start a job in subordinate b.q
    set job_id [submit_job "-o /dev/null -j y -q $bq $ts_config(product_root)/examples/jobs/sleeper.sh 240"]
@@ -358,7 +364,7 @@ proc issue_check_unsuspended_queue_with_more_slots {} {
    # other than running
 
    # now job in a.q is expected to run/finish after qmaster restart
-   wait_for_load_from_all_queues 60
+   wait_for_load_from_all_queues
 
    # check queue state of b.q
    set state [get_queue_state $bq]
@@ -386,8 +392,8 @@ proc issue_check_unsuspended_queue_with_more_slots {} {
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   del_queue "a.q" $check_host  0 1
-   del_queue "b.q" $check_host  0 1
+   del_queue "a.q" $issue_1741_host  0 1
+   del_queue "b.q" $issue_1741_host  0 1
 }
 
 
