@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -87,10 +87,8 @@ proc bigdecimal_setup {} {
       add_user $CHECK_SECOND_FOREIGN_SYSTEM_USER
    }
 
-   if {[info exists bigdecimal_backup]} {
-      unset bigdecimal_backup
-   }
    # we want to modify the global config - make a backup
+   unset -nocomplain bigdecimal_backup
    get_config bigdecimal_backup
 
    # enable reporting
@@ -124,7 +122,7 @@ proc bigdecimal_setup {} {
    }
    set sqlutil_sp_id [ lindex $sqlutil_id 1 ]
 
-   if { [ sqlutil_connect $sqlutil_sp_id] != 0 } {
+   if {[sqlutil_connect $sqlutil_sp_id] != 0} {
       ts_log_config "Can not connect to database"
       close_spawn_process $sqlutil_id
       set sqlutil_id ""
@@ -147,7 +145,7 @@ proc bigdecimal_cleanup {} {
       delete_all_ars
    }
 
-   if { $sqlutil_id != "" } {
+   if {$sqlutil_id != ""} {
       close_spawn_process $sqlutil_id
    }
    set sqlutil_id ""
@@ -235,9 +233,12 @@ proc bigdecimal_test {} {
 
    # add queue
    set chgar(slots) "10"
-   add_queue $Queue_Name1 "@allhosts" chgar
+   # we may only add a single queue instance, otherwise the following code (bigdecimal_duplicate_record)
+   # would try to create multiple records with the same big id,
+   # which is prevented by the sge_queue's table primary key
+   add_queue $Queue_Name1 [lindex $ts_config(execd_nodes) 0] chgar
    # duplicate queue record with big id
-   if { [bigdecimal_duplicate_record "sge_queue" "q_id"] != 0 } {
+   if {[bigdecimal_duplicate_record "sge_queue" "q_id"] != 0} {
       return -1
    }
    array unset chgar
