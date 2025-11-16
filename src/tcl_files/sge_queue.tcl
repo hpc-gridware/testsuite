@@ -671,6 +671,8 @@ proc mod_queue_state { queuelist state } {
 #
 #  INPUTS
 #     queue - name of the queue
+#     qstat_output_var - if given, the name of a variable which will return the output
+#                        of the qstat command called to get the queue state
 #
 #  RESULT
 #     The return value can contain more than one state. Here is a list of possible
@@ -687,8 +689,12 @@ proc mod_queue_state { queuelist state } {
 #     E(rror)
 #
 #*******************************
-proc get_queue_state { queue_name } {
+proc get_queue_state {queue_name {qstat_output_var ""}} {
   get_current_cluster_config_array ts_config
+
+   if {$qstat_output_var ne ""} {
+      upvar $qstat_output_var result
+   }
 
   # resolve the queue name
   set queue [resolve_queue $queue_name 0]

@@ -302,9 +302,14 @@ proc issue_check_unsuspended_queue {} {
    wait_for_load_from_all_queues
 
    # check queue state of b.q
-   set state [get_queue_state $bq]
-   if {$state != ""} {
-      ts_log_severe "Queue b.q is not in state running, it is in state $state"
+   # @todo CS-1597 load values are spooled, so wait_for_load_from_all_queues returned immediately
+   if {0} {
+      set state [get_queue_state $bq]
+      if {$state != ""} {
+         ts_log_severe "Queue b.q is not in state running, it is in state $state"
+      }
+   } else {
+      wait_for_queue_state $bq "" 60
    }
 
    # check state state of job
@@ -367,15 +372,25 @@ proc issue_check_unsuspended_queue_with_more_slots {} {
    wait_for_load_from_all_queues
 
    # check queue state of b.q
-   set state [get_queue_state $bq]
-   if {$state != ""} {
-      ts_log_severe "Queue b.q is not in state running, it is in state $state"
+   # @todo CS-1597 load values are spooled, so wait_for_load_from_all_queues returned immediately
+   if {0} {
+      set state [get_queue_state $bq qstat_output]
+      if {$state != ""} {
+         ts_log_severe "Queue b.q is not in state running, it is in state $state\n$qstat_output"
+      }
+   } else {
+      wait_for_queue_state $bq "" 60
    }
 
    # check queue state of a.q
-   set state [get_queue_state $aq]
-   if {$state != ""} {
-      ts_log_severe "Queue a.q is not in state running, it is in state $state"
+   # @todo CS-1597 load values are spooled, so wait_for_load_from_all_queues returned immediately
+   if {0} {
+      set state [get_queue_state $aq qstat_output]
+      if {$state != ""} {
+         ts_log_severe "Queue a.q is not in state running, it is in state $state\n$qstat_output"
+      }
+   } else {
+      wait_for_queue_state $aq "" 60
    }
 
    # check if both jobs are running

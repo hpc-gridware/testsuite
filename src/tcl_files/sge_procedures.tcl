@@ -3514,8 +3514,16 @@ proc wait_for_queue_state {queue state wait_timeout} {
       ts_log_progress
       after 500
       set q_state [get_queue_state $queue]
-      if {[string first $state $q_state] >= 0} {
-         return $q_state
+      # we might want to wait for state "" = no special state = queue is running
+      # need to handle this special case as we cannot pass "" into string first
+      if {$state eq ""} {
+         if {$q_state eq ""} {
+            return $q_state
+         }
+      } else {
+         if {[string first $state $q_state] >= 0} {
+            return $q_state
+         }
       }
       if {[clock seconds] > $my_timeout} {
          set qstat_output [start_sge_bin "qstat" "-f -q $queue"]
