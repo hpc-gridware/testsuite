@@ -3766,3 +3766,39 @@ proc host_conf_add_host_from_template {host_template_var} {
    return $ret
 }
 
+## @brief return hosts with massive uid/gid range
+#
+# @return list of hostnames
+#
+proc host_conf_select_ehost_with_massive_uid_gid {} {
+   get_current_cluster_config_array ts_config
+
+   # @todo: we should add a TS host attribute to mark host that provide a huge amount of users and groups
+   set wanted_hosts {"ce-8-lx-amd64.*" "v01702.*"}
+
+   # seach wanted hosts in the list of available hosts
+   set selected_hosts {}
+   get_exechost_list exec_hosts
+
+   puts $exec_hosts
+
+   foreach host $exec_hosts {
+      foreach pattern $wanted_hosts {
+        if {[string match $pattern $host]} {
+            lappend selected_hosts $host
+            break
+        }
+      }
+   }
+   return $selected_hosts
+}
+
+## @brief return user with massive supplementary groups
+#
+# @param ehost  host on which the user should exist
+#
+proc host_conf_get_user_with_massive_supplementary_groups {ehost} {
+   # user might be different per host
+   return "usr10000"
+}
+
