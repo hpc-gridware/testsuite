@@ -374,3 +374,74 @@ proc get_hardware_node_stats {internal_topo_string array_name} {
    }
 }
 
+##
+# @brief Setup host slots for binding tests
+#
+# With the binding improvements in OCS/GCS 9.1.0 the slot capacity of exec hosts
+# is always set to the number of cores. Some tests require more slots, so this function
+# sets the slot capacity to a high value (1000) for the specified hosts.
+# The queue slots are usually already set to 10 times the number of cores, or are set
+# by the tests to whatever they need.
+#
+# The original complex_values of the hosts are backed up in the specified array variable
+# for later restore via cleanup_host_slots_for_binding.
+#
+# @param hosts List of hostnames to modify (default: all exec hosts)
+# @param backup_var Name of the array variable to store the backup (default: host_slots_for_binding_backup)
+# @see cleanup_host_slots_for_binding
+proc setup_host_slots_for_binding {{hosts ""} {backup_var "host_slots_for_binding_backup"}} {
+   get_current_cluster_config_array ts_config
+
+   # beginning with 9.1.0 a slot capacity is set to the number of cores for every exec host
+   # in tests we sometimes need more slots, set them to a high value
+   if {[is_version_in_range "9.1.0"]} {
+      # we backup the complex values of all hosts for later restore
+      upvar $backup_var backup
+
+      # if no host are given then modify *all* hosts
+      if {$hosts eq ""} {
+         set hosts $ts_config(execd_nodes)
+      }
+
+      foreach host $hosts {
+         unset -nocomplain eh_backup eh
+         # backup the existing complex_values
+         get_exechost eh_backup $host
+         set backup($host) $eh_backup(complex_values)
+
+         # set the new complex values
+         add_or_replace_array_param eh eh_backup "complex_values" "slots" 1000
+         set_exechost eh $host
+      }
+   }
+}
+
+##
+# @brief Cleanup host slots for binding tests
+#
+# Restores the complex_values of the hosts modified by setup_host_slots_for_binding.
+# The backup is taken from the specified array variable.
+#
+# @param backup_var Name of the array variable containing the backup (default: host_slots_for_binding_backup)
+# @param unset_backup_var If set to 1, the backup variable is unset after restore (default: 1)
+# @see setup_host_slots_for_binding
+proc cleanup_host_slots_for_binding {{backup_var "host_slots_for_binding_backup"} {unset_backup_var 1}} {
+   get_current_cluster_config_array ts_config
+
+   if {[is_version_in_range "9.1.0"]} {
+      upvar $backup_var backup
+
+      # we restore the hosts for which we have a backup
+      foreach host [array names backup] {
+         unset -nocomplain eh
+         set eh(complex_values) $backup($host)
+         set_exechost eh $host
+      }
+
+      # optionally unset the backup array
+      if {$unset_backup_var} {
+         unset -nocomplain $backup_var
+      }
+   }
+}
+

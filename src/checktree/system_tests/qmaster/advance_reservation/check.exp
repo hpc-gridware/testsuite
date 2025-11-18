@@ -27,17 +27,17 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
@@ -48,7 +48,7 @@ set check_category        "AR PARALLEL RESERVATION SCHEDULER VERIFIED"
 set check_description(0)  "advance reservation constistancy checks"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function advance_reservation_setup
@@ -68,23 +68,14 @@ lappend check_functions "test_ar_access_list"
 lappend check_functions "test_job_runtime_limit"
 lappend check_functions "test_masterq"
 
-global pe_name1 pe_name2
-global ar_name1 ar_name2
-global queue_name1 queue_name2
-global ckpt_name1 ckpt_name2
-global cal_name1 cal_name2
-global userset_name1 userset_name2
-global complex_name1 complex_name2 gr_cplx
-global test_host default_args
-
 # -------- local test procedures: initialization------------------------------
 
 proc advance_reservation_setup {} {
    global ts_config
    global queue_name1 queue_name2
    global complex_name1 complex_name2 gr_cplx
-   global test_host 
-   global schedd_conf CHECK_JOB_OUTPUT_DIR
+   global test_host
+   global CHECK_JOB_OUTPUT_DIR
    global default_args
    global pe_name1 pe_name2
    global ckpt_name1 ckpt_name2
@@ -92,6 +83,7 @@ proc advance_reservation_setup {} {
    global userset_name1 userset_name2
    global ar_name1 ar_name2
    global advance_reservation_complex_backup
+   global advance_reservation_host_backup
 
    set pe_name1 "pe_with_conflict"
    set pe_name2 "pe_without_conflict"
@@ -110,7 +102,6 @@ proc advance_reservation_setup {} {
    set gr_cplx "graphics"
 
    get_complex advance_reservation_complex_backup
-   get_schedd_config schedd_conf
    set test_host [host_conf_get_suited_hosts]
 
    set queue_settings(slots) 10
@@ -132,6 +123,12 @@ proc advance_reservation_setup {} {
 
    # set default jobargs
    set default_args "-o $CHECK_JOB_OUTPUT_DIR -e $CHECK_JOB_OUTPUT_DIR $ts_config(product_root)/examples/jobs/sleeper.sh 60"
+
+   # backup the test host
+   get_exechost advance_reservation_host_backup $test_host
+
+   # beginning with 9.1.0 we need to increase slots on host level
+   setup_host_slots_for_binding $test_host
 }
 
 proc advance_reservation_cleanup {} {
@@ -144,10 +141,11 @@ proc advance_reservation_cleanup {} {
    global queue_name1 queue_name2 gr_cplx
    global complex_name1 complex_name2
    global test_host
-   global schedd_conf
    global advance_reservation_complex_backup
+   global advance_reservation_host_backup
 
-   mod_schedd_config schedd_conf
+   # in check functions we modify the scheduler config - restore it
+   reset_schedd_config
 
    delete_all_jobs
    wait_for_end_of_all_jobs
@@ -169,11 +167,24 @@ proc advance_reservation_cleanup {} {
    del_access_list $userset_name1 "" "" 0
    del_access_list $userset_name2 "" "" 0
 
-   set host_config(complex_values) "NONE"
-   set_exechost host_config $test_host
+   cleanup_host_slots_for_binding
 
+   # restore the test host
+   set_exechost advance_reservation_host_backup $test_host
+
+   # reset the complex
    reset_complex advance_reservation_complex_backup
-   unset advance_reservation_complex_backup
+
+   # remove global variables
+   unset -nocomplain pe_name1 pe_name2
+   unset -nocomplain ckpt_name1 ckpt_name2
+   unset -nocomplain cal_name1 cal_name2
+   unset -nocomplain userset_name1 userset_name2
+   unset -nocomplain ar_name1 ar_name2
+   unset -nocomplain queue_name1 queue_name2 gr_cplx
+   unset -nocomplain complex_name1 complex_name2
+   unset -nocomplain test_host
+   unset -nocomplain advance_reservation_complex_backup advance_reservation_host_backup
 }
 
 
@@ -194,7 +205,7 @@ proc test_pe {} {
    set queue_settings(pe_list)          "$pe_name2"
    mod_queue $queue_name2 "" queue_settings
 
-   set queue_settings(pe_list) "mytestpe" 
+   set queue_settings(pe_list) "mytestpe"
    set pe_settings(slots) "1"
 
    # Submit advance reservation with queue1 AND pe1 request
@@ -215,11 +226,11 @@ proc test_pe {} {
    }
 
    # Try to lower pe_slots. Should be allowed for queue2 but not for queue1
-   set result [mod_pe $pe_name1 pe_settings 1 "" "" 0] 
+   set result [mod_pe $pe_name1 pe_settings 1 "" "" 0]
    if {$result != -8} {
       ts_log_severe "lowering pe_slots below reserved slots is not rejected"
    }
-   set result [mod_pe $pe_name2 pe_settings] 
+   set result [mod_pe $pe_name2 pe_settings]
    if {$result != 0} {
       ts_log_severe "lowering pe_slots is wrongly rejected"
    }
@@ -232,7 +243,7 @@ proc test_pe {} {
 
    # Now remove advance reservation and try it again
    start_sge_bin "qrdel" "$ar_name1"
-   set result [mod_pe $pe_name1 pe_settings] 
+   set result [mod_pe $pe_name1 pe_settings]
    if {$result != 0} {
       ts_log_severe "lowering pe_slots below reserved slots is not rejected"
    }
@@ -265,7 +276,7 @@ proc test_ckpt {} {
    set queue_settings(ckpt_list)        "$ckpt_name2"
    mod_queue $queue_name2 "" queue_settings
 
-   set queue_settings(ckpt_list) "NONE" 
+   set queue_settings(ckpt_list) "NONE"
 
    # Submit advance reservation with queue1 AND ckpt1 request
    set output [start_sge_bin "qrsub" "-q $queue_name1 -N $ar_name1 -ckpt $ckpt_name1 -d 36000"]
@@ -326,7 +337,7 @@ proc test_cal {} {
    set queue_settings(calendar)         "$cal_name2"
    mod_queue $queue_name2 "" queue_settings
 
-   set queue_settings(calendar) "NONE" 
+   set queue_settings(calendar) "NONE"
 
    # Submit advance reservation to queue1
    set output [start_sge_bin "qrsub" "-q $queue_name1 -N $ar_name1 -d 36000"]
@@ -395,8 +406,8 @@ proc test_userlist {} {
    set queue_settings(user_lists)       "$userset_name2"
    mod_queue $queue_name2 "" queue_settings
 
-   set queue_settings(user_lists) "NONE" 
-   set queue_settings(xuser_lists) "$userset_name1" 
+   set queue_settings(user_lists) "NONE"
+   set queue_settings(xuser_lists) "$userset_name1"
 
    set userset_settings(entries) "$CHECK_USER"
 
@@ -445,7 +456,7 @@ proc test_userlist {} {
    set queue_settings(xuser_lists)      "NONE"
    mod_queue $queue_name1 "" queue_settings
    mod_queue $queue_name2 "" queue_settings
-   
+
    del_access_list $userset_name1
    del_access_list $userset_name2
 }
@@ -457,67 +468,95 @@ proc test_complexes {} {
    global queue_name1 queue_name2
    global test_host
 
-   # Test setup
+   set ok 1
 
-   set host_config(complex_values) "$complex_name1=10,$complex_name2=10"
+   # Test setup
+   # backup the exec host
+   get_exechost host_backup $test_host
+   add_or_replace_array_param host_config host_backup "complex_values" $complex_name1 10
+   add_or_replace_array_param host_config host_config "complex_values" $complex_name2 10
    set_exechost host_config $test_host
 
-   # Submit advance reservation with queue1 AND 5 complex1 requests 
+   # Submit advance reservation with queue1 AND 5 complex1 requests
    set output [start_sge_bin "qrsub" "-q $queue_name1 -N $ar_name1 -pe mytestpe 5 -l $complex_name1=1 -d 36000"]
    if {$prg_exit_state != 0} {
-      ts_log_fine "qrsub: $output"
+      ts_log_severe "qrsub failed:\n$output"
+      set ok 0
    }
+
    # Submit advance reservation with queue2 and NO complex request
    # start_sge_bin "qrsub" "-q $queue_name2 -N $ar_name2 -pe mytestpe 5 -d 36000"
 
    # Try to lower queue1 slot count. Should be rejected because 5 slots are reserved
-   set queue_settings(slots) "4"
-   set result [mod_queue $queue_name1 "" queue_settings 1 "" "" 0]
-   if {$result != -10} {
-      ts_log_severe "lowering queue slots for reserved queue is not rejected(1)"
+   if {$ok} {
+      set queue_settings(slots) "4"
+      set result [mod_queue $queue_name1 "" queue_settings 1 "" "" 0]
+      if {$result != -10} {
+         ts_log_severe "lowering queue slots for reserved queue is not rejected(1)"
+         set ok 0
+      }
    }
-   set result [replace_attr queue slots "4" $queue_name1 1 "" "" 0]
-   if {$result != -4} {
-      ts_log_severe "lowering queue slots for reserved queue is not rejected(2)"
+   if {$ok} {
+      set result [replace_attr queue slots "4" $queue_name1 1 "" "" 0]
+      if {$result != -4} {
+         ts_log_severe "lowering queue slots for reserved queue is not rejected(2)"
+         set ok 0
+      }
    }
 
    # Lower complex1 to 5, should be allowed
-   set host_config(complex_values) "$complex_name1=5,$complex_name2=10"
-   set result [set_exechost host_config $test_host]
-   if {$result != 0} {
-      ts_log_severe "lowering reserved host consumable is wrongly rejected"
+   if {$ok} {
+      add_or_replace_array_param host_config host_config "complex_values" $complex_name1 5
+      add_or_replace_array_param host_config host_config "complex_values" $complex_name2 10
+      set result [set_exechost host_config $test_host]
+      if {$result != 0} {
+         ts_log_severe "lowering reserved host consumable is wrongly rejected"
+         set ok 0
+      }
    }
    # Lower complex2 to 1, should be allowed
-   set host_config(complex_values) "$complex_name1=5,$complex_name2=1"
-   set result [set_exechost host_config $test_host]
-   if {$result != 0} {
-      ts_log_severe "lowering unreserved host consumable is wrongly rejected"
+   if {$ok} {
+      add_or_replace_array_param host_config host_config "complex_values" $complex_name1 5
+      add_or_replace_array_param host_config host_config "complex_values" $complex_name2 1
+      set result [set_exechost host_config $test_host]
+      if {$result != 0} {
+         ts_log_severe "lowering unreserved host consumable is wrongly rejected"
+         set ok 0
+      }
    }
 
-   # Lower complex1 to 1, should be rejected 
-   set host_config(complex_values) "$complex_name1=1,$complex_name2=1"
-   set result [set_exechost host_config $test_host 1 "" "" 0]
-   if {$result != -2} {
-      ts_log_severe "lowering consumable smaller than reserved one is not rejected"
+   # Lower complex1 to 1, should be rejected
+   if {$ok} {
+      add_or_replace_array_param host_config host_config "complex_values" $complex_name1 1
+      add_or_replace_array_param host_config host_config "complex_values" $complex_name2 1
+      set result [set_exechost host_config $test_host 1 "" "" 0]
+      if {$result != -2} {
+         ts_log_severe "lowering consumable smaller than reserved one is not rejected"
+         set ok 0
+      }
    }
-   
+
    # Try to lower queue2 slot count. Should be allowed
-   set queue_settings(slots) "4"
-   set result [mod_queue $queue_name2 "" queue_settings 1 "" "" 0]
-   if {$result != 0} {
-      ts_log_severe "lowering queue slots on unreserved queue is wrongly rejected"
+   if {$ok} {
+      set queue_settings(slots) "4"
+      set result [mod_queue $queue_name2 "" queue_settings 1 "" "" 0]
+      if {$result != 0} {
+         ts_log_severe "lowering queue slots on unreserved queue is wrongly rejected"
+         set ok 0
+      }
    }
 
-   # Remove advance reservation and try again 
-   start_sge_bin "qrdel" "$ar_name1"
+   # Remove advance reservation and try again
+   start_sge_bin "qrdel" $ar_name1
 
-   # Lower complex1 to 1, should be rejected 
-   set host_config(complex_values) "$complex_name1=1,$complex_name2=1"
+   # Lower complex1 to 1, should succeed as nothing is reserved.
+   add_or_replace_array_param host_config host_config "complex_values" $complex_name1 1
+   add_or_replace_array_param host_config host_config "complex_values" $complex_name2 1
    set result [set_exechost host_config $test_host]
    if {$result != 0} {
       ts_log_severe "lowering unreserved host comsumable is wrongly rejected"
    }
-   # Try to lower queue1 slot count. Should be rejected because 5 slots are reserved
+   # Try to lower queue1 slot count. Should succeed as nothing is reserved.
    set queue_settings(slots) "4"
    set result [mod_queue $queue_name1 "" queue_settings 1 "" "" 0]
    if {$result != 0} {
@@ -530,8 +569,7 @@ proc test_complexes {} {
 
    # Cleanup
    ts_log_fine "doing cleanup"
-   set host_config(complex_values) "NONE"
-   set_exechost host_config $test_host
+   set_exechost host_backup $test_host
 }
 
 proc test_require_more_than_reserved {} {
@@ -542,88 +580,112 @@ proc test_require_more_than_reserved {} {
    global test_host default_args
 
    # Test setup
-   set host_config(complex_values) "$gr_cplx=10"
+   get_exechost host_backup $test_host
+   add_or_replace_array_param host_config host_backup "complex_values" $gr_cplx 10
    set_exechost host_config $test_host
 
    delete_all_ars
 
-   # Submit advance reservation with queue1 AND 5 complex1 requests 
+   set ok 1
+
+   # Submit advance reservation with queue1 AND 5 complex1 requests
    set args "-l '$gr_cplx=2,h_rt=3600' -d 3600"
    set ar_id [submit_ar $args]
    if {$ar_id < 0} {
-      return
+      set ok 0
    }
 
    # Positive tests
-   set args "-ar $ar_id -l $gr_cplx=2,h_rt=100 $default_args"
-   set job_id [submit_job $args]
-   set arch [resolve_arch $test_host]
-
-   # Negative tests 
-   set args "-ar $ar_id -l $gr_cplx=3,h_rt=100 $default_args"
-   set job_id [submit_job $args 0]
-   if {$job_id != -34} {
-      ts_log_severe "error 'no suitable queues' was not shown"
+   if {$ok} {
+      set args "-ar $ar_id -l $gr_cplx=2,h_rt=100 $default_args"
+      set job_id [submit_job $args]
+      set arch [resolve_arch $test_host]
    }
-
-   set args "-ar $ar_id -l $gr_cplx=1,h_rt=10000 $default_args"
-   set job_id [submit_job $args 0]
-   if {$job_id != -35} {
-      ts_log_severe "error 'job duration is longer than duration of AR' was not shown"
-   }
-
-   delete_all_ars
-   # Questionable behavior RESTRING
-   set args "-l 'a=$arch' -d 3600"
-   set ar_id [submit_ar $args]
-   if {$ar_id < 0} {
-      return
-   } 
-
-   set args "-ar $ar_id -l 'a=$arch' $default_args"
-   set job_id [submit_job $args]
-
-   set args "-ar $ar_id -l 'a=$arch*' $default_args"
-   set job_id [submit_job $args]
-
-   set args "-l 'a=$arch*' -d 3600"
-   set ar_id [submit_ar $args]
-   if {$ar_id < 0} {
-      return
-   }
-   set args "-ar $ar_id -l 'a=bla' $default_args"
-   set job_id [submit_job $args 0]
-   if {$job_id != -34} {
-      ts_log_severe "error  'no suitable queues' was not shown"
-      return
-   }
-    
-   delete_all_ars
-   # Submit advance reservation with 6 consumable graphics 
-   set args "-pe mytestpe 3 -l $gr_cplx=2 -d 1000"
-   set ar_id [submit_ar $args]
-   if {$ar_id < 0} {
-      return
-   }
-
-   # Positive tests
-   set args "-ar $ar_id -pe mytestpe 1 -l $gr_cplx=2 $default_args"
-   set job_id [submit_job $args]
-
-   set args "-ar $ar_id -pe mytestpe 3 -l $gr_cplx=2 $default_args"
-   set job_id [submit_job $args]
 
    # Negative tests
-   set args "-ar $ar_id -pe mytestpe 4 -l $gr_cplx=2 $default_args"
-   set job_id [submit_job $args 0]
-   if {$job_id != -34} {
-      ts_log_severe "error 'no suitable queues' was not shown"
+   if {$ok} {
+      set args "-ar $ar_id -l $gr_cplx=3,h_rt=100 $default_args"
+      set job_id [submit_job $args 0]
+      if {$job_id != -34} {
+         ts_log_severe "error 'no suitable queues' was not shown"
+      }
+
+      set args "-ar $ar_id -l $gr_cplx=1,h_rt=10000 $default_args"
+      set job_id [submit_job $args 0]
+      if {$job_id != -35} {
+         ts_log_severe "error 'job duration is longer than duration of AR' was not shown"
+      }
+
+      delete_all_ars
    }
 
-   set args "-ar $ar_id -pe mytestpe 2 -l $gr_cplx=4 $default_args"
-   set job_id [submit_job $args 0]
-   if {$job_id != -34} {
-      ts_log_severe "error 'no suitable queues' was not shown"
+   # Questionable behavior RESTRING
+   if {$ok} {
+      set args "-l 'a=$arch' -d 3600"
+      set ar_id [submit_ar $args]
+      if {$ar_id < 0} {
+         set ok 0
+      }
+   }
+
+   if {$ok} {
+      set args "-ar $ar_id -l 'a=$arch' $default_args"
+      set job_id [submit_job $args]
+
+      set args "-ar $ar_id -l 'a=$arch*' $default_args"
+      set job_id [submit_job $args]
+   }
+
+   if {$ok} {
+      set args "-l 'a=$arch*' -d 3600"
+      set ar_id [submit_ar $args]
+      if {$ar_id < 0} {
+         set ok 0
+      }
+   }
+
+   if {$ok} {
+      set args "-ar $ar_id -l 'a=bla' $default_args"
+      set job_id [submit_job $args 0]
+      if {$job_id != -34} {
+         ts_log_severe "error  'no suitable queues' was not shown"
+         set ok 0
+      }
+   }
+
+   delete_all_ars
+
+   # Submit advance reservation with 6 consumable graphics
+   if {$ok} {
+      set args "-pe mytestpe 3 -l $gr_cplx=2 -d 1000"
+      set ar_id [submit_ar $args]
+      if {$ar_id < 0} {
+         set ok 0
+      }
+   }
+
+   # Positive tests
+   if {$ok} {
+      set args "-ar $ar_id -pe mytestpe 1 -l $gr_cplx=2 $default_args"
+      set job_id [submit_job $args]
+
+      set args "-ar $ar_id -pe mytestpe 3 -l $gr_cplx=2 $default_args"
+      set job_id [submit_job $args]
+   }
+
+   # Negative tests
+   if {$ok} {
+      set args "-ar $ar_id -pe mytestpe 4 -l $gr_cplx=2 $default_args"
+      set job_id [submit_job $args 0]
+      if {$job_id != -34} {
+         ts_log_severe "error 'no suitable queues' was not shown"
+      }
+
+      set args "-ar $ar_id -pe mytestpe 2 -l $gr_cplx=4 $default_args"
+      set job_id [submit_job $args 0]
+      if {$job_id != -34} {
+         ts_log_severe "error 'no suitable queues' was not shown"
+      }
    }
 }
 
@@ -639,7 +701,7 @@ proc test_changing_ar_id {} {
    set start1 [clock format $then1 -format "%Y%m%d%H%M.%S"]
    set then2 [expr $now + 20000]
    set start2 [clock format $then2 -format "%Y%m%d%H%M.%S"]
-    
+
    # Test setup
    set job_name "chjobr"
 
@@ -680,7 +742,7 @@ proc test_changing_ar_id {} {
 
    # Test setup
    set job_name "chjobp"
-   delete_all_ars   
+   delete_all_ars
 
    set args "-d 3600 -a $start1"
    set ar_id1 [submit_ar $args]
@@ -704,7 +766,7 @@ proc test_changing_ar_id {} {
    set res [wait_for_jobpending $job_id $job_name 300]
    if {$res!=0} {
       ts_log_severe "job is not pending"
-   } 
+   }
 
 	ts_log_fine "change the ar of pending job\nrun qalter -ar $ar_id2 $job_id\n"
    set result1 [start_sge_bin "qalter" "-ar $ar_id2 $job_id" ]
@@ -715,7 +777,7 @@ proc test_changing_ar_id {} {
 
 proc test_waitingjob_future_ar {} {
    global ts_config CHECK_USER
-   global complex_name1 complex_name2 gr_cplx
+   global complex_name1 complex_name2
    global ar_name1 ar_name2
    global queue_name1 queue_name2
    global test_host default_args
@@ -723,10 +785,10 @@ proc test_waitingjob_future_ar {} {
    set now [clock seconds]
    set then [expr $now + 1000]
    set start [clock format $then -format "%Y%m%d%H%M.%S"]
-   
+
    # Test setup
    set ar_name "futurear"
-   delete_all_ars   
+   delete_all_ars
 
    set args "-d 36000 -a $start -N $ar_name"
    set ar_id [submit_ar $args]
@@ -739,7 +801,7 @@ proc test_waitingjob_future_ar {} {
    if {$job_id < 0} {
       return
    }
-   
+
    set res [wait_for_jobstart $job_id $ar_name 30 0]
    if {$res==0} {
       ts_log_severe "job expected to wait is running"
@@ -779,7 +841,7 @@ proc test_ar_access_list {} {
    # 2) test xuser access
    set args "-u \!$CHECK_FIRST_FOREIGN_SYSTEM_USER -d 36000"
    set ar_id [submit_ar $args]
-     
+
    set job_id [submit_job "-ar $ar_id $default_args" 1]
    if {$job_id < 0} {
       ts_log_severe "(2) job was wrongly rejected"
@@ -817,7 +879,7 @@ proc test_ar_access_list {} {
    # 4) test xacl access
    set args "-u \!@$userset_name1 -d 36000"
    set ar_id [submit_ar $args]
-     
+
    set job_id [submit_job "-ar $ar_id $default_args"]
    if {$job_id < 0} {
       ts_log_severe "(2) job was wrongly rejected"
@@ -843,7 +905,7 @@ proc test_job_runtime_limit {} {
    set schedconf(params) "DURATION_OFFSET=120"
    mod_schedd_config schedconf
 
-   # 1) 
+   # 1)
    # job should run at least 20 seconds and should be killed by execd after
    # 30 seconds (ar_duration - duration_offset)
    # to be safe we wait 10 seconds longer
@@ -854,7 +916,7 @@ proc test_job_runtime_limit {} {
    set run_result [is_job_running $job_id "leeper"]
    if {$run_result != 1} {
        ts_log_severe "job was wrongly killed or not scheduled"
-   } else { 
+   } else {
       wait_for_job_end $job_id 20
    }
    delete_ar $ar_id
@@ -869,13 +931,12 @@ proc test_job_runtime_limit {} {
    set run_result [is_job_running $job_id "leeper"]
    if {$run_result != 1} {
        ts_log_severe "job was wrongly killed or not scheduled"
-   } else { 
+   } else {
       wait_for_job_end $job_id 20
    }
    delete_ar $ar_id
 
-   set schedconf(params) "none"
-   mod_schedd_config schedconf
+   reset_schedd_config
 
    delete_all_ars
 }
@@ -917,6 +978,6 @@ proc test_masterq {} {
       delete_job $job_id
    }
 
-   # Test cleanup 
+   # Test cleanup
    delete_ar $ar_id
 }
