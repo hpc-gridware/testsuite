@@ -5275,6 +5275,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
 
    # remove temporary files and directories created by the test
    delete_temp_script_files
+   clear_job_output_dir
 
    if {$immediate_return != 0} {
       set CHECK_TEST_RUNNING 0

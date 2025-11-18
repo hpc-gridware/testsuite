@@ -5292,3 +5292,34 @@ proc delete_temp_script_files {{config_file ""}} {
    }
 }
 
+##
+# @brief clear the job output directory
+#
+# Testsuite has a global job output directory which is used by various tests
+# to store job output and error files.
+# Some tests delete the files which were created, others do not.
+# This function removes all files and all subdirectories in the job output directory.
+# It is called after every check (in run_test)
+proc clear_job_output_dir {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_JOB_OUTPUT_DIR
+
+   # clear job output dir on the file server, if possible, else on the master host
+   set host [fs_config_get_server_for_path $CHECK_JOB_OUTPUT_DIR]
+   if {$host eq ""} {
+      set host $ts_config(master_host)
+   }
+
+   analyze_directory_structure $host $CHECK_USER $CHECK_JOB_OUTPUT_DIR dirs files permissions
+   foreach filename $files {
+      ts_log_fine "==> deleting file $filename"
+      delete_remote_file $host $CHECK_USER "$CHECK_JOB_OUTPUT_DIR/$filename"
+   }
+   foreach dir $dirs {
+      if {$dir ne "." && $dir ne ".."} {
+         ts_log_fine "==> deleting directory $dir"
+         remote_delete_directory $host "$CHECK_JOB_OUTPUT_DIR/$dir"
+      }
+   }
+}
+
