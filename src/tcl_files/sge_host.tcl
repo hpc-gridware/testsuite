@@ -945,3 +945,41 @@ proc get_shell_fd_limit_for_host { host user {mode "soft"} } {
    return $ret_val
 }
 
+##
+# @brief Backup complex_values of a list of hosts
+#
+# This procedure backs up the complex_values attribute of a list of hosts.
+# The backup is stored in an associative array passed as argument,
+# where the host names are the keys and the complex_values are the values.
+#
+# @param hostlist List of hosts
+# @param backup_var Name of array variable to store the backup
+# @see host_restore_complex_values
+proc host_backup_complex_values {hostlist backup_var} {
+   upvar $backup_var backup
+
+   foreach host $hostlist {
+      get_exechost eh_backup $host
+      set backup($host) $eh_backup(complex_values)
+   }
+}
+
+##
+# @brief Restore complex_values of a list of hosts from backup
+#
+# The function expects an associative array as argument,
+# where the host names are the keys and the complex_values are the values.
+# It restores the complex_values attribute of each host.
+#
+# @param backup_var Name of array variable containing the backup
+# @see host_backup_complex_values
+proc host_restore_complex_values {backup_var} {
+   upvar $backup_var backup
+
+   foreach host [array names backup] {
+      unset -nocomplain eh_restore
+      set eh_restore(complex_values) $backup($host)
+      set_exechost eh_restore $host
+   }
+}
+

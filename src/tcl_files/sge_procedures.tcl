@@ -3600,7 +3600,7 @@ proc shutdown_execd {host_list {soft 0} {timeout 120}} {
          }
          set result [start_sge_bin "qconf" "$option $host" $ts_config(master_host) $CHECK_USER]
          if {$prg_exit_state != 0} {
-            ts_log_fine "qconf -ke $host returned $prg_exit_state, hard killing execd"
+            ts_log_fine "qconf -ke $host returned $prg_exit_state, hard killing execd:\n$result"
             shutdown_system_daemon $host execd
          }
       }

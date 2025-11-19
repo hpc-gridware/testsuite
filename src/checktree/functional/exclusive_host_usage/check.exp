@@ -74,7 +74,7 @@ lappend check_functions "exclusive_job_consumables"
 proc exclusive_host_usage_setup {} {
    global ts_config CHECK_FIRST_FOREIGN_SYSTEM_USER
    global exclusive_hosts
-   global exclusive_host_usage_complex_backup
+   global exclusive_host_usage_complex_backup exclusive_host_usage_host_backup
 
    if {$ts_config(source_dir) == "none"} {
       ts_log_config "source directory is set to \"none\" - cannot run test"
@@ -92,9 +92,19 @@ proc exclusive_host_usage_setup {} {
    set_complex tmp_complex
 
    # set host complex attributes
-   set host_config(complex_values) "excl=true,jexcl=true"
-   set_exechost host_config [lindex $exclusive_hosts 0]
-   set_exechost host_config [lindex $exclusive_hosts 1]
+   set hosts [concat [lindex $exclusive_hosts 0] [lindex $exclusive_hosts 1]]
+   foreach host $hosts {
+      # backup existing complex values
+      get_exechost eh_backup $host
+      set exclusive_host_usage_host_backup($host) $eh_backup(complex_values)
+
+      # set new ones
+      add_or_replace_array_param host_config exclusive_host_usage_host_backup "complex_values" "excl" "true"
+      add_or_replace_array_param host_config host_config "complex_values" "jexcl" "true"
+      set_exechost host_config $host
+   }
+   # beginning with 9.1.0 we need to increase slots on host level
+   setup_host_slots_for_binding $hosts
 
    # add pes
    set pe(slots)             "100"
@@ -128,7 +138,7 @@ proc exclusive_host_usage_setup {} {
 
 proc exclusive_host_usage_cleanup {} {
    global ts_config
-   global exclusive_host_usage_complex_backup
+   global exclusive_host_usage_complex_backup exclusive_host_usage_host_backup
    global exclusive_hosts
 
    delete_all_jobs
@@ -147,21 +157,16 @@ proc exclusive_host_usage_cleanup {} {
    del_pe "round_robin"
    del_pe "fill_up"
 
-   # remove host complex attributes
-   set host_config(complex_values) "NONE"
-   set_exechost host_config [lindex $exclusive_hosts 0]
-   set_exechost host_config [lindex $exclusive_hosts 1]
+   # restore exec hosts
+   cleanup_host_slots_for_binding
+   host_restore_complex_values exclusive_host_usage_host_backup
 
    # remove exclusive complex
    reset_complex exclusive_host_usage_complex_backup
    unset exclusive_host_usage_complex_backup
 
    # unset our test's global variables
-   foreach var "exclusive_hosts" {
-      if {[info exists $var]} {
-         unset $var
-      }
-   }
+   unset -nocomplain exclusive_hosts exclusive_host_usage_complex_backup exclusive_host_usage_host_backup
 }
 
 proc do_exclusive_usage_test { first_is_exclusive {pe_name ""} {rqs_test 0} } {
