@@ -5312,12 +5312,10 @@ proc clear_job_output_dir {} {
 
    analyze_directory_structure $host $CHECK_USER $CHECK_JOB_OUTPUT_DIR dirs files permissions
    foreach filename $files {
-      ts_log_fine "==> deleting file $filename"
-      delete_remote_file $host $CHECK_USER "$CHECK_JOB_OUTPUT_DIR/$filename"
+      delete_remote_file $host $permissions($filename,owner) "$CHECK_JOB_OUTPUT_DIR/$filename"
    }
    foreach dir $dirs {
       if {$dir ne "." && $dir ne ".."} {
-         ts_log_fine "==> deleting directory $dir"
          remote_delete_directory $host "$CHECK_JOB_OUTPUT_DIR/$dir"
       }
    }
