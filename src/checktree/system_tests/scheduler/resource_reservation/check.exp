@@ -66,10 +66,9 @@ lappend check_functions "resource_reservation_basic"
 # -------- local test procedures: initialization ------------------------------
 
 proc resource_reservation_setup {} {
-   global rr_queue_name rr_cal_queue_name rr_h_vmem_complex
-   global rr_host
    global ts_config
-   global resource_reservation_complex_backup
+   global rr_queue_name rr_cal_queue_name rr_h_vmem_complex rr_host
+   global resource_reservation_complex_backup resource_reservation_host_backup
 
    ts_log_fine "resource_reservation_setup"
 
@@ -119,22 +118,25 @@ proc resource_reservation_setup {} {
    # enable / disable queues needed for the test
    disable_queue "all.q"
 
-#-----
+   # set host complex_values
+   # for 9.1.0 and higher we need to set slots
+   setup_host_slots_for_binding
 
    # set global variable
    set my_host_config(complex_values) "license=10,license2=10"
    set_exechost my_host_config "global"
 
    # set host variable
-   set my_host_config(complex_values) "h_vmem=20G"
-   set_exechost my_host_config $rr_host
+   get_exechost eh_backup $rr_host
+   set resource_reservation_host_backup($rr_host) $eh_backup(complex_values)
+   add_or_replace_array_param eh eh_backup "complex_values" "h_vmem" "20G"
+   set_exechost eh $rr_host
 }
 
 proc resource_reservation_level_setup {} {
-   global rr_queue_name rr_cal_queue_name rr_h_vmem_complex
-   global rr_host
    global ts_config
    global CHECK_ACT_LEVEL
+   global rr_queue_name rr_cal_queue_name rr_h_vmem_complex rr_host
 
    switch -- $CHECK_ACT_LEVEL {
       2 {
@@ -261,10 +263,10 @@ proc resource_reservation_level_setup {} {
 }
 
 proc resource_reservation_cleanup {  } {
-   global rr_h_vmem_complex
    global ts_config
+   global rr_h_vmem_complex
    global rr_host
-   global resource_reservation_complex_backup
+   global resource_reservation_complex_backup resource_reservation_host_backup
 
    # reset the scheduler configuration
    reset_schedd_config
@@ -274,17 +276,19 @@ proc resource_reservation_cleanup {  } {
    set_exechost my_host_config "global"
 
    # set host variable
-   set my_host_config(complex_values) "NONE"
-   set_exechost my_host_config $rr_host
+   host_restore_complex_values resource_reservation_host_backup
+
+   cleanup_host_slots_for_binding
 
    # remove complex attributes
    reset_complex resource_reservation_complex_backup
    unset resource_reservation_complex_backup
 
    # enable queues
-    enable_queue "all.q"
+   enable_queue "all.q"
 
    unset -nocomplain rr_h_vmem_complex rr_host global resource_reservation_complex_backup
+   unset -nocomplain resource_reservation_host_backup
 }
 
 proc resource_reservation_level_cleanup {} {

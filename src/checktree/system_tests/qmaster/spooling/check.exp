@@ -77,6 +77,9 @@ proc qmaster_spooling_setup {} {
    } else {
       set qmaster_spooling_dateformat "%m/%d/%Y %H:%M:%S"
    }
+
+   # beginning with 9.1.0 we need to setup host slots for binding
+   setup_host_slots_for_binding
 }
 
 proc qmaster_spooling_cleanup {} {
@@ -89,7 +92,10 @@ proc qmaster_spooling_cleanup {} {
          del_rqs $elem
       }
    }
+
    delete_all_ars
+
+   cleanup_host_slots_for_binding
 
    unset -nocomplain qmaster_spooling_dateformat
 }
