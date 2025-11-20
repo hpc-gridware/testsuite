@@ -107,6 +107,9 @@ proc qdel_setup {} {
    set q_param(slots)                 "50"
 
    add_queue $qdel_queue $qdel_host q_param
+
+   # beginning with 9.1.0 we have slots on host level and need a higher slot count
+   setup_host_slots_for_binding
 }
 
 proc qdel_setup_level {} {
@@ -166,6 +169,8 @@ proc qdel_cleanup {} {
    wait_for_end_of_all_jobs
 
    del_queue $qdel_queue $qdel_host 0 1
+
+   cleanup_host_slots_for_binding
 
    unset -nocomplain qdel_queue qdel_host hold_state pending_state
 }
@@ -340,7 +345,7 @@ proc submit_testjobs {{user ""} {additional_job_args ""} {testjob_count "4"} {ar
       if {$pending_state == 0} {
          # wait for all job to run
          foreach elem $joblist {
-            wait_for_jobstart  $elem $my_job_name 400
+            wait_for_jobstart $elem $my_job_name 10
          }
 
          if {$hold_state == 1} {
@@ -352,7 +357,7 @@ proc submit_testjobs {{user ""} {additional_job_args ""} {testjob_count "4"} {ar
       } else {
          # wait for all job to get in pending state
          foreach elem $joblist {
-            wait_for_jobpending $elem $my_job_name 400
+            wait_for_jobpending $elem $my_job_name 10
          }
       }
    }
