@@ -3774,7 +3774,7 @@ proc host_conf_select_ehost_with_massive_uid_gid {} {
    get_current_cluster_config_array ts_config
 
    # @todo: we should add a TS host attribute to mark host that provide a huge amount of users and groups
-   set wanted_hosts {"ce-8-lx-amd64.*" "v01702.*"}
+   set wanted_hosts {"ro8-0-lx-amd64*" "v01702*"}
 
    # seach wanted hosts in the list of available hosts
    set selected_hosts {}
