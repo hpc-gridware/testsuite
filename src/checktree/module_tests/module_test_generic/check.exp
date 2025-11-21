@@ -175,7 +175,10 @@ proc generic_module_tests_run {} {
       ts_log_fine "host $host, arch [resolve_arch $host]"
       foreach module_test $generic_module_tests {
          ts_log_fine "starting $module_test ..."
-         set output [start_test_bin $module_test "" $host $CHECK_USER ret 300]
+
+         # some tests (especially thread related tests) might take very long, so we set a timeout of 10 minutes
+         set time_in_sec 600
+         set output [start_test_bin $module_test "" $host $CHECK_USER ret $time_in_sec]
          if {$ret == 0} {
             ts_log_fine "   => $module_test ok"
             ts_log_fine $output
