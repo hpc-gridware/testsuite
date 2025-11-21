@@ -78,6 +78,8 @@ proc consumable_dec_setup {} {
    set q(pe_list) "test.pe"
    set q(slots) 10
    add_queue "test.q" "@allhosts" q
+
+   setup_host_slots_for_binding
 }
 
 proc consumable_dec_setup_level {} {
@@ -93,6 +95,9 @@ proc consumable_dec_setup_level {} {
          set consumable_dec_instance "global"
          unset -nocomplain consumable_dec_backup
          get_exechost consumable_dec_backup
+         if {[string compare -nocase "NONE" $consumable_dec_backup(complex_values)] != 0} {
+            append complex_values ",$consumable_dec_backup(complex_values)"
+         }
          replace_attr exechost "complex_values" $complex_values $consumable_dec_instance
       }
       1 {
@@ -101,6 +106,9 @@ proc consumable_dec_setup_level {} {
          set consumable_dec_instance [resolve_host [host_conf_get_suited_hosts 1] 1]
          unset -nocomplain consumable_dec_backup
          get_exechost consumable_dec_backup $consumable_dec_instance
+         if {[string compare -nocase "NONE" $consumable_dec_backup(complex_values)] != 0} {
+            append complex_values ",$consumable_dec_backup(complex_values)"
+         }
          replace_attr exechost "complex_values" $complex_values $consumable_dec_instance
       }
       2 {
@@ -109,6 +117,9 @@ proc consumable_dec_setup_level {} {
          set host [resolve_host [host_conf_get_suited_hosts 1] 1]
          set consumable_dec_instance "test.q@${host}"
          get_queue $consumable_dec_instance consumable_dec_backup
+         if {[string compare -nocase "NONE" $consumable_dec_backup(complex_values)] != 0} {
+            append complex_values ",$consumable_dec_backup(complex_values)"
+         }
          replace_attr queue "complex_values" $complex_values $consumable_dec_instance
       }
    }
@@ -145,6 +156,8 @@ proc consumable_dec_cleanup {} {
 
    reset_complex consumable_dec_complex_backup
 
+   cleanup_host_slots_for_binding
+
    unset -nocomplain consumable_dec_complex_backup
 }
 
@@ -170,13 +183,15 @@ proc consumable_dec_check_consumable {name expected_value situation} {
       }
    }
 
-   qstat_F_plain_parse qstat_info $name "" "-q $queue"
+   qstat_F_plain_parse qstat_info $name "" "-q $queue" qstat_output
    #parray qstat_info
 
    set expected_transformed [transform_unit $expected_value]
    set value_transformed [transform_unit $qstat_info($queue,$level:$name)]
    if {$value_transformed != $expected_transformed} {
-      ts_log_severe "$situation: Consumable $name usage on $consumable_dec_instance_type $consumable_dec_instance is $qstat_info($queue,$level:$name), expected $expected_value"
+      set message "$situation: Consumable $name usage on $consumable_dec_instance_type $consumable_dec_instance is $qstat_info($queue,$level:$name), expected $expected_value"
+      append message "\n$qstat_output"
+      ts_log_severe $message
       return 0
    } else {
       ts_log_fine "$situation: Consumable $name usage on $consumable_dec_instance_type $consumable_dec_instance is as expected: $expected_value"

@@ -3012,37 +3012,52 @@ proc qstat_ext_plain_parse { output {param ""} } {
 
 
 
-#                                                             max. column:     |
-#****** parser/qstat_F_plain_parse() ******
+##
+# @brief Parse qstat -F output into assoc. array
 #
-#  NAME
-#     qstat_F_plain_parse -- Parse qstat -F output into assoc. array
+# Parses the output of the qstat -F command and stores the results in an associative array.
+# The function can handle optional parameters to specify which fields to request,
+# the user to run the command as, additional arguments, and a variable to store the raw output.
+# The returned TCL array has the format
+# qstat_output(<qinstance>,<variable>) = <value>
+# where <variable> can contain the domain prefix (e.g., "hl:mem_free").
 #
-#  SYNOPSIS
-#     qstat_F_plain_parse { output {params ""}  }
+# Example:
+# ```tcl
+# Enter expression to evaluate (exit to quit): qstat_F_plain_parse qstat_info "cpu,mem_total,mem_free"
+# Enter expression to evaluate (exit to quit): parray qstat_info
+# qstat_info(all.q@centos-7-amd64-2,arch)          = ulx-amd64
+# qstat_info(all.q@centos-7-amd64-2,hl:cpu)        = 0.000000
+# qstat_info(all.q@centos-7-amd64-2,hl:mem_free)   = 3.500G
+# qstat_info(all.q@centos-7-amd64-2,hl:mem_total)  = 3.700G
+# qstat_info(all.q@centos-7-amd64-2,load_avg)      = 0.01
+# qstat_info(all.q@centos-7-amd64-2,qname)         = all.q@centos-7-amd64-2
+# qstat_info(all.q@centos-7-amd64-2,qtype)         = BIPC
+# qstat_info(all.q@centos-7-amd64-2,resv_slots)    = 0
+# qstat_info(all.q@centos-7-amd64-2,state)         =
+# qstat_info(all.q@centos-7-amd64-2,total_slots)   = 10
+# qstat_info(all.q@centos-7-amd64-2,used_slots)    = 0
+# qstat_info(all.q@rocky-8-amd64-1,arch)           = lx-amd64
+# qstat_info(all.q@rocky-8-amd64-1,hl:cpu)         = 0.100000
+# qstat_info(all.q@rocky-8-amd64-1,hl:mem_free)    = 6.713G
+# qstat_info(all.q@rocky-8-amd64-1,hl:mem_total)   = 7.517G
+# qstat_info(all.q@rocky-8-amd64-1,load_avg)       = 0.16
+# ...
+# ```
 #
-#     output - associative array returning the values parsed
-#     params - params for -F
-#
-#  FUNCTION
-#     Give out assoc. array with entries. We also
-#     accumuluate the queues in output(queue_list).
-#
-#  INPUTS
-#     None
-#
-#  RESULT
-#     assoc array output() with entries listed above
-#
-#
-#  SEE ALSO
-#     parser/parse_qstat
-#*******************************
-proc qstat_F_plain_parse {  output {params ""} {user ""} {add_args ""}} {
+# @param result_array_var Name of the array variable to store the result
+# @param params Comma-separated list of fields to request from qstat -F (optional, default is to fetch all variables)
+# @param user User to run the qstat command as (optional, default is the CHECK_USER)
+# @param add_args Additional arguments to pass to qstat (optional)
+# @param qstat_output_var Name of variable to store raw qstat output (optional)
+proc qstat_F_plain_parse {result_array_var {params ""} {user ""} {add_args ""} {qstat_output_var ""}} {
+   get_current_cluster_config_array ts_config
    global queue_name
 
-   upvar $output qstat_output
-   get_current_cluster_config_array ts_config
+   upvar $result_array_var qstat_output
+   if {$qstat_output_var ne ""} {
+      upvar $qstat_output_var result
+   }
 
    set qstat_output(jobid_list) ""
 
