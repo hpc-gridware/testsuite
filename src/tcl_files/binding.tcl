@@ -176,7 +176,7 @@ proc job_get_binding_active {job_id array_name} {
 
    # e.g. v01701.fritz.box=SCC,v01702.fritz.box=SCC
    foreach binding [split $binding_list ","] {
-      if {[regexp {([a-zA-Z0-9.]+)=([a-zA-Z]+)} $binding all hostname topology_string]} {
+      if {[regexp {([a-zA-Z0-9.-]+)=([a-zA-Z]+)} $binding all hostname topology_string]} {
          set hostname [get_short_hostname $hostname]
          set bindings($hostname) $topology_string
       }
