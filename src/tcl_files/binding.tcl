@@ -389,14 +389,20 @@ proc get_hardware_node_stats {internal_topo_string array_name} {
 # @param hosts List of hostnames to modify (default: all exec hosts)
 # @param backup_var Name of the array variable to store the backup (default: host_slots_for_binding_backup)
 # @see cleanup_host_slots_for_binding
-proc setup_host_slots_for_binding {{hosts ""} {backup_var "host_slots_for_binding_backup"}} {
+proc setup_host_slots_for_binding {{hosts ""} {backup_var ""}} {
    get_current_cluster_config_array ts_config
 
    # beginning with 9.1.0 a slot capacity is set to the number of cores for every exec host
    # in tests we sometimes need more slots, set them to a high value
    if {[is_version_in_range "9.1.0"]} {
       # we backup the complex values of all hosts for later restore
-      upvar $backup_var backup
+      if {$backup_var eq ""} {
+         # if no backup variable is given, we backup to our own global variable
+         global host_slots_for_binding_backup
+         upvar 0 host_slots_for_binding_backup backup
+      } else {
+         upvar $backup_var backup
+      }
 
       # if no host are given then modify *all* hosts
       if {$hosts eq ""} {
@@ -425,11 +431,18 @@ proc setup_host_slots_for_binding {{hosts ""} {backup_var "host_slots_for_bindin
 # @param backup_var Name of the array variable containing the backup (default: host_slots_for_binding_backup)
 # @param unset_backup_var If set to 1, the backup variable is unset after restore (default: 1)
 # @see setup_host_slots_for_binding
-proc cleanup_host_slots_for_binding {{backup_var "host_slots_for_binding_backup"} {unset_backup_var 1}} {
+proc cleanup_host_slots_for_binding {{backup_var ""} {unset_backup_var 1}} {
    get_current_cluster_config_array ts_config
 
    if {[is_version_in_range "9.1.0"]} {
-      upvar $backup_var backup
+      ts_log_fine "cleanup host slots for binding"
+      if {$backup_var eq ""} {
+         # if no backup variable is given, we restore from our own global variable
+         global host_slots_for_binding_backup
+         upvar 0 host_slots_for_binding_backup backup
+      } else {
+         upvar $backup_var backup
+      }
 
       # we restore the hosts for which we have a backup
       foreach host [array names backup] {

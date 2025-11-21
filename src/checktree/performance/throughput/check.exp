@@ -447,12 +447,16 @@ proc throughput_setup {} {
    unset change_array
    set change_array(qtype) "INTERACTIVE"
    add_queue "interactive" "@allhosts" change_array 1
+
+   setup_host_slots_for_binding
 }
 
 proc throughput_cleanup {} {
    global nr_queues host_list
    global throughput_complex_backup throughput_bootstrap_backup
    global throughput_host_info
+
+   cleanup_host_slots_for_binding
 
    # enable all default queues
    enable_queue "all.q"
@@ -854,7 +858,10 @@ proc throughput_get_host_info {} {
    global throughput_host_info
 
    # we fetch the following load values via qstat -F
-   set variables "arch num_proc mem_total m_topology"
+   # actually we only use num_proc so far - so fetch only num_proc
+   # but in the long term other info would be good to have in the throughput test report
+   #set variables "arch num_proc mem_total m_topology"
+   set variables "num_proc"
    qstat_F_plain_parse output $variables
 
    set throughput_host_info(hosts) {}
@@ -863,7 +870,11 @@ proc throughput_get_host_info {} {
       if {[lsearch -exact $throughput_host_info(hosts) $host] == -1} {
          lappend throughput_host_info(hosts) $host
          foreach var $variables {
-            set throughput_host_info($host,$var) $output($queue,hl:$var)
+            if {![info exists output($queue,hl:$var)]} {
+               ts_log_severe "attribute $queue,hl:$var does not exist after qstat -F parsing"
+            } else {
+               set throughput_host_info($host,$var) $output($queue,hl:$var)
+            }
          }
       }
    }
