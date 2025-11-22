@@ -51,6 +51,9 @@ lappend check_functions "qstat_r_parallel"
 
 proc qstat_r_setup {} {
    get_current_cluster_config_array ts_config
+
+   # increase slots capacity
+   setup_host_slots_for_binding
 }
 
 proc qstat_r_cleanup {} {
@@ -58,6 +61,8 @@ proc qstat_r_cleanup {} {
 
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   cleanup_host_slots_for_binding
 }
 
 proc qstat_r_check_job {format job_id expected_var} {

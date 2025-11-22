@@ -137,6 +137,9 @@ proc qstat_setup {} {
    if {!$prj_exists} {
       set result [add_project $prj]
    }
+
+   # increase slots capacity
+   setup_host_slots_for_binding
 }
 
 proc qstat_cleanup {} {
@@ -144,6 +147,8 @@ proc qstat_cleanup {} {
 
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   cleanup_host_slots_for_binding
 
    del_queue "wrong.q" "" 1 1
    del_queue "empty.q" "" 1 1
