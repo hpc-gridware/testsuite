@@ -27,17 +27,17 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -47,10 +47,12 @@ set check_description(0)  "checking global path alias file"
 set check_description(1)  "checking user path alias file"
 
 # define test's dependencies
-set check_needs           "init_core_system display_test" 
+set check_needs           "init_core_system display_test"
 
 
 # setup and cleanup functions
+set check_setup_function "path_alias_setup"
+set check_cleanup_function "path_alias_cleanup"
 set check_setup_level_function "path_alias_setup_level"
 set check_cleanup_level_function "path_alias_cleanup_level"
 
@@ -65,6 +67,14 @@ set path_alias_test 0
 
 # -------- local test procedures -----------------------------------------------
 
+proc path_alias_setup {} {
+   setup_host_slots_for_binding
+}
+
+proc path_alias_cleanup {} {
+   cleanup_host_slots_for_binding
+}
+
 proc path_alias_setup_level {} {
    global ts_config
    global CHECK_ACT_LEVEL
@@ -76,10 +86,10 @@ proc path_alias_setup_level {} {
    global env CHECK_PROTOCOL_DIR
 
    switch -- $CHECK_ACT_LEVEL {
-      0 { set path_alias_test 1 } 
+      0 { set path_alias_test 1 }
       1 { set path_alias_test 2 }
-   } 
-   
+   }
+
    set PATH_ALIAS_OUTPUT1 [ file dirname "$CHECK_JOB_OUTPUT_DIR/adir" ]
    set PATH_ALIAS_OUTPUT2 [ file dirname "$CHECK_JOB_OUTPUT_DIR/adir" ]
    append PATH_ALIAS_OUTPUT1 "/path_alias_output1"
@@ -88,13 +98,13 @@ proc path_alias_setup_level {} {
    ts_log_fine "creating directory: $PATH_ALIAS_OUTPUT1"
    file mkdir $PATH_ALIAS_OUTPUT1
    if { [ file isdirectory $PATH_ALIAS_OUTPUT1 ] != 1 } {
-      ts_log_severe "could not create directory $PATH_ALIAS_OUTPUT1" 
+      ts_log_severe "could not create directory $PATH_ALIAS_OUTPUT1"
    }
 
    ts_log_fine "creating directory: $PATH_ALIAS_OUTPUT2"
    file mkdir $PATH_ALIAS_OUTPUT2
    if { [ file isdirectory $PATH_ALIAS_OUTPUT2 ] != 1 } {
-      ts_log_severe "could not create directory $PATH_ALIAS_OUTPUT2" 
+      ts_log_severe "could not create directory $PATH_ALIAS_OUTPUT2"
    }
 
    set do_it 0
@@ -110,7 +120,7 @@ proc path_alias_setup_level {} {
 
    if { $do_it == 1 } {
       ts_log_fine "testing alias file $file_name"
-      if { ([ file isfile "${file_name}.sav" ] != 1) && 
+      if { ([ file isfile "${file_name}.sav" ] != 1) &&
            ([ file isfile ${file_name}] == 1) } {
          ts_log_fine "moving original alias file to ${file_name}.sav"
          file rename ${file_name} ${file_name}.sav
@@ -143,7 +153,7 @@ proc path_alias_setup_level {} {
             if {$prefix != ""} {
                set data(src-path,$index)     "$prefix"
                set data(sub-host,$index)     "*"
-               set data(exec-host,$index)    "*" 
+               set data(exec-host,$index)    "*"
                set data(replacement,$index)  "/"
                incr index 1
             }
@@ -152,7 +162,7 @@ proc path_alias_setup_level {} {
 
       set data(src-path,$index)     "$PATH_ALIAS_OUTPUT1"
       set data(sub-host,$index)     "*"
-      set data(exec-host,$index)    "*" 
+      set data(exec-host,$index)    "*"
       set data(replacement,$index)  "$PATH_ALIAS_OUTPUT2"
       incr index 1
 
@@ -177,18 +187,18 @@ proc path_alias_setup_level {} {
       if {$prg_exit_state != 0} {
          ts_log_severe "error reading file ${file_name} on host $elem"
       }
-      lappend cat_hostname $elem 
+      lappend cat_hostname $elem
       lappend cat_output $result
       set last_host $elem
    }
-   
+
    set elem_nr 0
    set orig [open "$CHECK_PROTOCOL_DIR/test1.txt" "w"]
    puts $orig $result
    close $orig
    foreach elem $cat_output {
        set diff [open "$CHECK_PROTOCOL_DIR/test2.txt" "w"]
-       puts $diff $elem 
+       puts $diff $elem
        close $diff
 
        set catch_return [ catch { eval exec "diff -w $CHECK_PROTOCOL_DIR/test1.txt $CHECK_PROTOCOL_DIR/test2.txt" } diff_output ]
@@ -240,14 +250,14 @@ proc path_alias_main {} {
          set args "-v DISPLAY=$CHECK_DISPLAY_OUTPUT"
       } else {
          set args ""
-      }      
+      }
       set args "$args -cwd -l h=${elem} -- -e $pwd_script"
       ts_log_fine "qsh $args"
       set output [start_remote_prog $elem $CHECK_USER "qsh" $args prg_exit_state 60 0 $PATH_ALIAS_OUTPUT1]
       ts_log_fine $output
    }
- 
-   wait_for_end_of_all_jobs 100 
+
+   wait_for_end_of_all_jobs 100
 
    after 10000
 
@@ -271,7 +281,7 @@ proc path_alias_main {} {
    set nr_hosts_x2 [ expr ( $nr_hosts * 3 ) ]
    if { $nr_new_files2 != $nr_hosts_x2 } {
       ts_log_severe "there are $nr_new_files2 new files in directory $PATH_ALIAS_OUTPUT2, should be $nr_hosts_x2 (case 2)"
-   } 
+   }
 
    foreach elem $files1 {
       #ts_log_fine "deleting $elem"
@@ -296,20 +306,20 @@ proc path_alias_cleanup_level {} {
    ts_log_fine "deleting directory: $PATH_ALIAS_OUTPUT1"
    catch { file delete $PATH_ALIAS_OUTPUT1 }
    if { [ file isdirectory  $PATH_ALIAS_OUTPUT1 ] == 1 } {
-      ts_log_severe "could delete directory $PATH_ALIAS_OUTPUT1" 
+      ts_log_severe "could delete directory $PATH_ALIAS_OUTPUT1"
    }
    catch { file delete $PATH_ALIAS_OUTPUT2 }
    ts_log_fine "deleting directory: $PATH_ALIAS_OUTPUT2"
    if { [ file isdirectory $PATH_ALIAS_OUTPUT2 ] == 1 } {
-      ts_log_severe "could delete directory $PATH_ALIAS_OUTPUT2" 
+      ts_log_severe "could delete directory $PATH_ALIAS_OUTPUT2"
    }
 
-   set do_it 0 
+   set do_it 0
 
    if { $path_alias_test == 1 } {
       set file_name "$ts_config(product_root)/$ts_config(cell)/common/sge_aliases"
       set do_it 1
-   } 
+   }
    if { $path_alias_test == 2 } {
       set file_name "$env(HOME)/.sge_aliases"
       set do_it 1
@@ -319,7 +329,7 @@ proc path_alias_cleanup_level {} {
       ts_log_fine "deleting $file_name"
       if { [ file isfile "$file_name" ] == 1 } {
          ts_log_severe "could not delete file $file_name"
-         return 
+         return
       }
 
       if { [ file isfile "$file_name.sav" ] == 1 } {

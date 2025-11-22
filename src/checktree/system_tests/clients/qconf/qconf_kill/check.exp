@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -88,21 +88,23 @@ proc qconf_kill_ke {} {
 
    # select a host to shutdown
    set host [host_conf_get_suited_hosts]
+   ts_log_fine "testing shutdown of sge_execd on host $host"
 
    # run qconf -ke to initially kill the execd
    set master_arch [resolve_arch $ts_config(master_host)]
    set qconf "$ts_config(product_root)/bin/$master_arch/qconf"
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER $qconf "-ke $host" prg_exit_state 60 0 "" "" 1 1 0 1 0 1]
+   ts_log_fine $output
 
    # waiting for unknown state is not sufficient because the state is set before execd is down
    wait_for_queue_state "all.q@$host" "au" 60
 
-   # second kill attempts has to return with exit code 1
+   # second kill attempt has to return with exit code 1
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER $qconf "-ke $host" prg_exit_state 60 0 "" "" 1 1 0 1 0 1]
 
    # check exit code
    if {$prg_exit_state == 0} {
-      ts_log_severe "qconf_ke test failed.\nExpected qconf to return exit code other than 0, but got result: $prg_exit_state"
+      ts_log_severe "qconf_ke test failed.\nExpected qconf to return exit code other than 0, but got result: $prg_exit_state\n$output"
    } else {
       ts_log_fine "qconf_ke test successful"
    }

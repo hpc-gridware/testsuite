@@ -110,20 +110,21 @@ proc qrsh_setup {} {
    # setup some user info
    set QSUB_GID_USER   $CHECK_FIRST_FOREIGN_SYSTEM_USER
    set QSUB_GID_GROUPS $CHECK_FIRST_FOREIGN_SYSTEM_GROUP
+
+   # increase slots capacity
+   setup_host_slots_for_binding
 }
 
 proc qrsh_cleanup {} {
    global qrsh_hostlist qrsh_submithost
    global QSUB_GID_USER QSUB_GID_GROUPS
 
-   foreach var "qrsh_hostlist qrsh_submithost QSUB_GID_USER QSUB_GID_GROUPS" {
-      if {[info exists $var]} {
-         unset $var
-      }
-   }
-
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   cleanup_host_slots_for_binding
+
+   unset -nocomplain qrsh_hostlist qrsh_submithost QSUB_GID_USER QSUB_GID_GROUPS
 }
 
 # -------- check functions -----------------------------------------------------
