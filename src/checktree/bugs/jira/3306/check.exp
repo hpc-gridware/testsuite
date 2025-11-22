@@ -50,19 +50,10 @@ lappend check_functions "ge_3306_pe_slots"
 proc ge_3306_setup {} {
    global ts_config
    global ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host_backup ge_3306_host
-   global host_config_backup
 
    # we want to test global resources and on a specific host
    set ge_3306_host [host_conf_get_suited_hosts]
-
-   # increase slots capacity
-   foreach host $ts_config(execd_nodes) {
-      get_exechost host_config_bkup $host
-      set host_config_backup($host) $host_config_bkup(complex_values)
-
-      set host_cfg(complex_values)  "slots=5000"
-      set_exechost host_cfg $host
-   }
+   setup_host_slots_for_binding $ge_3306_host
 
    # we add a consumable - backup the complex definition
    get_complex ge_3306_complex_backup
@@ -106,13 +97,6 @@ proc ge_3306_setup {} {
 
 proc ge_3306_cleanup {} {
    global ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host_backup ge_3306_host
-   global host_config_backup
-
-   # restore complex_values
-   foreach host $ge_3306_host {
-      set host_cfg(complex_values) $host_config_backup($host)
-      set_exechost host_cfg $host
-   }
 
    # close our tail -f <qmaster_messages_file>
    close_logfile_wait
@@ -137,6 +121,8 @@ proc ge_3306_cleanup {} {
 
    # reset the complex
    reset_complex ge_3306_complex_backup
+
+   cleanup_host_slots_for_binding
 
    # unset our test's global variables
    unset -nocomplain ge_3306_complex_backup ge_3306_global_host_backup ge_3306_host_backup ge_3306_host

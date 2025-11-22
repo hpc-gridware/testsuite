@@ -72,6 +72,9 @@ proc issue_2222_setup {} {
    # select a host for testing
    set issue_2222_host [host_conf_get_suited_hosts]
 
+   # increase slots capacity
+   setup_host_slots_for_binding $issue_2222_host
+
    # backup the hosts configuration
    get_config issue_2222_config_backup $issue_2222_host
 
@@ -117,11 +120,7 @@ proc issue_2222_setup {} {
    add_queue "Interactive" $issue_2222_host queue
 
    # disable all.q
-   set queues {}
-   foreach host $ts_config(execd_nodes) {
-      lappend queues [get_queue_instance "all.q" $host]
-   }
-   disable_queue $queues
+   disable_queue "all.q"
 }
 
 proc issue_2222_cleanup {} {
@@ -155,11 +154,9 @@ proc issue_2222_cleanup {} {
    reset_config_and_propagate issue_2222_config_backup $issue_2222_host
 
    # enable all.q
-   set queues {}
-   foreach host $ts_config(execd_nodes) {
-      lappend queues [get_queue_instance "all.q" $host]
-   }
-   enable_queue $queues
+   enable_queue "all.q"
+
+   cleanup_host_slots_for_binding
 
    unset -nocomplain issue_2222_config_backup issue_2222_host
 }
