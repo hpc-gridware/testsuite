@@ -43,7 +43,7 @@ global check_root_access_needs
 # define test's name and run level descriptions
 set check_name            "issue_440"
 set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_description(0) "qsub / qrsh command lines crash qmaster with arg. lines > 10 K"
+set check_description(0)  "qsub / qrsh command lines crash qmaster with arg. lines > 10 K"
 
 # define test's dependencies
 set check_needs           "init_core_system"
@@ -72,6 +72,9 @@ proc issue_440_setup {} {
    }
 
    set issue_440_remove_accounting 0
+
+   # increase slots capacity
+   setup_host_slots_for_binding
 }
 
 proc issue_440_cleanup {} {
@@ -81,6 +84,8 @@ proc issue_440_cleanup {} {
 
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   cleanup_host_slots_for_binding
 
    # if we ran into CS-1381 the test would leave an accounting file with very long lines qacct cannot parse
    # remove this accounting file
@@ -269,8 +274,12 @@ proc issue_440_check_qrsh {} {
          ts_log_fine "$host: submitting qrsh job with command line length: [string length $test_info($host,$length,command_line)] ..."
          # start qrsh job
          set test_info($host,$length,output) [start_remote_prog $host $CHECK_USER $qrsh_command "-verbose $test_info($host,$length,command_line)"]
+         #ts_log_frame
+         #ts_log_fine $test_info($host,$length,output)
+         #ts_log_fine "exit state: $prg_exit_state"
          if {$prg_exit_state != 0} {
             append error_text "$host: error in qrsh job:\nexit status is $prg_exit_state\noutput: $test_info($host,$length,output)\n"
+            #ts_log_fine [start_sge_bin "qstat" "-F slots"]
          }
       }
    }

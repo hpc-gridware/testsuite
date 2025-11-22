@@ -66,6 +66,9 @@ proc issue_2419_setup {} {
    set excluded ""
    set issue_2419_hosts [host_conf_get_suited_hosts 1 "" "" $excluded]
 
+   # increase slots capacity for binding
+   setup_host_slots_for_binding $issue_2419_hosts
+
    # we want to modify the global config - make a backup
    get_config issue_2419_backup
 
@@ -105,12 +108,10 @@ proc issue_2419_cleanup {} {
    del_queue "tight" "" 1 1
    del_pe "tight"
 
+   cleanup_host_slots_for_binding
+
    # unset our test's global variables
-   foreach var "issue_2419_backup issue_2419_hosts"  {
-      if {[info exists $var]} {
-         unset $var
-      }
-   }
+   unset -nocomplain issue_2419_backup issue_2419_hosts
 }
 
 
