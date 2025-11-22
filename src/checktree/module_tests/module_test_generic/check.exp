@@ -91,6 +91,8 @@ lappend generic_module_tests "test_sgeobj_range"
 lappend generic_module_tests "test_sgeobj_resource_quota"
 lappend generic_module_tests "test_sgeobj_schedd_conf"
 lappend generic_module_tests "test_sgeobj_utility"
+lappend generic_module_tests "test_sgeobj_RequestLimits"
+lappend generic_module_tests "test_sgeobj_Session"
 
 lappend generic_module_tests "test_sched_eval_performance"
 lappend generic_module_tests "test_sched_resource_utilization"
