@@ -3805,16 +3805,15 @@ proc qhost_q_parse { output_var jobCount } {
 #
 #
 #*******************************
-proc qhost_F_parse { output_var jobCount {params "" } } {
+proc qhost_F_parse {output_var job_count_var {params "" }} {
    upvar $output_var plain
-   upvar $jobCount job
+   upvar $job_count_var job
 
    # capture plain output
    set plainoutput [start_sge_bin "qhost" "$params"]
 
-
    # split plain output on each new line
-   set plain_split [ split $plainoutput "\n" ]
+   set plain_split [split $plainoutput "\n"]
    set has_binding [ge_has_feature "binding-in-execd"]
    set has_binding_scheduler [ge_has_feature "binding-in-scheduler"]
 
@@ -3823,6 +3822,7 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
    set count 1
    set line -1
    foreach elem $plain_split {
+#ts_log_fine "$line: $elem"
      if {$count > 2} {
          switch -- $line {
             "1" {
@@ -3873,9 +3873,9 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
                }
             }
          } elseif {$has_binding_scheduler} {
-            # if core binding is present then there are more lines for m_topology, m_core, m_socket, m_thread
+            # if core binding is present then there are more lines for m_topology, m_core, m_socket, m_thread, slots
             switch -- $line {
-                22 - 23 - 24 - 25 {
+                22 - 23 - 24 - 25 - 26 {
                   set attr [ split $elem "="]
                   lassign $attr heading value
                   set val [ split $heading ":"]
@@ -3884,7 +3884,7 @@ proc qhost_F_parse { output_var jobCount {params "" } } {
                 }
             }
             # switch to next job, increment counter
-            if { $line == 25} {
+            if { $line == 26} {
                   incr job 1
                   set line 0
             }

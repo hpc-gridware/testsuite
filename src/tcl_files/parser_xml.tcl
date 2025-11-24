@@ -1604,8 +1604,9 @@ proc qstat_ext_xml_parse { output } {
 #
 #
 #*******************************
-proc qhost_xml_parse { output {params ""} } {
+proc qhost_xml_parse {output {params ""}} {
    upvar $output xml
+   unset -nocomplain xml
 
    # capture xml output
    set xmloutput [start_sge_bin "qhost" "$params -xml"]
@@ -1615,17 +1616,21 @@ proc qhost_xml_parse { output {params ""} } {
 
    # parse xml output and create lists based on the attributes
    set qhost [$root childNodes]
-   set job -1
+   set host_idx -1
    foreach elem $qhost {
       set hostvalue [$elem childNodes]
-      set inc 1
+      incr host_idx 1
+      set host_attrib "host$host_idx"
+      set xml($host_attrib,name) [$elem getAttribute name]
       foreach elemin $hostvalue {
-         if {$inc == "1"} {
-            incr job 1
-            set xml(host$job,name) [$elem getAttribute name]
+         set name [$elemin getAttribute name]
+         set child [$elemin firstChild]
+         if {$child ne ""} {
+            set value [$child nodeValue]
+         } else {
+            set value ""
          }
-         set xml(host$job,[$elemin getAttribute name]) [[$elemin firstChild] nodeValue]
-         incr inc 1
+         set xml($host_attrib,$name) $value
       }
    }
 }

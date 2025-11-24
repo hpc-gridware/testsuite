@@ -79,8 +79,8 @@ proc qhost_setup {} {
    get_config qhost_config_old
 
    # change load report time so that we will have a chance that regular plain qhost qnd xml-qhost will se the same load
-   set qhost_config(load_report_time) "00:03:00"
-   set qhost_config(max_unheard)      "00:10:00"
+   set qhost_config(load_report_time) "00:01:00"
+   set qhost_config(max_unheard)      "00:02:00"
    set_config_and_propagate qhost_config
 }
 
@@ -395,8 +395,8 @@ proc test_issue132_F {} {
    }
 
    set params "-F"
-   set result [qhost_xml_parse xml $params ]
-   set result [qhost_F_parse plain job $params ]
+   qhost_xml_parse xml $params
+   qhost_F_parse plain job $params
 
    # for each host test that the xml and plain outpus are the same
    for {set ind 0} {$ind < $job} {incr ind 1} {
