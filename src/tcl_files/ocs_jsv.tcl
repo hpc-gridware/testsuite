@@ -108,9 +108,9 @@ proc jsv_instructions2ac_arguments {instructions} {
 proc jsv_submit_job_with_instructions {jsv_script instructions job_arguments} {
    get_current_cluster_config_array ts_config
 
+   set hostname $ts_config(master_host)
    # take the default echo script if caller does not provide one
    if {$jsv_script == ""} {
-      set hostname $ts_config(master_host)
       set jsv_script [get_ts_local_script $hostname "jsv_echo.tcl"]
    }
    set qsub_arguments "-jsv $jsv_script"
@@ -123,7 +123,7 @@ proc jsv_submit_job_with_instructions {jsv_script instructions job_arguments} {
 
    # submit a test job with jsv that echos the job parameters and handles instructions
    append qsub_arguments " $job_arguments -b y sleep 120"
-   set job_id [submit_job $qsub_arguments]
+   set job_id [submit_job $qsub_arguments 1 60 $hostname]
 
    return $job_id
 }
