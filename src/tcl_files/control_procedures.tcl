@@ -2439,12 +2439,20 @@ proc resolve_build_arch_installed_libs {host {raise_error 1}} {
 #  SEE ALSO
 #     ???/???
 #*******************************
+# clear cache on re-source of tcl-files (menu 33)
+global resolve_host_cache
+unset -nocomplain resolve_host_cache
 proc resolve_host {name {long 0}} {
-   global resolve_host_cache CHECK_USER
-
    get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global resolve_host_cache
 
    set name [string trim $name]
+   if {$name eq ""} {
+      ts_log_severe "empty host name given to resolve_host"
+      return ""
+   }
+
    # we cannot resolve hostgroups.
    if {[string range $name 0 0] == "@"} {
       ts_log_fine "hostgroups ($name) cannot be resolved"
@@ -2464,7 +2472,7 @@ proc resolve_host {name {long 0}} {
    set result [start_sge_utilbin "gethostbyname" "-aname $name" $ts_config(master_host) $CHECK_USER]
 
    if {$prg_exit_state != 0} {
-      ts_log_fine "proc resolve_host - gethostbyname failed: \n$result"
+      ts_log_fine "proc resolve_host - gethostbyname -aname $name failed: \n$result"
       return $name
    }
 

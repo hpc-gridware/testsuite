@@ -3102,7 +3102,7 @@ proc qstat_F_plain_parse {result_array_var {params ""} {user ""} {add_args ""} {
          # matches dom:name=value (in_use)
          set qstat_output($queue_name,${dom}:$name) $value
          set qstat_output($queue_name,${dom}:${name}_in_use) $in_use
-      } elseif {[regexp {([a-zA-Z]{2}):([a-zA-Z_]+)=([a-zA-Z._0-9/]+)} $id all dom name value]} {
+      } elseif {[regexp {([a-zA-Z]{2}):([a-zA-Z_]+)=([a-zA-Z._0-9/-]+)} $id all dom name value]} {
          # matches dom:name=value
          set qstat_output($queue_name,${dom}:$name) $value
       } elseif { [regexp "\[a-zA-Z\]" $id] } {  ; # queue listing
@@ -3805,105 +3805,53 @@ proc qhost_q_parse { output_var jobCount } {
 #
 #
 #*******************************
-proc qhost_F_parse {output_var job_count_var {params "" }} {
-   upvar $output_var plain
-   upvar $job_count_var job
+proc qhost_F_parse {output_var host_count_var {params "" }} {
+   upvar $output_var output
+   upvar $host_count_var host_count
 
    # capture plain output
-   set plainoutput [start_sge_bin "qhost" "$params"]
+   set plainoutput [start_sge_bin "qhost" $params]
 
    # split plain output on each new line
    set plain_split [split $plainoutput "\n"]
-   set has_binding [ge_has_feature "binding-in-execd"]
-   set has_binding_scheduler [ge_has_feature "binding-in-scheduler"]
 
-   set inc 0
-   set job 0
-   set count 1
-   set line -1
-   foreach elem $plain_split {
-#ts_log_fine "$line: $elem"
-     if {$count > 2} {
-         switch -- $line {
-            "1" {
-               qhost_add_plain plain $elem $job
-            }
-            2 - 3 - 4 - 5 - 6 - 7 - 8 - 9 - 10 - 11 - 12 - 13 - 14 - 15 - 16 - 17 - 18 - 19 - 20 - 21 {
-               set attr [ split $elem "="]
-               lassign $attr heading value
-               set val [ split $heading ":"]
-               lassign $val dom nam
-               set plain(host$job,$nam) $value
-            }
+   set job_count 0
+   set line_no 0
+   set host_count 0
+   foreach line $plain_split {
+      # skip header
+      if {$line_no > 1} {
+         set single_white_space_string [qstat_special_parse [string trim $line]]
+         if {$single_white_space_string eq ""} {
+            continue
          }
-         if {$has_binding} {
-            if {[is_version_in_range "9.1.0"]} {
-               # if core binding is present then there are more lines for m_topology, m_core, m_socket, m_thread
-               switch -- $line {
-                  22 - 23 - 24 - 25 {
-                     set attr [ split $elem "="]
-                     lassign $attr heading value
-                     set val [ split $heading ":"]
-                     lassign $val dom nam
-                     set plain(host$job,$nam) $value
 
-                  }
-               }
-               # switch to next job, increment counter
-               if {$line == 25} {
-                     incr job 1
-                     set line 0
-               }
-            } else {
-               # if core binding is present then there are more lines for m_topology, m_core, m_socket, m_thread, m_topology_inuse
-               switch -- $line {
-                  22 - 23 - 24 - 25 - 26 {
-                     set attr [ split $elem "="]
-                     lassign $attr heading value
-                     set val [ split $heading ":"]
-                     lassign $val dom nam
-                     set plain(host$job,$nam) $value
+         ts_log_fine $single_white_space_string
+         set id [lindex $single_white_space_string 0]
+         set two_ids [lrange $single_white_space_string 0 1]
 
-                  }
-               }
-               # switch to next job, increment counter
-               if {$line == 26} {
-                     incr job 1
-                     set line 0
-               }
-            }
-         } elseif {$has_binding_scheduler} {
-            # if core binding is present then there are more lines for m_topology, m_core, m_socket, m_thread, slots
-            switch -- $line {
-                22 - 23 - 24 - 25 - 26 {
-                  set attr [ split $elem "="]
-                  lassign $attr heading value
-                  set val [ split $heading ":"]
-                  lassign $val dom nam
-                  set plain(host$job,$nam) $value
-                }
-            }
-            # switch to next job, increment counter
-            if { $line == 26} {
-                  incr job 1
-                  set line 0
-            }
+         if {[regexp {([a-zA-Z]{2}):([a-zA-Z_]+)=([a-zA-Z]+) \(([a-zA-Z]+)\)} $two_ids all dom name value in_use]} {
+            # matches dom:name=value (in_use)
+            # new output in 9.1.0
+            set output($hostid,$name) $value
+            #set output($hostid,${dom}:${name}_in_use) $in_use
+         } elseif {[regexp {([a-zA-Z]{2}):([a-zA-Z_]+)=([a-zA-Z._0-9/-]+)} $id all dom name value]} {
+            # matches dom:name=value
+            # usual -F output
+            # hl:arch=lx-amd64
+            set output($hostid,$name) $value
+         } elseif {[regexp "\[a-zA-Z\]" $id]} {
+            # host line
+            # ubuntu-24-amd64-1 lx-amd64 8 2 8 8 1.00 7.8G 493.6M 2.3G 0.0
+            set hostid "host$host_count"
+            qhost_add_plain output $single_white_space_string $host_count
+            incr host_count
          } else {
-            # switch to next job, increment counter
-            if { $line == 21} {
-                  incr job 1
-                  set line 0
-            }
-         }
-         if { $count == 3 } {
-            incr job 1
-            set line 0
+            # we could parse additional info, e.g. from qhost -j here
          }
       }
-      incr line 1
-      incr count 1
+      incr line_no
    }
-   incr job -1
 }
 
 #****** parser/plain_gdr_parse() ******
