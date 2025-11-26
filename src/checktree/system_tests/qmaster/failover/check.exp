@@ -98,6 +98,10 @@ proc qmaster_failover_cleanup {} {
 # should not enter state DISABLED after failure of qmaster if previously
 # enabled.
 #
+# This test sometimes fails due to CS-1597 only static load values shall be written to spooling:
+# wait_for_load_from_all_queues waits for load values to be there, but if they are spooled,
+# then they are available immediately after qmaster restart.
+# The queue OTOH will only leave "u" state when execds reconnected.
 proc check_queue_state {} {
    global test_hostname
    global ts_config

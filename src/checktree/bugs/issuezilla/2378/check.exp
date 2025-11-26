@@ -27,17 +27,17 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -46,7 +46,7 @@ set check_category        "ISSUE PARALLEL SCHEDULER VERIFIED"
 set check_description(0)  "check issue 2378 is fixed"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function issue_2378_setup
@@ -62,13 +62,14 @@ proc issue_2378_setup {} {
    global ts_config
    global global_host_backup
 
-   ts_log_fine "issue_2378_setup" 
+   ts_log_fine "issue_2378_setup"
 
    if {[llength $ts_config(execd_nodes)] < 2} {
       ts_log_config "Need at least 2 hosts for this test. We only have $ts_config(execd_hosts)"
       return 99
    }
 
+   setup_host_slots_for_binding
 
    set pe(slots)             "2"
    set pe(allocation_rule)   "\$round_robin"
@@ -128,6 +129,8 @@ proc issue_2378_cleanup {  } {
 
    del_pe        "round_robin"
    del_pe        "fill_up"
+
+   cleanup_host_slots_for_binding
 }
 
 

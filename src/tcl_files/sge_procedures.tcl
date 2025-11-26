@@ -6534,7 +6534,7 @@ proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
          if {$do_errorcheck == 1} {
             set qstat_output [start_sge_bin "qstat" "-f -g t -u '*'"]
             set qstat_wp_output [start_sge_bin "qalter" "-w p $jobid"]
-            ts_log_severe "timeout waiting for job $jobid \"$jobname\"\n$qstat_output\n$qstat_wp_output"
+            ts_log_severe "timeout waiting for job $jobid \"$jobname\" to start\n$qstat_output\n$qstat_wp_output"
          }
          return -1
       }

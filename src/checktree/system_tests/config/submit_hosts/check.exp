@@ -27,17 +27,17 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -47,12 +47,14 @@ set check_description(0)  "checking submit host functionality without local conf
 set check_description(1)  "checking submit host functionality with local qsh_command"
 
 # define test's dependencies
-set check_needs           "init_core_system display_test" 
+set check_needs           "init_core_system display_test"
 
 
 # setup and cleanup functions
-set check_setup_level_function "submit_hosts_setup"
-set check_cleanup_level_function "submit_hosts_cleanup"
+set check_setup_function "submit_hosts_setup"
+set check_cleanup_function "submit_hosts_cleanup"
+set check_setup_level_function "submit_hosts_setup_level"
+set check_cleanup_level_function "submit_hosts_cleanup_level"
 
 # define test's procedure order
 set check_functions ""
@@ -62,6 +64,15 @@ global submit_hosts_use_local_conf
 # -------- local test procedures -----------------------------------------------
 
 proc submit_hosts_setup {} {
+   setup_host_slots_for_binding
+}
+
+proc submit_hosts_cleanup {} {
+   cleanup_host_slots_for_binding
+}
+
+
+proc submit_hosts_setup_level {} {
    global ts_config CHECK_ACT_LEVEL
    global CHECK_JOB_OUTPUT_DIR
    global submit_hosts_use_local_conf
@@ -109,7 +120,7 @@ proc submit_hosts_setup {} {
    }
 }
 
-proc submit_hosts_cleanup {} {
+proc submit_hosts_cleanup_level {} {
    global ts_config
    global CHECK_JOB_OUTPUT_DIR
    global submit_hosts_use_local_conf
@@ -170,7 +181,7 @@ proc submit_hosts_test {} {
    global ts_config
    global CHECK_USER
    global submit_hosts_use_local_conf
-   
+
 
    if {[llength $ts_config(submit_only_hosts)] <= 0 || $ts_config(submit_only_hosts) == "none" } {
       ts_log_config "No submit hosts specified in test configuration file - run setup option"
@@ -185,7 +196,7 @@ proc submit_hosts_test {} {
    }
 
    # we do all following tests for each configured submit host
-   foreach submit_host $ts_config(submit_only_hosts) { 
+   foreach submit_host $ts_config(submit_only_hosts) {
       ts_log_fine "testing submit host $submit_host"
 
       ts_log_fine "*** step 1 on $submit_host: qsub ***"
@@ -216,7 +227,7 @@ proc submit_hosts_test {} {
    wait_for_jobend $job_id "leeper" 30 0
 
    # give all our submit only hosts submit privileges
-   foreach submit_host $ts_config(submit_only_hosts) { 
+   foreach submit_host $ts_config(submit_only_hosts) {
       set output [start_sge_bin "qconf" "-as $submit_host"]
       if {$prg_exit_state != 0} {
          ts_log_severe "qconf -as $submit_host failed:\n$output"
@@ -227,7 +238,7 @@ proc submit_hosts_test {} {
 
    # now test again
    set job_ids {}
-   foreach submit_host $ts_config(submit_only_hosts) { 
+   foreach submit_host $ts_config(submit_only_hosts) {
       ts_log_fine "testing submit host host $submit_host"
 
       # submit a job from each submit host
@@ -248,7 +259,7 @@ proc submit_hosts_test {} {
    }
 
    # test qstat, qrsh and qconf
-   foreach submit_host $ts_config(submit_only_hosts) { 
+   foreach submit_host $ts_config(submit_only_hosts) {
       ts_log_fine "testing host $submit_host"
 
       set output [start_sge_bin "qstat" "-f" $submit_host $CHECK_USER]
