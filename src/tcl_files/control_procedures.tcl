@@ -2379,27 +2379,7 @@ proc resolve_build_arch_installed_libs {host {raise_error 1}} {
 
    set build_arch [resolve_build_arch $host]
 
-
-
-   # we need special handling for some architectures
-   switch $build_arch {
-      "LINUXAMD64_26" {
-         set arch [resolve_arch $host]
-         if {$arch == "lx24-amd64" && [is_remote_path $host $CHECK_USER $ts_config(source_dir)/LINUXAMD64_24]} {
-            ts_log_info "We are on lx26-amd64 platform (build platform LINUXAMD64_26) with lx24-amd64 binaries installed.\nUsing lx24-amd64 (build platform LINUXAMD64_24) test binaries" $raise_error
-            set build_arch "LINUXAMD64_24"
-         }
-      }
-      "LINUX86_26" {
-         set arch [resolve_arch $host]
-         if {$arch == "lx24-x86" && [is_remote_path $host $CHECK_USER $ts_config(source_dir)/LINUX86_24]} {
-            ts_log_info "We are on lx26-x86 platform (build platform LINUX86_26) with lx24-x86 binaries installed.\nUsing lx24-x86 (build platform LINUX86_24) test binaries" $raise_error
-            set build_arch "LINUX86_24"
-         }
-      }
-   }
-
-   if { [is_remote_path $host $CHECK_USER $ts_config(source_dir)/$build_arch] == 0 } {
+   if {[is_remote_path $host $CHECK_USER $ts_config(source_dir)/$build_arch] == 0} {
       ts_log_severe "can't find build directory: $ts_config(source_dir)/$build_arch" $raise_error
    }
 

@@ -1103,8 +1103,14 @@ proc start_test_bin {bin args {host ""} {user ""} {exit_var prg_exit_state} {tim
       ts_log_finer "found test binary $test_bin"
       set output [start_sge_bin $bin $args $host $user prg_exit_state $timeout "" "testbin" output_lines envlist]
    } else {
-      ts_log_finer "didn't find test binary $test_bin - trying to start from aimk build"
-      set output [start_source_bin $bin $args $host $user prg_exit_state $timeout 0 envlist]
+      if {[is_version_in_range "9.0.0"]} {
+         # beginning with OCS/GCS 9.0.0 we have a cmake build and expect test binaries to be in installed in $SGE_ROOT/testbin/<arch>
+         ts_log_severe "didn't find test binary $test_bin"
+      } else {
+         # in Gridengine we had an aimk build and used to start binaries from the build directory
+         ts_log_finer "didn't find test binary $test_bin - trying to start from aimk build"
+         set output [start_source_bin $bin $args $host $user prg_exit_state $timeout 0 envlist]
+      }
    }
 
    return $output
