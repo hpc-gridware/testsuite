@@ -184,6 +184,43 @@ proc job_get_binding_active {job_id array_name} {
    return
 }
 
+## @brief Get the active binding of an AR
+#
+# The array is filled with the following structure:
+#
+#   array_name(hostname) = topology_string
+#
+# where hostname is the name of the host the job was bound to and
+# topology_string is the binding topology string.
+# @param ar_id The AR ID to query
+# @param array_name Name of the array to store the results in
+#
+proc ar_get_binding_active {ar_id array_name} {
+   upvar $array_name bindings
+
+   parse_qrstat $ar_id
+   set result [parse_qrstat $ar_id qrstat_info]
+   if {[info exists qrstat_info(exec_binding_list)]} {
+      set binding_list $qrstat_info(exec_binding_list)
+   } else {
+      set binding_list "NONE"
+   }
+
+   # early exit if nothing was bound
+   if {$binding_list eq "NONE"} {
+      return
+   }
+
+   # e.g. v01701.fritz.box=SCC,v01702.fritz.box=SCC
+   foreach binding [split $binding_list ","] {
+      if {[regexp {([a-zA-Z0-9.-]+)=([a-zA-Z]+)} $binding all hostname topology_string]} {
+         set hostname [get_short_hostname $hostname]
+         set bindings($hostname) $topology_string
+      }
+   }
+   return
+}
+
 ## @brief Get the binding request of a job
 #
 # The array is filled with the following structure:
