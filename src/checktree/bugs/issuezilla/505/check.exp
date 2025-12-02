@@ -107,11 +107,13 @@ proc issue_505_run {} {
       if {$my_limit < 65536} {
          set my_limit 65536
       }
-      # workaround for CS-1594
+      # workaround for CS-1594 (fixed in 9.0.10 and 9.1.0)
       # on Ubuntu-25 FD_SETSIZE is 1.073.741.816
       # it will take some 30 minutes to close this amount of fds
-      if {$my_limit > 100000} {
-         set my_limit 100000
+      if {![is_version_in_range "9.0.10 9.1.0"]} {
+         if {$my_limit > 100000} {
+            set my_limit 100000
+         }
       }
 
       set used_fds [startup_execd_with_fd_limit $host $my_limit]

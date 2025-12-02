@@ -118,6 +118,8 @@ lappend generic_module_tests "test_uti_uidgid"
 lappend generic_module_tests "test_uti_threads"
 lappend generic_module_tests "test_uti_thread_local"
 lappend generic_module_tests "test_uti_time"
+lappend generic_module_tests "test_uti_os_fds"
+
 
 proc generic_module_tests_setup {} {
    global ts_config
