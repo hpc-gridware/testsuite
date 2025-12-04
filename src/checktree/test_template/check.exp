@@ -110,12 +110,6 @@ proc __TESTSUITE_TEST_NAME_setup {} {
    get_config __TESTSUITE_TEST_NAME_backup
 }
 
-proc __TESTSUITE_TEST_NAME_setup_level {} {
-}
-
-proc __TESTSUITE_TEST_NAME_cleanup_level {} {
-}
-
 proc __TESTSUITE_TEST_NAME_cleanup {} {
    get_current_cluster_config_array ts_config
    global __TESTSUITE_TEST_NAME_hosts __TESTSUITE_TEST_NAME_backup
@@ -132,6 +126,11 @@ proc __TESTSUITE_TEST_NAME_cleanup {} {
    unset -nocomplain __TESTSUITE_TEST_NAME_hosts __TESTSUITE_TEST_NAME_backup
 }
 
+proc __TESTSUITE_TEST_NAME_setup_level {} {
+}
+
+proc __TESTSUITE_TEST_NAME_cleanup_level {} {
+}
 
 proc __TESTSUITE_TEST_NAME_test {} {
    get_current_cluster_config_array ts_config
