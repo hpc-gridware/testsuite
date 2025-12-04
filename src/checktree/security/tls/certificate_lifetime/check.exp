@@ -49,6 +49,7 @@ set check_functions {}
 lappend check_functions "cert_lifetime_qrsh"
 lappend check_functions "cert_renew_qmaster"
 lappend check_functions "cert_renew_execd"
+lappend check_functions "cert_start_offset"
 
 # -------- local test procedures: initialization------------------------------
 
@@ -86,8 +87,13 @@ proc cert_lifetime_cleanup {} {
    unset -nocomplain cert_lifetime_host cert_lifetime_backup
 }
 
-proc cert_lifetime_check_certificate {hostname cert_path expected_lifetime {not_before 0}} {
+proc cert_lifetime_check_certificate {hostname cert_path expected_lifetime {not_before 0} {not_after 0} {predate 10}} {
    set ok [get_cert_info $hostname $cert_path cert_info]
+
+   # we predate the begin time by 10 seconds to avoid clock issues - add that to the expected lifetime
+   incr expected_lifetime $predate
+
+   set errors {}
 
    if {$ok} {
       ts_log_fine "certificate is valid from $cert_info(not_before) ($cert_info(not_before_epoch)) to $cert_info(not_after) ($cert_info(not_after_epoch)), lifetime $cert_info(lifetime) seconds"
@@ -95,16 +101,27 @@ proc cert_lifetime_check_certificate {hostname cert_path expected_lifetime {not_
          set msg "expected certificate lifetime to be $expected_lifetime, got $cert_info(lifetime)"
          append msg "\nNot Before: $cert_info(not_before) ($cert_info(not_before_epoch))"
          append msg "\nNot After:  $cert_info(not_after) ($cert_info(not_after_epoch))"
-         ts_log_severe $msg
+         lappend errors $msg
          set ok 0
       }
       if {$not_before != 0} {
          if {$cert_info(not_before_epoch) < $not_before} {
             set msg "expected certificate not_before time to be >= $not_before, got $cert_info(not_before) ($cert_info(not_before_epoch))"
-            ts_log_severe $msg
+            lappend errors $msg
             set ok 0
          }
       }
+      if {$not_after != 0} {
+         if {$cert_info(not_before_epoch) > $not_after} {
+            set msg "expected certificate not_before time to be <= $not_after, got $cert_info(not_before) ($cert_info(not_before_epoch))"
+            lappend errors $msg
+            set ok 0
+         }
+      }
+   }
+
+   if {[llength $errors] > 0} {
+      ts_log_severe [join $errors "\n"]
    }
 
    return $ok
@@ -222,7 +239,7 @@ proc cert_renew_qmaster {} {
    set default_lifetime [get_tls_default_lifetime]
 
    if {$ok} {
-      ts_log_fine "TEST 1: check if certificates are generated with the default lifetime"
+      ts_log_fine "TEST 1: check if certificates have been generated with the default lifetime"
       # shutdown qmaster
       shutdown_qmaster
 
@@ -269,7 +286,8 @@ proc cert_renew_qmaster {} {
       set qmaster_start_time [clock seconds]
 
       # check for the short lifetime
-      set ok [cert_lifetime_check_certificate $ts_config(master_host) $cert_path $lifetime $qmaster_shutdown_time]
+      set not_before [expr $qmaster_shutdown_time - 10]
+      set ok [cert_lifetime_check_certificate $ts_config(master_host) $cert_path $lifetime $not_before]
 
       # test clients reconnecting with a new certificate
       if {$ok} {
@@ -293,7 +311,7 @@ proc cert_renew_qmaster {} {
       sleep_for_seconds $wait_time "waiting $wait_time seconds until certificate is about to expire..."
 
       # check lifetime of the new certificate - and later than the previous one
-      set not_before [expr $qmaster_start_time + 60]
+      set not_before [expr $qmaster_start_time + 60 - 10]
       set ok [cert_lifetime_check_certificate $ts_config(master_host) $cert_path $lifetime $not_before]
 
       # test clients reconnecting with a new certificate
@@ -329,7 +347,8 @@ proc cert_renew_qmaster {} {
       startup_qmaster
 
       # check for the default lifetime
-      set ok [cert_lifetime_check_certificate $ts_config(master_host) $cert_path $default_lifetime $qmaster_shutdown_time]
+      set not_before [expr $qmaster_shutdown_time - 10]
+      set ok [cert_lifetime_check_certificate $ts_config(master_host) $cert_path $default_lifetime $not_before]
 
       # check clients reconnecting with a new certificate
       if {$ok} {
@@ -374,6 +393,7 @@ proc cert_renew_execd {} {
 
    # select a test host
    set execd_host [host_conf_get_suited_hosts]
+   ts_log_fine "testing on exec host $execd_host"
 
    # get paths for certificate and key
    set cert_path [get_tls_cert_path $execd_host "execd"]
@@ -381,7 +401,7 @@ proc cert_renew_execd {} {
    set default_lifetime [get_tls_default_lifetime]
 
    if {$ok} {
-      ts_log_fine "TEST 1: check if certificates are generated with the default lifetime"
+      ts_log_fine "TEST 1: check if certificates have been generated with the default lifetime"
       # check default lifetime
       set ok [cert_lifetime_check_certificate $execd_host $cert_path $default_lifetime]
 
@@ -407,11 +427,12 @@ proc cert_renew_execd {} {
       bootstrap_file_write bs
 
       # start execd and expect it to reconnect to the qmaster
-      startup_execd $execd_host
       set startup_time [clock seconds]
+      startup_execd $execd_host
 
       # check lifetime
-      set ok [cert_lifetime_check_certificate $execd_host $cert_path $lifetime $shutdown_time]
+      set not_before [expr $shutdown_time - 10]
+      set ok [cert_lifetime_check_certificate $execd_host $cert_path $lifetime $not_before]
 
       if {$ok} {
          # test if we can connect to the execd commlib server
@@ -427,7 +448,7 @@ proc cert_renew_execd {} {
       sleep_for_seconds $wait_time "waiting $wait_time seconds until certificate is about to expire..."
 
       # check lifetime of the new certificate - and later than the previous one
-      set not_before [expr $startup_time + 60]
+      set not_before [expr $startup_time + 60 - 10]
       set ok [cert_lifetime_check_certificate $execd_host $cert_path $lifetime $not_before]
 
       if {$ok} {
@@ -435,6 +456,10 @@ proc cert_renew_execd {} {
          set ok [cert_renew_check_execd_connection $execd_host]
       }
    }
+
+   # remove short lifetime in bootstrap file
+   set bs(security_params) ""
+   bootstrap_file_write bs
 
    if {$ok} {
       ts_log_fine "TEST 4: check if certificates are generated with the default lifetime after removing the short lifetime setting"
@@ -446,19 +471,59 @@ proc cert_renew_execd {} {
       delete_remote_file $execd_host $CHECK_USER $cert_path
       delete_remote_file $execd_host "root" $key_path
 
-      # remove short lifetime in bootstrap file
-      set bs(security_params) ""
-      bootstrap_file_write bs
-
       # start execd
       startup_execd $execd_host
 
       # check for the default lifetime
-      set ok [cert_lifetime_check_certificate $execd_host $cert_path $default_lifetime $shutdown_time]
+      set not_before [expr $shutdown_time - 10]
+      set ok [cert_lifetime_check_certificate $execd_host $cert_path $default_lifetime $not_before]
       if {$ok} {
          # test if we can connect to the execd commlib server
          set ok [cert_renew_check_execd_connection $execd_host]
       }
    }
+}
+
+proc cert_start_offset {} {
+   global CHECK_USER
+
+   # select a test host
+   set execd_host [host_conf_get_suited_hosts]
+
+   # get paths for certificate and key
+   set cert_path [get_tls_cert_path $execd_host "execd"]
+   set key_path [get_tls_key_path $execd_host "execd"]
+   set default_lifetime [get_tls_default_lifetime]
+
+   set ok 1
+   if {$ok} {
+      # shutdown the execd
+      shutdown_execd $execd_host
+
+      # delete certificates
+      delete_remote_file $execd_host $CHECK_USER $cert_path
+      delete_remote_file $execd_host "root" $key_path
+
+      # set a high start_offset
+      set bs(security_params) "certificate_start_offset=-300"
+      bootstrap_file_write bs
+
+      # start execd
+      set start_time [clock seconds]
+      startup_execd $execd_host
+
+      # check the certificate times
+      set not_before [expr $start_time - 310]
+      set not_after [expr $start_time - 290]
+      set ok [cert_lifetime_check_certificate $execd_host $cert_path $default_lifetime $not_before $not_after 300]
+   }
+
+   # reset to defaults, delete certificates, restart the execd
+   set bs(security_params) ""
+   bootstrap_file_write bs
+   shutdown_execd $execd_host
+   delete_remote_file $execd_host $CHECK_USER $cert_path
+   delete_remote_file $execd_host "root" $key_path
+   startup_execd $execd_host
 }
 

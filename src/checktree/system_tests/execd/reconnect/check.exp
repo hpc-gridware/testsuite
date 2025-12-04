@@ -55,7 +55,7 @@ set check_needs           "init_core_system"
 
 # define level setup/cleanup
 set check_setup_function "execd_reconnect_setup"
-set check_cleanup_level_function "execd_reconnect_cleanup_level"
+set check_cleanup_function "execd_reconnect_cleanup"
 
 
 # define test's procedure order
@@ -73,12 +73,12 @@ proc execd_reconnect_setup {} {
    }
 }
 
-#****** check/execd_reconnect_cleanup_level() **********************************
+#****** check/execd_reconnect_cleanup() **********************************
 #  NAME
-#     execd_reconnect_cleanup_level() -- cleanup test procedure
+#     execd_reconnect_cleanup() -- cleanup test procedure
 #
 #  SYNOPSIS
-#     execd_reconnect_cleanup_level { }
+#     execd_reconnect_cleanup{ }
 #
 #  FUNCTION
 #     This cleanup level function is doing a qconf call to get the global
@@ -86,11 +86,11 @@ proc execd_reconnect_setup {} {
 #     restart complete cell cluster
 #
 #*******************************************************************************
-proc execd_reconnect_cleanup_level {} {
-   global execd_reconnect_cleanup_level_do_cleanup
+proc execd_reconnect_cleanup {} {
+   global execd_reconnect_cleanup_do_cleanup
    ts_log_fine "cleanup level function ..."
 
-   if {[get_config dummy global 10] != 0 || $execd_reconnect_cleanup_level_do_cleanup == 1} {
+   if {[get_config dummy global 10] != 0 || $execd_reconnect_cleanup_do_cleanup == 1} {
       # shutdown complete system (execd will never re-connect on error)
       shutdown_core_system
 
@@ -130,10 +130,10 @@ proc execd_reconnect_test {} {
    global check_description
    global CHECK_ACT_LEVEL
    global CHECK_USER
-   global execd_reconnect_cleanup_level_do_cleanup
+   global execd_reconnect_cleanup_do_cleanup
    get_current_cluster_config_array ts_config
 
-   set execd_reconnect_cleanup_level_do_cleanup 1
+   set execd_reconnect_cleanup_do_cleanup 1
 
    ts_log_fine "TEST: \"$check_description($CHECK_ACT_LEVEL)\""
    set execd_name [host_conf_get_suited_hosts]
@@ -198,7 +198,7 @@ proc execd_reconnect_test {} {
 
    # 5) Wait that all execds reconnect to the new started qmaster
    if {[wait_for_load_from_all_queues 120] == 0} {
-      set execd_reconnect_cleanup_level_do_cleanup 0
+      set execd_reconnect_cleanup_do_cleanup 0
    }
 
    set host_load "-"
@@ -212,7 +212,7 @@ proc execd_reconnect_test {} {
       ts_log_fine "load is ok!"
    } else {
       append error_text "Load of host $execd_name is not available. The selected (restarted) execd did not connect to qmaster!\n"
-      set execd_reconnect_cleanup_level_do_cleanup 1
+      set execd_reconnect_cleanup_do_cleanup 1
    }
 
    if {$error_text != ""} {
