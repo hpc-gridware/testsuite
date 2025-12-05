@@ -10816,6 +10816,18 @@ proc shutdown_and_restart_qmaster {} {
    startup_qmaster 1
 }
 
+## @brief shutdown and restart execd on a host
+#
+# @param[in] host - the host where execd should be restarted
+#
+proc shutdown_and_restart_execd {host} {
+   global ts_config
+
+   shutdown_execd $host
+   # sometimes the socket can not be re-used immediately
+   sleep_for_seconds 2
+   startup_execd $host
+}
 
 proc call_startup_script { host service {script_file ""} {args ""} { timeout 30 } } {
    global ts_config CHECK_USER CHECK_ADMIN_USER_SYSTEM
