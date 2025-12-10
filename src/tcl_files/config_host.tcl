@@ -3799,6 +3799,7 @@ proc host_conf_select_ehost_with_massive_uid_gid {} {
 #
 proc host_conf_get_user_with_massive_supplementary_groups {ehost} {
    # user might be different per host
+   # user should have at least 150 supplementary groups
    return "usr10000"
 }
 

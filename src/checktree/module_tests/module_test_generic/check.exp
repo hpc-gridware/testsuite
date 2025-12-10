@@ -119,6 +119,9 @@ lappend generic_module_tests "test_uti_threads"
 lappend generic_module_tests "test_uti_thread_local"
 lappend generic_module_tests "test_uti_time"
 lappend generic_module_tests "test_uti_os_fds"
+if {[is_version_in_range "9.1.0"]} {
+   lappend generic_module_tests "test_uti_Encoder"
+}
 
 
 proc generic_module_tests_setup {} {
