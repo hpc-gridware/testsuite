@@ -57,6 +57,7 @@ set check_cleanup_function exclusive_host_usage_cleanup
 
 # define test's procedure order
 set check_functions {}
+# tests with exclusive consumable YES
 lappend check_functions "sequential_exclusive_blocked"
 lappend check_functions "sequential_non_exclusive_blocked"
 lappend check_functions "parallel_exclusive_blocked"
@@ -67,7 +68,16 @@ lappend check_functions "sequential_AR_exclusive_blocked"
 lappend check_functions "sequential_AR_non_exclusive_blocked"
 lappend check_functions "parallel_AR_exclusive_blocked"
 lappend check_functions "parallel_AR_non_exclusive_blocked"
+
+# tests with per JOB exclusive complex
 lappend check_functions "exclusive_job_consumables"
+
+# tests with per HOST exclusive complex
+lappend check_functions "parallel_host_exclusive_blocked"
+lappend check_functions "parallel_host_non_exclusive_blocked"
+lappend check_functions "parallel_host_resource_reservation"
+lappend check_functions "parallel_AR_host_exclusive_blocked"
+lappend check_functions "parallel_AR_host_non_exclusive_blocked"
 
 # -------- local test procedures: initialization------------------------------
 
@@ -88,6 +98,7 @@ proc exclusive_host_usage_setup {} {
 
    # add exclusive complex
    set tmp_complex(exclusive) "excl BOOL EXCL YES YES 0 0"
+   set tmp_complex(hexclusive) "hexcl BOOL EXCL YES HOST 0 0"
    set tmp_complex(jexclusive) "jexcl BOOL EXCL YES JOB 0 0"
    set_complex tmp_complex
 
@@ -100,6 +111,7 @@ proc exclusive_host_usage_setup {} {
 
       # set new ones
       add_or_replace_array_param host_config exclusive_host_usage_host_backup "complex_values" "excl" "true"
+      add_or_replace_array_param host_config host_config "complex_values" "hexcl" "true"
       add_or_replace_array_param host_config host_config "complex_values" "jexcl" "true"
       set_exechost host_config $host
    }
@@ -123,7 +135,7 @@ proc exclusive_host_usage_setup {} {
    # setup resource quota set
    set rqs_name "exclusive_test"
    set rules {}
-   lappend rules "users $CHECK_FIRST_FOREIGN_SYSTEM_USER to exclusive=true"
+   lappend rules "users $CHECK_FIRST_FOREIGN_SYSTEM_USER to exclusive=true,hexclusive=true"
    set rqs_charray($rqs_name,limit)   $rules
    set rqs_charray($rqs_name,enabled) "true"
    add_rqs rqs_charray
@@ -169,20 +181,29 @@ proc exclusive_host_usage_cleanup {} {
    unset -nocomplain exclusive_hosts exclusive_host_usage_complex_backup exclusive_host_usage_host_backup
 }
 
-proc do_exclusive_usage_test { first_is_exclusive {pe_name ""} {rqs_test 0} } {
+proc do_exclusive_usage_test { first_is_exclusive {pe_name ""} {rqs_test 0} {host_exclusive 0}} {
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
    global exclusive_hosts
    set ret 0
 
-   ts_log_fine "doing test with first_is_exclusive=$first_is_exclusive, pe=$pe_name, rqs_test=$rqs_test"
+   ts_log_fine "doing test with first_is_exclusive=$first_is_exclusive, pe=$pe_name, rqs_test=$rqs_test, host_exclusive=$host_exclusive"
+
+   # we use either a YES or HOST consumable
+   if {$host_exclusive} {
+      set variable "hexclusive"
+      set shortcut "hexcl"
+   } else {
+      set variable "exclusive"
+      set shortcut "excl"
+   }
 
    if {$rqs_test == 0} {
       set user $CHECK_USER
       set test_host [lindex $exclusive_hosts 0]
       set job_request "-b y -l h=$test_host"
       set msg [translate_macro MSG_SCHEDD_ITOFFERSONLY]
-      set msg1 "${msg}hc:exclusive=false"
-      set msg2 [translate_macro MSG_SCHEDD_EXCLUSIVE_IN_USE_S "exclusive"]
+      set msg1 "${msg}hc:${variable}=false"
+      set msg2 [translate_macro MSG_SCHEDD_EXCLUSIVE_IN_USE_S $variable]
    } else {
       set user $CHECK_FIRST_FOREIGN_SYSTEM_USER
       set job_request "-b y"
@@ -197,9 +218,9 @@ proc do_exclusive_usage_test { first_is_exclusive {pe_name ""} {rqs_test 0} } {
 
    # submit the first job to fill a slot
    if {$first_is_exclusive == 1} {
-      set job_id [submit_job "$job_request -l excl=true $job_script" 1 60 "" $user]
+      set job_id [submit_job "$job_request -l ${shortcut}=true $job_script" 1 60 "" $user]
    } else {
-      set job_id [submit_job "$job_request -l excl=false $job_script" 1 60 "" $user]
+      set job_id [submit_job "$job_request -l ${shortcut}=false $job_script" 1 60 "" $user]
    }
 
    if {[wait_for_jobstart $job_id "sleep" 60] != 0} {
@@ -209,7 +230,7 @@ proc do_exclusive_usage_test { first_is_exclusive {pe_name ""} {rqs_test 0} } {
 
    if {$ret == 0} {
       # a exclusive job should now not started
-      set job_id [submit_job "$job_request -l excl=true $job_script" 1 60 "" $user]
+      set job_id [submit_job "$job_request -l ${shortcut}=true $job_script" 1 60 "" $user]
       if {[wait_for_jobstart $job_id "sleep" 5 0] == 0} {
          # job has to run, error was generated in wait_for_jobstart
          ts_log_severe "exclusive job $job_id was started even consumable is already in use"
@@ -236,7 +257,7 @@ proc do_exclusive_usage_test { first_is_exclusive {pe_name ""} {rqs_test 0} } {
       # depending on the first job a non-exclusive job has to
       # a) start if first job was non-exclusive
       # b) stay pending if first job was exclusive
-      set job_id [submit_job "$job_request -l excl=false $job_script" 1 60 "" $user]
+      set job_id [submit_job "$job_request -l ${shortcut}=false $job_script" 1 60 "" $user]
       if {$first_is_exclusive == 1} {
          if {[wait_for_jobstart $job_id "sleep" 5 0] == 0} {
             # job has to run, error was generated in wait_for_jobstart
@@ -310,9 +331,18 @@ proc parallel_non_exclusive_blocked {} {
    do_exclusive_usage_test 0 "fill_up" 1
 }
 
-proc do_resource_reservation_test {mode {pe_name ""}} {
+proc do_resource_reservation_test {mode {pe_name ""} {host_exclusive 0}} {
    global ts_config CHECK_USER
    global exclusive_hosts
+
+   # we use either a YES or HOST consumable
+   if {$host_exclusive} {
+      set variable "hexclusive"
+      set shortcut "hexcl"
+   } else {
+      set variable "exclusive"
+      set shortcut "excl"
+   }
 
    set runtime_1 "10"
    if {$mode == "ST_BACKFILL_FINISH_ORDER"} {
@@ -327,14 +357,14 @@ proc do_resource_reservation_test {mode {pe_name ""}} {
 
    if {$pe_name != ""} {
       set job_request "-R y -q excl.q -pe $pe_name"
-      set job_desc1 "-N L4_BF -p 100 $job_request 1 -l h_rt=$runtime_1,excl=false"
-      set job_desc2 "-N L5_BF -p 0 $job_request 11 -l h_rt=$runtime_1,excl=true"
-      set job_desc3 "-N L1_BF -p 0 $job_request 1 -l h_rt=$runtime_2,excl=false"
+      set job_desc1 "-N L4_BF -p 100 $job_request 1 -l h_rt=$runtime_1,${shortcut}=false"
+      set job_desc2 "-N L5_BF -p 0 $job_request 11 -l h_rt=$runtime_1,${shortcut}=true"
+      set job_desc3 "-N L1_BF -p 0 $job_request 1 -l h_rt=$runtime_2,${shortcut}=false"
    } else {
       set job_request "-R y -l h=$test_host"
-      set job_desc1 "-N L4_BF -p 100 $job_request,h_rt=$runtime_1,excl=false"
-      set job_desc2 "-N L5_BF -p 0 $job_request,h_rt=$runtime_1,excl=true"
-      set job_desc3 "-N L1_BF -p 0 $job_request,h_rt=$runtime_2,excl=false"
+      set job_desc1 "-N L4_BF -p 100 $job_request,h_rt=$runtime_1,${shortcut}=false"
+      set job_desc2 "-N L5_BF -p 0 $job_request,h_rt=$runtime_1,${shortcut}=true"
+      set job_desc3 "-N L1_BF -p 0 $job_request,h_rt=$runtime_2,${shortcut}=false"
    }
 
    set drmaa_arguments "$mode \"$job_script\" \"$job_desc1\" \"$job_desc2\" \"$job_desc3\""
@@ -363,12 +393,21 @@ proc parallel_resource_reservation {} {
    do_resource_reservation_test ST_BACKFILL_FINISH_ORDER "fill_up"
 }
 
-proc do_AR_exclusive_usage_test { first_is_exclusive {pe_name ""} } {
+proc do_AR_exclusive_usage_test {first_is_exclusive {pe_name ""} {host_exclusive 0}} {
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
    global exclusive_hosts
    set ret 0
 
    ts_log_fine "doing AR test with first_is_exclusive=$first_is_exclusive, pe=$pe_name"
+
+   # we use either a YES or HOST consumable
+   if {$host_exclusive} {
+      set variable "hexclusive"
+      set shortcut "hexcl"
+   } else {
+      set variable "exclusive"
+      set shortcut "excl"
+   }
 
    set test_host [lindex $exclusive_hosts 0]
    set job_request "-l h=$test_host"
@@ -381,9 +420,9 @@ proc do_AR_exclusive_usage_test { first_is_exclusive {pe_name ""} } {
 
    # submit the first job to fill a slot
    if {$first_is_exclusive == 1} {
-      set ar_id [submit_ar "$ar_request -l excl=true"]
+      set ar_id [submit_ar "$ar_request -l ${shortcut}=true"]
    } else {
-      set ar_id [submit_ar "$ar_request -l excl=false"]
+      set ar_id [submit_ar "$ar_request -l ${shortcut}=false"]
    }
 
    if {$ar_id <= 0} {
@@ -394,7 +433,7 @@ proc do_AR_exclusive_usage_test { first_is_exclusive {pe_name ""} } {
    # test behavior inside the AR
    if {$ret == 0} {
       # test exclusive job
-      set job_id [submit_job "$job_request -ar $ar_id -l excl=true $job_script" 0]
+      set job_id [submit_job "$job_request -ar $ar_id -l ${shortcut}=true $job_script" 0]
       if {$first_is_exclusive == 0} {
          # job is rejected at submit time because AR did not requested to be exclusive
          if {$job_id > 0} {
@@ -402,7 +441,7 @@ proc do_AR_exclusive_usage_test { first_is_exclusive {pe_name ""} } {
             set ret 1
          }
          # non-exclusive job has to run
-         set job_id [submit_job "$job_request -ar $ar_id -l excl=false $job_script"]
+         set job_id [submit_job "$job_request -ar $ar_id -l ${shortcut}=false $job_script"]
          if {[wait_for_jobstart $job_id "sleep" 5 0] != 0} {
             # job has to run, error was generated in wait_for_jobstart
             ts_log_severe "non-exclusive job stayed pending for non-exclusive AR"
@@ -419,14 +458,14 @@ proc do_AR_exclusive_usage_test { first_is_exclusive {pe_name ""} } {
 
    if {$ret == 0} {
       # a exclusive AR should now be rejected
-      set ar_id [submit_ar "$ar_request -l excl=true" "" "" 0]
+      set ar_id [submit_ar "$ar_request -l ${shortcut}=true" "" "" 0]
       if {$ar_id > 0} {
          ts_log_severe "exclusive are was accepeted even consumable is already in use"
          set ret 1
       }
 
       # a exclusive job should now not started
-      set job_id [submit_job "$job_request -l excl=true $job_script"]
+      set job_id [submit_job "$job_request -l ${shortcut}=true $job_script"]
       if {[wait_for_jobstart $job_id "sleep" 5 0] == 0} {
          # job has to run, error was generated in wait_for_jobstart
          ts_log_severe "exclusive job was started even consumable is already in use"
@@ -438,7 +477,7 @@ proc do_AR_exclusive_usage_test { first_is_exclusive {pe_name ""} } {
       # depending on the first AR a non-exclusive AR has to be
       # a) accepted if first AR was non-exclusive
       # b) rejected if first AR was exclusive
-      set ar_id [submit_ar "$ar_request -l excl=false" "" "" 0]
+      set ar_id [submit_ar "$ar_request -l ${shortcut}=false" "" "" 0]
       if {$first_is_exclusive == 1} {
          if {$ar_id > 0} {
             ts_log_severe "non-exclusive AR was accepted even consumable is already used by exclusive AR"
@@ -454,7 +493,7 @@ proc do_AR_exclusive_usage_test { first_is_exclusive {pe_name ""} } {
       # depending on the first AR a non-exclusive job has to
       # a) start if first job was non-exclusive
       # b) stay pending if first job was exclusive
-      set job_id [submit_job "$job_request -l excl=false $job_script"]
+      set job_id [submit_job "$job_request -l ${shortcut}=false $job_script"]
       if {$first_is_exclusive == 1} {
          if {[wait_for_jobstart $job_id "sleep" 5 0] == 0} {
             # job has to run, error was generated in wait_for_jobstart
@@ -562,3 +601,39 @@ proc exclusive_job_consumables {} {
       }
    }
 }
+
+proc parallel_host_exclusive_blocked {} {
+   # without RQS
+   do_exclusive_usage_test 1 "round_robin" 0 1
+   do_exclusive_usage_test 1 "fill_up"     0 1
+   # with RQS
+   do_exclusive_usage_test 1 "round_robin" 1 1
+   do_exclusive_usage_test 1 "fill_up"     1 1
+}
+
+proc parallel_host_non_exclusive_blocked {} {
+   # without RQS
+   do_exclusive_usage_test 0 "round_robin" 0 1
+   do_exclusive_usage_test 0 "fill_up"     0 1
+   # with RQS
+   do_exclusive_usage_test 0 "round_robin" 1 1
+   do_exclusive_usage_test 0 "fill_up"     1 1
+}
+
+proc parallel_host_resource_reservation {} {
+   do_resource_reservation_test ST_RESERVATION_FINISH_ORDER "round_robin" 1
+   do_resource_reservation_test ST_BACKFILL_FINISH_ORDER "round_robin"    1
+   do_resource_reservation_test ST_RESERVATION_FINISH_ORDER "fill_up"     1
+   do_resource_reservation_test ST_BACKFILL_FINISH_ORDER "fill_up"        1
+}
+
+proc parallel_AR_host_exclusive_blocked {} {
+   do_AR_exclusive_usage_test 1 "round_robin" 1
+   do_AR_exclusive_usage_test 1 "fill_up"     1
+}
+
+proc parallel_AR_host_non_exclusive_blocked {} {
+   do_AR_exclusive_usage_test 0 "round_robin" 1
+   do_AR_exclusive_usage_test 0 "fill_up"     1
+}
+
