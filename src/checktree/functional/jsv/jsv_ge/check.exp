@@ -105,6 +105,7 @@ proc jsv_ge_setup {} {
    global ts_config
    global jsv_org_global_conf
    global jsv_base_path
+   global bootstrap_backup
 
    # create queue
    set q_param(load_thresholds) "np_load_avg=100.00"
@@ -128,6 +129,12 @@ proc jsv_ge_setup {} {
    set_config global_conf
    set global_conf(jsv_url) "NONE"
    set_config global_conf
+
+   # backup bootstrap file and set worker threads to 2 (jsv_ge_restart_after_kill expects 2 threads only)
+   bootstrap_file_read bootstrap_backup
+   set bootstrap(worker_threads) 2
+   bootstrap_file_write bootstrap
+   shutdown_and_restart_qmaster
 }
 
 # stop all running JSV scripts
@@ -135,6 +142,12 @@ proc jsv_ge_cleanup {} {
    global ts_config
    global jsv_org_global_conf
    global jsv_base_path
+   global bootstrap_backup
+
+   # reset changes in bootstrap file
+   set bootstrap(worker_threads) $bootstrap_backup(worker_threads)
+   bootstrap_file_write bootstrap
+   shutdown_and_restart_qmaster
 
    # trigger and wait for job termination
    delete_all_jobs
