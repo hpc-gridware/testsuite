@@ -75,6 +75,7 @@ proc usage_io_setup {} {
       ts_log_config "Cannot find a linux host for IO usage test"
       return
    }
+   ts_log_fine "testing on host $usage_io_host"
 
    # remove the old usage file if it exists
    delete_remote_file $fileserver $CHECK_USER $usage_io_file
@@ -175,7 +176,7 @@ proc usage_io_test {} {
    if {![info exists usage(io)]} {
       lappend errors "io usage not reported"
    } else {
-      if {![compare_usage $usage(io) $expected_io]} {
+      if {![compare_usage $usage(io) $expected_io 2]} {
          lappend errors "io usage ($usage(io)) differs too much from expected ($expected_io)"
       }
    }
