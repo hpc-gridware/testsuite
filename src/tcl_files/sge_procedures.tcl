@@ -2443,13 +2443,14 @@ proc get_config {change_array {host global} {atimeout 60} {raise_error 1}} {
 #*******************************
 global g_set_config_messages_add g_set_config_messages_mod
 unset -nocomplain g_set_config_messages_add g_set_config_messages_mod
-proc set_config {change_array {host global} {do_add 0} {raise_error 1} {do_reset 0}} {
+proc set_config {change_array {host global} {do_add 0} {raise_error 1} {do_reset 0} {fast_add 1} {on_host ""}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER CHECK_JOB_OUTPUT_DIR
    global g_set_config_messages_add g_set_config_messages_mod
 
    upvar $change_array chgar_orig
 
+   # @todo why do we copy it?
    foreach elem [array names chgar_orig] {
       set chgar($elem) $chgar_orig($elem)
    }
@@ -2475,37 +2476,85 @@ proc set_config {change_array {host global} {do_add 0} {raise_error 1} {do_reset
       }
    }
 
-   if {$do_add} {
-      set tmpfile "$CHECK_JOB_OUTPUT_DIR/$host"
-      set qconf_cmd "-Aconf $tmpfile"
-      array set data {}
-      set line_cnt 0
-      foreach elem [array names chgar] {
-         incr line_cnt 1
-         set data($line_cnt) "$elem $chgar($elem)"
+   # figure out the qconf option to use
+   if {$fast_add} {
+      if {$do_add} {
+         set option "-Aconf"
+      } else {
+         set option "-Mconf"
       }
-      set data(0) $line_cnt
-      write_remote_file $ts_config(master_host) $CHECK_USER $tmpfile data
-      set output [start_sge_bin qconf $qconf_cmd $ts_config(master_host) $CHECK_USER]
-      delete_remote_file $ts_config(master_host) $CHECK_USER $tmpfile
-      unset data
    } else {
-      set config_return [get_config current_values $host]
+      if {$do_add} {
+         set option "-aconf"
+      } else {
+         set option "-mconf"
+      }
+   }
+
+   # if we want to add a config, get_config will fail if the config does not yet exist
+   # suppress the error state
+   if {$do_add} {
+      set get_config_raise_error 0
+   } else {
+      set get_config_raise_error 1
+   }
+
+   # get the current config
+   set config_return [get_config current_values $host 60 $get_config_raise_error]
+
+   # add/modify
+   if {$fast_add} {
+      # build array to be used for qconf
+      foreach elem [array names chgar] {
+         # empty elements mean to delete the attribute
+         if {$chgar($elem) eq ""} {
+            unset -nocomplain current_values($elem)
+         } else {
+            # add / mod
+            set current_values($elem) $chgar($elem)
+         }
+      }
+      # for reset we need to remove additional elements
+      foreach elem [array names current_values] {
+         if {$do_reset && $config_return == 0} {
+            if {![info exists chgar($elem)]} {
+               unset -nocomplain current_values($elem)
+            }
+         }
+      }
+
+      # "perfect" host for calling qconf
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
+      }
+      # the tmpfile name must be equal to the host name
+      set tmpfile [dump_array_to_named_tmpfile current_values $host $on_host]
+      set qconf_opts "$option $tmpfile"
+      set output [start_sge_bin "qconf" "$qconf_opts" $on_host]
+   } else {
       if {$do_reset && $config_return == 0} {
-         # Any elem in current_values which should not be in new config
-         # have to be defined in new config as parameter with empty string
+         # Elements in current_values which should not be in new config
+         # have to be defined in new config as parameter with empty string.
          foreach elem [array names current_values] {
             if {![info exists chgar($elem)]} {
                set chgar($elem) ""
             }
          }
       }
-      set qconf_cmd "-mconf $host"
-      set vi_commands [build_vi_command chgar current_values]
-      set output [start_vi_edit qconf $qconf_cmd $vi_commands messages $ts_config(master_host) $CHECK_USER]
+      set qconf_opts "$option $host"
+      if {$config_return == 0} {
+         # get_config returned success - use the array
+         set current_name current_values
+
+      } else {
+         # get_config returned error - do not pass any array name to build_vi_command
+         set current_name ""
+      }
+      set vi_commands [build_vi_command chgar $current_name 0]
+      set output [start_vi_edit "qconf" $qconf_opts $vi_commands messages $ts_config(master_host) $CHECK_USER]
    }
 
-   set result [handle_sge_errors "set_config" "qconf $qconf_cmd" [string trim $output] messages $raise_error]
+   set result [handle_sge_errors "set_config" "qconf $qconf_opts" [string trim $output] messages $raise_error]
    if {$result < 0}  {
       ts_log_severe "could not add or modify configuration for host $host ($result)" $raise_error
    }
@@ -2880,7 +2929,7 @@ proc build_gdi_request_limit {src type obj user host limit} {
 #     change_array(usage_scaling)               "NONE"
 #     change_array(resource_capability_factor)  "0.000000"
 #*******************************
-proc add_exechost {change_array {fast_add 1}} {
+proc add_exechost {change_array {fast_add 1} {on_host ""}} {
    get_current_cluster_config_array ts_config
 
    upvar $change_array chgar
@@ -2905,16 +2954,12 @@ proc add_exechost {change_array {fast_add 1}} {
          set default_array($elem) $value
       }
 
-      set tmpfile [get_tmp_file_name]
-      set file [open $tmpfile "w"]
-      set values [array names default_array]
-      foreach elem $values {
-         set value $default_array($elem)
-         puts $file "$elem                   $value"
+      if {$on_host == ""} {
+         set on_host [config_get_best_suited_admin_host]
       }
-      close $file
+      set tmpfile [dump_array_to_tmpfile default_array $on_host]
 
-      set result [start_sge_bin "qconf" "-Ae ${tmpfile}"]
+      set result [start_sge_bin "qconf" "-Ae ${tmpfile}" $on_host]
       ts_log_finest $result
 
       set ADDED [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS "*" "*" "*" "*"]
@@ -4388,7 +4433,7 @@ proc del_attr_file_error {result object tmpfile attribute target raise_error} {
 #     integer value  0 on success, -2 on error
 #
 #*******************************************************************************
-proc add_attr { object attribute value target {fast_add 1} {on_host ""} {as_user ""} {raise_error 1}} {
+proc add_attr {object attribute value target {fast_add 1} {on_host ""} {as_user ""} {raise_error 1}} {
    global CHECK_USER
    get_current_cluster_config_array ts_config
 
@@ -4519,7 +4564,7 @@ proc replace_attr { object attribute value target {fast_add 1} {on_host ""} {as_
    ts_log_fine "Replacing attribute \"$attribute\" of object \"$object\""
 
    # add queue from file?
-    if { $fast_add } {
+    if {$fast_add} {
       set default_array($attribute) "$value"
       if {$on_host == ""} {
          set on_host [config_get_best_suited_admin_host]

@@ -254,7 +254,6 @@ proc set_exechost { change_array {host global} {fast_add 1} {on_host ""} {as_use
       } else {
          set ret [set_exechost_error $result old_values $tmpfile $raise_error]
       }
-
    } else {
       # Use vi
       set vi_commands [build_vi_command old_values]
@@ -379,7 +378,6 @@ proc mod_exechost {change_array host {fast_add 1} {on_host ""} {as_user ""} {rai
    ts_log_fine "Using mod_exechost as wrapper for set_exechost \n"
 
    return [set_exechost out $host $fast_add $on_host $as_user $raise_error]
-
 }
 #****** sge_host/get_exechost_list() *******************************************
 #  NAME
@@ -653,7 +651,6 @@ proc del_adminhost {host  {on_host ""} {as_user ""} {raise_error 1}} {
 #     sge_procedures/get_qconf_list()
 #*******************************************************************************
 proc add_adminhost {host  {on_host ""} {as_user ""} {raise_error 1}} {
-
    get_current_cluster_config_array ts_config
    set ret 0
    set result [start_sge_bin "qconf" "-ah $host" $on_host $as_user]

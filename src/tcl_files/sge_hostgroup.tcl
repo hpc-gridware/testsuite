@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -41,7 +41,7 @@
 #     set_hostgroup_defaults {change_array}
 #
 #  FUNCTION
-#     Fills the array change_array with default hostgroup attributes for the 
+#     Fills the array change_array with default hostgroup attributes for the
 #     specific version of SGE.
 #
 #  INPUTS
@@ -51,7 +51,7 @@
 proc set_hostgroup_defaults {change_array} {
    get_current_cluster_config_array ts_config
    upvar $change_array chgar
-   
+
    set chgar(group_name)    "@template"
    set chgar(hostlist)      "NONE"
 }
@@ -61,7 +61,7 @@ proc set_hostgroup_defaults {change_array} {
 #     add_hostgroup() -- Add a new host group configuration file
 #
 #  SYNOPSIS
-#     add_hostgroup { group {change_array ""} {fast_add 1} {on_host ""} 
+#     add_hostgroup { group {change_array ""} {fast_add 1} {on_host ""}
 #     {as_user ""} {raise_error 1}}
 #
 #  FUNCTION
@@ -119,7 +119,7 @@ proc add_hostgroup {group {change_array ""} {fast_add 1} {on_host ""} {as_user "
 #     get_hostgroup() -- get host group configuration object
 #
 #  SYNOPSIS
-#     get_hostgroup { group {output_var result} {on_host ""} {as_user ""} 
+#     get_hostgroup { group {output_var result} {on_host ""} {as_user ""}
 #     {raise_error 1}}
 #
 #  FUNCTION
@@ -157,7 +157,7 @@ proc get_hostgroup {group {output_var result} {on_host ""} {as_user ""} {raise_e
 #     del_hostgroup() -- delete host group configuration object
 #
 #  SYNOPSIS
-#     del_hostgroup { group {on_host ""} {as_user ""} {raise_error 1} } 
+#     del_hostgroup { group {on_host ""} {as_user ""} {raise_error 1} }
 #
 #  FUNCTION
 #     Delete the host group configuration object
@@ -192,7 +192,7 @@ proc del_hostgroup {group {on_host ""} {as_user ""} {raise_error 1}} {
 #    get_hostgroup_list () -- get the list of all host groups
 #
 #  SYNOPSIS
-#     get_hostgroup_list { {output_var result} {on_host ""} {as_user ""} 
+#     get_hostgroup_list { {output_var result} {on_host ""} {as_user ""}
 #     {raise_error 1}  }
 #
 #  FUNCTION
@@ -217,9 +217,9 @@ proc get_hostgroup_list {{output_var result} {on_host ""} {as_user ""} {raise_er
    ts_log_fine "Get hostgroup list ..."
 
    upvar $output_var out
-   
-   get_hostgroup_messages messages "list" "" $on_host $as_user 
-   
+
+   get_hostgroup_messages messages "list" "" $on_host $as_user
+
    return [get_qconf_object "get_hostgroup_list" "-shgrpl" out messages 1 $on_host $as_user $raise_error]
 }
 
@@ -228,7 +228,7 @@ proc get_hostgroup_list {{output_var result} {on_host ""} {as_user ""} {raise_er
 #     mod_hostgroup() -- Modify existing host group configuration object
 #
 #  SYNOPSIS
-#     mod_hostgroup { group change_array {fast_add 1}  {on_host ""} {as_user ""} 
+#     mod_hostgroup { group change_array {fast_add 1}  {on_host ""} {as_user ""}
 #     {raise_error 1}}
 #
 #  FUNCTION
@@ -288,15 +288,15 @@ proc mod_hostgroup { group change_array {fast_add 1} {on_host ""} {as_user ""}  
 #     get_hostgroup_tree() -- get tree like structure of host group
 #
 #  SYNOPSIS
-#     get_hostgroup_tree { group {output_var result}  {on_host ""} {as_user ""} 
+#     get_hostgroup_tree { group {output_var result}  {on_host ""} {as_user ""}
 #     {raise_error 1}}
-#     
+#
 #
 #  FUNCTION
 #     Calls qconf -shgrp_tree @allhosts to retrieve tree like structure of @allhosts group
 #
 #  INPUTS
-#     group        - value of host group we wish to see 
+#     group        - value of host group we wish to see
 #     {output_var result} - result will be placed here
 #     {on_host ""}    - execute qconf on this host, default is master host
 #     {as_user ""}    - execute qconf as this user, default is $CHECK_USER
@@ -315,8 +315,8 @@ proc get_hostgroup_tree {group {output_var result} {on_host ""} {as_user ""} {ra
    upvar $output_var out
 
    ts_log_fine "Get tree for hostgroup $group ..."
-   
-   get_hostgroup_messages messages "get_tree" "" $on_host $as_user 
+
+   get_hostgroup_messages messages "get_tree" "" $on_host $as_user
 
    return [get_qconf_object "get_hostgroup_tree" "-shgrp_tree $group" out messages 0 $on_host $as_user $raise_error]
 
@@ -328,7 +328,7 @@ proc get_hostgroup_tree {group {output_var result} {on_host ""} {as_user ""} {ra
 #
 #  SYNOPSIS
 #     get_hostgroup_resolved { group {output_var result} {on_host ""} {as_user ""} {raise_error 1}
-#     
+#
 #
 #  FUNCTION
 #     Calls qconf -shgrp_resolved $group to retrieve list of host group
@@ -354,7 +354,7 @@ proc get_hostgroup_resolved {group {output_var result} {on_host ""} {as_user ""}
 
    ts_log_fine "Get resolved for host group $group ..."
 
-   get_hostgroup_messages messages "get_resolved" "" $on_host $as_user 
+   get_hostgroup_messages messages "get_resolved" "" $on_host $as_user
 
    return [get_qconf_object "get_hostgroup_resolved" "-shgrp_resolved $group" out messages 0 $on_host $as_user $raise_error]
 
@@ -362,11 +362,11 @@ proc get_hostgroup_resolved {group {output_var result} {on_host ""} {as_user ""}
 
 #****** sge_hostgroup.60/get_hostgroup_messages() ******************************
 #  NAME
-#     get_hostgroup_messages() -- returns the set of messages related to action 
+#     get_hostgroup_messages() -- returns the set of messages related to action
 #                              on hostgroup, i.e. add, modify, delete, get
 #
 #  SYNOPSIS
-#     get_hostgroup_messages {msg_var action obj_name result {on_host ""} {as_user ""}} 
+#     get_hostgroup_messages {msg_var action obj_name result {on_host ""} {as_user ""}}
 #
 #  FUNCTION
 #     Returns the set of messages related to action on sge object. This function
@@ -389,12 +389,12 @@ proc get_hostgroup_messages {msg_var action obj_name {on_host ""} {as_user ""}} 
    if { [info exists messages]} {
       unset messages
    }
-     
+
    set GROUP "host group"
 
    sge_client_messages messages $action $GROUP $obj_name $on_host $as_user
 
-   # the place for exceptions: # VD version dependent  
+   # the place for exceptions: # VD version dependent
    #                           # CD client dependent
    # see sge_procedures/sge_client_messages
    switch -exact $action {
@@ -421,9 +421,9 @@ proc get_hostgroup_messages {msg_var action obj_name {on_host ""} {as_user ""}} 
          }
          if {$as_user == ""} {
             set as_user "*"
-         } 
+         }
          set REMOVED [translate_macro MSG_SGETEXT_REMOVEDFROMLIST_SSSS "$as_user" "$on_host" $obj_name "$GROUP entry"]
-         add_message_to_container messages 0 $REMOVED        
+         add_message_to_container messages 0 $REMOVED
       }
       "list" {
          # BUG: group list instead of host group
@@ -436,5 +436,5 @@ proc get_hostgroup_messages {msg_var action obj_name {on_host ""} {as_user ""}} 
       "get_resolved" {
          add_message_to_container messages -1 [translate_macro MSG_HGROUP_NOTEXIST_S $GROUP]
       }
-   } 
+   }
 }

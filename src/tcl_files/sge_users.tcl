@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -40,7 +40,7 @@
 #     set_user_defaults {change_array}
 #
 #  FUNCTION
-#     Fills the array change_array with user attributes for the specific 
+#     Fills the array change_array with user attributes for the specific
 #     version of SGE.
 #
 #  INPUTS
@@ -63,7 +63,7 @@ proc set_user_defaults {change_array} {
 #     add_user -- Add a new user configuration object
 #
 #  SYNOPSIS
-#     add_user {user {change_array ""} {fast_add 1} {on_host ""} {as_user ""} 
+#     add_user {user {change_array ""} {fast_add 1} {on_host ""} {as_user ""}
 #     {raise_error 1}}
 #
 #  FUNCTION
@@ -99,7 +99,7 @@ proc add_user {user {change_array ""} {fast_add 1} {on_host ""} {as_user ""} {ra
    set chgar(name) "$user"
 
    get_user_messages messages "add" "$user" $on_host $as_user
-  
+
    if {$fast_add} {
       ts_log_fine "Add user $user from file ..."
       set option "-Auser"
@@ -161,18 +161,18 @@ proc get_user {user {change_array ""} {on_host ""} {as_user ""} {raise_error 1}}
    ts_log_fine "Get user $user ..."
 
    get_user_messages messages "get" "$user" $on_host $as_user
-   
+
    return [get_qconf_object "get_user" "-suser $user" out messages 0 $on_host $as_user $raise_error]
 
 }
 
 #****** sge_users/del_user() ***************************************************
-# 
+#
 #  NAME
 #     del_user -- delete the user(s)
 #
 #  SYNOPSIS
-#     del_user { user {on_host ""} {as_user ""} {raise_error 1} } 
+#     del_user { user {on_host ""} {as_user ""} {raise_error 1} }
 #
 #  FUNCTION
 #     Deletes a user(s) using qconf -duser $user
@@ -241,13 +241,13 @@ proc get_user_list {{output_var result} {on_host ""} {as_user ""} {raise_error 1
       ts_log_config "not possible for sge systems"
       return -9
    }
-   
+
    ts_log_fine "Get user list ..."
 
    upvar $output_var out
-   
-   get_user_messages messages "list" "" $on_host $as_user 
-   
+
+   get_user_messages messages "list" "" $on_host $as_user
+
    return [get_qconf_object "get_user_list" "-suserl" out messages 1 $on_host $as_user $raise_error]
 }
 
@@ -379,7 +379,7 @@ proc mod_user {user change_array {fast_add 1} {on_host ""} {as_user ""} {raise_e
 #     get_manager_list() -- get the list of managers
 #
 #  SYNOPSIS
-#     get_manager_list { {output_var result} {on_host ""} {as_user ""} 
+#     get_manager_list { {output_var result} {on_host ""} {as_user ""}
 #     {raise_error 1}  }
 #
 #  FUNCTION
@@ -470,7 +470,7 @@ proc del_manager {manager {on_host ""} {as_user ""} {raise_error 1}} {
 #     get_operator_list() -- get the list of operators
 #
 #  SYNOPSIS
-#     get_operator_list {{output_var result} {on_host ""} {as_user ""} 
+#     get_operator_list {{output_var result} {on_host ""} {as_user ""}
 #     {raise_error 1}  }
 #
 #  FUNCTION
@@ -493,18 +493,18 @@ proc del_manager {manager {on_host ""} {as_user ""} {raise_error 1}} {
 #*******************************************************************************
 proc get_operator_list {{output_var result} {on_host ""} {as_user ""} {raise_error 1}} {
    upvar $output_var out
-   
+
    return [get_qconf_list "get_operator_list" "-so" out $on_host $as_user $raise_error]
 
 }
 
 #****** sge_procedures/add_operator() ******
-# 
+#
 #  NAME
 #     add_operator
 #
 #  SYNOPSIS
-#     add_operator { anOperator } 
+#     add_operator { anOperator }
 #
 #  FUNCTION
 #     Add user ''anOperator'' to operator list.
@@ -514,7 +514,7 @@ proc get_operator_list {{output_var result} {on_host ""} {as_user ""} {raise_err
 #
 #  RESULT
 #     0 - Operator has been successfully added
-#    -1 - Otherwise 
+#    -1 - Otherwise
 #
 #  SEE ALSO
 #     sge_procedures/delete_operator
@@ -543,12 +543,12 @@ proc add_operator { anOperator } {
 
 #                                                             max. column:     |
 #****** sge_procedures/delete_operator() ******
-# 
+#
 #  NAME
 #     delete_operator
 #
 #  SYNOPSIS
-#     delete_operator { anOperator } 
+#     delete_operator { anOperator }
 #
 #  FUNCTION
 #     Delete user ''anOperator'' from operator list.
@@ -558,7 +558,7 @@ proc add_operator { anOperator } {
 #
 #  RESULT
 #     0 - Operator has been successfully deleted
-#    -1 - Otherwise 
+#    -1 - Otherwise
 #
 #  SEE ALSO
 #     sge_procedures/add_operator
@@ -587,11 +587,11 @@ proc delete_operator {anOperator} {
 
 #****** sge_user/get_user_messages() *******************************************
 #  NAME
-#     get_user_messages() -- returns the set of messages related to action 
+#     get_user_messages() -- returns the set of messages related to action
 #                              on user, i.e. add, modify, delete, get
 #
 #  SYNOPSIS
-#     get_user_messages {msg_var action obj_name result {on_host ""} {as_user ""}} 
+#     get_user_messages {msg_var action obj_name result {on_host ""} {as_user ""}}
 #
 #  FUNCTION
 #     Returns the set of messages related to action on sge object. This function
@@ -619,7 +619,7 @@ proc get_user_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
 
    sge_client_messages messages $action $USER $obj_name $on_host $as_user
 
-   # the place for exceptions: # VD version dependent  
+   # the place for exceptions: # VD version dependent
    #                           # CD client dependent
    # see sge_procedures/sge_client_messages
    switch -exact $action {
@@ -645,5 +645,5 @@ proc get_user_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
       "del" {
          #
       }
-   } 
+   }
 }

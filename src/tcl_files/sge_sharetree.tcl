@@ -43,10 +43,10 @@
 #     Calls qconf -astnode project to add user1, user2 to project with shares1,  shares2
 #
 #  INPUTS
-#     project         - project for which  we wish to see sharetree; 
-#     user1           - user1   for which  we wish to chage shares; 
+#     project         - project for which  we wish to see sharetree;
+#     user1           - user1   for which  we wish to chage shares;
 #     shares1         - shares   for user1;
-#     user2           - user2   for which  we wish to chage shares; 
+#     user2           - user2   for which  we wish to chage shares;
 #     shares2        - shares   for user12
 #     {on_host ""}    - execute qconf on this host, default is master host
 #     {as_user ""}    - execute qconf as this user, default is $CHECK_USER
@@ -68,7 +68,7 @@ proc add_sharetree_node {project user1 shares1 user2 shares2 {on_host ""} {as_us
 
    # parse output or raise error
    if {$prg_exit_state == 0} {
-      set ret  $result 
+      set ret  $result
    } else {
       set ret [add_sharetree_node_error $prg_exit_state $project $user1 $shares1 $user2 $shares2 $raise_error]
    }
@@ -113,7 +113,7 @@ proc add_sharetree_node {project user1 shares1 user2 shares2 {on_host ""} {as_us
 #     sge_procedures/handle_sge_errors
 #*******************************************************************************
 proc add_sharetree_node_error {result project user1 shares1 user2 shares2 raise_error} {
- 
+
    # recognize certain error messages and return special return code
    set messages(index) "-1"
    set messages(-1) [translate_macro MSG_PROJECT_XISNOKNWOWNPROJECT_S $project]
@@ -128,7 +128,7 @@ proc add_sharetree_node_error {result project user1 shares1 user2 shares2 raise_
    return $ret
 }
 
- 
+
 #****** sge_sharetree/get_sharetree_list() *****************************************
 #  NAME
 #     get_sharetree_list() -- get a list of all sharetrees
@@ -197,7 +197,7 @@ proc mod_sharetree_node {project user1 shares1 user2 shares2 {on_host ""} {as_us
 
    # parse output or raise error
    if {$prg_exit_state == 0} {
-      set ret $result 
+      set ret $result
    } else {
       set ret [mod_sharetree_node_error $prg_exit_state $project $user1 $shares1 $user2 $shares2 $raise_error]
    }
@@ -291,7 +291,7 @@ proc del_sharetree_node {project user {on_host ""} {as_user ""} {raise_error 1}}
 
    # parse output or raise error
    if {$prg_exit_state == 0} {
-      set ret  $result 
+      set ret  $result
    } else {
       set ret [del_sharetree_node_error $prg_exit_state $project $user $raise_error]
    }
@@ -353,7 +353,7 @@ proc del_sharetree_node_error {result project user raise_error} {
 #     del_sharetree() -- delete the sharetree
 #
 #  SYNOPSIS
-#     del_sharetree { {on_host ""} {as_user ""} {raise_error 1} } 
+#     del_sharetree { {on_host ""} {as_user ""} {raise_error 1} }
 #
 #  FUNCTION
 #     Deletes the sharetree.
@@ -388,21 +388,21 @@ proc del_sharetree {{on_host ""} {as_user ""} {raise_error 1}} {
 #     stree_buffer_init() -- initialize a sharetree buffer
 #
 #  SYNOPSIS
-#     stree_buffer_init { stree_var } 
+#     stree_buffer_init { stree_var }
 #
 #  FUNCTION
 #     Initializes a sharetree buffer.
 #
 #     A sharetree buffer is used to build, modify, query a sharetree
 #     in memory.
-#     
+#
 #     Sharetree nodes can be added, modified, deleted.
 #     The shares assigned to a certain node can be queried.
 #
-#     An in memory sharetree buffer can be made permanent: 
+#     An in memory sharetree buffer can be made permanent:
 #     It is sent to sge_qmaster via qconf -Mstree.
 #
-#     A sharetree buffer can be read into memory by querying 
+#     A sharetree buffer can be read into memory by querying
 #     it from qmaster (qconf -sstree).
 #
 #     Dumping a sharetree buffer shows it in a user readable form.
@@ -446,7 +446,7 @@ proc stree_buffer_init {stree_var} {
 #     stree_buffer_add_node() -- add a node to a sharetree buffer
 #
 #  SYNOPSIS
-#     stree_buffer_add_node { stree_var node shares } 
+#     stree_buffer_add_node { stree_var node shares }
 #
 #  FUNCTION
 #     Adds a node to the given sharetree buffer.
@@ -498,7 +498,7 @@ proc stree_buffer_add_node {stree_var node shares} {
 #     stree_buffer_mod_node() -- modify a node in sharetree buffer
 #
 #  SYNOPSIS
-#     stree_buffer_mod_node { stree_var node shares } 
+#     stree_buffer_mod_node { stree_var node shares }
 #
 #  FUNCTION
 #     Modify a node in the sharetree buffer (sets new value for shares)
@@ -537,7 +537,7 @@ proc stree_buffer_mod_node {stree_var node shares} {
 #     stree_buffer_del_node() -- delete a node in a sharetree buffer
 #
 #  SYNOPSIS
-#     stree_buffer_del_node { stree_var node } 
+#     stree_buffer_del_node { stree_var node }
 #
 #  FUNCTION
 #     Deletes the given node in the sharetree buffer.
@@ -553,7 +553,7 @@ proc stree_buffer_mod_node {stree_var node shares} {
 #     < 0 - on error
 #
 #  BUGS
-#     Does not remove itself from parent node and does not 
+#     Does not remove itself from parent node and does not
 #     respect child nodes!
 #
 #  SEE ALSO
@@ -608,7 +608,7 @@ proc stree_buffer_del_node {stree_var node} {
 #     stree_buffer_get_node() -- get the shares of a certain node
 #
 #  SYNOPSIS
-#     stree_buffer_get_node { stree_var node } 
+#     stree_buffer_get_node { stree_var node }
 #
 #  FUNCTION
 #     Returns the shares of the given node.
@@ -639,7 +639,7 @@ proc stree_buffer_get_node {stree_var node} {
 #     stree_buffer_commit() -- modify sharetree according to sharetree buffer
 #
 #  SYNOPSIS
-#     stree_buffer_commit { stree_var } 
+#     stree_buffer_commit { stree_var }
 #
 #  FUNCTION
 #     Modifies the sharetree in sge_qmaster (qconf -Mstree) according to
@@ -666,7 +666,7 @@ proc stree_buffer_commit {stree_var {on_host ""} {as_user ""} {raise_error 1}} {
    # open a temporary file - will be deleted automatically by testsuite
    set tmp_filename [get_tmp_file_name]
    set f [open $tmp_filename "w"]
-   
+
    # recursivly output sharetree
    set id 0
    foreach node $stree(index) {
@@ -724,7 +724,7 @@ proc stree_buffer_commit {stree_var {on_host ""} {as_user ""} {raise_error 1}} {
 #     stree_parse_line() -- parse a line of qconf -sstree output
 #
 #  SYNOPSIS
-#     stree_parse_line { name line } 
+#     stree_parse_line { name line }
 #
 #  FUNCTION
 #     Utility function called by stree_buffer_read.
@@ -759,7 +759,7 @@ proc stree_parse_line {name line} {
 #     stree_buffer_read() -- query sharetree and store it in sharetree buffer
 #
 #  SYNOPSIS
-#     stree_buffer_read { stree_var } 
+#     stree_buffer_read { stree_var }
 #
 #  FUNCTION
 #     Fetches the sharetree definition from sge_qmaster (qconf -sstree),
@@ -788,7 +788,7 @@ proc stree_buffer_read {stree_var} {
       set ret -1
    } else {
       set lines [split [string trim $result] "\n"]
-      
+
       # we get 5 lines per sharetree node - do some verification
       set num_lines [llength $lines]
       if {[expr $num_lines % 5] != 0} {
@@ -852,7 +852,7 @@ proc stree_buffer_read {stree_var} {
 #     stree_buffer_dump() -- dump the contents of a sharetree buffer
 #
 #  SYNOPSIS
-#     stree_buffer_dump { stree_var } 
+#     stree_buffer_dump { stree_var }
 #
 #  FUNCTION
 #     Dumps the contents of a sharetree buffer in the form:
@@ -887,7 +887,7 @@ proc stree_buffer_dump {stree_var} {
 #     test_stree_buffer() -- test for sharetree_buffer functions
 #
 #  SYNOPSIS
-#     test_stree_buffer { } 
+#     test_stree_buffer { }
 #
 #  FUNCTION
 #     Tests the sharetree_buffer functions.
@@ -934,7 +934,7 @@ proc test_stree_buffer {} {
 
    ts_log_fine "read sharetree from qmaster"
    wait_for_enter
-  
+
    # modify the read sharetree
    stree_buffer_mod_node new_sharetree "/$CHECK_USER" 50
    stree_buffer_add_node new_sharetree "/mytestproject" 100
@@ -972,7 +972,7 @@ proc test_stree_buffer {} {
 
    ts_log_fine "reread and modified sharetree from qmaster"
    wait_for_enter
-  
+
    del_sharetree
 
    ts_log_fine "deleted sharetree"
@@ -983,7 +983,7 @@ proc test_stree_buffer {} {
 #     sge_share_mon() -- call sge_share_mon and return data
 #
 #  SYNOPSIS
-#     sge_share_mon { output_var {on_host ""} {as_user ""} {raise_error 1} } 
+#     sge_share_mon { output_var {on_host ""} {as_user ""} {raise_error 1} }
 #
 #  FUNCTION
 #     Calls sge_share_mon to retrieve a snapshot of the sharetree usage.

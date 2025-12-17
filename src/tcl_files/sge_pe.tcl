@@ -28,7 +28,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -41,7 +41,7 @@
 #     set_pe_defaults {change_array}
 #
 #  FUNCTION
-#     Fills the array change_array with default parallel environment attributes 
+#     Fills the array change_array with default parallel environment attributes
 #     for the specific version of SGE.
 #
 #  INPUTS
@@ -80,7 +80,7 @@ proc set_pe_defaults {change_array} {
 #
 #  FUNCTION
 #     Add a new pe (parallel environemnt) to the Cluster Scheduler (Grid Engine) cluster.
-#     Supports fast (qconf -Ap) and slow (qconf -ap) mode. 
+#     Supports fast (qconf -Ap) and slow (qconf -ap) mode.
 #
 #  INPUTS
 #     pe_name           - parallel environment name
@@ -137,7 +137,7 @@ proc add_pe { pe_name {change_array ""} {fast_add 1} {on_host ""} {as_user ""} {
 }
 
 #****** sge_pe/get_pe() ********************************************************
-# 
+#
 #  NAME
 #     get_pe -- get parallel environment configuration object
 #
@@ -181,7 +181,7 @@ proc get_pe {pe_name {output_var result} {on_host ""} {as_user ""} {raise_error 
 #     mod_pe -- modify existing parallel environment configuration object
 #
 #  SYNOPSIS
-#     mod_pe {pe_name change_array {fast_add 1} {on_host ""} {as_user ""} 
+#     mod_pe {pe_name change_array {fast_add 1} {on_host ""} {as_user ""}
 #     {raise_error 1}}
 #
 #  FUNCTION
@@ -211,7 +211,7 @@ proc mod_pe {pe_name change_array {fast_add 1} {on_host ""} {as_user ""} {raise_
    set chgar(pe_name) "$pe_name"
 
    get_pe_messages messages "mod" "$pe_name" $on_host $as_user
-     
+
    if { $fast_add } {
       ts_log_fine "Modify parallel environment $pe_name from file ..."
       set option "-Mp"
@@ -237,7 +237,7 @@ proc mod_pe {pe_name change_array {fast_add 1} {on_host ""} {as_user ""} {raise_
    }
    return [handle_sge_errors "mod_pe" "qconf $option" $result messages $raise_error]
 }
- 
+
 #****** sge_pe/del_pe() ********************************************************
 #
 #  NAME
@@ -269,7 +269,7 @@ proc del_pe {pe_name {on_host ""} {as_user ""} {raise_error 1}} {
    get_current_cluster_config_array ts_config
 
    ts_log_fine "Delete parallel environment $pe_name ..."
-   
+
    unassign_queues_with_pe_object $pe_name $on_host $as_user $raise_error
 
    get_pe_messages messages "del" "$pe_name" $on_host $as_user
@@ -277,7 +277,7 @@ proc del_pe {pe_name {on_host ""} {as_user ""} {raise_error 1}} {
    set output [start_sge_bin "qconf" "-dp $pe_name" $on_host $as_user]
 
    return [handle_sge_errors "del_pe" "qconf -dp $pe_name" $output messages $raise_error]
-   
+
 }
 
 #****** sge_pe/get_pe_list() ***************************************************
@@ -285,7 +285,7 @@ proc del_pe {pe_name {on_host ""} {as_user ""} {raise_error 1}} {
 #    get_pe_list () -- get the list of all parallel environments
 #
 #  SYNOPSIS
-#     get_pe_list { {output_var result} {on_host ""} {as_user ""} 
+#     get_pe_list { {output_var result} {on_host ""} {as_user ""}
 #     {raise_error 1}  }
 #
 #  FUNCTION
@@ -308,21 +308,21 @@ proc del_pe {pe_name {on_host ""} {as_user ""} {raise_error 1}} {
 #*******************************************************************************
 proc get_pe_list {{output_var result} {on_host ""} {as_user ""} {raise_error 1}} {
    upvar $output_var out
-   
+
    ts_log_fine "Get parallel environment list ..."
 
-   get_pe_messages messages "list" "" $on_host $as_user 
-   
+   get_pe_messages messages "list" "" $on_host $as_user
+
    return [get_qconf_object "get_pe_list" "-spl" out messages 1 $on_host $as_user $raise_error]
 }
 
 #****** sge_pe/get_pe_messages() ***********************************************
 #  NAME
-#     get_pe_messages() -- returns the set of messages related to action 
+#     get_pe_messages() -- returns the set of messages related to action
 #                              on parallel env., i.e. add, modify, delete, get
 #
 #  SYNOPSIS
-#     get_pe_messages {msg_var action obj_name result {on_host ""} {as_user ""}} 
+#     get_pe_messages {msg_var action obj_name result {on_host ""} {as_user ""}}
 #
 #  FUNCTION
 #     Returns the set of messages related to action on sge object. This function
@@ -350,8 +350,8 @@ proc get_pe_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
 
    # set the expected client messages
    sge_client_messages messages $action $OBJ_PE $obj_name $on_host $as_user
-   
-   # the place for exceptions: # VD version dependent  
+
+   # the place for exceptions: # VD version dependent
    #                           # CD client dependent
    # see sge_procedures/sge_client_messages
 

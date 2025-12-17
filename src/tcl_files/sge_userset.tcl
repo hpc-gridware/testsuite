@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -40,7 +40,7 @@
 #     set_userset_defaults {change_array}
 #
 #  FUNCTION
-#     Fills the array change_array with default userset attributes for the 
+#     Fills the array change_array with default userset attributes for the
 #     specific version of SGE.
 #
 #  INPUTS
@@ -49,7 +49,7 @@
 #*******************************************************************************
 proc set_userset_defaults {change_array} {
    get_current_cluster_config_array ts_config
-   
+
    upvar $change_array chgar
 
    set chgar(name)        "template"
@@ -65,7 +65,7 @@ proc set_userset_defaults {change_array} {
 #     add_userset -- add a userset with qconf -Au
 #
 #  SYNOPSIS
-#     add_userset { name change_array {fast_add 1} {on_host ""} {as_user ""} 
+#     add_userset { name change_array {fast_add 1} {on_host ""} {as_user ""}
 #     {raise_error 1}}
 #
 #  FUNCTION
@@ -90,14 +90,14 @@ proc set_userset_defaults {change_array} {
 proc add_userset {name change_array {fast_add 1} {on_host ""} {as_user ""} {raise_error 1}} {
    global CHECK_USER CHECK_USER
    get_current_cluster_config_array ts_config
- 
+
    if { [ string compare $ts_config(product_type) "sge" ] == 0 } {
      ts_log_config "not possible for sge systems"
      return -9
    }
-   
+
    get_userset_messages messages "add" "$name" $on_host $as_user
-  
+
    if {$fast_add} {
       ts_log_fine "Add userset $name from file ..."
       set option "-Au"
@@ -112,13 +112,10 @@ proc add_userset {name change_array {fast_add 1} {on_host ""} {as_user ""} {rais
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
       unset chgar(name)
       return [handle_sge_errors "add_userset" "qconf $option" $result messages $raise_error]
-      
    } else {
       ts_log_fine "Add userset using vi is not supported ..."
       return 0
-
-   }   
-
+   }
 }
 
 #****** sge_userset/get_userset() **********************************************
@@ -150,9 +147,9 @@ proc add_userset {name change_array {fast_add 1} {on_host ""} {as_user ""} {rais
 #*******************************************************************************
 proc get_userset {name {output_var result} {on_host ""} {as_user ""} {raise_error 1}} {
    upvar $output_var out
-  
+
    ts_log_fine "Get userset $name ..."
-   
+
    get_userset_messages messages "get" "$name" $on_host $as_user
 
    return [get_qconf_object "get_userset" "-su $name" out messages 0 $on_host $as_user $raise_error]
@@ -161,10 +158,10 @@ proc get_userset {name {output_var result} {on_host ""} {as_user ""} {raise_erro
 #****** sge_userset/del_userset() **********************************************
 #
 #  NAME
-#     del_userset -- Delete an userset 
+#     del_userset -- Delete an userset
 #
 #  SYNOPSIS
-#     del_userset { name {on_host ""} {as_user ""} {raise_error 1} } 
+#     del_userset { name {on_host ""} {as_user ""} {raise_error 1} }
 #
 #  FUNCTION
 #     Deletes an userset using qconf -du
@@ -186,11 +183,11 @@ proc get_userset {name {output_var result} {on_host ""} {as_user ""} {raise_erro
 proc del_userset { name {on_host ""} {as_user ""} {raise_error 1} } {
    global CHECK_USER
    get_current_cluster_config_array ts_config
-   
+
    ts_log_fine "Delete userset $name ..."
 
    get_userset_messages messages "del" "$name" $on_host $as_user
-   
+
    set output [start_sge_bin "qconf" "-dul $name" $on_host $as_user]
 
    return [handle_sge_errors "del_userset" "qconf -dul $name" $output messages $raise_error]
@@ -227,8 +224,8 @@ proc get_userset_list {{output_var result} {on_host ""} {as_user ""} {raise_erro
 
    ts_log_fine "Get userset list ..."
 
-   get_userset_messages messages "list" "" $on_host $as_user 
-   
+   get_userset_messages messages "list" "" $on_host $as_user
+
    return [get_qconf_object "get_userset_list" "-sul" out messages 1 $on_host $as_user $raise_error]
 
 }
@@ -239,7 +236,7 @@ proc get_userset_list {{output_var result} {on_host ""} {as_user ""} {raise_erro
 #     mod_userset -- modify the userset
 #
 #  SYNOPSIS
-#     mod_userset {attribute value change_array {fast_add 1} {on_host ""} 
+#     mod_userset {attribute value change_array {fast_add 1} {on_host ""}
 #     {as_user ""} raise_error}
 #
 #  FUNCTION
@@ -264,18 +261,18 @@ proc get_userset_list {{output_var result} {on_host ""} {as_user ""} {raise_erro
 #*******************************************************************************
 proc mod_userset {userset change_array {fast_add 1} {on_host ""} {as_user ""} {raise_error 1} } {
    get_current_cluster_config_array ts_config
-     
+
    # userset doesn't exist for sge systems
    if {[string compare $ts_config(product_type) "sge"] == 0} {
       ts_log_config "not possible for sge systems"
       return -9
    }
-   
+
    upvar $change_array chgar
    set chgar(name) "$userset"
-  
+
    get_userset_messages messages "mod" "$userset" $on_host $as_user
-     
+
    if { $fast_add } {
       ts_log_fine "Modify userset $userset from file ..."
       set option "-Mu"
@@ -289,7 +286,7 @@ proc mod_userset {userset change_array {fast_add 1} {on_host ""} {as_user ""} {r
       }
       set tmpfile [dump_array_to_tmpfile curr_uset $on_host]
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
-  
+
    } else {
       ts_log_fine "Modify userset $userset slow ..."
       set option "-mu"
@@ -322,7 +319,7 @@ proc mod_userset {userset change_array {fast_add 1} {on_host ""} {as_user ""} {r
 #     add_access_list() -- add user access list
 #
 #  SYNOPSIS
-#     add_access_list { user_array list_name } 
+#     add_access_list { user_array list_name }
 #
 #  FUNCTION
 #     This procedure starts the qconf -au command to add a new user access list.
@@ -338,25 +335,26 @@ proc mod_userset {userset change_array {fast_add 1} {on_host ""} {as_user ""} {r
 #     sge_procedures/del_access_list()
 #
 #*******************************************************************************
-proc add_access_list { user_array list_name } {
-  get_current_cluster_config_array ts_config
+proc add_access_list {user_array list_name} {
+   get_current_cluster_config_array ts_config
 
  # aja: TODO: format arguments
-  set arguments ""
-  foreach elem $user_array {
-     append arguments "$elem,"
+   set arguments ""
+   foreach elem $user_array {
+      append arguments "$elem,"
    }
-  append arguments " $list_name"
+   append arguments " $list_name"
 
-  set result [start_sge_bin "qconf" "-au $arguments"]
+   set result [start_sge_bin "qconf" "-au $arguments"]
 
-  set ADDED [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_ACL_ADDTOACL_SS ] $user_array $list_name]
-  if { [string first "added" $result ] < 0 && [string first $ADDED $result ] < 0 } {
-     ts_log_severe "could not add access_list $list_name"
-     return -1
+   set ADDED [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_ACL_ADDTOACL_SS ] $user_array $list_name]
+   if {[string first "added" $result] < 0 && [string first $ADDED $result] < 0} {
+      ts_log_severe "could not add access_list $list_name"
+      return -1
    }
-     return 0
-   }
+
+   return 0
+}
 
 
 #****** sge_procedures/del_user_from_access_list() ***************************************
@@ -364,10 +362,10 @@ proc add_access_list { user_array list_name } {
 #     del_user_from_access_list() -- delete a user from an access list
 #
 #  SYNOPSIS
-#     del_user_from_access_list { user_name list_name } 
+#     del_user_from_access_list { user_name list_name }
 #
 #  FUNCTION
-#     This procedure starts the qconf -du command to delete a user from a 
+#     This procedure starts the qconf -du command to delete a user from a
 #     access list
 #
 #  INPUTS
@@ -393,9 +391,9 @@ proc add_access_list { user_array list_name } {
 #    } else {
 #       ts_log_severe "Can not delete user codtest1 from access list deadlineusers"
 #    }
-# 
+#
 #  SEE ALSO
-# 
+#
 #*******************************************************************************
 proc del_user_from_access_list { user_name list_name {on_host ""} {as_user ""} {raise_error 1}} {
    get_current_cluster_config_array ts_config
@@ -413,11 +411,11 @@ proc del_user_from_access_list { user_name list_name {on_host ""} {as_user ""} {
 #     add_user_to_access_list() -- add a user to an access list
 #
 #  SYNOPSIS
-#     add_user_to_access_list { user_name list_name {on_host ""} {as_user ""} 
-#     {raise_error 1} } 
+#     add_user_to_access_list { user_name list_name {on_host ""} {as_user ""}
+#     {raise_error 1} }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #     user_name       - name of the user
@@ -470,7 +468,7 @@ proc add_user_to_access_list { user_name list_name {on_host ""} {as_user ""} {ra
 #
 #  SEE ALSO
 #     sge_procedures/add_access_list()
-# 
+#
 #*******************************************************************************
 proc del_access_list { list_name {on_host ""} {as_user ""} {raise_error 1}} {
 
@@ -500,7 +498,7 @@ proc del_access_list { list_name {on_host ""} {as_user ""} {raise_error 1}} {
 #
 #  RESULT
 #
-#  COMMENT 
+#  COMMENT
 #   Use this construct due to some issues with using get_qconf_list
 #
 #*******************************************************************************
@@ -512,11 +510,11 @@ proc get_ulist { userlist change_array {raise_error 1}} {
 
 #****** sge_userset/get_userset_messages() *************************************
 #  NAME
-#     get_userset_messages() -- returns the set of messages related to action 
+#     get_userset_messages() -- returns the set of messages related to action
 #                              on userset, i.e. add, modify, delete, get
 #
 #  SYNOPSIS
-#     get_userset_messages {msg_var action obj_attr result {on_host ""} {as_user ""}} 
+#     get_userset_messages {msg_var action obj_attr result {on_host ""} {as_user ""}}
 #
 #  FUNCTION
 #     Returns the set of messages related to action on sge object. This function
@@ -525,7 +523,7 @@ proc get_ulist { userlist change_array {raise_error 1}} {
 #  INPUTS
 #     msg_var       - array of messages (the pair of message code and message value)
 #     action        - action examples: add, modify, delete,...
-#     obj_attr      - any object attribute you want to pass to the function 
+#     obj_attr      - any object attribute you want to pass to the function
 #                     i.e. sge object name,...
 #     {on_host ""}  - execute on this host, default is master host
 #     {as_user ""}  - execute qconf as this user, default is $CHECK_USER
@@ -540,12 +538,12 @@ proc get_userset_messages {msg_var action obj_attr {on_host ""} {as_user ""}} {
    if {[info exists messages]} {
       unset messages
    }
-   
+
    set USERSET [translate_macro MSG_OBJ_USERSET]
 
    sge_client_messages messages $action $USERSET $obj_attr $on_host $as_user
 
-   # the place for exceptions: # VD version dependent  
+   # the place for exceptions: # VD version dependent
    #                           # CD client dependent
    # see sge_procedures/sge_client_messages
    switch -exact $action {
@@ -600,6 +598,6 @@ proc get_userset_messages {msg_var action obj_attr {on_host ""} {as_user ""}} {
          add_message_to_container messages -3 [translate_macro MSG_PARSE_MOD3_REJECTED_DUE_TO_AR_SU "*" "*"]
          add_message_to_container messages -4 [translate_macro MSG_ACL_ACLDOESNOTEXIST_S "*"]
       }
-   } 
+   }
 }
 

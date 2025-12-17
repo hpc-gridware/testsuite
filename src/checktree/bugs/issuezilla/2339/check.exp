@@ -27,17 +27,17 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -46,7 +46,7 @@ set check_category        "BUG RQS VERIFIED"
 set check_description(0)  "check issue 2339 is fixed"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function issue_2339_setup
@@ -78,8 +78,8 @@ proc issue_2339_setup {} {
    }
 
 
-   ts_log_fine "issue_2339_setup" 
-       
+   ts_log_fine "issue_2339_setup"
+
    set pe(slots)             "2"
    set pe(allocation_rule)   "2"
    add_pe "two_per_host" pe
@@ -104,7 +104,7 @@ proc issue_2339_setup {} {
    set queue_conf(seq_no)           "0,\[$first=3\],\[$second=4\]"
    add_queue "B" "$first $second" queue_conf 1
 
-   add_rqs_single "two_in_total"   "to slots=2" 
+   add_rqs_single "two_in_total"   "to slots=2"
    add_rqs_single "trap"           "hosts ${first} to slots=1"
 
    # enable resource reservation etc.
@@ -134,7 +134,7 @@ proc issue_2339_cleanup {  } {
    global ts_config
 
    del_rqs "two_in_total"
-   del_rqs "trap"         
+   del_rqs "trap"
 
    del_pe  "two_per_host"
 

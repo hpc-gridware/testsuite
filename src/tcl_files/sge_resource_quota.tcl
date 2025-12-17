@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -37,8 +37,8 @@
 #     get_rqs() -- get resource quota set config
 #
 #  SYNOPSIS
-#     get_rqs { output_var {rqs ""} {on_host ""} {as_user ""} {raise_error 1} 
-#     } 
+#     get_rqs { output_var {rqs ""} {on_host ""} {as_user ""} {raise_error 1}
+#     }
 #
 #  FUNCTION
 #     Execute 'qconf -srqs (name)' to get one or more resource quota sets
@@ -80,8 +80,8 @@ proc get_rqs {output_var {rqs ""} {on_host ""} {as_user ""} {raise_error 1}} {
 #     get_rqs_list() -- get a list of all configured resource quota sets
 #
 #  SYNOPSIS
-#     get_rqs_list { {output_var result} {on_host ""} {as_user ""} 
-#     {raise_error 1} } 
+#     get_rqs_list { {output_var result} {on_host ""} {as_user ""}
+#     {raise_error 1} }
 #
 #  FUNCTION
 #     Executes 'qconf -srqsl' to get a list of all resource quota sets
@@ -106,7 +106,7 @@ proc get_rqs_list {{output_var result} {on_host ""} {as_user ""} {raise_error 1}
 #     get_rqs_error() -- error handling for get_rqs
 #
 #  SYNOPSIS
-#     get_rqs_error { result rqs raise_error } 
+#     get_rqs_error { result rqs raise_error }
 #
 #  FUNCTION
 #     Does the error handling for get_rqs.
@@ -139,8 +139,8 @@ proc get_rqs_error {result rqs raise_error} {
 #     add_rqs() -- Add resource quota set(s)
 #
 #  SYNOPSIS
-#     add_rqs { change_array {fast_add 1} {on_host ""} {as_user ""} 
-#     {raise_error 1} } 
+#     add_rqs { change_array {fast_add 1} {on_host ""} {as_user ""}
+#     {raise_error 1} }
 #
 #  FUNCTION
 #     Calls qconf -arqs/-Arqs to add a new resource quota set
@@ -230,8 +230,8 @@ proc add_rqs {change_array {fast_add 1} {on_host ""} {as_user ""} {raise_error 1
 #     mod_rqs() -- Modify resource quota set(s)
 #
 #  SYNOPSIS
-#     mod_rqs { change_array {name ""} {fast_add 1} {on_host ""} {as_user ""} 
-#     {raise_error 1} } 
+#     mod_rqs { change_array {name ""} {fast_add 1} {on_host ""} {as_user ""}
+#     {raise_error 1} }
 #
 #  FUNCTION
 #     Calls qconf -Mrqs $file to modify resource quota sets, or -mrqs
@@ -243,7 +243,7 @@ proc add_rqs {change_array {fast_add 1} {on_host ""} {as_user ""} {raise_error 1
 #     {on_host ""}    - execute qconf on this host, default is master host
 #     {as_user ""}    - execute qconf as this user, default is $CHECK_USER
 #     {raise_error 1} - raise error condition in case of errors
-#   
+#
 #     change_array(name,description)  (name = name of the resource quota,
 #                                      description = description of quota)
 #     change_array(name,enabled)      (name = name of the resource quota,
@@ -264,9 +264,9 @@ proc mod_rqs {change_array {name ""} {fast_add 1} {on_host ""} {as_user ""} {rai
    global CHECK_USER
    global env
    get_current_cluster_config_array ts_config
- 
+
 #   TODO: Add a syntax check for the change_array
-  
+
    upvar $change_array chgar
 
    # Modify rqs from file?
@@ -308,7 +308,7 @@ proc mod_rqs {change_array {name ""} {fast_add 1} {on_host ""} {as_user ""} {rai
 #     del_rqs() -- Deletes resource quota set(s)
 #
 #  SYNOPSIS
-#     del_rqs { rqs_name {on_host ""} {as_user ""} {raise_error 1} } 
+#     del_rqs { rqs_name {on_host ""} {as_user ""} {raise_error 1} }
 #
 #  FUNCTION
 #     Deletes the given resource quota sets

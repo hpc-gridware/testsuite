@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -40,7 +40,7 @@
 #     set_project_defaults {change_array}
 #
 #  FUNCTION
-#     Fills the array change_array with default project attributes for the 
+#     Fills the array change_array with default project attributes for the
 #     specific version of SGE.
 #
 #  NOTE
@@ -52,9 +52,9 @@
 #*******************************************************************************
 proc set_project_defaults {change_array} {
    get_current_cluster_config_array ts_config
-   
+
    upvar $change_array chgar
-    
+
    set chgar(name)        "template"
    set chgar(oticket)     "0"
    set chgar(fshare)      "0"
@@ -63,12 +63,12 @@ proc set_project_defaults {change_array} {
 }
 
 #****** sge_project/add_project() **********************************************
-# 
+#
 #  NAME
 #     add_project -- add a new project configuration object
 #
 #  SYNOPSIS
-#     add_project {project {change_array ""} {fast_add 1} {on_host ""} 
+#     add_project {project {change_array ""} {fast_add 1} {on_host ""}
 #     {as_user ""} {raise_error 1}}
 #
 #  FUNCTION
@@ -86,7 +86,7 @@ proc set_project_defaults {change_array} {
 #  RESULT
 #     >=0 - success
 #      <0 - error
-#   
+#
 #  SEE ALSO
 #     sge_procedures/handle_sge_error()
 #     sge_project/get_project_messages()
@@ -99,12 +99,12 @@ proc add_project {project {change_array ""} {fast_add 1} {on_host ""} {as_user "
       ts_log_config "not possible for sge systems"
       return -9
    }
-   
+
    upvar $change_array chgar
    set chgar(name) "$project"
 
    get_project_messages messages "add" $project $on_host $as_user
-   
+
    if {$fast_add} {
       ts_log_fine "Add project $project from file ..."
       set option "-Aprj"
@@ -126,7 +126,7 @@ proc add_project {project {change_array ""} {fast_add 1} {on_host ""} {as_user "
 }
 
 #****** sge_project/get_project() **********************************************
-# 
+#
 #  NAME
 #     get_project -- get project configuration object
 #
@@ -155,7 +155,7 @@ proc add_project {project {change_array ""} {fast_add 1} {on_host ""} {as_user "
 #*******************************************************************************
 proc get_project {project {output_var result} {on_host ""} {as_user ""} {raise_error 1}} {
    get_current_cluster_config_array ts_config
-     
+
    # project doesn't exist for sge systems
    if {[string compare $ts_config(product_type) "sge"] == 0} {
       ts_log_config "not possible for sge systems"
@@ -166,18 +166,18 @@ proc get_project {project {output_var result} {on_host ""} {as_user ""} {raise_e
    upvar $output_var out
 
    get_project_messages messages "get" "$project" $on_host $as_user
-   
+
    return [get_qconf_object "get_project" "-sprj $project" out messages 0 $on_host $as_user $raise_error]
-   
+
 }
 
 #****** sge_project/del_project() **********************************************
-# 
+#
 #  NAME
 #     del_project -- delete project configuration object
 #
 #  SYNOPSIS
-#     del_project { project {on_host ""} {as_user ""} {raise_error 1} } 
+#     del_project { project {on_host ""} {as_user ""} {raise_error 1} }
 #
 #  FUNCTION
 #     Delete the project configuration object
@@ -199,19 +199,19 @@ proc get_project {project {output_var result} {on_host ""} {as_user ""} {raise_e
 #*******************************************************************************
 proc del_project { project {on_host ""} {as_user ""} {raise_error 1} } {
    get_current_cluster_config_array ts_config
-   
+
     # project doesn't exist for sge systems
    if {[string compare $ts_config(product_type) "sge"] == 0} {
       ts_log_config "not possible for sge systems"
       return -9
    }
-   
+
    ts_log_fine "Delete project $project ..."
 
    get_project_messages messages "del" "$project" $on_host $as_user
-   
+
    set output [start_sge_bin "qconf" "-dprj $project" $on_host $as_user]
-   
+
    return [handle_sge_errors "del_project" "qconf -dprj $project" $output messages $raise_error]
 
 }
@@ -221,7 +221,7 @@ proc del_project { project {on_host ""} {as_user ""} {raise_error 1} } {
 #    get_project_list () -- get the list of all projects
 #
 #  SYNOPSIS
-#     get_project_list { {output_var result} {on_host ""} {as_user ""} 
+#     get_project_list { {output_var result} {on_host ""} {as_user ""}
 #     {raise_error 1}  }
 #
 #  FUNCTION
@@ -244,19 +244,19 @@ proc del_project { project {on_host ""} {as_user ""} {raise_error 1} } {
 #*******************************************************************************
 proc get_project_list {{output_var result} {on_host ""} {as_user ""} {raise_error 1}} {
    get_current_cluster_config_array ts_config
-     
+
    # project doesn't exist for sge systems
    if {[string compare $ts_config(product_type) "sge"] == 0} {
       ts_log_config "not possible for sge systems"
       return -9
    }
-   
+
    ts_log_fine "Get project list ..."
 
    upvar $output_var out
-   
-   get_project_messages messages "list" "" $on_host $as_user 
-   
+
+   get_project_messages messages "list" "" $on_host $as_user
+
    return [get_qconf_object "get_project_list" "-sprjl" out messages 1 $on_host $as_user $raise_error]
 
 }
@@ -267,7 +267,7 @@ proc get_project_list {{output_var result} {on_host ""} {as_user ""} {raise_erro
 #     mod_project -- modify existing project configuration object
 #
 #  SYNOPSIS
-#     mod_project {project change_array {fast_add 1} {on_host ""} {as_user ""} 
+#     mod_project {project change_array {fast_add 1} {on_host ""} {as_user ""}
 #     {raise_error 1}}
 #
 #  FUNCTION
@@ -292,18 +292,18 @@ proc get_project_list {{output_var result} {on_host ""} {as_user ""} {raise_erro
 #*******************************************************************************
 proc mod_project {project change_array {fast_add 1} {on_host ""} {as_user ""} {raise_error 1} } {
    get_current_cluster_config_array ts_config
-     
+
    # project doesn't exist for sge systems
    if {[string compare $ts_config(product_type) "sge"] == 0} {
       ts_log_config "not possible for sge systems"
       return -9
    }
-   
+
    upvar $change_array chgar
    set chgar(name) "$project"
-   
+
    get_project_messages messages "mod" "$project" $on_host $as_user
-     
+
    if { $fast_add } {
       ts_log_fine "Modify project $project from file ..."
       set option "-Mprj"
@@ -331,11 +331,11 @@ proc mod_project {project change_array {fast_add 1} {on_host ""} {as_user ""} {r
 
 #****** sge_project/get_project_messages() *************************************
 #  NAME
-#     get_project_messages() -- returns the set of messages related to action 
+#     get_project_messages() -- returns the set of messages related to action
 #                              on project, i.e. add, modify, delete, get
 #
 #  SYNOPSIS
-#     get_project_messages {msg_var action obj_name result {on_host ""} {as_user ""}} 
+#     get_project_messages {msg_var action obj_name result {on_host ""} {as_user ""}}
 #
 #  FUNCTION
 #     Returns the set of messages related to action on sge object. This function
@@ -358,12 +358,12 @@ proc get_project_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
    if { [info exists messages]} {
       unset messages
    }
-     
+
    set PROJECT [translate_macro MSG_PROJECT]
 
    sge_client_messages messages $action $PROJECT $obj_name $on_host $as_user
 
-   # the place for exceptions: # VD version dependent  
+   # the place for exceptions: # VD version dependent
    #                           # CD client dependent
    # see sge_procedures/sge_client_messages
    switch -exact $action {
@@ -403,5 +403,5 @@ proc get_project_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
          set NOT_DEFINED [translate_macro MSG_QCONF_NOXDEFINED_S "project list"]
          add_message_to_container messages -1 $NOT_DEFINED
       }
-   } 
+   }
 }

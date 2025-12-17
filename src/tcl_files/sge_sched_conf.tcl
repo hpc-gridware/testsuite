@@ -27,22 +27,22 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
 
 #                                                             max. column:     |
 #****** sge_procedures/reset_schedd_config() ******
-# 
+#
 #  NAME
 #     reset_schedd_config -- set schedd configuration default values
 #
 #  SYNOPSIS
-#     reset_schedd_config { } 
+#     reset_schedd_config { }
 #
 #  FUNCTION
-#     This procedure will call set_schedd_config with default values 
+#     This procedure will call set_schedd_config with default values
 #
 #  RESULT
 #       -1 : timeout error
@@ -51,9 +51,9 @@
 #
 #  NOTES
 #     The default values are:
-#     
+#
 #     SGE system:
-#    
+#
 #     algorithm                   "default"
 #     schedule_interval           "0:0:10"
 #     maxujobs                    "0"
@@ -63,8 +63,8 @@
 #     load_adjustment_decay_time  "0:7:30"
 #     load_formula                "np_load_avg"
 #     schedd_job_info             "true", "false" since 62
-#     
-#     
+#
+#
 #     SGEEE differences:
 #     queue_sort_method           "share"
 #     user_sort                   "false"
@@ -142,19 +142,19 @@ proc vdep_set_sched_conf_defaults {change_array} {
 
 #                                                             max. column:     |
 #****** sge_procedures/set_schedd_config() ******
-# 
+#
 #  NAME
 #     set_schedd_config -- change scheduler configuration
 #
 #  SYNOPSIS
-#     set_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {raise_error 1} } 
+#     set_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {raise_error 1} }
 #
 #  FUNCTION
-#     Set the scheduler configuration corresponding to the content of the 
+#     Set the scheduler configuration corresponding to the content of the
 #     change_array.
 #
 #  INPUTS
-#     change_array - name of an array variable that will be set by 
+#     change_array - name of an array variable that will be set by
 #                    set_schedd_config
 #     {fast_add 1} - 0: modify the attribute using qconf -mckpt,
 #                  - 1: modify the attribute using qconf -Mckpt, faster
@@ -173,14 +173,14 @@ proc vdep_set_sched_conf_defaults {change_array} {
 #
 #  NOTES
 #     The array should be build like follows:
-#   
+#
 #     set change_array(algorithm) default
 #     set change_array(schedule_interval) 0:0:15
 #     ....
 #     (every value that is set will be changed)
 #
 #     Here the possible change_array values with some typical settings:
-#     
+#
 #     algorithm                   "default"
 #     schedule_interval           "0:0:15"
 #     maxujobs                    "0"
@@ -190,10 +190,10 @@ proc vdep_set_sched_conf_defaults {change_array} {
 #     load_adjustment_decay_time  "0:7:30"
 #     load_formula                "np_load_avg"
 #     schedd_job_info             "true"
-#     
-#     
+#
+#
 #     In case of a SGEEE - System:
-#     
+#
 #     reprioritize_interval       "00:01:00"
 #     halftime                    "168"
 #     usage_weight_list           "cpu=0.34,mem=0.33,io=0.33"
@@ -206,7 +206,7 @@ proc vdep_set_sched_conf_defaults {change_array} {
 #     weight_tickets_functional   "0"
 #     weight_tickets_share        "0"
 #     weight_tickets_deadline     "10000"
-#     
+#
 #
 #  SEE ALSO
 #     sge_procedures/get_schedd_config()
@@ -245,13 +245,13 @@ proc set_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {ra
       set ADDNOTULONG [translate_macro MSG_MUST_BE_POSITIVE_VALUE_S "*"]
       set master_arch [resolve_arch $ts_config(master_host)]
       set result [handle_vi_edit "$ts_config(product_root)/bin/$master_arch/qconf" "-msconf" $vi_commands $CHANGED_SCHEDD_CONFIG $NOTULONG $ADDNOTULONG]
-      if { $result == -1 } { 
-         ts_log_severe "timeout error" $raise_error 
-      } elseif { $result == -2 } { 
+      if { $result == -1 } {
+         ts_log_severe "timeout error" $raise_error
+      } elseif { $result == -2 } {
          ts_log_severe "not a u_long32 value" $raise_error
-      } elseif { $result == -3 } { 
+      } elseif { $result == -3 } {
          ts_log_severe "must be positive" $raise_error
-      } elseif { $result != 0 } { 
+      } elseif { $result != 0 } {
          ts_log_severe "error changing scheduler configuration" $raise_error
       }
    }
@@ -332,23 +332,22 @@ proc mod_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {ra
    ts_log_fine "Using mod_schedd_config as wrapper for set_schedd_config \n"
 
    return [set_schedd_config chgar $fast_add $on_host $as_user $raise_error]
-
 }
 
 #                                                             max. column:     |
 #****** sge_procedures/get_schedd_config() ******
-# 
+#
 #  NAME
-#     get_schedd_config -- get scheduler configuration 
+#     get_schedd_config -- get scheduler configuration
 #
 #  SYNOPSIS
-#     get_schedd_config { change_array } 
+#     get_schedd_config { change_array }
 #
 #  FUNCTION
-#     Get the current scheduler configuration     
+#     Get the current scheduler configuration
 #
 #  INPUTS
-#     change_array - name of an array variable that will get set by 
+#     change_array - name of an array variable that will get set by
 #                    get_schedd_config
 #     {on_host ""}      - execute qconf on this host (default: qmaster host)
 #     {as_user ""}      - execute qconf as this user (default: CHECK_USER)
@@ -359,15 +358,15 @@ proc mod_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {ra
 #     puts $test(schedule_interval)
 #
 #  NOTES
-# 
+#
 #     The array is build like follows:
-#   
+#
 #     set change_array(algorithm) default
 #     set change_array(schedule_interval) 0:0:15
 #     ....
 #
 #     Here the possible change_array values with some typical settings:
-#     
+#
 #     algorithm                   "default"
 #     schedule_interval           "0:0:15"
 #     maxujobs                    "0"
@@ -377,10 +376,10 @@ proc mod_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {ra
 #     load_adjustment_decay_time  "0:7:30"
 #     load_formula                "np_load_avg"
 #     schedd_job_info             "true"
-#     
-#     
+#
+#
 #     In case of a SGEEE - System:
-#     
+#
 #     reprioritize_interval       "00:01:00"
 #     halftime                    "168"
 #     usage_weight_list           "cpu=0.34,mem=0.33,io=0.33"
@@ -426,32 +425,32 @@ proc get_schedd_config { change_array {on_host ""} {as_user ""} {raise_error 1} 
 
 #****** sge_sched_conf/set_schedd_config_from_file() ***************************
 #  NAME
-#     set_schedd_config_from_file() -- ??? 
+#     set_schedd_config_from_file() -- ???
 #
 #  SYNOPSIS
-#     set_schedd_config_from_file { filename {on_host ""} {as_user ""} 
-#     {raise_error 1} } 
+#     set_schedd_config_from_file { filename {on_host ""} {as_user ""}
+#     {raise_error 1} }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
-#     filename        - ??? 
-#     {on_host ""}    - ??? 
-#     {as_user ""}    - ??? 
-#     {raise_error 1} - ??? 
+#     filename        - ???
+#     {on_host ""}    - ???
+#     {as_user ""}    - ???
+#     {raise_error 1} - ???
 #
 #  RESULT
-#     ??? 
+#     ???
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???

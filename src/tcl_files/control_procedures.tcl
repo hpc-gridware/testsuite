@@ -51,6 +51,39 @@ proc update_change_array { target_array change_array } {
    }
 }
 
+proc dump_array_to_file_data {array_var data_var} {
+   upvar $array_var chgar
+   upvar $data_var data
+
+   # index into the data array
+   set idx 0
+
+   # copy array data to file data
+   if [info exists chgar] {
+      set ignored 0
+      foreach elem [array names chgar] {
+         if {$elem == ""} {
+            ts_log_fine "ignore empty elem $elem"
+            continue
+         }
+         set value $chgar($elem)
+         if {$value != ""} {
+            ts_log_finer "set \"$elem\" to \"$value\""
+            incr idx ; set data($idx) "$elem $value"
+         } else {
+            ts_log_finer "skip array name \"$elem\""
+            incr ignored
+         }
+      }
+      if {$ignored != 0} {
+         ts_log_fine "ignored $ignored line(s) because value was empty"
+      }
+   }
+
+   # set number of lines
+   set data(0) $idx
+}
+
 ###
 # @brief dump an array to a temporary file, return filename
 #
@@ -66,46 +99,63 @@ proc dump_array_to_tmpfile {change_array {hostname ""}} {
    upvar $change_array chgar
    global CHECK_USER
 
-   if [info exists chgar] {
-      set ignored 0
-      # build a file data array, data(0) is the number of lines, data(n) are the lines
-      set idx 0
-      foreach elem [array names chgar] {
-         if {$elem == ""} {
-            ts_log_fine "ignore empty elem"
-            continue
-         }
-         set value $chgar($elem)
-         if {$value != ""} {
-            ts_log_finer "set \"$elem\" to \"$value\""
-            incr idx ; set data($idx) "$elem $value"
-         } else {
-            ts_log_finer "skip array name \"$elem\""
-            incr ignored
-         }
-      }
-      if {$ignored != 0} {
-         ts_log_fine "ignored $ignored line(s) because value was empty"
-      }
-      set data(0) $idx
+   # bring the TCL array into file array format
+   dump_array_to_file_data chgar data
 
-      if {$hostname != ""} {
-         # write to a local tmp file (in the /tmp directory)
-         set tmpfile [get_tmp_file_name $hostname "default" "tmp" 1]
-         if {$hostname == [gethostname]} {
-            # we'll execute qconf on the local host, write it locally
-            #ts_log_fine "====> writing local file $tmpfile on host $hostname"
-            save_file $tmpfile data
-         } else {
-            # we'll execute qconf on a remote host, write it remotely
-            #ts_log_fine "====> writing remote file $tmpfile on host $hostname"
-            write_remote_file $hostname $CHECK_USER $tmpfile data
-         }
-      } else {
-         set tmpfile [get_tmp_file_name]
-         #ts_log_fine "====> writing remote file $tmpfile in results directory, as we have no hostname"
+   if {$hostname != ""} {
+      # write to a local tmp file (in the /tmp directory)
+      set tmpfile [get_tmp_file_name $hostname "default" "tmp" 1]
+      if {$hostname == [gethostname]} {
+         # we'll execute qconf on the local host, write it locally
+         # that's much faster
          save_file $tmpfile data
+      } else {
+         # we'll execute qconf on a remote host, write it remotely
+         write_remote_file $hostname $CHECK_USER $tmpfile data
       }
+   } else {
+      # we don't know the hostname - write the file (which is on NFS) locally
+      set tmpfile [get_tmp_file_name]
+      save_file $tmpfile data
+   }
+
+   return $tmpfile
+}
+
+proc dump_array_to_named_tmpfile {change_array filename {on_host ""}} {
+   upvar $change_array chgar
+   global CHECK_USER
+
+   # can we use the local TCL file operations
+   # or do we need to use the remote_file_* function?
+   set write_locally 0
+
+   if {$on_host eq ""} {
+      # create a tmp directory in the testsuite results directory (on NFS)
+      # we don't know on which host it will be needed
+      set tmp_dir [get_tmp_directory_name]
+      set write_locally 1
+   } else {
+      # create a local tmp directory on the target host - that's much faster
+      set tmp_dir [get_tmp_directory_name $on_host "default" "tmp" 1]
+      if {$on_host == [gethostname]} {
+         # if the target hostname is the testsuite host
+         # then we can use local file operations which again ist faster
+         set write_locally 1
+      }
+   }
+
+   # bring the TCL array into file array format
+   dump_array_to_file_data chgar data
+   # that's our tmp filename
+   set tmpfile "$tmp_dir/$filename"
+
+   if {$write_locally} {
+      file mkdir $tmp_dir
+      save_file $tmpfile data
+   } else {
+      remote_file_mkdir $on_host $tmp_dir
+      write_remote_file $on_host $CHECK_USER $tmpfile data
    }
 
    return $tmpfile
@@ -327,7 +377,7 @@ proc check_correct_testsuite_setup_user { error_text } {
 #  SEE ALSO
 #     ???/???
 #*******************************************************************************
-proc build_vi_command { change_array {current_array ""}} {
+proc build_vi_command {change_array {current_array ""} {fixed_attribute_format 1}} {
    upvar $change_array chgar
 
    if {$current_array != ""} {
@@ -373,9 +423,17 @@ proc build_vi_command { change_array {current_array ""}} {
          # this will quote any / to \/  (for vi - search and replace)
          set newVal $chgar($elem)
          if {$newVal != ""} {
-            set newVal1 [split $newVal {/}]
-            set newVal [join $newVal1 {\/}]
-            lappend vi_commands ":%s/^$elem .*$/$elem  $newVal/\n"
+            if {$fixed_attribute_format} {
+               # format of qconf on fixed attribute objects, like exechost, pe, ...
+               # here the editor contains all lines of the object, we replace the values
+               set newVal1 [split $newVal {/}]
+               set newVal [join $newVal1 {\/}]
+               lappend vi_commands ":%s/^$elem .*$/$elem  $newVal/\n"
+            } else {
+               # format of qconf on variable attribute objects, the local config
+               # here we start with an empty editor window and just fill in new lines
+               lappend vi_commands "A\n$elem  $newVal[format "%c" 27]"
+            }
          }
       }
    }

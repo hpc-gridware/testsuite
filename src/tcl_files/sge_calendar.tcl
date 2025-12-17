@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -40,7 +40,7 @@
 #     set_calendar_defaults {change_array}
 #
 #  FUNCTION
-#     Fills the array change_array with default calendar attributes for the 
+#     Fills the array change_array with default calendar attributes for the
 #     specific version of SGE.
 #
 #  INPUTS
@@ -49,20 +49,20 @@
 #*******************************************************************************
 proc set_calendar_defaults { change_array } {
    upvar $change_array chgar
-   
+
    set chgar(calendar_name) "template"          ;# calendar_name is mandatory
    set chgar(year)          "NONE"
    set chgar(week)          "NONE"
 }
 
 #****** sge_calendar/add_calendar() ********************************************
-# 
+#
 #  NAME
 #     add_calendar -- add a new calendar configuration object
 #
 #  SYNOPSIS
-#     add_calendar { calendar {change_array ""} {fast_add 1} {on_host ""} 
-#     {as_user ""} {raise_error 1}} 
+#     add_calendar { calendar {change_array ""} {fast_add 1} {on_host ""}
+#     {as_user ""} {raise_error 1}}
 #
 #  FUNCTION
 #     Add a calendar to the Cluster Scheduler (Grid Engine) cluster.
@@ -71,7 +71,7 @@ proc set_calendar_defaults { change_array } {
 #  INPUTS
 #     calendar          - calendar name
 #     {change_array ""} - name of an array variable
-#     {fast_add 1}      - if not 0 the add_calendar procedure will use a file 
+#     {fast_add 1}      - if not 0 the add_calendar procedure will use a file
 #                         for adding a calendar
 #     {on_host ""}      - execute qconf on this host, default is master host
 #     {as_user ""}      - execute qconf as this user, default is $CHECK_USER
@@ -104,7 +104,7 @@ proc add_calendar {calendar {change_array ""} {fast_add 1} {on_host ""} {as_user
       }
       set tmpfile [dump_array_to_tmpfile old_config $on_host]
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
-     
+
    } else {
       ts_log_fine "Add calendar $calendar slow ..."
       set option "-acal"
@@ -121,7 +121,7 @@ proc add_calendar {calendar {change_array ""} {fast_add 1} {on_host ""} {as_user
 #     get_calendar() -- get calendar configuration object
 #
 #  SYNOPSIS
-#     get_calendar { calendar  {output_var result} {on_host ""} {as_user ""}  
+#     get_calendar { calendar  {output_var result} {on_host ""} {as_user ""}
 #     {raise_error 1}}
 #
 #  FUNCTION
@@ -154,7 +154,7 @@ proc get_calendar {calendar {output_var result}  {on_host ""} {as_user ""} {rais
    get_calendar_messages messages "get" "$calendar" $on_host $as_user
 
    return [get_qconf_object "get_calendar" "-scal $calendar" out messages 0 $on_host $as_user $raise_error]
- 
+
 }
 
 #****** sge_calendar/get_calendar_list() ***************************************
@@ -162,7 +162,7 @@ proc get_calendar {calendar {output_var result}  {on_host ""} {as_user ""} {rais
 #     get_calendar_list() -- get the list of all calendars
 #
 #  SYNOPSIS
-#     get_calendar_list {{output_var result} {on_host ""} {as_user ""} 
+#     get_calendar_list {{output_var result} {on_host ""} {as_user ""}
 #     {raise_error 1}}
 #
 #  FUNCTION
@@ -185,11 +185,11 @@ proc get_calendar {calendar {output_var result}  {on_host ""} {as_user ""} {rais
 #*******************************************************************************
 proc get_calendar_list {{output_var result} {on_host ""} {as_user ""} {raise_error 1}} {
    upvar $output_var out
-   
+
    ts_log_fine "Get calendar list ..."
 
-   get_calendar_messages messages "list" "" $on_host $as_user 
-   
+   get_calendar_messages messages "list" "" $on_host $as_user
+
    return [get_qconf_object "get_calendar_list" "-scall" out messages 1 $on_host $as_user $raise_error]
 }
 
@@ -224,10 +224,10 @@ proc get_calendar_list {{output_var result} {on_host ""} {as_user ""} {raise_err
 #*******************************************************************************
 proc mod_calendar {calendar change_array {fast_add 1} {on_host ""} {as_user ""} {raise_error 1}} {
   get_current_cluster_config_array ts_config
- 
+
   upvar $change_array chgar
   set chgar(calendar_name) $calendar
-  
+
   get_calendar_messages messages "mod" "$calendar" $on_host $as_user
 
   if { $fast_add != 0 } {
@@ -243,7 +243,7 @@ proc mod_calendar {calendar change_array {fast_add 1} {on_host ""} {as_user ""} 
       }
       set tmpfile [dump_array_to_tmpfile curr_cal $on_host]
       set result [start_sge_bin "qconf" "$option $tmpfile" $on_host $as_user]
-      
+
    } else {
       ts_log_fine "Modify calendar $calendar slow ..."
       set option "-mcal"
@@ -288,20 +288,20 @@ proc del_calendar {calendar {on_host ""} {as_user ""} {raise_error 1}} {
    ts_log_fine "Delete calendar $calendar ..."
 
    get_calendar_messages messages "del" "$calendar" $on_host $as_user
-   
+
    set output [start_sge_bin "qconf" "-dcal $calendar" $on_host $as_user]
-   
+
    return [handle_sge_errors "del_calendar" "qconf -dcal $calendar" $output messages $raise_error]
-   
+
 }
 
 #****** sge_calendar/get_calendar_messages() *************************************
 #  NAME
-#     get_calendar_messages() -- returns the set of messages related to action 
+#     get_calendar_messages() -- returns the set of messages related to action
 #                              on calendar, i.e. add, modify, delete, get
 #
 #  SYNOPSIS
-#     get_calendar_messages {msg_var action obj_name result {on_host ""} {as_user ""}} 
+#     get_calendar_messages {msg_var action obj_name result {on_host ""} {as_user ""}}
 #
 #  FUNCTION
 #     Returns the set of messages related to action on sge object. This function
@@ -330,8 +330,8 @@ proc get_calendar_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
 
    # set the expected client messages
    sge_client_messages messages $action $CALENDAR $obj_name $on_host $as_user
-   
-   # the place for exceptions: # VD version dependent  
+
+   # the place for exceptions: # VD version dependent
    #                           # CD client dependent
    # see sge_procedures/sge_client_messages
    switch -exact $action {
@@ -344,7 +344,7 @@ proc get_calendar_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
       "get" {
          # CD: not expected generic message
          set NOT_EXISTS [translate_macro MSG_CALENDAR_XISNOTACALENDAR_S $obj_name]
-         add_message_to_container messages -1 $NOT_EXISTS     
+         add_message_to_container messages -1 $NOT_EXISTS
       }
       "mod" {
          set DISABLED_YEAR [translate_macro MSG_ANSWER_ERRORINDISABLYEAROFCALENDARXY_SS "*" $obj_name]
@@ -364,5 +364,5 @@ proc get_calendar_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
       }
       "list" {
       }
-   } 
+   }
 }

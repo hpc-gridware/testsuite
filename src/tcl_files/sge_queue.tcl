@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -40,7 +40,7 @@
 #     set_queue_defaults {change_array}
 #
 #  FUNCTION
-#     Fills the array change_array with queue attributes for the specific 
+#     Fills the array change_array with queue attributes for the specific
 #     version of SGE.
 #
 #  INPUTS
@@ -116,7 +116,7 @@ proc set_queue_defaults { change_array } {
 #     set_lab_defaults {change_array}
 #
 #  FUNCTION
-#     Adjust the default queue settings needed to run the tests in our lab 
+#     Adjust the default queue settings needed to run the tests in our lab
 #     properly.
 #
 #  INPUTS
@@ -126,7 +126,7 @@ proc set_queue_defaults { change_array } {
 proc set_lab_defaults {change_array} {
    get_current_cluster_config_array ts_config
    upvar $change_array chgar
-   
+
    set chgar(load_thresholds)      "np_load_avg=7.00"
    set chgar(slots)                "10"
 
@@ -134,7 +134,7 @@ proc set_lab_defaults {change_array} {
 
 proc get_queue_tmpdir {} {
    get_current_cluster_config_array ts_config
-   
+
    return "/tmp/testsuite_$ts_config(commd_port)"
 }
 
@@ -146,17 +146,17 @@ proc get_queue_tmpdir {} {
 #     validate_queue {change_array}
 #
 #  FUNCTION
-#     Validate the queue settings. Adjust the queue settings according to sge 
+#     Validate the queue settings. Adjust the queue settings according to sge
 #     version.
 #
 #  INPUTS
 #     change_array - the resulting array
-# 
+#
 #*******************************************************************************
 proc validate_queue {change_array} {
    get_current_cluster_config_array ts_config
    upvar $change_array chgar
-   
+
    # create cluster dependent tmpdir
    set chgar(tmpdir) [get_queue_tmpdir]
 
@@ -164,16 +164,16 @@ proc validate_queue {change_array} {
 }
 
 #****** sge_queue/add_queue() **************************************************
-# 
+#
 #  NAME
 #     add_queue -- Add a new queue configuration object
 #
 #  SYNOPSIS
-#     add_queue {qname hostlist {change_array ""} {fast_add 1} {on_host ""} 
-#     {as_user ""} {raise_error 1}} 
+#     add_queue {qname hostlist {change_array ""} {fast_add 1} {on_host ""}
+#     {as_user ""} {raise_error 1}}
 #
 #  FUNCTION
-#     Add a new queue configuration object corresponding to the content of 
+#     Add a new queue configuration object corresponding to the content of
 #     the change_array.
 #     Supports fast (qconf -Aq) and slow (qconf -aq) mode.
 #
@@ -235,7 +235,7 @@ proc add_queue {qname hostlist {change_array ""} {fast_add 1} {on_host ""} {as_u
 #     mod_queue() -- modify existing queue configuration object
 #
 #  SYNOPSIS
-#     mod_queue { qname hostslist hange_array {fast_add 1} {on_host ""} 
+#     mod_queue { qname hostslist hange_array {fast_add 1} {on_host ""}
 #    {as_user ""} {raise_error 1}}
 #
 #  FUNCTION
@@ -268,7 +268,7 @@ proc mod_queue { qname hostlist change_array {fast_add 1} {on_host ""} {as_user 
    validate_queue chgar
 
    get_queue_messages messages "mod" "$qname" $on_host $as_user
-     
+
    if {$fast_add} {
       ts_log_fine "Modify queue $qname for hostlist $hostlist from file ..."
       # aja: TODO: suppress all messages coming from the procedure
@@ -311,12 +311,12 @@ proc mod_queue { qname hostlist change_array {fast_add 1} {on_host ""} {as_user 
 }
 
 #****** sge_queue/del_queue() **************************************************
-# 
+#
 #  NAME
 #     del_queue -- delete queue configuration object
 #
 #  SYNOPSIS
-#     del_queue { q_name hostlist {on_host ""} {as_user ""} {raise_error 1} } 
+#     del_queue { q_name hostlist {on_host ""} {as_user ""} {raise_error 1} }
 #
 #  FUNCTION
 #     remove a queue from the qmaster configuration
@@ -339,13 +339,13 @@ proc mod_queue { qname hostlist change_array {fast_add 1} {on_host ""} {as_user 
 # aja TODO: create procedure del_queue {qname hostlist {on_host ""} {as_user ""} {raise_error 1}}
 
 #****** sge_procedures/get_queue() *********************************************
-# 
+#
 #  NAME
 #     get_queue -- get queue configuration information
 #
 #  SYNOPSIS
-#     get_queue { q_name {output_var result} {on_host ""} {as_user ""} 
-#    {raise_error 1} } 
+#     get_queue { q_name {output_var result} {on_host ""} {as_user ""}
+#    {raise_error 1} }
 #
 #  FUNCTION
 #     Get the actual configuration settings for the named queue
@@ -372,33 +372,33 @@ proc get_queue { q_name {output_var result} {on_host ""} {as_user ""} {raise_err
    upvar $output_var out
 
    get_queue_messages messages "get" "$q_name" $on_host $as_user
-   
+
    return [get_qconf_object "get_queue" "-sq $q_name" out messages 0 $on_host $as_user $raise_error]
 
 }
 
 #                                                             max. column:     |
 #****** sge_queue/suspend_queue() ******
-# 
+#
 #  NAME
 #     suspend_queue -- set a queue in suspend mode
 #
 #  SYNOPSIS
-#     suspend_queue { qname } 
+#     suspend_queue { qname }
 #
 #  FUNCTION
 #     This procedure will set the given queue into suspend state
 #
 #  INPUTS
-#     qname - name of the queue to suspend 
+#     qname - name of the queue to suspend
 #
 #  RESULT
 #     0  - ok
-#    -1  - error 
+#    -1  - error
 #
 #  SEE ALSO
 #     sge_procedures/mqattr()
-#     sge_procedures/set_queue() 
+#     sge_procedures/set_queue()
 #     sge_procedures/add_queue()
 #     sge_procedures/del_queue()
 #     sge_procedures/get_queue()
@@ -410,16 +410,16 @@ proc get_queue { q_name {output_var result} {on_host ""} {as_user ""} {raise_err
 proc suspend_queue { qname } {
   global CHECK_USER
   get_current_cluster_config_array ts_config
-  log_user 0 
+  log_user 0
    set WAS_SUSPENDED [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_QINSTANCE_SUSPENDED]]
 
-  
+
   # spawn process
   set master_arch [resolve_arch $ts_config(master_host)]
   set program "$ts_config(product_root)/bin/$master_arch/qmod"
   set sid [open_remote_spawn_process $ts_config(master_host) $CHECK_USER $program "-s $qname"]
   set sp_id [ lindex $sid 1 ]
-  set result -1	
+  set result -1
 
   log_user 0
   set timeout 30
@@ -440,7 +440,7 @@ proc suspend_queue { qname } {
 	      set result -1
 	  }
   }
-  # close spawned process 
+  # close spawned process
   close_spawn_process $sid
   log_user 1
   if { $result != 0 } {
@@ -452,12 +452,12 @@ proc suspend_queue { qname } {
 
 #                                                             max. column:     |
 #****** sge_queue/unsuspend_queue() ******
-# 
+#
 #  NAME
 #     unsuspend_queue -- set a queue in suspend mode
 #
 #  SYNOPSIS
-#     unsuspend_queue { queue } 
+#     unsuspend_queue { queue }
 #
 #  FUNCTION
 #     This procedure will set the given queue into unsuspend state
@@ -467,11 +467,11 @@ proc suspend_queue { qname } {
 #
 #  RESULT
 #     0  - ok
-#    -1  - error 
+#    -1  - error
 #
 #  SEE ALSO
 #     sge_procedures/mqattr()
-#     sge_procedures/set_queue() 
+#     sge_procedures/set_queue()
 #     sge_procedures/add_queue()
 #     sge_procedures/del_queue()
 #     sge_procedures/get_queue()
@@ -485,8 +485,8 @@ proc unsuspend_queue { queue } {
    get_current_cluster_config_array ts_config
 
   set timeout 30
-  log_user 0 
-   
+  log_user 0
+
    set UNSUSP_QUEUE [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_QINSTANCE_NSUSPENDED]]
 
   # spawn process
@@ -494,8 +494,8 @@ proc unsuspend_queue { queue } {
   set program "$ts_config(product_root)/bin/$master_arch/qmod"
   set sid [open_remote_spawn_process $ts_config(master_host) $CHECK_USER $program "-us $queue"]
   set sp_id [ lindex $sid 1 ]
-  set result -1	
-  log_user 0 
+  set result -1
+  log_user 0
 
   set timeout 30
   expect {
@@ -504,19 +504,19 @@ proc unsuspend_queue { queue } {
          ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
       }
       -i $sp_id "unsuspended queue" {
-         set result 0 
+         set result 0
       }
       -i $sp_id  "*${UNSUSP_QUEUE}*" {
-         set result 0 
+         set result 0
       }
       -i $sp_id default {
-         ts_log_fine $expect_out(buffer) 
-         set result -1 
+         ts_log_fine $expect_out(buffer)
+         set result -1
       }
   }
-  # close spawned process 
+  # close spawned process
   close_spawn_process $sid
-  log_user 1   
+  log_user 1
   if { $result != 0 } {
      ts_log_severe "could not unsuspend queue \"$queue\""
   }
@@ -525,12 +525,12 @@ proc unsuspend_queue { queue } {
 
 #                                                             max. column:     |
 #****** sge_queue/disable_queue() ******
-# 
+#
 #  NAME
 #     disable_queue -- disable queues
 #
 #  SYNOPSIS
-#     disable_queue { queue } 
+#     disable_queue { queue }
 #
 #  FUNCTION
 #     Disable the given queue/queue list
@@ -544,7 +544,7 @@ proc unsuspend_queue { queue } {
 #
 #  SEE ALSO
 #     sge_procedures/mqattr()
-#     sge_procedures/set_queue() 
+#     sge_procedures/set_queue()
 #     sge_procedures/add_queue()
 #     sge_procedures/del_queue()
 #     sge_procedures/get_queue()
@@ -561,12 +561,12 @@ proc disable_queue { queuelist } {
 
 #                                                             max. column:     |
 #****** sge_queue/enable_queue() ******
-# 
+#
 #  NAME
 #     enable_queue -- enable queuelist
 #
 #  SYNOPSIS
-#     enable_queue { queue } 
+#     enable_queue { queue }
 #
 #  FUNCTION
 #     This procedure enables a given queuelist by calling the qmod -e binary
@@ -580,7 +580,7 @@ proc disable_queue { queuelist } {
 #
 #  SEE ALSO
 #     sge_procedures/mqattr()
-#     sge_procedures/set_queue() 
+#     sge_procedures/set_queue()
 #     sge_procedures/add_queue()
 #     sge_procedures/del_queue()
 #     sge_procedures/get_queue()
@@ -609,7 +609,7 @@ proc mod_queue_state { queuelist state } {
      ts_log_severe "unknown state"
      return -1
   }
-  
+
   set failed 0
   set queues ""
   set queue_nr 0
@@ -621,12 +621,12 @@ proc mod_queue_state { queuelist state } {
         set result [start_sge_bin "qmod" "$command $queues"]
         ts_log_fine "$state queue(s) $queues"
         set result [string trim $result]
-        set res_split [split $result "\n"]   
+        set res_split [split $result "\n"]
         foreach elem $res_split {
            ts_log_fine "line: $elem"
            if {[string match "*${STATE}*" $elem] == 0} {
               incr failed 1
-           } 
+           }
         }
 
         set queues ""
@@ -639,13 +639,13 @@ proc mod_queue_state { queuelist state } {
      set result [start_sge_bin "qmod" "$command $queues"]
      ts_log_fine "$state queue(s) $queues"
      set result [string trim $result]
-     set res_split [split $result "\n"]   
+     set res_split [split $result "\n"]
      foreach elem $res_split {
         ts_log_fine "line: $elem"
         if {[string match "*${STATE}*" $elem] == 0} {
            incr failed 1
            append result_all "$result\n"
-        } 
+        }
      }
   }
 
@@ -659,15 +659,15 @@ proc mod_queue_state { queuelist state } {
 
 #                                                             max. column:     |
 #****** sge_queue/get_queue_state() ******
-# 
+#
 #  NAME
 #     get_queue_state -- get the state of a queue
 #
 #  SYNOPSIS
-#     get_queue_state { queue } 
+#     get_queue_state { queue }
 #
 #  FUNCTION
-#     This procedure returns the state of the queue by parsing output of qstat -f. 
+#     This procedure returns the state of the queue by parsing output of qstat -f.
 #
 #  INPUTS
 #     queue - name of the queue
@@ -711,14 +711,14 @@ proc get_queue_state {queue_name {qstat_output_var ""}} {
   # split each line as listelement
   set back ""
   set help [split $result "\n"]
-  foreach line $help { 
+  foreach line $help {
       if {[string compare [lindex $line 0] $queue] == 0} {
          set back [lindex $line 5]
          return $back
       }
   }
 
-  ts_log_severe "queue \"$queue\" not found" 
+  ts_log_severe "queue \"$queue\" not found"
   return ""
 }
 
@@ -848,19 +848,19 @@ proc get_queue_list {{output_var result} {on_host ""} {as_user ""} {raise_error 
 
    upvar $output_var out
 
-   get_queue_messages messages "list" "" $on_host $as_user 
-   
+   get_queue_messages messages "list" "" $on_host $as_user
+
    return [get_qconf_object "get_queue_list" "-sql" out messages 1 $on_host $as_user $raise_error]
 
 }
 
 #****** sge_queue/get_queue_messages() *************************************
 #  NAME
-#     get_queue_messages() -- returns the set of messages related to action 
+#     get_queue_messages() -- returns the set of messages related to action
 #                              on queue, i.e. add, modify, delete, get
 #
 #  SYNOPSIS
-#     get_queue_messages {msg_var action obj_name result {on_host ""} {as_user ""}} 
+#     get_queue_messages {msg_var action obj_name result {on_host ""} {as_user ""}}
 #
 #  FUNCTION
 #     Returns the set of messages related to action on sge queue. This function
@@ -886,11 +886,11 @@ proc get_queue_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
 
    # CD: why don't we have "cluster queue" in $SGE_OBJ_CQUEUE ?
    set QUEUE "cluster [translate_macro MSG_OBJ_QUEUE]"
-     
+
    # set the expected client messages
    sge_client_messages messages $action $QUEUE $obj_name $on_host $as_user
-   
-   # the place for exceptions: # VD version dependent  
+
+   # the place for exceptions: # VD version dependent
    #                           # CD client dependent
    # see sge_procedures/sge_client_messages
    switch -exact $action {
@@ -924,7 +924,7 @@ proc get_queue_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
          set NOT_DEFINED [translate_macro MSG_QCONF_NOXDEFINED_S "cqueue list"]
          add_message_to_container messages -1 $NOT_DEFINED
       }
-   } 
+   }
 }
 
 
@@ -1191,7 +1191,7 @@ proc del_queue { q_name hostlist {ignore_hostlist 0} {del_cqueue 0} {on_host ""}
       foreach host $hostlist {
          set result [start_sge_bin "qconf" "-dattr queue hostlist $host $q_name"]
          if { $prg_exit_state != 0 } {
-            ts_log_severe "could not delete queue instance or queue domain: $result" $raise_error 
+            ts_log_severe "could not delete queue instance or queue domain: $result" $raise_error
          }
       }
    }

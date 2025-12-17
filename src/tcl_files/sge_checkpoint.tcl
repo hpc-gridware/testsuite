@@ -1,5 +1,5 @@
 #!/usr/local/bin/tclsh
-# expect script 
+# expect script
 #___INFO__MARK_BEGIN__
 ##########################################################################
 #
@@ -29,7 +29,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -144,7 +144,7 @@ proc add_ckpt {ckpt_name {change_array ""} {fast_add 1} {on_host ""} {as_user ""
 #
 #  SEE ALSO
 #     sge_checkpoint/mod_ckpt()
-#     sge_procedures/get_queue() 
+#     sge_procedures/get_queue()
 #     sge_procedures/set_queue()
 #*******************************************************************************
 proc get_ckpt {ckpt_name {output_var result} {on_host ""} {as_user ""} {raise_error 1}} {
@@ -152,7 +152,7 @@ proc get_ckpt {ckpt_name {output_var result} {on_host ""} {as_user ""} {raise_er
   get_current_cluster_config_array ts_config
 
    ts_log_fine "Get checkpoint interface $ckpt_name ... "
-   
+
    get_ckpt_messages messages "get" "$ckpt_name" $on_host $as_user
 
    return [get_qconf_object "get_ckpt" "-sckpt $ckpt_name" out messages 0 $on_host $as_user $raise_error]
@@ -196,7 +196,7 @@ proc mod_ckpt {ckpt_name change_array {fast_add 1} {on_host ""} {as_user ""} {ra
    validate_checkpointobj chgar
 
    get_ckpt_messages messages "mod" "$ckpt_name" $on_host $as_user
-     
+
    if { $fast_add } {
       ts_log_fine "Modify checkpoint interface $ckpt_name from file ..."
       set option "-Mckpt"
@@ -252,7 +252,7 @@ proc del_ckpt {ckpt_name {on_host ""} {as_user ""} {raise_error 1}} {
    get_current_cluster_config_array ts_config
 
    ts_log_fine "Delete checkpoint interface $ckpt_name ..."
-   
+
    unassign_queues_with_ckpt_object $ckpt_name $on_host $as_user $raise_error
 
    get_ckpt_messages messages "del" "$ckpt_name" $on_host $as_user
@@ -284,7 +284,7 @@ proc del_ckpt {ckpt_name {on_host ""} {as_user ""} {raise_error 1}} {
 #  RESULT
 #       0 - success
 #     < 0 - error
-#     
+#
 #  SEE ALSO
 #     sge_procedures/handle_sge_error()
 #     sge_ckpt/get_ckpt_messages()
@@ -306,7 +306,7 @@ proc get_ckpt_list {{output_var result} {on_host ""} {as_user ""} {raise_error 1
 #
 #  SYNOPSIS
 #     get_ckpt_messages {msg_var action obj_name result {on_host ""} {as_user ""}}
-# 
+#
 #  FUNCTION
 #     Returns the set of messages related to action on sge object. This function
 #     is a wrapper of sge_object_messages which is general for all types of objects
@@ -317,7 +317,7 @@ proc get_ckpt_list {{output_var result} {on_host ""} {as_user ""} {raise_error 1
 #     obj_name      - sge object name
 #     {on_host ""}  - execute on this host, default is master host
 #     {as_user ""}  - execute qconf as this user, default is $CHECK_USER
-# 
+#
 #  SEE ALSO
 #     sge_procedures/sge_client_messages()
 #*******************************************************************************
