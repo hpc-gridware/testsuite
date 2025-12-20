@@ -60,6 +60,11 @@ proc consumable_dec_setup {} {
    get_current_cluster_config_array ts_config
    global consumable_dec_complex_backup
 
+   if {![ge_has_feature "gcs"]} {
+      ts_log_config "this test requires GCS"
+      return 99
+   }
+
    # we create new complex variables
    get_complex consumable_dec_complex_backup
    set complex(test_int_y) "tiy INT <= YES YES 0 0"

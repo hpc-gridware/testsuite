@@ -91,10 +91,12 @@ lappend generic_module_tests "test_sgeobj_range"
 lappend generic_module_tests "test_sgeobj_resource_quota"
 lappend generic_module_tests "test_sgeobj_schedd_conf"
 lappend generic_module_tests "test_sgeobj_utility"
-if {[is_version_in_range "9.1.0"]} {
-   lappend generic_module_tests "test_sgeobj_RequestLimits"
-} else {
-   lappend generic_module_tests "test_RequestLimits"
+if {[ge_has_feature "gcs"]} {
+   if {[is_version_in_range "9.1.0"]} {
+      lappend generic_module_tests "test_sgeobj_RequestLimits"
+   } else {
+      lappend generic_module_tests "test_RequestLimits"
+   }
 }
 lappend generic_module_tests "test_sgeobj_Session"
 
