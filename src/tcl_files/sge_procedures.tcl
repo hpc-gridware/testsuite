@@ -29,7 +29,7 @@
 #
 #  Portions of this code are Copyright 2011 Univa Inc.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -8615,7 +8615,7 @@ proc wait_till_qmaster_is_down {host {timeout 60}} {
 #
 #*******************************
 #
-proc submit_with_method {submit_method options script args tail_host {user ""} {env_var ""}} {
+proc submit_with_method {submit_method options script args tail_host {user ""} {env_var ""} {submit_host ""}} {
    global CHECK_USER
    global CHECK_PROTOCOL_DIR
    get_current_cluster_config_array ts_config
@@ -8625,6 +8625,9 @@ proc submit_with_method {submit_method options script args tail_host {user ""} {
    }
    if {$env_var != ""} {
       upvar $env_var myenv
+   }
+   if {$submit_host eq ""} {
+      set submit_host $ts_config(master_host)
    }
 
    # preprocessing args - it is treated as list for some reason - options not.
@@ -8643,7 +8646,7 @@ proc submit_with_method {submit_method options script args tail_host {user ""} {
          # initialize tail to logfile
          set sid [init_logfile_wait $tail_host $job_output_file]
          # submit job
-         submit_job "-o $job_output_file -j y $options $script $job_args" 1 60 "" "" "" 1 "qsub" 1 "qsub_output" {} "" myenv
+         submit_job "-o $job_output_file -j y $options $script $job_args" 1 60 $submit_host "" "" 1 "qsub" 1 "qsub_output" {} "" myenv
          # no need to trigger scheduling from 9.0.0 on: we set flush_submit_sec 1
          if {[is_version_in_range "" "9.0.0"]} {
             start_sge_bin "qconf" "-tsm"
@@ -8653,12 +8656,9 @@ proc submit_with_method {submit_method options script args tail_host {user ""} {
 
       qrsh {
          ts_log_fine "submitting job as user \"$user\" using qrsh, reading from stdout/stderr"
-#         set command "-c \\\"$ts_config(product_root)/bin/[resolve_arch $ts_config(master_host)]/qrsh -noshell $options $script $job_args\\\""
-         set command "$ts_config(product_root)/bin/[resolve_arch $ts_config(master_host)]/qrsh"
+         set command "$ts_config(product_root)/bin/[resolve_arch $submit_host]/qrsh"
          set cmd_args "-noshell $options $script $job_args"
-#set command ls
-#set cmd_args "-la"
-         set sid [open_remote_spawn_process $ts_config(master_host) $user $command $cmd_args 0 "" myenv]
+         set sid [open_remote_spawn_process $submit_host $user $command $cmd_args 0 "" myenv]
          set sp_id [lindex $sid 1]
 #         log_user 1
          set timeout 60
@@ -8684,14 +8684,14 @@ proc submit_with_method {submit_method options script args tail_host {user ""} {
       qlogin -
       qrlogin {
          if {$submit_method == "qlogin"} {
-            set command "$ts_config(product_root)/bin/[resolve_arch $ts_config(master_host)]/qlogin"
+            set command "$ts_config(product_root)/bin/[resolve_arch $submit_host]/qlogin"
          } else {
             # qrlogin is qrsh without command
-            set command "$ts_config(product_root)/bin/[resolve_arch $ts_config(master_host)]/qrsh"
+            set command "$ts_config(product_root)/bin/[resolve_arch $submit_host]/qrsh"
          }
          # we add the -verbose switch to get messages about job id and job being scheduled
          set args "-verbose $options"
-         set sid [open_remote_spawn_process $ts_config(master_host) $user $command $args 0 "" myenv]
+         set sid [open_remote_spawn_process $submit_host $user $command $args 0 "" myenv]
          if {$sid != ""} {
             set sp_id [lindex $sid 1]
             set timeout 60

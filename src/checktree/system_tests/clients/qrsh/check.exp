@@ -28,7 +28,7 @@
 #  All Rights Reserved.
 #
 #  Portions of this software are Copyright (c) 2011 Univa Corporation.
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -80,6 +80,7 @@ lappend check_functions "qrsh_w_v_test"
 lappend check_functions "qrsh_pty_yes_redirect"
 lappend check_functions "qrsh_pty_yes_line_breaks"   ;# test if NL gets converted to CR NL
 lappend check_functions "qrsh_forward_stdin"         ;# test if stdin forward works via <
+lappend check_functions "qrsh_massive_output"        ;# test if massive output job is fully received by qrsh
 
 # -------- local test procedures -----------------------------------------------
 proc qrsh_setup {} {
@@ -961,6 +962,8 @@ proc qrsh_terminate {} {
 
          for {set i 0} {$i < 60} {incr i} {
             after 1000
+            # @todo if we test with multiple hosts (qrsh_hostlist), then we need to delete the file between hosts
+            # or, better, make a temp directory and write a file <hostname>.log in the terminate method
             start_remote_prog $host $CHECK_USER ls $terminate_out_file exit_code
             if {$exit_code == 0} {
                ts_log_fine "terminate method has been started"
@@ -1938,4 +1941,119 @@ proc qrsh_forward_stdin {} {
       }
    }
    wait_for_end_of_all_jobs 60
+}
+
+proc qrsh_massive_output {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ACTUAL_TEST_PATH
+   global qrsh_hostlist
+
+   set job_script "$CHECK_ACTUAL_TEST_PATH/massive_output.sh"
+
+   set submit_hostlist $qrsh_hostlist
+   set exec_hostlist $qrsh_hostlist
+
+   foreach submit_host $submit_hostlist {
+      foreach host $exec_hostlist {
+         set arch [resolve_arch $submit_host]
+         set qrsh_bin "$ts_config(product_root)/bin/$arch/qrsh"
+
+         # start a script doing massive output
+         # count the lines and verify that output is complete
+         ts_log_fine "executing on $submit_host as $CHECK_USER\n$qrsh_bin -l h=$host $job_script"
+
+         set sid [submit_with_method "qrsh" "-verbose -l h=$host" $job_script "" "" "" "" $submit_host]
+         if {$sid == ""} {
+            ts_log_severe "job submission failed"
+            continue
+         }
+
+         # parse the job output and count the lines
+         set sp_id [lindex $sid 1]
+         set timeout 10
+         set done 0
+         set job_id 0
+         set num_lines 0
+         set errors {}
+         expect_user {
+            -i $sp_id eof {
+               lappend errors "unexpected eof"
+            }
+            -i $sp_id full_buffer {
+               lappend errors "buffer overflow"
+            }
+            -i $sp_id timeout {
+               lappend errors "timeout"
+            }
+            -i $sp_id "?*\n" {
+               foreach line [split $expect_out(buffer) "\n"] {
+                  set line [string trim $line]
+                  if {$line ne ""} {
+                     #ts_log_fine "qrsh output: $line"
+                     switch -glob $line {
+                        "Your job * has been submitted" {
+                           set job_id [lindex $line 2]
+                           ts_log_fine "qrsh job has job id $job_id"
+                        }
+                        "Got rsh client name *" -
+                        "waiting for interactive job to be scheduled*" -
+                        "Your interactive job * has been *" -
+                        "Establishing *" -
+                        "script done. (_END_OF_FILE_)" {
+                           # ignore
+                        }
+                        "_exit_status_:(*) *" {
+                           set exit_status [get_string_value_between "(" ")" $line]
+                           if {$exit_status == 0} {
+                              ts_log_fine "qrsh job exited with status 0"
+                           } else {
+                              lappend errors "qrsh job exited with status $exit_status"
+                           }
+                           set done 1
+                        }
+
+                        "*error: commlib error: got read error*" {
+                           lappend errors "commlib read error detected, this is CS-1735"
+                           set done 1
+                        }
+                        default {
+                           # count the output lines
+                           incr num_lines
+                           if {$num_lines % 100000 == 0} {
+                              ts_log_fine "qrsh output: counted $num_lines lines so far"
+                           }
+                        }
+                     }
+                  } else {
+                     # count empty lines as well
+                     incr num_lines
+                     if {$num_lines % 100000 == 0} {
+                        ts_log_fine "qrsh output: counted $num_lines lines so far"
+                     }
+                  }
+               }
+               if {!$done} {
+                  exp_continue
+               }
+            }
+         }
+
+         if {$job_id != 0} {
+            # delete the job - it might no longer exist, so ignore errors
+            delete_job $job_id 1 0 0
+         }
+
+         close_spawn_process $sid
+
+         ts_log_fine "qrsh output contained $num_lines lines"
+         if {$num_lines < 1000000} {
+            lappend errors "expected 1000000 lines of output, got $num_lines"
+         }
+         if {[llength $errors] > 0} {
+            set msg "Errors detected during qrsh massive output test, job $job_id from host $submit_host to host $host:\n"
+            append msg [join $errors "\n"]
+            ts_log_severe $msg
+         }
+      }
+   }
 }
