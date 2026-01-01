@@ -29,7 +29,7 @@
 #
 #  Portions of this code are Copyright 2011 Univa Inc.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -211,7 +211,7 @@ proc qstat_count_jobs {func_name qstat_options expected_jobs} {
 
       ts_log_fine "number of jobs: $nr_jobs"
       if {$nr_jobs != $expected_jobs} {
-         ts_log_severe "$func_name: qstat $qstat_options broken, got $nr_jobs but expected $expected_jobs"
+         ts_log_severe "$func_name: qstat $qstat_options broken, got $nr_jobs but expected $expected_jobs:\n$output"
       }
    } else {
       ts_log_severe "$func_name: qstat $qstat_options exit status not 0 ($prg_exit_state), output:\n$output"
@@ -569,7 +569,7 @@ proc qstat_option_s {} {
 
 
   #-s ha
-  ts_log_fine "submitting an date hold batch job ..."
+  ts_log_fine "submitting a date hold batch job ..."
   #
   # Set duetime well in the future. No hard coded values, please.
   #
