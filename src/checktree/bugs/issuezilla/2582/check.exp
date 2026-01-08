@@ -29,7 +29,7 @@
 #
 #  Portions of this software are Copyright (c) 2011 Univa Corporation
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -80,11 +80,7 @@ proc issue_2582_cleanup {} {
    global cluster_host non_cluster_host
 
    # unset our test's global variables
-   foreach var "cluster_host non_cluster_host" {
-      if {[info exists $var]} {
-         unset $var
-      }
-   }
+   unset -nocomplain cluster_host non_cluster_host
 }
 
 proc issue_2582_test1 {} {
@@ -98,7 +94,7 @@ proc issue_2582_test1 {} {
       ts_log_severe "qmod should have failed"
       start_sge_bin "qmod" "-e all.q@$cluster_host" "$non_cluster_host" "root"
    } else {
-      ts_log_fine "qmod have failed as expected"
+      ts_log_fine "qmod has failed as expected"
    }
 
    # execution "qmod -help -d all.q@cluster_host_xy from non_cluster_host as a root"
@@ -108,16 +104,16 @@ proc issue_2582_test1 {} {
       ts_log_severe "qmod should have failed"
       start_sge_bin "qmod" "-e all.q@$cluster_host" "$non_cluster_host" "root"
    } else {
-      ts_log_fine "qmod have failed as expected"
+      ts_log_fine "qmod has failed as expected"
    }
 
    # execution "qmod -help from non_cluster_host as a root"
    ts_log_fine "executing qmod -help from $non_cluster_host as a root"
-   set result [start_sge_bin "qmod" "-help" "$non_cluster_host" "root"]
+   set result [start_sge_bin "qmod" "-help" $non_cluster_host "root"]
    if {$prg_exit_state == 0} {
       ts_log_fine "qmod was successful"
    } else {
-      ts_log_severe "qmod have failed"
+      ts_log_severe "qmod -help from non cluster host has failed:\n$result"
    }
 
    # execution "qmod -d all.q@cluster_host_xy from cluster_host as a root"
@@ -128,6 +124,6 @@ proc issue_2582_test1 {} {
       ts_log_fine "qmod was successful"
       start_sge_bin "qmod" "-e all.q@$cluster_host" "$cluster_host" "root"
    } else {
-      ts_log_severe "qmod have failed"
+      ts_log_severe "qmod -d all.q@$cluster_host from cluster host has failed:\n$result"
    }
 }
