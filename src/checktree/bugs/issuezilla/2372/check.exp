@@ -108,7 +108,6 @@ proc issue_2372_setup {} {
 
    # restart qmaster with test environment variable SGE_TEST_SPOOLING_WAIT_TIME
    ts_log_fine "restarting qmaster (and scheduler) with slow spooling options enabled when qping -dump client is connected!"
-
    set envlist(SGE_TEST_SPOOLING_WAIT_TIME) "80"
    startup_qmaster 1 envlist
 }
@@ -117,24 +116,17 @@ proc issue_2372_cleanup {} {
    global ts_config
    global issue_2372_backup issue_2372_cl_ping issue_2372_gdi_timeout issue_2372_gdi_retries
 
-   shutdown_qmaster
-
    # restore config
    ts_log_fine "restarting qmaster and restore default settings"
-   startup_qmaster 0
+   shutdown_and_restart_qmaster
    reset_config issue_2372_backup
 
    ts_log_fine "restarting qmaster and scheduler with default settings"
    shutdown_and_restart_qmaster
-
-   # unset our test's global variables
-   foreach var "issue_2372_backup" {
-      if {[info exists $var]} {
-         unset $var
-      }
-   }
-
    wait_for_load_from_all_queues 120
+
+   # cleanup possibly left over jobs
+   delete_all_jobs
    wait_for_end_of_all_jobs
 
    unset -nocomplain issue_2372_backup issue_2372_cl_ping issue_2372_gdi_timeout issue_2372_gdi_retries
@@ -145,6 +137,16 @@ proc issue_2372 {} {
    global ts_config CHECK_USER
    global CHECK_ACT_LEVEL
    global issue_2372_cl_ping issue_2372_gdi_timeout issue_2372_gdi_retries
+
+   # @todo CS-1742 There is an issue when run with TLS encryption:
+   #       The first output of gdi_timeout is the default value,
+   #       only the second one is the configured value.
+   #       Workaround this issue until it is fixed.
+   if {[config_has_product_feature "tls"] && $CHECK_ACT_LEVEL != 3} {
+      set min_runs 1
+   } else {
+      set min_runs 0
+   }
 
    if {$CHECK_ACT_LEVEL == 0 || $CHECK_ACT_LEVEL == 1} {
       set host [host_conf_get_suited_hosts 1 {lx-x86 lx-amd64 lx-arm64 lx-riscv64 lx-ppc64le ulx-x86 ulx-amd64}]
@@ -166,6 +168,7 @@ proc issue_2372 {} {
       set runs 0
       set gdi_timeout ""
       set cl_ping ""
+
       foreach line [split $result "\r\n"] {
          if {[string match "*TEST_2372_OUTPUT*" $line]} {
             ts_log_fine $line
@@ -175,7 +178,9 @@ proc issue_2372 {} {
             if {[string match "*GDI_TIMEOUT*" $line]} {
                set tmp_gdi_timeout [lindex [split $line "="] 1]
                if {$gdi_timeout == ""} {
-                  set gdi_timeout $tmp_gdi_timeout
+                  if {$runs > $min_runs} {
+                     set gdi_timeout $tmp_gdi_timeout
+                  }
                } else {
                   if {[string compare $gdi_timeout $tmp_gdi_timeout] != 0} {
                      ts_log_severe "GDI_TIMEOUT value difference: old=\"$gdi_timeout\", new=\"$tmp_gdi_timeout\""
@@ -185,7 +190,9 @@ proc issue_2372 {} {
             if {[string match "*CL_PING*" $line]} {
                set tmp_cl_ping [lindex [split $line "="] 1]
                if {$cl_ping == ""} {
-                  set cl_ping $tmp_cl_ping
+                  if {$runs > $min_runs} {
+                     set cl_ping $tmp_cl_ping
+                  }
                } else {
                   if {[string compare $cl_ping $tmp_cl_ping] != 0} {
                      ts_log_severe "CL_PING value difference: old=\"$cl_ping\", new=\"$tmp_cl_ping\""
@@ -287,7 +294,9 @@ proc issue_2372 {} {
                      if {[string match "*GDI_TIMEOUT*" $line]} {
                         set tmp_gdi_timeout [lindex [split $line "="] 1]
                         if {$gdi_timeout == ""} {
-                           set gdi_timeout $tmp_gdi_timeout
+                           if {$runs > $min_runs} {
+                              set gdi_timeout $tmp_gdi_timeout
+                           }
                         } else {
                            if {[string compare $gdi_timeout $tmp_gdi_timeout] != 0} {
                               append error_text "GDI_TIMEOUT value difference: old=\"$gdi_timeout\", new=\"$tmp_gdi_timeout\"\n"
@@ -297,7 +306,9 @@ proc issue_2372 {} {
                      if {[string match "*CL_PING*" $line]} {
                         set tmp_cl_ping [lindex [split $line "="] 1]
                         if {$cl_ping == ""} {
-                           set cl_ping $tmp_cl_ping
+                           if {$runs > $min_runs} {
+                              set cl_ping $tmp_cl_ping
+                           }
                         } else {
                            if {[string compare $cl_ping $tmp_cl_ping] != 0} {
                               append error_text "CL_PING value difference: old=\"$cl_ping\", new=\"$tmp_cl_ping\"\n"
