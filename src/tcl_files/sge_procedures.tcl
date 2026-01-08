@@ -10509,7 +10509,7 @@ proc startup_execd {hostname {envlist ""} {startup_user ""}} {
       set service_name [systemd_get_service_name "execd"]
       set output [start_remote_prog $hostname $startup_user "systemctl" "start $service_name"]
       if {$prg_exit_state != 0} {
-         ts_log_severe "starting up sge_execd via systemd failed:\n$output"
+         ts_log_severe "starting up sge_execd on host $hostname via systemd failed:\n$output"
       }
    } else {
       if {$CHECK_VALGRIND == "execution" && $CHECK_VALGRIND_HOST == $hostname} {
@@ -10528,7 +10528,7 @@ proc startup_execd {hostname {envlist ""} {startup_user ""}} {
 
       set output [start_remote_prog $hostname $startup_user $execd_cmd $execd_args prg_exit_state 60 0 "" my_envlist 1 0]
       if {$prg_exit_state != 0} {
-         ts_log_severe "starting up sge_execd via $method failed:\n$output"
+         ts_log_severe "starting up sge_execd on host $hostname via $method failed:\n$output"
       }
    }
 
