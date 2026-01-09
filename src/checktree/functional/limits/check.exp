@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2025 HPC-Gridware GmbH
+#  Copyright 2025-2026 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ set check_name            "limits"
 set check_category        "EXECD LIMITS SYSTEMD VERIFIED"
 set check_description(0)  "apply limits with pdc delivering usage information"
 set check_description(1)  "apply limits with systemd delivering usage information"
+set check_version_range(1) "9.1.0"
 
 # define test's dependencies
 set check_needs           "init_core_system"
@@ -81,10 +82,6 @@ proc limits_setup_level {} {
       }
       1 {
          # apply limits with systemd delivering usage information
-         if {![ge_has_feature "systemd"]} {
-            ts_log_config "This test requires the systemd integration to be available"
-            return 99
-         }
          set limits_host [systemd_get_suited_hosts]
          if {$limits_host eq ""} {
             ts_log_config "No systemd host found in the current cluster configuration."
