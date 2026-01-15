@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -61,6 +61,7 @@ lappend check_functions "job_environment_basic_JOB_NAME"
 lappend check_functions "job_environment_basic_amount_uninherited"
 lappend check_functions "job_environment_basic_JOB_NAME_uninherited"
 lappend check_functions "job_environment_basic_ld_preload"
+lappend check_functions "job_environment_multi_line"                    ;# CS-1749
 
 # -------- local test procedures -----------------------------------------------
 
@@ -184,16 +185,27 @@ proc job_environment_basic_parse_env_test_output {file array} {
    ts_log_fine "waiting for file $file on host $ts_config(master_host) as user $CHECK_USER ..."
    if {[wait_for_remote_file $ts_config(master_host) $CHECK_USER $file] == 0} {
       get_file_content $ts_config(master_host) $CHECK_USER $file file_array
+      set variable ""
       for {set index 1} {$index <= $file_array(0)} {incr index 1} {
          set line $file_array($index)
          set pos [string first "=" $line]
-         incr pos -1
-         set variable [string range $line 0 $pos]
-         incr pos 2
-         set value [string range $line $pos end]
-         ts_log_finest "variable=\"$variable\", value=\"$value\""
-         set job_env_array($variable) $value
-         lappend variable_names_list $variable
+         # this is a line with a new variable
+         if {$pos > 0} {
+            incr pos -1
+            set variable [string range $line 0 $pos]
+            incr pos 2
+            set value [string range $line $pos end]
+            ts_log_finest "variable=\"$variable\", value=\"$value\""
+            set job_env_array($variable) $value
+            lappend variable_names_list $variable
+         } else {
+            # this is an additional line for the previous variable
+            if {$variable ne ""} {
+               set old_value $job_env_array($variable)
+               set new_value "$old_value\n$line"
+               set job_env_array($variable) $new_value
+            }
+         }
       }
       set job_env_array(index) $variable_names_list
       delete_remote_file $ts_config(master_host) $CHECK_USER $file
@@ -214,17 +226,23 @@ proc job_environment_basic_parse_env_test_output {file array} {
 #     jobname     the name the job will have when submitted
 #     array       the name of the array in which results will be placed
 #     arguments   switches to be passed to qsub
+#     job_id_var  name of a variable to be used to return the job id (if given)
+#     env_var     name of a TCL array containing environment variables to be set for job submission
 #
 #  RESULT
 #     0 -> ok   1 -> error
 ################################################################################
-proc job_environment_basic_qsub_job { jobname array arguments {job_id_array_name ""}} {
+proc job_environment_basic_qsub_job {jobname array arguments {job_id_var ""} {env_var ""}} {
    global ts_config CHECK_USER
    global CHECK_PROTOCOL_DIR
    global job_environment_basic_queue
    upvar $array job_env_array
-   if {$job_id_array_name != ""} {
-      upvar $job_id_array_name job_id
+   if {$job_id_var ne ""} {
+      upvar $job_id_var job_id
+   }
+
+   if {$env_var ne ""} {
+      upvar $env_var job_env
    }
 
    set ret 1
@@ -232,7 +250,7 @@ proc job_environment_basic_qsub_job { jobname array arguments {job_id_array_name
 
    set tmp_host [host_conf_get_suited_hosts 1]
    wait_for_remote_file $tmp_host $CHECK_USER "$CHECK_PROTOCOL_DIR/job_env.out" 60 1 1
-   set job_id [submit_job "$arguments -q $job_environment_basic_queue $ts_config(testsuite_root_dir)/scripts/jobenv.sh $CHECK_PROTOCOL_DIR" 1 60 $tmp_host]
+   set job_id [submit_job "$arguments -q $job_environment_basic_queue $ts_config(testsuite_root_dir)/scripts/jobenv.sh $CHECK_PROTOCOL_DIR" 1 60 $tmp_host "" "" 1 "qsub" 1 "qsub_output" {} "" job_env]
 
    if {$job_id <= 0} {
       set ret 0
@@ -342,21 +360,25 @@ proc job_environment_basic_qalter_job { jobname array qsub_args qalter_args } {
 #     Submit the jobenv.sh script via qrsh and parse the resulting output file.
 #
 #  INPUTS
-#     jobname     the name the job will have when submitted
 #     array       the name of the array in which results will be placed
 #     arguments   switches to be passed to qrsh
+#     env_var     name of a TCL array containing environment variables to be set for job submission
 #
 #  RESULT
 #     0 -> ok   1 -> error
 ################################################################################
-proc job_environment_basic_qrsh_job { array arguments } {
+proc job_environment_basic_qrsh_job {array arguments {env_var ""}} {
    global ts_config
    global CHECK_PROTOCOL_DIR
    global job_environment_basic_queue
 
    upvar $array job_env_array
 
-   set result [start_sge_bin "qrsh" "$arguments -q $job_environment_basic_queue $ts_config(testsuite_root_dir)/scripts/jobenv.sh $CHECK_PROTOCOL_DIR"]
+   if {$env_var ne ""} {
+      upvar $env_var job_env
+   }
+
+   set result [start_sge_bin "qrsh" "$arguments -q $job_environment_basic_queue $ts_config(testsuite_root_dir)/scripts/jobenv.sh $CHECK_PROTOCOL_DIR" "" "" prg_exit_state 60 "" "bin" output_lines job_env]
    ts_log_fine $result
 
    job_environment_basic_parse_env_test_output $CHECK_PROTOCOL_DIR/job_env.out job_env_array
@@ -844,3 +866,25 @@ proc job_environment_basic_ld_preload {} {
    reset_config global_conf_backup
 }
 
+proc job_environment_multi_line {} {
+   global ts_config
+
+   if {![is_version_in_range "9.0.11 9.1.0"]} {
+      ts_log_info "Skipping multi line environment variable test, CS-1749 has only been fixed in 9.0.11 and higher"
+      return
+   }
+
+   ts_log_fine "Testing multi line environment variable"
+
+   set multiline "line1\nline2\nline3"
+   set myenv(TEST) $multiline
+
+   ts_log_fine "\nqsub ..."
+   if {[job_environment_basic_qsub_job "jobenv.sh" job_env "-V" "" myenv]} {
+      job_environment_basic_check_env_value "TEST" $multiline job_env(TEST)
+   }
+
+   ts_log_fine "\nqrsh ..."
+   job_environment_basic_qrsh_job job_env "-V" myenv
+   job_environment_basic_check_env_value "TEST" $multiline job_env(TEST)
+}
