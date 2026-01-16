@@ -912,8 +912,7 @@ proc job_environment_TERM_test {submit_method env_var expected_term} {
          }
          -i $sp_id timeout {
             if {!$term_requested} {
-               #ts_send $sp_id "sleep 1\n"
-               ts_send $sp_id "echo \"TERM is set to \$TERM\"\n"
+               ts_send $sp_id "echo \"TERM is set to (\$TERM)\"\n"
                set term_requested 1
                exp_continue
             } else {
@@ -923,7 +922,7 @@ proc job_environment_TERM_test {submit_method env_var expected_term} {
          -i $sp_id "?*\n" {
             foreach line [split $expect_out(buffer) "\n"] {
                set line [string trim $line]
-               ts_log_fine "output: $line"
+               ts_log_fine "output: >>$line<<"
                if {$line ne ""} {
                   switch -glob $line {
                      "Your job * has been submitted" {
@@ -936,16 +935,19 @@ proc job_environment_TERM_test {submit_method env_var expected_term} {
                      "Establishing *" {
                         # ignore
                      }
-                     "TERM is set to *" {
-                        set term [lindex $line 4]
-                        if {$term != $expected_term} {
-                           lappend errors "expected TERM to be \"$expected_term\" but got \"$term\""
+                     "*TERM is set to *" {
+                        # skip the echo string
+                        if {[string first "echo" $line] < 0} {
+                           set term [get_string_value_between "(" ")" $line]
+                           if {$term != $expected_term} {
+                              lappend errors "expected TERM to be \"$expected_term\" but got \"$term\""
+                           }
+                           ts_send $sp_id "exit\n"
+                           set done 1
                         }
-                        ts_send $sp_id "exit\n"
-                        set done 1
                      }
                      default {
-                        ts_log_fine "unexpected output: $line"
+                        ts_log_fine "unexpected output: <<$line>>"
                      }
                   }
                }
