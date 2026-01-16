@@ -62,6 +62,7 @@ lappend check_functions "job_environment_basic_amount_uninherited"
 lappend check_functions "job_environment_basic_JOB_NAME_uninherited"
 lappend check_functions "job_environment_basic_ld_preload"
 lappend check_functions "job_environment_multi_line"                    ;# CS-1749
+lappend check_functions "job_environment_TERM"                          ;# CS-1727
 
 # -------- local test procedures -----------------------------------------------
 
@@ -888,3 +889,111 @@ proc job_environment_multi_line {} {
    job_environment_basic_qrsh_job job_env "-V" myenv
    job_environment_basic_check_env_value "TEST" $multiline job_env(TEST)
 }
+
+proc job_environment_TERM_test {submit_method env_var expected_term} {
+   global job_environment_basic_exec_host
+
+   upvar $env_var myenv
+
+   # submit the (interactive) job
+   set sid [submit_with_method $submit_method "-l h=$job_environment_basic_exec_host" "" "" "" "" myenv]
+   if {$sid ne ""} {
+      set sp_id [lindex $sid 1]
+      set errors {}
+      set term_requested 0
+      set done 0
+      set timeout 10
+      expect_user {
+         -i $sp_id eof {
+            lappend errors "unexpected eof"
+         }
+         -i $sp_id full_buffer {
+            lappend errors "buffer overflow"
+         }
+         -i $sp_id timeout {
+            if {!$term_requested} {
+               #ts_send $sp_id "sleep 1\n"
+               ts_send $sp_id "echo \"TERM is set to \$TERM\"\n"
+               set term_requested 1
+               exp_continue
+            } else {
+               lappend errors "timeout"
+            }
+         }
+         -i $sp_id "?*\n" {
+            foreach line [split $expect_out(buffer) "\n"] {
+               set line [string trim $line]
+               ts_log_fine "output: $line"
+               if {$line ne ""} {
+                  switch -glob $line {
+                     "Your job * has been submitted" {
+                        set job_id [lindex $line 2]
+                        ts_log_fine "interactive job has job id $job_id"
+                     }
+                     "Got * client name *" -
+                     "waiting for interactive job to be scheduled*" -
+                     "Your interactive job * has been *" -
+                     "Establishing *" {
+                        # ignore
+                     }
+                     "TERM is set to *" {
+                        set term [lindex $line 4]
+                        if {$term != $expected_term} {
+                           lappend errors "expected TERM to be \"$expected_term\" but got \"$term\""
+                        }
+                        ts_send $sp_id "exit\n"
+                        set done 1
+                     }
+                     default {
+                        ts_log_fine "unexpected output: $line"
+                     }
+                  }
+               }
+            }
+            if {!$done} {
+               exp_continue
+            }
+         }
+      }
+
+      if {[llength $errors] > 0} {
+         ts_log_severe [join $errors "\n"]
+      }
+
+      if {$job_id != 0} {
+         # delete the job - it might no longer exist, so ignore errors
+         delete_job $job_id 1 0 0
+      }
+
+      close_spawn_process $sid
+   }
+}
+
+proc job_environment_TERM {} {
+   global job_environment_basic_exec_host
+
+   if {![is_version_in_range "9.0.11 9.1.0"]} {
+      ts_log_info "Skipping multi line environment variable test, CS-1749 has only been fixed in 9.0.11 and higher"
+      return
+   }
+
+   # set TERM to a value unlikely to be used as default in the user's environment
+   set expected_term "vt100"
+   set myenv(TERM) $expected_term
+   job_environment_TERM_test "qlogin" myenv $expected_term
+   job_environment_TERM_test "qrlogin" myenv $expected_term
+
+   # explicitly unset TERM in the user's environment and make sure that it is not inherited from sge_execd
+   # when INHERIT_ENV is FALSE
+   set new_config(execd_params) "INHERIT_ENV=false"
+   set_config_and_propagate new_config $job_environment_basic_exec_host
+
+   unset myenv
+   set myenv(UNSET_VARS) "TERM"
+   job_environment_TERM_test "qlogin" myenv "dumb"
+   job_environment_TERM_test "qrlogin" myenv "dumb"
+
+   set new_config(execd_params) ""
+   set_config_and_propagate new_config $job_environment_basic_exec_host
+}
+
