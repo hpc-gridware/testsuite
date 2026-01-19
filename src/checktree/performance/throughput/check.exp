@@ -29,7 +29,7 @@
 #
 #  Portions of this software are Copyright (c) 2011 Univa Corporation
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -373,6 +373,7 @@ proc throughput_setup {} {
    global host_list submit_hosts qstat_hosts
    global queue_list
    global throughput_complex_backup
+   global prot_time_stamp
 
    # we need at least 3 hosts (1 submit host and 1 qstat host != master host)
    if {[llength $ts_config(execd_nodes)] < 3} {
@@ -449,12 +450,16 @@ proc throughput_setup {} {
    add_queue "interactive" "@allhosts" change_array 1
 
    setup_host_slots_for_binding
+
+   # set the time stamp for the protocol directory
+   set prot_time_stamp [clock format [clock seconds] -format "%Y-%m-%d-%H-%M"]
 }
 
 proc throughput_cleanup {} {
    global nr_queues host_list
    global throughput_complex_backup throughput_bootstrap_backup
    global throughput_host_info
+   global prot_time_stamp
 
    cleanup_host_slots_for_binding
 
@@ -474,6 +479,7 @@ proc throughput_cleanup {} {
 
    unset -nocomplain throughput_complex_backup throughput_bootstrap_backup
    unset -nocomplain throughput_host_info
+   unset -nocomplain prot_time_stamp
 }
 
 proc throughput_setup_level {} {
@@ -488,7 +494,7 @@ proc throughput_setup_level {} {
    global run_throughput_test_SCHEDULE_INTERVAL             ;# 00:00:30 ...
    global FLUSH_SUBMIT_SEC                    ;# -1 or 0,1,2,3 ...
    global FLUSH_FINISH_SEC                    ;# -1 or 0,1,2,3 ...
-   global throughput_subdir             ;# subdirectory in protocols/throughput/
+   global throughput_scenario             ;# subdirectory in protocols/throughput/
    global throughput_sharetree throughput_sharetree_ext functional_policy
    global consumables
    global host_list submit_hosts qstat_hosts
@@ -544,20 +550,20 @@ proc throughput_setup_level {} {
    switch -- $minor_level {
       0 {
          # enable queues after all jobs have been submitted
-         set throughput_subdir        "disabled"
+         set throughput_scenario        "disabled"
 
          set end_job_count            $job_count
          set enable_queues_job_count  $job_count
       }
       1 {
          # have queues enabled during whole submit process
-         set throughput_subdir        "enabled"
+         set throughput_scenario        "enabled"
 
          set end_job_count            $job_count
       }
       2 {
          # enable queues after half of the jobs have been submitted
-         set throughput_subdir        "mixed"
+         set throughput_scenario        "mixed"
 
          set end_job_count            $job_count
          set enable_queues_job_count  [expr $job_count / 2]
@@ -565,7 +571,7 @@ proc throughput_setup_level {} {
       3 {
          # enable queues after half of the jobs have been submitted
          # do no qstat's
-         set throughput_subdir        "mixed_with_qstat"
+         set throughput_scenario        "mixed_with_qstat"
 
          set end_job_count            $job_count
          set enable_queues_job_count  [expr $job_count / 2]
@@ -587,7 +593,7 @@ proc throughput_setup_level {} {
       }
       4 {
          # enable queues after half of the jobs have been submitted
-         set throughput_subdir        "mixed_requests"
+         set throughput_scenario        "mixed_requests"
 
          set end_job_count            $job_count
          set enable_queues_job_count  [expr $job_count / 2]
@@ -596,7 +602,7 @@ proc throughput_setup_level {} {
       }
       5 {
          # enable queues after half of the jobs have been submitted
-         set throughput_subdir        "mixed_requests_parallel"
+         set throughput_scenario        "mixed_requests_parallel"
 
          set end_job_count            $job_count
          set enable_queues_job_count  [expr $job_count/2]
@@ -607,7 +613,7 @@ proc throughput_setup_level {} {
       }
       6 {
          # enable queues after half of the jobs have been submitted
-         set throughput_subdir        "mixed_array"
+         set throughput_scenario        "mixed_array"
 
          set array_size $level_array_size
          set job_count                [expr $job_count / $array_size]
@@ -616,7 +622,7 @@ proc throughput_setup_level {} {
       }
       7 {
          # test with sharetree, enable queues half of the jobs have been submitted
-         set throughput_subdir        "mixed_sharetree"
+         set throughput_scenario        "mixed_sharetree"
          set end_job_count            $job_count
          set enable_queues_job_count  [expr $job_count/2]
          set throughput_sharetree     1
@@ -627,7 +633,7 @@ proc throughput_setup_level {} {
       }
       8 {
          # test with functional policy, enable queues after half of the have been submitted
-         set throughput_subdir        "mixed_functional"
+         set throughput_scenario        "mixed_functional"
          set end_job_count            $job_count
          set enable_queues_job_count  [expr $job_count/2]
          set functional_policy        1
@@ -638,7 +644,7 @@ proc throughput_setup_level {} {
       }
       9 {
          # test with reservation, enable queues after half of the have been submitted
-         set throughput_subdir        "mixed_reservation"
+         set throughput_scenario        "mixed_reservation"
          set end_job_count            $job_count
          set enable_queues_job_count  [expr $job_count/2]
          set reservation              1
@@ -651,7 +657,7 @@ proc throughput_setup_level {} {
       }
       10 {
          # test with 900 consumables, sharetree and 300 job categories
-         set throughput_subdir        "mixed_combined"
+         set throughput_scenario        "mixed_combined"
          set end_job_count            $job_count
          set consumables              1
          set throughput_sharetree     1
@@ -676,7 +682,7 @@ proc throughput_setup_level {} {
       }
    }
 
-   set test_scenario "$CHECK_ACT_LEVEL ($throughput_subdir)"
+   set test_scenario "$CHECK_ACT_LEVEL ($throughput_scenario)"
 
    # setup gdi request limits
    # - create one individual rule per user/host combination
@@ -1705,7 +1711,7 @@ proc fill_sched_from_messages {start_time end_time schedd_data_name} {
 
    get_file_content $qmaster_host $CHECK_USER $messages_file file_content
    set nr_of_lines $file_content(0)
-   for {set i 1 } { $i <= $nr_of_lines} {incr i 1} {
+   for {set i 1} {$i <= $nr_of_lines} {incr i 1} {
       set line $file_content($i)
 
       set tokens [split $line "|"]
@@ -2532,7 +2538,7 @@ proc analyse_dump_data_file { file { force 0 } } {
    }
    set sub_dir [file tail $base_file]
    set dir_name [file dirname $base_file]
-   set output_dir $dir_name/${sub_dir}_dir
+   set output_dir "$dir_name/${sub_dir}"
    ts_log_fine "file: [file tail $file]"
    ts_log_fine "generating report in directory: $output_dir"
    if {[file isdirectory $output_dir] && $force == 0} {
@@ -3617,7 +3623,7 @@ proc calculate_test_run_xy_rows { results_array_name row_array_name start_numb }
 proc create_reports { results_array job_array_name schedd_array_name monitoring_name qstat_name qping_name event_name} {
    global ts_config
    global ts_host_config
-   global CHECK_PROTOCOL_DIR check_name throughput_subdir
+   global CHECK_PROTOCOL_DIR check_name throughput_scenario
    global CHECK_USER
    global end_job_count                 ;# number of jobs
    global enable_queues_job_count         ;# after with job, enable queues
@@ -3629,6 +3635,7 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
    global run_throughput_test_SCHEDULE_INTERVAL        ;# 00:00:30 ...
    global array_size
    global unexpected_out_filename
+   global prot_time_stamp
 
    upvar $job_array_name jobs
    upvar $results_array results
@@ -3656,39 +3663,22 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
 
    set test_end_job_count [expr $end_job_count * $array_size]
 
-   if { $have_local_spool_dir == 1 } {
-      set prot_output_dir "$CHECK_PROTOCOL_DIR/$check_name/$throughput_subdir/local_spool/_${nr_of_execdhosts}_execds/_${test_end_job_count}_jobs"
-   } else {
-      set prot_output_dir "$CHECK_PROTOCOL_DIR/$check_name/$throughput_subdir/_${nr_of_execdhosts}_execds/_${test_end_job_count}_jobs"
-   }
+   # Store the test results in a directory structure like
+   # - testsuite protocol dir
+   #    - check name
+   #       - directory for this run: <CS version>_<num_exechosts>_<num_jobs>_<features>_<time_stamp>
+   #         e.g., 9.1.0_256_50000_munge-tls_2026-01-15-12-00
+   #          - <scenario.tsd>  (the test data file)
+   #          - <scenario>      directory containing the per scenario report
+   set version [get_version_info]
+   set features [join $ts_config(product_feature) "-"]
+   set prot_output_dir "$CHECK_PROTOCOL_DIR/$check_name/${version}_${nr_of_execdhosts}_${test_end_job_count}_${features}_${prot_time_stamp}"
 
    ts_log_fine "saving report in directory:"
    ts_log_fine $prot_output_dir
    file mkdir $prot_output_dir
 
-   set files [get_file_names $prot_output_dir "saved_run.*"]
-   # saved_run.x
-   set run_nr 1
-   foreach file $files {
-      # filename has format "saved_run.num.tsd
-      ts_log_fine "file: $file"
-      # strip the extension .tsd
-      if {[file extension $file] == ".tsd"} {
-         set file [file rootname $file]
-      }
-      # get the running number
-      set act_run [file extension $file]
-      set act_run [string range $act_run 1 end]
-      ts_log_fine "act-run: $act_run"
-      if {[string is integer $act_run]} {
-         if {$act_run >= $run_nr} {
-            set run_nr $act_run
-            incr run_nr 1
-         }
-      }
-   }
-
-   set prot_output_file "${prot_output_dir}/saved_run.${run_nr}.tsd"
+   set prot_output_file "${prot_output_dir}/${throughput_scenario}.tsd"
    ts_log_fine "using filename:"
    ts_log_fine $prot_output_file
    spool_array_prepare $prot_output_file
@@ -3737,7 +3727,7 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
    if {[file extension $results_dir] == ".tsd"} {
       set results_dir [file rootname $results_dir]
    }
-   append results_dir "_dir"
+
    ts_log_fine "copying master and scheduler messages files to $results_dir"
    if {![file isdirectory $results_dir]} {
       file mkdir $results_dir
