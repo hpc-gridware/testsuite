@@ -132,6 +132,14 @@ proc jsv_script_setup {} {
       lappend jsv_enter2_list "\r\n"
    }
 
+   # test Python JSV template
+   if {1} {
+      lappend jsv_script_list [jsv_script_get_script_file "python3" "jsv" "py"]
+      lappend jsv_name_list "PythonJSV"
+      lappend jsv_enter_list "\r\n"
+      lappend jsv_enter2_list "\r\n"
+   }
+
    # test TCL JSV template
    if {1} {
       lappend jsv_script_list [jsv_script_get_script_file "tclsh" "jsv" "tcl"] 
@@ -202,7 +210,7 @@ proc jsv_script_enter {} {
          set jsv_enter [lindex $jsv_enter_list $i]
 
          set timeout $jsv_expect_timeout 
-         set got_something 0
+         set got_something ""
          set use_output 0; 
          expect {
             -i $spawn_id "_start_mark_:(0)*\n" {
@@ -220,15 +228,15 @@ proc jsv_script_enter {} {
             -i $spawn_id -re ".*$jsv_enter" {
                if {$use_output == 1} {
                   ts_log_info "$name: got something unexpected as response: \"$expect_out(buffer)\""
-                  set got_something 1
+                  set got_something $expect_out(0,string)
                }
                exp_continue
             }
          }
 
          # if we got something then report an error
-         if {$got_something} {
-            ts_log_severe "$name script send response to \\n. Nothing should be sent."
+         if {$got_something != ""} {
+            ts_log_severe "$name script send response \"$got_something\" to \\n. Nothing should be sent."
          } 
          incr i
       }
@@ -891,7 +899,7 @@ proc jsv_script_start_begin_param_add_mod_del_accept_quit {} {
                lappend sequence_list 9
                exp_continue 
             }
-            -i $spawn_id -re "^RESULT STATE ACCEPT \(.*\)$jsv_enter" {
+            -i $spawn_id -re "^RESULT STATE CORRECT \(.*\)$jsv_enter" {
                #ts_log_info "Reject message is \"$expect_out(1,string)\""
                ts_send $spawn_id "QUIT\n"
                lappend sequence_list 11 

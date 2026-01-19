@@ -59,6 +59,7 @@ jsv_on_verify(sub {
          jsv_sub_del_param('ac','b');
       }
       jsv_sub_add_param('ac','c');
+      $do_correct = 1;
    }
 
    if (exists $evs{X}) {

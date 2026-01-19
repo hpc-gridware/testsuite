@@ -152,6 +152,7 @@ jsv_on_verify()
          jsv_sub_del_param ac b 
       fi
       jsv_sub_add_param ac c
+      do_correct="true"
    fi
 
    x=`jsv_get_env X`

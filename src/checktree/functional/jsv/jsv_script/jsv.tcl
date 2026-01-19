@@ -107,6 +107,7 @@ proc jsv_on_verify {} {
          jsv_sub_del_param "ac" "b"
       }
       jsv_sub_add_param "ac" "c"
+      set do_correct 1
    }
 
    set x [jsv_get_env "X"]
