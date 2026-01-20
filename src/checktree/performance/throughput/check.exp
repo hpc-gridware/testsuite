@@ -137,8 +137,8 @@ global check_root_access_needs
 set check_root_access_needs  "yes"
 set check_category            "PERFORMANCE EVENTCLIENT TESTBIN VERIFIED"
 set check_name                "throughput"
-set check_description(0)      "Functional test, submit 500 jobs with enabled queues"
-set check_description(1)      "Functional test, submit 500 jobs with disabled queues"
+set check_description(0)      "Functional test, submit 500 jobs with disabled queues"
+set check_description(1)      "Functional test, submit 500 jobs with enabled queues"
 set check_description(2)      "Functional test, submit 250 of 500 jobs with disabled queues"
 set check_description(3)      "Functional test, submit 250 of 500 jobs with disabled queues, with qstats"
 set check_description(4)      "Functional test, submit 250 of 500 jobs with disabled queues, requests"
@@ -148,8 +148,9 @@ set check_description(7)      "Functional test with sharetree, 500 jobs"
 set check_description(8)      "Functional test with functional policy, 500 jobs"
 set check_description(9)      "Functional test with reservation, 500 jobs"
 set check_description(10)     "Functional test with 500 jobs, 2000 complexes, sharetree and 500 job categories"
-set check_description(100)    "submit 5000 jobs with enabled queues"
-set check_description(101)    "submit 5000 jobs with disabled queues"
+set check_description(11)     "Functional test, submit 250 of 500 jobs with disabled queues, implicit binding"
+set check_description(100)    "submit 5000 jobs with disabled queues"
+set check_description(101)    "submit 5000 jobs with enabled queues"
 set check_description(102)    "submit 2500 of 5000 jobs with disabled queues"
 set check_description(103)    "submit 2500 of 5000 jobs with disabled queues, with qstats"
 set check_description(104)    "submit 2500 of 5000 jobs with disabled queues, requests"
@@ -158,9 +159,10 @@ set check_description(106)    "submit 2500 of 5000 jobs with disabled queues, ar
 set check_description(107)    "with sharetree, 5000 jobs"
 set check_description(108)    "with functional policy, 5000 jobs"
 set check_description(109)    "with reservation, 5000 jobs"
-set check_description(110)     "with 5000 jobs, 2000 complexes, sharetree and 300 job categories"
-set check_description(200)    "submit 50000 jobs with enabled queues"
-set check_description(201)    "submit 50000 jobs with disabled queues"
+set check_description(110)    "with 5000 jobs, 2000 complexes, sharetree and 300 job categories"
+set check_description(111)    "Functional test, submit 2500 of 5000 jobs with disabled queues, implicit binding"
+set check_description(200)    "submit 50000 jobs with disabled queues"
+set check_description(201)    "submit 50000 jobs with enabled queues"
 set check_description(202)    "submit 25000 of 50000 jobs with disabled queues"
 set check_description(203)    "submit 25000 of 50000 jobs with disabled queues, with qstats"
 set check_description(204)    "submit 25000 of 50000 jobs with disabled queues, requests"
@@ -169,9 +171,10 @@ set check_description(206)    "submit 25000 of 50000 jobs with disabled queues, 
 set check_description(207)    "with sharetree, 50000 jobs"
 set check_description(208)    "with functional policy, 50000 jobs"
 set check_description(209)    "with reservation, 50000 jobs"
-set check_description(210)     "with 50000 jobs, 2000 complexes, sharetree and 300 job categories"
-set check_description(300)    "submit 500000 jobs with enabled queues"
-set check_description(301)    "submit 500000 jobs with disabled queues"
+set check_description(210)    "with 50000 jobs, 2000 complexes, sharetree and 300 job categories"
+set check_description(211)    "Functional test, submit 25000 of 50000 jobs with disabled queues, implicit binding"
+set check_description(300)    "submit 500000 jobs with disabled queues"
+set check_description(301)    "submit 500000 jobs with enabled queues"
 set check_description(302)    "submit 250000 of 500000 jobs with disabled queues"
 set check_description(303)    "submit 250000 of 500000 jobs with disabled queues, with qstats"
 set check_description(304)    "submit 250000 of 500000 jobs with disabled queues, requests"
@@ -180,7 +183,8 @@ set check_description(306)    "submit 250000 of 500000 jobs with disabled queues
 set check_description(307)    "with sharetree, 500000 jobs"
 set check_description(308)    "with functional policy, 500000 jobs"
 set check_description(309)    "with reservation, 500000 jobs"
-set check_description(310)     "with 500000jobs, 2000 complexes, sharetree and 300 job categories"
+set check_description(310)    "with 500000 jobs, 2000 complexes, sharetree and 300 job categories"
+set check_description(311)    "Functional test, submit 250000 of 500000 jobs with disabled queues, implicit binding"
 
 set check_needs               "init_core_system"      ;# dependencies of this check (name of other check)
 
@@ -205,7 +209,7 @@ global throughput_max_consumable_per_job
 set throughput_max_consumable_per_job 3
 
 proc throughput_setup_sharetree {extended} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    if {$extended == 1} {
       set nr_of_projects 500
@@ -249,7 +253,7 @@ proc throughput_setup_sharetree {extended} {
 }
 
 proc throughput_cleanup_sharetree {extended} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    ts_log_fine "cleanup sharetree ..."
 
@@ -280,7 +284,7 @@ proc throughput_cleanup_sharetree {extended} {
 }
 
 proc throughput_setup_functional_policy {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    ts_log_fine "setup functional policy ..."
 
@@ -332,7 +336,7 @@ proc throughput_setup_consumables {} {
 }
 
 proc throughput_cleanup_functional_policy {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    # reset scheduler config
    reset_schedd_config
@@ -361,8 +365,41 @@ proc throughput_cleanup_consumables {} {
    set_complex complex
 }
 
+proc throughput_wait_for_fake_toplogy {} {
+   get_current_cluster_config_array ts_config
+   global host_list
+
+   set expected_topo_list {"NSXYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT" "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT"
+                             "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT" "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT"
+                             "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT" "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT"
+                             "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT" "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT"
+                             "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT" "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT"
+                             "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT" "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT"
+                           "NSXYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT" "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT"
+                             "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT" "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT"
+                             "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT" "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT"
+                             "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT" "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT"
+                             "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT" "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT"
+                             "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT" "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT"}
+   set expected_topology [join $expected_topo_list ""]
+
+   set ret 1
+   foreach host $host_list {
+      ts_log_fine "waiting for fake topology on host $host ..."
+      if {![host_wait_for_fake_topology $host $expected_topology]} {
+         # host_wait_for_fake_topology logs a severe message, which makes setup_level fail
+         # and the scenario will not be run
+         set ret 0
+         ts_log_fine "waiting for fake topology on host $host failed"
+         break
+      }
+   }
+
+   return $ret
+}
+
 proc throughput_setup {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global CHECK_PRODUCT_TYPE
    global nr_slots default_nr_slots           ;# nr of slots on each queue
    global nr_queues                           ;# nr of queues on each host
@@ -460,6 +497,7 @@ proc throughput_cleanup {} {
    global throughput_complex_backup throughput_bootstrap_backup
    global throughput_host_info
    global prot_time_stamp
+   global use_fake_topology
 
    cleanup_host_slots_for_binding
 
@@ -479,11 +517,11 @@ proc throughput_cleanup {} {
 
    unset -nocomplain throughput_complex_backup throughput_bootstrap_backup
    unset -nocomplain throughput_host_info
-   unset -nocomplain prot_time_stamp
+   unset -nocomplain prot_time_stamp use_fake_topology
 }
 
 proc throughput_setup_level {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
    global CHECK_ACT_LEVEL CHECK_PRODUCT_TYPE
    global end_job_count                      ;# number of jobs
@@ -505,6 +543,7 @@ proc throughput_setup_level {} {
    global throughput_max_job_categories
    global throughput_max_consumable_per_job
    global throughput_bootstrap_backup
+   global use_fake_topology
 
    # parameters for all tests
    set enable_queues_job_count   0   ;# after witch job, enable queues
@@ -519,6 +558,8 @@ proc throughput_setup_level {} {
    set consumables               0   ;# default: no additional consumables
    set job_options(count)        0   ;# default: no special job options
    set define_gdi_request_limits 1   ;# default: define gdi request limits
+   set use_fake_topology         0   ;# default: do not use fake topology
+   set use_implicit_binding      0   ;# default: do not use implicit binding
 
    # setup levels
    set major_level [expr $CHECK_ACT_LEVEL / 100]
@@ -680,6 +721,23 @@ proc throughput_setup_level {} {
             set job_options($count)      "-P project$count $request"
          }
       }
+      11 {
+         # we run this scenario only when binding in scheduler is supported
+         if {![ge_has_feature "binding-in-scheduler"]} {
+            ts_log_config "implicit binding in scheduler is not supported, skipping this runlevel"
+            return 99
+         }
+
+         # enable queues after half of the jobs have been submitted, do implicit binding
+         set throughput_scenario        "mixed_implicit_binding"
+
+         set end_job_count            $job_count
+         set enable_queues_job_count  [expr $job_count/2]
+
+         # use a fake topology with implicit binding
+         set use_fake_topology 1
+         set use_implicit_binding 1
+      }
    }
 
    set test_scenario "$CHECK_ACT_LEVEL ($throughput_scenario)"
@@ -711,6 +769,15 @@ proc throughput_setup_level {} {
        set myconfig(gdi_request_limits) $gdi_request_limits
    } else {
        set myconfig(gdi_request_limits) "none"
+   }
+
+   # use fake topology
+   if {$use_fake_topology} {
+      set myconfig(topology_file) "$ts_config(testsuite_root_dir)/resources/hwloc-topo/AMD-Epyc-Zen5-c4d-highmem-384.xml"
+   }
+   # use implicit binding
+   if {$use_implicit_binding} {
+      add_or_replace_array_param myconfig stored_configuration "binding_params" "implicit" "true"
    }
 
    # setup global configuration
@@ -803,6 +870,14 @@ proc throughput_setup_level {} {
       append accounting_file ".jsonl"
    }
    delete_remote_file $ts_config(master_host) $CHECK_USER $accounting_file
+
+   if {$use_fake_topology} {
+      # we wait for the fake topology to be active on all exec hosts
+      # we do this intentionally as last step of the setup_level function
+      # which lets sge_execds time to get the new config and read the topology file while we
+      # are doing other setup steps before
+      throughput_wait_for_fake_toplogy
+   }
 }
 
 proc throughput_cleanup_level {} {
@@ -811,6 +886,7 @@ proc throughput_cleanup_level {} {
    global throughput_sharetree functional_policy parallel_jobs reservation
    global consumables throughput_sharetree_ext
    global throughput_bootstrap_backup
+   global use_fake_topology
 
    # setup levels
    set major_level [expr $CHECK_ACT_LEVEL / 100]
@@ -905,7 +981,7 @@ proc get_event_client_time {line} {
 }
 
 proc run_throughput_test {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global CHECK_USER
    global queue_list
    global enable_queues_job_count
@@ -1617,7 +1693,7 @@ proc run_throughput_test {} {
 }
 
 proc throughput_wait_for_accounting_flush {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    # submit a sleep 0 job
    set job_id [submit_job "-b y sleep 0"]
@@ -1634,7 +1710,7 @@ proc throughput_wait_for_accounting_flush {} {
 }
 
 proc fill_job_list_from_accounting {job_array_name} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global array_size
 
    upvar $job_array_name job_data
@@ -1692,7 +1768,8 @@ proc fill_job_list_from_accounting {job_array_name} {
 }
 
 proc fill_sched_from_messages {start_time end_time schedd_data_name} {
-   global ts_config CHECK_USER
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
 
    upvar $schedd_data_name schedd_data
 
@@ -1774,7 +1851,7 @@ proc fill_sched_from_messages {start_time end_time schedd_data_name} {
 }
 
 proc get_submit_id_from_job_id {job_array_name job_id} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    upvar $job_array_name jobs
 
    if {[info exists jobs($job_id)] == 0} {
@@ -1785,7 +1862,7 @@ proc get_submit_id_from_job_id {job_array_name job_id} {
 }
 
 proc save_current_system_status { results_array array_name } {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global result_names
 
    upvar $array_name data
@@ -1799,7 +1876,7 @@ proc save_current_system_status { results_array array_name } {
 }
 
 proc compare_dump_directory { dir } {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    set files [get_file_names $dir "saved_run.*"]
    set first_data 0
@@ -1898,7 +1975,7 @@ proc compare_dump_directory { dir } {
 
 # directory of file1 is used to save results
 proc compare_dump_data_file { file1 file2 } {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global array_size parallel_jobs reservation
    global throughput_num_data_sets
 
@@ -2529,7 +2606,7 @@ proc compare_dump_data_file { file1 file2 } {
 }
 
 proc analyse_dump_data_file { file { force 0 } } {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global throughput_sharetree functional_policy qstat_interval array_size parallel_jobs reservation
    global throughput_sharetree_ext
 
@@ -3147,7 +3224,7 @@ proc analyse_dump_data_file { file { force 0 } } {
 
 
 proc calculate_schedd_run_xy_rows { results_array_name row_array_name test_start start_numb } {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    upvar $results_array_name schedd
    upvar $row_array_name xy_rows
@@ -3194,7 +3271,7 @@ proc calculate_schedd_run_xy_rows { results_array_name row_array_name test_start
 }
 
 proc calculate_submit_run_xy_rows { results_array_name row_array_name test_start start_numb} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    upvar $results_array_name jobs
    upvar $row_array_name xy_rows
@@ -3263,7 +3340,7 @@ proc calculate_submit_run_xy_rows { results_array_name row_array_name test_start
 }
 
 proc calculate_monitoring_xy_rows {results_array_name row_array_name test_start start_numb} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    upvar $results_array_name monitoring
    upvar $row_array_name xy_rows
@@ -3316,7 +3393,7 @@ proc calculate_monitoring_xy_rows {results_array_name row_array_name test_start 
 }
 
 proc calculate_qstat_xy_rows { results_array_name row_array_name test_start start_numb} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    upvar $results_array_name qstat_data
    upvar $row_array_name xy_rows
@@ -3355,7 +3432,7 @@ proc calculate_qstat_xy_rows { results_array_name row_array_name test_start star
 
 
 proc calculate_event_xy_rows { results_array_name row_array_name test_start start_numb} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    upvar $results_array_name event_data
    upvar $row_array_name xy_rows
@@ -3396,7 +3473,7 @@ proc calculate_event_xy_rows { results_array_name row_array_name test_start star
 }
 
 proc calculate_qping_xy_rows { results_array_name row_array_name test_start start_numb} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    upvar $results_array_name qping_data
    upvar $row_array_name xy_rows
@@ -3436,7 +3513,7 @@ proc calculate_qping_xy_rows { results_array_name row_array_name test_start star
 
 
 proc calculate_project_run_xy_rows {results_array_name job_array_name row_array_name start_numb} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    upvar $results_array_name results
    upvar $job_array_name jobs
@@ -3545,7 +3622,7 @@ proc calculate_project_run_xy_rows {results_array_name job_array_name row_array_
 }
 
 proc calculate_test_run_xy_rows { results_array_name row_array_name start_numb } {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    upvar $results_array_name results
    upvar $row_array_name xy_rows
@@ -3621,7 +3698,7 @@ proc calculate_test_run_xy_rows { results_array_name row_array_name start_numb }
 }
 
 proc create_reports { results_array job_array_name schedd_array_name monitoring_name qstat_name qping_name event_name} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global ts_host_config
    global CHECK_PROTOCOL_DIR check_name throughput_scenario
    global CHECK_USER
@@ -3670,8 +3747,12 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
    #         e.g., 9.1.0_256_50000_munge-tls_2026-01-15-12-00
    #          - <scenario.tsd>  (the test data file)
    #          - <scenario>      directory containing the per scenario report
-   set version [get_version_info]
+
+   # get version and replace spaces with underscores (as we use it in directory names)
+   set version [string map {" " "_"} [get_version_info]]
+   # get the enabled product features and join them with "-"
    set features [join $ts_config(product_feature) "-"]
+   # build the output directory name
    set prot_output_dir "$CHECK_PROTOCOL_DIR/$check_name/${version}_${nr_of_execdhosts}_${test_end_job_count}_${features}_${prot_time_stamp}"
 
    ts_log_fine "saving report in directory:"
@@ -3748,7 +3829,7 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
 }
 
 proc calculate_average_cluster_times { results_array monitoring_array qstat_array cluster_results_array { dump_file "" } } {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    global enable_queues_job_count
    global FLUSH_SUBMIT_SEC FLUSH_FINISH_SEC run_throughput_test_SCHEDULE_INTERVAL
@@ -3956,7 +4037,7 @@ proc trash_incomplete_job_records {job_array_name} {
 }
 
 proc calculate_average_job_times { job_array_name job_results_array { dump_file "" }} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    upvar $job_array_name jobs
    upvar $job_results_array result
@@ -4015,7 +4096,7 @@ proc calculate_average_job_times { job_array_name job_results_array { dump_file 
 
 
 proc calculate_average_schedd_times { schedd_array_name schedd_results_array { dump_file "" }} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    upvar $schedd_array_name schedd_array
    upvar $schedd_results_array result
@@ -4059,7 +4140,7 @@ proc calculate_average_schedd_times { schedd_array_name schedd_results_array { d
 
 
 proc show_and_check_current_system_status {start_time array_name schedd_array_name monitoring_name qstat_name} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global test_scenario
    global qstat_interval
 
@@ -4115,7 +4196,7 @@ proc show_and_check_current_system_status {start_time array_name schedd_array_na
 }
 
 proc clean_current_system_status { results_array array_name job_array_name schedd_array_name monitoring_name qstat_name qping_name event_name} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global queue_list global_job_run_time nr_slots
    global result_names host_list
 
