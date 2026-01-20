@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2025 HPC-Gridware GmbH
+#  Copyright 2025-2026 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -490,7 +490,7 @@ proc cleanup_host_slots_for_binding {{backup_var ""} {unset_backup_var 1}} {
 
       # optionally unset the backup array
       if {$unset_backup_var} {
-         unset -nocomplain $backup_var
+         unset -nocomplain backup
       }
    }
 }
