@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2024 HPC-Gridware GmbH
+#  Copyright 2024-2026 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ connection_type   ssh
 source_dir        /shared_home/sgetest/master/clusterscheduler/source
 NFS-ROOT2NOBODY   /shared_home/all_users
 NFS-ROOT2ROOT     /shared/all_users
-spooldir          /var/spool/ocs
+spooldir          /local/spool/ocs
 test-user-1       sgetest1 sgegroup sgegroup1
 test-user-2       sgetest2 sgegroup2
 #
