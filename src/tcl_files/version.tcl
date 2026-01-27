@@ -231,7 +231,24 @@ proc parse_version_info {version_string {version_information_array_name ""}} {
    }
 }
 
-proc get_version_info {{version_information_array_name ""}} {
+## @brief get the Cluster Scheduler (Grid Engine) version
+#
+# This procedure tries to get the Cluster Scheduler (Grid Engine) version
+# in different ways:
+# 1) from global variable g_rel_info if already parsed
+# 2) by starting "qconf -help" on the qmaster host and parsing the first line of output
+# 3) by starting the install script with "-v" option
+#
+# If the caller requests detailed release info, it is copied from the
+# global cache g_rel_info into the array given by version_information_array_name.
+#
+# @param[in] optional version_information_array_name - name of array to copy detailed
+#            release info into
+# @param[in] optional do_cleanup - if 1 then cleanup version string
+#            (replace spaces by underscores and cut off build number in parentheses)
+# @return version string
+#
+proc get_version_info {{version_information_array_name ""} {do_cleanup 0}} {
    get_current_cluster_config_array ts_config
    global g_rel_info
    global CHECK_PRODUCT_VERSION_NUMBER
@@ -296,7 +313,23 @@ proc get_version_info {{version_information_array_name ""}} {
       }
    }
 
-   return $CHECK_PRODUCT_VERSION_NUMBER
+   set version $CHECK_PRODUCT_VERSION_NUMBER
+
+   # cleanup version string
+   if {$do_cleanup == 1} {
+
+      # optionally replace spaces in version string by underscore
+      regsub -all { } $version "_" version
+
+      # cut off build number enclosed in parentheses
+      set bracket_pos [string first "(" $version]
+      if {$bracket_pos != -1} {
+         set version [string range $version 0 [expr $bracket_pos - 2]]
+      }
+   }
+
+   puts "Debug: detected Cluster Scheduler (Grid Engine) version: $version"
+   return $version
 }
 
 ###

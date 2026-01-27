@@ -399,8 +399,12 @@ proc backup_remote_cluster_config {filename dir} {
       ts_log_severe "can't read additonal configuration file $filename"
       return -1
    }
-
-   set cmd "./save_sge_config.sh"
+__
+   if {[is_version_in_range "9.0.0" "9.0.99"]} {
+      set cmd "./save_sge_config.sh"
+   } else {
+      set cmd "./save_config.sh"
+   }
    set curr_dir "$ts_config(product_root)/util/upgrade_modules"
 
    set hostname $add_config(master_host)
@@ -448,7 +452,11 @@ proc upgrade_cluster { dir } {
       return 0
    }
 
-   set cmd "load_sge_config.sh"
+   if {[is_version_in_range "9.0.0" "9.0.99"]} {
+      set cmd "load_sge_config.sh"
+   } else {
+      set cmd "load_config.sh"
+   }
    set curr_dir "$ts_config(product_root)/util/upgrade_modules"
 
    ts_log_fine "Loading the configuration from $dir directory."

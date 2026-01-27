@@ -509,10 +509,15 @@ proc current_version_upgrade_test {} {
       return
    }
 
-   # Save the save_cc.sh file of the current version into backup dir (we use fixed name save_sge_config.sh) ...
-   set save_file_path "$ts_config(product_root)/util/upgrade_modules/save_sge_config.sh"
+   # Save the save_cc.sh file of the current version into backup dir (we use fixed name save_config.sh) ...
+   if {[is_version_in_range "9.0.0" "9.0.99"]} {
+      set script_name "save_sge_config.sh"
+   } else {
+      set script_name "save_config.sh"
+   }
+   set save_file_path "$ts_config(product_root)/util/upgrade_modules/$script_name"
    get_file_content $backup_host $install_user $save_file_path backup_config_file
-   set save_config_file_path "$backup_dir/save_sge_config.sh"
+   set save_config_file_path "$backup_dir/$script_name"
    write_remote_file $ts_config(master_host) $install_user $save_config_file_path backup_config_file "755"
    set attribs [file attributes $save_config_file_path -permissions]
    if {[string compare $attribs "00755" ] != 0  } {
