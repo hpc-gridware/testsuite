@@ -1,0 +1,5 @@
+#v01702.fritz.box:
+xterm                        /usr/bin/X11/xterm
+mailer                       /bin/mail
+execd_spool_dir              /usr/local/testsuite/8000/execd
+

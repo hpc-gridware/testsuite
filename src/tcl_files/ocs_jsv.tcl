@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2025 HPC-Gridware GmbH
+#  Copyright 2025-2026 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -96,7 +96,7 @@ proc jsv_instructions2ac_arguments {instructions} {
 
 ## @brief Submits a job with given JSV script and instructions
 #
-# Instaructions are strings like `jsv_set_param:bamount:4` that will be handled by the JSV script.
+# Instructions are strings like `jsv_set_param:bamount:4` that will be handled by the JSV script.
 # after : characters have been replaced by spaces. The first part is the TCL procedure to be called,
 # the remaining parts are the arguments to be passed to the procedure.
 #

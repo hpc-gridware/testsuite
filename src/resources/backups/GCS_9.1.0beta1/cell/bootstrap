@@ -1,0 +1,15 @@
+# Version: 9.1.0
+#
+admin_user              ebablick
+default_domain          none
+ignore_fqdn             true
+spooling_method         classic
+spooling_lib            libspoolc
+spooling_params         /home/ebablick/Clion/gcs0/inst/default/common;/usr/local/testsuite/8000/qmaster
+binary_path             /home/ebablick/Clion/gcs0/inst/bin
+qmaster_spool_dir       /usr/local/testsuite/8000/qmaster
+security_mode           munge
+listener_threads        4
+worker_threads          4
+reader_threads          4
+scheduler_threads       1
