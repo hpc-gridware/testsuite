@@ -328,7 +328,6 @@ proc get_version_info {{version_information_array_name ""} {do_cleanup 0}} {
       }
    }
 
-   puts "Debug: detected Cluster Scheduler (Grid Engine) version: $version"
    return $version
 }
 

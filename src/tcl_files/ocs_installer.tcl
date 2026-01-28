@@ -18,14 +18,21 @@
 ###########################################################################
 #___INFO__MARK_END_NEW__
 
+proc installer_get_diff_script {} {
+   get_current_cluster_config_array ts_config
+   return "$ts_config(testsuite_root_dir)/scripts/diff_backups.sh"
+}
+
 proc installer_get_hostname {} {
    get_current_cluster_config_array ts_config
    return $ts_config(master_host)
 }
 
-proc installer_get_backup_dir {} {
+proc installer_get_backup_dir {{cs_version ""}} {
    get_current_cluster_config_array ts_config
-   set cs_version [get_version_info version_array 1]
+   if {$cs_version == ""} {
+      set cs_version [get_version_info version_array 1]
+   }
    return "$ts_config(testsuite_root_dir)/resources/backups/$cs_version"
 }
 
@@ -134,4 +141,42 @@ proc installer_load_config {{backup_dir ""} {on_error "cont_if_exist"}} {
    if {$prg_exit_state != 0} {
       ts_log_severe "Load config script failed, see log file $log_file for details:\n$result"
    }
+}
+
+## @brief create a new backup and compares it with the original one
+#
+# The only file expected to be different is "backup_date" which contains a timestamp.
+#
+# @return exit code of the diff command (0 if no differences, != 0 otherwise
+#
+proc installer_create_and_compare_backup {} {
+   global CHECK_USER
+
+   set hostname [installer_get_hostname]
+   set orig_backup_dir [installer_get_backup_dir]
+   set new_backup_dir [get_tmp_directory_name $hostname]
+
+   puts "Original backup dir: $orig_backup_dir"
+   puts "New backup dir: $new_backup_dir"
+
+   # create backup of current configuration
+   installer_save_config $new_backup_dir
+
+   # compare backup after load_config with that one before load_config
+   set command [installer_get_diff_script]
+   set arguments "$orig_backup_dir $new_backup_dir"
+   set output [start_remote_prog $hostname $CHECK_USER $command $arguments prg_exit_state]
+
+   # The diff script returns 0 if no differences were found
+   # The script automatically ignores the backup_date file
+   # or attributes containing timestamps which are expected to be different
+   # Extend the script if other files/attributes need to be ignored
+
+   # check diff result
+   if {$prg_exit_state != 0} {
+      ts_log_severe "Backups differ:\nBefore: $orig_backup_dir\nAfter: $new_backup_dir\nDiff output: $output"
+   } else {
+      ts_log_info "Backups are identical: $output"
+   }
+   return $prg_exit_state
 }
