@@ -1,0 +1,11 @@
+hostname              ce8-3-lx-arm64.fritz.box
+load_scaling          NONE
+complex_values        NONE
+load_values           load_avg=4.320000,load_short=4.240000,load_medium=4.320000,load_long=3.090000,arch=lx-arm64,num_proc=6,mem_free=2855.187500M,swap_free=3874.000000M,virtual_free=6729.187500M,mem_total=3487.562500M,swap_total=4099.937500M,virtual_total=7587.500000M,mem_used=632.375000M,swap_used=225.937500M,virtual_used=858.312500M,cpu=2.100000,m_topology=SCCSCCSCC,m_topology_inuse=SCCSCCSCC,m_socket=3,m_core=6,m_thread=6,np_load_avg=0.720000,np_load_short=0.706667,np_load_medium=0.720000,np_load_long=0.515000
+processors            6
+user_lists            NONE
+xuser_lists           NONE
+projects              NONE
+xprojects             NONE
+usage_scaling         NONE
+report_variables      NONE

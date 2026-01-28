@@ -1,0 +1,5 @@
+#ro8-0-lx-amd64.fritz.box:
+xterm                        /bin/xterm
+mailer                       /bin/mail
+execd_spool_dir              /usr/local/testsuite/8006/execd
+

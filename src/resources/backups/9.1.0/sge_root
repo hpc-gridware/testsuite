@@ -1,0 +1,1 @@
+SGE_ROOT=/home/ebablick/CS/cs2-0/inst; export SGE_ROOT

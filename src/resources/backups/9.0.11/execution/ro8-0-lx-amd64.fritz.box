@@ -1,0 +1,11 @@
+hostname              ro8-0-lx-amd64.fritz.box
+load_scaling          NONE
+complex_values        NONE
+load_values           load_avg=1.020000,load_short=1.500000,load_medium=1.020000,load_long=0.480000,arch=lx-amd64,num_proc=4,mem_free=2455.769531M,swap_free=3279.996094M,virtual_free=5735.765625M,mem_total=3665.167969M,swap_total=3279.996094M,virtual_total=6945.164062M,mem_used=1209.398438M,swap_used=0.000000M,virtual_used=1209.398438M,cpu=32.200000,m_topology=SCSCSCSC,m_topology_inuse=SCSCSCSC,m_socket=4,m_core=4,m_thread=4,np_load_avg=0.255000,np_load_short=0.375000,np_load_medium=0.255000,np_load_long=0.120000
+processors            4
+user_lists            NONE
+xuser_lists           NONE
+projects              NONE
+xprojects             NONE
+usage_scaling         NONE
+report_variables      NONE
