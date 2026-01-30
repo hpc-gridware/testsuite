@@ -7229,6 +7229,7 @@ proc source_tcl_files {} {
    ts_source $libdir/coverage_tcov
    ts_source $libdir/valgrind
    ts_source $libdir/ocs_cluster
+   ts_source $libdir/ocs_host
    ts_source $libdir/ocs_installer
    ts_source $libdir/ocs_jsv
    ts_source $libdir/parser

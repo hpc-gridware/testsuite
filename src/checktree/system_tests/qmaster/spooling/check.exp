@@ -72,7 +72,7 @@ proc qmaster_spooling_setup {} {
       return 99
    }
 
-   if {[is_version_in_range "9.0.0"]} {
+   if {[is_version_in_range "9.0.0" "9.0.99"]} {
       set qmaster_spooling_dateformat "%Y-%m-%d %H:%M:%S"
    } else {
       set qmaster_spooling_dateformat "%m/%d/%Y %H:%M:%S"

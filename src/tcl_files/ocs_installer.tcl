@@ -18,6 +18,14 @@
 ###########################################################################
 #___INFO__MARK_END_NEW__
 
+proc is_host_resolvable {hostname} {
+   if {[catch {exec ping -c 1 $hostname} result]} {
+      return 0
+   } else {
+      return 1
+   }
+}
+
 proc installer_get_diff_script {} {
    get_current_cluster_config_array ts_config
    return "$ts_config(testsuite_root_dir)/scripts/diff_backups.sh"
@@ -33,7 +41,13 @@ proc installer_get_backup_dir {{cs_version ""}} {
    if {$cs_version == ""} {
       set cs_version [get_version_info version_array 1]
    }
-   return "$ts_config(testsuite_root_dir)/resources/backups/$cs_version"
+
+   if {[is_executed_in_hpc_gridware_lab_environment]}
+      set subpath "backups"
+   } else {
+      set subpath "backups_local"
+   }
+   return "$ts_config(testsuite_root_dir)/resources/$subpath/$cs_version"
 }
 
 ## @brief set environment variables needed for the upgrade scripts
@@ -128,8 +142,8 @@ proc installer_load_config {{backup_dir ""} {on_error "cont_if_exist"}} {
    if {$backup_dir == ""} {
       set cs_version [get_version_info version_array 1]
       set backup_dir $ts_config(testsuite_root_dir)/resources/backups/$cs_version
-      set log_file [get_tmp_file_name]
    }
+   set log_file [get_tmp_file_name]
    set arguments "$backup_dir $log_file -mode upgrade -log I"
 
    # continue only if an object already exists (default also for the upgrade)
@@ -149,15 +163,18 @@ proc installer_load_config {{backup_dir ""} {on_error "cont_if_exist"}} {
 #
 # @return exit code of the diff command (0 if no differences, != 0 otherwise
 #
-proc installer_create_and_compare_backup {} {
+proc installer_create_and_compare_backup {{orig_backup_dir ""}} {
    global CHECK_USER
 
    set hostname [installer_get_hostname]
-   set orig_backup_dir [installer_get_backup_dir]
+   if {$orig_backup_dir == ""} {
+      set orig_backup_dir [installer_get_backup_dir]
+   }
    set new_backup_dir [get_tmp_directory_name $hostname]
 
    puts "Original backup dir: $orig_backup_dir"
    puts "New backup dir: $new_backup_dir"
+   puts "Command: ./src/scripts/diff_backups.sh $orig_backup_dir $new_backup_dir"
 
    # create backup of current configuration
    installer_save_config $new_backup_dir
