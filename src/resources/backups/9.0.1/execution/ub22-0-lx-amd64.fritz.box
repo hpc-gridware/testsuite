@@ -1,0 +1,11 @@
+hostname              ub22-0-lx-amd64.fritz.box
+load_scaling          NONE
+complex_values        NONE
+load_values           load_avg=0.010000,load_short=0.030000,load_medium=0.010000,load_long=0.000000,arch=lx-amd64,num_proc=6,mem_free=3434.941406M,swap_free=3906.996094M,virtual_free=7341.937500M,mem_total=3910.832031M,swap_total=3906.996094M,virtual_total=7817.828125M,mem_used=475.890625M,swap_used=0.000000M,virtual_used=475.890625M,cpu=0.000000,m_topology=SCTTTSCTTT,m_topology_inuse=SCTTTSCTTT,m_socket=2,m_core=2,m_thread=6,np_load_avg=0.001667,np_load_short=0.005000,np_load_medium=0.001667,np_load_long=0.000000
+processors            6
+user_lists            NONE
+xuser_lists           NONE
+projects              NONE
+xprojects             NONE
+usage_scaling         NONE
+report_variables      NONE

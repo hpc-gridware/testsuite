@@ -1,0 +1,11 @@
+hostname              ub20-0-lx-amd64.fritz.box
+load_scaling          NONE
+complex_values        NONE
+load_values           load_avg=0.370000,load_short=0.510000,load_medium=0.370000,load_long=0.270000,arch=lx-amd64,num_proc=4,mem_free=3090.605469M,swap_free=3921.996094M,virtual_free=7012.601562M,mem_total=3919.390625M,swap_total=3921.996094M,virtual_total=7841.386719M,mem_used=828.785156M,swap_used=0.000000M,virtual_used=828.785156M,cpu=9.600000,m_topology=SCSCSCSC,m_topology_inuse=SCSCSCSC,m_socket=4,m_core=4,m_thread=4,np_load_avg=0.092500,np_load_short=0.127500,np_load_medium=0.092500,np_load_long=0.067500
+processors            4
+user_lists            NONE
+xuser_lists           NONE
+projects              NONE
+xprojects             NONE
+usage_scaling         NONE
+report_variables      NONE

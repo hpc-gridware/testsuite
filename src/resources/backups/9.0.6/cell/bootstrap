@@ -1,0 +1,15 @@
+# Version: 9.0.6
+#
+admin_user              ebablick
+default_domain          none
+ignore_fqdn             true
+spooling_method         classic
+spooling_lib            libspoolc
+spooling_params         /home/ebablick/CS/cs1-0/inst/default/common;/home/ebablick/CS/cs1-0/inst/default/spool/qmaster
+binary_path             /home/ebablick/CS/cs1-0/inst/bin
+qmaster_spool_dir       /home/ebablick/CS/cs1-0/inst/default/spool/qmaster
+security_mode           none
+listener_threads        4
+worker_threads          4
+reader_threads          4
+scheduler_threads       1
