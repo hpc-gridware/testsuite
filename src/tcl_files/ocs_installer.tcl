@@ -42,7 +42,7 @@ proc installer_get_backup_dir {{cs_version ""}} {
       set cs_version [get_version_info version_array 1]
    }
 
-   if {[is_executed_in_hpc_gridware_lab_environment]}
+   if {[is_executed_in_hpc_gridware_lab_environment]} {
       set subpath "backups"
    } else {
       set subpath "backups_local"
