@@ -40,6 +40,8 @@ proc cluster_delete_all_objects {} {
    cluster_delete_all_rqss
    cluster_delete_all_users
    cluster_delete_all_usersets
+
+   # builtin complexes and global host cannot be deleted
 }
 
 proc cluster_delete_all_queues {} {
