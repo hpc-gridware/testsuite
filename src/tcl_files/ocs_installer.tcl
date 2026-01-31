@@ -39,7 +39,10 @@ proc installer_get_hostname {} {
 proc installer_get_backup_dir {{cs_version ""}} {
    get_current_cluster_config_array ts_config
    if {$cs_version == ""} {
-      set cs_version [get_version_info version_array 1]
+      get_version_info version_array 1
+      set cs_version $version_array(detected_version)
+
+      puts "DEBUG installer_get_backup_dir: Using current version for backup dir: $cs_version"
    }
 
    if {[is_executed_in_hpc_gridware_lab_environment]} {
@@ -140,7 +143,11 @@ proc installer_load_config {{backup_dir ""} {on_error "cont_if_exist"}} {
 
    # backup destination
    if {$backup_dir == ""} {
-      set cs_version [get_version_info version_array 1]
+      get_version_info version_array 1
+      set cs_version $version_array(detected_version)
+
+      puts "DEBUG: Using default backup dir for version $cs_version"
+
       set backup_dir $ts_config(testsuite_root_dir)/resources/backups/$cs_version
    }
    set log_file [get_tmp_file_name]
