@@ -2990,7 +2990,7 @@ proc verify_version_range {check_version_range_var levels_in} {
 proc read_checktree_nodes {path} {
    global ts_checktree CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
    global check_name check_needs
-   global check_category CHECK_USER check_source_files check_functions
+   global check_category CHECK_USER check_functions
    global CHECK_ACT_LEVEL sourced_commands check_description check_version_range
 
    # remember last check name - we'll reset to it on function exit
@@ -3007,21 +3007,12 @@ proc read_checktree_nodes {path} {
    # prepare for sourcing check.exp files
    set check_setup_function "--"
    set check_category "--"
-   set check_source_files "--"
    set check_functions "--"
    unset -nocomplain check_description
    unset -nocomplain check_version_range
 
    # try to find and source check files in this directory for the configured Cluster Scheduler (Grid Engine) version
    set sourced_files [ts_source $path/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT]
-
-   # additionally source all tcl files
-   if {$check_source_files != "--"} {
-      foreach asf $check_source_files {
-         ts_log_finer "check \"$check_name\" - sourcing \"$asf\" tcl files!"
-         ts_source $path/$asf
-      }
-   }
 
    # if there is a check in this directory, remember some information
    set test_available 1
@@ -4963,7 +4954,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    global check_setup_level_function check_cleanup_level_function
    global check_version_range
    global CHECK_TEST_RUNNING
-   global CHECK_INTERRUPT check_source_files
+   global CHECK_INTERRUPT
    global CHECK_USE_HUDSON
    global exclude_array
    global check_set_ignore_dependencies
@@ -5001,7 +4992,6 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    set check_cleanup_level_function ""
    set check_root_access_needs   "no"
    set check_need_running_system "yes"
-   set check_source_files "--"
    unset -nocomplain check_version_range
 
    if {$ONLY_ONE_LEVEL != ""} {
@@ -5011,14 +5001,6 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    }
 
    ts_source $path/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT
-
-   # additionally source all tcl files
-   if {$check_source_files != "--"} {
-      foreach asf $check_source_files {
-         ts_log_finer "check \"$check_name\" - sourcing \"$asf\" tcl files!"
-         ts_source $path/$asf
-      }
-   }
 
    if {[string compare $run_single_test "all"] != 0} {
       set do_only_one_test 1

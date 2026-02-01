@@ -42,9 +42,6 @@ global check_functions
 global check_root_access_needs
 global check_need_running_system
 
-# define tcl files which should be sourced at startup of testsuite
-set check_source_files "remote_cluster_procedures"
-
 # define test's name and run level descriptions
 set check_name            "extensive_qrsh"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"

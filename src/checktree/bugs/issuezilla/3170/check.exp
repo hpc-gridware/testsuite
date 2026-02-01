@@ -45,9 +45,6 @@ global check_need_running_system
 set check_root_access_needs "yes"
 #set check_need_running_system "no"
 
-# define tcl files which should be sourced at startup of testsuite
-set check_source_files "remote_cluster_procedures"
-
 # define test's name and run level descriptions
 set check_name            "issue_3170"
 set check_category        "COMPATIBILITY SYSTEM VERIFIED"

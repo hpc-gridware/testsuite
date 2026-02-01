@@ -11,3 +11,4 @@ check_durations.txt*
 *.swp
 *.log
 tags
+src/resources/backups/*
