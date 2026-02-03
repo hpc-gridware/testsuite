@@ -29,7 +29,7 @@
 #
 #  Portions of this software are Copyright (c) 2011 Univa Corporation
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -5380,11 +5380,21 @@ proc check_if_test_cleaned_up {} {
 
    # check if all systemd slices (of pe jobs) have been cleaned up, and repair if not
    if {[ge_has_feature "systemd"]} {
+      set have_a_systemd_host 0
       foreach host $ts_config(execd_nodes) {
          if {[host_has_systemd $host]} {
+            set have_a_systemd_host 1
             if {![systemd_check_cleanup_job_slices $host]} {
                set ret 0
             }
+         }
+      }
+      if {$have_a_systemd_host} {
+         # check if the slice file exists
+         set slice_name "$ts_config(product_root)/$ts_config(cell)/common/slice_name"
+         if {![file exists $slice_name]} {
+            ts_log_severe "$slice_name does not exist"
+            set ret 0
          }
       }
    }
