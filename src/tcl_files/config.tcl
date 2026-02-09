@@ -2670,7 +2670,10 @@ proc config_execd_hosts { only_check name config_array } {
 
    array set params { verify "compile" }
 
-   set value [config_generic $only_check $name config "" "host" 0 "2+" "" params]
+   # minimum one execd host
+   set number_of_hosts "1+"
+
+   set value [config_generic $only_check $name config "" "host" 0 $number_of_hosts "" params]
 
    if { $value == -1 } { return -1 }
 

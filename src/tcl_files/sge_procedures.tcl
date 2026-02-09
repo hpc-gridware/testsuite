@@ -2928,7 +2928,7 @@ proc build_gdi_request_limit {src type obj user host limit} {
 #     change_array(usage_scaling)               "NONE"
 #     change_array(resource_capability_factor)  "0.000000"
 #*******************************
-proc add_exechost {change_array {fast_add 1} {on_host ""}} {
+proc add_exechost {change_array {fast_add 1} {on_host ""} {ignore_error 0}} {
    get_current_cluster_config_array ts_config
 
    upvar $change_array chgar
@@ -2963,7 +2963,7 @@ proc add_exechost {change_array {fast_add 1} {on_host ""}} {
 
       set ADDED [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS "*" "*" "*" "*"]
 
-      if {[string match "*$ADDED*" $result] == 0} {
+      if {[string match "*$ADDED*" $result] == 0 && !$ignore_error} {
          ts_log_severe "qconf -Ae $tmpfile failed:\n$result"
          return
       }

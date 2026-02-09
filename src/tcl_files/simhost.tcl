@@ -115,7 +115,7 @@ proc simhost_init {} {
 # @param[in] attribute_array, optional, a list of attributes to be set for the new hosts
 # @returns a list of hostnames or "" in case of error
 ##
-proc simhost_add {num_hosts {host_group ""} {attribute_array ""}} {
+proc simhost_add {num_hosts {host_group ""} {attribute_array ""} {load_report_host ""}} {
    get_current_cluster_config_array ts_config
    global simhost_cache
 
@@ -178,7 +178,9 @@ proc simhost_add {num_hosts {host_group ""} {attribute_array ""}} {
       set eh(hostname) $host
 
       # get its load_report_host and add it to the complex_values
-      set load_report_host [lindex $ts_config(execd_nodes) [expr $i % $num_real_hosts]]
+      if {$load_report_host == ""} {
+         set load_report_host [lindex $ts_config(execd_nodes) [expr $i % $num_real_hosts]]
+      }
       set additional_attr "load_report_host=$load_report_host"
       if {[info exists eh(complex_values)]} {
          append eh(complex_values) ",$additional_attr"
@@ -186,7 +188,7 @@ proc simhost_add {num_hosts {host_group ""} {attribute_array ""}} {
          set eh(complex_values) $additional_attr
       }
 
-      add_exechost eh
+      add_exechost eh 1 "" 1
       # add_exechost doesn't return if it succeeded or not, just assume it did succeed
 
       # remember the added host and remove it from the free hosts
