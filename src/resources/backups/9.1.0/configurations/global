@@ -20,7 +20,7 @@ epilog                       none
 qmaster_params               none
 qlogin_command               builtin
 execd_spool_dir              /usr/local/testsuite/8000/execd
-mail_tag                     [p8000][GCS][9.1.0]
+mail_tag                     {[p8000][GCS][9.1.0]}
 auto_user_delete_time        86400
 gid_range                    13000-13199
 shell_start_mode             unix_behavior

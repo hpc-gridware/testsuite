@@ -21,7 +21,6 @@ m_core              core       INT         <=    YES         NO         0       
 m_socket            socket     INT         <=    YES         NO         0        0
 m_thread            thread     INT         <=    YES         NO         0        0
 m_topology          topo       RESTRING    ==    YES         NO         NONE     0
-m_topology_inuse    utopo      RESTRING    ==    YES         NO         NONE     0
 mem_free            mf         MEMORY      <=    YES         NO         0        0
 mem_total           mt         MEMORY      <=    YES         NO         0        0
 mem_used            mu         MEMORY      >=    YES         NO         0        0
