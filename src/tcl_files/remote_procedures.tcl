@@ -636,6 +636,7 @@ proc start_remote_prog { hostname
                          {without_start_output 0}
                          {without_sge_single_line 0}
                          {new_grp ""}
+                         {background_wait_time 15}
                        } {
    global CHECK_MAIN_RESULTS_DIR CHECK_DEBUG_LEVEL CHECK_USE_HUDSON
    upvar $exit_var back_exit_state
@@ -665,7 +666,7 @@ proc start_remote_prog { hostname
    set id [open_remote_spawn_process "$hostname" "$user" "$exec_command" "$exec_arguments" $background $cd_dir \
                                      users_env $source_settings_file 15 $set_shared_lib_path $raise_error \
                                      $without_start_output $without_sge_single_line \
-                                     shell_script_name 0 0 $new_grp]
+                                     shell_script_name 0 0 $new_grp $background_wait_time]
 
    if {$id == ""} {
       ts_log_severe "got no spawn id" $raise_error
@@ -1497,6 +1498,7 @@ proc open_remote_spawn_process { hostname
                                  {disable_stty_echo 0}
                                  {no_final_enter 0}
                                  {new_grp ""}
+                                 {background_wait_time 15}
                                } {
 
    global CHECK_USER
@@ -2164,13 +2166,13 @@ proc open_remote_spawn_process { hostname
 
    # for background processes, wait some time
    if {$background == 2} {
-      set back_time 15 ;# let background process time to do his initialization
+      set back_time $background_wait_time ;# let background process time to do his initialization
       while {$back_time > 0} {
          ts_log_progress
          after 1000
          incr back_time -1
       }
-      ts_log_fine "hope background process is initalized now!"
+      ts_log_finer "hope background process is initalized now!"
    }
 
    set back "$pid $spawn_id $nr_of_shells"

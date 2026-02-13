@@ -748,8 +748,6 @@ proc shadowd_migrate_test {} {
          } else {
             ts_log_severe "can't delete act_qmaster file $act_qmaster_file"
          }
-
-         startup_scheduler
       }
 
       if {$CHECK_ACT_LEVEL == 8} {

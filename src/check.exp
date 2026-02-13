@@ -189,8 +189,12 @@ global daemon_debug
 set daemon_debug 0
 global master_debug
 set master_debug 0
-global schedd_debug
-set schedd_debug 0
+global ocs_debug_display
+set ocs_debug_display ""
+global ocs_debug_terminal_application
+set ocs_debug_terminal_application "tilix"
+global ocs_debug_thread_pattern
+set ocs_debug_thread_pattern ""
 global actual_user_system
 set actual_user_system "admin user system" ;# system type installed at install core system test
 
@@ -5546,7 +5550,9 @@ proc select_runlevel {} {
 proc set_command_line_options {} {
      global CHECK_ENABLED_RUNLEVELS CHECK_ENABLED_CATEGORIES
      global CHECK_SGE_DEBUG_LEVEL check_use_installed_system
-     global master_debug schedd_debug CHECK_DISPLAY_OUTPUT daemon_debug ts_config
+     global CHECK_DISPLAY_OUTPUT
+     global master_debug CHECK_DISPLAY_OUTPUT daemon_debug ts_config
+     global ocs_debug_thread_pattern ocs_debug_display ocs_debug_terminal_application
      set data ""
      while { $data != 0 } {
         clear_screen
@@ -5562,11 +5568,6 @@ proc set_command_line_options {} {
         } else {
            set md_flag "on"
         }
-        if { $schedd_debug == 0 } {
-           set sd_flag "off"
-        } else {
-           set sd_flag "on"
-        }
 
         if { $check_use_installed_system == 0 } {
            set re_init_flag "off"
@@ -5574,10 +5575,23 @@ proc set_command_line_options {} {
            set re_init_flag "on"
         }
 
-        puts "(1) master_debug    : $md_flag"
-        puts "(2) schedd_debug    : $sd_flag"
-        puts "(3) SGE_DEBUG_LEVEL : $CHECK_SGE_DEBUG_LEVEL"
-        puts "(5) re_init         : $re_init_flag"
+        # Display to be used for debugging console output. Default is the display configured for the TS user.
+        if {$ocs_debug_display == ""} {
+           set ocs_debug_display $CHECK_DISPLAY_OUTPUT
+        }
+
+        # Thread pattern for which the debugging console output should be shown. Default is "scheduler", which means
+        # that only output of threads with "scheduler" in their name will be shown.
+        if {$ocs_debug_thread_pattern == ""} {
+           set ocs_debug_thread_pattern "scheduler*"
+        }
+
+        puts "(1) master_debug                      : $md_flag"
+        puts "(2) display for debugging terminal    : $ocs_debug_display"
+        puts "(3) SGE_DEBUG_LEVEL                   : $CHECK_SGE_DEBUG_LEVEL"
+        puts "(4) thread pattern for debug console  : $ocs_debug_thread_pattern"
+        puts "(5) re_init                           : $re_init_flag"
+        puts "(6) terminal application              : $ocs_debug_terminal_application"
 
         set data [wait_for_enter 1]
         if { $data <= 2 && $data > 0 } {
@@ -5603,27 +5617,16 @@ proc set_command_line_options {} {
               }
            }
            "2" {
-              puts "schedd_debug"
-              if { $schedd_debug == 0 } {
-                 set result [check_display]
-                 if { $result != 0 } {
-                    puts "current display \"$CHECK_DISPLAY_OUTPUT\" does not work,\nplease enter correct display: "
-                    set CHECK_DISPLAY_OUTPUT [wait_for_enter 1]
-                    set result [check_display]
-                    if { $result != 0 } {
-                       puts "still errors"
-                       wait_for_enter
-                       continue
-                    }
-                 }
-                 set schedd_debug 1
-              } else {
-                 set schedd_debug 0
-              }
+              puts "ocs_debug_display"
+              set ocs_debug_display [wait_for_enter 1]
            }
            "3" {
                puts "enter new SGE_DEBUG_LEVEL: "
                set CHECK_SGE_DEBUG_LEVEL [wait_for_enter 1]
+           }
+           "4" {
+               puts "enter new SGE_DEBUG_THREAD_NAME_PATTERN: "
+               set ocs_debug_thread_pattern [wait_for_enter 1]
            }
            "5" {
               if { $check_use_installed_system == 0 } {
@@ -5632,9 +5635,13 @@ proc set_command_line_options {} {
                  set check_use_installed_system 0
               }
            }
+           "6" {
+              puts "enter new terminal application for debug console (e.g. xterm or tilix): "
+              set ocs_debug_terminal_application [wait_for_enter 1]
+           }
         }
 
-        if { $schedd_debug == 0 && $master_debug == 0 } {
+        if { $master_debug == 0 } {
            set daemon_debug 1
         } else {
            set daemon_debug 0
@@ -6357,7 +6364,7 @@ proc get_user_input { what } {
 #
 #*******************************************************************************
 proc restart_debug_daemons {{shutdown 0}} {
-   global daemon_debug master_debug schedd_debug
+   global daemon_debug master_debug
    global ts_config
 
    if {[have_root_passwd] != 0} {
@@ -7224,6 +7231,7 @@ proc source_tcl_files {} {
    ts_source $libdir/ocs_host
    ts_source $libdir/ocs_installer
    ts_source $libdir/ocs_jsv
+   ts_source $libdir/ocs_perf
    ts_source $libdir/parser
    ts_source $libdir/parser_xml
    ts_source $libdir/tcl_utils
@@ -7907,10 +7915,6 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "                      in debug mode (using x host from DISPLAY,"
       puts "                      please enable xhost display for all users)"
       puts ""
-      puts "schedd_debug          procedure startup_qmaster will startup schedduler"
-      puts "                      in debug mode (using x host from DISPLAY,"
-      puts "                      please enable xhost display for all users)"
-      puts ""
       puts "display DISPLAY       set display for daemon debug windows"
       puts "vncserver <num>       starts vnc server on display number <num> at testsuite startup"
       puts "                      and terminates it when shutting down testsuite"
@@ -8124,11 +8128,6 @@ for {set i 0} {$i < $argc} {incr i} {
 
    if { ( [string compare [lindex $argv $i] "--master_debug"] == 0 ) || ([string compare [lindex $argv $i] "master_debug"] == 0) } {
       set master_debug 1
-      set daemon_debug 1
-      continue
-   }
-   if { ( [string compare [lindex $argv $i] "--schedd_debug"] == 0 ) || ([string compare [lindex $argv $i] "schedd_debug"] == 0) } {
-      set schedd_debug 1
       set daemon_debug 1
       continue
    }

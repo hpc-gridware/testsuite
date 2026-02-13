@@ -113,7 +113,6 @@ set module_name "sge_procedures.tcl"
 # release_job -- release job from hold state
 # wait_for_jobend -- wait for end of job
 # startup_qmaster() -- startup qmaster (and scheduler) daemon
-# startup_scheduler() -- ???
 # startup_daemon - starts the SGE daemon specified by the argument
 # are_master_and_scheduler_running -- ???
 # is_scheduler_alive() -- ???
@@ -2037,7 +2036,7 @@ proc submit_wait_type_job {job_type host user {variable qacct_info}} {
    }
 
 
-   ts_log_finer "waiting for job $job_id to disapear "
+   ts_log_finer "waiting for job $job_id to disappear "
    set my_timeout [clock seconds]
    incr my_timeout 30
    while { [is_job_running $job_id "" ] != -1 } {
@@ -7035,12 +7034,12 @@ proc wait_for_jobend {jobid jobname seconds {runcheck 1} {wait_for_end 0} {raise
 #     sge_procedures/startup_execd()
 #     sge_procedures/startup_shadowd()
 #*******************************************************************************
-proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
+proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""} {start_debug_terminal 0}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
    global CHECK_ADMIN_USER_SYSTEM
-   global CHECK_DEBUG_LEVEL
-   global schedd_debug master_debug CHECK_DISPLAY_OUTPUT CHECK_SGE_DEBUG_LEVEL
+   global CHECK_DEBUG_LEVEL CHECK_SGE_DEBUG_LEVEL
+   global ocs_debug_display master_debug CHECK_DISPLAY_OUTPUT CHECK_SGE_DEBUG_LEVEL ocs_debug_terminal_application
    global CHECK_INSTALL_RC
 
    if {$env_list != ""} {
@@ -7065,15 +7064,47 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
 
    set schedd_message ""
 
-   ts_log_fine "starting up qmaster $schedd_message on host \"$start_host\" as user \"$startup_user\""
    set arch [resolve_arch $start_host]
 
    set output ""
-   if {$master_debug != 0} {
-      set xterm_path [get_binary_path $start_host "xterm"]
-      ts_log_finest "using DISPLAY=${CHECK_DISPLAY_OUTPUT}"
-      set output [start_remote_prog $start_host $startup_user $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e $ts_config(testsuite_root_dir)/scripts/debug_starter.sh /tmp/out.$CHECK_USER.qmaster.$start_host \"$CHECK_SGE_DEBUG_LEVEL\" $ts_config(product_root)/bin/${arch}/sge_qmaster &" prg_exit_state 60 2 "" envlist]
+   if {$master_debug == 1 || $start_debug_terminal == 1} {
+      # starting qmaster in debug mode as normal user, because root user cannot start terminal on wayland
+      set startup_user $CHECK_USER
+      ts_log_fine "starting up qmaster in debug mode on display $CHECK_DISPLAY_OUTPUT on host \"$start_host\" as user \"$startup_user\""
+
+      #set xterm_path [get_binary_path $start_host "xterm"]
+      #ts_log_finest "using DISPLAY=${ocs_debug_display}"
+      #set output [start_remote_prog $start_host $startup_user $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e $ts_config(testsuite_root_dir)/scripts/debug_starter.sh /tmp/out.$CHECK_USER.qmaster.$start_host \"$CHECK_SGE_DEBUG_LEVEL\" $ts_config(product_root)/bin/${arch}/sge_qmaster &" prg_exit_state 60 2 "" envlist]
+
+      # component starter expects SGE_ROOT and SGE_CELL to be set correctly
+      set envlist(SGE_ROOT) "$ts_config(product_root)"
+      set envlist(SGE_CELL) "$ts_config(cell)"
+      set envlist(SGE_QMASTER_PORT) "$ts_config(commd_port)"
+      set envlist(SGE_EXECD_PORT) [expr $ts_config(commd_port) + 1]
+      set envlist(DISPLAY) "$CHECK_DISPLAY_OUTPUT"
+      set envlist(WAYLAND_DISPLAY) "wayland-0"
+
+      # starter that starts the terminal and shell with the component
+      set component_starter "$ts_config(testsuite_root_dir)/scripts/ocs_component_starter.sh"
+
+      if {$ocs_debug_terminal_application == "xterm"} {
+         # xterm on X11
+         set component_starter_args "-terminal xterm -display $CHECK_DISPLAY_OUTPUT"
+      } else {
+         # tilix-terminal on Wayland
+         set component_starter_args "-terminal tilix"
+      }
+      append component_starter_args " -debug_level \"$CHECK_SGE_DEBUG_LEVEL\" -daemonize false -thread_name_pattern scheduler"
+      append component_starter_args " $ts_config(product_root)/bin/${arch}/sge_qmaster &"
+      ts_log_fine "component starter args: $component_starter_args"
+
+      # launch the starter
+      set background 2;
+      set background_wait_time 3
+      set output [start_remote_prog $start_host $startup_user $component_starter $component_starter_args prg_exit_state 60 $background "" envlist 1 1 0 1 0 0 "" $background_wait_time]
+      set prg_exit_state 0; # ignore exit state of starter, we will check if qmaster is up and running later on
    } else {
+      ts_log_fine "starting up qmaster $schedd_message on host \"$start_host\" as user \"$startup_user\""
       # if we have an env list, cannot use systemd to startup qmaster
       if {$env_list == "" && $CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
          set service_name [systemd_get_service_name "qmaster"]
@@ -7115,63 +7146,6 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""}} {
       set CHECK_VALGRIND_LAST_DAEMON_RESTART [clock seconds]
       # wait a little bit for qmaster to be really up and mirror threads having been initialized
       sleep_for_seconds 5
-   }
-
-   return 0
-}
-
-#****** sge_procedures/startup_scheduler() *************************************
-#  NAME
-#     startup_scheduler() -- ???
-#
-#  SYNOPSIS
-#     startup_scheduler { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************************************************************
-proc startup_scheduler {} {
-   global CHECK_USER
-   global CHECK_ADMIN_USER_SYSTEM
-   global CHECK_DEBUG_LEVEL
-   global schedd_debug CHECK_DISPLAY_OUTPUT CHECK_SGE_DEBUG_LEVEL
-   get_current_cluster_config_array ts_config
-
-   if { $CHECK_ADMIN_USER_SYSTEM == 0 } {
-      if { [have_root_passwd] != 0  } {
-         ts_log_warning "no root password set or ssh not available"
-         return -1
-      }
-      set startup_user "root"
-   } else {
-      set startup_user $CHECK_USER
-   }
-
-   ts_log_fine "starting up scheduler on host \"$ts_config(master_host)\" as user \"$startup_user\""
-   set arch [resolve_arch $ts_config(master_host)]
-   if { $schedd_debug != 0 } {
-      set xterm_path [get_binary_path $ts_config(master_host) "xterm"]
-      ts_log_finest "using DISPLAY=${CHECK_DISPLAY_OUTPUT}"
-      start_remote_prog "$ts_config(master_host)" "$startup_user" $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e $ts_config(testsuite_root_dir)/scripts/debug_starter.sh /tmp/out.$CHECK_USER.schedd.$ts_config(master_host) \"$CHECK_SGE_DEBUG_LEVEL\" $ts_config(product_root)/bin/${arch}/sge_schedd &" prg_exit_state 60 2
-   } else {
-      start_remote_prog "$ts_config(master_host)" "$startup_user" "$ts_config(product_root)/bin/${arch}/sge_schedd" ""
    }
 
    return 0
@@ -8980,7 +8954,7 @@ proc copy_certificates { host { sync 1 } } {
 #*******************************
 #
 
-proc is_daemon_running { hostname daemon {disable_daemon_count_check 0} } {
+proc is_daemon_running { hostname daemon {disable_daemon_count_check 1} } {
    get_current_cluster_config_array ts_config
 
    set found_p [ ps_grep "$ts_config(product_root)/" $hostname ]
@@ -10850,14 +10824,17 @@ proc get_daemon_pid { host service } {
 #     sge_procedures/startup_qmaster()
 #*******************************************************************************
 
-proc shutdown_and_restart_qmaster {} {
+proc shutdown_and_restart_qmaster {{start_debug_terminal 0}} {
    global ts_config
 
+   # shutdown qmaster and scheduler.
    shutdown_qmaster
+
    # sometimes the socket can not be re-used immediately
    sleep_for_seconds 2
-   # startup qmaster with scheduler (if possible)
-   startup_qmaster 1
+
+   # startup qmaster with scheduler enabled. Do this in a debug terminal if requested
+   startup_qmaster 1 "" "" $start_debug_terminal
 }
 
 ## @brief shutdown and restart execd on a host
