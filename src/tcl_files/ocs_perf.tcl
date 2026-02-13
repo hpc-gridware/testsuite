@@ -24,6 +24,18 @@ set gperf_scenario_name "default"
 global gperf_threads_name
 set gperf_threads_name "scheduler"
 
+## @brief Set scenario name and name of threads to be profiled.
+#
+# This procedure sets the scenario name and the name of the threads to be profiled for the performance test.
+# The scenario name is used to identify the performance test scenario, while the name of the threads is used to
+# specify the category (threads/component/unit) to be profiled during the performance test.
+# The procedure also updates the qmaster parameters to include the gperf_name and gperf_threads parameters,
+# which are used by the performance testing framework to generate the appropriate performance reports.
+#
+# @param gperf_name The name of the performance test scenario. Default is "binding_with_pe_wildcard_and_reservation".
+# @param gperf_threads The name of the threads to be profiled. Default is "scheduler". Note that this also
+#                      needs to be available within the component that is profiled.app_path
+#
 proc perf_set_gperf_name {{gperf_name "default"} {gperf_threads "scheduler"}} {
    global gperf_scenario_name
 
@@ -47,6 +59,7 @@ proc perf_set_gperf_name {{gperf_name "default"} {gperf_threads "scheduler"}} {
    reset_config_and_propagate cluster_config
 }
 
+## @brief Reset scenario name and name of thread/component/unit to be profiled.
 proc perf_reset_gperf_name {} {
    global gperf_scenario_name
    global gperf_threads_name
@@ -56,11 +69,15 @@ proc perf_reset_gperf_name {} {
    perf_set_gperf_name $gperf_scenario_name
 }
 
-proc perf_generate_pdf_report {} {
-   global gperf_scenario_name
-
-}
-
+## @brief Get the appropriate pprof switch for the given output format.
+#
+# This procedure takes an output format extension (e.g., "pdf" or "txt") and returns the corresponding switch to be
+# used with the pprof tool for generating performance reports in that format. If the provided format extension is not
+# recognized, it logs a severe error message and returns a default switch indicating an unknown format.
+#
+# @param format_ext The output format extension for which to get the pprof switch (e.g., "pdf", "txt").
+# @return The pprof switch corresponding to the given output format extension, or "--unknown" if the format is not recognized.
+#
 proc perf_get_switch_for_format {format_ext} {
    switch -- $format_ext {
       "pdf" {
@@ -76,6 +93,17 @@ proc perf_get_switch_for_format {format_ext} {
    }
 }
 
+# @brief Find the path of the first available application from a list of applications on a given host.
+#
+# This procedure takes a list of application names and an optional host name, and checks for the presence of each
+# application on the specified host. If no host is provided, it defaults to checking on the master host. The procedure
+# returns the path of the first application found on the host. If none of the applications are found, it logs a severe
+# error message and returns an empty string.
+#
+# @param app_list A list of application names to check for (e.g., {"pprof-symbolize" "pprof"}).
+# @param host (Optional) The host on which to check for the applications. If not provided, the master host will be used.
+# @return The path of the first application found on the specified host, or an empty string if none of the applications are found.
+#
 proc perf_find_app {app_list {host ""}} {
    get_current_cluster_config_array ts_config
 
@@ -100,6 +128,17 @@ proc perf_find_app {app_list {host ""}} {
    return ""
 }
 
+## @brief Generate performance reports in specified formats while ignoring certain functions.
+#
+# This procedure generates performance reports in the specified output formats (e.g., "txt", "pdf") using the pprof
+# tool. It takes into account a list of functions to ignore during report generation, which can help reduce noise in
+# the reports by excluding irrelevant functions. The procedure determines the appropriate pprof binary to use,
+# constructs the necessary arguments for report generation, and executes the command on the master host where the
+# pprof profile files are located.
+#
+# @param output_formats A list of output formats for the reports (e.g., {"txt" "pdf"}).
+# @param ignore_functions A list of function names to ignore in the reports (e.g., {"schedd_log" "rmon_mprintf"}).
+#
 proc perf_generate_reports {{output_formats {"txt" "pdf"}} {ignore_functions {"schedd_log" "rmon_mprintf"}}} {
    global CHECK_USER
    global gperf_scenario_name
