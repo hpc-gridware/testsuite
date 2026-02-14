@@ -29,7 +29,7 @@
 #
 #  Portions of this software are Copyright (c) 2011 Univa Corporation.
 #
-#  Portions of this software are Copyright (c) 2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -64,9 +64,10 @@ proc qsub_pty_setup {} {
    global stored_configuration
    global job_output_dir test_host default_args default_q_args default_h_args
    global steps_per_queue size_interval
+   global qsub_pty_debug
 
    # set some global variables
-   set num_queues [llength $ts_config(unique_arch_nodes)] 
+   set num_queues [llength $ts_config(unique_arch_nodes)]
    set job_output_dir $CHECK_JOB_OUTPUT_DIR
 
    # run host specific tests on a random host
@@ -80,10 +81,18 @@ proc qsub_pty_setup {} {
 
    # backup global config
    get_config stored_configuration
-  
+
    # set config for fast scheduling / fast writing of accounting record
-   set my_config(reporting_params) "accounting=true reporting=false flush_time=00:00:01 joblog=true sharelog=00:10:00"
-   set_config my_config
+   # if we want to debug failing jobs, set qsub_pty_debug to 1
+   set qsub_pty_debug 0
+   add_or_replace_array_param my_config stored_configuration "reporting_params" "flush_time" "00:00:01"
+   if {$qsub_pty_debug} {
+      add_or_replace_array_param my_config stored_configuration "execd_params" "KEEP_ACTIVE" "ERROR"
+      set_config_and_propagate my_config
+   } else {
+      set_config my_config
+   }
+
 }
 
 proc qsub_pty_cleanup {} {
@@ -91,27 +100,25 @@ proc qsub_pty_cleanup {} {
    global stored_configuration
    global job_output_dir test_host default_args default_q_args default_h_args
    global steps_per_queue size_interval
+   global qsub_pty_debug
 
-   set spool_dir [get_spool_dir $ts_config(master_host)  "qmaster"] 
-   if {[is_qmaster_alive $ts_config(master_host) $spool_dir] != 1} {
-      if {[is_scheduler_alive $ts_config(master_host) $spool_dir] != 1} {
-         startup_qmaster 1
-      } else {
-      startup_qmaster 0
-      }
+   set spool_dir [get_qmaster_spool_dir]
+   if {![is_qmaster_alive $ts_config(master_host) $spool_dir]} {
+      startup_qmaster
    }
 
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   reset_config stored_configuration
+   if {$qsub_pty_debug} {
+      reset_config_and_propagate stored_configuration
+   } else {
+      reset_config stored_configuration
+   }
 
    # unset our test global variables
-   foreach var "stored_configuration job_output_dir test_host default_args default_q_args default_h_args steps_per_queue size_interval" {
-      if {[info exists $var]} {
-         unset $var
-      }
-   }
+   unset -nocomplain stored_configuration job_output_dir test_host default_args default_q_args default_h_args steps_per_queue size_interval
+   unset -nocomplain qsub_pty_debug
 }
 
 proc qsub_pty_submit_check {jobargs expect_submit_error {user ""} {host ""} {output_files 2}} {
@@ -151,7 +158,7 @@ proc qsub_pty_submit_check {jobargs expect_submit_error {user ""} {host ""} {out
    }
 
    # wait for job accounting record and expect 1 or 2 ($output_files) output/error files
-   set time [expr [timestamp] + 300] 
+   set time [expr [timestamp] + 300]
    while {[timestamp] < $time}  {
       after 1000
       set back [was_job_running $job_id 0]
@@ -175,14 +182,14 @@ proc qsub_pty_submit_check {jobargs expect_submit_error {user ""} {host ""} {out
    del_job_files $job_id $job_output_dir 2
    return 0
 }
- 
+
 proc check_submit {} {
    global ts_config
    global default_args
 
    # first clean up output directory:
    setup_output_directory
-   
+
    # submit from every architecture
    foreach host $ts_config(unique_arch_nodes) {
       ts_log_fine "--> submit on host $host"
@@ -217,11 +224,12 @@ proc qsub_pty {} {
       return
    }
 
-   wait_for_end_of_all_jobs
+   # wait for job end but don't expect to see the job at all - it can already be gone
+   wait_for_jobend $job_id "tty" 60 0
 
    if {[get_qacct $job_id] == 0} {
       if {$qacct_info(exit_status) != 0} {
-         ts_log_severe "There was not PTY available!"
+         ts_log_severe "There was no PTY available!"
       }
    }
 
@@ -263,11 +271,12 @@ proc qsub_pty_no {} {
       return
    }
 
-   wait_for_jobend $job_id "tty" 60
+   # wait for job end but don't expect to see the job at all - it can already be gone
+   wait_for_jobend $job_id "tty" 60 0
 
    if {[get_qacct $job_id] == 0} {
       if {$qacct_info(exit_status) != 1} {
-         ts_log_severe "There was a PTY available despite -pty no!"
+         ts_log_severe "TTY job did not exit with code 1 as expected but with $qacct_info(exit_status)!"
       }
    }
 
@@ -293,7 +302,7 @@ proc qsub_pty_no {} {
 #     qsub_pty_io - Testcase for qsub -pty yes and its IO-redirection
 #
 #  SYNOPSIS
-#     1. Generate a temporary input file with only "TESTINPUT" as content. 
+#     1. Generate a temporary input file with only "TESTINPUT" as content.
 #     2. Submit job with pty -yes and the generated input-file.
 #     3. Scan the output file for the content of the input file and the
 #        additional ouput of the test-script.
@@ -325,7 +334,8 @@ proc qsub_pty_io {} {
       }
 
       wait_for_file $input_tmpfile 10
-      set job_id [submit_job "-N pty_io -o $output_tmpfile -e /dev/null -i $input_tmpfile $ts_config(testsuite_root_dir)/scripts/stdin.sh" 1 60 $host $user]
+
+      set job_id [submit_job "-pty yes -N pty_io -o $output_tmpfile -e /dev/null -i $input_tmpfile $ts_config(testsuite_root_dir)/scripts/stdin.sh" 1 60 $host $user]
 
       if {$job_id < 1} {
          start_remote_prog $host $user rm $input_tmpfile

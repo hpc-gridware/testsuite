@@ -80,13 +80,16 @@ lappend check_functions "qrsh_w_v_test"
 lappend check_functions "qrsh_pty_yes_redirect"
 lappend check_functions "qrsh_pty_yes_line_breaks"   ;# test if NL gets converted to CR NL
 lappend check_functions "qrsh_forward_stdin"         ;# test if stdin forward works via <
+#lappend check_functions "qrsh_forward_stdin_pty"    ;# CS-1759, not fixed: test if stdin forward works via <, with -pty yes
+lappend check_functions "qrsh_pipe_stdin"            ;# test if stdin forward works via <
+#lappend check_functions "qrsh_pipe_stdin_pty"       ;# CS-1759, not fixed: test if stdin forward works via <, with -pty yes
 lappend check_functions "qrsh_massive_output"        ;# test if massive output job is fully received by qrsh
 
 # -------- local test procedures -----------------------------------------------
 proc qrsh_setup {} {
    global ts_config CHECK_ACT_LEVEL
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_FIRST_FOREIGN_SYSTEM_GROUP
-   global qrsh_hostlist qrsh_submithost
+   global qrsh_hostlist qrsh_submithost qrsh_config_backup
    global QSUB_GID_USER QSUB_GID_GROUPS
 
    # setup hosts
@@ -114,10 +117,16 @@ proc qrsh_setup {} {
 
    # increase slots capacity
    setup_host_slots_for_binding
+
+   # for debugging:
+   # set KEEP_ACTIVE=ERROR to keep the active jobs directories in case of errors
+   #get_config qrsh_config_backup
+   #add_or_replace_array_param conf qrsh_config_backup "execd_params" "KEEP_ACTIVE" "TRUE"
+   #set_config_and_propagate conf
 }
 
 proc qrsh_cleanup {} {
-   global qrsh_hostlist qrsh_submithost
+   global qrsh_hostlist qrsh_submithost qrsh_config_backup
    global QSUB_GID_USER QSUB_GID_GROUPS
 
    delete_all_jobs
@@ -125,7 +134,10 @@ proc qrsh_cleanup {} {
 
    cleanup_host_slots_for_binding
 
-   unset -nocomplain qrsh_hostlist qrsh_submithost QSUB_GID_USER QSUB_GID_GROUPS
+   #reset_config_and_propagate conf
+
+   unset -nocomplain qrsh_hostlist qrsh_submithost qrsh_config_backup
+   unset -nocomplain QSUB_GID_USER QSUB_GID_GROUPS
 }
 
 # -------- check functions -----------------------------------------------------
@@ -1907,40 +1919,103 @@ proc qrsh_pty_yes_redirect {} {
 #  SEE ALSO
 #
 #*******************************
-proc qrsh_forward_stdin {} {
+proc qrsh_forward_stdin {{add_opts ""}} {
    global ts_config CHECK_USER
    global qrsh_hostlist
 
+   set inputfile "$ts_config(product_root)/util/arch"
+   # We cannot use the cat command.
+   # When the pty gets closed, a SIGHUP will be sent to the job and cat does not handle SIGHUP.
+   # Use a script instead, which copies input to output stream and traps SIGHUP.
+   set cat_script "$ts_config(testsuite_root_dir)/scripts/cat.sh"
+
    foreach submit_host $qrsh_hostlist {
       foreach host $qrsh_hostlist {
+         set errors {}
          set arch [resolve_arch $submit_host]
          set tmpfile [get_tmp_file_name $submit_host]
-         set inputfile "$ts_config(product_root)/util/arch"
 
          # Start "qrsh stdin.sh < input_file"
          # Job has to finish within 60 seconds (timeout of start_remote_prog) otherwise GE-3580 is still present.
-         ts_log_fine "executing on $submit_host: $ts_config(product_root)/bin/$arch/qrsh \
-                      -l h=$host cat < $inputfile > $tmpfile on host $submit_host as $CHECK_USER"
-         # Unfortunatelly we cannot use submit_job as the qrsh support is broken.
-         # created TS-414
-         start_remote_prog $submit_host $CHECK_USER "qrsh" "-l h=$host cat < $inputfile > $tmpfile" exit_code
+         ts_log_fine "executing on $submit_host as $CHECK_USER: $ts_config(product_root)/bin/$arch/qrsh \
+                      -l h=$host $add_opts $cat_script < $inputfile > $tmpfile"
+         set output [start_remote_prog $submit_host $CHECK_USER "qrsh" "-l h=$host $add_opts $cat_script < $inputfile > $tmpfile" exit_code]
 
+         # Check exit code, must be 0.
          if {$exit_code != 0} {
-            ts_log_severe "qrsh job failed. Exit code: $exit_code"
-            delete_all_jobs
-            return
+            lappend errors "qrsh job failed. Exit code: $exit_code\n$output"
          }
 
          # Check if tmp-file is identical to the input-file
-         start_remote_prog $submit_host $CHECK_USER "diff" "$tmpfile $inputfile" exit_code
+         set output [start_remote_prog $submit_host $CHECK_USER "diff" "$tmpfile $inputfile" exit_code]
          if {$exit_code != 0} {
-            ts_log_severe "Output file differs form input file"
+            lappend errors "Output file differs form input file:\n$output"
+         }
+
+         # In case of errors, create error mail, cleanup and return.
+         if {[llength $errors] > 0} {
+            ts_log_severe [join $errors "\n"]
             delete_all_jobs
             return
          }
       }
    }
    wait_for_end_of_all_jobs 60
+}
+
+proc qrsh_forward_stdin_pty {} {
+   if {![is_version_in_range "9.0.11"]} {
+      ts_log_fine "Skipping qrsh_forward_stdin_pty test for version < 9.0.11 due to known issue CS-17xx"
+      return
+   }
+   qrsh_forward_stdin "-pty yes"
+}
+
+proc qrsh_pipe_stdin {{add_opts ""}} {
+   global ts_config CHECK_USER
+   global qrsh_hostlist
+
+   set inputfile "$ts_config(product_root)/util/arch"
+   # We cannot use the cat command.
+   # When the pty gets closed, a SIGHUP will be sent to the job and cat does not handle SIGHUP.
+   # Use a script instead, which copies input to output stream and traps SIGHUP.
+   set cat_script "$ts_config(testsuite_root_dir)/scripts/cat.sh"
+
+   foreach submit_host $qrsh_hostlist {
+      foreach host $qrsh_hostlist {
+         set arch [resolve_arch $submit_host]
+         set tmpfile [get_tmp_file_name $submit_host]
+
+         # Start "cat input_file | qrsh cat"
+         # Job has to finish within 60 seconds (timeout of start_remote_prog) otherwise GE-3580 is still present.
+         ts_log_fine "executing on $submit_host as $CHECK_USER: cat $inputfile | $ts_config(product_root)/bin/$arch/qrsh \
+                      -l h=$host $add_opts $cat_script > $tmpfile"
+         set output [start_remote_prog $submit_host $CHECK_USER "cat" "$inputfile | qrsh -l h=$host $add_opts $cat_script > $tmpfile" exit_code]
+
+         if {$exit_code != 0} {
+            ts_log_severe "qrsh job failed. Exit code: $exit_code\n$output"
+            delete_all_jobs
+            return
+         }
+
+         # Check if tmp-file is identical to the input-file
+         set output [start_remote_prog $submit_host $CHECK_USER "diff" "$tmpfile $inputfile" exit_code]
+         if {$exit_code != 0} {
+            ts_log_severe "Output file differs form input file:\n$output"
+            delete_all_jobs
+            return
+         }
+      }
+   }
+   wait_for_end_of_all_jobs 60
+}
+
+proc qrsh_pipe_stdin_pty {} {
+   if {![is_version_in_range "9.0.11"]} {
+      ts_log_fine "Skipping qrsh_pipe_stdin_pty test for version < 9.0.11 due to known issue CS-17xx"
+      return
+   }
+   qrsh_pipe_stdin "-pty yes"
 }
 
 proc qrsh_massive_output {} {

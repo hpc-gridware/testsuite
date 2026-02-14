@@ -7340,8 +7340,8 @@ proc is_qmaster_alive { hostname qmaster_spool_dir } {
    get_ps_info $qmaster_pid $hostname
 
    set alive 0
-   if { ($ps_info($qmaster_pid,error) == 0) } {
-      if { [ is_pid_with_name_existing $hostname $qmaster_pid "sge_qmaster" ] == 0 } {
+   if {$ps_info($qmaster_pid,error) == 0} {
+      if {[is_pid_with_name_existing $hostname $qmaster_pid "sge_qmaster"] == 0} {
          set alive 1
       }
    }

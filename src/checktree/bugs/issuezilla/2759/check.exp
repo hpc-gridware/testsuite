@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -111,8 +111,8 @@ proc issue_2759_cleanup {} {
 #     Additional test:
 #     Startup cluster again. Start some sleeper jobs. Stop execd with
 #     sgeexecd -softstop and verify if the jobs are running (they have to be).
-#
-#
+#     Re-start sge_execd with sgeexecd start, wait a little bit and expect
+#     the jobs still to be running.
 #*******************************************************************************
 proc issue_2759_test {} {
    global ts_config CHECK_USER
