@@ -59,7 +59,8 @@ proc issue_1780_run  {} {
 
 
    ts_log_fine "retrieving hosts via ypcat"
-   set output [start_remote_prog $ts_config(master_host) $CHECK_USER [get_binary_path $ts_config(master_host) "ypcat"] "hosts" result]
+   set ypcat_binary [get_binary_path $ts_config(master_host) "ypcat" 0]
+   set output [start_remote_prog $ts_config(master_host) $CHECK_USER $ypcat_binary "hosts" result]
    if {$result != 0} {
       ts_log_config "couldn't call ypcat - skipping this test:\n$output"
       set ypcat_exists 0
