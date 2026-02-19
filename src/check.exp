@@ -5417,7 +5417,7 @@ proc clean_up_globals {} {
   unset -nocomplain check_description
   unset -nocomplain check_version_range
 
-  set check_name        ""                 ;# name of actual check module
+  set check_name        ""          ;# name of current check module
   set check_needs       ""          ;# dependencies of this check (name of other check)
   set check_functions   ""          ;# functions to call (in order)
 }

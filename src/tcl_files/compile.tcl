@@ -29,7 +29,7 @@
 #
 #  Portions of this software are Copyright (c) 2011 Univa Corporation
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -54,7 +54,8 @@
 #    -1 - at least for one host, no compile host is configured
 #*******************************************************************************
 proc compile_check_compile_hosts {host_list} {
-   global ts_host_config ts_config
+   get_current_cluster_config_array ts_config
+   global ts_host_config
 
 
    # remember already resolved compile archs
@@ -111,8 +112,8 @@ proc compile_check_compile_hosts {host_list} {
 #     compile/compile_search_compile_host()
 #*******************************************************************************
 proc compile_host_list {{binaries_only 0}} {
+   get_current_cluster_config_array ts_config
    global ts_host_config
-   global ts_config
 
    set other_hosts {}
    if {$ts_config(submit_only_hosts) != "none"} {
@@ -227,7 +228,7 @@ proc compile_host_list {{binaries_only 0}} {
 #     string containing compile options
 #*******************************************************************************
 proc get_compile_options_string { } {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    set options $ts_config(compile_options)
 
@@ -358,7 +359,8 @@ proc compile_rebuild_arch_cache { compile_hosts {al "arch_list"} } {
 #  SEE ALSO
 #*******************************************************************************
 proc compile_depend { compile_hosts a_report do_clean } {
-   global ts_host_config ts_config
+   get_current_cluster_config_array ts_config
+   global ts_host_config
    global CHECK_USER
 
    upvar $a_report report
@@ -577,7 +579,8 @@ proc wait_for_NFS_after_compile_clean { host_list a_report } {
 #     ???/???
 #*******************************************************************************
 proc compile_source { { do_only_hooks 0} {compile_only 0} } {
-   global ts_host_config ts_config
+   get_current_cluster_config_array ts_config
+   global ts_host_config
    global CHECK_PRODUCT_TYPE
    global CHECK_COMPILE_TOOL
    global CHECK_HTML_DIRECTORY
@@ -836,7 +839,8 @@ proc compile_source { { do_only_hooks 0} {compile_only 0} } {
 
 # @todo compile_only 1 is not implemented
 proc compile_source_aimk {do_only_hooks compile_hosts report_var {compile_only 0}} {
-   global ts_host_config ts_config
+   get_current_cluster_config_array ts_config
+   global ts_host_config
    global check_do_clean_compile
 
    upvar $report_var report
@@ -943,8 +947,8 @@ proc compile_source_aimk {do_only_hooks compile_hosts report_var {compile_only 0
 }
 
 proc compile_source_cmake_get_build_dir {host} {
+   get_current_cluster_config_array ts_config
    global ts_host_config
-   global ts_config
    global CHECK_USER
    global CHECK_COVERAGE
    global CHECK_COVERAGE_DIR
@@ -1259,7 +1263,8 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
 
 
 proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 0}} {
-   global ts_host_config ts_config
+   get_current_cluster_config_array ts_config
+   global ts_host_config
    global CHECK_USER CHECK_CMAKE_BUILD_TYPE
    global check_do_clean_compile check_do_3rdparty_build
    global CMAKE_BUILD_ID
@@ -1506,8 +1511,9 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
 #     1: ERROR
 #*******************************************************************************
 proc compile_with_aimk {host_list a_report task_name {aimk_options ""}} {
+   get_current_cluster_config_array ts_config
    global CHECK_USER define_daily_build_nr
-   global CHECK_HTML_DIRECTORY CHECK_PROTOCOL_DIR ts_config
+   global CHECK_HTML_DIRECTORY CHECK_PROTOCOL_DIR
 
    upvar $a_report report
 
@@ -1824,7 +1830,7 @@ proc get_build_number {} {
 #     build - the build number
 #*******************************************************************************
 proc delete_build_number_object {host build} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    if {$ts_config(source_dir) == "none"} {
       ts_log_config "source directory is set to \"none\" - cannot delete a build object"
@@ -1872,11 +1878,11 @@ proc get_preferred_build_host {compile_hosts} {
 # returns -1: error
 # returns 0 : no error
 proc prepare_packages { } {
+   get_current_cluster_config_array ts_config
    global CHECK_PACKAGE_DIRECTORY CHECK_DEFAULTS_FILE
    global CHECK_JOB_OUTPUT_DIR CHECK_PACKAGE_TYPE
    global CHECK_USER CHECK_PRODUCT_TYPE CHECK_PROTOCOL_DIR
    global CHECK_GROUP check_name CHECK_CUR_PROC_NAME
-   global ts_config
 
    set check_name "prepare_packages"
    set CHECK_CUR_PROC_NAME "prepare_packages"
@@ -2380,6 +2386,90 @@ proc check_packages_directory { path { mode "check_both" } { get_files "no" } } 
    return -1
 }
 
+##
+# @brief on a specific host get the list of files in a directory
+#
+# Calls ls on a given host for a given directory and returns
+# the list of files.
+#
+# @param host host name
+# @param dir directory name
+# @return list of files in directory
+proc remote_get_files_in_directory {host path} {
+   global CHECK_USER
+   set output [start_remote_prog $host $CHECK_USER "ls" "-1 $path"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "error listing files in directory \"$path\" on host \"$host\":\n$output"
+      return ""
+   }
+   set file_list {}
+   foreach line [split $output "\n"] {
+      set file [string trim $line]
+      if {[string length $file] > 0} {
+         lappend file_list "$path/$file"
+      }
+   }
+   return $file_list
+}
+
+##
+# @brief wait for binary files to be available on a host
+#
+# After compiling GCS/OCS on different compile hosts per architecture,
+# the installed binaries might not yet be available on the host we use for creating distribution packages,
+# usually due to NFS issues.
+# This procedure creates a list of binary files per architecture on the resp. compile host
+# and waits on a target host for the files to appear.
+# It uses a testsuite report to report success or failure and details about errors if there are any.
+#
+# @param host - the target host name
+# @param arch_list - list of architectures for binary files
+# @param report_var - name of the testsuite report variable
+# @return 1 on success, 0 on failure
+proc wait_for_distribution_files {host arch_list report_var} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   upvar $report_var report
+
+   # per architecture
+   #  - get the compile host
+   #  - get a list of binary files (in bin, utilbin, examples/jobsbin, testbin)
+   foreach arch [lsort -unique $arch_list] {
+      set compile_host [compile_search_compile_host $arch]
+      if {$compile_host != "none"} {
+         set host_files($arch) {}
+         foreach path "bin utilbin examples/jobsbin testbin" {
+            set files [remote_get_files_in_directory $compile_host "$ts_config(product_root)/$path/$arch"]
+            set host_files($arch) [concat $host_files($arch) $files]
+         }
+      }
+   }
+
+   # once we have all these files wait on the target host for them to appear
+   set errors {}
+   foreach arch [array names host_files] {
+      foreach file $host_files($arch) {
+         if {[wait_for_remote_file $host $CHECK_USER $file 60 0] != 0} {
+            lappend errors $file
+         }
+      }
+   }
+
+   # if there are any errors,
+   # report them in the testsuite report and return failure
+   if {[llength $errors] != 0} {
+      report_task_add_message report $task_nr "Could not find some files on $host:"
+      foreach error $errors {
+         report_task_add_message report $task_nr "   - $error"
+      }
+
+      report_finish_task report $task_nr 1
+      return 0
+   }
+
+   return 1
+}
+
 #****** compile/build_distribution() **********************************
 #  NAME
 #     build_distribution() -- create distribution packages
@@ -2401,8 +2491,8 @@ proc check_packages_directory { path { mode "check_both" } { get_files "no" } } 
 #     0 - there were errors
 #*******************************************************************************
 proc build_distribution {arch_list report_var} {
+   get_current_cluster_config_array ts_config
    global CHECK_USER
-   global ts_config
    global ts_checktree
 
    upvar $report_var report
@@ -2411,6 +2501,11 @@ proc build_distribution {arch_list report_var} {
    set host [fs_config_get_server_for_path $ts_config(product_root) 0]
    if {$host == ""} {
       set host [gethostname]
+   }
+
+   # wait for distribution files to be available on the host we call mk_dist on
+   if {![wait_for_distribution_files $host $arch_list report_var]} {
+      return 0
    }
 
    # create task in HTML output
@@ -2507,9 +2602,10 @@ proc build_distribution {arch_list report_var} {
 }
 
 proc install_binaries {arch_list a_report} {
+   get_current_cluster_config_array ts_config
    global CHECK_PRODUCT_TYPE
    global CHECK_JOB_OUTPUT_DIR
-   global CHECK_USER ts_config
+   global CHECK_USER
    upvar $a_report report
 
    # try to do the installations on the file server for SGE_ROOT
