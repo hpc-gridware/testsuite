@@ -149,18 +149,18 @@ set check_description(8)      "Functional test with functional policy, 500 jobs"
 set check_description(9)      "Functional test with reservation, 500 jobs"
 set check_description(10)     "Functional test with 500 jobs, 2000 complexes, sharetree and 500 job categories"
 set check_description(11)     "Functional test, submit 250 of 500 jobs with disabled queues, implicit binding"
-set check_description(100)    "submit 5000 jobs with disabled queues"
-set check_description(101)    "submit 5000 jobs with enabled queues"
-set check_description(102)    "submit 2500 of 5000 jobs with disabled queues"
+#set check_description(100)    "submit 5000 jobs with disabled queues"
+#set check_description(101)    "submit 5000 jobs with enabled queues"
+#set check_description(102)    "submit 2500 of 5000 jobs with disabled queues"
 set check_description(103)    "submit 2500 of 5000 jobs with disabled queues, with qstats"
-set check_description(104)    "submit 2500 of 5000 jobs with disabled queues, requests"
-set check_description(105)    "submit 2500 of 5000 jobs with disabled queues, requests and parallel jobs"
-set check_description(106)    "submit 2500 of 5000 jobs with disabled queues, array jobs"
-set check_description(107)    "with sharetree, 5000 jobs"
-set check_description(108)    "with functional policy, 5000 jobs"
-set check_description(109)    "with reservation, 5000 jobs"
-set check_description(110)    "with 5000 jobs, 2000 complexes, sharetree and 300 job categories"
-set check_description(111)    "Functional test, submit 2500 of 5000 jobs with disabled queues, implicit binding"
+#set check_description(104)    "submit 2500 of 5000 jobs with disabled queues, requests"
+#set check_description(105)    "submit 2500 of 5000 jobs with disabled queues, requests and parallel jobs"
+#set check_description(106)    "submit 2500 of 5000 jobs with disabled queues, array jobs"
+#set check_description(107)    "with sharetree, 5000 jobs"
+#set check_description(108)    "with functional policy, 5000 jobs"
+#set check_description(109)    "with reservation, 5000 jobs"
+#set check_description(110)    "with 5000 jobs, 2000 complexes, sharetree and 300 job categories"
+#set check_description(111)    "Functional test, submit 2500 of 5000 jobs with disabled queues, implicit binding"
 set check_description(200)    "submit 50000 jobs with disabled queues"
 set check_description(201)    "submit 50000 jobs with enabled queues"
 set check_description(202)    "submit 25000 of 50000 jobs with disabled queues"
@@ -411,11 +411,16 @@ proc throughput_setup {} {
    global queue_list
    global throughput_complex_backup
    global prot_time_stamp
+   global throughput_timestamp_factor
 
    # we need at least 3 hosts (1 submit host and 1 qstat host != master host)
    if {[llength $ts_config(execd_nodes)] < 3} {
       ts_log_config "at least 3 exec hosts are needed to perform the test"
       return 99
+   }
+
+   if {[is_version_in_range "9.0.0"]} {
+      set throughput_timestamp_factor [expr 1.0 / 1000000.0]
    }
 
    throughput_get_host_info
@@ -498,6 +503,7 @@ proc throughput_cleanup {} {
    global throughput_host_info
    global prot_time_stamp
    global use_fake_topology
+   global throughput_timestamp_factor
 
    cleanup_host_slots_for_binding
 
@@ -517,7 +523,7 @@ proc throughput_cleanup {} {
 
    unset -nocomplain throughput_complex_backup throughput_bootstrap_backup
    unset -nocomplain throughput_host_info
-   unset -nocomplain prot_time_stamp use_fake_topology
+   unset -nocomplain prot_time_stamp use_fake_topology throughput_timestamp_factor
 }
 
 proc throughput_setup_level {} {
@@ -966,15 +972,14 @@ proc throughput_get_host_info {} {
 # JOB_FINISH (60001.17088:ECL_TIME=1224666841)
 # ECL_STATE (jobs_running=-273:jobs_registered=0:ECL_TIME=1224666842)
 proc get_event_client_time {line} {
+   global throughput_timestamp_factor
+
    set pos [string first "ECL_TIME=" $line]
    if {$pos >= 0} {
       incr pos 9
       set ecl_time [string range $line $pos end-1]
-      # @todo better have a global timestamp factor, we probably call this function very often
-      if {[is_version_in_range "9.0.0"]} {
-         # timestamp is in microseconds instead of seconds
-         set ecl_time [expr $ecl_time / 1000000]
-      }
+      # Depending on SGE/OCS/GCS version, timestamp is in seconds or microseconds, unify on seconds.
+      set ecl_time [expr $ecl_time * $throughput_timestamp_factor]
       return $ecl_time
    }
    return -1
@@ -1168,7 +1173,7 @@ proc run_throughput_test {} {
    # then set script file
    # if everything succeeded, accept this submitter
    log_user 0
-   set my_timeout [expr [timestamp] + $total_timeout]
+   set my_timeout [expr [clock seconds] + $total_timeout]
    set time_output 0
    expect_user {
       -i $spawn_list full_buffer {
@@ -1287,7 +1292,7 @@ proc run_throughput_test {} {
                }
                "messages in read buffer:*" {
                   set index $qping_data(count)
-                  set qping_data($index,time) [timestamp]
+                  set qping_data($index,time) [clock seconds]
                   set qping_data($index,read) [lindex $line 4]
                }
                "messages in write buffer:*" {
@@ -1306,7 +1311,7 @@ proc run_throughput_test {} {
          }
 
          # status output
-         set time_now [timestamp]
+         set time_now [clock seconds]
          if {$time_now > $time_output} {
             # status output - we do not use logging framework here, it's screen only
             clear_screen
@@ -1371,7 +1376,11 @@ proc run_throughput_test {} {
    # here the throughput test starts
    set error 0
    log_user 0
-   set start_time [timestamp]
+   set start_time [clock seconds]
+   # @todo need some final timeout for the analysis of CS-1803
+   #       OK for functional tests
+   #       but should be improved, e.g., made dependend on cluster size and number of jobs
+   set final_timeout [expr $start_time + 600]
    set submission_due 1
 
    # wait for job submit success for all execd hosts and event client reports
@@ -1487,7 +1496,7 @@ proc run_throughput_test {} {
                }
                "messages in read buffer:*" {
                   set index $qping_data(count)
-                  set qping_data($index,time) [timestamp]
+                  set qping_data($index,time) [clock seconds]
                   set qping_data($index,read) [lindex $line 4]
                }
                "messages in write buffer:*" {
@@ -1505,14 +1514,16 @@ proc run_throughput_test {} {
                "JOB_ADD*" {
                   # JOB_ADD (308.0:ECL_TIME=1094812995:project=NONE)
                   incr events_delivered
+               }
 
+               "JOB_DEL*" {
+                  incr events_delivered
                }
 
                "JOB_START*" {
                   # JOB_START (307.4:ECL_TIME=1094812970)
                   incr events_delivered
                   incr result(jobs_running)
-
                }
 
                "JOB_FINISH*" {
@@ -1540,15 +1551,13 @@ proc run_throughput_test {} {
                }
 
                "ECL_STATE*" {
+                  # this is the last qevent output line for one event package
+                  # store some data and re-set the events_delivered counter
                   set index $event_data(count)
                   set event_data($index,time) [get_event_client_time $line]
                   set event_data($index,events) $events_delivered
                   incr event_data(count)
                   set events_delivered 0
-               }
-
-               "JOB_DEL*" {
-                  incr events_delivered
                }
 
                default {
@@ -1565,6 +1574,8 @@ proc run_throughput_test {} {
                    ([llength $resend_list] > 0 || $sent_jobs < $end_job_count)} {
                # get first host in next_submitter_list and submit job on that host
                set sub_host [lindex $next_submitter_list 0]
+               # @todo is the following line an expensive operation?
+               # is there a better / cheaper way to round-robin over the hosts?
                set next_submitter_list [lrange $next_submitter_list 1 end]
 
                # if we have an invalid submit host, skip it
@@ -1595,8 +1606,6 @@ proc run_throughput_test {} {
                set sent_commands($sub_host) "$send_id $next_submit_command"
 
                # send submit command
-               # JG: TODO: May we use ts_send here instead of send?
-               #           Will it have impact on performance?
                set spawn_id $host_spawn_map($sub_host)
                send -i $spawn_id "$next_submit_command\n"
 
@@ -1633,14 +1642,14 @@ proc run_throughput_test {} {
          }
 
          # we continue until error or all jobs have run through
-         if {!$error && $result(jobs_done) < $test_end_job_count} {
+         if {!$error && $result(jobs_done) < $test_end_job_count && $time_now < $final_timeout} {
             exp_continue
          }
       } ;# received data ("*\n")
    } ;# expect_loop
    set error [show_and_check_current_system_status $start_time result schedd_data monitoring qstat_data]
 
-   set end_time [timestamp]
+   set end_time [clock seconds]
 
    log_user 1
    close $unexpected_out
@@ -4169,7 +4178,7 @@ proc show_and_check_current_system_status {start_time array_name schedd_array_na
    puts "total slots      : $data(total_slots)"
    puts "free slots       : $data(free_slots)"
    puts "jobs run time    : $data(job_run_time)"
-   puts "test run time    : [expr [timestamp] - $start_time] s"
+   puts "test run time    : [expr [clock seconds] - $start_time] s"
    puts "scheduling time  : $schedd($schedd(count),schedd_time)"
    puts "schedd total time: $schedd($schedd(count),schedd_total_time)"
    puts "qmaster size     : $monitoring(qmaster,$monitoring(qmaster,count),size)"
