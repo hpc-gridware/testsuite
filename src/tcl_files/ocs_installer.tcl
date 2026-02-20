@@ -96,9 +96,9 @@ proc installer_save_config {{backup_dir ""}} {
    }
    set arguments $backup_dir
 
-   # if backup dir does exist remove it first to have a clean state. save_config also expects it to be empty
+   # if backup dir does exist skip to avoid overwriting an existing backup
    if {[is_remote_path $hostname $admin_user $backup_dir]} {
-      delete_directory $backup_dir
+      return 0
    }
 
    # start the backup
