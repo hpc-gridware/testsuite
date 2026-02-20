@@ -823,8 +823,11 @@ proc throughput_setup_level {} {
    set my_schedd_config(job_load_adjustments) "none"
 
    if {$reservation} {
-      # allow reservation for 20% of the resources
+      # Allow reservation for 20% of the resources, but not more than 100.
       set max_reservation [expr [llength $host_list] * $nr_queues * $nr_slots / 5]
+      if {$max_reservation > 100} {
+         set max_reservation 100
+      }
       set my_schedd_config(max_reservation) $max_reservation
       set my_schedd_config(default_duration) $global_job_run_time
    }
@@ -1377,10 +1380,18 @@ proc run_throughput_test {} {
    set error 0
    log_user 0
    set start_time [clock seconds]
-   # @todo need some final timeout for the analysis of CS-1803
-   #       OK for functional tests
-   #       but should be improved, e.g., made dependend on cluster size and number of jobs
-   set final_timeout [expr $start_time + 600]
+   # We need some final timeout to avoid running endlessly in case of errors.
+   # It needs to depend on the setup, e.g., on the number of available slots, the number of jobs to run, ...
+   #    - test_end_job_count / total_slots * runtime
+   #    - expect only 10% utilization in average - we have that in some scenarios with high scheduling times :-(
+   #    - add some overhead, e.g., 5 minutes
+   #    - use a minimum of 10 minutes
+   set max_runtime [expr $test_end_job_count / $result(total_slots) * $global_job_run_time * 10 + 300]
+   if {$max_runtime < 600} {
+      set max_runtime 600
+   }
+   ts_log_fine "expecting a maximum test runtime of $max_runtime seconds"
+   set final_timeout [expr $start_time + $max_runtime]
    set submission_due 1
 
    # wait for job submit success for all execd hosts and event client reports
@@ -1641,7 +1652,9 @@ proc run_throughput_test {} {
             save_current_system_status results_list result
          }
 
-         # we continue until error or all jobs have run through
+         # We continue until error
+         # or all jobs have run through
+         # or the final_timeout is reached.
          if {!$error && $result(jobs_done) < $test_end_job_count && $time_now < $final_timeout} {
             exp_continue
          }
@@ -1650,6 +1663,10 @@ proc run_throughput_test {} {
    set error [show_and_check_current_system_status $start_time result schedd_data monitoring qstat_data]
 
    set end_time [clock seconds]
+   if {$end_time >= $final_timeout} {
+      ts_log_severe "stopped test due to final timeout"
+      set error 1
+   }
 
    log_user 1
    close $unexpected_out
@@ -1677,12 +1694,12 @@ proc run_throughput_test {} {
       wait_for_end_of_all_jobs
    }
 
-   # If error we can stop, otherwise we wait until timeout is reached for each qacct call below
-   if {$error} {
-      return
-   }
+   # Even if there were errors, we try to generate the reports.
+   # The data (e.g., the qmaster messages file) might help in
+   # analysing the root cause of errors.
 
    # output submission distribution
+   # @todo wouldn't we rather want to see this in the report?
    ts_log_fine ""
    ts_log_fine "submitted jobs per host"
    foreach host $submit_hosts {
@@ -1696,9 +1713,7 @@ proc run_throughput_test {} {
    fill_sched_from_messages $start_time $end_time schedd_data
 
    # create reports
-   if {!$error} {
-      create_reports results_list job_data schedd_data monitoring qstat_data qping_data event_data
-   }
+   create_reports results_list job_data schedd_data monitoring qstat_data qping_data event_data $error
 }
 
 proc throughput_wait_for_accounting_flush {} {
@@ -2614,7 +2629,7 @@ proc compare_dump_data_file { file1 file2 } {
    return 0
 }
 
-proc analyse_dump_data_file { file { force 0 } } {
+proc analyse_dump_data_file {file {force 0}} {
    get_current_cluster_config_array ts_config
    global throughput_sharetree functional_policy qstat_interval array_size parallel_jobs reservation
    global throughput_sharetree_ext
@@ -2675,11 +2690,15 @@ proc analyse_dump_data_file { file { force 0 } } {
    }
 
    set content ""
+   if {$test_config(had_errors)} {
+      # If the test ran into any errors, make sure the report shows this in a prominent way.
+      append content [create_html_text "THE TEST SCENARIO HAD ERRORS" 1 "Tomato" "H1"]
+   }
    set text ""
    append text "The Cluster Scheduler (Grid Engine) throughput test runs submits sleeper jobs to each execd host in the "
    append text "cluster. No job is submitted from master host. The testsuite Cluster Scheduler (Grid Engine) cluster had "
    append text "following settings:"
-   append content [ create_html_text $text ]
+   append content [create_html_text $text]
 
    set test "Cluster Scheduler (Grid Engine) version"
    set table($test) "$test_config(gridengine_version)"
@@ -3706,7 +3725,7 @@ proc calculate_test_run_xy_rows { results_array_name row_array_name start_numb }
 
 }
 
-proc create_reports { results_array job_array_name schedd_array_name monitoring_name qstat_name qping_name event_name} {
+proc create_reports { results_array job_array_name schedd_array_name monitoring_name qstat_name qping_name event_name {error 0}} {
    get_current_cluster_config_array ts_config
    global ts_host_config
    global CHECK_PROTOCOL_DIR check_name throughput_scenario
@@ -3794,6 +3813,7 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
    set test_config(SCHEDULE_INTERVAL)       $run_throughput_test_SCHEDULE_INTERVAL        ;# 00:00:30 ...
    set test_config(gridengine_version)      [get_version_info]
    set test_config(test_date)               [clock format [clock seconds]]
+   set test_config(had_errors)              $error
 
    spool_array_add_data $prot_output_file "test configuration" test_config
 

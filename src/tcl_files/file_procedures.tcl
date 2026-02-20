@@ -29,7 +29,7 @@
 #
 #  Portions of this software are Copyright (c) 2011 Univa Corporation
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -1713,8 +1713,11 @@ proc create_html_target {target_name} {
 #     This procedure returns a html format for "text"
 #
 #  INPUTS
-#     content      - text
-#     { center 0 } - if not 0: center text
+#     content    - text
+#     {center 0} - if not 0: center text
+#     {color ""} - if != "", print the text in the given color
+#     {type "p"} - type of text (the html tag to use). Default is "p" for
+#                  a paragraph of text, but can be e.g., "H1" for a header line.
 #
 #  RESULT
 #     html format
@@ -1725,7 +1728,7 @@ proc create_html_target {target_name} {
 #     file_procedures/create_html_link()
 #     file_procedures/create_html_text()
 #*******************************************************************************
-proc create_html_text {content {center 0}} {
+proc create_html_text {content {center 0} {color ""} {type "p"}} {
    set back ""
 
    if {$content == ""}  {
@@ -1735,7 +1738,12 @@ proc create_html_text {content {center 0}} {
    if {$center != 0} {
       append back "<center>\n"
    }
-   append back "\n<p>$content</p>\n"
+   if {$color != ""} {
+      append back "\n<$type style=\"color:$color;\">"
+   } else {
+      append back "\n<$type>"
+   }
+   append back "$content</$type>\n"
    if {$center != 0} {
       append back "</center>\n"
    }
