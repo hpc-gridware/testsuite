@@ -38,6 +38,7 @@ set gperf_threads_name "scheduler"
 #
 proc perf_set_gperf_name {{gperf_name "default"} {gperf_threads "scheduler"}} {
    global gperf_scenario_name
+   global gperf_threads_name
 
    # remember scenario name for later use
    set gperf_scenario_name $gperf_name
@@ -139,7 +140,7 @@ proc perf_find_app {app_list {host ""}} {
 # @param output_formats A list of output formats for the reports (e.g., {"txt" "pdf"}).
 # @param ignore_functions A list of function names to ignore in the reports (e.g., {"schedd_log" "rmon_mprintf"}).
 #
-proc perf_generate_reports {{output_formats {"txt" "pdf"}} {ignore_functions {"schedd_log" "rmon_mprintf"}}} {
+proc perf_generate_reports {{output_formats {"txt" "pdf"}} {ignore_functions {"schedd_log" "rmon_mprintf" "mwrite"}}} {
    global CHECK_USER
    global gperf_scenario_name
    global gperf_threads_name
@@ -186,7 +187,7 @@ proc perf_generate_reports {{output_formats {"txt" "pdf"}} {ignore_functions {"s
       append pprof_args " $ocs_qmaster_path"
       append pprof_args " $pprof_profile_file"
       append pprof_args " >$pprof_pdf_file"; # redirection to output file
-      ts_log_info "Generating $pprof_output_format report with command: $pprof_path $pprof_args"
+      ts_log_fine "Generating $pprof_output_format report with command: $pprof_path $pprof_args"
 
       # generate the report
       set output [start_remote_prog $pprof_host $pprof_user $pprof_path $pprof_args prg_exit_state 60]
