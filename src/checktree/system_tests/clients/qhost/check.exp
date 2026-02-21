@@ -251,7 +251,7 @@ proc test_issue132_j {} {
    # qhost -j
    # submit job
    set jobid [submit_job "-l h=$host $ts_config(product_root)/examples/jobs/sleeper.sh"]
-   wait_for_jobstart $jobid "leeper" 60 1 1
+   wait_for_job_state $jobid "r" 30
 
    set result1 [qhost_u_xml_parse xml "-j"]
    set result1 [qhost_u_parse plain "-j"]
@@ -305,7 +305,7 @@ proc test_issue132_u {} {
 
    # submit job
    set jobid [submit_job "-l h=$host -u $CHECK_USER $ts_config(product_root)/examples/jobs/sleeper.sh"]
-   wait_for_jobstart $jobid "leeper" 60 1 1
+   wait_for_job_state $jobid "r" 30
 
    set params "-u $CHECK_USER"
    set result1 [qhost_u_xml_parse xml $params]
