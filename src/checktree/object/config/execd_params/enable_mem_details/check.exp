@@ -1,0 +1,173 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+#set check_root_access_needs "yes"
+#set check_need_running_system "no"
+set check_version_range "9.1.0"
+
+# define test's name and run level descriptions
+set check_name            "config_mem_details"
+set check_category        "OBJECT QCONF USAGE VERIFIED"
+set check_description(0)  "check execd_params ENABLE_MEM_DETAILS"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function config_mem_details_setup
+set check_cleanup_function config_mem_details_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "config_mem_details_FALSE"
+lappend check_functions "config_mem_details_TRUE"
+
+# -------- local test procedures: initialization------------------------------
+
+proc config_mem_details_setup {} {
+   get_current_cluster_config_array ts_config
+   global config_mem_details_hosts config_mem_details_backup
+
+   if {![ge_has_feature "gcs"]} {
+      ts_log_config "ENABLE_MEM_DETAILS is only available with GCS"
+      return 99
+   }
+
+   # we need a linux host for testing
+   set config_mem_details_hosts [host_conf_get_suited_hosts 1 {} {"lx-amd64" "lx-arm64" "lx-riscv64"}]
+
+   # we want to modify the local config - make a backup
+   get_config config_mem_details_backup $config_mem_details_hosts
+}
+
+proc config_mem_details_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global config_mem_details_hosts config_mem_details_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # standard reset config
+   reset_config_and_propagate config_mem_details_backup $config_mem_details_hosts
+
+   unset -nocomplain config_mem_details_hosts config_mem_details_backup
+}
+
+proc config_mem_details_check_FALSE {} {
+   get_current_cluster_config_array ts_config
+   global config_mem_details_hosts
+
+   # submit a worker job, expect usage values like "cpu" to appear, but "pss" not to appear
+   set job_opts "-l h=$config_mem_details_hosts"
+   set job_args "$ts_config(product_root)/examples/jobs/worker.sh"
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $job_id "" 10] == 0} {
+      if {![wait_for_online_usage $job_id 60 "cpu"]} {
+         ts_log_severe "got no cpu usage for job $job_id"
+      } else {
+         if {[wait_for_online_usage $job_id 10 "pss"]} {
+            ts_log_severe "got pss usage for job $job_id, but expected none"
+         }
+      }
+   }
+   delete_job $job_id
+}
+
+proc config_mem_details_FALSE {} {
+   get_current_cluster_config_array ts_config
+   global config_mem_details_hosts config_mem_details_backup
+
+   # test without ENABLE_MEM_DETAILS setting
+   config_mem_details_check_FALSE
+
+   # test with ENABLE_MEM_DETAILS set to FALSE
+   add_or_replace_array_param conf config_mem_details_backup "execd_params" "ENABLE_MEM_DETAILS" "FALSE"
+   # We need to set USAGE_COLLECTION to HYBRID as well.
+   # It is set in the global config, but when we set execd_params in the local config,
+   # the global setting is not effective anymore.
+   add_or_replace_array_param conf conf "execd_params" "USAGE_COLLECTION" "HYBRID"
+   set_config_and_propagate conf $config_mem_details_hosts
+   config_mem_details_check_FALSE
+   reset_config_and_propagate config_mem_details_backup $config_mem_details_hosts
+}
+
+proc config_mem_details_TRUE {} {
+   get_current_cluster_config_array ts_config
+   global config_mem_details_hosts config_mem_details_backup
+
+   # Test with ENABLE_MEM_DETAILS set to TRUE
+   add_or_replace_array_param conf config_mem_details_backup "execd_params" "ENABLE_MEM_DETAILS" "TRUE"
+   # We need to set USAGE_COLLECTION to HYBRID as well.
+   # It is set in the global config, but when we set execd_params in the local config,
+   # the global setting is not effective anymore.
+   add_or_replace_array_param conf conf "execd_params" "USAGE_COLLECTION" "HYBRID"
+   set_config_and_propagate conf $config_mem_details_hosts
+
+   # submit a worker job, expect usage values like "cpu" to appear
+   # as well as the mem details variables like "pss", "maxpss", "pmem", "smem"
+   set job_opts "-l h=$config_mem_details_hosts"
+   set job_args "$ts_config(product_root)/examples/jobs/worker.sh 60"
+   set job_id [submit_job "$job_opts $job_args"]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $job_id "" 10] == 0} {
+      set errors {}
+      if {![wait_for_online_usage $job_id 60 "cpu"]} {
+         lappend errors "got no cpu usage for job $job_id"
+      }
+      foreach variable "pss maxpss pmem smem" {
+         if {![wait_for_online_usage $job_id 10 $variable]} {
+            lappend errors "got $variable usage for job $job_id, but expected none"
+         }
+      }
+      if {$errors != {}} {
+         ts_log_severe [join $errors "\n"]
+         delete_job $job_id
+      } else {
+         if {[wait_for_jobend $job_id "" 60] == 0} {
+            get_qacct $job_id
+            if {![info exists qacct_info(maxpss)]} {
+               ts_log_severe "got no maxpss usage in qacct for job $job_id, but expected it"
+            } else {
+               if {$qacct_info(maxpss) == 0} {
+                  ts_log_severe "got maxpss usage of 0 in qacct for job $job_id, but expected a value > 0"
+               }
+            }
+         }
+      }
+   }
+
+   # cleanup
+   reset_config_and_propagate config_mem_details_backup $config_mem_details_hosts
+}
