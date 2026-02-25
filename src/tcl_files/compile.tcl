@@ -190,7 +190,7 @@ proc compile_host_list {{binaries_only 0}} {
    # so it must be contained in the build host list.
    # With OCS/GCS >= 9.0.0 we separated core product and extensions like the drmaa-java,
    # so there is no longer then need to build java and c++ code on the same host.
-   if {[get_version_info != "0.0"] && [is_version_in_range "" "9.0.0"] && $jc_host != ""} {
+   if {[get_version_info] != "0.0" && [is_version_in_range "" "9.0.0"] && $jc_host != ""} {
       set jc_arch [host_conf_get_arch $jc_host]
 
       if {$compile_host($jc_arch) != $jc_host} {
