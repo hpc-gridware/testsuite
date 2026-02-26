@@ -421,6 +421,14 @@ proc ge_has_feature {feature {quiet 0}} {
                set result 0
             }
          }
+         "par_option" {
+            set output [start_sge_bin "qsub" "-help"]
+            if {[string first "-par" $output] >= 0} {
+               set result 1
+            } else {
+               set result 0
+            }
+         }
          "systemd" {
             start_remote_prog $ts_config(master_host) $CHECK_USER "grep" "RC_FILE=systemd $ts_config(product_root)/util/arch_variables"
             if {$prg_exit_state == 0} {
@@ -8589,7 +8597,7 @@ proc wait_till_qmaster_is_down {host {timeout 60}} {
 #
 #*******************************
 #
-proc submit_with_method {submit_method options script args tail_host {user ""} {env_var ""} {submit_host ""}} {
+proc submit_with_method {submit_method options script args {tail_host ""} {user ""} {env_var ""} {submit_host ""}} {
    global CHECK_USER
    global CHECK_PROTOCOL_DIR
    get_current_cluster_config_array ts_config
@@ -8618,6 +8626,9 @@ proc submit_with_method {submit_method options script args tail_host {user ""} {
          set output [start_remote_prog  $tail_host $CHECK_USER "touch" $job_output_file]
          ts_log_fine "touch $job_output_file output:\n$output"
          # initialize tail to logfile
+         if {$tail_host == ""} {
+            set tail_host $ts_config(master_host)
+         }
          set sid [init_logfile_wait $tail_host $job_output_file]
          # submit job
          submit_job "-o $job_output_file -j y $options $script $job_args" 1 60 $submit_host "" "" 1 "qsub" 1 "qsub_output" {} "" myenv
