@@ -9,7 +9,7 @@
 #
 #  Copyright (c) 2011 Univa Corporation.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ###########################################################################
 #___INFO__MARK_END_NEW__
@@ -48,33 +48,44 @@ lappend check_functions "max_dyn_ec_out_of_ids"
 # -------- local test procedures: initialization------------------------------
 
 proc max_dyn_ec_setup {} {
-   global ts_config
-   global max_dyn_ec_backup
-   global max_dyn_ec_clients
+   get_current_cluster_config_array ts_config
+   global max_dyn_ec_backup max_dyn_ec_clients
 
    # default value
    set max_dyn_ec_clients 1000
 
    # we want to modify the global config - make a backup
    get_config max_dyn_ec_backup
+
+   # with 9.1.0 and higher we need to set slots on exechost layer
+   setup_host_slots_for_binding
 }
 
 proc max_dyn_ec_setup_level {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global CHECK_ACT_LEVEL
    global max_dyn_ec_simhosts max_dyn_ec_jobs_per_host
 
    # set the number of jobs per host
    if {$CHECK_ACT_LEVEL == 0} {
-      # we have 40 slots per hosts, so we can start 40 jobs per host simultaneously
-      # multiple consecutive job starts on a host might cause this test to hit timeouts
-      # if you want to increase the number of jobs per host, you might need to increase
-      # the number of hosts, the number of slots per host or the timeouts values!
+      # We start up to 40 qsub -sync y on each host simultaneously.
+      # Even VMs should be able to handle this work load.
       set max_dyn_ec_jobs_per_host 40
+      # Create a test queue allowing to start up to 20 sleeper jobs per host.
+      set q(slots) 20
+      add_queue "test.q" "@allhosts" q
+      disable_queue "all.q"
    } else {
+      set num_simulated_hosts 100
+      # No need to run the run level with simulated hosts
+      # if we already ran with the same or a higher number of real hosts in runlevel 0.
+      if {[llength $ts_config(execd_nodes)] >= $num_simulated_hosts} {
+         ts_log_info "not running runlevel 1 - we have already run with a higher number of real hosts in runlevel 0"
+         return 99
+      }
       # we use simulated hosts, so we do not have load on the hosts from job execution
       # and can start more submit clients
-      set max_dyn_ec_jobs_per_host 100
+      set max_dyn_ec_jobs_per_host $num_simulated_hosts
 
       # initialize the use of simulated hosts
       if {![simhost_init]} {
@@ -83,7 +94,7 @@ proc max_dyn_ec_setup_level {} {
       }
 
       # add hosts and add them to host group and queue
-      set max_dyn_ec_simhosts [simhost_add 100 "@simhosts"]
+      set max_dyn_ec_simhosts [simhost_add $num_simulated_hosts "@simhosts"]
       set q(slots) 10
       add_queue "sim.q" "@simhosts" q
 
@@ -94,11 +105,18 @@ proc max_dyn_ec_setup_level {} {
 }
 
 proc max_dyn_ec_cleanup_level {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global CHECK_ACT_LEVEL
    global max_dyn_ec_simhosts
 
-   if {$CHECK_ACT_LEVEL == 1} {
+   # cleanup jobs
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   if {$CHECK_ACT_LEVEL == 0} {
+      del_queue "test.q" "" 1 1
+      enable_queue "all.q"
+   } else {
       del_queue "sim.q" "" 1 1
       enable_queue "all.q"
 
@@ -108,13 +126,11 @@ proc max_dyn_ec_cleanup_level {} {
 }
 
 proc max_dyn_ec_cleanup {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global max_dyn_ec_backup
    global max_dyn_ec_clients max_dyn_ec_jobs_per_host max_dyn_ec_simhosts
 
-   # cleanup jobs
-   delete_all_jobs
-   wait_for_end_of_all_jobs
+   cleanup_host_slots_for_binding
 
    # standard reset config
    reset_config max_dyn_ec_backup
@@ -134,16 +150,28 @@ proc max_dyn_ec_cleanup {} {
 #     Make sure the correct default value is active for MAX_DYN_EC at qmaster startup
 #*******************************************************************************
 proc max_dyn_ec_default {} {
-   global ts_config CHECK_USER
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
    global max_dyn_ec_clients
-
-   set expected_message [translate_macro MSG_SET_MAXDYNEVENTCLIENT_U "*"]
-   set exceeds_message [translate_macro MSG_CONF_NR_DYNAMIC_EVENT_CLIENT_EXCEEDS_MAX_FILEDESCR_U "*"]
 
    shutdown_qmaster
    init_logfile_wait $ts_config(master_host) [get_qmaster_messages_file]
    startup_qmaster
 
+   # Expect to get the default value of 1000 dynamic event clients,
+   # unless the file descriptor limit enforces a lower value.
+   # We store the actual maximal number of dynamic event clients in max_dyn_ec_clients,
+   # so that we can use it in the further check_functions.
+   set max_dyn_ec_clients [max_dyn_ec_get_max_dyn_ec_from_logfile_wait $max_dyn_ec_clients]
+
+   wait_for_load_from_all_queues 60
+}
+
+proc max_dyn_ec_get_max_dyn_ec_from_logfile_wait {expected_max_dyn_ec_clients} {
+   set expected_message [translate_macro MSG_SET_MAXDYNEVENTCLIENT_U "*"]
+   set exceeds_message [translate_macro MSG_CONF_NR_DYNAMIC_EVENT_CLIENT_EXCEEDS_MAX_FILEDESCR_U "*"]
+
+   set max_dyn 0
    set messages [logfile_wait $expected_message]
    # if we got the expected message then check for the actual maximal number of event clients
    # it should be 1000 unless the file descriptor limit enforces a lower value
@@ -158,23 +186,21 @@ proc max_dyn_ec_default {} {
             set max_dyn [lindex $msg 9]
             ts_log_fine "dynamic event client limit is set to $max_dyn"
             if {$exceeded} {
-               set max_dyn_ec_clients $max_dyn
                  set msg "master host file descriptor limit allows only $max_dyn dynamic event clients"
                  append msg "\ntry increasing it, on Linux edit /etc/security/limits.conf and add e.g. the lines"
                  append msg "\n*                -       nofile          8192"
                  append msg "\nroot             -       nofile          8192"
                  ts_log_config $msg
             } else {
-               if {$max_dyn != $max_dyn_ec_clients} {
-                  ts_log_severe "invalid max dynamic event clients: expected $max_dyn_ec_clients, got $max_dyn"
-                  set max_dyn_ec_clients $max_dyn
+               if {$max_dyn != $expected_max_dyn_ec_clients} {
+                  ts_log_severe "invalid max dynamic event clients: expected $expected_max_dyn_ec_clients, got $max_dyn"
                }
             }
          }
       }
    }
 
-   wait_for_load_from_all_queues 60
+   return $max_dyn
 }
 
 #****** max_dyn_ec/max_dyn_ec_massive_qsub_sync() *************************************************
@@ -190,18 +216,35 @@ proc max_dyn_ec_default {} {
 #     TODO: check qmaster messages file
 #*******************************************************************************
 proc max_dyn_ec_massive_qsub_sync {} {
-   global ts_config CHECK_USER
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
    global max_dyn_ec_clients max_dyn_ec_jobs_per_host
+
+   # with the fix of CS-1825 we can rely on logging "maximum number of dynamic event clients set to *"
+   # in the qmaster messages file to know when the new value is active
+   set have_cs_1825_fix [is_version_in_range "9.0.12 9.1.0"]
 
    ts_log_fine "starting max_dyn_ec_massive_qsub_sync at [clock format [clock seconds]]"
 
    # set high number of event clients
+   # @todo in GCP increase the high_max_dyn_ec_clients to 5000 or even more
+   #       we have a file descriptor limit of 64k, lets see what the event master can handle
+   set high_max_dyn_ec_clients 2000
    get_config conf_backup
-   set conf(qmaster_params) [add_or_replace_param $conf_backup(qmaster_params) "MAX_DYN_EC" "MAX_DYN_EC=2000"]
+   # Wait for qmaster to write the message about the max dynamic event clients to the log file,
+   # otherwise we might miss it when we set the new value.
+   if {$have_cs_1825_fix} {
+      init_logfile_wait $ts_config(master_host) [get_qmaster_messages_file]
+   }
+   add_or_replace_array_param conf conf_backup "qmaster_params" "MAX_DYN_EC" $high_max_dyn_ec_clients
    set_config conf
-
-   # maximum number of qsub -sync y to start
-   set max_jobs $max_dyn_ec_clients
+   if {$have_cs_1825_fix} {
+      # sge_qmaster will log the new max_dyn_ec
+      set max_jobs [max_dyn_ec_get_max_dyn_ec_from_logfile_wait $high_max_dyn_ec_clients]
+   } else {
+      # qmaster does not log the new max_dyn_ec, so we have to assume that what we set is active
+      set max_jobs $max_dyn_ec_clients
+   }
 
    # on every host call scripts/qsub_sync.sh to submit a bunch of qsub -sync jobs
    set hosts $ts_config(execd_nodes)
@@ -320,7 +363,8 @@ proc max_dyn_ec_massive_qsub_sync {} {
 }
 
 proc max_dyn_ec_out_of_ids {} {
-   global ts_config CHECK_USER CHECK_ACT_LEVEL
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ACT_LEVEL
 
    # need to run this check only once
    if {$CHECK_ACT_LEVEL > 0} {
