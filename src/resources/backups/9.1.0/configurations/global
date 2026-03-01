@@ -19,10 +19,10 @@ auto_user_fshare             0
 epilog                       none
 qmaster_params               none
 qlogin_command               builtin
-execd_spool_dir              /usr/local/testsuite/8000/execd
-mail_tag                     {[p8000][GCS][9.1.0]}
+execd_spool_dir              /home/ebablick/CS/cs3-0/inst/default/spool
+mail_tag                     [p8008][GCS][9.1.0]
 auto_user_delete_time        86400
-gid_range                    13000-13199
+gid_range                    14600-14799
 shell_start_mode             unix_behavior
 mailer                       /bin/mail
 xprojects                    none

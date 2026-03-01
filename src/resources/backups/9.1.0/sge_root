@@ -1,1 +1,1 @@
-SGE_ROOT=/home/ebablick/Clion/gcs0/inst; export SGE_ROOT
+SGE_ROOT=/home/ebablick/CS/cs3-0/inst; export SGE_ROOT

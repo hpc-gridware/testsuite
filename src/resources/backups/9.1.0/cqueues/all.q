@@ -12,8 +12,8 @@ qtype                 BATCH INTERACTIVE
 ckpt_list             testcheckpointobject
 pe_list               make mytestpe
 rerun                 FALSE
-slots                 10,[v01701.fritz.box=100],[v01702.fritz.box=40],[v01703.fritz.box=40],[v01704.fritz.box=40],[v01705.fritz.box=40]
-tmpdir                /tmp/testsuite_8000
+slots                 10,[al10-0-lx-amd64.fritz.box=20],[ce10-0-lx-amd64.fritz.box=80],[rh10-0-lx-amd64.fritz.box=20],[ro8-0-lx-amd64.fritz.box=40],[ro8-1-lx-amd64.fritz.box=40],[ro10-0-lx-amd64.fritz.box=20],[ub24-0-lx-amd64.fritz.box=40],[ub26-0-lx-amd64.fritz.box=20]
+tmpdir                /tmp/testsuite_8008
 shell                 /bin/sh
 prolog                NONE
 epilog                NONE

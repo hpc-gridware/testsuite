@@ -1,9 +1,0 @@
-hostname              v01703.fritz.box
-load_scaling          NONE
-complex_values        slots=4
-user_lists            NONE
-xuser_lists           NONE
-projects              NONE
-xprojects             NONE
-usage_scaling         NONE
-report_variables      NONE
