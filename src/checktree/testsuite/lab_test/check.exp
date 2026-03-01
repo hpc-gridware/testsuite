@@ -296,6 +296,15 @@ proc host_has_munge_key {host} {
    return 1
 }
 
+proc host_is_ssh_available {host} {
+   global ts_config
+   set output [start_remote_prog $ts_config(master_host) "root" "nc" "-zv $host 22"]
+   if {$prg_exit_state != 0} {
+      return 0
+   }
+   return 1
+}
+
 proc host_has_munge_server {host} {
    global ts_config
 
@@ -354,7 +363,7 @@ proc lab_test_applications {} {
     # filter out hosts that are unsupported for the current GCS version and add all zones
     foreach node $all_hosts {
        set host [node_get_host $node]
-       if {$ts_host_config($host,arch,$gcs_version) != "unsupported"} {
+       if {$ts_host_config($host,arch,$gcs_version) != "unsupported" && [host_is_ssh_available $host]} {
           set all_hosts [concat $all_hosts $ts_host_config($host,zones)]
        } else {
           set idx [lsearch -exact $all_hosts $host]
