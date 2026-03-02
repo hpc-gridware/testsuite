@@ -277,19 +277,21 @@ proc host_has_strings {host} {
 proc host_has_munge_key {host} {
    global ts_config
 
-   set munge_master_key [start_remote_prog "h007" "root" "cat" "/etc/munge/munge.key"]
+   # We assume that the primary munge key is located on the FS that also provides /home 
+   set fs_host [fs_config_get_server_for_path "/home" 0]
+   set munge_master_key [start_remote_prog $fs_host "root" "cat" "/etc/munge/munge.key"]
    if {$prg_exit_state != 0} {
       return 0
    }
 
-   set munge_key [start_remote_prog $ts_config(master_host) "root" "cat" "/etc/munge/munge.key"]
+   set munge_key [start_remote_prog $host "root" "cat" "/etc/munge/munge.key"]
    if {$prg_exit_state != 0} {
       ts_log_fine "Munge key on host $host does not exist"
       return 0
    }
 
    if {$munge_master_key != $munge_key} {
-      ts_log_fine "Munge key on host $host does not match the master key"
+      ts_log_fine "Munge key on host $host does not match the master key located on $fs_host"
       return 0
    }
 
@@ -320,7 +322,8 @@ proc host_has_munge_server {host} {
       }
       "ulx-*" -
       "lx-*" {
-         set output [start_remote_prog $host "root" "systemctl" "status munge"]
+         #set output [start_remote_prog $host "root" "systemctl" "status munge"]
+         set output [start_remote_prog $host "root" "systemctl" "is-active --quiet munge"]
          if {$prg_exit_state != 0} {
             return 0
          }
@@ -364,6 +367,7 @@ proc lab_test_applications {} {
     foreach node $all_hosts {
        set host [node_get_host $node]
        if {$ts_host_config($host,arch,$gcs_version) != "unsupported" && [host_is_ssh_available $host]} {
+          puts "Host $host is available"
           set all_hosts [concat $all_hosts $ts_host_config($host,zones)]
        } else {
           set idx [lsearch -exact $all_hosts $host]
