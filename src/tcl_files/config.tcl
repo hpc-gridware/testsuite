@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -1879,9 +1879,11 @@ proc config_check_host_in_hostlist {hostlist { first_host ""} } {
       }
    }
 
-   set index [lsearch $hostlist $first_host]
-   if {$index >= 0} { set hostlist [lreplace $hostlist $index $index] }
-   set hostlist [linsert $hostlist 0 $first_host]
+   if {$hostlist ne "none"} {
+      set index [lsearch $hostlist $first_host]
+      if {$index >= 0} { set hostlist [lreplace $hostlist $index $index] }
+      set hostlist [linsert $hostlist 0 $first_host]
+   }
 
    return $hostlist
 }
@@ -2737,6 +2739,7 @@ proc config_submit_only_hosts { only_check name config_array } {
    array set params {}
    set params(verify) "compile"
    set params(exclude_list) [lsort -unique "$config(master_host) $config(shadowd_hosts) $config(execd_hosts) $config(admin_only_hosts) $config(non_cluster_hosts)"]
+   regsub "none" $params(exclude_list) "" params(exclude_list)
 
    return [config_generic $only_check $name config "" "host" 1 0 "" params]
 }
@@ -2749,6 +2752,7 @@ proc config_admin_only_hosts {only_check name config_array} {
      array set params {}
      set params(verify) "compile"
      set params(exclude_list) [lsort -unique "$config(master_host) $config(shadowd_hosts) $config(execd_hosts) $config(submit_only_hosts) $config(non_cluster_hosts)"]
+   regsub "none" $params(exclude_list) "" params(exclude_list)
 
      return [config_generic $only_check $name config "" "host" 1 0 "" params]
 }
@@ -2761,6 +2765,7 @@ proc config_non_cluster_hosts {only_check name config_array} {
      array set params {}
      set params(verify) "compile"
      set params(exclude_list) [lsort -unique "$config(master_host) $config(shadowd_hosts) $config(execd_hosts) $config(submit_only_hosts) $config(admin_only_hosts)"]
+     regsub "none" $params(exclude_list) "" params(exclude_list)
 
      return [config_generic $only_check $name config "" "host" 1 0 "" params]
 }
@@ -4202,31 +4207,33 @@ proc config_shadowd_hosts { only_check name config_array } {
 
    set master_host $config(master_host)
 
-   if { $config($name,default) == "" } {
+   if {$config($name,default) == ""} {
       set config($name,default) $master_host
    }
 
    array set params { verify "compile" }
-   set value [config_generic $only_check $name config "" "host" 0 0 "" params]
+   set value [config_generic $only_check $name config "" "host" 1 0 "" params]
 
    if { $value == -1 } { return -1 }
 
    if {$only_check == 0} {
       # initialize value from defaults, if not yet set
-      if { $value == "" } {
+      if {$value == ""} {
          set value $config($name,default)
-         if { $value == "" } {
+         if {$value == ""} {
             set value $master_host
          }
       }
-      # master_host must be first host in the list
+      # if we have shadow hosts, then master_host must be first host in the list
       set value [config_check_host_in_hostlist $value $master_host]
    }
 
-   # at least one shadowd must run on qmaster host
-   if {[lsearch -exact $value $config(master_host)] < 0 } {
-      puts "master host $config(master_host) is not in shadowd list: $value"
-      return -1
+   # if we have shadow hosts, then at least one shadowd must run on qmaster host
+   if {$value ne "none"} {
+      if {[lsearch -exact $value $config(master_host)] < 0} {
+         puts "master host $config(master_host) is not in shadowd list: $value"
+         return -1
+      }
    }
 
    # check that each shadowd host has access to qmaster spool dir

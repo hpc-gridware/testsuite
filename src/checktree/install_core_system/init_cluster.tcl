@@ -29,7 +29,7 @@
 #
 #  Portions of this software are Copyright (c) 2011 Univa Corporation
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -553,9 +553,11 @@ proc setup_execd_conf {} {
    global check_do_not_create_local_config
 
    set host_list $ts_config(execd_nodes)
-   foreach sh_host $ts_config(shadowd_hosts) {
-      if {[lsearch -exact $host_list $sh_host] == -1} {
-         lappend host_list $sh_host
+   if {$ts_config(shadowd_hosts) ne "none"} {
+      foreach sh_host $ts_config(shadowd_hosts) {
+         if {[lsearch -exact $host_list $sh_host] == -1} {
+            lappend host_list $sh_host
+         }
       }
    }
 

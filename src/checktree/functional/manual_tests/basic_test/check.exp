@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -231,11 +231,11 @@ proc basic_cluster_configure {host} {
       set ts_config(all_nodes) $host
       set ts_config(product_feature) $ts_config_backup(product_feature)
    }
-   set ts_config(shadowd_hosts) ""
+   set ts_config(shadowd_hosts) "none"
    set ts_config(execd_hosts) $host
    set ts_config(execd_nodes) $host
    set ts_config(cell) basic_$host
-   set ts_config(submit_only_hosts) none
+   set ts_config(submit_only_hosts) "none"
 }
 
 proc basic_test {report_var} {

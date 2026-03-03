@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -63,6 +63,7 @@ proc install_qmaster {} {
    #dump hostlist to file
    set admin_hosts "$ts_config(all_nodes) $ts_config(shadowd_hosts)"
    set admin_hosts [lsort -unique $admin_hosts]
+   regsub "none" $admin_hosts "" admin_hosts
 
    set host_file_name "$CHECK_PROTOCOL_DIR/hostlist"
    set f [open $host_file_name w]
@@ -248,7 +249,11 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
    if {[is_version_in_range "" "9.0.8"]} {
       append auto_config_content "SCHEDD_CONF=\"1\"\n"
    }
-   append auto_config_content "SHADOW_HOST=\"$ts_config(shadowd_hosts)\"\n"
+   if {$ts_config(shadowd_hosts) != "none"} {
+      append auto_config_content "SHADOW_HOST=\"$ts_config(shadowd_hosts)\"\n"
+   } else {
+      append auto_config_content "SHADOW_HOST=\"\"\n"
+   }
    append auto_config_content "REMOVE_RC=\"false\"\n"
    append auto_config_content "CSP_RECREATE=\"true\"\n"
    append auto_config_content "CSP_COPY_CERTS=\"true\"\n"

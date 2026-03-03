@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -790,8 +790,10 @@ proc startup_cluster {} {
    startup_daemon $host "qmaster"
 
    #shadowds
-   foreach host $ts_config(shadowd_hosts) {
-      startup_daemon $host "shadowd"
+   if {$ts_config(shadowd_hosts) ne "none"} {
+      foreach host $ts_config(shadowd_hosts) {
+         startup_daemon $host "shadowd"
+      }
    }
    #dbwriter
    if {[info exists arco_config(dbwriter_host)] == 1} {

@@ -8368,9 +8368,11 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
       }
    }
    # - shadowd hosts (we might have a qmaster running there!)
-   foreach elem $ts_config(shadowd_hosts) {
-      if {[lsearch -exact $hosts_to_check $elem] < 0} {
-         lappend hosts_to_check $elem
+   if {$ts_config(shadowd_hosts) ne "none"} {
+      foreach elem $ts_config(shadowd_hosts) {
+         if {[lsearch -exact $hosts_to_check $elem] < 0} {
+            lappend hosts_to_check $elem
+         }
       }
    }
 
@@ -8449,14 +8451,16 @@ proc startup_core_system {{only_hooks 0} {with_additional_clusters 0} } {
 
       # startup all shadowds
       #
-      foreach sh_host $ts_config(shadowd_hosts) {
-         ts_log_finer "testing shadowd settings for host $sh_host ..."
-         set info [check_shadowd_settings $sh_host]
-         if { $info != "" } {
-            ts_log_info "skipping shadowd startup for host $sh_host:\n$info"
-            continue
+      if {$ts_config(shadowd_hosts) ne "none"} {
+         foreach sh_host $ts_config(shadowd_hosts) {
+            ts_log_finer "testing shadowd settings for host $sh_host ..."
+            set info [check_shadowd_settings $sh_host]
+            if { $info != "" } {
+               ts_log_info "skipping shadowd startup for host $sh_host:\n$info"
+               continue
+            }
+            startup_shadowd $sh_host
          }
-         startup_shadowd $sh_host
       }
 
       # startup of all execd
@@ -10338,16 +10342,22 @@ proc startup_shadowd {hostname {env_list ""}} {
 proc check_shadowd_settings { shadowd_host } {
    global CHECK_USER
    get_current_cluster_config_array ts_config
-   set nr_shadowds [llength $ts_config(shadowd_hosts)]
+   if {$ts_config(shadowd_hosts) eq "none"} {
+      set nr_shadowds 0
+   } else {
+      set nr_shadowds [llength $ts_config(shadowd_hosts)]
+   }
    ts_log_fine "$nr_shadowds shadowd host configured ..."
 
    set fine 0
-   set test_host [resolve_host $shadowd_host]
-   foreach sd_host $ts_config(shadowd_hosts) {
-      set sd_res_host [resolve_host $sd_host]
-      if { $sd_res_host == $test_host } {
-         set fine 1
-         break
+   if {$nr_shadowds > 0} {
+      set test_host [resolve_host $shadowd_host]
+      foreach sd_host $ts_config(shadowd_hosts) {
+         set sd_res_host [resolve_host $sd_host]
+         if { $sd_res_host == $test_host } {
+            set fine 1
+            break
+         }
       }
    }
 
@@ -11039,6 +11049,8 @@ proc remove_cluster_hosts_from_init_system {} {
 
    set hosts [concat $ts_config(master_host) $ts_config(shadowd_hosts) $ts_config(execd_nodes)]
    set hosts [lsort -unique $hosts]
+   # remove "none" entries from the list
+   regsub "none" $cluster_hosts "" cluster_hosts
    foreach host $hosts {
       remove_from_init_system $host
    }

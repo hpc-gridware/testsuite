@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2024-2025 HPC-Gridware GmbH
+#  Copyright 2024-2026 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -268,8 +268,10 @@ proc valgrind_shutdown_daemon {} {
    switch $CHECK_VALGRIND {
       "master" {
          # shutdown the shadowds first - qmaster shutdown can take some time and we don't want a shadowd to take over
-         foreach host $ts_config(shadowd_hosts) {
-            shutdown_system_daemon $host "shadowd"
+         if {$ts_config(shadowd_hosts) ne "none"} {
+            foreach host $ts_config(shadowd_hosts) {
+               shutdown_system_daemon $host "shadowd"
+            }
          }
          # shutdown qmaster, allow 10 minutes for the shutdown, dumping valgrind data can take some time
          shutdown_qmaster "" "" 900
@@ -287,8 +289,10 @@ proc valgrind_startup_daemon {} {
       "master" {
          startup_qmaster
          # re-start the shadowds
-         foreach host $ts_config(shadowd_hosts) {
-            startup_shadowd $host
+         if {$ts_config(shadowd_hosts) ne "none"} {
+            foreach host $ts_config(shadowd_hosts) {
+               startup_shadowd $host
+            }
          }
          wait_for_load_from_all_queues 60
       }

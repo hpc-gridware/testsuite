@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -111,7 +111,7 @@ proc smf_test_qmaster {} {
 proc smf_test_shadowd {} {
    global ts_config
 
-   if {[llength $ts_config(shadowd_hosts)] == 0} {
+   if {$ts_config(shadowd_hosts) eq "none" || [llength $ts_config(shadowd_hosts)] == 0} {
       ts_log_config "No shadowd hosts in your configuration"
       return
    }
