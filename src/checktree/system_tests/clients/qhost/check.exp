@@ -220,8 +220,10 @@ proc test_issue132_h {} {
          ts_log_severe "outputs do not match from plain and xml for mem_total."
          return
       }
-      if {[string compare [string trim $xml(host$ind,mem_used)] [string trim $plain(host$ind,mem_used)]] != 0} {
-         ts_log_severe "outputs do not match from plain and xml for mem_used."
+      set xml_mem_used [string trim $xml(host$ind,mem_used)]
+      set plain_mem_used [string trim $plain(host$ind,mem_used)]
+      if {[string compare $xml_mem_used $plain_mem_used] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for mem_used ($xml_mem_used != $plain_mem_used)."
          return
       }
       if {[string compare [string trim $xml(host$ind,swap_total)] [string trim $plain(host$ind,swap_total)]] != 0} {
