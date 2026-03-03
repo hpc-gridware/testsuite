@@ -2453,6 +2453,12 @@ proc set_config {change_array {host global} {do_add 0} {raise_error 1} {do_reset
    get_current_cluster_config_array ts_config
    global CHECK_USER CHECK_JOB_OUTPUT_DIR
    global g_set_config_messages_add g_set_config_messages_mod
+   global check_do_not_create_local_config
+
+   if {$check_do_not_create_local_config && $host ne "global"} {
+      ts_log_severe "testsuite was started with option no_local_config - not creating local config $host" $raise_error
+      return -1
+   }
 
    upvar $change_array chgar_orig
 

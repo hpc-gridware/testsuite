@@ -5359,7 +5359,12 @@ proc check_if_test_cleaned_up {} {
    set errors {}
    foreach host $ts_config(execd_nodes) {
       unset -nocomplain local_conf
-      set conf_ret [get_config local_conf $host]
+      if {$check_do_not_create_local_config} {
+         set report_get_config_error 0
+      } else {
+         set report_get_config_error 1
+      }
+      set conf_ret [get_config local_conf $host 60 $report_get_config_error]
       ts_log_fine "get_config for $host returned $conf_ret, attributes [array names local_conf]"
       if {$conf_ret == 0} {
          if {$check_do_not_create_local_config} {
