@@ -57,6 +57,13 @@ proc max_dyn_ec_setup {} {
    # we want to modify the global config - make a backup
    get_config max_dyn_ec_backup
 
+   # we need the loglevel to be set to log_info
+   # in our GCP deployment it is set to log_warning - check and fix if necessary
+   if {$max_dyn_ec_backup(loglevel) != "log_info"} {
+      set conf(loglevel) "log_info"
+      set_config conf
+   }
+
    # with 9.1.0 and higher we need to set slots on exechost layer
    setup_host_slots_for_binding
 }
