@@ -11056,7 +11056,7 @@ proc remove_cluster_hosts_from_init_system {} {
    set hosts [concat $ts_config(master_host) $ts_config(shadowd_hosts) $ts_config(execd_nodes)]
    set hosts [lsort -unique $hosts]
    # remove "none" entries from the list
-   regsub "none" $cluster_hosts "" cluster_hosts
+   regsub "none" $hosts "" hosts
    foreach host $hosts {
       remove_from_init_system $host
    }
