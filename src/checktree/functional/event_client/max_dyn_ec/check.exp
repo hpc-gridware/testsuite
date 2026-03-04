@@ -87,7 +87,7 @@ proc max_dyn_ec_setup_level {} {
       # No need to run the run level with simulated hosts
       # if we already ran with the same or a higher number of real hosts in runlevel 0.
       if {[llength $ts_config(execd_nodes)] >= $num_simulated_hosts} {
-         ts_log_info "not running runlevel 1 - we have already run with a higher number of real hosts in runlevel 0"
+         ts_log_config "not running runlevel 1 - we have already run with a higher number of real hosts in runlevel 0"
          return 99
       }
       # we use simulated hosts, so we do not have load on the hosts from job execution
@@ -233,10 +233,11 @@ proc max_dyn_ec_massive_qsub_sync {} {
 
    ts_log_fine "starting max_dyn_ec_massive_qsub_sync at [clock format [clock seconds]]"
 
-   # set high number of event clients
-   # @todo in GCP increase the high_max_dyn_ec_clients to 5000 or even more
-   #       we have a file descriptor limit of 64k, lets see what the event master can handle
-   set high_max_dyn_ec_clients 2000
+   # Set high number of event clients.
+   # Tested in GCP with 256 execution hosts. sge_qmaster (worker threads, event_master thread)
+   # can easily cope with 5000 event clients, probably more.
+   # We have a file descriptor limit of 64k, so there is no restriction on the number of file descriptors.
+   set high_max_dyn_ec_clients 5000
    get_config conf_backup
    # Wait for qmaster to write the message about the max dynamic event clients to the log file,
    # otherwise we might miss it when we set the new value.
