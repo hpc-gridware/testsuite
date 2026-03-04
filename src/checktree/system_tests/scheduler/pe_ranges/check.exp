@@ -65,6 +65,8 @@ proc pe_ranges_setup {} {
    global pe_ranges_test_hosts
    global pe_ranges_complex_backup
 
+   setup_host_slots_for_binding
+
    get_complex pe_ranges_complex_backup
    set pe_ranges_test_hosts {}
    set execd_count 0
@@ -126,6 +128,8 @@ proc pe_ranges_cleanup {} {
    }
    reset_complex pe_ranges_complex_backup
 
+   cleanup_host_slots_for_binding
+
    unset -nocomplain pe_ranges_test_hosts pe_ranges_complex_backup
 }
 
@@ -134,7 +138,13 @@ proc pe_ranges_submit_pejobs_and_wait { job_arguments job_count job_count_max ru
 
    set job_id [submit_job "-pe round_robin $job_count-$job_count_max $job_arguments $ts_config(product_root)/examples/jobs/sleeper.sh 100"]
 
-   while { 1 } {
+   set final_timeout [expr [clock seconds] + 60]
+
+   while {1} {
+      if {[clock seconds] >= $final_timeout} {
+         ts_log_severe "timeout while waiting for pe jobs to run"
+         break
+      }
       trigger_scheduling
       set running_jobs 0
       set error 0
