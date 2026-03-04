@@ -446,23 +446,25 @@ proc setup_host_slots_for_binding {{hosts ""} {backup_var ""}} {
          set hosts $ts_config(execd_nodes)
       }
 
+      # @todo It would be nice to get the slots counts in a single call, e.g., qhost -F slots
+      #       but this gives us the currently free slots, not the capacity.
+      #       Wait for bulk operations ...
       foreach host $hosts {
          unset -nocomplain eh_backup eh
-         # backup the existing complex_values
-         get_exechost eh_backup $host
+         # backup the existing complex_values - call qconf always on the same host
+         get_exechost eh_backup $host $ts_config(master_host)
          set backup($host) $eh_backup(complex_values)
-
-         # set the new complex values
-         add_or_replace_array_param eh eh_backup "complex_values" "slots" 1000
-         set_exechost eh $host
       }
+
+      # set the new complex values with a single command
+      mod_attr "exechost" "complex_values" "slots=1000" $hosts 0 $ts_config(master_host)
    }
 }
 
 ##
 # @brief Cleanup host slots for binding tests
 #
-# Restores the complex_values of the hosts modified by setup_host_slots_for_binding.
+# Restores the slot counts of the hosts modified by setup_host_slots_for_binding.
 # The backup is taken from the specified array variable.
 #
 # @param backup_var Name of the array variable containing the backup (default: host_slots_for_binding_backup)
@@ -482,10 +484,21 @@ proc cleanup_host_slots_for_binding {{backup_var ""} {unset_backup_var 1}} {
       }
 
       # we restore the hosts for which we have a backup
+      # we want to use a low number of qconf -mattr calls, group hosts with the same slot count
       foreach host [array names backup] {
-         unset -nocomplain eh
-         set eh(complex_values) $backup($host)
-         set_exechost eh $host
+         parse_name_value_list values $backup($host)
+         if {[info exists values(slots)]} {
+            if {![info exists slots_hosts($values(slots))]} {
+               set slots_hosts($values(slots)) $host
+            } else {
+               lappend slots_hosts($values(slots)) $host
+            }
+         }
+      }
+
+      # now do the actual modification with one qconf -mattr call per group
+      foreach slots [array names slots_hosts] {
+         mod_attr "exechost" "complex_values" "slots=$slots" $slots_hosts($slots) 0 $ts_config(master_host)
       }
 
       # optionally unset the backup array
