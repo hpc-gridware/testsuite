@@ -36,7 +36,7 @@
 
 proc kill_running_system {} {
    global ts_config
-   global CHECK_USER CORE_INSTALLED
+   global CHECK_USER CORE_INSTALLED CHECK_INSTALL_RC
    global check_use_installed_system
 
    set result [check_all_system_times]
@@ -69,6 +69,10 @@ proc kill_running_system {} {
                ts_log_severe "removing $key_dir failed:\n$output"
             }
          }
+      }
+
+      if {$CHECK_INSTALL_RC} {
+         remove_cluster_hosts_from_init_system
       }
    }
 }
