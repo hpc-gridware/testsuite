@@ -3622,11 +3622,11 @@ proc wait_for_queue_state {queue state wait_timeout} {
 #  SEE ALSO
 #     sge_procedures/shutdown_system_daemon()
 #*******************************************************************************
-proc soft_execd_shutdown {host_list {timeout 120}} {
-   return [shutdown_execd $host_list 1 $timeout]
+proc soft_execd_shutdown {host_list {timeout 120} {wait_for_unknown_load 1}} {
+   return [shutdown_execd $host_list 1 $timeout $wait_for_unknown_load]
 }
 
-proc shutdown_execd {host_list {soft 0} {timeout 120}} {
+proc shutdown_execd {host_list {soft 0} {timeout 120} {wait_for_unknown_load 1}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
    global CHECK_INSTALL_RC
@@ -3672,17 +3672,19 @@ proc shutdown_execd {host_list {soft 0} {timeout 120}} {
    }
 
    # check loads
-   foreach host $host_list {
-      set queue "*@$host"
-      set load [wait_for_unknown_load $timeout $queue 0]
-      if {$load == 0} {
-         ts_log_finer "execd on host $host reports 99.99 load value"
-         #execd might not be down yet, let's check!
-      } else {
-         set qhost_output [start_sge_bin "qhost" "-h $host"]
-         ts_log_severe "timeout while waiting for unknown load for host $host:\n$qhost_output"
-         break
-         return -1
+   if {$wait_for_unknown_load} {
+      foreach host $host_list {
+         set queue "*@$host"
+         set load [wait_for_unknown_load $timeout $queue 0]
+         if {$load == 0} {
+            ts_log_finer "execd on host $host reports 99.99 load value"
+            #execd might not be down yet, let's check!
+         } else {
+            set qhost_output [start_sge_bin "qhost" "-h $host"]
+            ts_log_severe "timeout while waiting for unknown load for host $host:\n$qhost_output"
+            break
+            return -1
+         }
       }
    }
 
