@@ -3894,6 +3894,8 @@ proc plain_gdr_parse { output_var } {
    set myenv(SGE_LONG_QNAMES) 50
    set plainoutput [start_sge_bin "qstat" "-g d -r" "" "" prg_exit_state 60 "" "bin" output_lines myenv]
 
+   puts "$plainoutput"
+
    # split plain output on each new line
    set plain_split [ split $plainoutput "\n" ]
    set inc 0

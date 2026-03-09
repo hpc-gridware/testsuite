@@ -120,6 +120,8 @@ proc test_issue132 {} {
    # TODO must be in the exact time
    set result [qhost_q_xml_parse xml]
    set result [qhost_q_parse plain job]
+   parray xml
+   parray plain
 
    # for each host test that the xml and plain outpus are the same
    for {set ind 0} {$ind < $job} {incr ind 1} {
@@ -400,10 +402,15 @@ proc test_issue132_F {} {
    qhost_xml_parse xml $params
    qhost_F_parse plain job $params
 
+   parray xml
+   parray plain
+
    # for each host test that the xml and plain outpus are the same
    for {set ind 0} {$ind < $job} {incr ind 1} {
-      if {[string compare [string trim $xml(host$ind,load_avg)] [string trim $plain(host$ind,load_avg)]] != 0} {
-         ts_log_severe "outputs do not match from plain and xml for load_avg."
+      set xml_value [string trim $xml(host$ind,load_avg)]
+      set plain_value [string trim $plain(host$ind,load_avg)]
+      if {[string compare $xml_value $plain_value] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for load_avg ($xml_value != $plain_value)."
          return
       }
       if {[string compare [string trim $xml(host$ind,arch_string)] [string trim $plain(host$ind,arch_string)]] != 0} {
@@ -430,8 +437,10 @@ proc test_issue132_F {} {
          ts_log_severe "outputs do not match from plain and xml for mem_total."
          return
       }
-      if {[string compare [string trim $xml(host$ind,mem_used)] [string trim $plain(host$ind,mem_used)]] != 0} {
-         ts_log_severe "outputs do not match from plain and xml for mem_used."
+      set xml_mem_used [string trim $xml(host$ind,mem_used)]
+      set plain_mem_used [string trim $plain(host$ind,mem_used)]
+      if {[string compare $xml_mem_used $plain_mem_used] != 0} {
+         ts_log_severe "outputs do not match from plain and xml for mem_used ($xml_mem_used != $plain_mem_used)."
          return
       }
       if {[string compare [string trim $xml(host$ind,swap_total)] [string trim $plain(host$ind,swap_total)]] != 0} {
@@ -479,8 +488,10 @@ proc test_issue132_F {} {
             ts_log_severe "outputs do not match from plain and xml for virtual_free."
             return
          }
-         if {[string compare [string trim $xml(host$ind,mem_used)] [string trim $plain(host$ind,mem_used)]] != 0} {
-            ts_log_severe "outputs do not match from plain and xml for mem_used."
+         set xml_mem_used [string trim $xml(host$ind,mem_used)]
+         set plain_mem_used [string trim $plain(host$ind,mem_used)]
+         if {[string compare $xml_mem_used $plain_mem_used] != 0} {
+            ts_log_severe "outputs do not match from plain and xml for mem_used ($xml_mem_used != $plain_mem_used)."
             return
          }
          if {[string compare [string trim $xml(host$ind,swap_used)] [string trim $plain(host$ind,swap_used)]] != 0} {

@@ -1665,6 +1665,8 @@ proc qhost_u_xml_parse { output_var {params ""} } {
    # capture xml output
    set xmloutput [start_sge_bin "qhost" "$params -xml"]
 
+   puts "qhost_u_xml_parse\n$xmloutput\n"
+
    set doc [dom parse $xmloutput]
    set root [$doc documentElement]
 
@@ -1781,6 +1783,8 @@ proc qstat_gdr_xml_parse { output } {
    }
 
    set xmloutput [start_sge_bin "qstat" "-g d -r -xml"]
+
+   puts "$xmloutput"
 
    set doc [dom parse $xmloutput]
    set root [$doc documentElement]

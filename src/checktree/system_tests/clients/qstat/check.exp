@@ -59,8 +59,6 @@ lappend check_functions "qstat_option_q"
 lappend check_functions "qstat_option_pe"
 lappend check_functions "qstat_option_U"
 lappend check_functions "qstat_option_s"
-lappend check_functions "qstat_tasks"
-#lappend check_functions "qstat_j_xml"
 lappend check_functions "qstat_plain_xml_comparison"  ;# Compare the two qstatcommands
 lappend check_functions "qstat_ne_plain_xml_comparison"  ;# Compare the two qstat -ne commands
 lappend check_functions "qstat_f_qs_plain_xml_comparison"  ;# Compare the two qstat -f -qs E commands
@@ -93,6 +91,8 @@ lappend check_functions "qstat_U_valid_plain_xml_comparison" ;# Compare the two 
 #lappend check_functions "qstat_g_d_plain_xml_comparison" ;# Compare the two qstat -g d commands
 #lappend check_functions "qstat_g_t_plain_xml_comparison" ;# Compare the two qstat -g t commands
 #lappend check_functions "qstat_s_a_plain_xml_comparison" ;# Compare the two qstat -s a commands
+#lappend check_functions "qstat_j_xml"
+#lappend check_functions "qstat_tasks"
 
 proc qstat_setup {} {
    global ts_config CHECK_HAVE_TDOM
@@ -337,6 +337,11 @@ proc qstat_help {} {
    # in GCS 9.0.0 the -sdv switch was added
    if {[is_version_in_range "9.0.2"] && [ge_has_feature "gcs"]} {
       set qstat_help_lines 43
+   }
+
+   # in GCS 9.2.0 the -sdv switch was removed
+   if {[is_version_in_range "9.2.0"] && [ge_has_feature "gcs"]} {
+      set qstat_help_lines 42
    }
 
    delete_all_jobs
@@ -3512,6 +3517,9 @@ proc qstat_tasks {} {
    set result1 [qstat_gdr_xml_parse xml]
    set result1 [plain_gdr_parse plain]
 
+   parray xml
+   parray plain
+
    set var_array {jobNumber prio name owner state queue slots tasks fullName}
 
    # for each job test that the xml and plain outputs are the same
@@ -3545,11 +3553,13 @@ proc qstat_tasks {} {
    # capture plain output
    set res1 [plain_r_parse plain]
 
+   parray xml
+   parray plain
+
    set var_array1 {prior name owner state queue slots hard_resource soft_resource}
    # compare xml and plain arrays to ensure  all attributes match
    foreach elem $var_array1 {
-      if {[string compare [string trim $xml($job_id,$elem)] \
-         [string trim $plain($elem)]] != 0} {
+      if {[string compare [string trim $xml($job_id,$elem)] [string trim $plain($elem)]] != 0} {
          ts_log_fine "xml = [string trim $xml($job_id,$elem)] , plain = [string trim $plain($elem)]"
          ts_log_severe "outputs do not match from plain and xml for $elem.\nxml output: [string trim $xml($elem)]\nplain output: [string trim $plain($elem)]"
          return
