@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2024-2025 HPC-Gridware GmbH
+#  Copyright 2024-2026 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -60,11 +60,18 @@ proc bootstrap_file_read {{array_var "bootstrap"}} {
 # @param array_var the name of the array containing the bootstrap values
 # @param remove_additional optional, if set (1) will remove entries from the bootstrap file which
 #                          are not mentioned in the new bootstrap array
+# @param write_host optional, if set then the bootstrap file will be written on this host
 # @return 1 if the file was written successfully, 0 otherwise
 ##
-proc bootstrap_file_write {{array_var "bootstrap"} {remove_additional 0}} {
+proc bootstrap_file_write {{array_var "bootstrap"} {remove_additional 0} {write_host ""}} {
    get_current_cluster_config_array ts_config
+   global CHECK_USER
+
    upvar $array_var new_bootstrap
+
+   if {$write_host eq ""} {
+      set write_host $ts_config(master_host)
+   }
 
    set ret 0
    set bootstrap_file "$ts_config(product_root)/$ts_config(cell)/common/bootstrap"
@@ -111,8 +118,9 @@ proc bootstrap_file_write {{array_var "bootstrap"} {remove_additional 0}} {
          set restore_permissions 1
          file attributes $bootstrap_file -permissions 0644
       }
-      save_file $bootstrap_file data
-      set ret 1 ;# save_file doesn't return anything, let's assume it worked
+      if {[write_remote_file $write_host $CHECK_USER $bootstrap_file data] != 0} {
+         set ret 0
+      }
 
       # restore the permissions
       if {$restore_permissions} {
