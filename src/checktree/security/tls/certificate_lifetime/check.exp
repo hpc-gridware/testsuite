@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2025 HPC-Gridware GmbH
+#  Copyright 2025-2026 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -106,14 +106,16 @@ proc cert_lifetime_check_certificate {hostname cert_path expected_lifetime {not_
       }
       if {$not_before != 0} {
          if {$cert_info(not_before_epoch) < $not_before} {
-            set msg "expected certificate not_before time to be >= $not_before, got $cert_info(not_before) ($cert_info(not_before_epoch))"
+            set msg "expected certificate not_before time to be >= [clock format $not_before] ($not_before)\n"
+            append msg "got                                           $cert_info(not_before) ($cert_info(not_before_epoch))"
             lappend errors $msg
             set ok 0
          }
       }
       if {$not_after != 0} {
          if {$cert_info(not_before_epoch) > $not_after} {
-            set msg "expected certificate not_before time to be <= $not_after, got $cert_info(not_before) ($cert_info(not_before_epoch))"
+            set msg "expected certificate not_before time to be <= [clock format $not_after] ($not_after)\n"
+            append msg "got                                           $cert_info(not_before) ($cert_info(not_before_epoch))"
             lappend errors $msg
             set ok 0
          }
@@ -279,7 +281,7 @@ proc cert_renew_qmaster {} {
       # set short lifetime in bootstrap file
       set lifetime 120
       set bs(security_params) "certificate_lifetime=$lifetime"
-      bootstrap_file_write bs
+      bootstrap_file_write bs 0 $ts_config(master_host)
 
       # start qmaster and expect execds to reconnect to the qmaster using a new certificate
       startup_qmaster
@@ -332,8 +334,8 @@ proc cert_renew_qmaster {} {
    if {$ok} {
       ts_log_fine "TEST 4: check if certificates are generated with the default lifetime after removing the short lifetime setting"
       # shutdown qmaster
-      set qmaster_shutdown_time [clock seconds]
       shutdown_qmaster
+      set qmaster_shutdown_time [clock seconds]
 
       # delete certificates
       delete_remote_file $ts_config(master_host) $CHECK_USER $cert_path
@@ -341,7 +343,7 @@ proc cert_renew_qmaster {} {
 
       # remove short lifetime in bootstrap file
       set bs(security_params) ""
-      bootstrap_file_write bs
+      bootstrap_file_write bs 0 $ts_config(master_host)
 
       # start qmaster and expect execds to reconnect to the qmaster using a new certificate
       startup_qmaster
@@ -413,9 +415,9 @@ proc cert_renew_execd {} {
 
    if {$ok} {
       ts_log_fine "TEST 2: check if certificates are generated with a short lifetime"
-      # shutdown execd
+      # shutdown execd - no need to wait for unknown load
+      shutdown_execd $execd_host 0 120 0
       set shutdown_time [clock seconds]
-      shutdown_execd $execd_host
 
       # delete certificates
       delete_remote_file $execd_host $CHECK_USER $cert_path
@@ -424,7 +426,7 @@ proc cert_renew_execd {} {
       # set short lifetime in bootstrap file
       set lifetime 120
       set bs(security_params) "certificate_lifetime=$lifetime"
-      bootstrap_file_write bs
+      bootstrap_file_write bs 0 $execd_host
 
       # start execd and expect it to reconnect to the qmaster
       set startup_time [clock seconds]
@@ -459,13 +461,13 @@ proc cert_renew_execd {} {
 
    # remove short lifetime in bootstrap file
    set bs(security_params) ""
-   bootstrap_file_write bs
+   bootstrap_file_write bs 0 $execd_host
 
    if {$ok} {
       ts_log_fine "TEST 4: check if certificates are generated with the default lifetime after removing the short lifetime setting"
       # shutdown execd
+      shutdown_execd $execd_host 0 120 0
       set shutdown_time [clock seconds]
-      shutdown_execd $execd_host
 
       # delete certificates
       delete_remote_file $execd_host $CHECK_USER $cert_path
@@ -498,7 +500,7 @@ proc cert_start_offset {} {
    set ok 1
    if {$ok} {
       # shutdown the execd
-      shutdown_execd $execd_host
+      shutdown_execd $execd_host 0 120 0
 
       # delete certificates
       delete_remote_file $execd_host $CHECK_USER $cert_path
@@ -506,7 +508,7 @@ proc cert_start_offset {} {
 
       # set a high start_offset
       set bs(security_params) "certificate_start_offset=-300"
-      bootstrap_file_write bs
+      bootstrap_file_write bs 0 $execd_host
 
       # start execd
       set start_time [clock seconds]
@@ -520,8 +522,8 @@ proc cert_start_offset {} {
 
    # reset to defaults, delete certificates, restart the execd
    set bs(security_params) ""
-   bootstrap_file_write bs
-   shutdown_execd $execd_host
+   bootstrap_file_write bs 0 $execd_host
+   shutdown_execd $execd_host 0 120 0
    delete_remote_file $execd_host $CHECK_USER $cert_path
    delete_remote_file $execd_host "root" $key_path
    startup_execd $execd_host
