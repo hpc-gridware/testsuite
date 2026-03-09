@@ -34,7 +34,7 @@
 
 global ts_host_config               ;# new testsuite host configuration array
 global actual_ts_host_config_version      ;# actual host config version number
-set    actual_ts_host_config_version "1.17"
+set    actual_ts_host_config_version "1.18"
 
 if {![info exists ts_host_config]} {
    # ts_host_config defaults
@@ -1739,6 +1739,30 @@ proc update_ts_host_config_version { filename } {
       }
 
       set ts_host_config(version) "1.17"
+
+      show_config ts_host_config
+      wait_for_enter
+      if {[save_host_configuration $filename] != 0} {
+         puts "Could not save host configuration"
+         wait_for_enter
+         return
+      }
+      return 0
+   }
+
+   if {[string compare $ts_host_config(version)  "1.17"] == 0} {
+      puts "\ntestsuite host configuration update from 1.17 to 1.18 ..."
+
+      # introduce new version 91
+      foreach host $ts_host_config(hostlist) {
+         puts $host
+         set ts_host_config($host,arch,92) $ts_host_config($host,arch,91)
+         set ts_host_config($host,compile,92) $ts_host_config($host,compile,91)
+         set ts_host_config($host,java_compile,92) $ts_host_config($host,java_compile,91)
+         set ts_host_config($host,doc_compile,92) $ts_host_config($host,doc_compile,91)
+      }
+
+      set ts_host_config(version) "1.18"
 
       show_config ts_host_config
       wait_for_enter

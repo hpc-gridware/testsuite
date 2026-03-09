@@ -3957,6 +3957,7 @@ proc config_testsuite_gridengine_version { only_check name config_array } {
       80 "UGE 8.0.* systems"
       90 "GCS/OCS 9.0.* systems"
       91 "GCS/OCS 9.1.* systems"
+      92 "GCS/OCS 9.2.* systems"
    }
 
    return [config_generic $only_check $name config "" "choice" 0 1 version_list]
