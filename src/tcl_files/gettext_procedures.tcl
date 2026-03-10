@@ -29,7 +29,7 @@
 #
 #  Portions of this software are Copyright (c) 2011 Univa Corporation
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -586,6 +586,9 @@ proc update_macro_messages_list {} {
            set line [replace_string $line " SFQ " "\"\\\"%-.100s\\\"\""]
            set line [replace_string $line " SFQ" "\"\\\"%-.100s\\\"\""]
            set line [replace_string $line "SFQ " "\"\\\"%-.100s\\\"\""]
+           set line [replace_string $line " SFNMAX " "\"%-.2047s\""]
+           set line [replace_string $line " SFNMAX" "\"%-.2047s\""]
+           set line [replace_string $line "SFNMAX " "\"%-.2047s\""]
            set line [replace_string $line " SFN2 " "\"%-.200s\""]
            set line [replace_string $line " SFN2" "\"%-.200s\""]
            set line [replace_string $line "SFN2 " "\"%-.200s\""]
