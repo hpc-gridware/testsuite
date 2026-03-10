@@ -1282,15 +1282,29 @@ proc run_throughput_test {} {
                "QSTAT DATA*" {
                   set index $qstat_data(count)
                   set qstat_data($index,time) [lindex $line, 2]
-                  set qstat_data($index,duration) [lindex $line 3]
-                  set qstat_data($index,error) 0
+                  # store the durations of successful qstats
+                  set durations [lrange $line 3 end]
+                  set qstat_data($index,durations) $durations
+                  # store the total number of qstats
+                  incr qstat_data(total_qstats) [llength $durations]
+                  # if not yet done clear the error durations
+                  if {![info exists qstat_data($index,errors)]} {
+                     set qstat_data($index,errors) {}
+                  }
                   incr qstat_data(count)
                }
                "QSTAT ERROR*" {
                   set index $qstat_data(count)
                   set qstat_data($index,time) [lindex $line, 2]
-                  set qstat_data($index,duration) [lindex $line 3]
-                  set qstat_data($index,error) 1
+                  # store the durations of failed qstats
+                  set durations [lrange $line 3 end]
+                  set qstat_data($index,errors) $durations
+                  # update the total number of errors
+                  incr qstat_data(total_errors) [llength $durations]
+                  # if not yet done clear the successful durations
+                  if {![info exists qstat_data($index,durations)]} {
+                     set qstat_data($index,durations) {}
+                  }
                   incr qstat_data(count)
                }
                "messages in read buffer:*" {
@@ -1428,6 +1442,10 @@ proc run_throughput_test {} {
                continue
             }
 
+            # @todo Count the number of parsed lines and output with the other statistics?
+            #       Might give an impression of what goes on.
+            #       Store them in an array per type of message, output after all jobs finished.
+
             switch -glob -- $line {
                "SUBMIT OK*" {
                   # we can submit again
@@ -1494,15 +1512,29 @@ proc run_throughput_test {} {
                "QSTAT DATA*" {
                   set index $qstat_data(count)
                   set qstat_data($index,time) [lindex $line, 2]
-                  set qstat_data($index,duration) [lindex $line 3]
-                  set qstat_data($index,error) 0
+                  # store the durations of successful qstats
+                  set durations [lrange $line 3 end]
+                  set qstat_data($index,durations) $durations
+                  # store the total number of qstats
+                  incr qstat_data(total_qstats) [llength $durations]
+                  # if not yet done clear the error durations
+                  if {![info exists qstat_data($index,errors)]} {
+                     set qstat_data($index,errors) {}
+                  }
                   incr qstat_data(count)
                }
                "QSTAT ERROR*" {
                   set index $qstat_data(count)
                   set qstat_data($index,time) [lindex $line, 2]
-                  set qstat_data($index,duration) [lindex $line 3]
-                  set qstat_data($index,error) 1
+                  # store the durations of failed qstats
+                  set durations [lrange $line 3 end]
+                  set qstat_data($index,errors) $durations
+                  # update the total number of errors
+                  incr qstat_data(total_errors) [llength $durations]
+                  # if not yet done clear the successful durations
+                  if {![info exists qstat_data($index,durations)]} {
+                     set qstat_data($index,durations) {}
+                  }
                   incr qstat_data(count)
                }
                "messages in read buffer:*" {
@@ -3445,13 +3477,14 @@ proc calculate_qstat_xy_rows { results_array_name row_array_name test_start star
    for {set i 0} {$i < $qstat_data(count)} {incr i} {
       if { $qstat_data($i,time) >= $test_start } {
          set normalized_time [expr $qstat_data($i,time) - $test_start ]
-         if {$qstat_data($i,error)} {
+         foreach item $qstat_data($i,errors) {
             set xy_rows($pos2,$failed,x) $normalized_time
-            set xy_rows($pos2,$failed,y) $qstat_data($i,duration)
+            set xy_rows($pos2,$failed,y) $item
             incr failed
-         } else {
+         }
+         foreach item $qstat_data($i,durations) {
             set xy_rows($pos1,$succeeded,x) $normalized_time
-            set xy_rows($pos1,$succeeded,y) $qstat_data($i,duration)
+            set xy_rows($pos1,$succeeded,y) $item
             incr succeeded
          }
       }
@@ -3963,8 +3996,10 @@ proc calculate_average_cluster_times { results_array monitoring_array qstat_arra
    # jobs per second is the cluster throughput while queues were enabled
    if { $result(total_qenabled_time) > 0 } {
       set result(jobs_per_second) [ expr ( $result(total_jobs_done).00 / $result(total_qenabled_time) ) ]
-      set result(qstats_per_second) [ expr ( $qstat_data(count) / $result(total_run_time) ) ]
    }
+
+   # qstats per second
+   set result(qstats_per_second) [expr $qstat_data(total_qstats) / $result(total_run_time)]
 
    set result(utilization) [ expr 100.0 * (double($result(total_slots)) - $result(avg_slots_free)) / double($result(total_slots)) ]
    ts_log_fine "total_slots    = $result(total_slots)"
@@ -3999,18 +4034,19 @@ proc calculate_average_cluster_times { results_array monitoring_array qstat_arra
    }
 
    # calculate qstat data
-   set result(qstat_total) $qstat_data(count)
+   set result(qstat_total) 0
+   set result(avg_qstat_time) 0
    set count 0
    set sum_qstat_time 0.0
    for {set i 0} {$i < $qstat_data(count)} {incr i} {
-      if { $qstat_data($i,error) } {
-         incr result(qstat_errors)
-      } else {
+      incr result(qstat_errors) [llength $qstat_data($i,errors)]
+      foreach item $qstat_data($i,durations) {
          incr count
-         set sum_qstat_time [expr $sum_qstat_time + $qstat_data($i,duration)]
+         set sum_qstat_time [expr $sum_qstat_time + $item]
       }
    }
    if {$count > 0} {
+      set result(qstat_total) $count
       set result(avg_qstat_time) [expr $sum_qstat_time / double($count)]
    }
 
@@ -4206,7 +4242,7 @@ proc show_and_check_current_system_status {start_time array_name schedd_array_na
    puts "testsuite size   : $monitoring(testsuite,$monitoring(testsuite,count),size)"
    puts "testsuite cpu    : $monitoring(testsuite,$monitoring(testsuite,count),cpu)"
    if {$qstat_interval > 0} {
-      puts "qstat count      : $qstat_data(count)"
+      puts "qstat count      : $qstat_data(total_qstats)"
    }
    puts ""
    flush stdout
@@ -4242,6 +4278,7 @@ proc clean_current_system_status { results_array array_name job_array_name sched
    set result_names "jobs_done jobs_submitted jobs_running jobs_pending total_slots free_slots queues_enabled test_run_time job_run_time"
 
    # clean result array
+   unset -nocomplain data
    set data(jobs_done) 0
    set data(jobs_pending) 0
    set data(jobs_running) 0
@@ -4251,23 +4288,19 @@ proc clean_current_system_status { results_array array_name job_array_name sched
    set data(job_run_time) $global_job_run_time
    set data(test_run_time) 0
 
-   if {[info exists jobs]} {
-      unset jobs
-   }
-   if {[info exists results]} {
-      unset results
-   }
-   if {[info exists schedd]} {
-      unset schedd
-   }
+   unset -nocomplain jobs
+
+   unset -nocomplain results
+   set results(count) 0
+
+   unset -nocomplain schedd
+   set schedd(count) 0
    set schedd(0,system_time) 0
    set schedd(0,schedd_time) 0
    set schedd(0,schedd_orders) 0
    set schedd(0,schedd_total_time) 0
 
-   set schedd(count) 0
-   set results(count) 0
-
+   unset -nocomplain monitor
    set monitor(qmaster,count) 0
    set monitor(qmaster,0,time) 0
    set monitor(qmaster,0,size) 0
@@ -4278,8 +4311,15 @@ proc clean_current_system_status { results_array array_name job_array_name sched
    set monitor(testsuite,0,size) 0
    set monitor(testsuite,0,cpu) 0
 
+   unset -nocomplain qstat_data
    set qstat_data(count) 0
+   set qstat_data(total_qstats) 0
+   set qstat_data(total_errors) 0
+
+   unset -nocomplain qping_data
    set qping_data(count) 0
+
+   unset -nocomplain event_data
    set event_data(count) 0
 }
 
