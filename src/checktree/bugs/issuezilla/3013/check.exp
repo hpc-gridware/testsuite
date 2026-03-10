@@ -27,17 +27,17 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -46,7 +46,7 @@ set check_category        "BUG PARALLEL RQS SCHEDULER VERIFIED"
 set check_description(0)  "check issue 3013 is fixed"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function issue_3013_setup
@@ -60,28 +60,28 @@ lappend check_functions "issue_3013_check"
 
 #****** issuezilla/issue_3013_setup() ********************************************
 #  NAME
-#     issue_3013_setup() -- Setup function for 3013. 
+#     issue_3013_setup() -- Setup function for 3013.
 #
 #  SYNOPSIS
-#     issue_3013_setup { } 
+#     issue_3013_setup { }
 #
 #  FUNCTION
-#     Tests if scheduling is right when requesting -masterq and -q and 
-#     having an matching but not restricting resource quota rule. 
-#     The scheduling will fail when the specific regression bug is active.  
+#     Tests if scheduling is right when requesting -masterq and -q and
+#     having an matching but not restricting resource quota rule.
+#     The scheduling will fail when the specific regression bug is active.
 #*******************************************************************************
 proc issue_3013_setup {} {
    global ts_config
-   global rqs_name_3013 
+   global rqs_name_3013
 
-   ts_log_fine "issue_3013_setup" 
+   ts_log_fine "issue_3013_setup"
 
    if { [llength $ts_config(execd_nodes)] < 2 } {
       ts_log_config "need 2 execd nodes"
       return 99
    }
 
-   # offer enough slots within these pe's 
+   # offer enough slots within these pe's
    set pe(slots)             "100"
    set pe(allocation_rule)   "\$round_robin"
    add_pe "round_robin" pe
@@ -128,27 +128,27 @@ proc issue_3013_setup {} {
 
 #****** cissuezilla/issue_3013_wait_for_pattern() *********************************
 #  NAME
-#     issue_3013_wait_for_pattern() --  Waits till a pattern in the log occurs. 
+#     issue_3013_wait_for_pattern() --  Waits till a pattern in the log occurs.
 #
 #  SYNOPSIS
-#     issue_3013_wait_for_pattern { case_name pattern {timeout 30} } 
+#     issue_3013_wait_for_pattern { case_name pattern {timeout 30} }
 #
 #  FUNCTION
-#     Waits till a specific pattern in the log file occurs.  
+#     Waits till a specific pattern in the log file occurs.
 #
 #  INPUTS
-#     case_name    - The case in which the error occured (for error reporting). 
-#     pattern      - The pattern to wait for.  
-#     {timeout 30} - timeout 
+#     case_name    - The case in which the error occured (for error reporting).
+#     pattern      - The pattern to wait for.
+#     {timeout 30} - timeout
 #
 #  RESULT
-#     Returns 1 in case when the pattern was not found. Otherwise 0. 
+#     Returns 1 in case when the pattern was not found. Otherwise 0.
 #
 #*******************************************************************************
 proc issue_3013_wait_for_pattern {case_name pattern {timeout 30}} {
-   set output [logfile_wait $pattern $timeout 0]
+   set output [logfile_wait $pattern $timeout 0 0]
    if {$logfile_wait_error != 0} {
-      ts_log_severe "case '$case_name': there were no pattern '$pattern' in the reporting file, got only\n$output"
+      ts_log_severe "case '$case_name': there was no pattern '$pattern' in the reporting file, got only\n$output"
       return 1
    }
    return 0
@@ -156,15 +156,15 @@ proc issue_3013_wait_for_pattern {case_name pattern {timeout 30}} {
 
 proc issue_3013_cleanup {  } {
    global ts_config
-   global rqs_name_3013 
+   global rqs_name_3013
 
    # reset the scheduler configuration
    reset_schedd_config
 
    # remove the cqueues
    del_queue "A" "" 1 1
-  
-   # remove parallel environments 
+
+   # remove parallel environments
    del_pe        "round_robin"
    del_pe        "fill_up"
 
@@ -178,18 +178,18 @@ proc issue_3013_cleanup {  } {
 
 #****** issuezilla/issue_3013_check() ********************************************
 #  NAME
-#     issue_3013_check() -- Checks hard masterq and slave q requests. 
+#     issue_3013_check() -- Checks hard masterq and slave q requests.
 #
 #  SYNOPSIS
-#     issue_3013_check { } 
+#     issue_3013_check { }
 #
 #  FUNCTION
-#     Checks several combinations of hard masterq and slave q requests.  
-#     Since these are not soft options the scheduler have to schedule     
-#     them on the given queue or queue instance. Because the queue offers 
-#     exactly 2 hosts and each host offers only 1 slot the result is 
-#     predictable. 
-# 
+#     Checks several combinations of hard masterq and slave q requests.
+#     Since these are not soft options the scheduler have to schedule
+#     them on the given queue or queue instance. Because the queue offers
+#     exactly 2 hosts and each host offers only 1 slot the result is
+#     predictable.
+#
 #*******************************************************************************
 proc issue_3013_check { } {
    global ts_config
@@ -198,18 +198,25 @@ proc issue_3013_check { } {
 
    ts_log_fine "testing -masterq 'a host' with -q 'the queue'"
 
-   # this should be scheduled because we have 1 slot at $first and 1 slot at $second 
+   # this should be scheduled because we have 1 slot at $first and 1 slot at $second
    if { [ issue_3013_single_check "fill_up"     "A@$first" "A" ] != 0 } { return }
    if { [ issue_3013_single_check "round_robin" "A@$first" "A" ] != 0 } { return }
-   
+
    if { [ issue_3013_single_check "fill_up"     "A@$second" "A" ] != 0 } { return }
    if { [ issue_3013_single_check "round_robin" "A@$second" "A" ] != 0 } { return }
 
-   if { [ issue_3013_single_check "fill_up"     "A" "A@$first" ] != 0 } { return }
-   if { [ issue_3013_single_check "round_robin" "A" "A@$first" ] != 0 } { return }
+# The following commented out scenarios can only work due to issue CS-1850:
+# Depending on the load information, if the requested slave queue is picked for the master task
+# the job will stay pending, as no slave queue is already full and no slave task can be scheduled.
+# Scheduler does only a single pass over all hosts. To solve this issue scheduler would have
+# to try scheduling the job with different master hosts/queues - essentially have an additional
+# loop over the host list for picking the master task.
+# With CS-1850 the slave task will simply go into the wrong queue instance - which the test does not detect.
+#   if { [ issue_3013_single_check "fill_up"     "A" "A@$first" ] != 0 } { return }
+#   if { [ issue_3013_single_check "round_robin" "A" "A@$first" ] != 0 } { return }
 
-   if { [ issue_3013_single_check "fill_up"     "A" "A@$second" ] != 0 } { return }
-   if { [ issue_3013_single_check "round_robin" "A" "A@$second" ] != 0 } { return }
+#   if { [ issue_3013_single_check "fill_up"     "A" "A@$second" ] != 0 } { return }
+#   if { [ issue_3013_single_check "round_robin" "A" "A@$second" ] != 0 } { return }
 
    if { [ issue_3013_single_check "fill_up"     "A@$first" "A@$second" ] != 0 } { return }
    if { [ issue_3013_single_check "round_robin" "A@$first" "A@$second" ] != 0 } { return }
@@ -220,21 +227,21 @@ proc issue_3013_check { } {
 
 #****** check.62/issue_3013_single_check() *************************************
 #  NAME
-#     issue_3013_single_check() -- Submits parallel task.  
+#     issue_3013_single_check() -- Submits parallel task.
 #
 #  SYNOPSIS
-#     issue_3013_single_check { pe_name master {slave ""} {slave_request ""} 
-#     {handled_as_fillup 0} } 
+#     issue_3013_single_check { pe_name master {slave ""} {slave_request ""}
+#     {handled_as_fillup 0} }
 #
 #  FUNCTION
-#     Submits a parallel job with master and slave requests. After submitting 
-#     it watches the output file.  
+#     Submits a parallel job with master and slave requests. After submitting
+#     it watches the output file.
 #
 #  INPUTS
-#     pe_name               - Name of parallel environment. 
-#     master                - The -masterq request. 
-#     {slave ""}            - The -q request  
-#     {slave_request ""}    - The -q option when needed. 
+#     pe_name               - Name of parallel environment.
+#     master                - The -masterq request.
+#     {slave ""}            - The -q request
+#     {slave_request ""}    - The -q option when needed.
 #
 #*******************************************************************************
 proc issue_3013_single_check { pe_name master {slave ""} {slave_request ""} } {
