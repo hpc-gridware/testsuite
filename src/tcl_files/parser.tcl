@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -994,7 +994,7 @@ proc transform_cpu {s_cpu {with_fractional 0}} {
 #  SEE ALSO
 #     ???/???
 #*******************************
-proc transform_date_time {value {xml 0}} {
+proc transform_date_time {value {xml 0} {raise_error 1}} {
    set ret ""
 
    # we parse both time stamps in the format 03/08/2007 16:45:02, and
@@ -1004,6 +1004,14 @@ proc transform_date_time {value {xml 0}} {
    if {[is_version_in_range "9.0.0"]} {
       set value [lindex [split $value "."] 0]
    }
+
+   # workaround for CS-1858: M(¶N\;-02026-03-11 13:32:02.384812
+   set len [string length $value]
+   if {$len > 19} {
+      set value [string range $value end-18 end]
+      ts_log_info "corrected garbled timestamp to \"$value\""
+   }
+
    if {$xml} {
       set value [join [split [string trim $value] "T"] " "]
    }
@@ -1012,7 +1020,7 @@ proc transform_date_time {value {xml 0}} {
       if {$catch_ret == 0} {
          set ret $output
       } else {
-         ts_log_severe "error parsing date/time string $value"
+         ts_log_severe "error parsing date/time string $value" $raise_error
       }
    }
 

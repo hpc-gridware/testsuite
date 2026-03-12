@@ -1714,7 +1714,7 @@ proc run_throughput_test {} {
       close_spawn_process $elem
    }
 
-   # close qevent and tail to schedd messages file
+   # close qevent
    close_spawn_process $event_client_sid
 
    # cleanup jobs (there shouldn't be any left)
@@ -1845,10 +1845,23 @@ proc fill_sched_from_messages {start_time end_time schedd_data_name} {
    get_file_content $qmaster_host $CHECK_USER $messages_file file_content
    set nr_of_lines $file_content(0)
    for {set i 1} {$i <= $nr_of_lines} {incr i 1} {
-      set line $file_content($i)
+      set line [string trim $file_content($i)]
+
+      if {[string length $line] == 0} {
+         ts_log_fine "empty line in qmaster messages file line"
+         continue
+      }
 
       set tokens [split $line "|"]
-      set time_stamp [transform_date_time [lindex $tokens 0]]
+      if {[llength $tokens] < 5} {
+         ts_log_info "expected at least 5 tokens in qmaster messages file line but got:\n$line"
+         continue
+      }
+
+      set time_stamp [transform_date_time [lindex $tokens 0] 0 0]
+      if {$time_stamp eq ""} {
+         continue
+      }
       if {$time_stamp < $start_time} {
          continue
       } elseif {$time_stamp > $end_time} {
@@ -3810,7 +3823,8 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
    #          - <scenario>      directory containing the per scenario report
 
    # get version and replace spaces with underscores (as we use it in directory names)
-   set version [string map {" " "_"} [get_version_info]]
+   # also remove parentheses, as they are used in some version strings and cause problems in directory names
+   set version [string map {" " "_" "(" "" ")" ""} [get_version_info]]
    # get the enabled product features and join them with "-"
    set features [join $ts_config(product_feature) "-"]
    # build the output directory name
@@ -3865,7 +3879,7 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
    # we don't want to keep the backup file - these files are huge!
    catch { file delete ${prot_output_file}.old }
 
-   # save qmaster and scheduler messages files in report directory
+   # save qmaster messages files in report directory
    set results_dir $prot_output_file
    if {[file extension $results_dir] == ".tsd"} {
       set results_dir [file rootname $results_dir]
