@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -66,7 +66,8 @@ proc submitter_submit_job { num_jobs add_opts } {
             set split_job_id [split $job_id "."]
             set job_id [lindex $split_job_id 0]
          }
-         puts "SUBMIT OK $job_id [expr $end_time - $start_time] $start_clock $end_clock"
+         #puts "SUBMIT OK $job_id [expr $end_time - $start_time] $start_clock $end_clock"
+         puts "SUBMIT OK $job_id [expr $end_time - $start_time] $start_clock"
       } else {
          puts "SUBMIT FAILED $output"
       }
