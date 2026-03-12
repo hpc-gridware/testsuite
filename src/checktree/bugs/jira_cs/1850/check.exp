@@ -1,0 +1,148 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+#global check_version_range
+
+#set check_version_range "9.0.12 9.1.1 9.2.0"
+
+# define test's name and run level descriptions
+set check_name            "issue_1850"
+set check_category        "BUG PARALLEL SCHEDULER VERIFIED"
+set check_description(0)  "check issue 1850 is fixed"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function issue_1850_setup
+set check_cleanup_function issue_1850_cleanup
+
+# define test's procedure order
+set check_functions ""
+lappend check_functions "issue_1850_check"
+
+proc issue_1850_setup {} {
+   get_current_cluster_config_array ts_config
+
+   ts_log_fine "issue_1850_setup"
+
+   if { [llength $ts_config(execd_nodes)] < 2 } {
+      ts_log_config "need 2 execd nodes"
+      return 99
+   }
+
+   # offer enough slots within these pe's
+   set pe(slots)             "100"
+   set pe(allocation_rule)   "\$round_robin"
+   add_pe "round_robin" pe
+
+   set pe(slots)             "100"
+   set pe(allocation_rule)   "\$fill_up"
+   add_pe "fill_up" pe
+
+   set first [lindex $ts_config(execd_nodes) 0]
+   set second [lindex $ts_config(execd_nodes) 1]
+
+   # setup queues A and B each with one slot on a single host
+   set queue_conf(slots)            "1"
+   set queue_conf(pe_list)          "round_robin fill_up"
+   set queue_conf(load_thresholds)  "NONE"
+   add_queue "A" "$first $second" queue_conf 1
+}
+
+
+proc issue_1850_cleanup {  } {
+   get_current_cluster_config_array ts_config
+
+   # remove the cqueues
+   del_queue "A" "" 1 1
+
+   # remove parallel environments
+   del_pe "round_robin"
+   del_pe "fill_up"
+}
+
+proc issue_1850_check { } {
+   get_current_cluster_config_array ts_config
+   set first [lindex $ts_config(execd_nodes) 0]
+   set second [lindex $ts_config(execd_nodes) 1]
+
+   # Depending on the load information, if the requested slave queue is picked for the master task
+   # the job will stay pending, as no slave queue is already full and no slave task can be scheduled.
+   # Scheduler does only a single pass over all hosts. To solve this issue scheduler would have
+   # to try scheduling the job with different master hosts/queues - essentially have an additional
+   # loop over the host list for picking the master task.
+   # With CS-1850 present the slave task will simply go into the wrong queue instance.
+   # We verify that the job either stays pending or goes into the right queues.
+   if {![issue_1850_single_check "fill_up"     "A" "A@$first"] != 0} { return }
+   if {![issue_1850_single_check "round_robin" "A" "A@$first"] != 0} { return }
+
+   if {![issue_1850_single_check "fill_up"     "A" "A@$second"] != 0} { return }
+   if {![issue_1850_single_check "round_robin" "A" "A@$second"] != 0} { return }
+}
+
+proc issue_1850_single_check {pe_name master {slave ""} {slave_request ""}} {
+   get_current_cluster_config_array ts_config
+
+   ts_log_frame
+   set job_id [submit_job "-pe $pe_name 2 -scope master -q $master -scope slave -q $slave $ts_config(product_root)/examples/jobs/sleeper.sh 180"]
+   if {$job_id <= 0} {
+      return 0
+   }
+
+   set ret 1
+   # if the job starts, check if the slave task is running in the right queue instance
+   if {[wait_for_jobstart $job_id "" 10 0 1] == 0} {
+      set job_info [get_standard_job_info $job_id 1]
+      foreach line $job_info {
+         set qinstance [lindex $line 7]
+         if {[lindex $line 8] == "SLAVE"} {
+            # qinstance might have a long host name
+            if {[string first $slave $qinstance] >= 0} {
+               ts_log_fine "OK, SLAVE qinstance $qinstance matches request $slave"
+            } else {
+               ts_log_severe "SLAVE task went into wrong qinstance $qinstance, expected $slave"
+               set ret 0
+            }
+         } else {
+            if {[string first "A@" $qinstance] >= 0} {
+               ts_log_fine "OK, MASTER qinstance $qinstance matches request A"
+            } else {
+               ts_log_severe "MASTER task went into wrong qinstance $qinstance, expected A@*"
+               set ret 0
+            }
+         }
+      }
+   } else {
+      ts_log_fine "OK, job stayed pending"
+   }
+
+   delete_job $job_id 1
+
+   # all was OK
+   return $ret
+}
