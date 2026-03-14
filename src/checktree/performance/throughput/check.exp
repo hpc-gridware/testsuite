@@ -209,8 +209,6 @@ global throughput_max_consumable_per_job
 set throughput_max_consumable_per_job 3
 
 proc throughput_setup_sharetree {extended} {
-   get_current_cluster_config_array ts_config
-
    if {$extended == 1} {
       set nr_of_projects 500
    } else {
@@ -253,8 +251,6 @@ proc throughput_setup_sharetree {extended} {
 }
 
 proc throughput_cleanup_sharetree {extended} {
-   get_current_cluster_config_array ts_config
-
    ts_log_fine "cleanup sharetree ..."
 
    # reset scheduler config
@@ -284,8 +280,6 @@ proc throughput_cleanup_sharetree {extended} {
 }
 
 proc throughput_setup_functional_policy {} {
-   get_current_cluster_config_array ts_config
-
    ts_log_fine "setup functional policy ..."
 
    ts_log_fine "adding projects ..."
@@ -336,8 +330,6 @@ proc throughput_setup_consumables {} {
 }
 
 proc throughput_cleanup_functional_policy {} {
-   get_current_cluster_config_array ts_config
-
    # reset scheduler config
    reset_schedd_config
 
@@ -366,7 +358,6 @@ proc throughput_cleanup_consumables {} {
 }
 
 proc throughput_wait_for_fake_toplogy {} {
-   get_current_cluster_config_array ts_config
    global host_list
 
    set expected_topo_list {"NSXYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT" "XYCTTYCTTYCTTYCTTYCTTYCTTYCTTYCTT"
@@ -2197,7 +2188,7 @@ proc compare_dump_data_file { file1 file2 } {
    set table($test) "$test_config2(gridengine_version)"
 
    set test "Nr. of Execution daemons"
-   set table($test) [create_html_link [llength $execd_list1] "#Execd list"]
+   set table($test) "[llength $execd_list1]"
 
    set test "Master/Scheduler host"
    set table($test) "$qmaster1"
@@ -2447,18 +2438,6 @@ proc compare_dump_data_file { file1 file2 } {
    append content [ create_html_text "Appendix" 1]
    append content "<hr WIDTH=\"100%\">"
 
-   # host architecture list
-   append content [create_html_target "Execd list"]
-   append content [create_html_text "The test runs used the following execution hosts:"]
-   unset table
-   set table(Hostname) "Architecture"
-   foreach host $execd_list1 {
-      set table($host) [resolve_arch $host]
-   }
-   set tmp_file [get_tmp_file_name]
-   spool_array_to_file $tmp_file "table" table
-   append content [convert_spool_file_to_html $tmp_file $output_dir/index.html 1]
-
    generate_html_file $output_dir/index.html "$test_config1(gridengine_version) (A) from $test_config1(test_date)<br>file: $file1<br>vs<br>$test_config2(gridengine_version) (B) from $test_config2(test_date)<br>file: $file2" $content
 
    # generate chart files ------------------------------------------------
@@ -2675,10 +2654,6 @@ proc compare_dump_data_file { file1 file2 } {
 }
 
 proc analyse_dump_data_file {file {force 0}} {
-   get_current_cluster_config_array ts_config
-   global throughput_sharetree functional_policy qstat_interval array_size parallel_jobs reservation
-   global throughput_sharetree_ext
-
    if {[file extension $file] == ".tsd"} {
       set base_file [file rootname $file]
    }
@@ -2723,7 +2698,7 @@ proc analyse_dump_data_file {file {force 0}} {
 
    set nr 0
    set execd_list ""
-   set qmaster $ts_config(master_host)
+   set qmaster $test_config(qmaster_host)
    foreach elem $host_list(host_list) {
       if { $elem == $qmaster } {
          continue
@@ -2748,7 +2723,7 @@ proc analyse_dump_data_file {file {force 0}} {
    set test "Cluster Scheduler (Grid Engine) version"
    set table($test) "$test_config(gridengine_version)"
    set test "Nr. of Execution daemons"
-   set table($test) [create_html_link [llength $execd_list] "#Execd list"]
+   set table($test) [llength $execd_list]
    set test "Master/Scheduler host"
    set table($test) "$qmaster"
    set tmp_file [get_tmp_file_name]
@@ -2774,15 +2749,15 @@ proc analyse_dump_data_file {file {force 0}} {
    append text "The Cluster Scheduler (Grid Engine) system had $test_config(nr_queues) queues with $test_config(nr_slots_per_queue) "
    append text "slots on each host (=[ expr ( $test_config(nr_queues) * $test_config(nr_slots_per_queue) * [llength $execd_list]  )] "
    append text "slots). The testsuite submitted $test_config(end_job_count) sleeper jobs "
-   if {$array_size > 1} {
-      append text "(array jobs of size $array_size) "
+   if {$test_config(array_size) > 1} {
+      append text "(array jobs of size $test_config(array_size)) "
    }
-   if {$parallel_jobs} {
+   if {$test_config(parallel_jobs)} {
       append text "(parallel jobs with slot range 2-16) "
    }
    append text "to the system. Each job had "
    append text "a sleep time of $test_config(global_job_run_time) seconds."
-   if {$reservation} {
+   if {$test_config(reservation)} {
       append text "Resource reservation was enabled"
    }
    append content [ create_html_text $text ]
@@ -2951,7 +2926,7 @@ proc analyse_dump_data_file {file {force 0}} {
       append content [ create_html_text "" ]
    }
 
-   if { $throughput_sharetree == 1 || $functional_policy == 1 }  {
+   if {$test_config(throughput_sharetree) == 1 || $test_config(functional_policy) == 1}  {
       append content [create_html_link "   Running project job analysis" "project_jobs.html"]
       append content [ create_html_text "" ]
    }
@@ -2982,33 +2957,11 @@ proc analyse_dump_data_file {file {force 0}} {
    append content [ create_html_text "" ]
    append content [create_html_link "   Testsuite scheduler configuration" "#schedd_config"]
 
-   foreach execd $host_list(host_list) {
-      append content [ create_html_text "" ]
-      append content [create_html_link "   Execution host $execd" "#execd $execd"]
-
-      append content [ create_html_text "" ]
-      append content [create_html_link "   Configuration for host $execd" "#config execd $execd"]
-   }
-
-
    # apendix
    append content [ create_html_text "" ]
    append content "<hr WIDTH=\"100%\">"
    append content [ create_html_text "Appendix" 1]
    append content "<hr WIDTH=\"100%\">"
-
-   # host architecture list
-   append content [create_html_target "Execd list"]
-   append content [create_html_text "The test run used the following execution hosts:"]
-   unset table
-   set table(Hostname) "Architecture"
-   foreach host $execd_list {
-      set table($host) [resolve_arch $host]
-   }
-   set tmp_file [get_tmp_file_name]
-   spool_array_to_file $tmp_file "table" table
-   append content [convert_spool_file_to_html $tmp_file $output_dir/index.html 1]
-
 
    # test_config
    append content [create_html_target "test_config"]
@@ -3027,7 +2980,7 @@ proc analyse_dump_data_file {file {force 0}} {
    # configurations
    set nr_of_local_spool_directories 0
 
-   generate_html_file $output_dir/index.html "Testsuite Throughput Test Status Report from $test_config(test_date)" $content
+   generate_html_file $output_dir/index.html "Throughput Test Status Report ($test_config(throughput_scenario)) from $test_config(test_date)" $content
 
    # spool addition test information into test_results_array.dat
    set info_data(end_job_count) $test_config(end_job_count)
@@ -3048,7 +3001,7 @@ proc analyse_dump_data_file {file {force 0}} {
    append content [create_html_image "Running jobs" "running_jobs.gif"]
    generate_html_file $output_dir/running_jobs.html "$test_config(gridengine_version) from $test_config(test_date)" $content
 
-   if { $throughput_sharetree == 1 || $functional_policy == 1 }  {
+   if {$test_config(throughput_sharetree) == 1 || $test_config(functional_policy) == 1}  {
       set content ""
       append content ""
       append content [create_html_image "Running project jobs" "project_jobs.gif"]
@@ -3096,7 +3049,7 @@ proc analyse_dump_data_file {file {force 0}} {
    append content [create_html_image "Qping information" "qping.gif"]
    generate_html_file $output_dir/qping.html "$test_config(gridengine_version) from $test_config(test_date)" $content
 
-   if {$qstat_interval > 0} {
+   if {$test_config(qstat_interval) > 0} {
       set content ""
       append content ""
       append content [create_html_image "Qstat performance" "qstat.gif"]
@@ -3123,7 +3076,7 @@ proc analyse_dump_data_file {file {force 0}} {
    if {$qstat_data(count) > 0} {
       append content [create_html_image "Qstat performance" "qstat.gif"]
    }
-   if { $throughput_sharetree == 1 || $functional_policy == 1 }  {
+   if {$test_config(throughput_sharetree) == 1 || $test_config(functional_policy) == 1 }  {
       append content [create_html_image "Running project jobs" "project_jobs.gif"]
    }
    generate_html_file $output_dir/all_charts.html "$test_config(gridengine_version) from $test_config(test_date)" $content
@@ -3156,7 +3109,8 @@ proc analyse_dump_data_file {file {force 0}} {
    calculate_qping_xy_rows qping_data xy_rows $test_start 0
 
    # 5) optional: calculate project times
-   if { ($throughput_sharetree == 1 && $throughput_sharetree_ext == 0) || $functional_policy == 1 }  {
+   if {($test_config(throughput_sharetree) == 1 && $test_config(throughput_sharetree_ext) == 0) ||
+       $test_config(functional_policy) == 1}  {
       ts_log_fine "- calculate project run xy rows"
       calculate_project_run_xy_rows results jobs xy_rows 0
    }
@@ -3281,7 +3235,7 @@ proc analyse_dump_data_file {file {force 0}} {
       create_gnuplot_xy_gif plot_data xy_rows
    }
 
-   if {$throughput_sharetree == 1 || $functional_policy == 1} {
+   if {$test_config(throughput_sharetree) == 1 || $test_config(functional_policy) == 1} {
       ts_log_fine "- project jobs"
       set plot_data(xlabel) "time\[s\]"
       set plot_data(ylabel) "jobs done\[%\]"
@@ -3297,8 +3251,6 @@ proc analyse_dump_data_file {file {force 0}} {
 
 
 proc calculate_schedd_run_xy_rows { results_array_name row_array_name test_start start_numb } {
-   get_current_cluster_config_array ts_config
-
    upvar $results_array_name schedd
    upvar $row_array_name xy_rows
 
@@ -3344,8 +3296,6 @@ proc calculate_schedd_run_xy_rows { results_array_name row_array_name test_start
 }
 
 proc calculate_submit_run_xy_rows { results_array_name row_array_name test_start start_numb} {
-   get_current_cluster_config_array ts_config
-
    upvar $results_array_name jobs
    upvar $row_array_name xy_rows
 
@@ -3413,8 +3363,6 @@ proc calculate_submit_run_xy_rows { results_array_name row_array_name test_start
 }
 
 proc calculate_monitoring_xy_rows {results_array_name row_array_name test_start start_numb} {
-   get_current_cluster_config_array ts_config
-
    upvar $results_array_name monitoring
    upvar $row_array_name xy_rows
 
@@ -3466,8 +3414,6 @@ proc calculate_monitoring_xy_rows {results_array_name row_array_name test_start 
 }
 
 proc calculate_qstat_xy_rows { results_array_name row_array_name test_start start_numb} {
-   get_current_cluster_config_array ts_config
-
    upvar $results_array_name qstat_data
    upvar $row_array_name xy_rows
 
@@ -3506,8 +3452,6 @@ proc calculate_qstat_xy_rows { results_array_name row_array_name test_start star
 
 
 proc calculate_event_xy_rows { results_array_name row_array_name test_start start_numb} {
-   get_current_cluster_config_array ts_config
-
    upvar $results_array_name event_data
    upvar $row_array_name xy_rows
 
@@ -3547,8 +3491,6 @@ proc calculate_event_xy_rows { results_array_name row_array_name test_start star
 }
 
 proc calculate_qping_xy_rows { results_array_name row_array_name test_start start_numb} {
-   get_current_cluster_config_array ts_config
-
    upvar $results_array_name qping_data
    upvar $row_array_name xy_rows
 
@@ -3587,8 +3529,6 @@ proc calculate_qping_xy_rows { results_array_name row_array_name test_start star
 
 
 proc calculate_project_run_xy_rows {results_array_name job_array_name row_array_name start_numb} {
-   get_current_cluster_config_array ts_config
-
    upvar $results_array_name results
    upvar $job_array_name jobs
    upvar $row_array_name xy_rows
@@ -3696,8 +3636,6 @@ proc calculate_project_run_xy_rows {results_array_name job_array_name row_array_
 }
 
 proc calculate_test_run_xy_rows { results_array_name row_array_name start_numb } {
-   get_current_cluster_config_array ts_config
-
    upvar $results_array_name results
    upvar $row_array_name xy_rows
 
@@ -3771,7 +3709,7 @@ proc calculate_test_run_xy_rows { results_array_name row_array_name start_numb }
 
 }
 
-proc create_reports { results_array job_array_name schedd_array_name monitoring_name qstat_name qping_name event_name {error 0}} {
+proc create_reports {results_array job_array_name schedd_array_name monitoring_name qstat_name qping_name event_name {error 0}} {
    get_current_cluster_config_array ts_config
    global ts_host_config
    global CHECK_PROTOCOL_DIR check_name throughput_scenario
@@ -3787,6 +3725,8 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
    global array_size
    global unexpected_out_filename
    global prot_time_stamp
+   global throughput_sharetree throughput_sharetree_ext
+   global functional_policy qstat_interval array_size parallel_jobs reservation
 
    upvar $job_array_name jobs
    upvar $results_array results
@@ -3850,6 +3790,7 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
    spool_array_add_data $prot_output_file "schedd config" schedd_config
 
    # set test configuration
+   set test_config(version)                 "1"                       ;# file format version
    set test_config(end_job_count)           $end_job_count            ;# number of jobs
    set test_config(enable_queues_job_count) $enable_queues_job_count  ;# after with job, enable queues
    set test_config(nr_queues)               $nr_queues                ;# nr of queues on each host
@@ -3859,12 +3800,24 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
    set test_config(FLUSH_FINISH_SEC)        $FLUSH_FINISH_SEC         ;# -1 or 0,1,2,3 ...
    set test_config(SCHEDULE_INTERVAL)       $run_throughput_test_SCHEDULE_INTERVAL        ;# 00:00:30 ...
    set test_config(gridengine_version)      [get_version_info]
+   set test_config(product_feature)         $ts_config(product_feature)
+   set test_config(qmaster_host)            $ts_config(master_host)
    set test_config(test_date)               [clock format [clock seconds]]
    set test_config(had_errors)              $error
 
-   spool_array_add_data $prot_output_file "test configuration" test_config
+   # we need additional info about the scenario to be able to re-create the reports later
+   # only from the report data file
+   set test_config(throughput_scenario)      $throughput_scenario
+   set test_config(throughput_sharetree)     $throughput_sharetree
+   set test_config(functional_policy)        $functional_policy
+   set test_config(qstat_interval)           $qstat_interval
+   set test_config(array_size)               $array_size
+   set test_config(parallel_jobs)            $parallel_jobs
+   set test_config(reservation)              $reservation
+   set test_config(throughput_sharetree_ext) $throughput_sharetree_ext
 
    # spool everything to file (without comment line)
+   spool_array_add_data $prot_output_file "test configuration" test_config
    spool_array_add_data $prot_output_file "online data" results
    spool_array_add_data $prot_output_file "job data" jobs
    spool_array_add_data $prot_output_file "scheduler data" schedd
@@ -3905,8 +3858,6 @@ proc create_reports { results_array job_array_name schedd_array_name monitoring_
 }
 
 proc calculate_average_cluster_times { results_array monitoring_array qstat_array cluster_results_array { dump_file "" } } {
-   get_current_cluster_config_array ts_config
-
    global enable_queues_job_count
    global FLUSH_SUBMIT_SEC FLUSH_FINISH_SEC run_throughput_test_SCHEDULE_INTERVAL
    upvar $results_array cluster
@@ -4116,8 +4067,6 @@ proc trash_incomplete_job_records {job_array_name} {
 }
 
 proc calculate_average_job_times { job_array_name job_results_array { dump_file "" }} {
-   get_current_cluster_config_array ts_config
-
    upvar $job_array_name jobs
    upvar $job_results_array result
 
@@ -4175,8 +4124,6 @@ proc calculate_average_job_times { job_array_name job_results_array { dump_file 
 
 
 proc calculate_average_schedd_times { schedd_array_name schedd_results_array { dump_file "" }} {
-   get_current_cluster_config_array ts_config
-
    upvar $schedd_array_name schedd_array
    upvar $schedd_results_array result
 
@@ -4219,7 +4166,6 @@ proc calculate_average_schedd_times { schedd_array_name schedd_results_array { d
 
 
 proc show_and_check_current_system_status {start_time array_name schedd_array_name monitoring_name qstat_name} {
-   get_current_cluster_config_array ts_config
    global test_scenario
    global qstat_interval
 
@@ -4275,7 +4221,6 @@ proc show_and_check_current_system_status {start_time array_name schedd_array_na
 }
 
 proc clean_current_system_status { results_array array_name job_array_name schedd_array_name monitoring_name qstat_name qping_name event_name} {
-   get_current_cluster_config_array ts_config
    global queue_list global_job_run_time nr_slots
    global result_names host_list
 
