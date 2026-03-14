@@ -29,7 +29,7 @@
 #
 #  Portions of this software are Copyright (c) 2011 Univa Corporation
 #
-#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -72,6 +72,7 @@ if {$install_mode == "automatic" && !$check_use_installed_system} {
    lappend check_functions "create_autoinst_config"
 }
 lappend check_functions "install_qmaster"
+lappend check_functions "clear_caches"
 lappend check_functions "install_wait_for_settings_file"
 if { $install_mode == "manual" } {
    lappend check_functions "make_user_cert"
@@ -147,4 +148,13 @@ proc read_install_list {} {
       gets $myfile CORE_INSTALLED
       close $myfile
    }
+}
+
+##
+# @brief Clear caches that shall be re-built after qmaster installation
+#
+# E.g., the feature cache is cleared to make sure that features get correctly detected
+# after qmaster installation = after $SGE_ROOT/$SGE_CELL/common/... files have been created.
+proc clear_caches {} {
+   clear_feature_cache
 }

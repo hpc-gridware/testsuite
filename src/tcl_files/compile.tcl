@@ -830,6 +830,11 @@ proc compile_source { { do_only_hooks 0} {compile_only 0} } {
    # finish the HTML report
    report_finish report 0
 
+   # clear the feature cache - we might have new features after installing new binaries
+   # or we might actually just have installed for the first time and only now are able
+   # to correctly determine the features of the system
+   clear_feature_cache
+
    if {$compile_only} {
       startup_core_system 0 1
    }

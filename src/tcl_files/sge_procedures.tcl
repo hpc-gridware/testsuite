@@ -406,19 +406,33 @@ proc ge_has_feature {feature {quiet 0}} {
             }
          }
          "gcs" {
+            set result 0
             set output [start_sge_bin "qsub" "-help"]
-            if {[string first "GCS" $output] >= 0} {
-               set result 1
+            if {$prg_exit_state == 0} {
+               if {[string first "GCS" $output] >= 0} {
+                  set result 1
+               }
             } else {
-               set result 0
+               # if e.g., qconf does not yet exist at all, check if we configured
+               # a gcs-extensions directory
+               if {[string first "gcs-extensions" $ts_config(ext_source_dir)] >= 0} {
+                  set result 1
+               }
             }
          }
          "ocs" {
+            set result 0
             set output [start_sge_bin "qsub" "-help"]
-            if {[string first "OCS" $output] >= 0} {
-               set result 1
+            if {$prg_exit_state == 0} {
+               if {[string first "OCS" $output] >= 0} {
+                  set result 1
+               }
             } else {
-               set result 0
+               # if e.g., qconf does not yet exist at all, check if we configured
+               # a gcs-extensions directory
+               if {$ts_config(ext_source_dir)] eq "none"} {
+                  set result 1
+               }
             }
          }
          "par_option" {
@@ -459,6 +473,15 @@ proc ge_has_feature {feature {quiet 0}} {
    return $result
 }
 
+##
+# @brief clear the cache of ge_has_feature procedure
+#
+# We call it e.g., after compiling as the newly installed binaries
+# may now support features which were not supported before.
+proc clear_feature_cache {} {
+   global ge_has_feature_cache
+   unset -nocomplain ge_has_feature_cache
+}
 
 #                                                             max. column:     |
 #****** sge_procedures/get_execd_spool_dir() ******
