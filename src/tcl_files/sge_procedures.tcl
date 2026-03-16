@@ -8346,15 +8346,16 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
    if {$CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"]} {
       set use_systemd_if_available 1
    }
-   foreach host $ts_config(execd_nodes) {
-      if {$use_systemd_if_available && [host_has_systemd $host] && [systemd_is_service_active $host "execd"]} {
+
+   if {$use_systemd_if_available && [host_has_systemd $host] && [systemd_is_service_active $host "execd"]} {
+      foreach host $ts_config(execd_nodes) {
          # shutdown the execds via systemd
          systemd_stop_service $host "execd"
-      } else {
-         # shutdown via qconf
-         set result [start_sge_bin "qconf" "-ke $host"]
-         ts_log_fine $result
       }
+   } else {
+      # shutdown all execds via qconf
+      set result [start_sge_bin "qconf" "-ke all"]
+      ts_log_fine $result
    }
 
    # give execds some time to shutdown
