@@ -1598,19 +1598,21 @@ proc create_html_table {array_name {border 0} {align LEFT} {center 1}} {
    for {set row 1} {$row <= $table(ROWS)} {incr row} {
       append back "<tr ALIGN=$align VALIGN=CENTER BGCOLOR=\"$table($row,BGCOLOR)\" NOSAVE>\n"
       for {set col 1} {$col <= $table(COLS)} {incr col} {
-         if {[info exists table($row,$col)]} {
-            if {[info exists table($row,$col,FNCOLOR)]} {
-               append back "<td NOSAVE><b><font color=\"$table($row,$col,FNCOLOR)\"><font size=+1>$table($row,$col)</font></font></b></td>\n"
-            } else {
-               append back "<td NOSAVE><b><font color=\"$table($row,FNCOLOR)\"><font size=+1>$table($row,$col)</font></font></b></td>\n"
-            }
-         } else {
-            if {[info exists table($row,$col,FNCOLOR)]} {
-               append back "<td NOSAVE><b><font color=\"$table($row,$col,FNCOLOR)\"><font size=+1></font></font></b></td>\n"
-            } else {
-               append back "<td NOSAVE><b><font color=\"$table($row,FNCOLOR)\"><font size=+1></font></font></b></td>\n"
-            }
+         append back "<td NOSAVE valign=\"top\""
+         if {[info exists table($row,$col,BGCOLOR)]} {
+            append back " bgcolor=\"$table($row,$col,BGCOLOR)\""
          }
+         append back "><b><font"
+         if {[info exists table($row,$col,FNCOLOR)]} {
+            append back " color=\"$table($row,$col,FNCOLOR)\""
+         }
+         append back " size=+1>"
+
+         if {[info exists table($row,$col)]} {
+            append back "$table($row,$col)"
+         }
+
+         append back "</font></b></td>\n"
       }
       append back "</tr>\n"
    }
