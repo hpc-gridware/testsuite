@@ -1608,8 +1608,6 @@ proc run_throughput_test {} {
                    ([llength $resend_list] > 0 || $sent_jobs < $end_job_count)} {
                # get first host in next_submitter_list and submit job on that host
                set sub_host [lindex $next_submitter_list 0]
-               # @todo is the following line an expensive operation?
-               # is there a better / cheaper way to round-robin over the hosts?
                set next_submitter_list [lrange $next_submitter_list 1 end]
 
                # if we have an invalid submit host, skip it
@@ -2692,7 +2690,9 @@ proc analyse_dump_data_file {file {force 0}} {
 
    # job results
    trash_incomplete_job_records jobs
-   calculate_average_cluster_times results monitoring qstat_data cluster_results $output_dir/cluster_times.txt
+
+   # calculate cluster results, store them for later use as summary.tsd
+   calculate_average_cluster_times test_config results monitoring qstat_data cluster_results "$output_dir/cluster_times.txt" "$output_dir/summary.tsd"
    calculate_average_job_times jobs avg_values $output_dir/job_times.txt
    calculate_average_schedd_times schedd avg_schedd_values $output_dir/schedd_times.txt
 
@@ -3247,6 +3247,584 @@ proc analyse_dump_data_file {file {force 0}} {
       set_xy_rows_show xy_rows 20
       create_gnuplot_xy_gif plot_data xy_rows
    }
+}
+
+##
+# @brief read or generate from scratch summary data for a scenario
+#
+# Reads the data from the given data file and calculates summary values.
+# If a summary.tsd file already exists in the scenario directory,
+# it is read instead of calculating the summary values again.
+#
+# @param datafile the data file containing the test results for a scenario
+# @param summary_var the name of the variable to store the summary data in
+proc read_or_generate_summary_data {datafile summary_var} {
+   upvar $summary_var summary
+   unset -nocomplain summary
+
+   # the per scenario report is located in a directory without the extension
+   # this directory might contain a summary.tsd file containing the data we need
+   # if not, create it
+   set scenario_dir [file rootname $datafile]
+   ts_log_fine "scenario directory $scenario_dir"
+   set summary_file "$scenario_dir/summary.tsd"
+   if {[file isdirectory $scenario_dir]} {
+      if {[file exists "$scenario_dir/summary.tsd"]} {
+         set dump_summary 0
+      } else {
+         set dump_summary 1
+      }
+   } else {
+      file mkdir $scenario_dir
+      set dump_summary 1
+   }
+
+   if {$dump_summary} {
+      # we need to generate and dump the summary data
+      ts_log_fine "reading $datafile"
+      read_array_from_file $datafile "test configuration" test_config
+      #parray test_config
+      read_array_from_file $datafile "online data"    results
+      read_array_from_file $datafile "monitoring" monitoring
+      read_array_from_file $datafile "qstat data" qstat_data
+      calculate_average_cluster_times test_config results monitoring qstat_data summary "" $summary_file
+   } else {
+      # we already have the summary data, just read it
+      ts_log_fine "reading $summary_file"
+      read_array_from_file "$summary_file" "test summary" summary
+   }
+}
+
+# @todo add function returning a per scenario description
+
+##
+# @brief generate a key for the throughput report data
+# The key is generated from the given key prefix, scenario and metric.
+# The key is used to store or read the data in a TCL array.
+#
+# @param key_prefix the prefix for the key, the name of a test run, can be empty
+# @param scenario the name of the scenario, can be empty
+# @param metric the name of the metric
+proc throughput_report_key {key_prefix scenario metric} {
+   if {$key_prefix ne ""} {
+      if {$scenario ne ""} {
+         set key "$key_prefix,$scenario,$metric"
+      } else {
+         set key "$key_prefix,$metric"
+      }
+   } else {
+      if {$scenario ne ""} {
+         set key "$scenario,$metric"
+      } else {
+         set key "$metric"
+      }
+   }
+
+   return $key
+}
+
+##
+# @brief copy the per scenario metrics from the summary variable to the result variable
+#
+# The function copies the per scenario metrics from the summary variable to the result variable.
+# The keys for the result variable are generated using the given key prefix and the scenario name.
+# The function also copies some global metrics to the result variable,
+# such as the gridengine version, product feature, total jobs done, etc.
+# @param key_prefix the prefix for the key, the name of a test run, can be empty
+# @param result_var the name of the variable to store the result data in
+# @param summary_var the name of the variable containing the summary data
+proc copy_per_scenario_metrics {key_prefix result_var summary_var} {
+   upvar $result_var result
+   upvar $summary_var summary
+
+   # run global metrics
+   set key [throughput_report_key $key_prefix "" "scenarios"]
+   set scenario $summary(scenario)
+   lappend result($key) $scenario
+
+   set key [throughput_report_key $key_prefix "" "datetime"]
+   set result($key) [min $result($key) $summary(datetime)]
+
+   set key [throughput_report_key $key_prefix "" "gridengine_version"]
+   if {![info exists result($key)]} {
+      set result($key) $summary(gridengine_version)
+   }
+
+   set key [throughput_report_key $key_prefix "" "product_feature"]
+   if {![info exists result($key)]} {
+      set result($key) $summary(product_feature)
+   }
+
+   set key [throughput_report_key $key_prefix "" "total_jobs"]
+   set result($key) [max $result($key) $summary(total_jobs_done)]
+
+   # per run and scenario metrics
+   set key [throughput_report_key $key_prefix $scenario "avg_qmaster_cpu"]
+   set result($key) $summary(avg_qmaster_cpu)
+
+   set key [throughput_report_key $key_prefix $scenario "had_errors"]
+   set result($key) $summary(had_errors)
+
+   set key [throughput_report_key $key_prefix $scenario "qstats_per_second"]
+   set result($key) $summary(qstats_per_second)
+
+   set key [throughput_report_key $key_prefix $scenario "submits_per_second"]
+   set result($key) $summary(submits_per_second)
+
+   set key [throughput_report_key $key_prefix $scenario "total_run_time"]
+   set result($key) $summary(total_run_time)
+
+   set key [throughput_report_key $key_prefix $scenario "total_submit_time"]
+   set result($key) $summary(total_submit_time)
+
+   set key [throughput_report_key $key_prefix $scenario "utilization"]
+   set result($key) $summary(utilization)
+}
+
+##
+# @brief generate an overview for a test run
+#
+# The function generates an overview for a test run by reading the data files for all scenarios in the given directory,
+# calculating summary values for each scenario and storing the data in a TCL array.
+# The function then creates an index.html file in the given directory,
+# providing an overview of the test run and a table listing per scenario several metrics.
+#
+# @param dirname the name of the directory containing the data files for the test run
+proc generate_per_run_overview {dirname} {
+   # search for all "*.tsd" files in dirname - they are our scenarios
+   # e.g., disabled.tsd, enabled.tsd, mixed.tsd, ...
+   set datafiles [lsort [glob -nocomplain -directory $dirname "*.tsd"]]
+   if {[llength $datafiles] == 0} {
+      ts_log_fine "no throughput test results found in $dirname"
+      return
+   }
+
+   # for every scenario we
+   # - read in the data file
+   # - calculate summary values
+   # - store the data for all scenarios in a TCL array
+   set result(scenarios) {}
+   set result(datetime) 9999999999
+   set result(total_jobs) 0
+   foreach datafile $datafiles {
+      read_or_generate_summary_data $datafile summary
+      copy_per_scenario_metrics "" result summary
+   }
+
+   # create an index.html file
+   # - providing some overview
+   # - having a table listing per scenario (row) several metrics
+   # parray result
+
+   # general info
+   set content ""
+   append content [create_html_text "The test ran Cluster Scheduler version $result(gridengine_version)."]
+   append content [create_html_text "We ran $result(total_jobs) jobs/tasks per scenario"]
+   if {$result(product_feature) ne "none"} {
+      append content [create_html_text "The following product features were enabled: $result(product_feature)"]
+   }
+
+   # per scenario table
+   set row 1
+   set SCN 1   ;# Scenario
+   set TRT 2   ;# Total Run Time
+   set TST 3   ;# Total Submit Time
+   set SPS 4   ;# Submits Per Second
+   set QPS 5   ;# Qstats Per Second
+   set UTI 6   ;# Utilization
+   set html_table($row,BGCOLOR) "#3366FF"
+   set html_table($row,FNCOLOR) "#66FFFF"
+   set html_table(COLS) 6
+   set html_table($row,$SCN) "Scenario"
+   set html_table($row,$TRT) "Total Run Time"
+   set html_table($row,$TST) "Total Submit Time"
+   set html_table($row,$SPS) "Submits Per Second"
+   set html_table($row,$QPS) "Qstats Per Second"
+   set html_table($row,$UTI) "Utilization"
+   foreach scenario $result(scenarios) {
+      incr row
+      if {$result($scenario,had_errors)} {
+         set html_table($row,BGCOLOR) "#CC0000"
+         set html_table($row,FNCOLOR) "#FFFFFF"
+      } else {
+         set html_table($row,BGCOLOR) "#009900"
+         set html_table($row,FNCOLOR) "#FFFFFF"
+      }
+
+      set html_table($row,$SCN) "[create_html_link $scenario "./$scenario/index.html"] [create_html_link "(Charts)" "./$scenario/all_charts.html"]"
+      set html_table($row,$TRT) $result($scenario,total_run_time)
+      set html_table($row,$TST) $result($scenario,total_submit_time)
+      set html_table($row,$SPS) [format "%0.0f" $result($scenario,submits_per_second)]
+      set html_table($row,$QPS) [format "%0.0f" $result($scenario,qstats_per_second)]
+      set html_table($row,$UTI) [format "%0.1f" $result($scenario,utilization)]
+   }
+   set html_table(ROWS) $row
+   append content [create_html_table html_table]
+
+   generate_html_file "$dirname/index.html" "Throughput Test Status Overview from [clock format $result(datetime)]" $content
+}
+
+##
+# @brief generate an overview comparing multiple test runs
+#
+# The function generates an overview comparing multiple test runs by reading the data files for all scenarios in the given directory,
+# calculating summary values for each scenario and storing the data in a TCL array.
+# The function then creates an index.html file in the given directory,
+# providing an overview of the test runs and several tables comparing the runs.
+#
+# @param dirname the name of the directory containing the data files for the test runs
+# @param num_hosts the number of execution hosts used for the test runs, used to identify the test runs in the directory
+# @param num_jobs the number of jobs run per scenario for the test runs, used to identify the test runs in the directory
+proc generate_multiple_run_overview {dirname num_hosts num_jobs} {
+   # go over all directories in dirname - they are performance/throughput test runs
+   # per directory go over all "*.tsd" files - they are our scenarios
+   # we want to generate different reports:
+   # - if multiple runs exist for the same version and scenario, generate a report comparing the runs
+   #   - also list the product features enabled for the runs
+   #   - sort rows by datetime + product features (none first, then alphabetically)
+   # - for runs of different versions generate a report comparing the versions
+   #   - generate one table per identical product feature set
+   #   - sort by version + datetime
+   # the report tables should have the scenario as row and the runs as columns,
+   # and each cell have one metric as value and a link to the per scenario report of the run
+
+   # first build a data structure (TCL array) containing all the data we need for the reports
+   # - key: run,scenario,metric
+
+   # get all sub-directories in dirname - they are candidates for our runs
+   set directories [lsort [glob -nocomplain -types d -directory $dirname "*_${num_hosts}_${num_jobs}_*"]]
+   if {[llength $directories] == 0} {
+      ts_log_fine "no throughput test runs found in $dirname"
+      return
+   }
+   # now check per directory it if is really a run (contains *.tsd files)
+   # and read in the data
+   set result(runs) {}
+   foreach dir $directories {
+      set datafiles [lsort [glob -nocomplain -directory $dir "*.tsd"]]
+      if {[llength $datafiles] > 0} {
+         set run [file tail $dir]
+         lappend result(runs) $run
+         set result($run,scenarios) {}
+         set result($run,datetime) 9999999999
+         set result($run,total_jobs) 0
+         foreach datafile $datafiles {
+            read_or_generate_summary_data $datafile summary
+            copy_per_scenario_metrics $run result summary
+         }
+      }
+   }
+   #parray result
+
+   # create the index.html file
+   set content ""
+   append content [create_html_text "This document compares multiple runs of the performance/throughput test.<br>The runs were executed on a cluster with $num_hosts execution hosts and $num_jobs jobs were run per test scenario."]
+
+   append content [create_html_text "The document is structured in two main sections:"]
+   append content [create_html_text "1) Comparison of multiple runs of the same product version.<br>2) Comparison of runs of different product versions" 0]
+   append content [create_html_text "In the following tables, every run is one row, and every scenario is one column.<br>The cells contain the total run time (R:), the submits per second (S:), the utilization (U:), and for the \"mixed_with_qstat\" scenario the qstats per second (Q:).<br>The cell content is also a link to the per scenario report for the run."]
+
+   append content [create_html_text "Comparison of multiple runs of the same product version" 0 "" "H2"]
+   append content [create_html_text "The runs which are compared can have different product features enabled or can be different builds of the same version."]
+   append content [create_html_text "We have one table per product version."]
+   set versions [throughput_get_sorted_versions result]
+   foreach version $versions {
+      append content [create_html_text "Product Version $version" 0 "" "H2"]
+      append content [throughput_create_comparison_table result "version" $version]
+   }
+
+   append content [create_html_text "Comparison of runs of different product versions" 0 "" "H2"]
+   append content [create_html_text "The runs which are compared will have the same product features enabled."]
+   append content [create_html_text "We have one table per product feature set"]
+   set feature_sets [throughput_get_sorted_feature_sets result]
+   foreach feature_set $feature_sets {
+      append content [create_html_text "Product Feature Set $feature_set" 0 "" "H2"]
+      append content [throughput_create_comparison_table result "feature" $feature_set]
+   }
+
+   generate_html_file "$dirname/index.html" "Throughput Test Status Overview For Multiple Runs" $content
+}
+
+##
+# @brief create a comparison table for multiple runs
+#
+# The function creates a comparison table for multiple runs by reading the data from the given result variable,
+# filtering the runs by the given filter and sorting them by the given criteria (version or feature set).
+# The function then creates an HTML table with the runs as rows and the scenarios as columns, and several metrics in the cells.
+#
+# @param result_var the name of the variable containing the data for the runs
+# @param by the criteria to sort the runs by, either "version" or "feature"
+# @param filter the value to filter the runs by, either a version or a feature set
+proc throughput_create_comparison_table {result_var by filter} {
+   upvar $result_var result
+
+   # filter and sort the runs
+   if {$by == "version"} {
+      set runs [throughput_get_sorted_runs_by_version result $filter]
+   } elseif {$by == "feature"} {
+      set runs [throughput_get_sorted_runs_by_feature_set result $filter]
+   } else {
+      ts_log_fine "invalid value for by: $by"
+      return
+   }
+
+   # get the scenarios - we want to have the same columns for all runs,
+   # so we get the scenarios from all runs and sort them
+   set scenarios [throughput_get_sorted_scenarios result]
+
+   # create the HTML table with header
+   set row 1
+   set col 1
+   set html_table($row,BGCOLOR) "#3366FF"
+   set html_table($row,FNCOLOR) "#66FFFF"
+   set html_table(COLS) [expr 1 + [llength $scenarios]]
+   set html_table($row,$col) "Run"
+   foreach scenario $scenarios {
+      incr col
+      set html_table($row,$col) $scenario
+   }
+
+   # populate the table with the data for the runs
+   foreach run $runs {
+      incr row
+      set col 1
+      set html_table($row,BGCOLOR) "#009900"
+      set html_table($row,FNCOLOR) "#FFFFFF"
+      # as run name we use either
+      # - the feature set and datetime
+      # - the version and datetime
+      set name [throughput_get_run_name result $by $run]
+      set html_table($row,$col) "[create_html_link $name "./$run/index.html"]"
+      foreach scenario $scenarios {
+         incr col
+         # in case a scenario had errors, we want to mark the cell red
+         set key [throughput_report_key $run $scenario "had_errors"]
+         if {[info exists result($key)] && $result($key)} {
+            set html_table($row,$col,BGCOLOR) "#CC0000"
+         }
+         # metrics with a shortcut to be shown in the table
+         set metrics {{total_run_time R} {submits_per_second S} {utilization U}}
+         if {$scenario eq "mixed_with_qstat"} {
+            lappend metrics {qstats_per_second Q}
+         }
+         set data {}
+         foreach metric $metrics {
+            set metric_name [lindex $metric 0]
+            set metric_short [lindex $metric 1]
+            set key [throughput_report_key $run $scenario $metric_name]
+            if {[info exists result($key)]} {
+               lappend data "$metric_short:&nbsp;[format "%0.1f" $result($key)]"
+            }
+         }
+         set html_table($row,$col) [create_html_link [join $data "<br>"] "./$run/$scenario/index.html"]
+      }
+   }
+
+   set html_table(ROWS) $row
+   return [create_html_table html_table]
+}
+
+##
+# @brief get the name for a run to be shown in the comparison table
+#
+# The function gets the name for a run to be shown in the comparison table by reading the data from the given result variable,
+# and using the given criteria (version or feature set) and the datetime of the run to generate a name.
+#
+# @param result_var the name of the variable containing the data for the runs
+# @param by the criteria to sort the runs by, either "version" or "feature"
+proc throughput_get_run_name {result_var by run} {
+   upvar $result_var result
+
+   if {$by == "version"} {
+      set name "$result($run,product_feature) [clock format $result($run,datetime) -format "%Y-%m-%d"]"
+   } elseif {$by == "feature"} {
+      set name "$result($run,gridengine_version) [clock format $result($run,datetime) -format "%Y-%m-%d"]"
+   } else {
+      ts_log_fine "invalid value for by: $by"
+      set name "invalid $by"
+   }
+
+   return $name
+}
+
+##
+# @brief get a sorted list of all scenarios used in the runs
+#
+# The function gets a sorted list of all scenarios used in the runs by reading the data from the given result variable,
+# extracting the scenarios from all runs and sorting them alphabetically.
+#
+# @param result_var the name of the variable containing the data for the runs
+proc throughput_get_sorted_scenarios {result_var} {
+   upvar $result_var result
+
+   # get a unique list of all scenarios used in the runs
+   set scenarios {}
+   foreach run $result(runs) {
+      set key [throughput_report_key $run "" "scenarios"]
+      if {[info exists result($key)]} {
+         foreach scenario $result($key) {
+            if {[lsearch -exact $scenarios $scenario] == -1} {
+               lappend scenarios $scenario
+            }
+         }
+      }
+   }
+
+   # return a sorted list
+   return [lsort -dictionary $scenarios]
+}
+
+##
+# @brief get a sorted list of runs filtered by version
+#
+# The function gets a sorted list of runs filtered by version by reading the data from the given result variable,
+# filtering the runs by the given version and sorting them by their feature set and datetime.
+#
+# @param result_var the name of the variable containing the data for the runs
+# @param version the version to filter the runs by
+proc throughput_get_sorted_runs_by_version {result_var version} {
+   upvar $result_var result
+
+   set runs {}
+   foreach run $result(runs) {
+      if {$result($run,gridengine_version) == $version} {
+         set feature $result($run,product_feature)
+         # want to have "none" features at the front of the list, and the rest sorted alphabetically
+         if {$feature eq "none"} {
+            set feature "0_none"
+         }
+         set datetime [clock format $result($run,datetime) -format "%Y-%m-%d"]
+         # we store the feature and datetime in the run name, so that we can sort by it later
+         set item {}
+         lappend item $run
+         lappend item "$feature $datetime"
+         lappend runs $item
+      }
+   }
+
+   # sort by feature set and datetime
+   set runs [lsort -dictionary -command throughput_compare_runs $runs]
+
+   # now remove the feature and datetime from the run name
+   set sorted_runs {}
+   foreach run $runs {
+      set name [lindex $run 0]
+      lappend sorted_runs $name
+   }
+
+   return $sorted_runs
+}
+
+##
+# @brief get a sorted list of runs filtered by feature set
+#
+# The function gets a sorted list of runs filtered by feature set by reading the data from the given result variable,
+# filtering the runs by the given feature set and sorting them by their version and datetime.
+#
+# @param result_var the name of the variable containing the data for the runs
+# @param feature_set the feature set to filter the runs by
+proc throughput_get_sorted_runs_by_feature_set {result_var feature_set} {
+   upvar $result_var result
+
+   set runs {}
+   foreach run $result(runs) {
+      if {$result($run,product_feature) == $feature_set} {
+         # we sort by version + datetime
+         set version $result($run,gridengine_version)
+         set datetime [clock format $result($run,datetime) -format "%Y-%m-%d"]
+         set item {}
+         lappend item $run
+         lappend item "$version $datetime"
+         lappend runs $item
+      }
+   }
+
+   # sort by version and datetime
+   set runs [lsort -dictionary -command throughput_compare_runs $runs]
+
+   # now remove the version and datetime from the run name
+   set sorted_runs {}
+   foreach run $runs {
+      set name [lindex $run 0]
+      lappend sorted_runs $name
+   }
+
+   return $sorted_runs
+}
+
+##
+# @brief compare two runs by their feature set and datetime
+#
+# The function compares two runs by their feature set and datetime, used for sorting the runs in the comparison tables.
+# The function is called by the lsort command with the -command option.
+#
+# @param run1 the first run to compare, a list containing the run name and the sort criteria
+# @param run2 the second run to compare, a list containing the run name and the sort criteria
+proc throughput_compare_runs {run1 run2} {
+   set feature_datetime1 [lindex $run1 1]
+   set feature_datetime2 [lindex $run2 1]
+
+   if {$feature_datetime1 < $feature_datetime2} {
+      return -1
+   } elseif {$feature_datetime1 > $feature_datetime2} {
+      return 1
+   } else {
+      return 0
+   }
+}
+
+##
+# @brief get a sorted list of all versions used in the runs
+#
+# @param result_var the name of the variable containing the data for the runs
+proc throughput_get_sorted_versions {result_var} {
+   upvar $result_var result
+
+   # get a unique list of all versions used in the runs
+   set versions {}
+   foreach run $result(runs) {
+      set key [throughput_report_key $run "" "gridengine_version"]
+      if {[info exists result($key)]} {
+         set version $result($key)
+         if {[lsearch -exact $versions $version] == -1} {
+            lappend versions $version
+         }
+      }
+   }
+
+   # return a sorted list
+   return [lsort -dictionary $versions]
+}
+
+##
+# @brief get a sorted list of all feature sets used in the runs
+#
+# @param result_var the name of the variable containing the data for the runs
+proc throughput_get_sorted_feature_sets {result_var} {
+   upvar $result_var result
+
+   # get a unique list of all feature sets used in the runs
+   set feature_sets {}
+   foreach run $result(runs) {
+      set key [throughput_report_key $run "" "product_feature"]
+      if {[info exists result($key)]} {
+         set feature_set $result($key)
+         if {[lsearch -exact $feature_sets $feature_set] == -1} {
+            lappend feature_sets $feature_set
+         }
+      }
+   }
+
+   # get feature set "none" to the front of the list, if it exists
+   # the remaining list shall be sorted alphabetically
+   set feature_sets [lsort -dictionary $feature_sets]
+   set pos [lsearch -exact $feature_sets "none"]
+   if {$pos != -1 && $pos != 0} {
+      set feature_sets [lreplace $feature_sets $pos $pos]
+      set feature_sets [linsert $feature_sets 0 "none"]
+   }
+
+   return $feature_sets
 }
 
 
@@ -3857,34 +4435,44 @@ proc create_reports {results_array job_array_name schedd_array_name monitoring_n
    #compare_dump_directory $prot_output_dir
 }
 
-proc calculate_average_cluster_times { results_array monitoring_array qstat_array cluster_results_array { dump_file "" } } {
-   global enable_queues_job_count
-   global FLUSH_SUBMIT_SEC FLUSH_FINISH_SEC run_throughput_test_SCHEDULE_INTERVAL
+proc calculate_average_cluster_times {config_array results_array monitoring_array qstat_array cluster_results_array {dump_file ""} {summary_file ""}} {
+   upvar $config_array test_config
    upvar $results_array cluster
    upvar $cluster_results_array result
    upvar $monitoring_array monitoring
    upvar $qstat_array qstat_data
 
-   set result(total_run_time)    0    ;#
-   set result(total_qenabled_time) 0  ;# queues were enabled during this period
-   set result(total_jobs_done)   0    ;# number of jobs that ran through
-   set result(total_submit_time) 0    ;#
-   set result(submits_per_second) 0   ;#
-   set result(jobs_per_second) 0      ;#
-   set result(qstats_per_second) 0      ;#
-   set result(utilization) 0          ;#
-   set result(jobs_sleep_time)  0      ;#
-   set result(queue_enable_value) $enable_queues_job_count    ;#
-   set result(flush_submit_sec) $FLUSH_SUBMIT_SEC
-   set result(flush_finish_sec) $FLUSH_FINISH_SEC
-   set result(schedule_interval) $run_throughput_test_SCHEDULE_INTERVAL
-   set result(avg_qmaster_cpu) 0
-   set result(avg_testsuite_cpu) 0
-   set result(max_qmaster_size) 0
-   set result(max_testsuite_size) 0
-   set result(avg_qstat_time) 0.0
-   set result(qstat_errors) 0
-   set result(qstat_total) 0
+   # we use the result array as a summary of test data
+   # give it a version
+   # and copy some attributes from the test configuration
+   set result(version)              1
+   set result(datetime)             [clock scan $test_config(test_date)]
+   set result(scenario)             $test_config(throughput_scenario)
+   set result(gridengine_version)   $test_config(gridengine_version)
+   set result(had_errors)           $test_config(had_errors)
+   set result(product_feature)      $test_config(product_feature)
+   set result(queue_enable_value)   $test_config(enable_queues_job_count)
+   set result(flush_submit_sec)     $test_config(FLUSH_SUBMIT_SEC)
+   set result(flush_finish_sec)     $test_config(FLUSH_FINISH_SEC)
+   set result(schedule_interval)    $test_config(SCHEDULE_INTERVAL)
+
+   # initialize attributes which will be calculated in the code below
+   set result(total_run_time)       0
+   set result(total_qenabled_time)  0  ;# queues were enabled during this period
+   set result(total_jobs_done)      0  ;# number of jobs that ran through
+   set result(total_submit_time)    0
+   set result(submits_per_second)   0
+   set result(jobs_per_second)      0
+   set result(qstats_per_second)    0
+   set result(utilization)          0
+   set result(jobs_sleep_time)      0
+   set result(avg_qmaster_cpu)      0
+   set result(avg_testsuite_cpu)    0
+   set result(max_qmaster_size)     0
+   set result(max_testsuite_size)   0
+   set result(avg_qstat_time)       0.0
+   set result(qstat_errors)         0
+   set result(qstat_total)          0
 
    if { $cluster(count) > 0 } {
       set result(avg_slots_free)    $cluster(0,total_slots)  ;# avg_slots_free
@@ -4013,6 +4601,11 @@ proc calculate_average_cluster_times { results_array monitoring_array qstat_arra
    if {$count > 0} {
       set result(qstat_total) $count
       set result(avg_qstat_time) [expr $sum_qstat_time / double($count)]
+   }
+
+   # optionally dump the test result / the test summary to a file
+   if {$summary_file != ""} {
+      spool_array_to_file $summary_file "test summary" result
    }
 
 #   ts_log_fine ""
