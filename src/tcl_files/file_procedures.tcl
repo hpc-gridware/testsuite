@@ -621,20 +621,17 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
    set title_list ""
 
    set datarows 0
-   set row_index ""
-   while { [info exists rows($datarows,show) ] } {
-      lappend row_index $datarows
+   set row_index {}
+   while {[info exists rows($datarows,show)]} {
+      if {$rows($datarows,show)} {
+         lappend row_index $datarows
+      }
       incr datarows 1
    }
 
-   set command_file [get_tmp_file_name]
 
    foreach row $row_index {
-      if { $rows($row,show) == 0 } {
-         continue
-      }
-
-      set file_name [get_tmp_file_name "" "$row"]
+      set file_name [get_tmp_file_name "" $row]
       set file_pointer [open $file_name w]
 
       set counter 0
@@ -665,6 +662,7 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
 
 
    # check gnuplot supporting gif terminals:
+   # @todo CS-1879 do this only once and cache the results
    set terminal_type "gif"
    set test_file_name [get_tmp_file_name "" "gnuplot_test"]
    set test_file [open $test_file_name w]
@@ -706,12 +704,11 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
       wait_for_remote_file $local_host $CHECK_USER $command_file
    }
    set result [start_remote_prog $local_host $CHECK_USER $gnuplot_bin $command_file prg_exit_state 60 0 "" "" 1 0 0]
-   if { $prg_exit_state == 0 } {
+   if {$prg_exit_state == 0} {
       return $data(output_file)
    } else {
-      ts_log_finer $result
+      ts_log_fine $result
       catch { file copy $ts_config(testsuite_root_dir)/images/no_gnuplot.gif $data(output_file) }
-
       return $data(output_file)
    }
 }
