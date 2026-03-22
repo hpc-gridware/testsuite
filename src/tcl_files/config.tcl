@@ -3159,8 +3159,9 @@ proc config_compile_options { only_check name config_array } {
       "Enter cmake or aimk compile options (use \"none\" for no options)"
       "or press >RETURN< to use the default value."
       ""
-      "-DWITH_GPERF=ON   Enabled compilation with Google Performance Tools (default OFF)"
-      "-DWITH_PYTHON=ON  Enabled compilation with Python (default OFF)"
+      "-DWITH_GPERF=ON   Enable Google Performance Tools (default OFF)"
+      "-DWITH_PYTHON=ON  Enable Python (default OFF)"
+      "-DWITH_OPENSSL=ON Enable OpenSSL that allows installation with TLS (default OFF)"
       "Coverage with lcov needs to get activated with -coverage \"lcov\" and -coverage_dir <path>. No need to set -DWITH_LCOV=ON here"
    }
    return [config_generic $only_check $name config $help_text "string" 1 0]
