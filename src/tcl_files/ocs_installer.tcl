@@ -26,6 +26,59 @@ proc is_host_resolvable {hostname} {
    }
 }
 
+proc installer_reinstall_fresh_cluster {} {
+   global CHECK_ACT_PATH
+   global CHECK_ENABLED_CATEGORIES
+   global check_use_installed_system
+   get_current_cluster_config_array ts_config
+
+   # reset testsuite sessions
+   close_open_rlogin_sessions 1  ;# session reset (if defect)
+
+   # first cleanup all jobs
+   delete_all_jobs
+   wait_for_end_of_all_jobs 15
+
+   set save_installed_value $check_use_installed_system
+   set check_use_installed_system 1
+
+   # first run cleanup hooks
+   # This is done because some additional checktree implementations
+   # have to cleanup the clusters before re_init (e.g. to re-add removed execds)
+   exec_checktree_clean_hooks
+
+   # now re_init all additional clusters
+   ts_log_fine "performing additional cluster install re_init ..."
+   set add_clusters_ret [operate_additional_clusters install]
+   if {$add_clusters_ret != 0} {
+      ts_log_info "installing additional clusters with re_use system failed with \"$add_clusters_ret\", starting fresh installation ..."
+      set check_use_installed_system 0
+      ts_log_fine "performing additional cluster install ..."
+      set add_clusters_ret2 [operate_additional_clusters install]
+      ts_log_info "installing additional clusters returned \"$add_clusters_ret\"!"
+   }
+
+   set save_CHECK_ACT_PATH $CHECK_ACT_PATH
+   set check_use_installed_system 1
+   set CHECK_ACT_PATH "$ts_config(checktree_root_dir)/install_core_system"
+   ts_log_fine "starting install_core_system with check_use_installed_system=$check_use_installed_system ..."
+   incr check_id ;# reinit will be displayed number separate check_id - we will see real oder of execution
+   set init_ret [run_test $CHECK_ACT_PATH "all"]
+   if {$init_ret != 0 && $init_ret != -3} {
+      ts_log_info "installing with re_use system failed, starting fresh installation ..."
+      ts_log_fine "starting install_core_system with check_use_installed_system=$check_use_installed_system ..."
+      set check_use_installed_system 0
+      # we start all checks with INSTALL category
+      set org_categories $CHECK_ENABLED_CATEGORIES
+      set CHECK_ENABLED_CATEGORIES "INSTALL"
+      set init_ret2 [run_tests "root" "all"]
+      set CHECK_ENABLED_CATEGORIES $org_categories
+      ts_log_fine "installing cluster returned \"$init_ret2\"!"
+   }
+   set CHECK_ACT_PATH $save_CHECK_ACT_PATH
+   set check_use_installed_system $save_installed_value
+}
+
 proc installer_get_diff_script {} {
    get_current_cluster_config_array ts_config
    return "$ts_config(testsuite_root_dir)/scripts/diff_backups.sh"

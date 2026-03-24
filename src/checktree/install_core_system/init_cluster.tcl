@@ -396,8 +396,11 @@ proc setup_conf {} {
   set_config params
   get_config old_config
 
-  # set finished_job in global config
-  set params(finished_jobs) "0"
+  # set finished_job in global config if version is < 9.2.0
+  if {[is_version_in_range "" 9.2.0"]} {
+     set params(finished_jobs) "0"
+  }
+
   set params(load_report_time) "00:00:15"
   set params(reschedule_unknown) "00:00:00"
   set params(loglevel) "log_info"
@@ -465,7 +468,10 @@ proc setup_conf {} {
        set new  $new_config($param)
 
        if {[string compare -nocase $old $new] != 0} {
-          set name_list [list "reschedule_unknown" "load_report_time" "loglevel" "execd_params" "finished_jobs" "max_unheard" "reporting_params" "mail_tag"]
+          set name_list [list "reschedule_unknown" "load_report_time" "loglevel" "execd_params" "max_unheard" "reporting_params" "mail_tag"]
+          if {[is_version_in_range "" "9.2.0"]} {
+             lappend name_list "finished_jobs"
+          }
           if {[lsearch -exact $name_list $param] != -1} {
              continue
           }

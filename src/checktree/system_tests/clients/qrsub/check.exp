@@ -461,7 +461,13 @@ proc check_option_l {} {
    }
 
    ts_log_fine "qrstat -ar $ar_id\n"
-   set check_values(resource_list)                     "hostname=${actual_host}*, h_rt=1000"
+
+   if {[is_version_in_range "9.2.0"]} {
+      # in 9.2.0 and later the resource request is stored without space after comma
+      set check_values(resource_list) "hostname=${actual_host}*,h_rt=1000"
+   } else {
+      set check_values(resource_list) "hostname=${actual_host}*, h_rt=1000"
+   }
    set ret [parse_qrstat_check $ar_id check_values]
    if {$ret != 0 } {
       return

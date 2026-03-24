@@ -339,9 +339,9 @@ proc qstat_help {} {
       set qstat_help_lines 43
    }
 
-   # in GCS 9.2.0 the -sdv switch was removed
+   # in GCS 9.2.0 the -sdv and -ncb switch was removed
    if {[is_version_in_range "9.2.0"] && [ge_has_feature "gcs"]} {
-      set qstat_help_lines 42
+      set qstat_help_lines 41
    }
 
    delete_all_jobs
@@ -464,11 +464,11 @@ proc qstat_option_pe {} {
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   del_pe "mype1"
-   del_pe "mype2"
-
    del_queue "test1.q" $hostname 0 1
    del_queue "test2.q" $hostname 0 1
+
+   del_pe "mype1"
+   del_pe "mype2"
 }
 
 proc qstat_option_U {} {
@@ -3057,6 +3057,11 @@ proc qstat_s_s_plain_xml_comparison {} {
 proc qstat_s_z_plain_xml_comparison {} {
    global ts_config CHECK_ACTUAL_TEST_PATH CHECK_USER
    global CHECK_HAVE_TDOM
+
+   if {[is_version_in_range "9.2.0"]} {
+      ts_log_fine "skipping qstat -s z cases for 9.2.0 ... \n"
+      return
+   }
 
    if {!$CHECK_HAVE_TDOM} {
       ts_log_fine "skipping qstat -xml cases ... \n"

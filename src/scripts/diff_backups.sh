@@ -57,9 +57,9 @@ while IFS= read -r file1; do
       filter2="grep -Ev ^(binary_path|qmaster_spool_dir|security_mode|spooling_params|#) $file2"
    elif [ "$object_type" = "configurations" ] && [ "$object_name" = "global" ]; then
       # Users delete_time will differ for different backups, exclude it
-      echo "Excluding 'execd_spool_dir' and 'mail_tag' from diff of '$object_type' object '$object_name'"
-      filter1="grep -Ev ^(execd_spool_dir|mail_tag) $file1"
-      filter2="grep -Ev ^(execd_spool_dir|mail_tag) $file2"
+      echo "Excluding 'execd_spool_dir', 'mail_tag' and 'gid_range' from diff of '$object_type' object '$object_name'"
+      filter1="grep -Ev ^(execd_spool_dir|mail_tag|gid_range) $file1"
+      filter2="grep -Ev ^(execd_spool_dir|mail_tag|gid_range) $file2"
    elif [ "$object_type" = "configurations" ]; then
       # Users delete_time will differ for different backups, exclude it
       echo "Excluding 'execd_spool_dir' from diff of '$object_type' object '$object_name'"
@@ -86,7 +86,7 @@ while IFS= read -r file1; do
       if [ $? -eq 0 ]; then
          echo "$rel_path: OK"
       else
-         echo "$object_type - $object_name: DIFFER"
+         echo "$object_type - $object_name: FOUND DIFFERENCE <==============================="
          ret=1
       fi
    else

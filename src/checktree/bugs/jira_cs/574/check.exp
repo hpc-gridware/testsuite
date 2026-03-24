@@ -51,7 +51,7 @@ global check_root_access_needs
 global check_need_running_system
 global check_version_range
 
-set check_version_range "9.0.0"
+set check_version_range {"9.0.0" "9.2.0"}
 
 # define test's name and run level descriptions
 set check_name            "cs_574"

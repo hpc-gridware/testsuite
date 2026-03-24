@@ -590,10 +590,11 @@ proc check_size_config {} {
 proc check_size_config_zombies {} {
    global qmaster_size_num_zombies
 
-   set default_array(finished_jobs)   $qmaster_size_num_zombies
-   set_config default_array
-
-   monitor_size [get_job_count] "set finished jobs to $qmaster_size_num_zombies"
+   if {[is_version_in_range "" "9.2.0"]} {
+      set default_array(finished_jobs) $qmaster_size_num_zombies
+      set_config default_array
+      monitor_size [get_job_count] "set finished jobs to $qmaster_size_num_zombies"
+   }
 }
 
 proc qmaster_size_cleanup_level {} {

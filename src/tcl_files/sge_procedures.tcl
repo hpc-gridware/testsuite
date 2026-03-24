@@ -2358,7 +2358,6 @@ proc get_gid_range { user port } {
 #     shepherd_cmd         none
 #     qmaster_params       none
 #     execd_params         none
-#     finished_jobs        0
 #     gid_range            13001-13100
 #     admin_user           crei
 #     qlogin_command       telnet
@@ -2461,7 +2460,6 @@ proc get_config {change_array {host global} {atimeout 60} {raise_error 1}} {
 #     shepherd_cmd         none
 #     qmaster_params       none
 #     execd_params         none
-#     finished_jobs        0
 #     gid_range            13001-13100
 #     admin_user           crei
 #     qlogin_command       telnet
@@ -3304,7 +3302,7 @@ proc master_queue_of { job_id {qlist {}}} {
 #     sge_procedures/wait_for_jobpending()
 #     sge_procedures/wait_for_jobend()
 #*******************************
-proc wait_for_load_from_all_queues {{seconds 60} {raise_error 1}} {
+proc wait_for_load_from_all_queues {{seconds 60} {raise_error 1} {test_for_unknown_state 1}} {
    get_current_cluster_config_array ts_config
    global CHECK_VALGRIND
 
@@ -3340,6 +3338,7 @@ proc wait_for_load_from_all_queues {{seconds 60} {raise_error 1}} {
          set qnames ""
          set slots ""
          set load ""
+         set state ""
 
          # get line data information for queuename used/tot and load_avg
          foreach elem $data {
@@ -3351,14 +3350,25 @@ proc wait_for_load_from_all_queues {{seconds 60} {raise_error 1}} {
 
             lappend slots [string range $used_tot $pos1 $pos2 ]
             lappend load [lindex $linedata 3]
+            lappend state [lindex $linedata 5]
          }
 
-         # check if load of an host is set > 99 (no exed report)
-         set failed 0
-         foreach elem $load {
-           if {$elem == "-NA-" || $elem >= 99} {
-              incr failed 1
-           }
+         # check either that the host is in unknown state
+         # or that the load is not available or bigger 99
+         if {$test_for_unknown_state == 1} {
+            set failed 0
+            foreach elem $state {
+               if {[string first "u" $elem] != -1} {
+                  incr failed 1
+               }
+            }
+         } else {
+            set failed 0
+            foreach elem $load {
+               if {$elem == "-NA-" || $elem >= 99} {
+                  incr failed 1
+               }
+            }
          }
 
          if {$failed == 0} {
@@ -5947,7 +5957,7 @@ proc get_qstat_j_info {jobid {my_variable qstat_j_info} {add_switch ""} {host ""
             set elem [ string trim $elem]
             ts_log_finest "removing message id: \"$elem\""
          }
-         if { [string first ":" $elem] >= 0 && [string first ":" $elem] < 30 } {
+         if { [string first ":" $elem] >= 0 && [string first ":" $elem] < 32 } {
             append my_result "\n$elem"
          } else {
             append my_result ",$elem"
@@ -5966,7 +5976,9 @@ proc get_qstat_j_info {jobid {my_variable qstat_j_info} {add_switch ""} {host ""
 }
 
 proc get_qstat_j_attribute {name {task 1}} {
-   if {[is_version_in_range "9.1.0"]} {
+   if {[is_version_in_range "9.2.0"]} {
+      return [format "%-19s %11d" $name $task]
+   } elseif {[is_version_in_range "9.1.0"]} {
       return [format "%-17s %11d" $name $task]
    } elseif {[is_version_in_range "9.0.8"]} {
       return [format "%-16s %11d" $name $task]
