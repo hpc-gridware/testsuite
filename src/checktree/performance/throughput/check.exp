@@ -1765,7 +1765,7 @@ proc fill_job_list_from_accounting {job_array_name} {
    # the order in the array is just how job ids were reported by submitter scripts
    # so we need to build min and max
    set index_size $job_data(index_size)
-   set first_job_id 4294967295 ;# U_LONG32_MAX
+   set first_job_id 4294967295 ;# std::numeric_limits<uint32_t>::max()
    set last_job_id 0
    for {set i 0} {$i < $index_size} {incr i} {
       if {[info exists job_data($i,job_id)]} {

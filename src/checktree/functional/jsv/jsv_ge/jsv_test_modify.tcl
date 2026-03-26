@@ -132,7 +132,7 @@ proc jsv_on_verify {} {
    lappend val_list ""
    append res "1"
 
-   # -ar; u_long32 
+   # -ar; uint32_t
    lappend par_list "ar"
    lappend val_list "5"
    append res "1"
@@ -258,7 +258,7 @@ proc jsv_on_verify {} {
    lappend val_list ""
    append res "1"
 
-   # -js; u_long32 
+   # -js; uint32_t
    lappend par_list "js"
    lappend val_list "0"
    append res "1"
@@ -432,7 +432,7 @@ proc jsv_on_verify {} {
    lappend val_list ""
    append res "1"
 
-   # -pe .. n-m; u_long32 range 
+   # -pe .. n-m; uint32_t range
    lappend par_list "pe_name"
    lappend val_list ""
    append res "1"

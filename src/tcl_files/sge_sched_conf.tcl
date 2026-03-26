@@ -248,7 +248,7 @@ proc set_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {ra
       if { $result == -1 } {
          ts_log_severe "timeout error" $raise_error
       } elseif { $result == -2 } {
-         ts_log_severe "not a u_long32 value" $raise_error
+         ts_log_severe "not a uint32_t value" $raise_error
       } elseif { $result == -3 } {
          ts_log_severe "must be positive" $raise_error
       } elseif { $result != 0 } {
