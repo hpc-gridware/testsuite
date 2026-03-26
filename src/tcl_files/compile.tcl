@@ -1315,7 +1315,17 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
       foreach host $compile_hosts {
          set options($host,cmd) "cmake"
          set source_dir [file dirname $ts_config(source_dir)]
-         set args "-S $source_dir"
+         set args ""
+
+         if {[is_version_in_range "9.0.0" "9.2.0"]} {
+            # build environment has to be defined via scripts or bashrc outside of cmake
+         } else {
+            # Beginning with version 9.2 we have a toolchain file that allows to select
+            # build tools and application depending on the host and architecture
+            append args "-DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain.cmake"
+         }
+
+         append args " -S $source_dir"
          append args " -DCMAKE_INSTALL_PREFIX=$ts_config(product_root)"
 
          # use gmake instead of make on sol-amd64
