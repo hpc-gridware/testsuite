@@ -1317,14 +1317,10 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
          set source_dir [file dirname $ts_config(source_dir)]
          set args ""
 
-         if {[is_version_in_range "9.0.0" "9.2.0"]} {
-            # build environment has to be defined via scripts or bashrc outside of cmake
-         } else {
-            # Beginning with version 9.2 we have a toolchain file that allows to select
-            # build tools and application depending on the host and architecture
-            append args "-DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain.cmake"
-         }
+         # build tools and application depending on the host and architecture
+         append args "-DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain.cmake"
 
+         # source directory
          append args " -S $source_dir"
          append args " -DCMAKE_INSTALL_PREFIX=$ts_config(product_root)"
 
@@ -2513,7 +2509,7 @@ proc build_distribution {arch_list report_var} {
    upvar $report_var report
 
    # early exit if we should not create packages
-   if {$ts_config(package_directory) == "none"]} {
+   if {$ts_config(package_directory) == "none"} {
       return 1
    }
 
