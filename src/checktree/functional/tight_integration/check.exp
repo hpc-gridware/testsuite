@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -364,6 +364,14 @@ proc tight_integration_check_messages {mode1 mode2 scenario {expect_error 0}} {
                [string match "*died through signal KILL*" $message] == 1)} {
             set skip_message 1
          }
+         #
+         # General warning messages that can appear in the qmaster messages file
+         # but have nothing to do with this test
+         #
+         if {[string match "*nr of dynamic event clients exceeds max file descriptor limit*" $message]} {
+            set skip_message 1
+         }
+
          #
          # Write out any unexpected warning message and header, if required.
          #
