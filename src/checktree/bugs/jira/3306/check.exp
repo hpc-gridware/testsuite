@@ -92,7 +92,6 @@ proc ge_3306_setup {} {
 
    # start a tail -f on the qmaster messages file
    init_logfile_wait $ts_config(master_host) "[get_qmaster_spool_dir]/messages"
-
 }
 
 proc ge_3306_cleanup {} {
@@ -142,9 +141,13 @@ proc ge_3306_delete_jobs {job_ids_var} {
 
    ts_log_fine "deleting jobs $job_ids"
 
-   # delete all jobs
+   start_sge_bin "qdel" [join $job_ids ","]
    foreach job_id $job_ids {
-      delete_job $job_id 1
+      wait_for_jobend $job_id "" 10 0
+   }
+   trigger_scheduling
+   foreach job_id $job_ids {
+      wait_for_jobend $job_id "" 10 0 1
    }
 
    # all jobs gone
@@ -170,6 +173,7 @@ proc ge_3306_do_test {params_var job_ids_var} {
 
    # trigger a scheduling run
    trigger_scheduling
+   after 1000
 
    # modify the consumable value
    mod_attr exechost complex_values "$params(variable)=$params(value_change)" $params(host)
@@ -286,6 +290,8 @@ proc ge_3306_per_job {} {
       trigger_scheduling ; after 10000
 
       # start a sequential job, must start
+      ts_log_frame
+      ts_log_fine "1: host $host"
       set params(host) $host
       set params(qsub_options) "-l h=$ge_3306_host -l CJ=1"
       set params(variable) "CJ"
@@ -296,6 +302,8 @@ proc ge_3306_per_job {} {
          return
       }
       # start a second job, reduce consumable, must get rejected
+      ts_log_frame
+      ts_log_fine "2: host $host"
       set params(value_start) "2"
       set params(value_change) "1"
       set params(job_running) 0
@@ -304,6 +312,8 @@ proc ge_3306_per_job {} {
          return
       }
       # start a pe job, expect it to run
+      ts_log_frame
+      ts_log_fine "3: host $host"
       set params(qsub_options) "-l CJ=1 -pe mytestpe 2"
       set params(value_start) 2
       set params(value_change) 2
@@ -312,6 +322,8 @@ proc ge_3306_per_job {} {
          return
       }
       # start a pe job, expect it to get rejected at start
+      ts_log_frame
+      ts_log_fine "4: host $host"
       set params(value_start) 3
       set params(value_change) 2
       set params(job_running) 0
