@@ -2512,6 +2512,11 @@ proc build_distribution {arch_list report_var} {
 
    upvar $report_var report
 
+   # early exit if we should not create packages
+   if {$ts_config(package_directory) == "none"]} {
+      return 1
+   }
+
    # if possible, call mk_dist on the file server
    set host [fs_config_get_server_for_path $ts_config(product_root) 0]
    if {$host == ""} {
