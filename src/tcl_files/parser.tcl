@@ -1400,9 +1400,9 @@ proc parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1}} {
          set  transform(5)  transform_date_time
          set   position(6)  "69 118"            ; set    names(6)    queue
          set      rules(6)  rule_list
-         set   position(7)  "120 124"            ; set    names(7)    master
+         set   position(7)  "120 125"            ; set    names(7)    master
          set      rules(7)  rule_list
-         set   position(8)  "126 end"           ; set    names(8)    jatask
+         set   position(8)  "127 end"           ; set    names(8)    jatask
          set      rules(8)  rule_list
       }
    } else {
