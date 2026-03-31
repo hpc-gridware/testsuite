@@ -426,7 +426,7 @@ proc get_hardware_node_stats {internal_topo_string array_name} {
 # @param hosts List of hostnames to modify (default: all exec hosts)
 # @param backup_var Name of the array variable to store the backup (default: host_slots_for_binding_backup)
 # @see cleanup_host_slots_for_binding
-proc setup_host_slots_for_binding {{hosts ""} {backup_var ""}} {
+proc setup_host_slots_for_binding {{hosts ""} {backup_var ""} {slots 1000}} {
    get_current_cluster_config_array ts_config
 
    # beginning with 9.1.0 a slot capacity is set to the number of cores for every exec host
@@ -457,7 +457,7 @@ proc setup_host_slots_for_binding {{hosts ""} {backup_var ""}} {
       }
 
       # set the new complex values with a single command
-      mod_attr "exechost" "complex_values" "slots=1000" $hosts 0 $ts_config(master_host)
+      mod_attr "exechost" "complex_values" "slots=$slots" $hosts 0 $ts_config(master_host)
    }
 }
 
