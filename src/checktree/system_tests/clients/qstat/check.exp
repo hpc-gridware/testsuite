@@ -603,7 +603,9 @@ proc qstat_option_s {} {
 proc qstat_option_s_z {} {
    global qstat_config_backup
 
-   if {![is_version_in_range "9.0.12 9.1.1"]} {
+   # CS-1905 Zombie jobs are not displayed has been fixed in 9.0.12 and 9.1.1,
+   #         but in 9.2.0 we do no longer have them.
+   if {![is_version_in_range "9.0.12 9.1.1" "9.2.0"]} {
       ts_log_fine "skipping test for zombie jobs, because it was only fixed in 9.0.12 and 9.1.1"
       return
    }
