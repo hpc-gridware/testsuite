@@ -59,6 +59,7 @@ lappend check_functions "qstat_option_q"
 lappend check_functions "qstat_option_pe"
 lappend check_functions "qstat_option_U"
 lappend check_functions "qstat_option_s"
+lappend check_functions "qstat_option_s_z"
 lappend check_functions "qstat_plain_xml_comparison"  ;# Compare the two qstatcommands
 lappend check_functions "qstat_ne_plain_xml_comparison"  ;# Compare the two qstat -ne commands
 lappend check_functions "qstat_f_qs_plain_xml_comparison"  ;# Compare the two qstat -f -qs E commands
@@ -95,8 +96,10 @@ lappend check_functions "qstat_U_valid_plain_xml_comparison" ;# Compare the two 
 #lappend check_functions "qstat_tasks"
 
 proc qstat_setup {} {
-   global ts_config CHECK_HAVE_TDOM
+   get_current_cluster_config_array ts_config
+   global CHECK_HAVE_TDOM
    global first_host last_host prj_exists
+   global qstat_config_backup
 
    # First add queues "error" with one host (last).
    # Set prolog to non-existent path, and np_load_avg to 10
@@ -140,13 +143,21 @@ proc qstat_setup {} {
 
    # increase slots capacity
    setup_host_slots_for_binding
+
+   # backup the global config, we want to modify it in the zombie test
+   get_config qstat_config_backup
 }
 
 proc qstat_cleanup {} {
-   global ts_config prj_exists
+   get_current_cluster_config_array ts_config
+   global first_host last_host prj_exists
+   global qstat_config_backup
 
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   # reset the global config
+   reset_config qstat_config_backup
 
    cleanup_host_slots_for_binding
 
@@ -174,32 +185,28 @@ proc qstat_cleanup {} {
    if {!$prj_exists} {
       set result [del_project $prj]
    }
+
+   # unset global variables
+   unset -nocomplain first_host last_host prj_exists qstat_config_backup
 }
 
-#****** check/qstat_count_jobs() ***********************************************
-#  NAME
-#     qstat_count_jobs() -- count the jobs of the qstat output with the
-#                           given options
+##
+# @brief count the jobs of the qstat output with the given options
 #
-#  SYNOPSIS
-#     qstat_count_jobs { func_name qstat_options expected_jobs }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     func_name     - name of the calling function. needed for ts_log_severe
-#     qstat_options - options for qstat
-#     expected_jobs - the nr of the expected job count
-#
-#*******************************************************************************
-proc qstat_count_jobs {func_name qstat_options expected_jobs} {
+# @param func_name name of the calling function. needed for ts_log_severe
+# @param qstat_options options for qstat
+# @param expected_jobs the nr of the expected job count
+# @param raise_error if set to 1, an error is raised if the job count doesn't match the expected job count, otherwise only a log message is created
+# @returns 1 if the job count matches the expected job count, 0 otherwise
+proc qstat_count_jobs {func_name qstat_options expected_jobs {raise_error 1}} {
    global ts_config
+
+   set ret 1
 
    ts_log_fine "\nrunning qstat $qstat_options"
    set myenv(SGE_LONG_QNAMES) 50
    set output [start_sge_bin "qstat" $qstat_options "" "" prg_exit_state 60 "" "bin" output_lines myenv]
-   ts_log_fine $output
+   ts_log_finer $output
 
    if {$prg_exit_state == 0} {
       if {[info exists jobinfo]} {
@@ -211,11 +218,15 @@ proc qstat_count_jobs {func_name qstat_options expected_jobs} {
 
       ts_log_fine "number of jobs: $nr_jobs"
       if {$nr_jobs != $expected_jobs} {
-         ts_log_severe "$func_name: qstat $qstat_options broken, got $nr_jobs but expected $expected_jobs:\n$output"
+         ts_log_severe "$func_name: qstat $qstat_options broken, got $nr_jobs but expected $expected_jobs:\n$output" $raise_error
+         set ret 0
       }
    } else {
-      ts_log_severe "$func_name: qstat $qstat_options exit status not 0 ($prg_exit_state), output:\n$output"
+      ts_log_severe "$func_name: qstat $qstat_options exit status not 0 ($prg_exit_state), output:\n$output" $raise_error
+      set ret 0
    }
+
+   return $ret
 }
 
 proc check_core_queues {} {
@@ -587,6 +598,94 @@ proc qstat_option_s {} {
 
   delete_all_jobs
   wait_for_end_of_all_jobs
+}
+
+proc qstat_option_s_z {} {
+   global qstat_config_backup
+
+   if {![is_version_in_range "9.0.12 9.1.1"]} {
+      ts_log_fine "skipping test for zombie jobs, because it was only fixed in 9.0.12 and 9.1.1"
+      return
+   }
+
+   # Expect there to be 0 zombie jobs at the beginning of the test
+   ts_log_fine "checking that there are no zombie jobs at the beginning of the test ..."
+   set ok [qstat_count_jobs "qstat_option_s_z" "-s z" 0]
+
+   # Enable keeping zombie jobs
+   if {$ok} {
+      ts_log_fine "enabling keeping zombie jobs with a maximum of 10 ..."
+      set conf(finished_jobs) 10
+      set_config conf
+
+      # Submit a few short running jobs
+      for {set i 0} {$i < 5} {incr i} {
+         set job_id [submit_job "-b y sleep 1"]
+         if {$job_id <= 0} {
+            set ok 0
+            break
+         }
+      }
+   }
+
+   # They need to show up in qstat -s z output
+   if {$ok} {
+      ts_log_fine "expecting the 5 submitted jobs to show up in qstat -s z output ..."
+      wait_for_end_of_all_jobs
+      set ok [qstat_count_jobs "qstat_option_s_z" "-s z" 5]
+   }
+
+   # Submit more short running jobs and wait for them to finish
+   if {$ok} {
+      for {set i 0} {$i < 10} {incr i} {
+         set job_id [submit_job "-b y sleep 1"]
+         if {$job_id <= 0} {
+            set ok 0
+            break
+         }
+      }
+   }
+
+   # Expect number of zombie jobs to be the configured maximum
+   if {$ok} {
+      ts_log_fine "expecting the number of zombie jobs to be settle at the configured maximum of 10 ..."
+      wait_for_end_of_all_jobs
+      # Wait for the finished jobs to go down to 10
+      set timeout [expr [clock seconds] + 10]
+      while {[clock seconds] < $timeout} {
+         set qstat_ok [qstat_count_jobs "qstat_option_s_z" "-s z" 10 0]
+         if {$qstat_ok} {
+            break
+         }
+         after 1000
+      }
+      if {!$qstat_ok} {
+         ts_log_severe "number of zombie jobs did not settle at the configured maximum of 10"
+      }
+   }
+
+   # Reset finished job to 0 and check that there are no zombie jobs anymore
+   if {$ok} {
+      ts_log_fine "resetting the number of finished jobs to 0 and expecting no zombie jobs anymore ..."
+      set conf(finished_jobs) 0
+      set_config conf
+
+      # Wait for the finished jobs to go down to 0
+      set timeout [expr [clock seconds] + 10]
+      while {[clock seconds] < $timeout} {
+         set qstat_ok [qstat_count_jobs "qstat_option_s_z" "-s z" 0 0]
+         if {$qstat_ok} {
+            break
+         }
+         after 1000
+      }
+      if {!$qstat_ok} {
+         ts_log_severe "number of zombie jobs did not go down to 0"
+      }
+   }
+
+   # Cleanup
+   reset_config qstat_config_backup
 }
 
 proc qstat_issue1800 {} {
