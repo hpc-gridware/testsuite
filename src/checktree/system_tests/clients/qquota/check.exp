@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -132,7 +132,11 @@ proc qquota_cleanup {} {
 proc qquota_help {} {
    global CHECK_PRODUCT_VERSION_NUMBER
 
-   set qquota_help_lines 22
+   if {[is_version_in_range "9.2"]} {
+      set qquota_help_lines 23
+   } else {
+      set qquota_help_lines 22
+   }
 
    set output [start_sge_bin "qquota" "-help"]
 
@@ -247,7 +251,6 @@ proc qquota_option_l {} {
 
    # two rules from default rule sets and two from test specific rule set
    qquota_count_entries "qquota_option_l" "" 4
-
    qquota_count_entries "qquota_option_l" "-l tm" 1
    qquota_count_entries "qquota_option_l" "-l tt" 1
    qquota_count_entries "qquota_option_l" "-l tm,tt" 2

@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -41,8 +41,6 @@ global check_functions
 global check_root_access_needs
 global qrstat_help_lines
 global qrstat_queue qrstat_host
-
-set qrstat_help_lines 11
 
 set check_root_access_needs "yes"
 
@@ -97,7 +95,14 @@ proc qrstat_test_cleanup {} {
 
 proc qrstat_help {} {
    global ts_config CHECK_PRODUCT_VERSION_NUMBER
-   global qrstat_help_lines
+
+   if {[is_version_in_range "9.2"]} {
+      # new switches: -fmt and -ectx
+      set qrstat_help_lines 13
+   } else {
+      set qrstat_help_lines 11
+   }
+
 
    delete_all_jobs
    wait_for_end_of_all_jobs 60
