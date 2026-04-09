@@ -3162,6 +3162,7 @@ proc config_compile_options { only_check name config_array } {
       "-DWITH_GPERF=ON   Enable Google Performance Tools (default OFF)"
       "-DWITH_PYTHON=ON  Enable Python (default OFF)"
       "-DWITH_OPENSSL=ON Enable OpenSSL that allows installation with TLS (default OFF)"
+      "-DWITH_CURL=ON    Enable Curl/libcurl for cloud provider detection (default OFF)"
       "Coverage with lcov needs to get activated with -coverage \"lcov\" and -coverage_dir <path>. No need to set -DWITH_LCOV=ON here"
    }
    return [config_generic $only_check $name config $help_text "string" 1 0]
