@@ -336,23 +336,18 @@ proc check_core_queues {} {
 }
 
 proc qstat_help {} {
-
    # this is true for < 6.2u5
    set qstat_help_lines 41
 
    # in 6.2u5 there is an additional "-cb" line
    if {[ge_has_feature "binding-in-execd"]} {
       set qstat_help_lines 42
-   }
-
-   # in GCS 9.0.0 the -sdv switch was added
-   if {[is_version_in_range "9.0.2"] && [ge_has_feature "gcs"]} {
+   } elseif {[is_version_in_range "9.0.2" "9.2.0"] && [ge_has_feature "gcs"]} {
+      # in GCS 9.0.0 the -sdv switch was added
       set qstat_help_lines 43
-   }
-
-   # in GCS 9.2.0 the -sdv and -ncb switch was removed
-   if {[is_version_in_range "9.2.0"] && [ge_has_feature "gcs"]} {
-      set qstat_help_lines 41
+   } elseif {[is_version_in_range "9.2.0"] && [ge_has_feature "gcs"]} {
+      # in GCS 9.2.0 the -sdv/-ncb/-xml switch was removed and -fmt/-ectx was added
+      set qstat_help_lines 42
    }
 
    delete_all_jobs
