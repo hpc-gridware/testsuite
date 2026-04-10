@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2024,2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -246,6 +246,8 @@ proc qselect_U {} {
    global ts_config
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
    global qselect_host
+
+   # wait_for_enter
 
    # select all queues accessable by CHECK_FIRST_FOREIGN_SYSTEM_USER
    set option "-U $CHECK_FIRST_FOREIGN_SYSTEM_USER"
