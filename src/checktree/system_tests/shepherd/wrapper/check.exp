@@ -1,0 +1,124 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2024-2025 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+#set check_root_access_needs "yes"
+#set check_need_running_system "no"
+set check_version_range {"9.0.12 9.1.1" ""}
+
+# define test's name and run level descriptions
+set check_name            "shepherd_wrapper"
+set check_category        "EXECUTION SHEPHERD VERIFIED"
+set check_description(0)  "test shepherd wrapper"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function shepherd_wrapper_setup
+set check_cleanup_function shepherd_wrapper_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "shepherd_wrapper_bg"
+lappend check_functions "shepherd_wrapper_no_bg"
+
+# -------- local test procedures: initialization------------------------------
+
+proc shepherd_wrapper_setup {} {
+   get_current_cluster_config_array ts_config
+   global shepherd_wrapper_hosts shepherd_wrapper_backup
+
+   # we test on one node only
+   set shepherd_wrapper_hosts [host_conf_get_suited_hosts]
+
+   # we want to modify the local config - make a backup
+   get_config shepherd_wrapper_backup $shepherd_wrapper_hosts
+}
+
+proc shepherd_wrapper_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global shepherd_wrapper_hosts shepherd_wrapper_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # standard reset config
+   reset_config_and_propagate shepherd_wrapper_backup $shepherd_wrapper_hosts
+
+   unset -nocomplain shepherd_wrapper_hosts shepherd_wrapper_backup
+}
+
+proc shepherd_wrapper_test_jobs {} {
+   global shepherd_wrapper_hosts
+
+   # check qsub job
+   set job_id [submit_job "-b y -l h=$shepherd_wrapper_hosts sleep 10"]
+   wait_for_jobstart $job_id "" 10
+   wait_for_jobend $job_id "" 20
+   get_qacct $job_id
+   if {$qacct_info(exit_status) != 0} {
+      ts_log_severe "job failed with exit status $qacct_info(exit_status)"
+   }
+
+   # check qrsh job
+   set output [start_sge_bin "qrsh" "-l h=$shepherd_wrapper_hosts echo hello"]
+   ts_log_fine "qrsh output: $output"
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qrsh failed with exit status $prg_exit_state"
+   }
+   if {[string trim $output] ne "hello"} {
+      ts_log_severe "qrsh output was not \"hello\" as expected\nbut \"$output\""
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+proc shepherd_wrapper_bg {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH
+   global shepherd_wrapper_hosts
+
+   set conf(shepherd_cmd) "$CHECK_ACTUAL_TEST_PATH/shepherd_wrapper.sh"
+   set_config_and_propagate conf $shepherd_wrapper_hosts
+
+   shepherd_wrapper_test_jobs
+}
+
+proc shepherd_wrapper_no_bg {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH
+   global shepherd_wrapper_hosts
+
+   set conf(shepherd_cmd) "$CHECK_ACTUAL_TEST_PATH/shepherd_wrapper_no_opts.sh"
+   set_config_and_propagate conf $shepherd_wrapper_hosts
+
+   shepherd_wrapper_test_jobs
+}
