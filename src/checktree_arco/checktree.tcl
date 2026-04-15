@@ -28,7 +28,7 @@
 #
 #  Portions of this software are Copyright (c) 2011 Univa Corporation
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -137,7 +137,7 @@ set ARCO_VIEWS { view_ar_time_usage view_job_times_subquery view_job_times view_
 #*******************************************************************************
 proc arco_compile { compile_hosts a_report } {
    upvar $a_report report
-   return [arco_build [host_conf_get_java_compile_host] "all" report]
+   return [arco_build [host_conf_get_java_compile_host] "dist" report]
 }
 
 #****** checktree/arco_compile_clean() *****************************************
@@ -234,7 +234,7 @@ proc arco_build { compile_hosts target a_report { ant_options "" } { arco_build_
 
    # setup environment
    set env(JAVA_HOME) [host_conf_get_java $build_host 8]
-   if { $env(JAVA_HOME) == "" } {
+   if {$env(JAVA_HOME) == ""} {
       ts_log_config "Java 1.8. not found on $build_host!"
       return -1
    }
@@ -242,20 +242,26 @@ proc arco_build { compile_hosts target a_report { ant_options "" } { arco_build_
    set java_path [string range $env(JAVA_HOME) 0 $ind]
    set env(ARCH)      [resolve_arch $build_host]
    set env(PATH)      "$java_path:\$PATH"
-   append ant_options " -Dsge.root=$ts_config(product_root)"
-   append ant_options " -Dsge.srcdir=$ts_config(source_dir)"
-   set env(ANT_OPTS) "$ant_options"
+
+   if {[arco_have_maven_build]} {
+      set options "$target $ts_config(package_release)"
+   } else {
+      append ant_options " -Dsge.root=$ts_config(product_root)"
+      append ant_options " -Dsge.srcdir=$ts_config(source_dir)"
+      set env(ANT_OPTS) "$ant_options"
+      if {[coverage_enabled "emma"]} {
+         set options "-emma $target"
+      } else {
+         set options "$target"
+      }
+   }
 
    report_task_add_message report $task_nr "environment settings:"
    foreach attr [array names env] {
       report_task_add_message report $task_nr "   $attr=$env($attr)"
    }
 
-   if {[coverage_enabled "emma"]} {
-      set open_spawn [open_remote_spawn_process $build_host $CHECK_USER "./build.sh" "-emma $target" 0 $arco_config(arco_source_dir) env]
-   } else {
-      set open_spawn [open_remote_spawn_process $build_host $CHECK_USER "./build.sh" "$target" 0 $arco_config(arco_source_dir) env]
-   }
+   set open_spawn [open_remote_spawn_process $build_host $CHECK_USER "./build.sh" $options 0 $arco_config(arco_source_dir) env]
    set spawn_list [lindex $open_spawn 1]
    set timeout $arco_build_timeout
    set error -1
@@ -361,11 +367,17 @@ proc arco_install_binaries { arch_list a_report } {
 
    upvar $a_report report
 
-
    set task_nr [ report_create_task report "install_dbwriter_binaries" $ts_config(master_host) ]
 
    set tar $ts_host_config($ts_config(master_host),tar)
-   set tar_args "xzf $arco_config(arco_source_dir)/dbwriter/dbwriter.tar.gz -C $ts_config(product_root)"
+
+   if {[arco_have_maven_build]} {
+      set targz "$arco_config(arco_source_dir)/dbwriter/target/dbwriter/dbwriter.tar.gz"
+   } else {
+      set targz "$arco_config(arco_source_dir)/dbwriter/dbwriter.tar.gz"
+   }
+
+   set tar_args "xzf $targz -C $ts_config(product_root)"
 
    report_task_add_message report $task_nr "------------------------------------------"
    report_task_add_message report $task_nr "-> $tar $tar_args"
@@ -1025,4 +1037,20 @@ proc check_dbwriter_log { } {
 proc arco_test_run_level_check {is_starting was_error} {
    # anything to do?
    return 0
+}
+
+##
+# @brief Do we have a maven build or an ant build for the dbwriter?
+#
+# @return 1 if we have a maven build, 0 if we have an ant build
+proc arco_have_maven_build {} {
+   global arco_config
+
+   set ret 0
+
+   if {[file exists $arco_config(arco_source_dir)/dbwriter/pom.xml]} {
+      set ret 1
+   }
+
+   return $ret
 }

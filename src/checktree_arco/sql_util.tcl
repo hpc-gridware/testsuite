@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -93,7 +93,11 @@ proc send_to_spawn_id { sp_id input { no_nl 0 } } {
 proc get_sqlutil_classpath {} {
    global ts_config arco_config
 
-   set jar_list { arco_common.jar jaxb-impl.jar jaxb-jxc.jar  jaxb-xjc.jar }
+   if {[arco_have_maven_build]} {
+      set jar_list [glob -directory "$ts_config(product_root)/dbwriter/lib" -tails "*.jar"]
+   } else {
+      set jar_list {"arco_common.jar" "jaxb-impl.jar" "jaxb-jxc.jar" "jaxb-xjc.jar"}
+   }
    set ret ""
 
    set jdbc_driver_path [get_jdbc_driver_path]
