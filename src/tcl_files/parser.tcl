@@ -1310,7 +1310,7 @@ proc parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1}} {
    upvar $input  in
    upvar $output out
 
-   if {[is_version_in_range "9.0.3 9.1.0"]} {
+   if {[is_version_in_range "9.0.3 9.1.0 9.2.0"]} {
       # beginning with 9.0.3 / 9.1.0 the job id column is 3 characters wider
       if {$ext == 1} {
          set   position(0)  "0 9"               ; set    names(0)    id
@@ -1362,9 +1362,9 @@ proc parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1}} {
          set   position(8)  "74 86"             ; set    names(8)    user
          set   position(9)  "87 92"             ; set    names(9)    state
          set      rules(9)  rule_list
-         set   position(10) "93 113"            ; set    names(10)   time
+         set   position(10) "93 111"            ; set    names(10)   time
          set  transform(10)  transform_date_time
-         set   position(11) "114 132"           ; set    names(11)   deadline
+         set   position(11) "113 131"           ; set    names(11)   deadline
          set   position(12) "133 183"           ; set    names(12)   queue
          set      rules(12)  rule_list
          set   position(13) "184 188"           ; set    names(13)   slots
