@@ -315,6 +315,11 @@ proc sqlutil_connect {sp_id {use_admin_db 0}} {
 proc sqlutil_exec {sp_id cmd {a_timeout 30}} {
    global CHECK_DEBUG_LEVEL sqlutil_errors
 
+   # Print the SQL command (but not the pseudo command used to check the connection).
+   if {$cmd ne "set print_header true"} {
+      ts_log_fine $cmd
+   }
+
    # split the command into more lines, if the command is too long
    set commd $cmd
    while {1} {

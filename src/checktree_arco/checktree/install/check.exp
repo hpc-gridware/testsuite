@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -359,16 +359,16 @@ proc mysql_init_arco_db {} {
    global ts_config ts_host_config arco_config
    global CHECK_DEBUG_LEVEL
 
-   if { [get_dbwriter_status 0] == 0} {
+   if {[get_dbwriter_status 0] == 0} {
       shutdown_dbwriter
    }
 
    set id [sqlutil_create]
-   if { $id == "-1" } {
+   if {$id == "-1"} {
       ts_log_severe "Can't create sqlutil"
       return -2
    }
-   set sp_id [ lindex $id 1 ]
+   set sp_id [lindex $id 1]
 
    # connect to the admin database
    if {[sqlutil_connect $sp_id 1] != 0} {
@@ -390,7 +390,7 @@ proc mysql_init_arco_db {} {
       return -2
    } elseif {$res > 0} {
       # database does exists => drop it
-      set sql "drop database $db_name"
+      set sql "DROP DATABASE $db_name"
       if {[sqlutil_exec $sp_id $sql] != 0} {
          ts_log_severe "Can't drop database $db_name, may be another user is using this database"
          close_spawn_process $id
@@ -408,17 +408,17 @@ proc mysql_init_arco_db {} {
       return -2
    } elseif {$res > 0} {
       # user does exists => drop it
-      foreach i [ array names result_array ] {
-         if { "$result_array($i)" != "${arco_write_user}" } {
+      foreach i [array names result_array] {
+         if {"$result_array($i)" != "${arco_write_user}"} {
             # revoke user's privileges
             set sql "REVOKE ALL PRIVILEGES, GRANT OPTION FROM '${arco_write_user}'@'$result_array($i)'"
             if {[sqlutil_exec $sp_id $sql] != 0} {
                ts_log_severe "Can't revoke privileges from user '$arco_write_user'@'$result_array($i)'"
                close_spawn_process $id
-#               return -2
+               return -2
             }
             # drop user
-            set sql "drop user '$arco_write_user'@'$result_array($i)'"
+            set sql "DROP USER '$arco_write_user'@'$result_array($i)'"
             if {[sqlutil_exec $sp_id $sql] != 0} {
                ts_log_severe "Can't drop user '$arco_write_user'@'$result_array($i)'"
                close_spawn_process $id
@@ -437,17 +437,17 @@ proc mysql_init_arco_db {} {
       close_spawn_process $id
       return -2
    } elseif {$res > 0} {
-      foreach i [ array names result_array ] {
-         if { "$result_array($i)" != "${arco_read_user}" } {
+      foreach i [array names result_array] {
+         if {"$result_array($i)" != "${arco_read_user}"} {
             # before dropping the user we have to revoke his privileges
-               set sql "REVOKE SELECT, SHOW VIEW on ${db_name}.* FROM '${arco_read_user}'@'$result_array($i)'"
-               if {[sqlutil_exec $sp_id $sql] != 0} {
-                  ts_log_severe "Can't revoke privileges from user '${arco_read_user}'@'$result_array($i)'"
-                  close_spawn_process $id
-#                  return -2
-               }
+            set sql "REVOKE SELECT, SHOW VIEW on ${db_name}.* FROM '${arco_read_user}'@'$result_array($i)'"
+            if {[sqlutil_exec $sp_id $sql] != 0} {
+               ts_log_severe "Can't revoke privileges from user '${arco_read_user}'@'$result_array($i)'"
+               close_spawn_process $id
+               return -2
+            }
             # drop user
-            set sql "drop user '$arco_read_user'@'$result_array($i)'"
+            set sql "DROP USER '$arco_read_user'@'$result_array($i)'"
             if {[sqlutil_exec $sp_id $sql] != 0} {
                ts_log_severe "Can't drop user '$arco_read_user'@'$result_array($i)'"
                close_spawn_process $id
@@ -457,7 +457,7 @@ proc mysql_init_arco_db {} {
       }
    }
 
-   set sql "create database $db_name"
+   set sql "CREATE DATABASE $db_name"
    if {[sqlutil_exec $sp_id $sql] < 0} {
       ts_log_severe "Can't create database $db_name"
       close_spawn_process $id
@@ -470,28 +470,41 @@ proc mysql_init_arco_db {} {
    #                          'username'@'database_host' [ mandatory if swc_host = database_host ]
    # The grant statement also creates the user in the database
 
-   set hosts {}
-   lappend hosts "%"
-   lappend hosts [get_database_host]
-
-   foreach host $hosts {
-      set sql "GRANT ALL on *.* to '$arco_write_user'@'$host' IDENTIFIED BY 'secret' with GRANT OPTION"
-      if {[sqlutil_exec $sp_id $sql] < 0} {
-         ts_log_severe "Can't grant privileges to user '$arco_write_user'@'$host'"
-         close_spawn_process $id
-         return -2
-      }
+   # With older MySQL versions the user was implicitly created on a GRANT statement if it did not exist.
+   # With newer MySQL versions this is not the case anymore.
+   # So we have to create the user before granting privileges to it.
+   # This should also work with older versions of MySQL (which we will probably never support again).
+   set sql "CREATE USER '$arco_write_user'@'%' IDENTIFIED BY 'secret'"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
+      ts_log_severe "Can't grant privileges to user '$arco_write_user'@'$host'"
+      close_spawn_process $id
+      return -2
    }
 
-   foreach host $hosts {
-      set sql "GRANT SELECT, SHOW VIEW on ${db_name}.* to '$arco_read_user'@'$host' IDENTIFIED BY 'secret'"
-      if {[sqlutil_exec $sp_id $sql] < 0} {
-         ts_log_severe "Can't grant privileges to user '$arco_read_user'@'$host'"
-         close_spawn_process $id
-         return -2
-      }
+   set sql "CREATE USER '$arco_read_user'@'%' IDENTIFIED BY 'secret'"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
+      ts_log_severe "Can't grant privileges to user '$arco_write_user'@'$host'"
+      close_spawn_process $id
+      return -2
    }
 
+   # Grant access to the arco_write_user for all hosts.
+   set sql "GRANT ALL on ${db_name}.* TO '$arco_write_user'@'%' WITH GRANT OPTION"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
+      ts_log_severe "Can't grant privileges to user '$arco_write_user'@'%'"
+      close_spawn_process $id
+      return -2
+   }
+
+   # Grant access to the arco_read_user for all hosts.
+   set sql "GRANT SELECT, SHOW VIEW on ${db_name}.* to '$arco_read_user'@'%'"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
+      ts_log_severe "Can't grant privileges to user '$arco_read_user'@'%'"
+      close_spawn_process $id
+      return -2
+   }
+
+   # Flush privileges to make sure that all changes are applied.
    set sql "FLUSH PRIVILEGES"
    if {[sqlutil_exec $sp_id $sql] < 0} {
       ts_log_severe "Can't flush privileges"
@@ -499,8 +512,8 @@ proc mysql_init_arco_db {} {
       return -2
    }
 
+   # Close connection to sql util.
    close_spawn_process $id
-#   add_proc_error "mysql_init_arco_db" 0 "arco db initialized"
-   return 0
 
+   return 0
 }
