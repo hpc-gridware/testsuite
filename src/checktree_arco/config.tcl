@@ -26,7 +26,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -572,18 +572,20 @@ proc config_arco_source_dir { only_check name config_array } {
 
    upvar $config_array config
 
-   set help_text {  "Enter the full path to ARCo source directory."
-                    "The testsuite needs this directory to build ARCo." }
+   set help_text {  "Enter the full path to the dbwriter (former ARCo) source directory."
+                    "The testsuite needs this directory to build dbwriter(former ARCo)." }
 
    set value [config_generic $only_check $name config $help_text "directory" 0]
 
    if { $value == -1 } { return -1 }
 
    if {!$fast_setup} {
-      if { [ file isfile $value/build.sh ] != 1 } {
+      set last_component [file tail $value]
+      set parent_dir [file dirname $value]
+      if {![file isfile $value/build.sh ]} {
          puts "File \"$value/build.sh\" not found"
          return -1
-}
+      }
    }
    return $value
 }

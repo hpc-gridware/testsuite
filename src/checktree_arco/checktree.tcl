@@ -372,7 +372,7 @@ proc arco_install_binaries { arch_list a_report } {
    set tar $ts_host_config($ts_config(master_host),tar)
 
    if {[arco_have_maven_build]} {
-      set targz "$arco_config(arco_source_dir)/dbwriter/target/dbwriter/dbwriter.tar.gz"
+      set targz "$arco_config(arco_source_dir)/target/dbwriter/dbwriter.tar.gz"
    } else {
       set targz "$arco_config(arco_source_dir)/dbwriter/dbwriter.tar.gz"
    }
@@ -1048,7 +1048,7 @@ proc arco_have_maven_build {} {
 
    set ret 0
 
-   if {[file exists $arco_config(arco_source_dir)/dbwriter/pom.xml]} {
+   if {[file exists $arco_config(arco_source_dir)/pom.xml]} {
       set ret 1
    }
 
