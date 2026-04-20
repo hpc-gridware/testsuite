@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2025 HPC-Gridware GmbH
+#  Copyright 2025-2026 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -354,4 +354,27 @@ proc systemd_stop_service {host service {raise_error 1}} {
    return $ret
 }
 
-# @todo add functions for start, enable, disable, ...
+##
+# @brief start a systemd service.
+#
+# This function starts a specific systemd service on the specified host.
+# It uses the `systemctl start` command to start the service.
+#
+# @param host The host where the service should be started.
+# @param service The name of the service to start, e.g., "ocs8012-qmaster.service"
+# @returns 1 if the service was started successfully, 0 otherwise.
+proc systemd_start_service {host service} {
+   set ret 1
+   set service_name [systemd_get_service_name $service]
+   set output [start_remote_prog $host "root" "systemctl" "start $service_name"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "systemctl start $service_name on host $host failed:\n$output"
+      set ret 0
+   } else {
+      ts_log_fine "systemctl start $service_name on host $host exited 0:\n$output"
+   }
+
+   return $ret
+}
+
+# @todo add functions for enable, disable, ...

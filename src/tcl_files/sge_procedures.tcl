@@ -8359,10 +8359,12 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
       set use_systemd_if_available 1
    }
 
-   if {$use_systemd_if_available && [host_has_systemd $host] && [systemd_is_service_active $host "execd"]} {
+   if {$use_systemd_if_available} {
       foreach host $ts_config(execd_nodes) {
-         # shutdown the execds via systemd
-         systemd_stop_service $host "execd"
+         if {[host_has_systemd $host] && [systemd_is_service_active $host "execd"]} {
+            # shutdown the execds via systemd
+            systemd_stop_service $host "execd"
+         }
       }
    } else {
       # shutdown all execds via qconf
@@ -11042,7 +11044,7 @@ proc remove_from_init_system {host} {
    if {$CHECK_INSTALL_RC && [host_has_systemd $host]} {
       ts_log_frame
       ts_log_fine "removing services from init system on host $host"
-      set services "qmaster execd"
+      set services "qmaster execd dbwriter"
       foreach service $services {
          set service_name [systemd_get_service_name $service]
          ts_log_fine "   -> $service_name"
@@ -11091,7 +11093,13 @@ proc remove_from_init_system {host} {
 proc remove_cluster_hosts_from_init_system {} {
    get_current_cluster_config_array ts_config
 
+   # We expect services to run on master host, shadowd hosts and execd nodes
    set hosts [concat $ts_config(master_host) $ts_config(shadowd_hosts) $ts_config(execd_nodes)]
+   # if dbwriter is configured, then we also expect a service to run on the dbwriter host
+   if {[lsearch -glob $ts_config(additional_checktree_dirs) "*checktree_arco"] >= 0} {
+      global arco_config
+      set hosts [concat $hosts $arco_config(dbwriter_host)]
+   }
    set hosts [lsort -unique $hosts]
    # remove "none" entries from the list
    regsub "none" $hosts "" hosts

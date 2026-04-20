@@ -26,7 +26,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -52,7 +52,7 @@ lappend check_functions "arco_dbwriter_install"
 # here the tests begin ....
 
 proc arco_dbwriter_install {} {
-   global CHECK_USER CHECK_DEBUG_LEVEL
+   global CHECK_USER CHECK_DEBUG_LEVEL CHECK_INSTALL_RC
    global ts_config arco_config ts_host_config
 
    if {[get_dbwriter_status 0] == 0} {
@@ -261,7 +261,11 @@ proc arco_dbwriter_install {} {
              continue
           }
           -i $sp_id "start dbwriter at machine boot (y/n) * >> " {
-             send_to_spawn_id $sp_id "n"
+             if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $arco_config(dbwriter_host)]} {
+                send_to_spawn_id $sp_id "y"
+             } else {
+                send_to_spawn_id $sp_id "n"
+             }
              continue
           }
           #SMF startup is always disabled in testsuite

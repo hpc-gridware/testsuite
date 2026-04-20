@@ -419,53 +419,67 @@ proc arco_install_binaries { arch_list a_report } {
 #               by add_proc_error
 #
 #  SEE ALSO
-#     checktree/is_dbwriter_running
 #*******************************************************************************
-proc startup_dbwriter { { hostname "--" } { debugmode "0" } } {
-   global ts_config arco_config CHECK_USER
+proc startup_dbwriter {{hostname "--"} {debugmode "0"}} {
+   global ts_config arco_config CHECK_USER CHECK_INSTALL_RC
 
-   if { $hostname == "--" } {
+   if {$hostname == "--"} {
       set hostname $arco_config(dbwriter_host)
    }
 
-   if { [file exists "$ts_config(product_root)/$ts_config(cell)/spool/dbwriter"] != 1 } {
+   ts_log_fine "startup_dbwriter($hostname)"
+
+   # Create spool directory for dbwriter.
+   if {![file exists "$ts_config(product_root)/$ts_config(cell)/spool/dbwriter"]} {
       set output [start_remote_prog "$hostname" "$CHECK_USER" "mkdir" "-p $ts_config(product_root)/$ts_config(cell)/spool/dbwriter"]
-      if { $prg_exit_state != 0 } {
+      if {$prg_exit_state != 0} {
          ts_log_severe "Can not create spool directory for dbwriter: $output"
          return -1;
       }
    }
 
-   # pass special environment variables to sgedbwriter
-   # to allow code coverage analysis with EMMA
-   if {[coverage_enabled "emma"]} {
-      parse_properties_file properties "$arco_config(arco_source_dir)/build.properties"
-      parse_properties_file properties "$arco_config(arco_source_dir)/build_private.properties" 1
-      set dbwriter_env(DBWRITER_JVMARGS) "-Demma.coverage.out.file=$arco_config(arco_source_dir)/arco/dbwriter/coverage/dbwriter.emma -Demma.coverage.out.merge=true"
-      set dbwriter_env(DBWRITER_CLASSPATH) "$properties(emma.dir)/emma.jar"
-   }
-
-   set prog "$ts_config(product_root)/$ts_config(cell)/common/sgedbwriter"
-
-   if {[wait_for_remote_file "$hostname" "$CHECK_USER" "$prog"] == 0} {
-      set args ""
-      if {$debugmode == 1} {
-         append args "-debug_port 8000 -debug "
+   # Start dbwriter either via systemd or via sgedbwriter.
+   if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $hostname]} {
+      ts_log_fine "   via systemd"
+      if {[systemd_start_service $hostname "dbwriter"]} {
+         return 0
+      } else {
+         # error raised in systemd_stop_service
+         return -1
       }
-      append args "start"
-
-      set output [start_remote_prog "$hostname" "$CHECK_USER" "$prog" $args prg_exit_state 60 0 "" dbwriter_env]
-
-      if {$debugmode == 1} {
-        puts "dbwriter has been started in debug mode"
-        puts "Connect with a jpda debugger to $hostname (Port 8000)!"
-        wait_for_enter
-      } elseif {$prg_exit_state != 0} {
-         ts_log_severe "startup of dbwriter failed: $output (exit code $prg_exit_state)"
-      }
-      return $prg_exit_state;
    } else {
-      return -1
+      ts_log_fine "   via systemd"
+      # pass special environment variables to sgedbwriter
+      # to allow code coverage analysis with EMMA
+      if {[coverage_enabled "emma"]} {
+         parse_properties_file properties "$arco_config(arco_source_dir)/build.properties"
+         parse_properties_file properties "$arco_config(arco_source_dir)/build_private.properties" 1
+         set dbwriter_env(DBWRITER_JVMARGS) "-Demma.coverage.out.file=$arco_config(arco_source_dir)/arco/dbwriter/coverage/dbwriter.emma -Demma.coverage.out.merge=true"
+         set dbwriter_env(DBWRITER_CLASSPATH) "$properties(emma.dir)/emma.jar"
+      }
+
+      set prog "$ts_config(product_root)/$ts_config(cell)/common/sgedbwriter"
+
+      if {[wait_for_remote_file "$hostname" "$CHECK_USER" "$prog"] == 0} {
+         set args ""
+         if {$debugmode == 1} {
+            append args "-debug_port 8000 -debug "
+         }
+         append args "start"
+
+         set output [start_remote_prog "$hostname" "$CHECK_USER" "$prog" $args prg_exit_state 60 0 "" dbwriter_env]
+
+         if {$debugmode == 1} {
+           puts "dbwriter has been started in debug mode"
+           puts "Connect with a jpda debugger to $hostname (Port 8000)!"
+           wait_for_enter
+         } elseif {$prg_exit_state != 0} {
+            ts_log_severe "startup of dbwriter failed: $output (exit code $prg_exit_state)"
+         }
+         return $prg_exit_state;
+      } else {
+         return -1
+      }
    }
 }
 
@@ -560,34 +574,45 @@ proc get_dbwriter_status { { raise_error 1 } { hostname "--" } } {
 #     ???/???
 #*******************************************************************************
 proc shutdown_dbwriter { { hostname "--" } } {
-   global ts_config arco_config CHECK_USER
+   global ts_config arco_config CHECK_USER CHECK_INSTALL_RC
 
    if {$hostname == "--"} {
       set hostname $arco_config(dbwriter_host)
    }
 
-   set prog "$ts_config(product_root)/$ts_config(cell)/common/sgedbwriter"
-
-   if {[file exists $prog]} {
-      start_remote_prog "$hostname" "$CHECK_USER" "$prog" "stop"
-
-      switch -- $prg_exit_state {
-         "0" {
-            ts_log_fine "dbwriter has been stopped"
-            return 0
-         }
-         "1" {
-            ts_log_fine "dbwriter has not been started"
-            return 0
-         }
-         default {
-            ts_log_severe "shutdown of dbwriter failed, exit status $prg_exit_state"
-            return -1
-         }
+   ts_log_fine "shutdown_dbwriter($hostname)"
+   if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $hostname] && [systemd_is_service_active $hostname "dbwriter"]} {
+      ts_log_fine "   via systemd"
+      if {[systemd_stop_service $hostname "dbwriter"]} {
+         return 0
+      } else {
+         # error raised in systemd_stop_service
+         return -1
       }
    } else {
-      ts_log_fine "Can not shutdown dbwriter, $prog does not exists"
-      return -1
+      ts_log_fine "   via sgedbwriter"
+      set prog "$ts_config(product_root)/$ts_config(cell)/common/sgedbwriter"
+      if {[file exists $prog]} {
+         start_remote_prog "$hostname" "$CHECK_USER" "$prog" "stop"
+
+         switch -- $prg_exit_state {
+            0 {
+               ts_log_fine "dbwriter has been stopped"
+               return 0
+            }
+            1 {
+               ts_log_fine "dbwriter has not been started"
+               return 0
+            }
+            default {
+               ts_log_severe "shutdown of dbwriter failed, exit status $prg_exit_state"
+               return -1
+            }
+         }
+      } else {
+         ts_log_fine "Can not shutdown dbwriter, $prog does not exists"
+         return -1
+      }
    }
 }
 
