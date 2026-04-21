@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2024-2025 HPC-Gridware GmbH
+#  Copyright 2024-2026 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -189,6 +189,31 @@ proc drmaaj_install_binaries { arch_list a_report } {
       }
    }
 
+   report_finish_task report $task_nr 0
+
+   # 3rdparty licenses / SBOM files
+   set task_nr [report_create_task report "drmaaj_install_3rdparty_licenses" $ts_config(master_host)]
+   set thirdparty_dst "$ts_config(product_root)/3rd_party/drmaaj"
+   set bom_src "$source_dir/target/bom.json"
+   set bom_dst "$thirdparty_dst/sbom.cyclonedx.json"
+   # create the 3rdparty licenses directory
+   report_task_add_message report $task_nr "creating 3rdparty license directory $thirdparty_dst"
+   set output [remote_file_mkdir $ts_config(master_host) $thirdparty_dst]
+   report_task_add_message report $task_nr $output
+   if {$prg_exit_state != 0} {
+      report_task_add_message report $task_nr "FAILED"
+      lappend errors "creating directory $thirdparty_dst failed:\n$output"
+      set ret -1
+   } else {
+      # install the SBOM file
+      report_task_add_message report $task_nr "copying SBOM files from $bom_src to $bom_dst"
+      set output [start_remote_prog $ts_config(master_host) $CHECK_USER "cp" "$bom_src $bom_dst"]
+      report_task_add_message report $task_nr $output
+      if {$prg_exit_state != 0} {
+         lappend errors "copying SBOM files from $bom_src to $bom_dst failed:\n$output"
+         set ret -1
+      }
+   }
 
    report_finish_task report $task_nr 0
 
