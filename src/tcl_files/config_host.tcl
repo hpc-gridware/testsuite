@@ -316,18 +316,22 @@ proc host_config_get_host_parameters { } {
    lappend params arch,80
    lappend params arch,90
    lappend params arch,91
+   lappend params arch,92
    lappend params compile,62
    lappend params compile,80
    lappend params compile,90
    lappend params compile,91
+   lappend params compile,92
    lappend params doc_compile,62
    lappend params doc_compile,80
    lappend params doc_compile,90
    lappend params doc_compile,91
+   lappend params doc_compile,92
    lappend params java_compile,62
    lappend params java_compile,80
    lappend params java_compile,90
    lappend params java_compile,91
+   lappend params java_compile,92
    lappend params compile_time
    lappend params response_time
    lappend params fr_locale
