@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2024,2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -126,15 +126,17 @@ proc issue_3223_test {} {
    set job_env(SGE_TASK_ID) "undefined"
 
    foreach host $issue_3223_hosts {
+      # need to resolve the host - it might have a long host name
+      set resolved_host [resolve_host $host 1]
       # first as CHECK_USER, must be OK
-      set output [start_remote_prog $master_host $CHECK_USER "qrsh" "-inherit $host echo OK" prg_exit_state 60 0 "" job_env]
+      set output [start_remote_prog $master_host $CHECK_USER "qrsh" "-inherit $resolved_host echo OK" prg_exit_state 60 0 "" job_env]
       if {$prg_exit_state != 0 || [string first "OK" $output] < 0} {
-         ts_log_severe "qrsh -inherit as job user failed on host $host: $prg_exit_state:\n$output"
+         ts_log_severe "qrsh -inherit as job user failed on host $resolved_host: $prg_exit_state:\n$output"
       }
       # as other user must fail
-      set output [start_remote_prog $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER "qrsh" "-inherit $host echo FAILING" prg_exit_state 60 0 "" job_env]
+      set output [start_remote_prog $master_host $CHECK_FIRST_FOREIGN_SYSTEM_USER "qrsh" "-inherit $resolved_host echo FAILING" prg_exit_state 60 0 "" job_env]
       if {$prg_exit_state == 0 || [string first "FAILING" $output] >= 0} {
-         ts_log_severe "qrsh -inherit as non job user succeeded on host $host: $prg_exit_state:\n$output"
+         ts_log_severe "qrsh -inherit as non job user succeeded on host $resolved_host: $prg_exit_state:\n$output"
       }
    }
 
