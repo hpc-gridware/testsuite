@@ -30,6 +30,8 @@
 #
 #  All Rights Reserved.
 #
+#  Portions of this software are Copyright (c) 2024,2026 HPC-Gridware GmbH
+#
 ##########################################################################
 #___INFO__MARK_END__
 
@@ -52,7 +54,7 @@ PeHostfile2MachineFile()
 {
    cat $1 | while read line; do
       # echo $line
-      host=`echo $line|cut -f1 -d" "|cut -f1 -d"."`
+      host=`echo $line|cut -f1 -d" "`
       nslots=`echo $line|cut -f2 -d" "`
       i=1
       while [ $i -le $nslots ]; do
