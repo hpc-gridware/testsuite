@@ -168,8 +168,9 @@ proc issue_3170_test {} {
    # submit job task ...
    set my_tight_env(JOB_ID) $job_id
    set my_tight_env(SGE_TASK_ID) 1
-   ts_log_finer "starting qrsh -inherit $host $ts_config(product_root)/examples/jobs/sleeper.sh 600 ..."
-   set sid [open_remote_spawn_process $ts_config(master_host) $user "qrsh" "-inherit $host $ts_config(product_root)/examples/jobs/sleeper.sh 600" 0 "" my_tight_env]
+   set resolved_host [resolve_host $host 1]
+   ts_log_finer "starting qrsh -inherit $resolved_host $ts_config(product_root)/examples/jobs/sleeper.sh 600 ..."
+   set sid [open_remote_spawn_process $ts_config(master_host) $user "qrsh" "-inherit $resolved_host $ts_config(product_root)/examples/jobs/sleeper.sh 600" 0 "" my_tight_env]
    set sp_id [lindex $sid 1]
    set timeout 90
    log_user 1

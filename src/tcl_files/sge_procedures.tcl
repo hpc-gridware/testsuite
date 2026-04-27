@@ -1996,8 +1996,9 @@ proc submit_wait_type_job {job_type host user {variable qacct_info}} {
          set my_tight_env(JOB_ID) $master_task_id
          set my_tight_env(SGE_TASK_ID) 1
 
-         ts_log_finer "starting qrsh -inherit $host $ts_config(product_root)/examples/jobs/sleeper.sh 15 ..."
-         set sid [open_remote_spawn_process $ts_config(master_host) $user "qrsh" "-inherit $host $ts_config(product_root)/examples/jobs/sleeper.sh 15" 0 "" my_tight_env]
+         set resolved_host [resolve_host $host 1]
+         ts_log_finer "starting qrsh -inherit $resolved_host $ts_config(product_root)/examples/jobs/sleeper.sh 15 ..."
+         set sid [open_remote_spawn_process $ts_config(master_host) $user "qrsh" "-inherit $resolved_host $ts_config(product_root)/examples/jobs/sleeper.sh 15" 0 "" my_tight_env]
          set sp_id [lindex $sid 1]
          set timeout 1
          set max_timeouts 30

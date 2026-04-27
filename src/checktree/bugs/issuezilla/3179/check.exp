@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -85,7 +85,7 @@ proc issue_3179_setup {} {
    get_config issue_3179_saved_config
 
    # set global config params
-   set new_config(load_report_time) "0:0:5"
+   set new_config(load_report_time) "0:0:2"
    set_config_and_propagate new_config
 
    # create parallel environments
@@ -166,7 +166,8 @@ proc create_pe_job_script { host slots } {
       if { $slots == 0 } {
          break
       }
-      start_remote_prog $host $CHECK_USER "echo" "\"qrsh -inherit $execd $ts_config(product_root)/examples/jobs/worker.sh &\" >> $issue_3179_pe_job_script"
+      set resolved_host [resolve_host $execd 1]
+      start_remote_prog $host $CHECK_USER "echo" "\"qrsh -inherit $resolved_host $ts_config(product_root)/examples/jobs/worker.sh &\" >> $issue_3179_pe_job_script"
       set slots [expr $slots - 1]
    }
    start_remote_prog $host $CHECK_USER "echo" "\"sleep 150\" >> $issue_3179_pe_job_script"

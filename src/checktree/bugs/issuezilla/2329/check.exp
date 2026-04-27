@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2024,2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -138,14 +138,15 @@ proc issue_2329_test {} {
    set task_env(SGE_TASK_ID) "undefined"
    set task_script "$ts_config(testsuite_root_dir)/scripts/pe_task.sh"
    set task_options "1 60"
-   set id [open_remote_spawn_process $master_host $CHECK_USER "qrsh" "-inherit $slave_host $task_script $task_options" 0 "" task_env]
+   set resolved_host [resolve_host $slave_host 1]
+   set id [open_remote_spawn_process $master_host $CHECK_USER "qrsh" "-inherit $resolved_host $task_script $task_options" 0 "" task_env]
    set sp_id [lindex $id 1]
 
    # no use to do certain tasks in case of errors
    set error 0
 
    # expect the task to start
-log_user 1
+   log_user 1
    set timeout 20
    expect {
       -i $sp_id timeout {

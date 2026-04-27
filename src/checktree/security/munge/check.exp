@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2025 HPC-Gridware GmbH
+#  Copyright 2025-2026 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -184,8 +184,10 @@ proc munge_tight_pe {} {
 
       set myenv(JOB_ID) $job_id
       set myenv(SGE_TASK_ID) "undefined"
+      set resolved_host [resolve_host $munge_host 1]
+
       # try to start a task, should succeed
-      start_sge_bin "qrsh" "-inherit $munge_host id" $munge_host $CHECK_USER prg_exit_state 60 "" "bin" "output_lines" myenv
+      start_sge_bin "qrsh" "-inherit $resolved_host id" $munge_host $CHECK_USER prg_exit_state 60 "" "bin" "output_lines" myenv
       if {$prg_exit_state != 0} {
          ts_log_severe "qrsh -inherit should have succeeded but failed: $prg_exit_state: $output_lines(1)"
       }
@@ -199,7 +201,7 @@ proc munge_tight_pe {} {
       set pattern [translate_macro "MSG_CULL_AUTHINFO_CORRECTINGUSERNAME_SS" $CHECK_FIRST_FOREIGN_SYSTEM_USER $CHECK_USER]
       init_logfile_wait $munge_host [get_execd_messages_file $munge_host]
       set myenv(SGE_DEBUG_FAKE_USERNAME) $CHECK_FIRST_FOREIGN_SYSTEM_USER
-      start_sge_bin "qrsh" "-inherit $munge_host hostname" $munge_host $CHECK_USER prg_exit_state 60 "" "bin" "output_lines" myenv
+      start_sge_bin "qrsh" "-inherit $resolved_host hostname" $munge_host $CHECK_USER prg_exit_state 60 "" "bin" "output_lines" myenv
       puts $prg_exit_state
       parray output_lines
       if {$prg_exit_state != 0} {

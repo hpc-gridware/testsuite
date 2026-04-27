@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2024-2025 HPC-Gridware GmbH
+#  Copyright 2024-2026 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -156,7 +156,8 @@ if {0} {
 proc x_forks_slaves_do_qrsh_inherit {job_id host} {
    global CHECK_USER
 
-   set qrsh_args "-inherit $host sleep 10"
+   set resolved_host [resolve_host $host 1]
+   set qrsh_args "-inherit $resolved_host sleep 10"
 
    set myenv(JOB_ID) $job_id
    set myenv(SGE_TASK_ID) "undefined"
@@ -258,7 +259,8 @@ if {0} {
    }
 }
 
-   set qrsh_args "-inherit $host echo one task too many"
+   set resolved_host [resolve_host $host 1]
+   set qrsh_args "-inherit $resolved_host echo one task too many"
 
    set myenv(JOB_ID) $job_id
    set myenv(SGE_TASK_ID) "undefined"
