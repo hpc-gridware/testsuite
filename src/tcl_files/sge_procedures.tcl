@@ -8772,7 +8772,6 @@ proc submit_with_method_read_startup_messages {sid {job_id_var ""}} {
    }
 
    set sp_id [lindex $sid 1]
-   # Got telnet client name from global/local config: builtin
    # Your job 5 ("QLOGIN") has been submitted
    # waiting for interactive job to be scheduled ...
    # Your interactive job 5 has been successfully scheduled.
