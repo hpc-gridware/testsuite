@@ -448,7 +448,7 @@ proc startup_dbwriter {{hostname "--"} {debugmode "0"}} {
          return -1
       }
    } else {
-      ts_log_fine "   via systemd"
+      ts_log_fine "   via sgedbwriter"
       # pass special environment variables to sgedbwriter
       # to allow code coverage analysis with EMMA
       if {[coverage_enabled "emma"]} {
