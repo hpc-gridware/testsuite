@@ -177,7 +177,8 @@ proc sqlutil_create {{user ""}} {
    set java_build_host [host_conf_get_java_compile_host]
    ts_log_finest "java build host is \"$java_build_host\""
 
-   set cmd [host_conf_get_java_bin $java_build_host 8 1 1]
+   set java_home [arco_get_java_home $java_build_host]
+   set cmd "$java_home/bin/java"
    set args "com.sun.grid.util.SQLUtil"
 
    set sql_utilenv(CLASSPATH) [get_sqlutil_classpath]

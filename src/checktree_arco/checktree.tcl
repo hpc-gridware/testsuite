@@ -41,7 +41,6 @@ global ACT_CHECKTREE
 
 ts_source $ACT_CHECKTREE/config
 ts_source $ACT_CHECKTREE/sql_util
-ts_source $ACT_CHECKTREE/arcorun
 ts_source $ACT_CHECKTREE/arco_queries
 
 set arco_config(initialized) 0
@@ -233,9 +232,8 @@ proc arco_build { compile_hosts target a_report { ant_options "" } { arco_build_
    report_task_add_message report $task_nr "starting arco build.sh $target on host $build_host ..."
 
    # setup environment
-   set env(JAVA_HOME) [host_conf_get_java $build_host 8]
-   if {$env(JAVA_HOME) == ""} {
-      ts_log_config "Java 1.8. not found on $build_host!"
+   set env(JAVA_HOME) [arco_get_java_home $build_host]
+   if {$env(JAVA_HOME) eq ""} {
       return -1
    }
    set ind [string first "/java" $env(JAVA_HOME)]
@@ -1079,3 +1077,35 @@ proc arco_have_maven_build {} {
 
    return $ret
 }
+
+##
+# @brief Get the JAVA_HOME for the given host
+#
+# Which Java version to use depends on the version of the SGE installation.
+# For SGE 9.1.2 and higher, Java 11 is required,
+# for older versions Java 8 is required.
+# For SGE 9.1.2 and higher, if Java 11 is not available, but a higher version is available,
+# this higher version will be used.
+#
+# @param host the host for which the JAVA_HOME should be determined
+proc arco_get_java_home {host} {
+   if {[is_version_in_range "9.1.2"]} {
+      set min_version 11
+      set allow_higher 1
+   } else {
+      set min_version 8
+      set allow_higher 0
+   }
+   set ret [host_conf_get_java $host $min_version 0 $allow_higher]
+   if {$ret eq ""} {
+      if {$allow_higher} {
+         set msg "On host $host the required Java version $min_version (or higher) is not installed"
+      } else {
+         set msg "On host $host the required Java version $min_version is not installed"
+      }
+      ts_log_config $msg
+   }
+
+   return $ret
+}
+

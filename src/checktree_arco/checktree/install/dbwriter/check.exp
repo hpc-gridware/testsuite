@@ -168,7 +168,7 @@ proc arco_dbwriter_install {} {
           }
 
           -i $sp_id "*nter the path to your java installation * >> " {
-             set java_home [host_conf_get_java $arco_config(dbwriter_host) 8 0 1]
+             set java_home [arco_get_java_home $arco_config(dbwriter_host)]
              if {$java_home == ""} {
                ts_log_severe "didn't find a Java version >= 8 on host $arco_config(dbwriter_host)"
                incr error_count 1
