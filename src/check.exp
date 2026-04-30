@@ -7294,10 +7294,18 @@ proc build_java_env_list {{host ""} {arch "" }} {
 proc load_additional_packages {} {
    global CHECK_HAVE_TDOM
 
+   # try to load tdom package that allows XML parsing
    set ret [catch {package require tdom} output]
    if {$ret == 0} {
       set CHECK_HAVE_TDOM 1
       ts_log_fine "successfully loaded tdom package version $output"
+   }
+
+   # try to load json module that allows JSON parsing
+   set ret [catch {package require json} output]
+   if {$ret == 0} {
+      set CHECK_HAVE_JSON 1
+      ts_log_fine "successfully loaded json package version $output"
    }
 }
 

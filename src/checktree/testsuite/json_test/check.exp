@@ -1,0 +1,53 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2025-2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+
+set check_name "json_test"
+set check_category "TESTSUITE"
+set check_description(0)  "check if JSON module is availabele otherwise all JSON specific test cannot run successfully."
+set check_needs ""
+set check_root_access_needs "yes"
+
+# setup and cleanup functions
+set check_setup_level_function lab_test_level_setup
+set check_cleanup_level_function lab_test_level_cleanup
+
+# define test's procedure order
+set check_functions "json_test_availability"
+
+# -------- local test procedures: initialization------------------------------
+
+proc json_test_availability {} {
+   set data [::json::json2dict {{"a":99,"b":[2,3]}}]
+   set result [dict get $data a]
+
+   if {$result != 99} {
+      ts_log_error "JSON module is not working properly. Install the package `tcllib` that is available on most Linux distributions or switch your TS to a corresponding machine."
+   } else {
+      ts_log_fine "JSON module is working properly."
+   }
+}
