@@ -39,7 +39,7 @@ while IFS= read -r file1; do
 
    # Exclude specific files from comparison
    case "$object_name" in
-      backup_date|ports|version|sge_root|admin_hosts|submit_hosts|act_qmaster|shadow_masters|cluster_name|jobseqnum|arseqnum)
+      backup_date|ports|version|sge_root|admin_hosts|submit_hosts|act_qmaster|shadow_masters|cluster_name|jobseqnum|arseqnum|sge_aliases)
          echo "Skipping excluded file '$object_name'"
       continue
       ;;
