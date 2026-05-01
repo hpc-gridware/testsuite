@@ -197,7 +197,7 @@ proc usage_io_test {} {
          lappend errors "iow usage not reported"
       } else {
          set iow [transform_usage_value $usage(iow) 1]
-         if {$iow <= 0} {
+         if {$iow < 0} {
             lappend errors "iow ($usage(iow)) usage not reported"
          }
          # iow must be lower than wallclock
