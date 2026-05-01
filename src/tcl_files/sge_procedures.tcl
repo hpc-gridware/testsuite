@@ -3018,37 +3018,12 @@ proc add_exechost {change_array {fast_add 1} {on_host ""} {ignore_error 0}} {
   return $result
 }
 
-#****** sge_procedures/get_scheduling_info() ***********************************
-#  NAME
-#     get_scheduling_info() -- get scheduling information
-#
-#  SYNOPSIS
-#     get_scheduling_info { job_id { check_pending 1 } }
-#
-#  FUNCTION
-#     This procedure starts the get_qstat_j_info() procedure and returns
-#     the "scheduling info" value. The procedure returns ALLWAYS a valid
-#     text string.
-#
-#  INPUTS
-#     job_id              - job id
-#     { check_pending 1 } - 1(default): do a wait_forjob_pending first
-#                           0         : no wait_for_jobpending() call
-#
-#  RESULT
-#     scheduling info text
-#
-#  SEE ALSO
-#     sge_procedures/get_qstat_j_info()
-#     sge_procedures/wait_forjob_pending()
-#
-#*******************************************************************************
-proc get_scheduling_info { job_id { check_pending 1 }} {
+proc get_scheduling_info {job_id {check_pending 1}} {
    get_current_cluster_config_array ts_config
 
-   if { $check_pending == 1 } {
-      set result [ wait_for_jobpending $job_id "leeper" 120 ]
-      if { $result != 0 } {
+   if {$check_pending == 1} {
+      set result [wait_for_jobpending $job_id "leeper" 120]
+      if {$result != 0} {
          return "job not pending"
       }
    }
@@ -3056,25 +3031,15 @@ proc get_scheduling_info { job_id { check_pending 1 }} {
 
    set my_timeout [expr [clock seconds] + 30]
    ts_log_finer "waiting for scheduling info information ..."
-   while { 1 } {
-      if { [get_qstat_j_info $job_id ] } {
+   while {1} {
+      if {[get_qstat_j_info $job_id]} {
          set help_var_name "scheduling info"
          if { [info exists qstat_j_info($help_var_name)] } {
             set sched_info $qstat_j_info($help_var_name)
          } else {
             set sched_info "no messages available"
          }
-         set help_var_name [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SCHEDD_SCHEDULINGINFO]]
-         if { [info exists qstat_j_info($help_var_name)] } {
-            set sched_info $qstat_j_info($help_var_name)
-         } else {
-            set sched_info "no messages available"
-         }
-
-
-         set INFO_NOMESSAGE [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SCHEDD_INFO_NOMESSAGE]]
-
-         if { [string first "no messages available" $sched_info] < 0 && [string first $INFO_NOMESSAGE $sched_info] < 0 } {
+         if {[string first "no messages available" $sched_info] < 0} {
             ts_log_finest $sched_info
             return $sched_info
          }
