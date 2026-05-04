@@ -520,23 +520,24 @@ proc startup_dbwriter {{hostname "--"} {debugmode "0"}} {
 proc get_dbwriter_status { { raise_error 1 } { hostname "--" } } {
    global ts_config arco_config CHECK_USER
 
-   if { $hostname == "--" } {
+   if {$hostname == "--"} {
       set hostname $arco_config(dbwriter_host)
    }
 
    set prog "$ts_config(product_root)/$ts_config(cell)/common/sgedbwriter"
 
-   if { $raise_error } {
+   if {$raise_error} {
       set timeout 60
    } else {
       set timeout 5
    }
-   if { [wait_for_remote_file "$hostname" "$CHECK_USER" "$prog" $timeout $raise_error] == 0 } {
-      start_remote_prog "$hostname" "$CHECK_USER" "$prog" "status"
+   if {[wait_for_remote_file $hostname $CHECK_USER $prog $timeout $raise_error] == 0} {
+      set output [start_remote_prog $hostname $CHECK_USER $prog "status"]
+      ts_log_fine $output
       return $prg_exit_state
    } else {
-      if { $raise_error } {
-         ts_log_severe "Can not startup dbwriter, $prog does not exists"
+      if {$raise_error} {
+         ts_log_severe "Can not query dbwriter status, $prog does not exists"
       }
       return -1
    }

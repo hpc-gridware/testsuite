@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2024,2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -104,7 +104,9 @@ proc auto_backup_do_backup {} {
    set my_timeout 500
    set exit_val 0
 
-   set output [start_remote_prog $ts_config(master_host) $CHECK_USER "./inst_sge" "-bup -auto $ts_config(product_root)/autobackup_config.conf" exit_val $my_timeout 0 $ts_config(product_root)]
+   # Start the auto backup.
+   # Do not source the settings file - the backup must be self-contained.
+   set output [start_remote_prog $ts_config(master_host) $CHECK_USER "./inst_sge" "-bup -auto $ts_config(product_root)/autobackup_config.conf" exit_val $my_timeout 0 $ts_config(product_root) "" 1 0]
 
    if {$exit_val != 0} {
       ts_log_severe $output
