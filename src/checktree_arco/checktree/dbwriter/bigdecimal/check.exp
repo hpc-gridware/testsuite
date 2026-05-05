@@ -105,6 +105,12 @@ proc bigdecimal_setup {} {
       delete_file $DBWRITER_LOG_FNAME
    }
 
+   # Clean the database - records from earlier tests might make this test fail.
+   if {[arco_clean_database] < 0} {
+      ts_log_severe "Can not clean arco database"
+      return -1
+   }
+
    # start dbwriter if necessary
    if {[get_dbwriter_status 0] != 0} {
       if { [get_dbwriter_status 0] != 0 } {

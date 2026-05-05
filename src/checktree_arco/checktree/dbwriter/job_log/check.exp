@@ -156,7 +156,7 @@ proc arco_dbwriter_job_log_execute {} {
    }
 
    if {[arco_clean_database] < 0} {
-      ts_log_severe "arco_dbwriter_job_log_reusesetup" -1 "Can not clean arco database"
+      ts_log_severe "Can not clean arco database"
       return -1
    }
 
