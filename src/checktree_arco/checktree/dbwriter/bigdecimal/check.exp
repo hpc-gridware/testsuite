@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -94,8 +94,10 @@ proc bigdecimal_setup {} {
    # enable reporting
    set delimiter " "
    add_or_replace_array_param new_conf accounting_backup reporting_params "reporting" "true" $delimiter
-   # for now dbwriter uses the old reporting file format
-   add_or_replace_array_param new_conf new_conf reporting_params "old_reporting" "true" $delimiter
+   # only since 9.1.2 is dbwriter using the new JSONL format
+   if {[is_version_in_range "" "9.1.2"]} {
+      add_or_replace_array_param new_conf new_conf reporting_params "old_reporting" "true" $delimiter
+   }
    set_config new_conf
 
    # Delete the dbwriter log file to make sure only errors raised during this test are logged
