@@ -36,10 +36,10 @@
 #
 #****** version/ts_source() ******
 #  NAME
-#     ts_source() -- get testsuite internal version number for product 
+#     ts_source() -- get testsuite internal version number for product
 #
 #  SYNOPSIS
-#     ts_source {filebase {extension tcl}} 
+#     ts_source {filebase {extension tcl}}
 #
 #  FUNCTION
 #     This function sources a tclfile named by filebase and extension.
@@ -271,7 +271,9 @@ proc get_version_info {{version_information_array_name ""} {do_cleanup 0}} {
       set qconf_host_arch [resolve_arch $qconf_host]
       set qconf_bin $ts_config(product_root)/bin/$qconf_host_arch/qconf
 
-      if {[file isfile $qconf_bin]} {
+      # we might just have compiled and installed, wait for qconf to be available on the master host
+      # lets wait for it to be available
+      if {[wait_for_remote_file $ts_config(master_host) $CHECK_USER $qconf_bin 60 0] == 0} {
          set result [start_remote_prog $qconf_host $CHECK_USER $qconf_bin "-help" prg_exit_state 15 0 "" "" 1 1 0 1]
          set help [split $result "\n"]
          if {([string first "fopen" [ lindex $help 0]]        >= 0) ||
@@ -348,7 +350,7 @@ proc get_version_info {{version_information_array_name ""} {do_cleanup 0}} {
 proc is_version_in_range {from_version {to_version ""}} {
    # get the current product version
    set current_version [get_version_info]
-   
+
    # we put the following into a separate function for ease of testing
    return [check_version_in_range $current_version $from_version $to_version]
 }
@@ -409,7 +411,7 @@ proc check_version_in_range {current_version from_version to_version} {
       } elseif {$current(major_release) == $to(major_release)} {
          if {$current(minor_release) > $to(minor_release)} {
             set ret 0
-         } elseif {$current(minor_release) == $to(minor_release)} {  
+         } elseif {$current(minor_release) == $to(minor_release)} {
             if {$current(update_release) >= $to(update_release)} {
                set ret 0
             }
