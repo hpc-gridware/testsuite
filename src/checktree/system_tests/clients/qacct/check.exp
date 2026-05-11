@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2024,2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -35,10 +35,10 @@
 
 # define global variable in this namespace
 global check_name
-global check_category 
-global check_description 
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 global check_version_range
 
@@ -52,7 +52,7 @@ set check_description(1)  "test qacct functionality (JSON format)"
 set check_version_range(1) "9.0.0"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function qacct_setup
@@ -68,6 +68,7 @@ lappend check_functions "qacct_issue1720"
 lappend check_functions "qacct_issue1686"
 lappend check_functions "qacct_issue2127"
 lappend check_functions "qacct_issue2189"
+lappend check_functions "qacct_issue2146"
 
 # -------- local test procedures: initialization------------------------------
 proc qacct_setup {} {
@@ -119,7 +120,7 @@ proc qacct_basic {} {
 
    if {$CHECK_ACT_LEVEL == 1} {
       # with Cluster Scheduler 9.0.0 and the JSONL accounting format we have additional fields
-      append qacct_fields " pe_taskid wallclock maxrss"
+      append qacct_fields " pe_taskid wallclock maxrss submit_cmd_line"
    }
 
    # submit job
@@ -206,6 +207,54 @@ proc qacct_issue2127 {} {
    set output [start_sge_bin qacct "-l a=$master_arch"]
    if {$prg_exit_state != 0} {
       ts_log_severe "qacct -l a=$master_arch output:\n$output"
+   }
+}
+
+proc qacct_issue2146 {} {
+   global CHECK_ACT_LEVEL
+
+   # This test only runs in level 0 (old colon-separated accounting format).
+   # It verifies that attributes which exist only in the new JSON accounting
+   # format are NOT present in the qacct result when reading an old accounting file.
+   # The issue has been fixed in 9.0.13 and 9.1.2
+   if {$CHECK_ACT_LEVEL != 0 || ![is_version_in_range "9.0.13 9.1.2"]} {
+      return
+   }
+
+   # run a simple qrsh job to create an accounting record
+   set job_id [submit_job "-b y sleep 5"]
+   if {$job_id <= 0} {
+      return
+   }
+
+   if {[wait_for_jobend $job_id "" 60 0 1] != 0} {
+      return
+   }
+
+   # get accounting for this job (waits up to 30s for the record to appear)
+   if {[get_qacct $job_id] != 0} {
+      return
+   }
+
+   # Attributes only available in the new (JSON) accounting format,
+   # read by sge_read_rusage_json() but not by sge_read_rusage_classic():
+   #   pe_taskid       - JSON only (classic skips this field)
+   #   wallclock       - JSON only (classic derives it from ru_wallclock)
+   #   maxrss          - JSON only (eusage maxrss, distinct from ru_maxrss)
+   #   submit_cmd_line - JSON only (not recorded in classic format)
+   set json_only_fields "pe_taskid wallclock maxrss submit_cmd_line"
+
+   set unexpected ""
+   foreach field $json_only_fields {
+      if {[info exists qacct_info($field)]} {
+         lappend unexpected "$field = $qacct_info($field)"
+      }
+   }
+   if {[llength $unexpected] > 0} {
+      set msg "the following fields are only available in the new JSON accounting format"
+      append msg "but were unexpectedly present in old (classic) accounting format output:\n"
+      append msg [join $unexpected "\n"]
+      ts_log_severe $msg
    }
 }
 
