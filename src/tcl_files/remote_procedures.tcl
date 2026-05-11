@@ -1499,6 +1499,7 @@ proc open_remote_spawn_process { hostname
                                  {no_final_enter 0}
                                  {new_grp ""}
                                  {background_wait_time 15}
+                                 {force_pty 0}
                                } {
 
    global CHECK_USER
@@ -1589,7 +1590,10 @@ proc open_remote_spawn_process { hostname
    # get info about an already open rlogin connection
    set create_alternate_connection 0
    set open_new_connection 1
-   if {[get_open_spawn_rlogin_session $hostname $user con_data]} {
+   # CS-2142: when the caller needs a remote PTY (e.g. to capture binary-mode qrsh stderr),
+   # cached non-PTY sessions cannot be reused — skip the lookup and open a fresh ssh -tt
+   # connection below.
+   if {!$force_pty && [get_open_spawn_rlogin_session $hostname $user con_data]} {
       if {$con_data(in_use)} {
          set found_alternative 0
          if {$CHECK_DEBUG_LEVEL != 0} {
@@ -1657,7 +1661,13 @@ proc open_remote_spawn_process { hostname
             log_user 1
          }
          if {$tmp_help || $ts_config(connection_type) == "ssh_with_password" || $ts_config(connection_type) == "ssh"} {
-            set pid [spawn "ssh" "-l" $connect_full_user $hostname] 
+            # CS-2142: -tt forces remote PTY allocation so spawned commands' stderr flows
+            # through the expect session (fd 1 + fd 2 both go through the PTY slave).
+            if {$force_pty} {
+               set pid [spawn "ssh" "-tt" "-l" $connect_full_user $hostname]
+            } else {
+               set pid [spawn "ssh" "-l" $connect_full_user $hostname]
+            }
          } else {
             set pid [spawn "rlogin" $hostname "-l" $connect_full_user]
          }
