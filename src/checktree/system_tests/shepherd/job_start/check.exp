@@ -64,7 +64,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "job_start"
-set check_category        "COMPATIBILITY SYSTEM"
+set check_category        "COMPATIBILITY SYSTEM IJS"
 set check_description(0)   "test shepherd trace file write on admin  user system"
 set check_description(1)   "test shepherd trace file write on root   user system"
 set check_description(2)   "test shepherd trace file write on normal user system"

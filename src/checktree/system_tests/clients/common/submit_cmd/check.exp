@@ -32,7 +32,7 @@ set check_version_range "9.0.0"
 
 # define test's name and run level descriptions
 set check_name            "submit_cmd"
-set check_category        "ACCOUNTING QSTAT VERIFIED"
+set check_category        "ACCOUNTING QSTAT IJS VERIFIED"
 set check_description(0)  "check submit_cmd_line and effective_submit_cmd_line in qstat and qacct"
 
 # define test's dependencies

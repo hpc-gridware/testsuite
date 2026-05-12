@@ -45,7 +45,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "issue_2050"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM IJS VERIFIED"
 set check_description(0)  "check setup qlogin_daemon rlogin_daemon paths"
 
 # define test's dependencies

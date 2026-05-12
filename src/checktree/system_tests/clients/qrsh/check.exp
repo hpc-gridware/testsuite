@@ -43,7 +43,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "qrsh"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM IJS VERIFIED"
 set check_description(0)    "checking qrsh to one exec host (master)"
 set check_description(200)  "checking qrsh to all exec hosts"
 

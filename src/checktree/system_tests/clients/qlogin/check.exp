@@ -32,7 +32,7 @@ set check_version_range "9.0.7"
 
 # define test's name and run level descriptions
 set check_name            "qlogin"
-set check_category        "SUBMISSION VERIFIED"
+set check_category        "SUBMISSION IJS VERIFIED"
 set check_description(0)  "check interactive submit client qlogin"
 set check_description(1)  "check interactive submit client qrsh without command"
 

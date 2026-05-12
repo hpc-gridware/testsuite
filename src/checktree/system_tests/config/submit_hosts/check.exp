@@ -42,7 +42,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "submit_hosts"
-set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM L10N IJS VERIFIED"
 set check_description(0)  "checking submit host functionality without local configuration"
 set check_description(1)  "checking submit host functionality with local qsh_command"
 
