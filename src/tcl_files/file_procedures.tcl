@@ -1974,21 +1974,35 @@ proc create_shell_script {scriptfile host exec_command exec_arguments {cd_dir ""
       set set_env_skript ""
       set un_set_env_skript ""
 
+      # Collect the list of variables to unset up front.  UNSET_VARS must win
+      # over any setter for the same variable name — including setters injected
+      # implicitly by set_users_environment from CHECK_REMOTE_ENVIRONMENT (e.g.
+      # DISPLAY pulled in via the user-config envlist).  Without this, a test
+      # asking to unset DISPLAY would still see DISPLAY re-exported on the next
+      # line of the generated script.
+      set vars_to_unset {}
+      if {[info exists users_env(UNSET_VARS)]} {
+         set vars_to_unset [split $users_env(UNSET_VARS)]
+      }
+
       if {[llength $user_env_names] > 0} {
+         if {[llength $vars_to_unset] > 0} {
+            append un_set_env_skript "# unsetting users default environment variables\n"
+            foreach unset_var $vars_to_unset {
+               append un_set_env_skript "unset $unset_var\n"
+            }
+         }
          append set_env_skript "# setup users environment variables\n"
          foreach u_env $user_env_names {
             if {$u_env == "UNSET_VARS"} {
-                #the "meta key" UNSET_VARS was found that defines variables to be unset
-                set vars_to_unset [split $users_env($u_env)] ;# the delimiter is a space (list delimiter)
-                append un_set_env_skript "# unsetting users default environment variables\n"
-                foreach unset_var $vars_to_unset {
-                    append un_set_env_skript "unset $unset_var\n"
-                }
-            } else {
-               set u_val $users_env($u_env)
-               append set_env_skript "${u_env}=\"${u_val}\"\n"
-               append set_env_skript "export ${u_env}\n"
+               continue
             }
+            if {[lsearch -exact $vars_to_unset $u_env] >= 0} {
+               continue
+            }
+            set u_val $users_env($u_env)
+            append set_env_skript "${u_env}=\"${u_val}\"\n"
+            append set_env_skript "export ${u_env}\n"
          }
       }
 
