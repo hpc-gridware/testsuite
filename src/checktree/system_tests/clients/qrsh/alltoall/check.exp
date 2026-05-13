@@ -1,0 +1,81 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# Split from the legacy system_tests/clients/qrsh test (CS-2159 follow-up).
+# Setup / cleanup live in testsuite/src/tcl_files/qrsh_test_helpers.tcl.
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+
+set check_name             "qrsh_alltoall"
+set check_category         "COMPATIBILITY SYSTEM IJS VERIFIED"
+set check_description(0)   "qrsh from all hosts to all hosts (master only)"
+set check_description(200) "qrsh from all hosts to all hosts (all execd hosts)"
+
+set check_needs            "init_core_system"
+set check_root_access_needs "yes"
+
+set check_setup_level_function   "qrsh_setup"
+set check_cleanup_level_function "qrsh_cleanup"
+
+set check_functions {}
+lappend check_functions "qrsh_alltoall"
+
+proc qrsh_alltoall {} {
+   global ts_config
+   global CHECK_USER
+   global qrsh_hostlist
+
+   foreach source $qrsh_hostlist {
+      set source_arch [resolve_arch $source]
+      foreach dest $qrsh_hostlist {
+         set qrsh_id [open_remote_spawn_process "$source" $CHECK_USER "$ts_config(product_root)/bin/$source_arch/qrsh" "-l hostname=$dest echo qrsh successfully started"]
+         set sp_id [lindex $qrsh_id 1]
+         set timeout 60
+         expect {
+            -i $sp_id full_buffer {
+               ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
+            }
+            -i $sp_id eof {
+               ts_log_severe "open_remote_spawn_process closed connection (eof)"
+            }
+            -i $sp_id "qrsh successfully started" {
+               ts_log_fine "qrsh from host $source to host $dest ok"
+               exp_continue
+            }
+            -i $sp_id "_exit_status_:(*)*\n" {
+               ts_log_fine "got exit status from script:\n$expect_out(buffer)"
+            }
+            -i $sp_id default {
+               ts_log_severe "qrsh from host $source to host $dest failed"
+            }
+         }
+
+         close_spawn_process $qrsh_id
+      }
+   }
+
+   wait_for_end_of_all_jobs
+}
+

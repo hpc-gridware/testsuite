@@ -1,0 +1,157 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# Split from the legacy system_tests/clients/qrsh test (CS-2159 follow-up).
+# Setup / cleanup live in testsuite/src/tcl_files/qrsh_test_helpers.tcl.
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+
+set check_name             "qrsh_accounting"
+set check_category         "COMPATIBILITY SYSTEM IJS VERIFIED"
+set check_description(0)   "qrsh accounting and online usage (sgeee)"
+
+set check_needs            "init_core_system"
+set check_root_access_needs "yes"
+
+set check_setup_level_function   "qrsh_setup"
+set check_cleanup_level_function "qrsh_cleanup"
+
+set check_functions {}
+lappend check_functions "qrsh_accounting"
+
+proc qrsh_accounting {} {
+   global ts_config CHECK_PRODUCT_TYPE
+   global CHECK_USER
+   global qrsh_hostlist qrsh_submithost
+
+   set INTERACTIVE_JOB [translate_macro MSG_QSH_INTERACTIVEJOBHASBEENSCHEDULED_S "*"]
+   set INTERACTIVE_JOB_DUMMY [translate_macro MSG_QSH_INTERACTIVEJOBHASBEENSCHEDULED_S "__JOBID__"]
+   set job_id_start [string first "__JOBID__" $INTERACTIVE_JOB_DUMMY]
+
+   set arch [resolve_arch $qrsh_submithost]
+   foreach host $qrsh_hostlist {
+
+      set job_run_time 120
+
+      set qrsh_id [open_remote_spawn_process $qrsh_submithost $CHECK_USER $ts_config(product_root)/bin/$arch/qrsh "-verbose -nostdin -l hostname=$host $ts_config(product_root)/examples/jobs/worker.sh $job_run_time"]
+
+      set state startup
+      set job_id ""
+      set sp_id [lindex $qrsh_id 1]
+
+      while {[string compare $state exit] != 0} {
+         set timeout 80
+         expect {
+            -i $sp_id full_buffer {
+               ts_log_severe "buffer overflow please increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
+               set state exit
+            }
+            -i $sp_id eof {
+               ts_log_severe "open_remote_spawn_process closed connection (eof)"
+               set state exit
+            }
+            -i $sp_id timeout {
+               # now (after 80s) the job should be running
+               if {[string compare $state running]} {
+                  ts_log_severe "qrsh to host $host failed"
+                  set state exit
+               } else {
+                  # in sgeee mode, we can check the online usage
+                  if {$CHECK_PRODUCT_TYPE == "sgeee"} {
+                     if {$job_id == ""} {
+                        ts_log_severe "unknown job_id for qrsh job on host $host"
+                     } else {
+                        if {[info exists job_info]} {
+                           unset job_info
+                        }
+                        if {[get_extended_job_info $job_id] == 1} {
+                           if {$job_info(cpu) < 10} {
+                              ts_log_config "online usage probably does not work on $host"
+                           }
+                        }
+                     }
+                  }
+               }
+            }
+            -i $sp_id $INTERACTIVE_JOB {
+               ts_log_finer "jobstart: \"$expect_out(0,string)\""
+               set job_id [string range $expect_out(0,string) $job_id_start end]
+               set space_start [string first " " $job_id]
+               set job_id [string range $job_id 0 $space_start]
+               set job_id [string trim $job_id]
+               ts_log_fine "job id is: \"$job_id\""
+               set state scheduled
+            }
+            -i $sp_id "Forking" { ;# "Forking" printout is from worker job (utilbin/work.c)
+               set state running
+            }
+            -i $sp_id "_exit_status_" {   ;# _exit_status_ is from open_remote_spawn_process - generated script
+               if {[string compare $state running]} {
+                  ts_log_severe "qrsh to host $host failed"
+               }
+               set state exit
+            }
+         }
+      }
+
+      close_spawn_process $qrsh_id
+
+      # wait for accounting file to be flushed (esp. for 6.0) and NFS
+      ts_log_fine "now waiting for end of job ..."
+      wait_for_end_of_all_jobs
+
+      ts_log_fine "now check accounting of job ..."
+      if {$job_id != ""} {
+         if {[get_qacct $job_id qacct_info $ts_config(master_host)] == 0} {
+            set cpu [expr $qacct_info(ru_utime) + $qacct_info(ru_stime)]
+            # the machine might be busy, so we might not get the cpu for the whole runtime
+            set my_allowed_cpu_value [expr $job_run_time - 10.0]
+
+            ts_log_fine "cpu entry: $cpu should be >= $my_allowed_cpu_value"
+            if {$cpu < $my_allowed_cpu_value} {
+               set help_text     "cpu entry \"$cpu\" in accounting seems to be wrong for job $job_id on host $host which\n"
+               append help_text "is a worker with runtime = $job_run_time\nI expected at least a runtime of\n"
+               append help_text "$my_allowed_cpu_value seconds!\n"
+               append help_text "This might happen on virtual hosts which report wrong wallclock time!\n"
+               ts_log_info $help_text
+            }
+
+            if {$cpu < 30} {
+               ts_log_severe "cpu entry \"$cpu\" in accounting seems to be wrong for job $job_id on host $host"
+            }
+
+            if {$CHECK_PRODUCT_TYPE == "sgeee"} {
+               # compute absolute diffence between cpu and ru_utime + ru_stime
+               set difference [expr $cpu - $qacct_info(cpu)]
+               set difference [expr $difference * $difference]
+               if {$difference > 2} {
+                  ts_log_severe "accounting: cpu($qacct_info(cpu)) is not the sum of ru_utime and ru_stime ($cpu) for job $job_id on host $host"
+               }
+            }
+         }
+      }
+   }
+}
+
