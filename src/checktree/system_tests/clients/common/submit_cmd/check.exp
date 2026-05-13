@@ -86,7 +86,20 @@ proc submit_cmd_check_item {data_var attribute expect_string errors_var} {
    return $ret
 }
 
-proc submit_cmd_check {job_id scope data_var client {with_effective 0} {expect_string ""}} {
+## @brief Assert that a job's submit_cmd_line (and optionally
+#  effective_submit_cmd_line) contains the expected substrings.
+#
+# @param expect_string     Expected substring for submit_cmd_line.  When
+#                          $with_effective is set and $expect_effective is
+#                          empty, this string is also used to check
+#                          effective_submit_cmd_line — the historical
+#                          behaviour.
+# @param expect_effective  Expected substring for effective_submit_cmd_line.
+#                          Pass when category-string normalization causes the
+#                          effective form to diverge from the user input
+#                          (e.g. `mem_total=1M` → `mem_total=1048576`).  An
+#                          empty string falls back to $expect_string.
+proc submit_cmd_check {job_id scope data_var client {with_effective 0} {expect_string ""} {expect_effective ""}} {
    upvar $data_var data
 #   parray data
 
@@ -99,8 +112,11 @@ proc submit_cmd_check {job_id scope data_var client {with_effective 0} {expect_s
    }
    if {$with_effective} {
       submit_cmd_check_item data "effective_submit_cmd_line" "-N TEST_$client" errors
-      if {$expect_string != ""} {
-         submit_cmd_check_item data "effective_submit_cmd_line" $expect_string errors
+      if {$expect_effective == ""} {
+         set expect_effective $expect_string
+      }
+      if {$expect_effective != ""} {
+         submit_cmd_check_item data "effective_submit_cmd_line" $expect_effective errors
       }
    }
 
@@ -191,47 +207,64 @@ proc submit_cmd_options {} {
 
    set ar_id [submit_ar "-d 3600 -l h=$submit_cmd_host"]
 
+   # Each entry is a list {qsub_arg expect_effective_override}.  When the
+   # override is empty the qsub_arg is used as the expected substring for
+   # both submit_cmd_line and effective_submit_cmd_line.  An override is
+   # needed for options whose effective form is canonicalised by the
+   # category-string normalizer (e.g. memory values get expanded to bytes).
    set options {}
-   lappend options "-A TEST"
-   lappend options "-a 202010101111.11"
+   lappend options [list "-A TEST" ""]
+   lappend options [list "-a 202010101111.11" ""]
    if {$ar_id > 0} {
-      lappend options "-ar $ar_id"
+      lappend options [list "-ar $ar_id" ""]
    }
-   lappend options "-b yes"
+   lappend options [list "-b yes" ""]
    if {![is_version_in_range "9.1.0"]} {
-      lappend options "-binding set linear:1"
+      lappend options [list "-binding set linear:1" ""]
    }
-   lappend options "-C XX"
-   lappend options "-ckpt testcheckpointobject -c s"
-   lappend options "-dl 202010101111.11"
+   lappend options [list "-C XX" ""]
+   lappend options [list "-ckpt testcheckpointobject -c s" ""]
+   lappend options [list "-dl 202010101111.11" ""]
    # need separate test for -e, -hold_jid, -hold_jid_ad, -i, -j
-   lappend options "-js 100"
-   lappend options "-hard -l hostname=$submit_cmd_host,mem_total=1M -soft -l mem_total=100M"
-   lappend options "-m s -M user@example.com"
-#   lappend options "-masterq all.q -pe mytestpe 2" ;# we have a different order of arguments
-   lappend options "-notify"
-   lappend options "-now yes"
-   lappend options "-P mytestproject"
-   lappend options "-p -10"
+   lappend options [list "-js 100" ""]
+   # Beginning with v9.2.0, mem_total values get normalized from the
+   # M-suffixed form to bytes in the effective line (category-string
+   # normalization refinement); submit_cmd_line keeps the original user
+   # input.  Earlier versions keep the M form in both lines.
+   set mem_total_effective ""
+   if {[is_version_in_range "9.2.0"]} {
+      set mem_total_effective "-hard -l hostname=$submit_cmd_host,mem_total=1048576 -soft -l mem_total=104857600"
+   }
+   lappend options [list \
+      "-hard -l hostname=$submit_cmd_host,mem_total=1M -soft -l mem_total=100M" \
+      $mem_total_effective]
+   lappend options [list "-m s -M user@example.com" ""]
+#   lappend options [list "-masterq all.q -pe mytestpe 2" ""] ;# we have a different order of arguments
+   lappend options [list "-notify" ""]
+   lappend options [list "-now yes" ""]
+   lappend options [list "-P mytestproject" ""]
+   lappend options [list "-p -10" ""]
    # -pty fails on freebsd, this is CS-634
    if {[string first "fbsd" [resolve_arch $submit_cmd_host]] < 0} {
-      lappend options "-pty yes"
+      lappend options [list "-pty yes" ""]
    }
-   lappend options "-hard -q all.q -soft -q all.q@$submit_cmd_host"
-   lappend options "-r yes"
-   lappend options "-sc foo=bar"
-   # lappend options "-shell /bin/sh" ; # not a qsub option, would need to test it with qrsh
-   lappend options "-t 1-10:2 -tc 1"
-   lappend options "-v foo=bar"
-   lappend options "-wd /tmp"
+   lappend options [list "-hard -q all.q -soft -q all.q@$submit_cmd_host" ""]
+   lappend options [list "-r yes" ""]
+   lappend options [list "-sc foo=bar" ""]
+   # lappend options [list "-shell /bin/sh" ""] ; # not a qsub option, would need to test it with qrsh
+   lappend options [list "-t 1-10:2 -tc 1" ""]
+   lappend options [list "-v foo=bar" ""]
+   lappend options [list "-wd /tmp" ""]
    # Beginning with v9.1.0, the output of -sync is available in qstat -j
    if {[is_version_in_range "9.1.0"]} {
-      lappend options "-sync r"
+      lappend options [list "-sync r" ""]
    }
 
    set cmd "$CHECK_ACTUAL_TEST_PATH/job.sh"
    set args "5"
-   foreach option $options {
+   foreach option_pair $options {
+      set option           [lindex $option_pair 0]
+      set expect_effective [lindex $option_pair 1]
       ts_log_frame
       ts_log_fine "testing option(s) $option"
       set id [submit_with_method "qsub" "-N TEST_qsub -l h=$submit_cmd_host $option" $cmd $args $submit_cmd_host]
@@ -266,7 +299,7 @@ proc submit_cmd_options {} {
                      set job_id [lindex $line 3]
                      ts_log_fine "got job_id $job_id"
                      if {[get_qstat_j_info $job_id]} {
-                        submit_cmd_check $job_id "qstat" qstat_j_info "qsub" 1 $option
+                        submit_cmd_check $job_id "qstat" qstat_j_info "qsub" 1 $option $expect_effective
                      }
                   }
                   "exiting now" {
