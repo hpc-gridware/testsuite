@@ -78,22 +78,27 @@ proc issue_2735_cleanup {} {
 }
 
 
-#****** bugs/issuezilla/issue_2735_test() **************************************
-#  NAME
-#     issue_2735_test() -- test case for issue 2735
+## @brief Regression guard for issuezilla 2735 — "qlogin produces undeleteable
+#  job / non-killable shepherd".
 #
-#  SYNOPSIS
-#     issue_2735_test { } 
+# Submits `qlogin -l h=<execd> > /dev/null` on a non-master host, waits for
+# the job to reach running state, then deletes it via the normal
+# `delete_all_jobs` path.  The original (2001-era) symptom was that the
+# shepherd survived the delete, leaving the job in an undeleteable state
+# that required `qdel -f` plus a manual `kill` of the shepherd pid.
 #
-#  FUNCTION
-#     This procedure submits a qlogin job and redirects the output. This results
-#     in a not killable sheperd daemon at execd. The only way to remove the
-#     job is a qdel -f. The sheperd will not be terminated and has to be killed
-#     manually. The qmaster messages file contains logging entries about a
-#     job which should not run anymore.
-#     Test is deleting shepherd process if failing.
+# Detection: after the first `delete_all_jobs`, if `wait_for_end_of_all_jobs`
+# returns non-zero the shepherd is presumed to have survived.  The test then
+# locates the residual shepherd pid, kills it manually, and accumulates a
+# human-readable diagnosis in `$error_text`.  Any non-empty `$error_text` at
+# the end fires `ts_log_severe`, failing the run.
 #
-#*******************************************************************************
+# The original failure mode was fixed long before the CS- ticket era; the
+# test is kept as a regression guard against the symptom recurring through
+# any newly-introduced cleanup path.  CS-2166 cleaned up the previously
+# dead `report_error` plumbing + a misleading "Disabled until test is
+# corrected" log on the success path that suggested the test was muted —
+# the assertion has actually been live for years.
 proc issue_2735_test {} {
    global ts_config 
    global CHECK_USER
@@ -105,7 +110,6 @@ proc issue_2735_test {} {
    set host_arch [resolve_arch $host]
 
    set error_text ""
-   set report_error 1
    ts_log_fine "starting qlogin on host $host"
    ts_log_fine "requested execd: -l h=$shepherd_host"
 
@@ -184,7 +188,6 @@ proc issue_2735_test {} {
       ts_log_fine "no shepherd found - good"
       if {$error_text != ""} {
          append error_text "No shepherd found, this is good!\nBut job qlogin > /dev/null should run. Issue 2735 found!\n"
-         set report_error 1
       }
    } else {
       ts_log_fine "found more than one possible shepherd: $possible_sheperd_pid_list"
@@ -198,17 +201,13 @@ proc issue_2735_test {} {
          start_remote_prog $shepherd_host root "kill" $shepherd_pid
          wait_for_end_of_all_jobs
          append error_text "Issue 2735 found! Complete cleanup successful!!!\n"
-         set report_error 1
       } else {
          append error_text "Issue 2735 found! Cannot kill shepherd pid on host $host\n"
          delete_all_jobs 1 1
-         set report_error 1
       }
    }
-   if {$error_text != "" && $report_error != 0} {
+   if {$error_text != ""} {
       ts_log_severe $error_text
-   } else {
-      ts_log_config "Disabled until test is corrected\n${error_text}"  ;# TODO: This is only a unsuported test! Remove this once 2735 is completely fixed !!!
    }
 }
 
