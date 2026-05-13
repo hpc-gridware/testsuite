@@ -80,9 +80,9 @@ lappend check_functions "qrsh_w_v_test"
 lappend check_functions "qrsh_pty_yes_redirect"
 lappend check_functions "qrsh_pty_yes_line_breaks"   ;# test if NL gets converted to CR NL
 lappend check_functions "qrsh_forward_stdin"         ;# test if stdin forward works via <
-#lappend check_functions "qrsh_forward_stdin_pty"    ;# CS-1759, not fixed: test if stdin forward works via <, with -pty yes
+lappend check_functions "qrsh_forward_stdin_pty"     ;# test if stdin forward works via <, with -pty yes
 lappend check_functions "qrsh_pipe_stdin"            ;# test if stdin forward works via <
-#lappend check_functions "qrsh_pipe_stdin_pty"       ;# CS-1759, not fixed: test if stdin forward works via <, with -pty yes
+lappend check_functions "qrsh_pipe_stdin_pty"        ;# test if stdin forward works via <, with -pty yes
 lappend check_functions "qrsh_massive_output"        ;# test if massive output job is fully received by qrsh
 
 # -------- local test procedures -----------------------------------------------
