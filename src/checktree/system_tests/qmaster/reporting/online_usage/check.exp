@@ -1,0 +1,402 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** system_tests/qmaster/reporting/online_usage *****************************
+#  NAME
+#     online_usage -- check online_usage records in the JSONL reporting file
+#
+#  FUNCTION
+#     Verifies the online_usage record type introduced by CS-1333:
+#       * qconf -mconf accepts the documented online_usage variable list
+#       * a sequential job produces records with task_number=0 and no pe_taskid
+#       * an array job produces one record per array task with the matching
+#         task_number
+#       * a tightly-integrated PE job with accounting_summary=FALSE produces
+#         one record per pe_task (with pe_taskid populated)
+#       * a tightly-integrated PE job with accounting_summary=TRUE produces
+#         only ja_task-level records (no pe_taskid; usage aggregated)
+#       * when online_usage is empty, no records are produced
+#********************************************************************************
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range     "9.1.2"
+
+set check_name              "online_usage"
+set check_category          "REPORTING VERIFIED"
+set check_description(0)    "Test online_usage records in the JSONL reporting file"
+
+set check_needs             "init_core_system"
+
+set check_setup_function   online_usage_setup
+set check_cleanup_function online_usage_cleanup
+
+set check_functions {}
+lappend check_functions "online_usage_config_test"
+lappend check_functions "online_usage_reporting_test"
+
+# -------- setup / cleanup -----------------------------------------------------
+
+proc online_usage_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global online_usage_old_config online_usage_test_host
+   global online_usage_reporting_file
+   global online_usage_pe_individual online_usage_pe_summary
+   global online_usage_pe_created online_usage_queue_created
+   global ONLINE_USAGE_JR_WAIT
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   set online_usage_test_host        [host_conf_get_suited_hosts]
+   set online_usage_pe_individual    "pe_online_usage_individual"
+   set online_usage_pe_summary       "pe_online_usage_summary"
+   set online_usage_pe_created       0
+   set online_usage_queue_created    0
+
+   # How long to wait after each job submission for at least one job report
+   # to arrive from execd and one flush cycle to complete. The default execd
+   # load_report_time is ~40s; flush_time is set to 3s in
+   # online_usage_apply_config. Tweak here if your test cluster uses a
+   # different load_report_time.
+   set ONLINE_USAGE_JR_WAIT 60
+
+   # backup global config
+   get_config online_usage_old_config
+
+   # JSONL reporting file path (the feature is JSONL-only)
+   set online_usage_reporting_file "$ts_config(product_root)/$ts_config(cell)/common/reporting.jsonl"
+
+   # start clean
+   file delete -force $online_usage_reporting_file
+}
+
+proc online_usage_cleanup {} {
+   global online_usage_old_config online_usage_reporting_file
+   global online_usage_pe_individual online_usage_pe_summary
+   global online_usage_pe_created online_usage_queue_created online_usage_test_host
+   global ONLINE_USAGE_JR_WAIT
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # delete the test queue (if we created it)
+   if {$online_usage_queue_created} {
+      del_queue "online_usage_q" $online_usage_test_host 0 1
+      set online_usage_queue_created 0
+   }
+
+   # delete the PEs we may have created
+   if {$online_usage_pe_created} {
+      del_pe $online_usage_pe_individual
+      del_pe $online_usage_pe_summary
+      set online_usage_pe_created 0
+   }
+
+   reset_config online_usage_old_config
+
+   file delete -force $online_usage_reporting_file
+   unset -nocomplain online_usage_old_config online_usage_reporting_file
+   unset -nocomplain online_usage_test_host
+   unset -nocomplain online_usage_pe_individual online_usage_pe_summary
+   unset -nocomplain ONLINE_USAGE_JR_WAIT
+}
+
+# -------- helpers -------------------------------------------------------------
+
+# Apply our reporting parameters on top of the live global config. Only the
+# attributes we care about are touched; everything else in reporting_params is
+# preserved. Returns the set_config return code (< 0 on error). Does not
+# raise an error on failure so callers can verify negative cases.
+proc online_usage_apply_config {online_usage_value} {
+   get_config snap
+   add_or_replace_array_param new_config snap       "reporting_params" "reporting"    "true"     " "
+   add_or_replace_array_param new_config new_config "reporting_params" "flush_time"   "00:00:03" " "
+   add_or_replace_array_param new_config new_config "reporting_params" "online_usage" $online_usage_value " "
+   return [set_config new_config "global" 0 0]
+}
+
+# Truncate the reporting file so subsequent extractions only see records for
+# the next submission.
+proc online_usage_reset_reporting_file {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER online_usage_reporting_file
+   file delete -force $online_usage_reporting_file
+   start_remote_prog $ts_config(master_host) $CHECK_USER "touch" $online_usage_reporting_file
+}
+
+# Return the list of online_usage record lines that mention "job_number":<jobid>.
+# Reads the reporting file via the NFS-safe testsuite helpers (the file lives
+# on shared storage; TCL's local "open" would be flaky). Waits for the file
+# to be visible on the master host first so that get_file_content does not
+# fail with "cat: ... No such file or directory" on NFS sync lag.
+proc online_usage_records_for_job {job_id} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER online_usage_reporting_file
+   if {[wait_for_remote_file $ts_config(master_host) $CHECK_USER \
+        $online_usage_reporting_file 30 0] != 0} {
+      return {}
+   }
+   get_file_content $ts_config(master_host) $CHECK_USER $online_usage_reporting_file file_content
+   set records {}
+   for {set i 1} {$i <= $file_content(0)} {incr i} {
+      set line $file_content($i)
+      if {[string match "*\"type\":\"online_usage\"*" $line] &&
+          [regexp "\"job_number\":${job_id}\\M" $line]} {
+         lappend records $line
+      }
+   }
+   return $records
+}
+
+# Extract a numeric field value from a JSONL record line. Returns "" if absent.
+proc online_usage_field_num {line key} {
+   if {[regexp "\"$key\":(-?\\d+(?:\\.\\d+)?)" $line -> val]} {
+      return $val
+   }
+   return ""
+}
+
+# Does the record line contain the given field name at all?
+proc online_usage_has_field {line key} {
+   return [regexp "\"$key\":" $line]
+}
+
+# -------- check_function 1: reporting_params syntax validation ----------------
+
+proc online_usage_config_test {} {
+   global online_usage_old_config
+
+   ts_log_fine "online_usage_config_test: positive cases"
+
+   # Each variable that the execd currently produces. There is no authoritative
+   # closed list — any string that is a valid complex_name (see sge_types(1))
+   # is accepted by the parser; this set is just the one execd reports today,
+   # i.e. the names for which online_usage records will actually carry a value.
+   set valid_vars {cpu mem io iow ioops vmem maxvmem rss maxrss pss maxpss smem pmem wallclock}
+   foreach var $valid_vars {
+      if {[online_usage_apply_config $var] < 0} {
+         ts_log_severe "qconf rejected valid online_usage=$var"
+      }
+   }
+
+   # Empty value = feature disabled.
+   if {[online_usage_apply_config ""] < 0} {
+      ts_log_severe "qconf rejected online_usage="
+   }
+
+   # Multi-variable, '|' separator.
+   if {[online_usage_apply_config "cpu|mem|maxvmem|wallclock"] < 0} {
+      ts_log_severe "qconf rejected online_usage=cpu|mem|maxvmem|wallclock"
+   }
+
+   ts_log_fine "online_usage_config_test: negative cases"
+
+   # Each token between '|' separators must be a valid complex_name (=
+   # object_name) per sge_types(1); empty tokens are also rejected. The
+   # parser-side validator lives in CS-2207; an accepted value here means a
+   # regression.
+   set negative_cases {}
+   lappend negative_cases "cpu:mem"  "colon separator"
+   lappend negative_cases "cpu|mem|" "trailing pipe"
+   lappend negative_cases "cpu||mem" "empty token"
+   # @todo Comma and space are valid separators for the reporting_params. mem will then be interpreted as attribute
+   #       name - which apparently is not rejected.
+   #lappend negative_cases "cpu,mem"  "comma separator"
+   #lappend negative_cases "cpu mem"  "space character"
+
+   # @todo Pending team decision: the object_name forbidden set in sge_types(1) /
+   # KEY_TABLE (sge_utility.cc) does NOT include `;`, so today's validator
+   # accepts `cpu;mem`. Disallowing semicolon in object_name has been
+   # discussed but not decided. When (if) the rule changes, re-enable this
+   # case and adjust the validator / man page in lockstep.
+   # lappend negative_cases "cpu;mem"  "semicolon"
+   lappend negative_cases "cpu/mem"  "slash"
+   foreach {val desc} $negative_cases {
+      set rc [online_usage_apply_config $val]
+      if {$rc >= 0} {
+         ts_log_severe "negative case '$val' ($desc): qconf accepted invalid online_usage value (rc=$rc); CS-2207 validator regressed"
+      }
+   }
+
+   # leave qmaster in a known state for the next check_function
+   reset_config online_usage_old_config
+}
+
+# -------- check_function 2: functional end-to-end -----------------------------
+
+proc online_usage_reporting_test {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global online_usage_test_host
+   global online_usage_pe_individual online_usage_pe_summary
+   global online_usage_pe_created online_usage_queue_created
+   global ONLINE_USAGE_JR_WAIT
+
+   # Common: enable online_usage with four variables for every functional case.
+   set vars "cpu|mem|maxvmem|wallclock"
+   set required_vars {cpu mem maxvmem wallclock}
+
+   # ----- 1. SEQUENTIAL JOB --------------------------------------------------
+   ts_log_fine "online_usage_reporting_test: sequential job"
+   online_usage_apply_config $vars
+   online_usage_reset_reporting_file
+
+   set job_id [submit_job "-o /dev/null -j y -b y sleep 60"]
+   if {$job_id > 0} {
+      sleep_for_seconds $ONLINE_USAGE_JR_WAIT "waiting for online_usage records"
+      set records [online_usage_records_for_job $job_id]
+      if {[llength $records] < 1} {
+         ts_log_severe "sequential job ($job_id): no online_usage records found"
+      }
+      foreach line $records {
+         set tn [online_usage_field_num $line "task_number"]
+         if {$tn ne "0"} {
+            ts_log_severe "sequential job: expected task_number=0, got '$tn' in: $line"
+         }
+         if {[online_usage_has_field $line "pe_taskid"]} {
+            ts_log_severe "sequential job: pe_taskid must be absent: $line"
+         }
+         foreach v $required_vars {
+            if {![regexp "\"$v\":" $line]} {
+               ts_log_severe "sequential job: variable '$v' missing from usage in: $line"
+            }
+         }
+      }
+      delete_job $job_id
+      wait_for_end_of_all_jobs
+   }
+
+   # ----- 2. ARRAY JOB -------------------------------------------------------
+   ts_log_fine "online_usage_reporting_test: array job"
+   online_usage_reset_reporting_file
+
+   set job_id [submit_job "-t 1-3 -o /dev/null -j y -b y sleep 60"]
+   if {$job_id > 0} {
+      sleep_for_seconds $ONLINE_USAGE_JR_WAIT "waiting for online_usage records"
+      foreach expected_task {1 2 3} {
+         set found 0
+         foreach line [online_usage_records_for_job $job_id] {
+            if {[online_usage_field_num $line "task_number"] eq "$expected_task"} {
+               incr found
+               if {[online_usage_has_field $line "pe_taskid"]} {
+                  ts_log_severe "array job: pe_taskid must be absent for task $expected_task: $line"
+               }
+            }
+         }
+         if {$found == 0} {
+            ts_log_severe "array job ($job_id): no online_usage record for task_number=$expected_task"
+         }
+      }
+      delete_job $job_id
+      wait_for_end_of_all_jobs
+   }
+
+   # ----- 3 + 4. PARALLEL JOB (PE accounting_summary FALSE then TRUE) --------
+   # Create two PEs and a queue that accepts both.
+   set pe_def(slots)              4
+   set pe_def(control_slaves)     "TRUE"
+   set pe_def(allocation_rule)    "\$pe_slots"
+   set pe_def(start_proc_args)    "NONE"
+   set pe_def(stop_proc_args)     "NONE"
+   set pe_def(job_is_first_task)  "FALSE"
+   set pe_def(user_lists)         "NONE"
+   set pe_def(xuser_lists)        "NONE"
+
+   set pe_def(accounting_summary) "FALSE"
+   add_pe $online_usage_pe_individual pe_def
+
+   set pe_def(accounting_summary) "TRUE"
+   add_pe $online_usage_pe_summary pe_def
+   set online_usage_pe_created 1
+
+   set q(slots)   4
+   set q(pe_list) "make $online_usage_pe_individual $online_usage_pe_summary"
+   add_queue "online_usage_q" $online_usage_test_host q
+   set online_usage_queue_created 1
+
+   set job_script  "$ts_config(testsuite_root_dir)/scripts/pe_job.sh"
+   set task_script "$ts_config(testsuite_root_dir)/scripts/pe_task.sh"
+
+   # ----- 3. PE, accounting_summary FALSE ------------------------------------
+   ts_log_fine "online_usage_reporting_test: parallel job, accounting_summary FALSE"
+   online_usage_reset_reporting_file
+
+   set job_id [submit_job "-pe $online_usage_pe_individual 2 -q online_usage_q -o /dev/null -j y $job_script $task_script 1 30"]
+   if {$job_id > 0} {
+      sleep_for_seconds $ONLINE_USAGE_JR_WAIT "waiting for online_usage records"
+      set records [online_usage_records_for_job $job_id]
+      set with_pet 0
+      foreach line $records {
+         if {[online_usage_has_field $line "pe_taskid"]} {
+            incr with_pet
+         }
+      }
+      if {$with_pet == 0} {
+         ts_log_severe "PE summary=FALSE ($job_id): expected at least one record with pe_taskid, got none"
+      }
+      delete_job $job_id
+      wait_for_end_of_all_jobs
+   }
+
+   # ----- 4. PE, accounting_summary TRUE -------------------------------------
+   ts_log_fine "online_usage_reporting_test: parallel job, accounting_summary TRUE"
+   online_usage_reset_reporting_file
+
+   set job_id [submit_job "-pe $online_usage_pe_summary 2 -q online_usage_q -o /dev/null -j y $job_script $task_script 1 30"]
+   if {$job_id > 0} {
+      sleep_for_seconds $ONLINE_USAGE_JR_WAIT "waiting for online_usage records"
+      set records [online_usage_records_for_job $job_id]
+      if {[llength $records] == 0} {
+         ts_log_severe "PE summary=TRUE ($job_id): no online_usage records found"
+      }
+      foreach line $records {
+         if {[online_usage_has_field $line "pe_taskid"]} {
+            ts_log_severe "PE summary=TRUE: pe_taskid must be absent (records aggregated at ja_task): $line"
+         }
+      }
+      delete_job $job_id
+      wait_for_end_of_all_jobs
+   }
+
+   # ----- 5. DISABLED CASE (regression guard) --------------------------------
+   ts_log_fine "online_usage_reporting_test: disabled case (online_usage=)"
+   online_usage_apply_config ""
+   online_usage_reset_reporting_file
+
+   set job_id [submit_job "-o /dev/null -j y -b y sleep 30"]
+   if {$job_id > 0} {
+      sleep_for_seconds $ONLINE_USAGE_JR_WAIT "waiting for online_usage records"
+      set records [online_usage_records_for_job $job_id]
+      if {[llength $records] != 0} {
+         ts_log_severe "disabled case ($job_id): expected 0 online_usage records, got [llength $records]"
+      }
+      delete_job $job_id
+      wait_for_end_of_all_jobs
+   }
+}
