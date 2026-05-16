@@ -2737,10 +2737,21 @@ proc del_open_spawn_rlogin_session {spawn_id} {
       # if session is super session make alternate session to new supersession
       if {[llength $rlogin_spawn_session_buffer($spawn_id,alternate_sessions)] > 0} {
          ts_log_finer "removing super session - declaring first alternate session to new super session"
-         
-         set new_super_session [lindex $rlogin_spawn_session_buffer($spawn_id,alternate_sessions) 0]
+
+         # Pick the first alternate that is STILL live.  Siblings sharing this
+         # (host,user) can legitimately be torn down out of band before the
+         # super session (e.g. the IJS reconnect tests network-kill their qrsh
+         # client and force-invalidate the spawns), so the head of the list is
+         # not guaranteed to still exist - don't treat that as an error.
+         set new_super_session ""
+         foreach cand $rlogin_spawn_session_buffer($spawn_id,alternate_sessions) {
+            if {[info exists rlogin_spawn_session_buffer($cand,pid)]} {
+               set new_super_session $cand
+               break
+            }
+         }
          ts_log_finer "new supersession is: \"$new_super_session\""
-         if {[info exists rlogin_spawn_session_buffer($new_super_session,pid)]} {
+         if {$new_super_session ne ""} {
             # get all alternative session from super session and add it to first alternate session
             set alternate_sessions $rlogin_spawn_session_buffer($spawn_id,alternate_sessions)
             set pos [lsearch -exact $alternate_sessions $new_super_session]
@@ -2748,16 +2759,19 @@ proc del_open_spawn_rlogin_session {spawn_id} {
             set rlogin_spawn_session_buffer($new_super_session,is_alternate_of) ""
             set rlogin_spawn_session_buffer($new_super_session,alternate_sessions) $alternate_sessions
             ts_log_finer "session \"$new_super_session\" will be new super session with alternate list: \"$alternate_sessions\""
-            
+
             # update session index info
             set remove_from_index 0
             set hostname       $rlogin_spawn_session_buffer($spawn_id,hostname)
             set user           $rlogin_spawn_session_buffer($spawn_id,user)
             set rlogin_spawn_session_idx($hostname,$user) $new_super_session
          } else {
-            ts_log_severe "error occured for removing super session"
+            # All alternates were already torn down out of band - nothing to
+            # promote.  Fall through to clear the index entry below; this is a
+            # normal teardown race, not an error.
+            ts_log_finer "no live alternate session to promote for \"$spawn_id\"; clearing index"
          }
-      } 
+      }
 
       if {$remove_from_index != 0} {
          # remove session from search index
@@ -2767,7 +2781,9 @@ proc del_open_spawn_rlogin_session {spawn_id} {
             if {[info exists rlogin_spawn_session_idx($hostname,$user)]} {
                unset rlogin_spawn_session_idx($hostname,$user)
             } else {
-               ts_log_severe "spawn session index rlogin_spawn_session_idx($hostname,$user) not found"
+               # Already cleared by a sibling spawn of the same (host,user)
+               # that was torn down out of band - benign teardown race.
+               ts_log_finer "spawn session index rlogin_spawn_session_idx($hostname,$user) already removed"
             }
          } else {
             ts_log_severe "spawn session index rlogin_spawn_session_buffer($spawn_id,hostname) not found"
