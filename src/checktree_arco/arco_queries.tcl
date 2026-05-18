@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2024,2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -37,7 +37,7 @@
 #    arco_job_to_string() -- get a human readable string representation of a job object
 #
 #  SYNOPSIS
-#    arco_job_to_string { job_object } 
+#    arco_job_to_string { job_object }
 #
 #  FUNCTION
 #     get a human readable string representation of a job object
@@ -46,7 +46,7 @@
 #    job_object -- the job object
 #
 #  RESULT
-#     The human readable string 
+#     The human readable string
 #
 #  EXAMPLE
 #   set job(j_job_number)  15
@@ -76,7 +76,7 @@ proc arco_job_to_string { job_object } {
 #    arco_job_run() -- submit a job
 #
 #  SYNOPSIS
-#    arco_job_run { job_object { start_timeout 10 } { end_timeout 120 } 
+#    arco_job_run { job_object { start_timeout 10 } { end_timeout 120 }
 #                   {on_host ""} {as_user ""} }
 #
 #  FUNCTION
@@ -101,9 +101,9 @@ proc arco_job_to_string { job_object } {
 #   set res [arco_job_run job 10 20]
 #*******************************************************************************
 proc arco_job_run { job_object { start_timeout 20 } { end_timeout 120 } {on_host ""} {as_user ""} } {
-   
+
    upvar $job_object job
-   
+
    if { [info exists job(j_job_name)] != 1 } {
       ts_log_severe "Missing element j_job_name in job object"
       return -1
@@ -114,21 +114,21 @@ proc arco_job_run { job_object { start_timeout 20 } { end_timeout 120 } {on_host
    }
 
    set res [submit_job "-N $job(j_job_name) $job(args)" 1 60 $on_host $as_user]
-   
+
    if { $res < 0 } {
       ts_log_severe "submission of job [arco_job_to_string job] failed"
       return -1
    }
    set job(j_job_number) $res
-   
+
    if {[wait_for_jobstart $job(j_job_number) "" $start_timeout 1 1] != 0} {
       return -1
    }
-   
+
    if {[wait_for_jobend $job(j_job_number) "" $end_timeout 0 1] == -1} {
       return -1
    }
-   
+
    return 0
 }
 
@@ -148,7 +148,7 @@ proc arco_job_run { job_object { start_timeout 20 } { end_timeout 120 } {on_host
 #    sqlutil_sp_id --  spawn id of the sql util
 #    job_array     --  Array with the elements j_job_number, j_job_name (optional) and
 #                      j_task_number (option).
-#                      If a job is found, the fields j_id, j_open, j_group, j_owner, 
+#                      If a job is found, the fields j_id, j_open, j_group, j_owner,
 #                      j_account, j_priority, j_submission_time, j_project and
 #                      j_department are stored in this array
 #    expected_count -- Expected count
@@ -169,7 +169,7 @@ proc arco_job_run { job_object { start_timeout 20 } { end_timeout 120 } {on_host
 #   set res [arco_query_job $sqlutil_sp_id job]
 #
 #   if { $res > 0 } {
-#      for { set i 0 } { $i < $res } { incr i } { 
+#      for { set i 0 } { $i < $res } { incr i } {
 #         puts "j_id = $job($i,j_id)"
 #         puts "j_job_number = $job($i,j_job_number)"
 #         puts "j_task_number = $job($i,j_task_number)"
@@ -193,18 +193,18 @@ proc arco_job_run { job_object { start_timeout 20 } { end_timeout 120 } {on_host
 #*******************************************************************************
 proc arco_query_job {sqlutil_sp_id job_array {expected_count 1} {timeout 300}} {
    global CHECK_DEBUG_LEVEL
-   
+
    upvar $job_array job
-   
+
    set job_str [arco_job_to_string job]
-   
+
    ts_log_fine "Searching job $job_str in table sge_job "
-   
+
    set sql "select j_id, j_job_number, j_task_number, j_job_name, j_group, "
    append sql " j_owner, j_account, j_priority, j_submission_time, j_project, j_department"
    append sql " from sge_job"
    append sql " where j_job_number = $job(j_job_number)"
-   if { [info exists job(j_job_name) ] } {      
+   if { [info exists job(j_job_name) ] } {
       append sql " and j_job_name = '$job(j_job_name)'"
    }
    if { [info exists job(task_id)] } {
@@ -212,7 +212,7 @@ proc arco_query_job {sqlutil_sp_id job_array {expected_count 1} {timeout 300}} {
    }
 
    set end_time [ expr [clock seconds] + $timeout ]
-   
+
    while { 1 } {
       if { [clock seconds] > $end_time } {
          ts_log_severe "Timeout while waiting for job $job_str in table sge_job"
@@ -224,7 +224,7 @@ proc arco_query_job {sqlutil_sp_id job_array {expected_count 1} {timeout 300}} {
       if { $res < 0 } {
          ts_log_severe "Can not execute sql query"
          return -2
-      } 
+      }
       ts_log_progress
       if {$res >= $expected_count} {
          puts " ok ($res Tasks)"
@@ -252,7 +252,7 @@ proc arco_query_job {sqlutil_sp_id job_array {expected_count 1} {timeout 300}} {
 #    arco_query_job_log { sqlutil_sp_id job_array { timeout 120 } }
 #
 #  FUNCTION
-#     Query the job log information if a job in the table sge_job_log in the 
+#     Query the job log information if a job in the table sge_job_log in the
 #     ARCo database
 #
 #  INPUTS
@@ -283,13 +283,13 @@ proc arco_query_job {sqlutil_sp_id job_array {expected_count 1} {timeout 300}} {
 #*******************************************************************************
 proc arco_query_job_log {sqlutil_sp_id job_array {timeout 300}} {
    global CHECK_DEBUG_LEVEL
-   
+
    upvar $job_array job
-   
+
    set end_time [expr [clock seconds] + $timeout ]
-   
+
    set task_count $job(task_count)
-   
+
    for { set task_index 0 } { $task_index < $task_count } { incr task_index } {
       array set task {}
       set task(j_job_number)  $job($task_index,j_job_number)
@@ -309,7 +309,7 @@ proc arco_query_job_log {sqlutil_sp_id job_array {timeout 300}} {
       set job_str [arco_job_to_string task]
 
       puts "Searching events for job $job_str in table sge_job_log"
-      
+
       foreach event $events {
          set    sql "select count(jl_parent) from sge_job_log "
          append sql "where jl_parent in ("
@@ -322,7 +322,7 @@ proc arco_query_job_log {sqlutil_sp_id job_array {timeout 300}} {
             append sql "    and j_job_name = '$job(j_job_name)'"
          }
          append sql ")  and jl_event = '$event'"
-   
+
          set msg [format "    -> %10s "   $event]
          if { $CHECK_DEBUG_LEVEL == 0 } {
             puts -nonewline $msg
@@ -334,14 +334,14 @@ proc arco_query_job_log {sqlutil_sp_id job_array {timeout 300}} {
                ts_log_severe "timeout error while waiting for job_log entries of job $job_str"
                return -1
             }
-            
+
             array set result {}
             set columns {}
             set count [sqlutil_query $sqlutil_sp_id $sql result columns]
             if { $count < 0 } {
                ts_log_severe "Can not execute query --------\n$sql\n --------------------"
                return -2
-            } 
+            }
             set count $result(0,0)
             if { $CHECK_DEBUG_LEVEL == 0 } {
                ts_log_progress
@@ -364,7 +364,7 @@ proc arco_query_job_log {sqlutil_sp_id job_array {timeout 300}} {
 #    arco_query_job_usage() -- get a usage of a job
 #
 #  SYNOPSIS
-#    arco_query_job_usage { sqlutil_sp_id job_array { timeout 60 } } 
+#    arco_query_job_usage { sqlutil_sp_id job_array { timeout 60 } }
 #
 #  FUNCTION
 #    This function reads the job usage of a job from the table sge_job_usage
@@ -403,13 +403,13 @@ proc arco_query_job_log {sqlutil_sp_id job_array {timeout 300}} {
 #*******************************************************************************
 proc arco_query_job_usage {sqlutil_sp_id job_array {timeout 300}} {
    global CHECK_DEBUG_LEVEL
-   
+
    upvar $job_array job
-   
+
    set end_time [expr [clock seconds] + $timeout ]
-   
+
    set task_count $job(task_count)
-   
+
    for { set task_index 0 } { $task_index < $task_count } { incr task_index } {
       array set task {}
       set task(j_job_number)  $job($task_index,j_job_number)
@@ -423,7 +423,7 @@ proc arco_query_job_usage {sqlutil_sp_id job_array {timeout 300}} {
       set job_str [arco_job_to_string task]
 
       ts_log_fine "Searching for job $job_str in table sge_job_usage "
-      
+
       set    sql "select ju_ru_wallclock, ju_exit_status from sge_job_usage "
       append sql "where ju_parent in ("
       append sql "    select j_id from sge_job "
@@ -433,27 +433,27 @@ proc arco_query_job_usage {sqlutil_sp_id job_array {timeout 300}} {
       append sql ")"
 
       while { 1 } {
-         
+
          if { [clock seconds] > $end_time } {
             ts_log_severe "timeout error while waiting for job_usage entries of job $job_str"
             return -1
          }
-         
+
          array set result {}
          set columns {}
          set count [sqlutil_query $sqlutil_sp_id $sql result columns]
          if { $count < 0 } {
             ts_log_severe "Can not execute query --------\n$sql\n --------------------"
             return -2
-         } 
+         }
          if { $CHECK_DEBUG_LEVEL == 0 } {
             ts_log_progress
          }
-         
+
          if { $count >= 1 } {
             # we have found entries for current task
             puts " ok"
-            
+
             set col_count [llength $columns]
             for { set col 0 } { $col < $col_count } { incr col } {
                set job($task_index,[lindex $columns $col]) $result(0,$col)
@@ -465,6 +465,168 @@ proc arco_query_job_usage {sqlutil_sp_id job_array {timeout 300}} {
    }
 
    return 0
+}
+
+#****** arco_queries/arco_query_job_online_usage() *****************************
+#  NAME
+#    arco_query_job_online_usage() -- query the online usage of a job
+#
+#  SYNOPSIS
+#    arco_query_job_online_usage { sqlutil_sp_id job_array variables group_by
+#                                  expected_count { timeout 300 } }
+#
+#  FUNCTION
+#    Verifies that the dbwriter imported online_usage records of a job into the
+#    table sge_job_online_usage. online_usage is a value record type: every
+#    online_usage report becomes one sge_job_online_usage row per usage
+#    variable.
+#
+#    The found rows are grouped into "subjects" - the entity an online_usage
+#    report belongs to - according to group_by:
+#      job     -- the whole job is one subject (sequential job)
+#      task    -- one subject per array task (grouped by j_task_number)
+#      pe_task -- one subject per pe task (grouped by j_pe_taskid; the
+#                 ja_task level rows with j_pe_taskid 'NONE' are ignored)
+#
+#    The function waits (up to timeout) until at least expected_count subjects
+#    have a stored row for every requested variable, so it can be used to
+#    check that online usage is present for every array task / every pe task.
+#    The stored jou_dvalue is checked to be a non-negative number and
+#    jou_curr_time to be set.
+#
+#    Subjects are reached through a join of sge_job_online_usage to sge_job on
+#    j_job_number only - this also matches the sparse sge_job rows the dbwriter
+#    may create when an online_usage record of a pe task arrives before that
+#    task's own job record.
+#
+#  INPUTS
+#    sqlutil_sp_id  --  spawn id of the sqlutil
+#    job_array      --  job object, must contain j_job_number; arco_query_job
+#                       should have been called before so that the sge_job
+#                       rows already exist
+#    variables      --  list of online usage variable names that must be
+#                       present (e.g. {cpu mem maxvmem wallclock})
+#    group_by       --  how to group the rows into subjects: job, task or
+#                       pe_task
+#    expected_count --  number of subjects that must carry online usage (1 for
+#                       a sequential job, the number of array tasks for an
+#                       array job, the number of pe tasks for a parallel job)
+#    timeout        --  timeout in seconds (default 300s)
+#
+#  RESULT
+#     0   --  online usage for the expected number of subjects has been found
+#     -1  --  timeout error
+#     -2  --  fatal error, invalid group_by or sql query could not be executed
+#
+#  EXAMPLE
+#   set job(j_job_number) 15
+#
+#   arco_query_job $sqlutil_sp_id job
+#   arco_query_job_online_usage $sqlutil_sp_id job {cpu mem maxvmem wallclock} task 3
+#
+#  SEE ALSO
+#     arco_queries/arco_query_job
+#*******************************************************************************
+proc arco_query_job_online_usage {sqlutil_sp_id job_array variables group_by expected_count {timeout 300}} {
+   global CHECK_DEBUG_LEVEL
+
+   upvar $job_array job
+
+   switch -exact -- $group_by {
+      job     {set group_desc "job"}
+      task    {set group_desc "array task"}
+      pe_task {set group_desc "pe task"}
+      default {
+         ts_log_severe "arco_query_job_online_usage: invalid group_by '$group_by'"
+         return -2
+      }
+   }
+
+   set end_time [expr [clock seconds] + $timeout]
+   set job_str [arco_job_to_string job]
+
+   set    sql "SELECT sge_job.j_task_number, sge_job.j_pe_taskid, "
+   append sql "sge_job_online_usage.jou_variable, sge_job_online_usage.jou_dvalue, "
+   append sql "sge_job_online_usage.jou_curr_time "
+   append sql "FROM sge_job_online_usage, sge_job "
+   append sql "WHERE sge_job.j_id = sge_job_online_usage.jou_parent "
+   append sql "AND sge_job.j_job_number = $job(j_job_number)"
+
+   ts_log_fine "Searching online usage of job $job_str (expecting $expected_count ${group_desc}(s)) in table sge_job_online_usage"
+
+   while {1} {
+      if {[clock seconds] > $end_time} {
+         ts_log_severe "timeout error while waiting for online usage of $expected_count ${group_desc}(s) of job $job_str"
+         return -1
+      }
+
+      array unset result
+      array set result {}
+      set columns {}
+      set count [sqlutil_query $sqlutil_sp_id $sql result columns]
+      if {$count < 0} {
+         ts_log_severe "Can not execute query --------\n$sql\n --------------------"
+         return -2
+      }
+      if {$CHECK_DEBUG_LEVEL == 0} {
+         ts_log_progress
+      }
+
+      # group the rows by subject, collecting per subject the set of online
+      # usage variables that have been stored for it
+      array unset subject_vars
+      for {set row 0} {$row < $count} {incr row} {
+         set task_num  $result($row,0)
+         set pe_taskid $result($row,1)
+         set variable  $result($row,2)
+         set dvalue    $result($row,3)
+         set curr_time $result($row,4)
+
+         # determine the subject this row belongs to
+         switch -exact -- $group_by {
+            job  {set subject "job"}
+            task {set subject "task $task_num"}
+            pe_task {
+               # only the pe tasks count - skip the ja_task level rows
+               if {$pe_taskid == "" || $pe_taskid == "NONE"} {
+                  continue
+               }
+               set subject "pe_task $pe_taskid"
+            }
+         }
+
+         if {![string is double -strict $dvalue] || $dvalue < 0} {
+            ts_log_severe "invalid online usage value for '$variable' of $subject of job $job_str: '$dvalue'"
+         }
+         if {$curr_time == ""} {
+            ts_log_severe "online usage of '$variable' for $subject of job $job_str has no jou_curr_time"
+         }
+
+         lappend subject_vars($subject) $variable
+      }
+
+      # a subject is complete when it has a row for every requested variable
+      set complete_subjects {}
+      foreach subject [array names subject_vars] {
+         set complete 1
+         foreach var $variables {
+            if {[lsearch -exact $subject_vars($subject) $var] < 0} {
+               set complete 0
+               break
+            }
+         }
+         if {$complete} {
+            lappend complete_subjects $subject
+         }
+      }
+
+      if {[llength $complete_subjects] >= $expected_count} {
+         ts_log_fine "   -> found online usage for [llength $complete_subjects] ${group_desc}(s): $complete_subjects"
+         return 0
+      }
+
+      after 1000
+   }
 }
 
 

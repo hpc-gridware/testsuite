@@ -68,45 +68,73 @@ set ts_checktree($arco_checktree_nr,start_runlevel_hooks_0)   "arco_test_run_lev
 
 set ts_checktree($arco_checktree_nr,required_hosts_hook)    "arco_get_required_hosts"
 
-global ARCO_TABLES
-global ARCO_VIEWS
-global ts_config
-global DBWRITER_LOG_FNAME
 
-set DBWRITER_LOG_FNAME "$ts_config(product_root)\/$ts_config(cell)\/spool\/dbwriter\/dbwriter.log"
+proc arco_init_variables {} {
+   get_current_cluster_config_array ts_config
+   global ARCO_TABLES
+   global ARCO_VIEWS
+   global DBWRITER_LOG_FNAME
 
-set ARCO_TABLES { sge_job_usage sge_job_log sge_job_request sge_job
-                  sge_queue_values sge_queue
-                  sge_host_values sge_host
-                  sge_department_values sge_department
-                  sge_project_values sge_project
-                  sge_user_values sge_user
-                  sge_group_values sge_group
-                  sge_share_log
-                  sge_version
-                  sge_statistic_values
-                  sge_statistic
-                  sge_checkpoint
-}
+   set DBWRITER_LOG_FNAME "$ts_config(product_root)\/$ts_config(cell)\/spool\/dbwriter\/dbwriter.log"
 
-lappend ARCO_TABLES sge_ar_attribute
-lappend ARCO_TABLES sge_ar_usage
-lappend ARCO_TABLES sge_ar_log
-lappend ARCO_TABLES sge_ar_resource_usage
-lappend ARCO_TABLES sge_ar
+   set ARCO_TABLES {}
+   lappend ARCO_TABLES sge_job_usage
+   lappend ARCO_TABLES sge_job_log
+   lappend ARCO_TABLES sge_job_request
+   if {[is_version_in_range "9.1.2"]} {
+      lappend ARCO_TABLES sge_job_online_usage
+   }
+   lappend ARCO_TABLES sge_job
 
-set ARCO_VIEWS { view_job_times_subquery view_job_times view_jobs_completed
+   lappend ARCO_TABLES sge_queue_values
+   lappend ARCO_TABLES sge_queue
+
+   lappend ARCO_TABLES sge_host_values
+   lappend ARCO_TABLES sge_host
+
+   lappend ARCO_TABLES sge_department_values
+   lappend ARCO_TABLES sge_department
+
+   lappend ARCO_TABLES sge_project_values
+   lappend ARCO_TABLES sge_project
+
+   lappend ARCO_TABLES sge_user_values
+   lappend ARCO_TABLES sge_user
+
+   lappend ARCO_TABLES sge_group_values
+   lappend ARCO_TABLES sge_group
+
+   lappend ARCO_TABLES sge_share_log
+
+   lappend ARCO_TABLES sge_version
+   lappend ARCO_TABLES sge_statistic_values
+   lappend ARCO_TABLES sge_statistic
+   lappend ARCO_TABLES sge_checkpoint
+
+   lappend ARCO_TABLES sge_ar_attribute
+   lappend ARCO_TABLES sge_ar_usage
+   lappend ARCO_TABLES sge_ar_log
+   lappend ARCO_TABLES sge_ar_resource_usage
+   lappend ARCO_TABLES sge_ar
+
+   set ARCO_VIEWS { view_job_times_subquery view_job_times view_jobs_completed
+                    view_job_log view_department_values view_group_values view_host_values
+                    view_project_values view_queue_values view_user_values view_accounting
+                    view_statistic
+   }
+
+   set ARCO_VIEWS { view_ar_time_usage view_job_times_subquery view_job_times view_jobs_completed
                  view_job_log view_department_values view_group_values view_host_values
-                 view_project_values view_queue_values view_user_values view_accounting
-                 view_statistic
+                 view_project_values view_queue_values view_user_values view_statistic
+                 view_ar_time_usage view_ar_attribute view_ar_log view_ar_usage
+                 view_ar_resource_usage view_accounting view_ar_attribute
+   }
 }
 
-set ARCO_VIEWS { view_ar_time_usage view_job_times_subquery view_job_times view_jobs_completed
-              view_job_log view_department_values view_group_values view_host_values
-              view_project_values view_queue_values view_user_values view_statistic
-              view_ar_time_usage view_ar_attribute view_ar_log view_ar_usage
-              view_ar_resource_usage view_accounting view_ar_attribute
-}
+# Intialize the ARCO_TABLES etc. once
+# We repeat this after installing a new ARCO version to make sure
+# the variables match the ARCO version.
+arco_init_variables
 
 #****** checktree/arco_compile() ***********************************************
 #  NAME
@@ -204,9 +232,10 @@ proc arco_compile_clean { compile_hosts a_report } {
 #  SEE ALSO
 #*******************************************************************************
 proc arco_build { compile_hosts target a_report { ant_options "" } { arco_build_timeout 120 } } {
+   get_current_cluster_config_array ts_config
    global CHECK_OUTPUT CHECK_USER
    global CHECK_HTML_DIRECTORY CHECK_PROTOCOL_DIR
-   global ts_config ts_host_config arco_config
+   global ts_host_config arco_config
 
    upvar $a_report report
 
@@ -359,9 +388,9 @@ proc arco_get_required_hosts {} {
 #  SEE ALSO
 #*******************************************************************************
 proc arco_install_binaries { arch_list a_report } {
-
+   get_current_cluster_config_array ts_config
    global CHECK_USER
-   global ts_config ts_host_config arco_config
+   global ts_host_config arco_config
 
    upvar $a_report report
 
@@ -391,6 +420,10 @@ proc arco_install_binaries { arch_list a_report } {
    }
    report_finish_task report $task_nr 0
 
+   # We might have installed a new version which might affect the tables/views.
+   # Re-initialize the ARCO_TABLES and ARCO_VIEWS variables.
+   arco_init_variables
+
    return 0
 }
 
@@ -419,7 +452,8 @@ proc arco_install_binaries { arch_list a_report } {
 #  SEE ALSO
 #*******************************************************************************
 proc startup_dbwriter {{hostname "--"} {debugmode "0"}} {
-   global ts_config arco_config CHECK_USER CHECK_INSTALL_RC
+   get_current_cluster_config_array ts_config
+   global arco_config CHECK_USER CHECK_INSTALL_RC
 
    if {$hostname == "--"} {
       set hostname $arco_config(dbwriter_host)
@@ -518,7 +552,8 @@ proc startup_dbwriter {{hostname "--"} {debugmode "0"}} {
 #
 #*******************************************************************************
 proc get_dbwriter_status { { raise_error 1 } { hostname "--" } } {
-   global ts_config arco_config CHECK_USER
+   get_current_cluster_config_array ts_config
+   global arco_config CHECK_USER
 
    if {$hostname == "--"} {
       set hostname $arco_config(dbwriter_host)
@@ -573,7 +608,8 @@ proc get_dbwriter_status { { raise_error 1 } { hostname "--" } } {
 #     ???/???
 #*******************************************************************************
 proc shutdown_dbwriter { { hostname "--" } } {
-   global ts_config arco_config CHECK_USER CHECK_INSTALL_RC
+   get_current_cluster_config_array ts_config
+   global arco_config CHECK_USER CHECK_INSTALL_RC
 
    if {$hostname == "--"} {
       set hostname $arco_config(dbwriter_host)
@@ -846,7 +882,6 @@ proc arco_clean_postgres_database {{drop 0}} {
          }
 
          set sql "DROP VIEW $view"
-         ts_log_fine $sql
          set res [sqlutil_exec $sp_id $sql]
          if {$res != 0} {
             ts_log_severe "Error: Can not drop view $VIEW"
@@ -872,7 +907,6 @@ proc arco_clean_postgres_database {{drop 0}} {
 
       if {$drop} {
          set sql "DROP TABLE $table CASCADE"
-         ts_log_fine $sql
          set res [sqlutil_exec $sp_id $sql]
          if {$res != 0} {
             ts_log_severe "Error: Can not drop table $table"
@@ -882,7 +916,6 @@ proc arco_clean_postgres_database {{drop 0}} {
       } else {
          if {[clean_table $table] == 1} {
             set sql "DELETE FROM $table"
-            ts_log_fine $sql
             set res [sqlutil_exec $sp_id $sql]
             if {$res != 0} {
                ts_log_severe "Error: Can not delete table $table"
@@ -905,8 +938,7 @@ proc arco_clean_postgres_database {{drop 0}} {
 }
 
 proc arco_clean_mysql_database {{drop 0}} {
-
-global ARCO_TABLES ARCO_VIEWS
+   global ARCO_TABLES ARCO_VIEWS
 
    set id [sqlutil_create]
    if { $id == "-1" } {
@@ -986,7 +1018,6 @@ global ARCO_TABLES ARCO_VIEWS
 
       if { $drop } {
          set sql "DROP TABLE $table CASCADE"
-         ts_log_fine "drop table $table"
          set res [sqlutil_exec $sp_id $sql]
          if { $res != 0 } {
             ts_log_severe "Error: Can not drop table $table"
@@ -995,7 +1026,7 @@ global ARCO_TABLES ARCO_VIEWS
          }
       } else {
          if { [ clean_table $table ] == 1 } {
-            set sql "DELETE from $table"
+            set sql "DELETE FROM $table"
             set res [sqlutil_exec $sp_id $sql]
             if { $res != 0 } {
                ts_log_severe "Error: Can not delete table $table"
@@ -1035,7 +1066,8 @@ global ARCO_TABLES ARCO_VIEWS
 #
 #*******************************************************************************
 proc check_dbwriter_log { } {
-   global ts_config CHECK_USER
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
    global DBWRITER_LOG_FNAME
 
    set return_value ""
