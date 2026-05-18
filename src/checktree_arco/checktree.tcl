@@ -760,7 +760,7 @@ proc arco_clean_oracle_database { { drop 0 } } {
          if { $drop } {
             set sql "DROP TABLE $table"
             ts_log_fine "drop table ${table}"
-            set res [sqlutil_exec $sp_id $sql]
+            set res [sqlutil_exec $sp_id $sql 120]
             if { $res != 0 } {
                ts_log_severe "Error: Can not drop table $table"
                set result -1
@@ -769,7 +769,7 @@ proc arco_clean_oracle_database { { drop 0 } } {
          } else {
             if { [ clean_table $table ] == 1 } {
                set sql "DELETE FROM $table"
-               set res [sqlutil_exec $sp_id $sql]
+               set res [sqlutil_exec $sp_id $sql 120]
                if { $res != 0 } {
                   ts_log_severe "Error: Can not delete table $table"
                   set result -1
@@ -1097,6 +1097,7 @@ proc arco_get_java_home {host} {
       set min_version 8
       set allow_higher 0
    }
+   ts_log_fine "searching JAVA_HOME for host $host, version $min_version, allow_higher $allow_higher"
    set ret [host_conf_get_java $host $min_version 0 $allow_higher]
    if {$ret eq ""} {
       if {$allow_higher} {
