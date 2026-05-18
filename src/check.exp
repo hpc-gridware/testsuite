@@ -7227,7 +7227,8 @@ proc source_tcl_files {} {
    ts_source $libdir/systemd
    ts_source $libdir/security
 
-   ts_source $libdir/qrsh_test_helpers
+   ts_source $libdir/ocs_qrsh_test_helpers
+   ts_source $libdir/ocs_resource_helpers
 
    # source a user private tcl file, e.g. to contain a
    ts_source $libdir/private
