@@ -153,6 +153,31 @@ proc usage_io_test {} {
       return
    }
 
+   # Online IO usage is collected by the execd PDC and can take up to ~15s
+   # to show up in qstat -j. The job must keep running until at least one
+   # online sample has been gathered - otherwise usage(io) is still 0 here
+   # even though end-of-job accounting is correct. Poll (while the job is
+   # still writing) until online IO usage is reported, or time out.
+   set usage_attr ""
+   set online_timeout [expr [clock seconds] + 45]
+   while {[clock seconds] < $online_timeout} {
+      if {![is_job_running $job_id ""]} {
+         ts_log_config "Job $job_id ended before online IO usage was reported"
+         break
+      }
+      get_qstat_j_info $job_id
+      set usage_attr [get_qstat_j_attribute "usage"]
+      if {[info exists qstat_j_info($usage_attr)]} {
+         parse_name_value_list usage $qstat_j_info($usage_attr)
+         if {[info exists usage(io)] && [transform_usage_value $usage(io) 1] > 0} {
+            ts_log_fine "online IO usage reported: $usage(io)"
+            break
+         }
+      }
+      ts_log_fine "waiting for online IO usage to be reported ..."
+      sleep_for_seconds 5
+   }
+
    # suspend the job to stop it writing and get the actual IO usage
    suspend_job $job_id
 
@@ -162,7 +187,7 @@ proc usage_io_test {} {
    # get current file size
    set file_size [file size $usage_io_file]
 
-   # get usage values
+   # get final usage values
    get_qstat_j_info $job_id
    set usage_attr [get_qstat_j_attribute "usage"]
    parse_name_value_list usage $qstat_j_info($usage_attr)
