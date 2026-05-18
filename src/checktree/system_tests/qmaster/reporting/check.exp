@@ -684,6 +684,11 @@ proc reporting_queue_state_test {} {
    delete_job $job_id 1
    replace_attr "queue" "hostlist" "$reporting_test_host" "reporting"
    #reporting_wait_for_queue_state ""
+   # the orphan -> re-attach transition above leaves the exec host / queue
+   # instance re-registering; wait for it to fully settle so the next
+   # scenario does not start against a transient host state (which would
+   # yield empty host_consumable records)
+   wait_for_load_from_all_queues 60
 
    # shutdown tail -f
    close_logfile_wait
@@ -693,20 +698,33 @@ proc reporting_complex_change_test {} {
    global ts_config
    global reporting_file reporting_test_host
    global reporting_format_config
+   global reporting_old_config_test_host
+
+   # A preceding scenario (e.g. reporting_queue_state_test via
+   # set_config_and_propagate on the qmaster host) can leave a LOCAL
+   # reporting_params override on the test host. reporting_params is
+   # local-overridable, so a stale local value shadows the GLOBAL
+   # reporting_params this test sets (incl. log_consumables=true) and the
+   # host_consumable records below would never be written. Restore the
+   # host's original local config so the global value is authoritative.
+   reset_config_and_propagate reporting_old_config_test_host $reporting_test_host
 
    # we will see the fully qualified hostname in reporting records
    set qualified_hostname [resolve_host $reporting_test_host 1]
 
-   # assign consumable to our test host
-   set exechost(complex_values) "F001=2,F002=2"
+   # assign consumable to our test host; explicitly clear report_variables
+   # so a preceding scenario cannot leak host reporting configuration into
+   # the log_consumables=true scenario below
+   set exechost(complex_values)   "F001=2,F002=2"
+   set exechost(report_variables) "NONE"
    set_exechost exechost $reporting_test_host
 
-   # activate reporting and set short reporting flush time
-   set new_config(reporting_params) "reporting=true flush_time=00:00:1 $reporting_format_config"
+   # make sure the exec host is fully registered and reporting load before
+   # we rely on its consumable lists for the first host_consumable read
+   wait_for_load_from_all_queues 60
 
-   # in 6.2, the default changed to log_consumables=false
-   # make sure we start with the correct settings
-   append new_config(reporting_params) " log_consumables=true $reporting_format_config"
+   # in 6.2 the default changed to log_consumables=false
+   set new_config(reporting_params) "reporting=true flush_time=00:00:1 log_consumables=true $reporting_format_config"
    set_config new_config
 
    # tail -f reporting file
@@ -899,11 +917,8 @@ proc reporting_consumables_test {} {
    set exechost(complex_values) "F001=2,F002=2"
    set_exechost exechost $reporting_test_host
 
-   # activate reporting and set short reporting flush time
-   set new_config(reporting_params) "reporting=true flush_time=00:00:1 joblog=true $reporting_format_config"
-   # in 6.2, the default changed to log_consumables=false
-   # make sure we start with the correct settings
-   append new_config(reporting_params) " log_consumables=true $reporting_format_config"
+   # activate reporting and set short reporting flush time.
+   set new_config(reporting_params) "reporting=true flush_time=00:00:1 joblog=true log_consumables=true $reporting_format_config"
    set_config new_config
 
    # tail -f reporting file
