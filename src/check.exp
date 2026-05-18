@@ -1548,13 +1548,13 @@ proc check_executable_files {  } {
    lappend filelist "$ts_config(checktree_root_dir)/functional/migration/migrate.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qmake/echo_variable.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qmod/qmod_general/qmod_job.sh"
-   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/qsub_gid.sh"
-   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/sleep_pid.sh"
-   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/starter.sh"
-   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/terminate.sh"
-   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/trap.sh"
-   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/ulimit.sh"
-   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/signalhandler.sh"
+   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/env_config/qsub_gid.sh"
+   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/env_config/starter.sh"
+   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/env_config/ulimit.sh"
+   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/signals/sleep_pid.sh"
+   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/signals/terminate.sh"
+   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/signals/signalhandler.sh"
+#   lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qrsh/trap.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qsub/qsub_all_other/starter.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qsub/qsub_ac_dc_sc/sleeper.sh"
    lappend filelist "$ts_config(checktree_root_dir)/system_tests/clients/qsub/qsub_t/step.sh"
@@ -7226,6 +7226,9 @@ proc source_tcl_files {} {
    ts_source $libdir/simhost
    ts_source $libdir/systemd
    ts_source $libdir/security
+
+   ts_source $libdir/ocs_qrsh_test_helpers
+   ts_source $libdir/ocs_resource_helpers
 
    # source a user private tcl file, e.g. to contain a
    ts_source $libdir/private

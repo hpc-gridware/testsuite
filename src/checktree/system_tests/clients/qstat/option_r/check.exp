@@ -98,7 +98,9 @@ proc qstat_r_check_job {format job_id expected_var} {
                lappend errors "qstat -r $format $job_id: $attrib: expected '$expected_value', got '$actual_value'"
             }
          } else {
-            if {$actual_value != $expected_value} {
+            # accept both the suffixed form (h_rss=10G) and the byte form
+            # (h_rss=10737418240) that qstat -r may emit for memory resources
+            if {[sge_normalize_resource_string $actual_value] != [sge_normalize_resource_string $expected_value]} {
                lappend errors "qstat -r $format $job_id: $attrib: expected '$expected_value', got '$actual_value'"
             }
          }

@@ -19,7 +19,7 @@
 #___INFO__MARK_END_NEW__
 
 # Split from the legacy system_tests/clients/qrsh test (CS-2159 follow-up).
-# Setup / cleanup live in testsuite/src/tcl_files/qrsh_test_helpers.tcl.
+# Setup / cleanup live in testsuite/src/tcl_files/ocs_qrsh_test_helpers.tcl.
 
 global check_name
 global check_category
