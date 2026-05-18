@@ -273,7 +273,7 @@ proc get_version_info {{version_information_array_name ""} {do_cleanup 0}} {
 
       # we might just have compiled and installed, wait for qconf to be available on the master host
       # lets wait for it to be available
-      if {[wait_for_remote_file $ts_config(master_host) $CHECK_USER $qconf_bin 60 0] == 0} {
+      if {[wait_for_remote_file $qconf_host $CHECK_USER $qconf_bin 60 0] == 0} {
          set result [start_remote_prog $qconf_host $CHECK_USER $qconf_bin "-help" prg_exit_state 15 0 "" "" 1 1 0 1]
          set help [split $result "\n"]
          if {([string first "fopen" [ lindex $help 0]]        >= 0) ||
@@ -292,7 +292,7 @@ proc get_version_info {{version_information_array_name ""} {do_cleanup 0}} {
       #  try to get version from install script
       if {$CHECK_PRODUCT_VERSION_NUMBER == "n.a."} {
          set install_master_file "$ts_config(product_root)/inst_sge"
-         if {[file isfile $install_master_file]} {
+         if {[wait_for_remote_file $qconf_host $CHECK_USER $install_master_file 60 0] == 0} {
             set result [start_remote_prog $qconf_host $CHECK_USER $install_master_file "-v" prg_exit_state 15 0 $ts_config(product_root)]
             if {$prg_exit_state == 0} {
                set CHECK_PRODUCT_VERSION_NUMBER [string trim [lindex [split $result ":"] 1]]
