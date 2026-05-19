@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -66,6 +66,7 @@ lappend check_functions "enforce_limits_loose_qmaster_limit_enforcement_all_queu
 lappend check_functions "enforce_limits_batch_qmaster_limit_enforcement_all_queue"
 lappend check_functions "enforce_limits_tight_qmaster_limit_enforcement_after_stop_start_master"
 lappend check_functions "enforce_limits_tight_qmaster_limit_enforcement_after_stop_start_slave"
+lappend check_functions "enforce_limits_qmaster_deleted_by"
 
 # constants
 set tight_slots 5
@@ -772,4 +773,113 @@ proc enforce_limits_batch_qmaster_limit_enforcement_all_queue {} {
          ts_log_severe "job died through limit exceeding executed by the master daemon. Therefore it should end with failed=37 but it failed with $failed"
       }
    }
+}
+
+#****** enforce_limits/enforce_limits_check_deleted_by() ***********************
+#  NAME
+#     enforce_limits_check_deleted_by() -- verify a deleted_by value
+#
+#  FUNCTION
+#     Verifies that a "deleted_by" string has the form <user>@<host> and
+#     matches the expected user and host. The host is compared via resolve_host
+#     to tolerate FQDN vs. short name differences.
+#*******************************************************************************
+proc enforce_limits_check_deleted_by {deleted_by expected_user expected_host context} {
+   set parts [split $deleted_by "@"]
+   if {[llength $parts] != 2} {
+      ts_log_severe "deleted_by \"$deleted_by\" is not in user@host form ($context)"
+      return
+   }
+
+   set du_user [lindex $parts 0]
+   set du_host [lindex $parts 1]
+   if {$du_user ne $expected_user} {
+      ts_log_severe "deleted_by user is \"$du_user\", expected \"$expected_user\" ($context)"
+   }
+   if {[resolve_host $du_host] ne [resolve_host $expected_host]} {
+      ts_log_severe "deleted_by host is \"$du_host\", expected \"$expected_host\" ($context)"
+   }
+}
+
+# - submit a batch job to a queue with a hard runtime limit of 30s
+# - wait till the job is running
+# - shut down the execd where the job runs so that sge_qmaster has to
+#   enforce the runtime limit itself
+# - wait for the acct record of the job in the reporting file
+# - verify that the acct record (reporting file and qacct) carries
+#   deleted_by = qmaster@<master-host>
+proc enforce_limits_qmaster_deleted_by {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global tight_masterq tight_master_node
+
+   # deleted_by has been added in 9.1.2
+   if {![is_version_in_range "9.1.2"]} {
+      return
+   }
+
+   # enable reporting so the acct record is also written to the reporting file
+   get_config el_saved_conf
+   set new_conf(reporting_params) "accounting=true reporting=true flush_time=00:00:01 accounting_flush_time=00:00:00"
+   set_config new_conf
+
+   set reporting_file "$ts_config(product_root)/$ts_config(cell)/common/reporting.jsonl"
+   set master_host $ts_config(master_host)
+
+   # tail -f the reporting file
+   init_logfile_wait $ts_config(master_host) $reporting_file 1
+
+   # submit a job that runs much longer than the queue's hard runtime limit (30s)
+   set job_id [submit_job "-N el_deleted_by -q $tight_masterq $ts_config(product_root)/examples/jobs/sleeper.sh 180"]
+   if {$job_id <= 0} {
+      close_logfile_wait
+      reset_config el_saved_conf
+      return
+   }
+   if {[wait_for_jobstart $job_id "" 10 1 1] != 0} {
+      close_logfile_wait
+      delete_job $job_id 1
+      reset_config el_saved_conf
+      return
+   }
+   wait_for_end_of_transfer $job_id 60
+
+   # shut down the execd where the job runs - sge_qmaster now has to enforce
+   # the runtime limit itself (qdel -f style)
+   soft_execd_shutdown $tight_master_node
+
+   # wait for the acct record of this job in the reporting file
+   set job_pattern "\"type\":\"acct\",\"job_number\":$job_id,"
+   set output [logfile_wait $job_pattern 240 0 0]
+   close_logfile_wait
+
+   # restart the execd
+   startup_execd $tight_master_node
+
+   # the reporting acct record must carry deleted_by = qmaster@<master-host>
+   set acct_line ""
+   foreach line [split $output "\n"] {
+      if {[string first $job_pattern $line] >= 0} {
+         set acct_line $line
+      }
+   }
+   if {$acct_line == ""} {
+      ts_log_severe "no acct record for job $job_id found in reporting file"
+   } elseif {![regexp {"deleted_by":"([^"]*)"} $acct_line -> deleted_by]} {
+      ts_log_severe "acct record for job $job_id has no deleted_by attribute:\n$acct_line"
+   } else {
+      enforce_limits_check_deleted_by $deleted_by "qmaster" $master_host "reporting acct record"
+   }
+
+   # the qacct output must carry the same deleted_by
+   if {[get_qacct $job_id] == 0} {
+      if {![info exists qacct_info(deleted_by)]} {
+         ts_log_severe "deleted_by missing in qacct output for job $job_id"
+      } else {
+         enforce_limits_check_deleted_by $qacct_info(deleted_by) "qmaster" $master_host "qacct"
+      }
+   }
+
+   wait_for_end_of_all_jobs 60
+   reset_config el_saved_conf
 }
