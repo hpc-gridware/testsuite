@@ -1291,10 +1291,16 @@ proc reporting_check_deleted_by {deleted_by expected_user expected_host context}
 #     reporting_deleted_by_test() -- test deleted_by in the acct reporting record
 #
 #  FUNCTION
-#     Submits a long running job, deletes it while it is running - once with a
-#     regular qdel and once with a forced qdel (qdel -f) - and verifies that the
-#     acct record written to the reporting file carries the deleted_by attribute
-#     set to <user>@<host> of the qdel request.
+#     Runs three scenarios in which a running job is terminated and verifies
+#     that the acct record written to the reporting file carries the
+#     deleted_by attribute:
+#     - qdel        - the job is deleted with a regular qdel
+#     - qdel_forced - the job is deleted with a forced qdel (qdel -f)
+#     - execd       - the job exceeds a hard runtime limit (h_rt) and is
+#                     killed by sge_execd
+#
+#     deleted_by must be <user>@<host> of the qdel request, respectively
+#     execd@<exec-host> for a job killed by sge_execd.
 #
 #     deleted_by exists in the JSONL reporting format only and was added in
 #     9.1.2, so this test runs in run level 1 (JSON format) only.
@@ -1302,7 +1308,7 @@ proc reporting_check_deleted_by {deleted_by expected_user expected_host context}
 proc reporting_deleted_by_test {} {
    get_current_cluster_config_array ts_config
    global CHECK_USER CHECK_ACT_LEVEL
-   global reporting_file
+   global reporting_file reporting_test_host
    global reporting_format_config
 
    # deleted_by is available in the JSONL reporting format only, added in 9.1.2
@@ -1316,14 +1322,19 @@ proc reporting_deleted_by_test {} {
    set_config new_config
 
    # delete_job and start_sge_bin run qdel on the master host
-   set expected_host $ts_config(master_host)
+   set master_host $ts_config(master_host)
 
    # tail -f the reporting file
    init_logfile_wait $ts_config(master_host) $reporting_file 1
 
-   foreach mode {"normal" "forced"} {
-      # submit a long running job and delete it while it is running
-      set job_id [submit_job "-N rep_del_$mode -q reporting $ts_config(product_root)/examples/jobs/sleeper.sh 600"]
+   foreach mode {"qdel" "qdel_forced" "execd"} {
+      # for the execd scenario submit a job requesting a hard runtime limit
+      # shorter than its sleep time - sge_execd kills it when it exceeds h_rt
+      if {$mode == "execd"} {
+         set job_id [submit_job "-N rep_del_$mode -q reporting -l h_rt=0:0:30 $ts_config(product_root)/examples/jobs/sleeper.sh 60"]
+      } else {
+         set job_id [submit_job "-N rep_del_$mode -q reporting $ts_config(product_root)/examples/jobs/sleeper.sh 600"]
+      }
       if {$job_id <= 0} {
          continue
       }
@@ -1332,23 +1343,29 @@ proc reporting_deleted_by_test {} {
          continue
       }
 
-      # delete the running job
-      if {$mode == "forced"} {
-         start_sge_bin "qdel" "-f $job_id" $ts_config(master_host)
-         if {$prg_exit_state != 0} {
-            ts_log_severe "qdel -f $job_id failed"
-            delete_job $job_id 1
-            continue
+      # terminate the running job
+      switch $mode {
+         "qdel" {
+            if {[delete_job $job_id 0 0 1 $CHECK_USER $master_host] != 0} {
+               continue
+            }
          }
-      } else {
-         if {[delete_job $job_id 0 0 1 $CHECK_USER $ts_config(master_host)] != 0} {
-            continue
+         "qdel_forced" {
+            start_sge_bin "qdel" "-f $job_id" $master_host
+            if {$prg_exit_state != 0} {
+               ts_log_severe "qdel -f $job_id failed"
+               delete_job $job_id 1
+               continue
+            }
+         }
+         "execd" {
+            # nothing to do - sge_execd kills the job when it exceeds h_rt
          }
       }
 
       # wait for the acct record of this job in the reporting file
       set job_pattern "\"type\":\"acct\",\"job_number\":$job_id,"
-      set output [logfile_wait $job_pattern 60 0 0]
+      set output [logfile_wait $job_pattern 120 0 0]
 
       # isolate the acct line for our job
       set acct_line ""
@@ -1358,19 +1375,24 @@ proc reporting_deleted_by_test {} {
          }
       }
       if {$acct_line == ""} {
-         ts_log_severe "no acct record for job $job_id found in reporting file (qdel $mode mode)"
-         wait_for_jobend $job_id "" 90 0 0
+         ts_log_severe "no acct record for job $job_id found in reporting file ($mode)"
+         wait_for_jobend $job_id "" 120 0 0
          continue
       }
 
-      # the acct record must contain deleted_by = user@host
+      # the acct record must contain deleted_by
       if {![regexp {"deleted_by":"([^"]*)"} $acct_line -> deleted_by]} {
-         ts_log_severe "acct record for job $job_id has no deleted_by attribute (qdel $mode mode):\n$acct_line"
+         ts_log_severe "acct record for job $job_id has no deleted_by attribute ($mode):\n$acct_line"
       } else {
-         reporting_check_deleted_by $deleted_by $CHECK_USER $expected_host "qdel $mode mode"
+         if {$mode == "execd"} {
+            # a job killed for exceeding a limit: execd@<exec-host>
+            reporting_check_deleted_by $deleted_by "execd" $reporting_test_host $mode
+         } else {
+            reporting_check_deleted_by $deleted_by $CHECK_USER $master_host $mode
+         }
       }
 
-      wait_for_jobend $job_id "" 90 0 0
+      wait_for_jobend $job_id "" 120 0 0
    }
 
    # shutdown tail -f

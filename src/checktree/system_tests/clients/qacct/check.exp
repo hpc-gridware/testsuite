@@ -200,12 +200,16 @@ proc qacct_check_deleted_by {deleted_by expected_user expected_host context} {
 #     qacct_deleted_by() -- test the deleted_by accounting attribute
 #
 #  FUNCTION
-#     Submits a long running job, deletes it while it is running - once with
-#     a regular qdel and once with a forced qdel (qdel -f) - and verifies the
-#     deleted_by attribute in the accounting record:
-#     - in the JSONL accounting format it must be set to <user>@<host> of the
-#       qdel request
-#     - in the old colon-separated format it must not appear at all
+#     Runs three scenarios in which a running job is terminated and verifies
+#     the deleted_by attribute in the accounting record:
+#     - qdel        - the job is deleted with a regular qdel
+#     - qdel_forced - the job is deleted with a forced qdel (qdel -f)
+#     - execd       - the job exceeds a hard runtime limit (h_rt) and is
+#                     killed by sge_execd
+#
+#     In the JSONL accounting format deleted_by must be set to <user>@<host>
+#     of the qdel request, respectively to execd@<exec-host> for a job killed
+#     by sge_execd. In the old colon-separated format it must not appear.
 #*******************************************************************************
 proc qacct_deleted_by {} {
    get_current_cluster_config_array ts_config
@@ -217,11 +221,16 @@ proc qacct_deleted_by {} {
    }
 
    # delete_job and start_sge_bin run qdel on the master host
-   set expected_host $ts_config(master_host)
+   set master_host $ts_config(master_host)
 
-   foreach mode {"normal" "forced"} {
-      # submit a long running job that we delete while it is running
-      set job_id [submit_job "-N qacct_del_$mode $ts_config(product_root)/examples/jobs/sleeper.sh 600"]
+   foreach mode {"qdel" "qdel_forced" "execd"} {
+      # for the execd scenario submit a job requesting a hard runtime limit
+      # shorter than its sleep time - sge_execd kills it when it exceeds h_rt
+      if {$mode == "execd"} {
+         set job_id [submit_job "-N qacct_del_$mode -l h_rt=0:0:30 $ts_config(product_root)/examples/jobs/sleeper.sh 60"]
+      } else {
+         set job_id [submit_job "-N qacct_del_$mode $ts_config(product_root)/examples/jobs/sleeper.sh 600"]
+      }
       if {$job_id <= 0} {
          continue
       }
@@ -230,21 +239,27 @@ proc qacct_deleted_by {} {
          continue
       }
 
-      # delete the running job
-      if {$mode == "forced"} {
-         start_sge_bin "qdel" "-f $job_id" $ts_config(master_host)
-         if {$prg_exit_state != 0} {
-            ts_log_severe "qdel -f $job_id failed"
-            delete_job $job_id 1
-            continue
+      # terminate the running job
+      switch $mode {
+         "qdel" {
+            if {[delete_job $job_id 0 0 1 $CHECK_USER $master_host] != 0} {
+               continue
+            }
          }
-      } else {
-         if {[delete_job $job_id 0 0 1 $CHECK_USER $ts_config(master_host)] != 0} {
-            continue
+         "qdel_forced" {
+            start_sge_bin "qdel" "-f $job_id" $master_host
+            if {$prg_exit_state != 0} {
+               ts_log_severe "qdel -f $job_id failed"
+               delete_job $job_id 1
+               continue
+            }
+         }
+         "execd" {
+            # nothing to do - sge_execd kills the job when it exceeds h_rt
          }
       }
 
-      if {[wait_for_jobend $job_id "" 90 0 1] != 0} {
+      if {[wait_for_jobend $job_id "" 120 0 1] != 0} {
          continue
       }
 
@@ -256,17 +271,23 @@ proc qacct_deleted_by {} {
       if {$CHECK_ACT_LEVEL == 0} {
          # the old colon-separated accounting format does not carry deleted_by
          if {[info exists qacct_info(deleted_by)]} {
-            ts_log_severe "deleted_by must not appear in the old accounting format, but got \"$qacct_info(deleted_by)\" (qdel $mode mode)"
+            ts_log_severe "deleted_by must not appear in the old accounting format, but got \"$qacct_info(deleted_by)\" ($mode)"
          }
          continue
       }
 
-      # JSONL accounting format: deleted_by must be set to user@host
+      # JSONL accounting format: deleted_by must be set
       if {![info exists qacct_info(deleted_by)]} {
-         ts_log_severe "deleted_by missing in qacct output for job $job_id deleted by qdel ($mode mode)"
+         ts_log_severe "deleted_by missing in qacct output for job $job_id ($mode)"
          continue
       }
-      qacct_check_deleted_by $qacct_info(deleted_by) $CHECK_USER $expected_host "qdel $mode mode"
+
+      if {$mode == "execd"} {
+         # a job killed for exceeding a limit: execd@<exec-host>
+         qacct_check_deleted_by $qacct_info(deleted_by) "execd" $qacct_info(hostname) $mode
+      } else {
+         qacct_check_deleted_by $qacct_info(deleted_by) $CHECK_USER $master_host $mode
+      }
    }
 }
 
