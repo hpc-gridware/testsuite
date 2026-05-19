@@ -62,6 +62,7 @@ set check_cleanup_function qacct_cleanup
 # define test's procedure order
 set check_functions ""
 lappend check_functions "qacct_basic"
+lappend check_functions "qacct_deleted_by"
 lappend check_functions "qacct_unknown_job_id"
 
 lappend check_functions "qacct_issue1720"
@@ -72,7 +73,7 @@ lappend check_functions "qacct_issue2146"
 
 # -------- local test procedures: initialization------------------------------
 proc qacct_setup {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global qacct_reporting_backup
 
    # set the accounting_flush_time to 0 to speedup writing of accounting info
@@ -80,7 +81,7 @@ proc qacct_setup {} {
 }
 
 proc qacct_setup_level {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global CHECK_ACT_LEVEL
    global qacct_reporting_backup
 
@@ -102,7 +103,7 @@ proc qacct_setup_level {} {
 }
 
 proc qacct_cleanup {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global qacct_reporting_backup
 
    delete_all_jobs
@@ -113,7 +114,7 @@ proc qacct_cleanup {} {
 
 # --------------- test procedures for both 5.3 and 6.x
 proc qacct_basic {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global CHECK_USER CHECK_ACT_LEVEL
 
    set qacct_fields "qname hostname group owner project department jobname jobnumber taskid account priority qsub_time start_time end_time granted_pe slots failed exit_status ru_wallclock ru_utime ru_stime ru_maxrss ru_ixrss ru_ismrss ru_idrss ru_isrss ru_minflt ru_majflt ru_nswap ru_inblock ru_oublock ru_msgsnd ru_msgrcv ru_nsignals ru_nvcsw ru_nivcsw cpu mem io iow maxvmem"
@@ -165,8 +166,112 @@ proc qacct_basic {} {
    }
 }
 
+#****** qacct/qacct_check_deleted_by() *****************************************
+#  NAME
+#     qacct_check_deleted_by() -- verify a deleted_by value
+#
+#  FUNCTION
+#     Verifies that a "deleted_by" string from a qacct record has the form
+#     <user>@<host> and matches the expected user and host. The host is
+#     compared by its short name to tolerate FQDN vs. short name differences.
+#*******************************************************************************
+proc qacct_check_deleted_by {deleted_by expected_user expected_host context} {
+   set parts [split $deleted_by "@"]
+   if {[llength $parts] != 2} {
+      ts_log_severe "deleted_by \"$deleted_by\" is not in user@host form ($context)"
+      return
+   }
+
+   set du_user [lindex $parts 0]
+   set du_host [lindex $parts 1]
+   if {$du_user ne $expected_user} {
+      ts_log_severe "deleted_by user is \"$du_user\", expected \"$expected_user\" ($context)"
+   }
+
+   set exp_short [resolve_host $expected_host]
+   set got_short [resolve_host $du_host]
+   if {$got_short ne $exp_short} {
+      ts_log_severe "deleted_by host is \"$du_host\", expected \"$expected_host\" ($context)"
+   }
+}
+
+#****** qacct/qacct_deleted_by() ***********************************************
+#  NAME
+#     qacct_deleted_by() -- test the deleted_by accounting attribute
+#
+#  FUNCTION
+#     Submits a long running job, deletes it while it is running - once with
+#     a regular qdel and once with a forced qdel (qdel -f) - and verifies the
+#     deleted_by attribute in the accounting record:
+#     - in the JSONL accounting format it must be set to <user>@<host> of the
+#       qdel request
+#     - in the old colon-separated format it must not appear at all
+#*******************************************************************************
+proc qacct_deleted_by {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ACT_LEVEL
+
+   # deleted_by has been added in 9.1.2
+   if {![is_version_in_range "9.1.2"]} {
+      return
+   }
+
+   # delete_job and start_sge_bin run qdel on the master host
+   set expected_host $ts_config(master_host)
+
+   foreach mode {"normal" "forced"} {
+      # submit a long running job that we delete while it is running
+      set job_id [submit_job "-N qacct_del_$mode $ts_config(product_root)/examples/jobs/sleeper.sh 600"]
+      if {$job_id <= 0} {
+         continue
+      }
+      if {[wait_for_jobstart $job_id "" 60 1 1] != 0} {
+         delete_job $job_id 1
+         continue
+      }
+
+      # delete the running job
+      if {$mode == "forced"} {
+         start_sge_bin "qdel" "-f $job_id" $ts_config(master_host)
+         if {$prg_exit_state != 0} {
+            ts_log_severe "qdel -f $job_id failed"
+            delete_job $job_id 1
+            continue
+         }
+      } else {
+         if {[delete_job $job_id 0 0 1 $CHECK_USER $ts_config(master_host)] != 0} {
+            continue
+         }
+      }
+
+      if {[wait_for_jobend $job_id "" 90 0 1] != 0} {
+         continue
+      }
+
+      # get accounting record
+      if {[get_qacct $job_id] != 0} {
+         continue
+      }
+
+      if {$CHECK_ACT_LEVEL == 0} {
+         # the old colon-separated accounting format does not carry deleted_by
+         if {[info exists qacct_info(deleted_by)]} {
+            ts_log_severe "deleted_by must not appear in the old accounting format, but got \"$qacct_info(deleted_by)\" (qdel $mode mode)"
+         }
+         continue
+      }
+
+      # JSONL accounting format: deleted_by must be set to user@host
+      if {![info exists qacct_info(deleted_by)]} {
+         ts_log_severe "deleted_by missing in qacct output for job $job_id deleted by qdel ($mode mode)"
+         continue
+      }
+      qacct_check_deleted_by $qacct_info(deleted_by) $CHECK_USER $expected_host "qdel $mode mode"
+   }
+}
+
 proc qacct_unknown_job_id {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    # we can't get that high job id's due to job id wrapping
    set job_id 4000000000
@@ -178,7 +283,7 @@ proc qacct_unknown_job_id {} {
 }
 
 proc qacct_issue1686 {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    set acct_file "$ts_config(checktree_root_dir)/system_tests/clients/qacct/accounting_issue1686"
 
@@ -196,7 +301,7 @@ proc qacct_issue1720 {} {
 }
 
 proc qacct_issue2127 {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    set master_arch [resolve_arch $ts_config(master_host)]
    set output [start_sge_bin qacct "-l h=$ts_config(master_host)"]
@@ -259,7 +364,7 @@ proc qacct_issue2146 {} {
 }
 
 proc qacct_issue2189 {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
 
    # create a new queue
    set test_qname "test_issue2189.q"

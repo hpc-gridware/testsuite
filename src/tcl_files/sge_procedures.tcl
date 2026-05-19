@@ -4908,6 +4908,8 @@ proc is_job_id { job_id } {
 #                          (till qstat -f $jobid returns "job not found")
 #     {all_users 0}    - delete jobs of all users (as administrator), default no
 #     {raise_error 1}  - raise an error condition on error, default yes
+#     {user ""}        - user who shall call qdel (default $CHECK_USER)
+#     {host ""}        - host on which to execute qdel (default $ts_config(master_host))
 #
 #  RESULT
 #     0   - ok
@@ -4920,7 +4922,7 @@ proc is_job_id { job_id } {
 #*******************************
 global g_delete_job_messages
 unset -nocomplain g_delete_job_messages
-proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}} {
+proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""} {host ""}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
    global g_delete_job_messages
@@ -4928,6 +4930,9 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}}
 
    if {$user == ""} {
       set user $CHECK_USER
+   }
+   if {$host == ""} {
+      set host $ts_config(master_host)
    }
    ts_log_fine "deleting job $jobid as $user"
 
@@ -4944,7 +4949,7 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}}
    set result -100
    if {[is_job_id $jobid]} {
       # spawn process
-      set program "$ts_config(product_root)/bin/[resolve_arch $ts_config(master_host)]/qdel"
+      set program "$ts_config(product_root)/bin/[resolve_arch $host]/qdel"
 
       # beginning with SGE 6.0 we need to specify if we want to delete jobs from
       # other users (as admin user)
@@ -4952,7 +4957,7 @@ proc delete_job {jobid {wait_for_end 0} {all_users 0} {raise_error 1} {user ""}}
       if {$all_users} {
          set args "-u '*'"
       }
-      set id [open_remote_spawn_process $ts_config(master_host) $user $program "$args $jobid"]
+      set id [open_remote_spawn_process $host $user $program "$args $jobid"]
       set sp_id [ lindex $id 1 ]
       set timeout 60
       log_user 1

@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -92,11 +92,13 @@ lappend check_functions "reporting_ar_error_state_test"
 lappend check_functions "reporting_ar_warning_state_test"
 lappend check_functions "reporting_no_comment_in_json"
 lappend check_functions "reporting_complex_change_test"
+lappend check_functions "reporting_deleted_by_test"
 
 # -------- local test procedures -----------------------------------------------
 
 proc reporting_setup  {} {
-   global ts_config CHECK_USER
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
    global reporting_old_config reporting_old_exechost
    global reporting_file reporting_acct_file reporting_test_host
    global reporting_old_config_test_host
@@ -146,7 +148,8 @@ proc reporting_setup  {} {
 }
 
 proc reporting_setup_level {} {
-   global ts_config CHECK_USER
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
    global CHECK_ACT_LEVEL
    global reporting_file reporting_acct_file
    global reporting_format_config
@@ -244,7 +247,8 @@ proc reporting_cleanup {} {
 #     built-in command clock seconds
 #*******************************************************************************
 proc reporting_get_timestamp {{filename ""}} {
-   global ts_config CHECK_USER
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
 
    set expect_bin [get_binary_path $ts_config(master_host) expect]
    if {$filename == ""} {
@@ -279,7 +283,8 @@ proc reporting_wait_for_accounting_flush {scenario last_mtime} {
 }
 
 proc reporting_do_accounting_test {scenario flush_time} {
-   global ts_config CHECK_USER
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
    global reporting_acct_file
 
    # Check accounting file size
@@ -356,7 +361,8 @@ proc reporting_reporting_accounting_test {} {
 }
 
 proc reporting_immediate_accounting_test {} {
-   global ts_config CHECK_USER
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
    global reporting_acct_file
    global reporting_format_config
 
@@ -401,7 +407,8 @@ proc reporting_immediate_accounting_test {} {
 }
 
 proc reporting_wait_for_queue_state {state {timeout 10} {qi_error 0} {only_qstat 0} } {
-   global ts_config reporting_test_host
+   get_current_cluster_config_array ts_config
+   global reporting_test_host
    global CHECK_ACT_LEVEL
 
    # make sure the queue actually is in the requested state
@@ -472,7 +479,8 @@ proc reporting_wait_for_queue_state {state {timeout 10} {qi_error 0} {only_qstat
 }
 
 proc reporting_queue_state_test {} {
-   global ts_config reporting_old_config CHECK_USER
+   get_current_cluster_config_array ts_config
+   global reporting_old_config CHECK_USER
    global reporting_file reporting_test_host
    global reporting_format_config
 
@@ -695,7 +703,7 @@ proc reporting_queue_state_test {} {
 }
 
 proc reporting_complex_change_test {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global reporting_file reporting_test_host
    global reporting_format_config
    global reporting_old_config_test_host
@@ -901,7 +909,7 @@ proc reporting_check_consumable_records {output type name consumables {expect_co
 }
 
 proc reporting_consumables_test {} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global reporting_file reporting_test_host
    global reporting_format_config
 
@@ -1092,7 +1100,8 @@ proc reporting_wait_for_ar_acct {ar_id host} {
 }
 
 proc reporting_ar_error_state_test {} {
-   global ts_config CHECK_USER
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
    global reporting_file reporting_test_host
    global reporting_format_config
 
@@ -1171,7 +1180,8 @@ proc reporting_ar_error_state_test {} {
 }
 
 proc reporting_ar_warning_state_test {} {
-   global ts_config CHECK_USER
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
    global reporting_file reporting_test_host
    global reporting_format_config
 
@@ -1247,8 +1257,128 @@ proc reporting_ar_warning_state_test {} {
    close_logfile_wait
 }
 
+#****** reporting/reporting_check_deleted_by() *********************************
+#  NAME
+#     reporting_check_deleted_by() -- verify a deleted_by value
+#
+#  FUNCTION
+#     Verifies that a "deleted_by" string from an acct reporting record has the
+#     form <user>@<host> and matches the expected user and host. The host is
+#     compared by its short name to tolerate FQDN vs. short name differences.
+#*******************************************************************************
+proc reporting_check_deleted_by {deleted_by expected_user expected_host context} {
+   set parts [split $deleted_by "@"]
+   if {[llength $parts] != 2} {
+      ts_log_severe "deleted_by \"$deleted_by\" is not in user@host form ($context)"
+      return
+   }
+
+   set du_user [lindex $parts 0]
+   set du_host [lindex $parts 1]
+   if {$du_user ne $expected_user} {
+      ts_log_severe "deleted_by user is \"$du_user\", expected \"$expected_user\" ($context)"
+   }
+
+   set exp_short [resolve_host $expected_host]
+   set got_short [resolve_host $du_host]
+   if {$got_short ne $exp_short} {
+      ts_log_severe "deleted_by host is \"$du_host\", expected \"$expected_host\" ($context)"
+   }
+}
+
+#****** reporting/reporting_deleted_by_test() **********************************
+#  NAME
+#     reporting_deleted_by_test() -- test deleted_by in the acct reporting record
+#
+#  FUNCTION
+#     Submits a long running job, deletes it while it is running - once with a
+#     regular qdel and once with a forced qdel (qdel -f) - and verifies that the
+#     acct record written to the reporting file carries the deleted_by attribute
+#     set to <user>@<host> of the qdel request.
+#
+#     deleted_by exists in the JSONL reporting format only and was added in
+#     9.1.2, so this test runs in run level 1 (JSON format) only.
+#*******************************************************************************
+proc reporting_deleted_by_test {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ACT_LEVEL
+   global reporting_file
+   global reporting_format_config
+
+   # deleted_by is available in the JSONL reporting format only, added in 9.1.2
+   if {$CHECK_ACT_LEVEL == 0 || ![is_version_in_range "9.1.2"]} {
+      return
+   }
+
+   # enable reporting and flush accounting immediately so the acct record
+   # shows up in the reporting file right after the job has been deleted
+   set new_config(reporting_params) "accounting=true reporting=true flush_time=00:00:01 joblog=false sharelog=00:00:00 accounting_flush_time=00:00:00 $reporting_format_config"
+   set_config new_config
+
+   # delete_job and start_sge_bin run qdel on the master host
+   set expected_host $ts_config(master_host)
+
+   # tail -f the reporting file
+   init_logfile_wait $ts_config(master_host) $reporting_file 1
+
+   foreach mode {"normal" "forced"} {
+      # submit a long running job and delete it while it is running
+      set job_id [submit_job "-N rep_del_$mode -q reporting $ts_config(product_root)/examples/jobs/sleeper.sh 600"]
+      if {$job_id <= 0} {
+         continue
+      }
+      if {[wait_for_jobstart $job_id "" 60 1 1] != 0} {
+         delete_job $job_id 1
+         continue
+      }
+
+      # delete the running job
+      if {$mode == "forced"} {
+         start_sge_bin "qdel" "-f $job_id" $ts_config(master_host)
+         if {$prg_exit_state != 0} {
+            ts_log_severe "qdel -f $job_id failed"
+            delete_job $job_id 1
+            continue
+         }
+      } else {
+         if {[delete_job $job_id 0 0 1 $CHECK_USER $ts_config(master_host)] != 0} {
+            continue
+         }
+      }
+
+      # wait for the acct record of this job in the reporting file
+      set job_pattern "\"type\":\"acct\",\"job_number\":$job_id,"
+      set output [logfile_wait $job_pattern 60 0 0]
+
+      # isolate the acct line for our job
+      set acct_line ""
+      foreach line [split $output "\n"] {
+         if {[string first $job_pattern $line] >= 0} {
+            set acct_line $line
+         }
+      }
+      if {$acct_line == ""} {
+         ts_log_severe "no acct record for job $job_id found in reporting file (qdel $mode mode)"
+         wait_for_jobend $job_id "" 90 0 0
+         continue
+      }
+
+      # the acct record must contain deleted_by = user@host
+      if {![regexp {"deleted_by":"([^"]*)"} $acct_line -> deleted_by]} {
+         ts_log_severe "acct record for job $job_id has no deleted_by attribute (qdel $mode mode):\n$acct_line"
+      } else {
+         reporting_check_deleted_by $deleted_by $CHECK_USER $expected_host "qdel $mode mode"
+      }
+
+      wait_for_jobend $job_id "" 90 0 0
+   }
+
+   # shutdown tail -f
+   close_logfile_wait
+}
+
 proc reporting_file_head {filename} {
-   global ts_config
+   get_current_cluster_config_array ts_config
    global CHECK_USER
 
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER "head" $filename]
