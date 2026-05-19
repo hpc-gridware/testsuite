@@ -1,0 +1,201 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** dbwriter/deleted_by ****************************************************
+#  NAME
+#     deleted_by -- check the dbwriter import of the deleted_by attribute
+#
+#  FUNCTION
+#     Verifies that the dbwriter reads the deleted_by attribute from the acct
+#     records of the JSONL reporting file and stores it in the
+#     sge_job_usage.ju_qdel_info column.
+#
+#     The test submits a long running job, deletes it with qdel while it is
+#     running, and - once the dbwriter has imported the accounting record -
+#     checks that sge_job_usage.ju_qdel_info holds <user>@<host> of the qdel
+#     request.
+#
+#     deleted_by exists in the JSONL accounting format only and was added in
+#     9.1.2.
+#********************************************************************************
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+# deleted_by and the JSONL reporting format only exist since 9.1.2
+set check_version_range   "9.1.2"
+
+# define test's name and run level descriptions
+set check_name            "arco_dbwriter_deleted_by"
+set check_category        "DBWRITER JOB_SYNC VERIFIED"
+set check_description(0)  "test the import of the deleted_by attribute (sge_job_usage.ju_qdel_info)"
+
+# define test's dependencies
+set check_needs           "init_core_system arco_database_install arco_dbwriter_install"
+
+# setup and cleanup functions
+set check_setup_function arco_dbwriter_deleted_by_setup
+set check_cleanup_function arco_dbwriter_deleted_by_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "arco_dbwriter_deleted_by_execute"
+
+# -------- local test procedures: initialization------------------------------
+
+proc arco_dbwriter_deleted_by_setup {} {
+   get_current_cluster_config_array ts_config
+   global arco_dbwriter_deleted_by_backup
+
+   # we modify the global config - make a backup
+   get_config arco_dbwriter_deleted_by_backup
+
+   # enable reporting in the JSONL format (deleted_by is a JSONL-only
+   # attribute) with a short flush time so the acct record reaches the
+   # reporting file quickly
+   set delimiter " "
+   add_or_replace_array_param new_conf arco_dbwriter_deleted_by_backup reporting_params "reporting" "true" $delimiter
+   add_or_replace_array_param new_conf new_conf reporting_params "flush_time" "00:00:03" $delimiter
+   set_config new_conf
+
+   # start dbwriter if necessary
+   if {[get_dbwriter_status 0] != 0} {
+      ts_log_fine "starting dbwriter"
+      if {[startup_dbwriter] != 0} {
+         return -1
+      }
+   }
+}
+
+proc arco_dbwriter_deleted_by_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global arco_dbwriter_deleted_by_backup
+
+   # shutdown dbwriter
+   ts_log_fine "shutting down dbwriter"
+   if {[shutdown_dbwriter] != 0} {
+      return -1
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # restore config
+   reset_config arco_dbwriter_deleted_by_backup
+   unset -nocomplain arco_dbwriter_deleted_by_backup
+
+   # clean data from the arco database
+   arco_clean_database
+}
+
+#****** deleted_by/arco_dbwriter_deleted_by_execute() **************************
+#  NAME
+#     arco_dbwriter_deleted_by_execute() -- run the deleted_by dbwriter test
+#
+#  FUNCTION
+#     Submits a long running job, deletes it with qdel while it is running,
+#     waits for the dbwriter to import the accounting record and verifies that
+#     sge_job_usage.ju_qdel_info holds <user>@<host> of the qdel request.
+#*******************************************************************************
+proc arco_dbwriter_deleted_by_execute {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   # submit a long running job that we delete while it is running
+   set job_id [submit_job "-o /dev/null -j y -N arco_del $ts_config(product_root)/examples/jobs/sleeper.sh 600"]
+   if {$job_id <= 0} {
+      return -1
+   }
+   if {[wait_for_jobstart $job_id "" 60 1 1] != 0} {
+      delete_job $job_id 1
+      return -1
+   }
+
+   # delete the running job - the qdel request originates on the master host
+   if {[delete_job $job_id 0 0 1 $CHECK_USER $ts_config(master_host)] != 0} {
+      return -1
+   }
+   if {[wait_for_jobend $job_id "" 90 0 1] != 0} {
+      return -1
+   }
+
+   # create sqlutil and connect to the arco database
+   set id [sqlutil_create]
+   if {$id == "-1"} {
+      ts_log_severe "Can not create sqlutil"
+      return -2
+   }
+   set sp_id [lindex $id 1]
+   if {[sqlutil_connect $sp_id] != 0} {
+      ts_log_severe "Can not connect to database"
+      close_spawn_process $id
+      return -2
+   }
+
+   # wait for the dbwriter to import the accounting record of our job
+   set sql "SELECT ju.ju_qdel_info FROM sge_job j, sge_job_usage ju "
+   append sql "WHERE j.j_id = ju.ju_parent AND j.j_job_number = $job_id"
+
+   set column_names {}
+   array set result_array {}
+   set qdel_info ""
+   set found 0
+   for {set i 0} {$i < 20} {incr i} {
+      set res [sqlutil_query $sp_id "$sql" result_array column_names]
+      if {$res < 0} {
+         ts_log_severe "can not execute query $sql"
+         close_spawn_process $id
+         return -2
+      } elseif {$res > 0} {
+         set qdel_info $result_array(0,0)
+         set found 1
+         break
+      }
+      ts_log_progress
+      sleep_for_seconds 5
+   }
+   close_spawn_process $id
+
+   if {!$found} {
+      ts_log_severe "no sge_job_usage record found for job $job_id - dbwriter problem?"
+      return -2
+   }
+
+   # ju_qdel_info must be <CHECK_USER>@<master-host>
+   set parts [split $qdel_info "@"]
+   if {[llength $parts] != 2} {
+      ts_log_severe "ju_qdel_info \"$qdel_info\" is not in user@host form"
+      return -3
+   }
+   if {[lindex $parts 0] ne $CHECK_USER} {
+      ts_log_severe "ju_qdel_info user is \"[lindex $parts 0]\", expected \"$CHECK_USER\""
+   }
+   if {[resolve_host [lindex $parts 1]] ne [resolve_host $ts_config(master_host)]} {
+      ts_log_severe "ju_qdel_info host is \"[lindex $parts 1]\", expected \"$ts_config(master_host)\""
+   }
+
+   return 0
+}
