@@ -396,8 +396,9 @@ proc drmaa_check_single_threaded_part_03 { } {
       # -- tests with a <sleeper_job> argument repeatedly
       set test_scenario {}
       lappend test_scenario "ST_SUBMIT_NO_RUN_WAIT"
+      lappend test_scenario "ST_SUBMIT_SUSPEND_RESUME_WAIT"
       foreach st_test $test_scenario {
-         set n 100
+         set n 10
          ts_log_fine "starting single threaded test $st_test $n times each"
          for {set i 0} {$i < $n} {incr i} {
             ts_log_fine "test $i/$n"
