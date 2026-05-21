@@ -1,0 +1,249 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+##
+# @file check.exp
+# @brief Long-running multi-day dbwriter integration test (CS-2232).
+#
+# Long-running integration test for the dbwriter. Over several (real or -
+# in fast mode - collapsed) days it exercises the derived-value rules, the
+# deletion rules and a mixed multi-user workload, and verifies the resulting
+# ARCO database content.
+#
+# This file currently contains the shared scaffolding (CS-2233): the
+# setup/cleanup functions and a scaffolding self-test. The workload and the
+# per-phase assertions are added by the follow-up sub-tasks CS-2234 .. CS-2240.
+#
+# @see dbwriter_long_lib.tcl
+
+# define global variables in this namespace
+# note: check_setup_function / check_cleanup_function are pre-created as local
+# variables by the framework before this file is sourced, so they must not be
+# declared "global" here - they are just "set" below, like in the other tests.
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+# the long-running test runs jobs as several users, including root
+set check_root_access_needs "yes"
+
+# the workload uses JSONL reporting and online_usage records (since 9.1.2)
+set check_version_range "9.1.2"
+
+# define test's name and run level descriptions
+set check_name           "arco_dbwriter_long_running"
+set check_category       "DBWRITER VERIFIED"
+set check_description(0)   "long-running multi-day dbwriter integration test - just checking scaffolding"
+set check_description(400) "long-running multi-day dbwriter integration test"
+
+# define test's dependencies
+set check_needs          "init_core_system arco_database_install arco_dbwriter_install"
+
+# setup and cleanup functions
+set check_setup_function   "dbwriter_long_running_setup"
+set check_cleanup_function "dbwriter_long_running_cleanup"
+
+# define test's procedure order
+# CS-2233 ships the scaffolding self-test; CS-2235 .. CS-2239 append the
+# raw-data, hourly/daily derived and deletion-rule phase functions here.
+set check_functions {}
+lappend check_functions "dbwriter_long_running_scaffolding"
+
+# source the shared scaffolding library (dbwriter_xml / db / dbwriter_long)
+global CHECK_ACTUAL_TEST_PATH
+ts_source "$CHECK_ACTUAL_TEST_PATH/dbwriter_long_lib"
+
+# -------- setup / cleanup ------------------------------------------------------
+
+##
+# @brief Prepare the long-running test - bring the cluster to a known state.
+#
+# Brings the cluster into a known-empty starting state:
+#   - backs up the global cluster configuration,
+#   - backs up the active dbwriter.xml calculation file,
+#   - stops the dbwriter if it is running,
+#   - empties all ARCO database tables via arco_clean_database.
+#
+# The dbwriter installation and the database schema are already created by
+# the testsuite installation, so nothing is installed here.
+#
+# @return 0 on success, else -1 (error reported via ts_log_severe)
+proc dbwriter_long_running_setup {} {
+   global dbwriter_long_config_backup
+
+   # back up the global configuration - the workload phases enable reporting
+   get_config dbwriter_long_config_backup
+
+   # back up the dbwriter calculation file - the deletion-rule phase edits it
+   if {[dbwriter_xml::backup] != 0} {
+      return -1
+   }
+
+   # stop the dbwriter so the database can be emptied without a race
+   if {[get_dbwriter_status 0] == 0} {
+      if {[shutdown_dbwriter] != 0} {
+         ts_log_severe "can not stop dbwriter"
+         return -1
+      }
+   }
+
+   # start from a known-empty database
+   if {[arco_clean_database] < 0} {
+      ts_log_severe "can not clean the ARCO database"
+      return -1
+   }
+
+   return 0
+}
+
+##
+# @brief Restore the environment after the long-running test.
+#
+# Reverts everything dbwriter_long_running_setup and the phases changed:
+#   - closes the db connection,
+#   - deletes leftover jobs,
+#   - stops the dbwriter,
+#   - restores the original dbwriter.xml and global configuration,
+#   - empties the ARCO database again.
+#
+# dbwriter_xml::restore is idempotent, so aborting the test mid-run still
+# leaves the environment in its original state.
+#
+# @return 0
+proc dbwriter_long_running_cleanup {} {
+   global dbwriter_long_config_backup
+
+   db::disconnect
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   if {[get_dbwriter_status 0] == 0} {
+      shutdown_dbwriter
+   }
+
+   # restore the original dbwriter calculation file
+   dbwriter_xml::restore
+
+   # restore the global configuration
+   if {[info exists dbwriter_long_config_backup]} {
+      reset_config dbwriter_long_config_backup
+      unset dbwriter_long_config_backup
+   }
+
+   # leave the database empty
+   arco_clean_database
+
+   return 0
+}
+
+# -------- scaffolding self-test ------------------------------------------------
+
+##
+# @brief Verify the shared scaffolding (CS-2233 scaffolding self-test).
+#
+# Self-test for the CS-2233 scaffolding. It verifies, without a real-time
+# wait, that the shared helpers work before the workload phases rely on them:
+#   - dbwriter_xml::read parses the active dbwriter.xml,
+#   - dbwriter_long::register_short_retention_rules rewrites the deletion
+#     rules and dbwriter_xml::get_delete_rule reads them back,
+#   - dbwriter_xml::restore puts the original rules back,
+#   - the db wrapper connects, queries and disconnects,
+#   - dbwriter_long_running_setup left the ARCO tables empty.
+#
+# @return 0 if the scaffolding is OK, else -1 (error reported via ts_log_severe)
+proc dbwriter_long_running_scaffolding {} {
+   global CHECK_ACT_LEVEL check_description
+
+   if {$CHECK_ACT_LEVEL != 0} {
+      return 0
+   }
+   ts_log_fine $check_description($CHECK_ACT_LEVEL)
+
+   # ---- dbwriter_xml: the active calculation file parses --------------------
+   set doc [dbwriter_xml::read]
+   if {$doc eq ""} {
+      return -1
+   }
+   set root [$doc documentElement]
+   set n_derive [llength [$root selectNodes {//derive}]]
+   set n_delete [llength [$root selectNodes {//delete}]]
+   $doc delete
+   if {$n_derive == 0 || $n_delete == 0} {
+      ts_log_severe "dbwriter.xml has $n_derive derive and $n_delete delete rules, expected both > 0"
+      return -1
+   }
+   ts_log_fine "dbwriter.xml parsed: $n_derive derive rules, $n_delete delete rules"
+
+   # ---- dbwriter_xml: short-retention rules can be written and read back ----
+   if {[dbwriter_long::register_short_retention_rules] != 0} {
+      return -1
+   }
+   foreach {scope sub_scopes expected} {
+      job              {}                                       {day 2}
+      online_usage     {}                                       {day 1}
+      host_values      {np_load_avg cpu mem_free virtual_free}   {day 1}
+   } {
+      set got [dbwriter_xml::get_delete_rule $scope $sub_scopes]
+      if {$got ne $expected} {
+         ts_log_severe "delete rule $scope: expected {$expected}, got {$got}"
+         return -1
+      }
+   }
+   ts_log_fine "short-retention deletion rules written and verified"
+
+   # ---- dbwriter_xml: the original rules are restored -----------------------
+   if {[dbwriter_xml::restore] != 0} {
+      return -1
+   }
+   set got [dbwriter_xml::get_delete_rule "job"]
+   if {$got ne {year 1}} {
+      ts_log_severe "dbwriter.xml restore failed: job rule is {$got}, expected {year 1}"
+      return -1
+   }
+   ts_log_fine "original dbwriter.xml restored"
+
+   # ---- db: connect, query, disconnect --------------------------------------
+   if {[db::connect] != 0} {
+      return -1
+   }
+   # sge_version is populated by the schema install and is never cleaned
+   set n_version [db::count "sge_version"]
+   if {$n_version < 1} {
+      ts_log_severe "db::count sge_version returned $n_version, expected >= 1"
+      db::disconnect
+      return -1
+   }
+   # setup ran arco_clean_database, so the job table must be empty
+   set n_job [db::count "sge_job"]
+   db::disconnect
+   if {$n_job != 0} {
+      ts_log_severe "ARCO database not empty after setup: sge_job has $n_job rows"
+      return -1
+   }
+   ts_log_fine "db wrapper OK (sge_version rows: $n_version, sge_job rows: $n_job)"
+
+   ts_log_fine "dbwriter long-running scaffolding self-test passed"
+   return 0
+}
