@@ -1,0 +1,180 @@
+e___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+
+# define test's name and run level descriptions
+set check_name            "issue_1597"
+set check_category        "BUG SPOOLING VERIFIED"
+set check_description(0)  "only static load values shall be written to spooling"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function issue_1597_setup
+set check_cleanup_function issue_1597_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "issue_1597_check"
+
+# -------- local test procedures: initialization------------------------------
+
+proc issue_1597_setup {} {
+   get_current_cluster_config_array ts_config
+   global issue_1597_host issue_1597_backup
+
+   # pick an exec host to play with and make a backup of its configuration
+   set issue_1597_host [host_conf_get_suited_hosts 1]
+   get_exechost issue_1597_backup $issue_1597_host
+}
+
+proc issue_1597_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global issue_1597_host issue_1597_backup
+
+   # restore the original exec host configuration
+   if {[info exists issue_1597_backup]} {
+      set_exechost issue_1597_backup $issue_1597_host
+   }
+
+   unset -nocomplain issue_1597_host issue_1597_backup
+}
+
+# -------- local test procedures ----------------------------------------------
+
+#****** issue_1597/issue_1597_get_spooled_load_names() ************************
+#  NAME
+#     issue_1597_get_spooled_load_names() -- read the spooled load values
+#
+#  FUNCTION
+#     Reads the EH_load_list of an exec host as it has been written to the
+#     spooling (classic flatfile or berkeleydb) and returns the list of load
+#     value names that are present in the spooled object.
+#
+#  INPUTS
+#     host - name of the exec host
+#
+#  RESULT
+#     list of spooled load value names, or an empty list if the spooled
+#     object could not be read
+#*******************************************************************************
+proc issue_1597_get_spooled_load_names {host} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set names {}
+
+   if {$ts_config(spooling_method) == "berkeleydb"} {
+      # berkeleydb spooling: dump the object with the spooledit utility
+      set output [start_sge_utilbin "spooledit" "dump EXECHOST:$host" $ts_config(master_host)]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "spooledit dump EXECHOST:$host failed:\n$output"
+         return {}
+      }
+      # extract the HL_name values - the descriptor lines carry no quoted
+      # string and are therefore skipped automatically
+      foreach line [split $output "\n"] {
+         if {[regexp {HL_name\s+\*/\s+"([^"]+)"} $line -> name]} {
+            lappend names $name
+         }
+      }
+   } else {
+      # classic spooling: read the exec host spool file
+      set file "[get_qmaster_spool_dir]/exec_hosts/$host"
+      get_file_content $ts_config(master_host) $CHECK_USER $file content
+      for {set i 1} {$i <= $content(0)} {incr i} {
+         if {[lindex $content($i) 0] == "load_values"} {
+            set load_values [string trim [string range $content($i) [string length "load_values"] end]]
+            if {$load_values != "NONE"} {
+               foreach pair [split $load_values ","] {
+                  lappend names [string trim [lindex [split $pair "="] 0]]
+               }
+            }
+            break
+         }
+      }
+   }
+
+   return $names
+}
+
+#****** issue_1597/issue_1597_check() *****************************************
+#  NAME
+#     issue_1597_check() -- verify only static load values are spooled
+#
+#  FUNCTION
+#     Modifies an exec host (which makes qmaster write/spool the object) and
+#     verifies that no dynamic (non static) load values ended up in the
+#     spooled object.
+#*******************************************************************************
+proc issue_1597_check {} {
+   get_current_cluster_config_array ts_config
+   global issue_1597_host
+
+   # dynamic (non static) load values - none of these may be spooled
+   set dynamic_load_values {
+      load_avg load_short load_medium load_long
+      np_load_avg np_load_short np_load_medium np_load_long
+      mem_free swap_free virtual_free
+      mem_used swap_used virtual_used
+      cpu m_topology_inuse
+   }
+
+   # the issue can only be reproduced if the exec host actually reported
+   # dynamic load values - check the live configuration
+   get_exechost live_conf $issue_1597_host
+   if {![info exists live_conf(load_values)] || ![string match "*load_avg*" $live_conf(load_values)]} {
+      ts_log_config "exec host $issue_1597_host did not report any dynamic load values - cannot test"
+      return
+   }
+
+   # modify the exec host - this makes qmaster write the object to spooling
+   set chgar(report_variables) "cpu"
+   if {[set_exechost chgar $issue_1597_host] != 0} {
+      return
+   }
+
+   # read back the load values from the spooled exec host object
+   set spooled_names [issue_1597_get_spooled_load_names $issue_1597_host]
+   if {[llength $spooled_names] == 0} {
+      ts_log_severe "could not read any load values from the spooled exec host $issue_1597_host"
+      return
+   }
+   ts_log_fine "spooled load values of exec host $issue_1597_host: $spooled_names"
+
+   # none of the spooled load values may be a dynamic one
+   set leaked {}
+   foreach name $spooled_names {
+      if {[lsearch -exact $dynamic_load_values $name] >= 0} {
+         lappend leaked $name
+      }
+   }
+   if {[llength $leaked] > 0} {
+      ts_log_severe "dynamic load values were written to spooling for exec host $issue_1597_host: $leaked"
+   }
+}
