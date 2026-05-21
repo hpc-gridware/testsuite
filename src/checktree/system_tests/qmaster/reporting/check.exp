@@ -93,6 +93,7 @@ lappend check_functions "reporting_ar_warning_state_test"
 lappend check_functions "reporting_no_comment_in_json"
 lappend check_functions "reporting_complex_change_test"
 lappend check_functions "reporting_deleted_by_test"
+lappend check_functions "reporting_deleted_by_reschedule_unknown_test"
 
 # -------- local test procedures -----------------------------------------------
 
@@ -1291,15 +1292,16 @@ proc reporting_check_deleted_by {deleted_by expected_user expected_host context}
 #     reporting_deleted_by_test() -- test deleted_by in the acct reporting record
 #
 #  FUNCTION
-#     Runs three scenarios in which a running job is terminated and verifies
+#     Runs four scenarios in which a running job is terminated and verifies
 #     that the acct record written to the reporting file carries the
 #     deleted_by attribute:
 #     - qdel        - the job is deleted with a regular qdel
 #     - qdel_forced - the job is deleted with a forced qdel (qdel -f)
 #     - execd       - the job exceeds a hard runtime limit (h_rt) and is
 #                     killed by sge_execd
+#     - qmod_r      - the running task is rescheduled with qmod -rj
 #
-#     deleted_by must be <user>@<host> of the qdel request, respectively
+#     deleted_by must be <user>@<host> of the qdel / qmod request, respectively
 #     execd@<exec-host> for a job killed by sge_execd.
 #
 #     deleted_by exists in the JSONL reporting format only and was added in
@@ -1321,17 +1323,20 @@ proc reporting_deleted_by_test {} {
    set new_config(reporting_params) "accounting=true reporting=true flush_time=00:00:01 joblog=false sharelog=00:00:00 accounting_flush_time=00:00:00 $reporting_format_config"
    set_config new_config
 
-   # delete_job and start_sge_bin run qdel on the master host
+   # delete_job, start_sge_bin and qmod run on the master host
    set master_host $ts_config(master_host)
 
    # tail -f the reporting file
    init_logfile_wait $ts_config(master_host) $reporting_file 1
 
-   foreach mode {"qdel" "qdel_forced" "execd"} {
+   foreach mode {"qdel" "qdel_forced" "execd" "qmod_r"} {
       # for the execd scenario submit a job requesting a hard runtime limit
       # shorter than its sleep time - sge_execd kills it when it exceeds h_rt
+      # for the qmod_r scenario submit with -r y so the job is restartable
       if {$mode == "execd"} {
          set job_id [submit_job "-N rep_del_$mode -q reporting -l h_rt=0:0:30 $ts_config(product_root)/examples/jobs/sleeper.sh 60"]
+      } elseif {$mode == "qmod_r"} {
+         set job_id [submit_job "-N rep_del_$mode -q reporting -r y $ts_config(product_root)/examples/jobs/sleeper.sh 600"]
       } else {
          set job_id [submit_job "-N rep_del_$mode -q reporting $ts_config(product_root)/examples/jobs/sleeper.sh 600"]
       }
@@ -1361,6 +1366,14 @@ proc reporting_deleted_by_test {} {
          "execd" {
             # nothing to do - sge_execd kills the job when it exceeds h_rt
          }
+         "qmod_r" {
+            start_sge_bin "qmod" "-r $job_id" $master_host
+            if {$prg_exit_state != 0} {
+               ts_log_severe "qmod -r $job_id failed"
+               delete_job $job_id 1
+               continue
+            }
+         }
       }
 
       # wait for the acct record of this job in the reporting file
@@ -1388,15 +1401,110 @@ proc reporting_deleted_by_test {} {
             # a job killed for exceeding a limit: execd@<exec-host>
             reporting_check_deleted_by $deleted_by "execd" $reporting_test_host $mode
          } else {
+            # qdel / qdel_forced / qmod_r: user@<master-host>
             reporting_check_deleted_by $deleted_by $CHECK_USER $master_host $mode
          }
       }
 
+      # qmod -rj only reschedules the run; the job continues as a new pending
+      # task and will be picked up again. Delete it so it doesn't survive.
+      if {$mode == "qmod_r"} {
+         delete_job $job_id 1
+      }
       wait_for_jobend $job_id "" 120 0 0
    }
 
    # shutdown tail -f
    close_logfile_wait
+}
+
+#****** reporting/reporting_deleted_by_reschedule_unknown_test() ***************
+#  NAME
+#     reporting_deleted_by_reschedule_unknown_test() -- deleted_by for
+#         reschedule_unknown
+#
+#  FUNCTION
+#     Verifies that the acct record for a job whose run is terminated by
+#     qmaster's reschedule_unknown timer carries
+#     "deleted_by":"qmaster@<master-host>".
+#
+#     The scenario sets reschedule_unknown to 30s on the exec host, starts
+#     a restartable job, shuts down sge_execd on that host so the host goes
+#     into unknown state, and waits for qmaster to reschedule the job after
+#     the timer fires. After verification the execd is restarted and the
+#     re-pending job is deleted.
+#*******************************************************************************
+proc reporting_deleted_by_reschedule_unknown_test {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ACT_LEVEL
+   global reporting_file reporting_test_host
+   global reporting_format_config
+
+   if {$CHECK_ACT_LEVEL == 0 || ![is_version_in_range "9.1.2"]} {
+      return
+   }
+
+   set master_host $ts_config(master_host)
+
+   # enable reporting and short reschedule_unknown on the exec host
+   set new_config(reporting_params) "accounting=true reporting=true flush_time=00:00:01 joblog=false sharelog=00:00:00 accounting_flush_time=00:00:00 $reporting_format_config"
+   set_config new_config
+
+   # snapshot the exec-host config so we can restore reschedule_unknown later
+   get_config old_exec_config $reporting_test_host
+   set new_exec_config(reschedule_unknown) "00:00:30"
+   set_config new_exec_config $reporting_test_host
+
+   # tail -f the reporting file
+   init_logfile_wait $master_host $reporting_file 1
+
+   # submit a restartable long-running sleeper into the reporting queue
+   set job_id [submit_job "-N rep_del_ru -q reporting -r y $ts_config(product_root)/examples/jobs/sleeper.sh 600"]
+   set acct_ok 0
+   if {$job_id > 0 && [wait_for_jobstart $job_id "" 60 1 1] == 0} {
+      # take the execd down softly so the host goes into unknown state
+      soft_execd_shutdown $reporting_test_host 120 1
+
+      # wait for the acct record - reschedule_unknown timer is 30s,
+      # give it generous headroom for cluster timing
+      set job_pattern "\"type\":\"acct\",\"job_number\":$job_id,"
+      set output [logfile_wait $job_pattern 180 0 0]
+
+      set acct_line ""
+      foreach line [split $output "\n"] {
+         if {[string first $job_pattern $line] >= 0} {
+            set acct_line $line
+         }
+      }
+      if {$acct_line == ""} {
+         ts_log_severe "no acct record for rescheduled job $job_id found in reporting file"
+      } else {
+         if {![regexp {"deleted_by":"([^"]*)"} $acct_line -> deleted_by]} {
+            ts_log_severe "acct record for rescheduled job $job_id has no deleted_by attribute:\n$acct_line"
+         } else {
+            reporting_check_deleted_by $deleted_by "qmaster" $master_host "reschedule_unknown"
+            set acct_ok 1
+         }
+      }
+
+      # bring the execd back up so we can drain and delete the rescheduled job
+      startup_execd $reporting_test_host
+   } elseif {$job_id > 0} {
+      delete_job $job_id 1
+   }
+
+   close_logfile_wait
+
+   # clean up: delete the rescheduled job and restore exec-host config
+   if {$job_id > 0} {
+      delete_job $job_id 1
+      wait_for_jobend $job_id "" 180 0 0
+   }
+   reset_config old_exec_config $reporting_test_host
+
+   if {!$acct_ok && $job_id > 0} {
+      ts_log_severe "reschedule_unknown deleted_by scenario did not produce a verifiable acct record"
+   }
 }
 
 proc reporting_file_head {filename} {
