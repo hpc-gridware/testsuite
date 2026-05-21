@@ -71,8 +71,10 @@ set check_functions {}
 lappend check_functions "dbwriter_long_running_scaffolding"
 
 # source the shared scaffolding library (dbwriter_xml / db / dbwriter_long)
+# and the job-load generator (workload)
 global CHECK_ACTUAL_TEST_PATH
 ts_source "$CHECK_ACTUAL_TEST_PATH/dbwriter_long_lib"
+ts_source "$CHECK_ACTUAL_TEST_PATH/dbwriter_long_workload"
 
 # -------- setup / cleanup ------------------------------------------------------
 
