@@ -1,0 +1,260 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+
+# fixed in 9.1.2
+global check_version_range
+set check_version_range     "9.1.2"
+
+# define test's name and run level descriptions
+set check_name            "issue_1385"
+set check_category        "BUG SCHEDULER SPOOLING VERIFIED"
+set check_description(0)  "share tree usage booking must only store cpu, mem and io (and the finished_jobs counter) in user/project objects"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function   issue_1385_setup
+set check_cleanup_function issue_1385_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "issue_1385_test"
+
+# -------- local test procedures: initialization------------------------------
+
+proc issue_1385_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_PRODUCT_TYPE
+   global issue_1385_project issue_1385_saved_config
+   global issue_1385_allowed_usage
+
+   # the test relies on user/project usage booking, which only exists in sgeee
+   if {$CHECK_PRODUCT_TYPE != "sgeee"} {
+      ts_log_config "test requires sgeee mode"
+      return 99
+   }
+
+   set issue_1385_allowed_usage {cpu mem io finished_jobs}
+   set issue_1385_project "issue1385"
+
+   # make the qmaster spool the share tree related objects quickly so that
+   # the project object is on disk shortly after the usage has been booked
+   get_config issue_1385_saved_config
+   add_or_replace_array_param new_config issue_1385_saved_config "qmaster_params" "STREE_SPOOL_INTERVAL" "1"
+   set_config new_config
+
+   # a project that is also a share tree node
+   add_project $issue_1385_project
+
+   # create the share tree: a single project node below the root
+   del_sharetree
+   stree_buffer_init stree
+   stree_buffer_add_node stree "/$issue_1385_project" 100
+   stree_buffer_commit stree
+
+   # enable the share tree policy and a usage formula using cpu, mem and io
+   get_schedd_config my_config
+   set my_config(weight_tickets_share) "10000"
+   set my_config(usage_weight_list)    "cpu=0.34,mem=0.33,io=0.33"
+   set my_config(halftime)             "10"
+   set_schedd_config my_config
+}
+
+proc issue_1385_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global issue_1385_project issue_1385_saved_config
+   global issue_1385_allowed_usage
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   reset_schedd_config
+
+   del_sharetree
+   del_project $issue_1385_project
+
+   reset_config issue_1385_saved_config
+
+   unset -nocomplain issue_1385_saved_config issue_1385_project issue_1385_allowed_usage
+}
+
+# -------- local test procedures: utilities -----------------------------------
+
+#****** issue_1385/issue_1385_classic_usage_names() ***************************
+# classic spooling: read the project spool file and return the usage attribute
+# names of the requested usage list ("usage" or "long_term_usage").
+#******************************************************************************
+proc issue_1385_classic_usage_names {which} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER issue_1385_project
+
+   set names {}
+   set spool_file "[get_spool_dir $ts_config(master_host) qmaster]/projects/$issue_1385_project"
+
+   # the project object is spooled when it is created, but guard anyway
+   if {![is_remote_file $ts_config(master_host) $CHECK_USER $spool_file 1]} {
+      return $names
+   }
+
+   get_file_content $ts_config(master_host) $CHECK_USER $spool_file file_lines
+   for {set i 1} {$i <= $file_lines(0)} {incr i} {
+      set line [string trim $file_lines($i)]
+      if {[lindex $line 0] == $which} {
+         # everything behind the leading keyword is a space separated list
+         # of <name>=<value> tokens (or the literal NONE)
+         set value [string trim [string range $line [string length $which] end]]
+         if {$value != "NONE"} {
+            foreach token $value {
+               lappend names [lindex [split $token "="] 0]
+            }
+         }
+         break
+      }
+   }
+   return $names
+}
+
+#****** issue_1385/issue_1385_bdb_usage_names() *******************************
+# berkeleydb spooling: dump the project object with the spooledit utility and
+# return the usage attribute names of the requested usage list. The dump also
+# contains usage names of unrelated lists (PR_debited_job_usage, PR_project),
+# so we track which PR_ list field we are currently inside.
+#******************************************************************************
+proc issue_1385_bdb_usage_names {which} {
+   get_current_cluster_config_array ts_config
+   global issue_1385_project
+
+   set field "PR_$which"
+   set names {}
+
+   set output [start_sge_utilbin "spooledit" "dump PROJECT:$issue_1385_project" $ts_config(master_host)]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "spooledit dump PROJECT:$issue_1385_project failed:\n$output"
+      return $names
+   }
+
+   set context ""
+   foreach line [split $output "\n"] {
+      # a cull dump line looks like:  /* <FIELDNAME> */ <value>
+      if {[regexp {/\* +([A-Za-z0-9_ ]+?) +\*/} $line -> dumped_field]} {
+         # every top level PR_ field starts a new section
+         if {[string match "PR_*" $dumped_field]} {
+            set context $dumped_field
+         }
+      }
+      # collect UA_name values, but only while inside the requested list
+      if {$context == $field} {
+         if {[regexp {/\* +UA_name +\*/ +"([^"]*)"} $line -> name]} {
+            lappend names $name
+         }
+      }
+   }
+   return $names
+}
+
+#****** issue_1385/issue_1385_get_usage_names() *******************************
+# Return the usage attribute names of the spooled project "usage" or
+# "long_term_usage" list, regardless of the spooling method in use.
+#******************************************************************************
+proc issue_1385_get_usage_names {which} {
+   get_current_cluster_config_array ts_config
+
+   if {$ts_config(spooling_method) == "berkeleydb"} {
+      return [issue_1385_bdb_usage_names $which]
+   } else {
+      return [issue_1385_classic_usage_names $which]
+   }
+}
+
+#****** issue_1385/issue_1385_check_usage() ***********************************
+# Verify that a spooled usage list only contains attributes that are relevant
+# for share tree usage. Returns a (possibly empty) list of error strings.
+#******************************************************************************
+proc issue_1385_check_usage {label names} {
+   global issue_1385_allowed_usage
+
+   set errors {}
+   foreach name $names {
+      if {[lsearch -exact $issue_1385_allowed_usage $name] < 0} {
+         lappend errors "$label contains unexpected usage attribute \"$name\" (full list: $names)"
+      }
+   }
+   return $errors
+}
+
+# -------- local test procedures: tests ---------------------------------------
+
+proc issue_1385_test {} {
+   get_current_cluster_config_array ts_config
+   global issue_1385_project
+
+   # submit a few short jobs running under the project - when they finish the
+   # scheduler books their usage into the project object
+   set job_ids {}
+   for {set i 0} {$i < 3} {incr i} {
+      set job_id [submit_job "-P $issue_1385_project -o /dev/null -e /dev/null -b y sleep 5"]
+      if {$job_id <= 0} {
+         return
+      }
+      lappend job_ids $job_id
+   }
+
+   wait_for_end_of_all_jobs 120
+
+   # force a scheduler run so the finished job usage is booked and the
+   # ORT_update_project_usage order is sent to the qmaster
+   trigger_scheduling
+
+   # wait until the spooled project object shows the booked usage
+   set booked 0
+   for {set i 0} {$i < 30} {incr i} {
+      if {[lsearch -exact [issue_1385_get_usage_names "long_term_usage"] "cpu"] >= 0} {
+         set booked 1
+         break
+      }
+      trigger_scheduling
+      sleep_for_seconds 2
+   }
+   if {!$booked} {
+      ts_log_severe "project \"$issue_1385_project\" never got any share tree usage booked"
+      return
+   }
+
+   # the actual check: neither usage nor long_term_usage may contain anything
+   # but cpu, mem, io and the finished_jobs counter (CS-1385)
+   set errors {}
+   foreach which {usage long_term_usage} {
+      set names [issue_1385_get_usage_names $which]
+      ts_log_fine "spooled $which of project $issue_1385_project: $names"
+      set errors [concat $errors [issue_1385_check_usage $which $names]]
+   }
+
+   if {[llength $errors] > 0} {
+      ts_log_severe "share tree usage booking stored too much data in the project object:\n[join $errors "\n"]"
+   }
+}
