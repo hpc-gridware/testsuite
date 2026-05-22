@@ -946,7 +946,7 @@ proc compile_source_aimk {do_only_hooks compile_hosts report_var {compile_only 0
    }
 
    # we installed new binaries and scripts, version information might have changed
-   clear_version_info
+   clear_version_info 1
 
    return $error_count
 }
@@ -1496,7 +1496,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
    # @todo we might want to call setfileperm.sh in case we just replaced the binaries
 
    # we installed new binaries and scripts, version information might have changed
-   clear_version_info
+   clear_version_info 1
 
    return $error_count
 }
