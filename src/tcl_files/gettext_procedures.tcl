@@ -280,6 +280,34 @@ proc search_for_macros_in_c_source_code_files { file_list search_macro_list} {
    return $search_list
 }
 
+proc get_files_to_parse_for_macros {source_dir} {
+   set c_files ""
+   foreach dir [get_all_subdirectories $source_dir] {
+
+      # handle c/c++ files
+      set files [get_file_names $source_dir/$dir "*.c"]
+      set files [concat $files [get_file_names $source_dir/$dir "*.cc"]]
+      foreach file $files {
+         # ignore qmake completely
+         if { [string first "3rdparty" $dir] >= 0 } {
+            continue
+         }
+         lappend c_files $source_dir/$dir/$file
+      }
+
+      # handle header files
+      set files [get_file_names $source_dir/$dir "*.h"]
+      foreach file $files {
+         # ignore message files
+         if { [string match -nocase msg_*.h $file] } {
+            continue
+         }
+         lappend c_files $source_dir/$dir/$file
+      }
+   }
+   return $c_files
+}
+
 #****** gettext_procedures/check_c_source_code_files_for_macros() **************
 #  NAME
 #     check_c_source_code_files_for_macros() -- check if macros are used in code
@@ -312,32 +340,8 @@ proc check_c_source_code_files_for_macros {} {
       return
    }
 
-   set c_files ""
-   set second_run_files ""
-
-   set dirs [get_all_subdirectories $ts_config(source_dir) ]
-   foreach dir $dirs {
-      set files [get_file_names $ts_config(source_dir)/$dir "*.c"]
-      set files [concat $files [get_file_names $ts_config(source_dir)/$dir "*.cc"]]
-      foreach file $files {
-         if { [string first "qmon" $file] >= 0 } {
-            lappend second_run_files $ts_config(source_dir)/$dir/$file
-            continue
-         }
-         if { [string first "3rdparty" $dir] >= 0 } {
-            lappend second_run_files $ts_config(source_dir)/$dir/$file
-            continue
-         }
-         lappend c_files $ts_config(source_dir)/$dir/$file
-      }
-      set files [get_file_names $ts_config(source_dir)/$dir "*.h"]
-      foreach file $files {
-         if { [string match -nocase msg_*.h $file] } {
-            continue
-         }
-         lappend second_run_files $ts_config(source_dir)/$dir/$file
-      }
-   }
+   set c_files [get_files_to_parse_for_macros $ts_config(source_dir)]
+   append c_files " [get_files_to_parse_for_macros [file normalize "$ts_config(source_dir)/../$ts_config(ext_source_dir)/source"]]"
 
    set search_list ""
    for {set i 1} {$i <= $macro_messages_list(0) } {incr i 1} {
@@ -345,8 +349,6 @@ proc check_c_source_code_files_for_macros {} {
    }
 
    set search_list [search_for_macros_in_c_source_code_files $c_files $search_list ]
-   set search_list [search_for_macros_in_c_source_code_files $second_run_files $search_list ]
-
 
    # remove SGE_INFOTEXT_TESTSTRING_S_L10N from searchlist
    set index [lsearch -exact $search_list "SGE_INFOTEXT_TESTSTRING_S_L10N"]
