@@ -3858,12 +3858,13 @@ proc wait_for_end_of_all_jobs {{seconds 60} {raise_error 1} {check_spool_dir 1}}
    get_current_cluster_config_array ts_config
 
    set time [clock seconds]
-   ts_log_fine "waiting for end of all jobs (qstat -s pr)"
+   set opts "-s pr -u '*'"
+   ts_log_fine "waiting for end of all jobs (qstat $opts)"
    while {1} {
-      set result [start_sge_bin "qstat" "-s pr"]
+      set result [start_sge_bin "qstat" $opts]
       if {$prg_exit_state == 0} {
          if {[string trim $result] == ""} {
-            ts_log_finer "qstat -s pr shows no jobs ..."
+            ts_log_finer "qstat $opts shows no jobs ..."
             if {$check_spool_dir != 1} {
                ts_log_fine "spool dir checking disabled!"
                return 0
@@ -3896,12 +3897,12 @@ proc wait_for_end_of_all_jobs {{seconds 60} {raise_error 1} {check_spool_dir 1}}
 
          #remove first two lines
          set help [lreplace $help 0 1]
-         ts_log_finest "qstat -s pr output:"
+         ts_log_finest "qstat $opts output:"
          foreach elem $help {
             ts_log_finest $elem
          }
       } else {
-        ts_log_severe "qstat -s pr failed:\n$result" $raise_error
+        ts_log_severe "qstat $opts failed:\n$result" $raise_error
         return -1
       }
       ts_log_progress
