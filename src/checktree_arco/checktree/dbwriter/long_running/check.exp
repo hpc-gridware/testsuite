@@ -65,10 +65,12 @@ set check_setup_function   "dbwriter_long_running_setup"
 set check_cleanup_function "dbwriter_long_running_cleanup"
 
 # define test's procedure order
-# CS-2233 ships the scaffolding self-test; CS-2235 .. CS-2239 append the
-# raw-data, hourly/daily derived and deletion-rule phase functions here.
+# CS-2233 ships the scaffolding self-test (run level 0); CS-2241 adds the
+# Phase C check (run level 400); CS-2235 .. CS-2239 append the raw-data,
+# hourly/daily derived and deletion-rule phase functions here.
 set check_functions {}
 lappend check_functions "dbwriter_long_running_scaffolding"
+lappend check_functions "dbwriter_long_running_phase_c"
 
 # source the shared scaffolding library (dbwriter_xml / db / dbwriter_long)
 # and the job-load generator (workload)
@@ -76,16 +78,32 @@ global CHECK_ACTUAL_TEST_PATH
 ts_source "$CHECK_ACTUAL_TEST_PATH/dbwriter_long_lib"
 ts_source "$CHECK_ACTUAL_TEST_PATH/dbwriter_long_workload"
 
+# online_usage usage variables enabled for the test - used both when enabling
+# reporting and when asserting the online_usage fan-out
+global dbwriter_long_online_usage_vars
+set dbwriter_long_online_usage_vars {cpu mem maxvmem wallclock}
+
 # -------- setup / cleanup ------------------------------------------------------
 
 ##
 # @brief Prepare the long-running test - bring the cluster to a known state.
 #
-# Brings the cluster into a known-empty starting state:
+# Brings the cluster into a known-empty starting state and applies the
+# configuration shared by all workload phases:
 #   - backs up the global cluster configuration,
 #   - backs up the active dbwriter.xml calculation file,
 #   - stops the dbwriter if it is running,
-#   - empties all ARCO database tables via arco_clean_database.
+#   - empties all ARCO database tables via arco_clean_database,
+#   - raises the exec host slot capacity for the test host,
+#   - enables qmaster reporting,
+#   - creates the tight-integration PE and queue,
+#   - creates the test project,
+#   - starts the dbwriter.
+#
+# The reporting configuration, the PE/queue and the running dbwriter are
+# needed by every workload phase, not only by Phase C, so they are set up
+# here and not in a phase function - keeping the setup and cleanup functions
+# symmetrical.
 #
 # The dbwriter installation and the database schema are already created by
 # the testsuite installation, so nothing is installed here.
@@ -93,6 +111,7 @@ ts_source "$CHECK_ACTUAL_TEST_PATH/dbwriter_long_workload"
 # @return 0 on success, else -1 (error reported via ts_log_severe)
 proc dbwriter_long_running_setup {} {
    global dbwriter_long_config_backup
+   global dbwriter_long_test_host
 
    # back up the global configuration - the workload phases enable reporting
    get_config dbwriter_long_config_backup
@@ -116,6 +135,37 @@ proc dbwriter_long_running_setup {} {
       return -1
    }
 
+   # a host for the test PE / queue - remembered so the cleanup function can
+   # remove the PE and queue again
+   set dbwriter_long_test_host [host_conf_get_suited_hosts]
+
+   # raise the exec host slot capacity - the core-binding default slot count
+   # of the exec host can be lower than the workload needs
+   setup_host_slots_for_binding $dbwriter_long_test_host
+
+   # enable qmaster reporting (accounting, reporting, joblog, online_usage, ...)
+   if {[dbwriter_long_enable_reporting] != 0} {
+      return -1
+   }
+
+   # create the tight-integration PE and queue used by the workload PE jobs
+   if {[workload::setup_pe_queue $dbwriter_long_test_host] != 0} {
+      return -1
+   }
+
+   # create the project the workload jobs run under
+   if {[workload::setup_project] != 0} {
+      return -1
+   }
+
+   # start the dbwriter
+   if {[get_dbwriter_status 0] != 0} {
+      if {[startup_dbwriter] != 0} {
+         ts_log_severe "dbwriter long test: can not start the dbwriter"
+         return -1
+      }
+   }
+
    return 0
 }
 
@@ -125,6 +175,9 @@ proc dbwriter_long_running_setup {} {
 # Reverts everything dbwriter_long_running_setup and the phases changed:
 #   - closes the db connection,
 #   - deletes leftover jobs,
+#   - removes the test PE and queue,
+#   - removes the test project,
+#   - restores the exec host slot capacity,
 #   - stops the dbwriter,
 #   - restores the original dbwriter.xml and global configuration,
 #   - empties the ARCO database again.
@@ -135,11 +188,22 @@ proc dbwriter_long_running_setup {} {
 # @return 0
 proc dbwriter_long_running_cleanup {} {
    global dbwriter_long_config_backup
+   global dbwriter_long_test_host
 
    db::disconnect
 
    delete_all_jobs
    wait_for_end_of_all_jobs 60
+wait_for_enter
+   # remove the test PE and queue and restore the exec host slot capacity
+   if {[info exists dbwriter_long_test_host]} {
+      workload::cleanup_pe_queue $dbwriter_long_test_host
+      cleanup_host_slots_for_binding
+      unset dbwriter_long_test_host
+   }
+
+   # remove the test project
+   workload::cleanup_project
 
    if {[get_dbwriter_status 0] == 0} {
       shutdown_dbwriter
@@ -247,5 +311,235 @@ proc dbwriter_long_running_scaffolding {} {
    ts_log_fine "db wrapper OK (sge_version rows: $n_version, sge_job rows: $n_job)"
 
    ts_log_fine "dbwriter long-running scaffolding self-test passed"
+   return 0
+}
+
+# -------- Phase C: first-hour workload + per-job record assertions -------------
+
+##
+# @brief Enable qmaster reporting for the long-running test.
+#
+# Enables accounting, reporting, joblog, online_usage and consumable logging
+# with a short flush time, and shortens load_report_time so host load and
+# online_usage records accrue quickly. Called from dbwriter_long_running_setup;
+# the pre-test configuration was saved there and is restored by
+# dbwriter_long_running_cleanup.
+#
+# @return 0 on success, else -1 (error reported via ts_log_severe)
+proc dbwriter_long_enable_reporting {} {
+   global dbwriter_long_online_usage_vars
+
+   # online_usage is a JSONL-only record type - the long-running test keeps
+   # the qmaster on the default (JSONL) reporting format, so it is not changed
+   set d " "
+   get_config conf
+   add_or_replace_array_param new conf reporting_params "accounting"      "true"     $d
+   add_or_replace_array_param new new  reporting_params "reporting"       "true"     $d
+   add_or_replace_array_param new new  reporting_params "joblog"          "true"     $d
+   add_or_replace_array_param new new  reporting_params "flush_time"      "00:00:04" $d
+   add_or_replace_array_param new new  reporting_params "log_consumables" "true"     $d
+   add_or_replace_array_param new new  reporting_params "online_usage" \
+      [join $dbwriter_long_online_usage_vars "|"] $d
+   # frequent load reports so host_values and online_usage accrue quickly
+   set new(load_report_time) "00:00:15"
+   set_config new
+
+   ts_log_fine "dbwriter long test: qmaster reporting enabled"
+   return 0
+}
+
+##
+# @brief Assert the per-job records of the first-hour workload.
+#
+# Polls the database until the dbwriter has imported the accounting records,
+# then asserts that the first-hour workload is correctly recorded: the exact
+# expected number of sge_job and sge_job_usage rows (overall and per user),
+# non-empty sge_job_log and sge_job_request, and sge_job_online_usage rows that
+# fan out one per configured usage variable.
+#
+# @return 0 if all assertions pass, else -1 (error reported via ts_log_severe)
+proc dbwriter_long_phase_c_assert_jobs {} {
+   global dbwriter_long_online_usage_vars
+
+   set per_user     [workload::expected_finished_per_user]
+   set job_per_user [workload::expected_job_rows_per_user]
+   set users        [workload::users]
+   set expected     [expr {$per_user * [llength $users]}]
+   set job_expected [expr {$job_per_user * [llength $users]}]
+
+   if {[db::connect] != 0} {
+      return -1
+   }
+
+   # poll until the dbwriter has imported all accounting records
+   set deadline [expr {[clock seconds] + 300}]
+   while {1} {
+      set n_usage [db::count "sge_job_usage"]
+      if {$n_usage >= $expected} {
+         break
+      }
+      if {[clock seconds] >= $deadline} {
+         ts_log_severe "dbwriter long test: only $n_usage of $expected accounting\
+                        records were imported within the timeout"
+         db::disconnect
+         return -1
+      }
+      ts_log_fine "dbwriter long test: waiting for accounting import\
+                   ($n_usage/$expected)"
+      sleep_for_seconds 15
+   }
+
+   set rc 0
+
+   # exactly the expected number of accounting records and job rows
+   if {$n_usage != $expected} {
+      ts_log_severe "dbwriter long test: sge_job_usage has $n_usage rows,\
+                     expected exactly $expected"
+      set rc -1
+   }
+   set n_job [db::count "sge_job"]
+   if {$n_job != $job_expected} {
+      ts_log_severe "dbwriter long test: sge_job has $n_job rows, expected $job_expected"
+      set rc -1
+   }
+
+   # per-user breakdown of sge_job
+   foreach user $users {
+      set n [db::count "sge_job" "j_owner = '$user'"]
+      if {$n != $job_per_user} {
+         ts_log_severe "dbwriter long test: user $user has $n rows in sge_job,\
+                        expected $job_per_user"
+         set rc -1
+      }
+   }
+
+   # job log and job request rows must exist
+   foreach table {sge_job_log sge_job_request} {
+      set n [db::count $table]
+      if {$n <= 0} {
+         ts_log_severe "dbwriter long test: $table is empty, expected rows"
+         set rc -1
+      }
+   }
+
+   # online_usage: rows present, fanned out one per configured usage variable
+   set n_ou [db::count "sge_job_online_usage"]
+   if {$n_ou <= 0} {
+      ts_log_severe "dbwriter long test: sge_job_online_usage is empty"
+      set rc -1
+   } else {
+      array set r {}
+      set cols {}
+      if {[db::query "SELECT COUNT(DISTINCT jou_variable) FROM sge_job_online_usage" \
+              r cols] < 0} {
+         set rc -1
+      } else {
+         set want [llength $dbwriter_long_online_usage_vars]
+         if {$r(0,0) != $want} {
+            ts_log_severe "dbwriter long test: sge_job_online_usage has $r(0,0)\
+                           distinct variables, expected $want"
+            set rc -1
+         }
+      }
+   }
+
+   db::disconnect
+   if {$rc == 0} {
+      ts_log_fine "dbwriter long test: per-job record assertions passed\
+                   ($expected accounting records)"
+   }
+   return $rc
+}
+
+##
+# @brief Create an advance reservation, run a job in it and assert sge_ar*.
+#
+# @param host the host whose queue the AR reserves and the AR job runs on
+# @return 0 if the sge_ar* tables are correctly populated, else -1
+proc dbwriter_long_phase_c_check_ar {host} {
+   global CHECK_USER
+
+   set ar_id [workload::create_ar $host]
+   if {$ar_id <= 0} {
+      return -1
+   }
+   set ar_job [workload::submit_into_ar $ar_id $CHECK_USER $host]
+   if {$ar_job <= 0} {
+      workload::delete_ar_reservation $ar_id
+      return -1
+   }
+   if {[wait_for_end_of_all_jobs 300] != 0} {
+      ts_log_severe "dbwriter long test: the AR job did not finish in time"
+      workload::delete_ar_reservation $ar_id
+      return -1
+   }
+   # delete the AR so its final state change is logged as well
+   workload::delete_ar_reservation $ar_id
+
+   if {[db::connect] != 0} {
+      return -1
+   }
+
+   # the dbwriter imports a record some time after qmaster writes it, and the
+   # parent sge_ar row appears before its sub-records - so wait for each table
+   # to be populated rather than reading the counts once
+   #
+   # sge_ar_resource_usage is intentionally not checked yet: the test AR
+   # requests no resources, so that table stays empty. It is to be added once
+   # workload::create_ar submits the AR with a resource request.
+   set rc 0
+   foreach table {sge_ar sge_ar_attribute sge_ar_usage sge_ar_log} {
+      if {[db::wait_for_rows $table] != 0} {
+         ts_log_severe "dbwriter long test: $table is empty after the AR run"
+         set rc -1
+      }
+   }
+
+   db::disconnect
+   if {$rc == 0} {
+      ts_log_fine "dbwriter long test: advance-reservation tables populated"
+   }
+   return $rc
+}
+
+##
+# @brief Phase C - run the first-hour workload and assert the per-job records.
+#
+# Runs at check run level 400. Runs the first-hour deterministic workload
+# (workload::run_first_hour) and an advance reservation, and asserts that every
+# job and the AR are correctly recorded in the ARCO database. The test host,
+# the PE/queue, qmaster reporting and the running dbwriter are prepared by
+# dbwriter_long_running_setup.
+#
+# @return 0 if Phase C passed, else -1 (error reported via ts_log_severe)
+proc dbwriter_long_running_phase_c {} {
+   global CHECK_ACT_LEVEL check_description
+   global dbwriter_long_test_host
+
+   if {$CHECK_ACT_LEVEL != 400} {
+      return 0
+   }
+   ts_log_fine $check_description(400)
+
+   # the test host, PE/queue, qmaster reporting and the dbwriter were prepared
+   # by dbwriter_long_running_setup
+   set host $dbwriter_long_test_host
+
+   # Phase C: run the first-hour deterministic workload
+   if {[workload::run_first_hour $host] != 0} {
+      return -1
+   }
+
+   # assert every job of the first-hour workload is correctly recorded
+   if {[dbwriter_long_phase_c_assert_jobs] != 0} {
+      return -1
+   }
+
+   # advance reservation: create one, run a job in it, assert the sge_ar* tables
+   if {[dbwriter_long_phase_c_check_ar $host] != 0} {
+      return -1
+   }
+
+   ts_log_fine "dbwriter long test: Phase C passed"
    return 0
 }

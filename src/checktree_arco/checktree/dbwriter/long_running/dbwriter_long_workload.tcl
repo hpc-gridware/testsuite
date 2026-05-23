@@ -50,10 +50,12 @@ namespace eval workload {
       pe_jobs_per_user       2
       pe_array_jobs_per_user 1
       pe_array_tasks         2
-      job_runtime            30
+      job_runtime            45
+      job_h_rt               600
       pe_slots               2
-      pe_name                "dbwriter_long_pe"
-      queue_name             "dbwriter_long_q"
+      pe_name                "dbwriter_long.pe"
+      queue_name             "dbwriter_long.q"
+      project_name           "dbwriter_long.prj"
       first_hour_budget      900
       hour_margin            15
       submit_retries         3
@@ -65,6 +67,7 @@ namespace eval workload {
 
    variable pe_created 0       ;# 1 once setup_pe_queue created the PE
    variable queue_created 0    ;# 1 once setup_pe_queue created the queue
+   variable project_created 0  ;# 1 once setup_project created the project
    variable background_jobs {} ;# job ids of the started pminiworm chains
 }
 
@@ -97,17 +100,50 @@ proc workload::verify_users {} {
 ##
 # @brief Number of accounting records the first-hour workload produces per user.
 #
-# Each array task and each PE array task is a separate finished job, so they
-# count individually; a sequential PE job counts once (the PE is created with
-# accounting_summary TRUE).
+# This is the expected per-user row count of the sge_job_usage table - one row
+# per finished unit of work:
+#   - a sequential job counts once,
+#   - an array job counts once per array task,
+#   - the PE is created with accounting_summary FALSE and job_is_first_task
+#     TRUE, so a tightly-integrated PE job is accounted per task and counts
+#     pe_slots times (one record per task - the master/first task plus the
+#     pe tasks); a PE array job counts that for every array task.
 #
 # @return the expected per-user finished-job count for the first test hour
 proc workload::expected_finished_per_user {} {
    variable config
    return [expr {$config(seq_jobs_per_user) +
                  $config(array_jobs_per_user) * $config(array_tasks) +
-                 $config(pe_jobs_per_user) +
-                 $config(pe_array_jobs_per_user) * $config(pe_array_tasks)}]
+                 $config(pe_jobs_per_user) * $config(pe_slots) +
+                 $config(pe_array_jobs_per_user) * $config(pe_array_tasks) * $config(pe_slots)}]
+}
+
+##
+# @brief Number of sge_job rows the first-hour workload produces per user.
+#
+# A sge_job row is keyed by (j_job_number, j_task_number, j_pe_taskid). The
+# new_job reporting record written at submission time creates a whole-job row
+# with j_task_number = -1 (and, for an array job, one row per array task). The
+# PE is created with job_is_first_task TRUE, so the master task is the job's
+# first task: it carries an empty j_pe_taskid and its accounting record updates
+# the whole-job (resp. array-task) row instead of creating a new one. Only the
+# pe_slots - 1 additional pe tasks each get their own row. Counted per job type:
+#   - sequential job:  1 whole-job row (it is also the finished-unit row),
+#   - array job:       1 whole-job row + one row per array task,
+#   - PE job:          1 whole-job row (shared by the master task)
+#                      + pe_slots - 1 additional pe task rows  => pe_slots rows,
+#   - PE array job:    1 whole-job row + per array task: 1 array-task row
+#                      (shared by the master task) + pe_slots - 1 pe task rows
+#                                      => 1 + pe_array_tasks * pe_slots rows.
+#
+# @return the expected per-user sge_job row count for the first test hour
+proc workload::expected_job_rows_per_user {} {
+   variable config
+   return [expr {$config(seq_jobs_per_user) +
+                 $config(array_jobs_per_user) * (1 + $config(array_tasks)) +
+                 $config(pe_jobs_per_user) * $config(pe_slots) +
+                 $config(pe_array_jobs_per_user) * (1 + $config(pe_array_tasks) *
+                       $config(pe_slots))}]
 }
 
 ##
@@ -127,8 +163,12 @@ proc workload::setup_pe_queue {host} {
    set pe_def(slots)              $config(pe_slots)
    set pe_def(control_slaves)     "TRUE"
    set pe_def(allocation_rule)    "\$round_robin"
-   set pe_def(job_is_first_task)  "FALSE"
-   set pe_def(accounting_summary) "TRUE"
+   # job_is_first_task TRUE: the master task counts as the job's first task, so
+   # a PE job has exactly pe_slots tasks (the master plus the pe tasks)
+   set pe_def(job_is_first_task)  "TRUE"
+   # accounting_summary FALSE: every task is reported and accounted on its own,
+   # so the dbwriter writes an individual record per task
+   set pe_def(accounting_summary) "FALSE"
    set pe_def(start_proc_args)    "NONE"
    set pe_def(stop_proc_args)     "NONE"
    set pe_def(user_lists)         "NONE"
@@ -173,16 +213,59 @@ proc workload::cleanup_pe_queue {host} {
 }
 
 ##
+# @brief Create the project the workload jobs run under.
+#
+# All workload jobs request this project (see workload::submit_retry) so the
+# dbwriter's per-project hourly derived values - e.g. h_jobs_finished - get
+# data. Remembers whether the project was created so cleanup_project removes
+# exactly that object.
+#
+# @return 0 on success, else -1 (error reported via ts_log_severe)
+proc workload::setup_project {} {
+   variable config
+   variable project_created
+
+   if {[add_project $config(project_name)] < 0} {
+      ts_log_severe "workload: can not create project $config(project_name)"
+      return -1
+   }
+   set project_created 1
+
+   ts_log_fine "workload: created project $config(project_name)"
+   return 0
+}
+
+##
+# @brief Remove the project created by setup_project.
+#
+# Idempotent - only removes the project if setup_project actually created it.
+proc workload::cleanup_project {} {
+   variable config
+   variable project_created
+
+   if {$project_created} {
+      del_project $config(project_name)
+      set project_created 0
+   }
+}
+
+##
 # @brief Submit a job, retrying transient failures.
 #
 # Wraps submit_job so a transient qmaster failure (EAGAIN-style) does not
 # abort the long-running test - the submission is retried a few times.
+#
+# Every job is submitted under the test project so the dbwriter's per-project
+# hourly derived values get data.
 #
 # @param qsub_args the qsub argument string
 # @param user      the system user to submit as
 # @return the job id (> 0) on success, else -1 (error reported via ts_log_severe)
 proc workload::submit_retry {qsub_args user} {
    variable config
+
+   # all workload jobs run under the test project
+   set qsub_args "-P $config(project_name) $qsub_args"
 
    for {set attempt 1} {$attempt <= $config(submit_retries)} {incr attempt} {
       set jobid [submit_job $qsub_args 0 60 "" $user]
@@ -203,6 +286,8 @@ proc workload::submit_retry {qsub_args user} {
 #
 # Submits, as user, the configured number of sequential, array, tightly-
 # coupled PE and PE-array jobs. No pminiworm jobs - those are background load.
+# Each job carries an explicit h_rt resource request so the dbwriter writes
+# sge_job_request rows.
 #
 # @param user the system user to submit as
 # @param host unused, reserved for host-targeted submission
@@ -216,13 +301,16 @@ proc workload::submit_user_jobs {user host} {
    set pe_task "$ts_config(testsuite_root_dir)/scripts/pe_task.sh"
    set runtime $config(job_runtime)
    set pe_opts "-pe $config(pe_name) $config(pe_slots) -q $config(queue_name)"
+   # every job carries an explicit h_rt request, so the dbwriter writes
+   # sge_job_request rows the Phase C assertions can verify
+   set req     "-l h_rt=$config(job_h_rt)"
 
    set job_ids {}
 
    # sequential sleeper jobs
    for {set i 0} {$i < $config(seq_jobs_per_user)} {incr i} {
       set jid [workload::submit_retry \
-         "-N dbwl_seq -o /dev/null -e /dev/null $sleeper $runtime" $user]
+         "-N dbwl_seq $req -o /dev/null -e /dev/null $sleeper $runtime" $user]
       if {$jid <= 0} {
          return -1
       }
@@ -232,7 +320,7 @@ proc workload::submit_user_jobs {user host} {
    # array sleeper jobs
    for {set i 0} {$i < $config(array_jobs_per_user)} {incr i} {
       set jid [workload::submit_retry \
-         "-N dbwl_arr -t 1-$config(array_tasks) -o /dev/null -e /dev/null\
+         "-N dbwl_arr $req -t 1-$config(array_tasks) -o /dev/null -e /dev/null\
           $sleeper $runtime" $user]
       if {$jid <= 0} {
          return -1
@@ -243,7 +331,7 @@ proc workload::submit_user_jobs {user host} {
    # tightly-coupled PE jobs (sequential)
    for {set i 0} {$i < $config(pe_jobs_per_user)} {incr i} {
       set jid [workload::submit_retry \
-         "-N dbwl_pe $pe_opts -o /dev/null -j y $pe_job $pe_task 1 $runtime" $user]
+         "-N dbwl_pe $req $pe_opts -o /dev/null -j y $pe_job $pe_task 1 $runtime" $user]
       if {$jid <= 0} {
          return -1
       }
@@ -253,7 +341,7 @@ proc workload::submit_user_jobs {user host} {
    # tightly-coupled PE array jobs
    for {set i 0} {$i < $config(pe_array_jobs_per_user)} {incr i} {
       set jid [workload::submit_retry \
-         "-N dbwl_pearr -t 1-$config(pe_array_tasks) $pe_opts -o /dev/null -j y\
+         "-N dbwl_pearr $req -t 1-$config(pe_array_tasks) $pe_opts -o /dev/null -j y\
           $pe_job $pe_task 1 $runtime" $user]
       if {$jid <= 0} {
          return -1
@@ -385,7 +473,9 @@ proc workload::run_first_hour {host} {
 proc workload::create_ar {host} {
    variable config
 
-   set ar_id [submit_ar "-d $config(ar_duration) -q $config(queue_name)" $host "" 0]
+   # qrsub runs on the default submit host (master); $host is the reserved
+   # queue's host, not where qrsub is invoked
+   set ar_id [submit_ar "-d $config(ar_duration) -q $config(queue_name)" "" "" 0]
    if {$ar_id <= 0} {
       ts_log_severe "workload: can not create advance reservation (rc=$ar_id)"
       return -1

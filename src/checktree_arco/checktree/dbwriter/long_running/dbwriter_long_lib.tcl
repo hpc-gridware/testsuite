@@ -494,3 +494,29 @@ proc db::count {table {where ""}} {
    }
    return $result(0,0)
 }
+
+##
+# @brief Wait until a table has at least one row.
+#
+# The dbwriter imports a record some time after qmaster writes it to the
+# reporting file, and a parent record (e.g. sge_ar) appears before its
+# sub-records (e.g. sge_ar_usage). Callers therefore poll rather than read
+# the count once.
+#
+# @param table   the table name
+# @param timeout seconds to wait before giving up (default 300)
+# @return 0 once the table has at least one row, -1 on timeout
+proc db::wait_for_rows {table {timeout 300}} {
+   set deadline [expr {[clock seconds] + $timeout}]
+   while {1} {
+      set n [db::count $table]
+      if {$n > 0} {
+         return 0
+      }
+      if {[clock seconds] >= $deadline} {
+         return -1
+      }
+      ts_log_fine "dbwriter long test: waiting for $table to be imported ($n rows)"
+      sleep_for_seconds 15
+   }
+}
