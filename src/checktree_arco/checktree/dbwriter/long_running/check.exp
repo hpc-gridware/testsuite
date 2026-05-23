@@ -194,7 +194,7 @@ proc dbwriter_long_running_cleanup {} {
 
    delete_all_jobs
    wait_for_end_of_all_jobs 60
-wait_for_enter
+
    # remove the test PE and queue and restore the exec host slot capacity
    if {[info exists dbwriter_long_test_host]} {
       workload::cleanup_pe_queue $dbwriter_long_test_host
