@@ -26,57 +26,92 @@ proc is_host_resolvable {hostname} {
    }
 }
 
+## @brief reinstall the cluster from scratch as the final test step
+#
+# The upgrade_config test loads old-version configuration into the
+# running cluster, leaving it in a modified state. Perform a full fresh
+# (re)installation - the same end result as main menu item (21)
+# "install cluster" - so subsequent tests start from a clean cluster.
+#
+# This performs the same operation as main menu item (21) "install cluster":
+# menu_item_install_cluster with check_use_installed_system == 0, i.e. a
+# genuine fresh install (install_core_system runs kill_running_system and
+# then reinstalls from scratch). installer_reinstall_fresh_cluster is NOT
+# used here: it forces check_use_installed_system 1 (re-use the existing
+# installation) and only falls back to a fresh install if the re-use run
+# fails - on a healthy but config-dirtied cluster the re-use "succeeds",
+# so nothing would actually be reinstalled.
+#
+# menu_item_install_cluster runs run_tests -> run_test -> run_test_level,
+# which calls clear_all_check_errors. That unsets the global error
+# bookkeeping and overwrites the check_* globals of the currently running
+# upgrade_config check. We therefore snapshot the relevant globals before
+# the reinstall and restore them afterwards, so upgrade_config's own
+# pass/fail verdict (from the earlier upgrade steps) is preserved. A
+# failing reinstall is intentionally NOT propagated into the
+# upgrade_config verdict.
+#
 proc installer_reinstall_fresh_cluster {} {
-   global CHECK_ACT_PATH
-   global CHECK_ENABLED_CATEGORIES
+   global check_errno check_errstr
+   global check_name check_functions
+   global check_setup_function check_cleanup_function
+   global check_setup_level_function check_cleanup_level_function
+   global check_category check_needs check_version_range
+   global check_root_access_needs check_need_running_system
    global check_use_installed_system
-   get_current_cluster_config_array ts_config
+   global CHECK_ACT_PATH
 
-   # reset testsuite sessions
-   close_open_rlogin_sessions 1  ;# session reset (if defect)
-
-   # first cleanup all jobs
-   delete_all_jobs
-   wait_for_end_of_all_jobs 15
-
-   set save_installed_value $check_use_installed_system
-   set check_use_installed_system 1
-
-   # first run cleanup hooks
-   # This is done because some additional checktree implementations
-   # have to cleanup the clusters before re_init (e.g. to re-add removed execds)
-   exec_checktree_clean_hooks
-
-   # now re_init all additional clusters
-   ts_log_fine "performing additional cluster install re_init ..."
-   set add_clusters_ret [operate_additional_clusters install]
-   if {$add_clusters_ret != 0} {
-      ts_log_info "installing additional clusters with re_use system failed with \"$add_clusters_ret\", starting fresh installation ..."
-      set check_use_installed_system 0
-      ts_log_fine "performing additional cluster install ..."
-      set add_clusters_ret2 [operate_additional_clusters install]
-      ts_log_info "installing additional clusters returned \"$add_clusters_ret\"!"
+   # snapshot the state of the running upgrade_config check
+   if {[info exists check_errno]}  { set saved_errno  [array get check_errno] }
+   if {[info exists check_errstr]} { set saved_errstr [array get check_errstr] }
+   set saved_name                   $check_name
+   set saved_functions              $check_functions
+   set saved_setup_function         $check_setup_function
+   set saved_cleanup_function       $check_cleanup_function
+   set saved_setup_level_function   $check_setup_level_function
+   set saved_cleanup_level_function $check_cleanup_level_function
+   set saved_category               $check_category
+   set saved_needs                  $check_needs
+   if {[info exists check_version_range]} {
+      set saved_version_range $check_version_range
    }
+   set saved_root_access_needs      $check_root_access_needs
+   set saved_need_running_system    $check_need_running_system
+   set saved_use_installed_system   $check_use_installed_system
+   set saved_act_path               $CHECK_ACT_PATH
 
-   set save_CHECK_ACT_PATH $CHECK_ACT_PATH
-   set check_use_installed_system 1
-   set CHECK_ACT_PATH "$ts_config(checktree_root_dir)/install_core_system"
-   ts_log_fine "starting install_core_system with check_use_installed_system=$check_use_installed_system ..."
-   incr check_id ;# reinit will be displayed number separate check_id - we will see real oder of execution
-   set init_ret [run_test $CHECK_ACT_PATH "all"]
-   if {$init_ret != 0 && $init_ret != -3} {
-      ts_log_info "installing with re_use system failed, starting fresh installation ..."
-      ts_log_fine "starting install_core_system with check_use_installed_system=$check_use_installed_system ..."
-      set check_use_installed_system 0
-      # we start all checks with INSTALL category
-      set org_categories $CHECK_ENABLED_CATEGORIES
-      set CHECK_ENABLED_CATEGORIES "INSTALL"
-      set init_ret2 [run_tests "root" "all"]
-      set CHECK_ENABLED_CATEGORIES $org_categories
-      ts_log_fine "installing cluster returned \"$init_ret2\"!"
+   # perform the full fresh (re)installation - same as main menu item (21).
+   # Force a fresh install (not re-use of the existing installation) so the
+   # running cluster is killed and reinstalled with a clean configuration.
+   set check_use_installed_system 0
+   menu_item_install_cluster
+
+   # restore the snapshot so the outer run_test evaluates upgrade_config
+   if {[info exists saved_errno]} {
+      unset -nocomplain check_errno
+      array set check_errno $saved_errno
    }
-   set CHECK_ACT_PATH $save_CHECK_ACT_PATH
-   set check_use_installed_system $save_installed_value
+   if {[info exists saved_errstr]} {
+      unset -nocomplain check_errstr
+      array set check_errstr $saved_errstr
+   }
+   set check_name                   $saved_name
+   set check_functions              $saved_functions
+   set check_setup_function         $saved_setup_function
+   set check_cleanup_function       $saved_cleanup_function
+   set check_setup_level_function   $saved_setup_level_function
+   set check_cleanup_level_function $saved_cleanup_level_function
+   set check_category               $saved_category
+   set check_needs                  $saved_needs
+   if {[info exists saved_version_range]} {
+      set check_version_range $saved_version_range
+   } else {
+      unset -nocomplain check_version_range
+   }
+   set check_root_access_needs      $saved_root_access_needs
+   set check_need_running_system    $saved_need_running_system
+   set check_use_installed_system   $saved_use_installed_system
+   set CHECK_ACT_PATH               $saved_act_path
 }
 
 proc installer_get_diff_script {} {
