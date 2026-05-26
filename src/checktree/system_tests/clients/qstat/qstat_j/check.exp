@@ -1,0 +1,272 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.1.2"
+
+# define test's name and run level descriptions
+set check_name            "qstat_j_pending_tasks"
+set check_category        "QSTAT VERIFIED"
+set check_description(0)  "test the pending_tasks line in qstat -j output (CS-2251)"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function qstat_j_pending_tasks_setup
+set check_cleanup_function qstat_j_pending_tasks_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "qstat_j_pending_tasks_hold"
+lappend check_functions "qstat_j_pending_tasks_error"
+lappend check_functions "qstat_j_pending_tasks_array"
+lappend check_functions "qstat_j_pending_tasks_array_dependency"
+
+# -------- local test procedures: initialization------------------------------
+
+proc qstat_j_pending_tasks_setup {} {
+   get_current_cluster_config_array ts_config
+   global qstat_j_pending_tasks_queue
+
+   # the single-slot queue used by every test function in this file
+   set qstat_j_pending_tasks_queue "pending_tasks.q"
+
+   # one-slot queue so that array jobs always have pending tasks while one
+   # task is running. Pin it to a single execd to avoid surprises from
+   # multi-host scheduling.
+   set host [host_conf_get_suited_hosts]
+   set queue_conf(slots)            1
+   set queue_conf(rerun)            "TRUE"
+   set queue_conf(shell_start_mode) "unix_behavior"
+   add_queue $qstat_j_pending_tasks_queue $host queue_conf
+}
+
+proc qstat_j_pending_tasks_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global qstat_j_pending_tasks_queue
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   del_queue $qstat_j_pending_tasks_queue "" 0 1
+}
+
+# -------- helper procedures -------------------------------------------------
+
+# Read the pending_tasks value from qstat -j <jobid> output.
+# Returns the integer value on success, -1 if the field is missing.
+proc qstat_j_pending_tasks_get {jobid} {
+   if {![get_qstat_j_info $jobid info]} {
+      ts_log_severe "qstat -j $jobid failed"
+      return -1
+   }
+   if {![info exists info(pending_tasks)]} {
+      ts_log_severe "pending_tasks line missing in qstat -j $jobid output:\n$info(output)"
+      return -1
+   }
+   return [string trim $info(pending_tasks)]
+}
+
+# Assert that qstat -j <jobid> reports the expected pending_tasks value.
+# Logs a severe error and continues if the value differs.
+proc qstat_j_pending_tasks_expect {jobid expected context} {
+   set actual [qstat_j_pending_tasks_get $jobid]
+   if {$actual != $expected} {
+      ts_log_severe "qstat -j $jobid ($context): expected pending_tasks=$expected, got $actual"
+   } else {
+      ts_log_fine "qstat -j $jobid ($context): pending_tasks=$actual as expected"
+   }
+}
+
+# -------- test functions ----------------------------------------------------
+
+# Sequential job submitted with -h. Until released it stays in user hold and
+# must show up as exactly one pending task.
+proc qstat_j_pending_tasks_hold {} {
+   get_current_cluster_config_array ts_config
+   global qstat_j_pending_tasks_queue
+
+   set job_id [submit_job "-h -q $qstat_j_pending_tasks_queue -b y sleep 60"]
+   if {$job_id <= 0} {
+      ts_log_severe "could not submit held sleeper job"
+      return
+   }
+
+   wait_for_jobpending $job_id "" 30
+
+   qstat_j_pending_tasks_expect $job_id 1 "sequential job in user hold"
+
+   delete_job $job_id
+   wait_for_end_of_all_jobs
+}
+
+# A job that immediately enters error state (bad shell) is enrolled with the
+# JERROR bit set in JAT_state. The count_pending_tasks helper must therefore
+# report pending_tasks=0 even though the task is enrolled and idle.
+proc qstat_j_pending_tasks_error {} {
+   get_current_cluster_config_array ts_config
+   global qstat_j_pending_tasks_queue
+
+   set job_id [submit_job "-q $qstat_j_pending_tasks_queue -S /no/such/shell -b y sleep 60"]
+   if {$job_id <= 0} {
+      ts_log_severe "could not submit error-state sleeper job"
+      return
+   }
+
+   # wait until the task has been enrolled, failed and gained the JERROR bit
+   if {[wait_for_job_state $job_id "E" 60] == -1} {
+      delete_job $job_id 0 0 0
+      wait_for_end_of_all_jobs
+      return
+   }
+
+   qstat_j_pending_tasks_expect $job_id 0 "sequential job in error state"
+
+   delete_job $job_id 0 0 0
+   wait_for_end_of_all_jobs
+}
+
+# Array job covering most of the interesting transitions:
+#   - 1 running, the others in JB_ja_n_h_ids
+#   - move individual ids into the user / operator / system hold lists
+#   - reschedule the running task so every id becomes pending
+#   - re-run a task and suspend it; suspended tasks must not be counted
+proc qstat_j_pending_tasks_array {} {
+   get_current_cluster_config_array ts_config
+   global qstat_j_pending_tasks_queue
+
+   set array_size 5
+   set queue_instance [get_queue_instance $qstat_j_pending_tasks_queue [lindex $ts_config(execd_nodes) 0]]
+
+   set job_id [submit_job "-q $qstat_j_pending_tasks_queue -t 1-$array_size -b y sleep 600"]
+   if {$job_id <= 0} {
+      ts_log_severe "could not submit array sleeper job"
+      return
+   }
+
+   wait_for_jobstart $job_id "" 60
+
+   # 1 task is running, $array_size-1 are sitting in JB_ja_n_h_ids
+   qstat_j_pending_tasks_expect $job_id [expr {$array_size - 1}] "array, 1 running"
+
+   # Push a few task ids into the various hold lists. The total has to stay
+   # the same because tasks just migrate from JB_ja_n_h_ids into the
+   # respective hold list.
+   set output [start_sge_bin "qalter" "-h u $job_id.2"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qalter -h u failed:\n$output"
+   }
+   set output [start_sge_bin "qalter" "-h o $job_id.3"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qalter -h o failed:\n$output"
+   }
+   set output [start_sge_bin "qalter" "-h s $job_id.4"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qalter -h s failed:\n$output"
+   }
+
+   qstat_j_pending_tasks_expect $job_id [expr {$array_size - 1}] "array, mixed holds"
+
+   # Reschedule the running task. All ids must now show up as pending.
+   disable_queue $queue_instance
+   set output [start_sge_bin "qmod" "-f -r $job_id"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qmod -f -r $job_id failed:\n$output"
+   }
+   wait_for_jobpending $job_id "" 60
+
+   qstat_j_pending_tasks_expect $job_id $array_size "array, all pending after qmod -r"
+
+   # Release the holds, re-enable the queue, wait for one task to run again.
+   set output [start_sge_bin "qalter" "-h U $job_id.2"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qalter -h U failed:\n$output"
+   }
+   set output [start_sge_bin "qalter" "-h O $job_id.3"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qalter -h O failed:\n$output"
+   }
+   set output [start_sge_bin "qalter" "-h S $job_id.4"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qalter -h S failed:\n$output"
+   }
+   enable_queue $queue_instance
+   wait_for_jobstart $job_id "" 60
+
+   qstat_j_pending_tasks_expect $job_id [expr {$array_size - 1}] "array, 1 running again"
+
+   # Suspending a running task must not change the pending count: the task
+   # keeps JAT_status==JRUNNING and just gains the JSUSPENDED bit in
+   # JAT_state, so it is not counted as a pending task.
+   suspend_job $job_id
+   sleep_for_seconds 3
+
+   qstat_j_pending_tasks_expect $job_id [expr {$array_size - 1}] "array, running task suspended"
+
+   unsuspend_job $job_id
+   delete_job $job_id
+   wait_for_end_of_all_jobs
+}
+
+# Two array jobs of equal size. The second depends task-by-task on the first
+# via -hold_jid_ad. While the first job has one task running, the second one
+# is fully held (all tasks sitting in JB_ja_a_h_ids).
+proc qstat_j_pending_tasks_array_dependency {} {
+   get_current_cluster_config_array ts_config
+   global qstat_j_pending_tasks_queue
+
+   set array_size 4
+
+   set job_a [submit_job "-N pt_a -q $qstat_j_pending_tasks_queue -t 1-$array_size -b y sleep 600"]
+   if {$job_a <= 0} {
+      ts_log_severe "could not submit first array job"
+      return
+   }
+
+   wait_for_jobstart $job_a "" 60
+
+   set job_b [submit_job "-N pt_b -q $qstat_j_pending_tasks_queue -t 1-$array_size -hold_jid_ad $job_a -b y sleep 600"]
+   if {$job_b <= 0} {
+      ts_log_severe "could not submit dependent array job"
+      delete_job $job_a
+      wait_for_end_of_all_jobs
+      return
+   }
+
+   # give the scheduler a moment to register the dependency
+   sleep_for_seconds 3
+
+   qstat_j_pending_tasks_expect $job_a [expr {$array_size - 1}] "predecessor array, 1 running"
+   qstat_j_pending_tasks_expect $job_b $array_size "dependent array, fully held"
+
+   delete_job $job_b
+   delete_job $job_a
+   wait_for_end_of_all_jobs
+}
