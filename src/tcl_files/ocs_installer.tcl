@@ -72,9 +72,9 @@ proc installer_reinstall_fresh_cluster {} {
    set saved_cleanup_level_function $check_cleanup_level_function
    set saved_category               $check_category
    set saved_needs                  $check_needs
-   if {[info exists check_version_range]} {
-      set saved_version_range $check_version_range
-   }
+   #if {[info exists check_version_range]} {
+   #   set saved_version_range $check_version_range
+   #}
    set saved_root_access_needs      $check_root_access_needs
    set saved_need_running_system    $check_need_running_system
    set saved_use_installed_system   $check_use_installed_system
@@ -103,11 +103,11 @@ proc installer_reinstall_fresh_cluster {} {
    set check_cleanup_level_function $saved_cleanup_level_function
    set check_category               $saved_category
    set check_needs                  $saved_needs
-   if {[info exists saved_version_range]} {
-      set check_version_range $saved_version_range
-   } else {
-      unset -nocomplain check_version_range
-   }
+   #if {[info exists saved_version_range]} {
+   #   set check_version_range $saved_version_range
+   #} else {
+   #   unset -nocomplain check_version_range
+   #}
    set check_root_access_needs      $saved_root_access_needs
    set check_need_running_system    $saved_need_running_system
    set check_use_installed_system   $saved_use_installed_system
