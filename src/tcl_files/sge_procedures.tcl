@@ -3657,15 +3657,32 @@ proc shutdown_execd {host_list {soft 0} {timeout 120} {wait_for_unknown_load 1}}
             shutdown_system_daemon $host execd
          }
       } else {
-         ts_log_fine "   via qconf -ke\[j\]"
-         set option "-ke"
-         if {!$soft} {
-            append option "j"
-         }
-         set result [start_sge_bin "qconf" "$option $host" $ts_config(master_host) $CHECK_USER]
-         if {$prg_exit_state != 0} {
-            ts_log_fine "qconf -ke $host returned $prg_exit_state, hard killing execd:\n$result"
-            shutdown_system_daemon $host execd
+         # For debugging CS-2257 qdel job_id exits 1 when deleting a running job and the sge_execd was shutdown with sgeexecd softstop
+         # Enable killing sge_execd via sgeexecd script instead of using qconf -ke[j].
+         if {0} {
+            ts_log_fine "   via sgeexecd script"
+            set sgeexecd "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd"
+            if {$soft} {
+               set option "softstop"
+            } else {
+               set option "stop"
+            }
+            set result [start_remote_prog $host "root" $sgeexecd $option]
+            if {$prg_exit_state != 0} {
+               ts_log_fine "sgeexecd $option returned $prg_exit_state, hard killing execd:\n$result"
+               shutdown_system_daemon $host execd
+            }
+         } else {
+            ts_log_fine "   via qconf -ke\[j\]"
+            set option "-ke"
+            if {!$soft} {
+               append option "j"
+            }
+            set result [start_sge_bin "qconf" "$option $host" $ts_config(master_host) $CHECK_USER]
+            if {$prg_exit_state != 0} {
+               ts_log_fine "qconf -ke $host returned $prg_exit_state, hard killing execd:\n$result"
+               shutdown_system_daemon $host execd
+            }
          }
       }
    }
