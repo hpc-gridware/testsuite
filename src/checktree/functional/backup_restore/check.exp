@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -272,7 +272,7 @@ proc backup_restore_do_backup_restore {} {
    after 5000
 
    startup_core_system
-   wait_for_load_from_all_queues 60
+   wait_for_load_from_all_queues 120
 
    set arch [resolve_arch $ts_config(master_host)]
    set args "-f"
