@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -132,6 +132,11 @@ proc execd_reconnect_test {} {
    global CHECK_USER
    global execd_reconnect_cleanup_do_cleanup
    get_current_cluster_config_array ts_config
+
+   if {[config_has_product_feature "tls"]} {
+      ts_log_info "not running this test with TLS mode enabled due to CS-2258"
+      return
+   }
 
    set execd_reconnect_cleanup_do_cleanup 1
 
