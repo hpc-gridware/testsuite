@@ -184,6 +184,7 @@
 #*******************************
 #
 
+#encoding system iso8859-1
 fconfigure stdin -blocking TRUE
 global daemon_debug
 set daemon_debug 0
@@ -1584,7 +1585,7 @@ proc check_executable_files {  } {
          continue
       }
       set attribs [ file attributes $filename -permissions]
-      if { [ string compare $attribs "00755" ] != 0 } {
+      if { [ string compare $attribs "00755" ] != 0 && [ string compare $attribs "0o755" ]} {
          puts "file not executable (attributes: $attribs):\n $filename"
          lappend change_files $filename
          set file_error 1
@@ -1600,7 +1601,7 @@ proc check_executable_files {  } {
             foreach elem $change_files {
                 catch { file attributes $elem -permissions 00755 }
                 set attribs [ file attributes $elem -permissions]
-                if { [ string compare $attribs "00755" ] != 0  } {
+                if { [ string compare $attribs "00755" ] != 0 && [ string compare $attribs "0o755" ] } {
                    ts_log_fine "check_executable_files - error setting file permissions: $elem"
                    testsuite_shutdown 1
                 }
@@ -3467,6 +3468,7 @@ proc save_result {path runtime level state} {
 
    # dump test description to result file
    set output [open "$save_dir/$check_result_file" "w"]
+#   fconfigure $output -encoding utf-8
    puts $output "$data"
    close $output
 
