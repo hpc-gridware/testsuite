@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -374,7 +374,9 @@ proc drmaa_check_single_threaded_part_03 { } {
       lappend test_scenario "ST_INPUT_FILE_FAILURE"
       lappend test_scenario "ST_OUTPUT_FILE_FAILURE"
       lappend test_scenario "ST_ERROR_FILE_FAILURE"
-      lappend test_scenario "ST_SUBMIT_SUSPEND_RESUME_WAIT"
+      if {[is_version_in_range "9.2.0"]} {
+         lappend test_scenario "ST_SUBMIT_SUSPEND_RESUME_WAIT"
+      }
       lappend test_scenario "ST_SUBMIT_POLLING_WAIT_TIMEOUT"
       lappend test_scenario "ST_SUBMIT_POLLING_WAIT_ZEROTIMEOUT"
       lappend test_scenario "ST_SUBMIT_POLLING_SYNCHRONIZE_TIMEOUT"
@@ -396,7 +398,10 @@ proc drmaa_check_single_threaded_part_03 { } {
       # -- tests with a <sleeper_job> argument repeatedly
       set test_scenario {}
       lappend test_scenario "ST_SUBMIT_NO_RUN_WAIT"
-      lappend test_scenario "ST_SUBMIT_SUSPEND_RESUME_WAIT"
+
+      if {[is_version_in_range "9.2.0"]} {
+         lappend test_scenario "ST_SUBMIT_SUSPEND_RESUME_WAIT"
+      }
       foreach st_test $test_scenario {
          set n 10
          ts_log_fine "starting single threaded test $st_test $n times each"
