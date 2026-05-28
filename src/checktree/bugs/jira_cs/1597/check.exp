@@ -87,6 +87,7 @@ proc issue_1597_get_spooled_load_names {host} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
 
+   set host [resolve_host $host 1]
    set names {}
 
    if {$ts_config(spooling_method) == "berkeleydb"} {
