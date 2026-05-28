@@ -62,8 +62,12 @@ set check_cleanup_function "execd_reconnect_cleanup"
 set check_functions "execd_reconnect_test"
 
 proc execd_reconnect_setup {} {
+   global execd_reconnect_cleanup_do_cleanup
    get_current_cluster_config_array ts_config
    global CHECK_INSTALL_RC
+
+   # set/initialize the variable otherwise cleanup will fail if test is never executed
+   set execd_reconnect_cleanup_do_cleanup 0
 
    if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
       # the test installs a act_qmaster file with a non resolvable hostname
