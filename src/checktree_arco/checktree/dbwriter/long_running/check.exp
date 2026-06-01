@@ -66,22 +66,19 @@ set check_cleanup_function "dbwriter_long_running_cleanup"
 
 # define test's procedure order
 # CS-2233 ships the scaffolding self-test (run level 0); CS-2241 adds the
-# Phase C check (run level 400); CS-2235 .. CS-2239 append the raw-data,
-# hourly/daily derived and deletion-rule phase functions here.
+# Phase C check, CS-2235 adds the Phase D raw-data check (both at run level
+# 400); CS-2236 .. CS-2239 append the hourly/daily derived and deletion-rule
+# phase functions here.
 set check_functions {}
 lappend check_functions "dbwriter_long_running_scaffolding"
 lappend check_functions "dbwriter_long_running_phase_c"
+lappend check_functions "dbwriter_long_running_phase_d"
 
 # source the shared scaffolding library (dbwriter_xml / db / dbwriter_long)
 # and the job-load generator (workload)
 global CHECK_ACTUAL_TEST_PATH
 ts_source "$CHECK_ACTUAL_TEST_PATH/dbwriter_long_lib"
 ts_source "$CHECK_ACTUAL_TEST_PATH/dbwriter_long_workload"
-
-# online_usage usage variables enabled for the test - used both when enabling
-# reporting and when asserting the online_usage fan-out
-global dbwriter_long_online_usage_vars
-set dbwriter_long_online_usage_vars {cpu mem maxvmem wallclock}
 
 # -------- setup / cleanup ------------------------------------------------------
 
@@ -112,6 +109,17 @@ set dbwriter_long_online_usage_vars {cpu mem maxvmem wallclock}
 proc dbwriter_long_running_setup {} {
    global dbwriter_long_config_backup
    global dbwriter_long_test_host
+   global dbwriter_long_online_usage_vars
+   global dbwriter_long_report_variables
+
+   # online_usage usage variables enabled for the test - used both when
+   # enabling reporting and when asserting the online_usage fan-out
+   set dbwriter_long_online_usage_vars {cpu mem maxvmem wallclock}
+
+   # host load variables Phase D expects in sge_host_values. The same list is
+   # written into report_variables on the global exec host when reporting is
+   # enabled.
+   set dbwriter_long_report_variables {cpu np_load_avg mem_free virtual_free}
 
    # back up the global configuration - the workload phases enable reporting
    get_config dbwriter_long_config_backup
@@ -188,6 +196,7 @@ proc dbwriter_long_running_setup {} {
 # @return 0
 proc dbwriter_long_running_cleanup {} {
    global dbwriter_long_config_backup
+   global dbwriter_long_exechost_backup
    global dbwriter_long_test_host
 
    db::disconnect
@@ -218,8 +227,22 @@ proc dbwriter_long_running_cleanup {} {
       unset dbwriter_long_config_backup
    }
 
+   # restore report_variables on the global exec host
+   if {[info exists dbwriter_long_exechost_backup]} {
+      set_exechost dbwriter_long_exechost_backup global
+      array unset dbwriter_long_exechost_backup
+   }
+
    # leave the database empty
    arco_clean_database
+
+   # drop every global variable this test introduces so a follow-up test in
+   # the same testsuite run starts from a clean slate
+   unset -nocomplain ::dbwriter_long_config_backup
+   unset -nocomplain ::dbwriter_long_exechost_backup
+   unset -nocomplain ::dbwriter_long_online_usage_vars
+   unset -nocomplain ::dbwriter_long_report_variables
+   unset -nocomplain ::dbwriter_long_test_host
 
    return 0
 }
@@ -321,13 +344,17 @@ proc dbwriter_long_running_scaffolding {} {
 #
 # Enables accounting, reporting, joblog, online_usage and consumable logging
 # with a short flush time, and shortens load_report_time so host load and
-# online_usage records accrue quickly. Called from dbwriter_long_running_setup;
-# the pre-test configuration was saved there and is restored by
-# dbwriter_long_running_cleanup.
+# online_usage records accrue quickly. Sets report_variables on the global
+# exec host so the load variables Phase D checks are written to the reporting
+# file. Called from dbwriter_long_running_setup; the pre-test cluster
+# configuration was saved there, and the previous report_variables value is
+# saved here. Both are restored by dbwriter_long_running_cleanup.
 #
 # @return 0 on success, else -1 (error reported via ts_log_severe)
 proc dbwriter_long_enable_reporting {} {
    global dbwriter_long_online_usage_vars
+   global dbwriter_long_report_variables
+   global dbwriter_long_exechost_backup
 
    # online_usage is a JSONL-only record type - the long-running test keeps
    # the qmaster on the default (JSONL) reporting format, so it is not changed
@@ -344,7 +371,25 @@ proc dbwriter_long_enable_reporting {} {
    set new(load_report_time) "00:00:15"
    set_config new
 
-   ts_log_fine "dbwriter long test: qmaster reporting enabled"
+   # configure host-level reporting of the raw load variables Phase D verifies.
+   # Save the previous report_variables value so cleanup can put it back; the
+   # value defaults to "NONE" on a freshly installed cluster but a preceding
+   # scenario may have left a different value.
+   if {[get_exechost global_host global] != 0} {
+      ts_log_severe "dbwriter long test: can not read the global exec host config"
+      return -1
+   }
+   set dbwriter_long_exechost_backup(report_variables) \
+      $global_host(report_variables)
+   set chgar(report_variables) [join $dbwriter_long_report_variables ","]
+   if {[set_exechost chgar global] != 0} {
+      ts_log_severe "dbwriter long test: can not set report_variables on the\
+                     global exec host"
+      return -1
+   }
+
+   ts_log_fine "dbwriter long test: qmaster reporting enabled (report_variables\
+                = $chgar(report_variables))"
    return 0
 }
 
@@ -541,5 +586,144 @@ proc dbwriter_long_running_phase_c {} {
    }
 
    ts_log_fine "dbwriter long test: Phase C passed"
+   return 0
+}
+
+# -------- Phase D: raw-data assertions -----------------------------------------
+
+##
+# @brief Poll the database until every report_variable has a host_values row.
+#
+# The execd sends a load report every load_report_time seconds and the dbwriter
+# imports it some seconds later, so an assertion immediately after Phase C may
+# race the first load report. This helper polls until every variable listed in
+# dbwriter_long_report_variables has at least one row in sge_host_values, or
+# the timeout expires. The actual assertion happens in the caller.
+#
+# Once a variable has been seen once, dbwriter only adds further rows for it;
+# the helper therefore stops re-querying variables it has already found.
+#
+# @param timeout seconds to wait before giving up
+proc dbwriter_long_phase_d_wait_for_host_values {timeout} {
+   global dbwriter_long_report_variables
+
+   set deadline [expr {[clock seconds] + $timeout}]
+   set missing $dbwriter_long_report_variables
+   while {[llength $missing] > 0} {
+      set still_missing {}
+      foreach var $missing {
+         if {[db::count "sge_host_values" "hv_variable = '$var'"] <= 0} {
+            lappend still_missing $var
+         }
+      }
+      set missing $still_missing
+      if {[llength $missing] == 0 || [clock seconds] >= $deadline} {
+         return
+      }
+      ts_log_fine "dbwriter long test: waiting for sge_host_values rows\
+                   (missing: $missing)"
+      sleep_for_seconds 15
+   }
+}
+
+##
+# @brief Assert the raw load and consumable value rows produced by the workload.
+#
+# Checks the raw-value tables the parent task lists for Phase D:
+#   - sge_host_values: one assertion per variable in
+#     dbwriter_long_report_variables (cpu, np_load_avg, mem_free, virtual_free)
+#     - each variable must have at least one row.
+#   - sge_queue_values: one assertion that the 'slots' consumable was reported.
+#   - sge_job, sge_job_request, sge_job_usage, sge_job_log, sge_job_online_usage:
+#     non-empty. Phase C asserts exact counts and a per-user breakdown for
+#     these tables; the non-emptiness assertion here is the per-table check the
+#     sub-task lists and guards against a regression that wipes a whole table
+#     between Phase C and Phase D.
+#
+# @return 0 if every assertion passes, else -1 (errors reported via ts_log_severe)
+proc dbwriter_long_phase_d_assert_raw_data {} {
+   global dbwriter_long_report_variables
+
+   if {[db::connect] != 0} {
+      return -1
+   }
+
+   # give the dbwriter time to import the first load reports - Phase C only
+   # waits for the accounting records, so a few load reports may still be in
+   # flight
+   dbwriter_long_phase_d_wait_for_host_values 300
+
+   set rc 0
+
+   # sge_host_values: one assertion per configured report variable
+   foreach var $dbwriter_long_report_variables {
+      set n [db::count "sge_host_values" "hv_variable = '$var'"]
+      if {$n <= 0} {
+         ts_log_severe "dbwriter long test: sge_host_values has no rows for\
+                        variable '$var' - check report_variables on the global\
+                        exec host and load_report_time in reporting_params"
+         set rc -1
+      } else {
+         ts_log_fine "dbwriter long test: sge_host_values has $n rows for $var"
+      }
+   }
+
+   # sge_queue_values: the 'slots' consumable, driven by log_consumables
+   set n [db::count "sge_queue_values" "qv_variable = 'slots'"]
+   if {$n <= 0} {
+      ts_log_severe "dbwriter long test: sge_queue_values has no rows for\
+                     variable 'slots' - check log_consumables in reporting_params"
+      set rc -1
+   } else {
+      ts_log_fine "dbwriter long test: sge_queue_values has $n rows for slots"
+   }
+
+   # job-related raw tables: non-emptiness guard. Phase C already asserts exact
+   # counts and per-user breakdowns, so any failure here is a regression that
+   # wiped a table after Phase C, not a missing record from the workload.
+   foreach table {sge_job sge_job_request sge_job_usage sge_job_log \
+                  sge_job_online_usage} {
+      set n [db::count $table]
+      if {$n <= 0} {
+         ts_log_severe "dbwriter long test: $table is empty after the first-hour\
+                        workload"
+         set rc -1
+      } else {
+         ts_log_fine "dbwriter long test: $table has $n rows"
+      }
+   }
+
+   db::disconnect
+   return $rc
+}
+
+##
+# @brief Phase D - assert the raw load, consumable and job value tables.
+#
+# Runs at check run level 400 after Phase C. Phase C submitted and finished
+# the first-hour deterministic workload, so by the time Phase D runs the
+# dbwriter has received load reports (load_report_time = 15s), consumable
+# reports (log_consumables = true) and per-job accounting and usage records.
+# Phase D asserts that the corresponding raw-value tables actually contain
+# rows.
+#
+# Acceptance (CS-2235): reverting any single reporting toggle - report_variables
+# on the exec host, log_consumables in reporting_params, or online_usage in
+# reporting_params - turns the matching assertion red with a useful message.
+#
+# @return 0 if Phase D passed, else -1 (errors reported via ts_log_severe)
+proc dbwriter_long_running_phase_d {} {
+   global CHECK_ACT_LEVEL
+
+   if {$CHECK_ACT_LEVEL != 400} {
+      return 0
+   }
+   ts_log_fine "dbwriter long test: Phase D - raw-data assertions"
+
+   if {[dbwriter_long_phase_d_assert_raw_data] != 0} {
+      return -1
+   }
+
+   ts_log_fine "dbwriter long test: Phase D passed"
    return 0
 }
