@@ -160,7 +160,8 @@ proc workload::setup_pe_queue {host} {
    variable pe_created
    variable queue_created
 
-   set pe_def(slots)              $config(pe_slots)
+   # allow to start multiple pe slots at a time
+   set pe_def(slots)              [expr $config(pe_slots) * 10]
    set pe_def(control_slaves)     "TRUE"
    set pe_def(allocation_rule)    "\$round_robin"
    # job_is_first_task TRUE: the master task counts as the job's first task, so
