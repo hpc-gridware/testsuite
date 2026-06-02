@@ -344,8 +344,8 @@ proc qrsh_forward_stdin {{add_opts ""}} {
 }
 
 proc qrsh_forward_stdin_pty {} {
-   if {![is_version_in_range "9.0.11"]} {
-      ts_log_fine "Skipping qrsh_forward_stdin_pty test for version < 9.0.11 due to known issue CS-17xx"
+   if {![is_version_in_range "9.1.2"]} {
+      ts_log_fine "Skipping qrsh_forward_stdin_pty test for version < 9.1.2 due to known issue CS-1759"
       return
    }
    qrsh_forward_stdin "-pty yes"
@@ -391,8 +391,8 @@ proc qrsh_pipe_stdin {{add_opts ""}} {
 }
 
 proc qrsh_pipe_stdin_pty {} {
-   if {![is_version_in_range "9.0.11"]} {
-      ts_log_fine "Skipping qrsh_pipe_stdin_pty test for version < 9.0.11 due to known issue CS-17xx"
+   if {![is_version_in_range "9.1.2"]} {
+      ts_log_fine "Skipping qrsh_pipe_stdin_pty test for version < 9.1.2 due to known issue CS-1759"
       return
    }
    qrsh_pipe_stdin "-pty yes"
