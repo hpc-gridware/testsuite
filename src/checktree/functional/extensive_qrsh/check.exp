@@ -233,6 +233,8 @@ proc extensive_qrsh_test {} {
       close_spawn_process $sp_id_map($spawn_id)
    }
 
+   # It may take a a second until all jobs have been reported as finished by all exec hosts.
+   wait_for_end_of_all_jobs 10 1 0
 
    # figure out last job id used by a qrsh job
    set job_id [submit_job "-b y sleep 0"]
