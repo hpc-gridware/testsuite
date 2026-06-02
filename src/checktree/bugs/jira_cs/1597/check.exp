@@ -25,6 +25,10 @@ global check_description
 global check_needs
 global check_functions
 global check_root_access_needs
+global check_version_range
+
+# Issue is fixed in 9.1.2 and higher.
+set check_version_range "9.1.2"
 
 # define test's name and run level descriptions
 set check_name            "issue_1597"
