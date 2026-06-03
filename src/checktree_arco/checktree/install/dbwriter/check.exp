@@ -52,8 +52,21 @@ lappend check_functions "arco_dbwriter_install"
 # here the tests begin ....
 
 proc arco_dbwriter_install {} {
-   global CHECK_USER CHECK_DEBUG_LEVEL CHECK_INSTALL_RC
-   global ts_config arco_config ts_host_config
+   global CHECK_TESTSUITE_INSTALL_MODE
+
+   if {$CHECK_TESTSUITE_INSTALL_MODE == "automatic"} {
+      return [arco_dbwriter_install_auto]
+   }
+   return [arco_dbwriter_install_manual]
+}
+
+# Steps shared by manual and automatic dbwriter installation: stop any
+# running dbwriter, sanity-check the install script, and stage the JDBC
+# driver next to dbwriter.jar on the install host. Returns 0 on success,
+# -1 on a setup failure that should abort the install.
+proc arco_dbwriter_install_prepare {} {
+   global CHECK_USER
+   global ts_config arco_config
 
    if {[get_dbwriter_status 0] == 0} {
       shutdown_dbwriter
@@ -79,6 +92,17 @@ proc arco_dbwriter_install {} {
             return -1
          }
       }
+   }
+   return 0
+}
+
+proc arco_dbwriter_install_manual {} {
+   global CHECK_USER CHECK_DEBUG_LEVEL CHECK_INSTALL_RC
+   global ts_config arco_config ts_host_config
+
+   set ret [arco_dbwriter_install_prepare]
+   if {$ret != 0} {
+      return $ret
    }
 
    set LICENSE_AGREEMENT            [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_LICENSE_AGREEMENT] ]
@@ -307,5 +331,118 @@ proc arco_dbwriter_install {} {
    close_spawn_process $id
 
    return $error_count
+}
+
+# Build the inst_dbwriter auto-install template content as a Tcl array in
+# the format expected by write_remote_file (index 0 = line count, indices
+# 1..N = lines). Values mirror the choices made by the manual install in
+# arco_dbwriter_install_manual.
+proc arco_dbwriter_build_autoinst_config {array_name} {
+   upvar $array_name data
+   global CHECK_INSTALL_RC
+   global ts_config arco_config
+
+   set db_type [get_database_type]
+
+   # DBWRITER_CALCULATION_FILE: same path the manual install would derive
+   switch -- $db_type {
+      "oracle"      { set calc_subdir "oracle" }
+      "mysql"       { set calc_subdir "mysql" }
+      default       { set calc_subdir "postgres" }
+   }
+
+   # DB_SCHEMA: queryDBSchema in inst_util.sh hard-codes "n/a" for MySQL
+   if {$db_type == "mysql"} {
+      set db_schema "n/a"
+   } else {
+      set db_schema [get_database_schema]
+   }
+
+   set java_home [arco_get_java_home $arco_config(dbwriter_host)]
+   if {$java_home == ""} {
+      ts_log_severe "didn't find a Java version >= 11 on host $arco_config(dbwriter_host)"
+      return -1
+   }
+
+   if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $arco_config(dbwriter_host)]} {
+      set add_to_rc "true"
+   } else {
+      set add_to_rc "false"
+   }
+
+   set lines [list]
+   lappend lines "SGE_ROOT=\"$ts_config(product_root)\""
+   lappend lines "CELL_NAME=\"$ts_config(cell)\""
+   lappend lines "JAVA_HOME=\"$java_home\""
+   lappend lines "DB_TYPE=\"$db_type\""
+   lappend lines "DB_HOST=\"[get_database_host]\""
+   lappend lines "DB_PORT=\"[get_database_port]\""
+   lappend lines "DB_NAME=\"[get_database_name]\""
+   lappend lines "DB_USER=\"[get_arco_write_user]\""
+   lappend lines "DB_PW=\"[get_arco_user_pwd]\""
+   lappend lines "READ_USER=\"[get_arco_read_user]\""
+   if {$db_type == "oracle"} {
+      # Oracle uses READ_USER_PW to create synonyms; same password as DB_USER
+      lappend lines "READ_USER_PW=\"[get_arco_user_pwd]\""
+   } else {
+      lappend lines "READ_USER_PW=\"\""
+   }
+   lappend lines "DB_SCHEMA=\"$db_schema\""
+   lappend lines "TABLESPACE=\"$arco_config(tablespace)\""
+   lappend lines "TABLESPACE_INDEX=\"$arco_config(tablespace_index)\""
+   lappend lines "DBWRITER_INTERVAL=\"$arco_config(arco_dbwriter_interval)\""
+   lappend lines "SPOOL_DIR=\"$ts_config(product_root)/$ts_config(cell)/spool/dbwriter\""
+   lappend lines "DBWRITER_CALCULATION_FILE=\"$ts_config(product_root)/dbwriter/database/$calc_subdir/dbwriter.xml\""
+   lappend lines "DBWRITER_REPORTING_FILE=\"$ts_config(product_root)/$ts_config(cell)/common/reporting.jsonl\""
+   lappend lines "DBWRITER_DEBUG=\"$arco_config(arco_dbwriter_debug_level)\""
+   lappend lines "ADD_TO_RC=\"$add_to_rc\""
+
+   set i 1
+   foreach line $lines {
+      set data($i) $line
+      incr i
+   }
+   set data(0) [llength $lines]
+   return 0
+}
+
+proc arco_dbwriter_install_auto {} {
+   global CHECK_USER
+   global ts_config arco_config
+
+   set ret [arco_dbwriter_install_prepare]
+   if {$ret != 0} {
+      return $ret
+   }
+
+   set conf_file "$ts_config(product_root)/dbwriter/autoinst_dbwriter_$ts_config(cell).conf"
+
+   if {[arco_dbwriter_build_autoinst_config conf_array] != 0} {
+      return -1
+   }
+
+   if {[write_remote_file $arco_config(dbwriter_host) $CHECK_USER $conf_file conf_array "600"] != 0} {
+      ts_log_severe "could not write dbwriter auto-installation config $conf_file on $arco_config(dbwriter_host)"
+      return -1
+   }
+
+   ts_log_fine "inst_dbwriter -auto $conf_file"
+   set my_timeout 600
+   set exit_val 0
+   set output [start_remote_prog $arco_config(dbwriter_host) "root" "./inst_dbwriter" "-auto $conf_file" exit_val $my_timeout 0 "$ts_config(product_root)/dbwriter"]
+
+   if {$exit_val != 0} {
+      ts_log_severe "inst_dbwriter -auto failed with exit code $exit_val\n$output"
+      return 1
+   }
+
+   if {[string first "Installation of dbwriter completed" $output] < 0} {
+      ts_log_severe "inst_dbwriter -auto did not report successful completion\n$output"
+      return 1
+   }
+
+   # Keep the autoinstall template for easier debugging.
+   # delete_remote_file $arco_config(dbwriter_host) "root" $conf_file
+   return 0
 }
 
