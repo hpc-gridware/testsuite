@@ -421,7 +421,10 @@ proc arco_dbwriter_install_auto {} {
       return -1
    }
 
-   if {[write_remote_file $arco_config(dbwriter_host) $CHECK_USER $conf_file conf_array "600"] != 0} {
+   # We write the file as the admin user,
+   # but inst_dbwriter.sh reading it will be started as root.
+   # Being root will not help on NFS, so make sure everybody can read it.
+   if {[write_remote_file $arco_config(dbwriter_host) $CHECK_USER $conf_file conf_array "644"] != 0} {
       ts_log_severe "could not write dbwriter auto-installation config $conf_file on $arco_config(dbwriter_host)"
       return -1
    }
