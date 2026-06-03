@@ -342,7 +342,8 @@ proc qstat_help {} {
    # in 6.2u5 there is an additional "-cb" line
    if {[ge_has_feature "binding-in-execd"]} {
       set qstat_help_lines 42
-   } elseif {[is_version_in_range "9.0.2" "9.2.0"] && [ge_has_feature "gcs"]} {
+   }
+   if {[is_version_in_range "9.0.2" "9.2.0"] && [ge_has_feature "gcs"]} {
       # in GCS 9.0.0 the -sdv switch was added
       set qstat_help_lines 43
    } elseif {[is_version_in_range "9.2.0"] && [ge_has_feature "gcs"]} {
