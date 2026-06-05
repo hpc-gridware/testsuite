@@ -54,7 +54,8 @@ lappend check_functions "arco_dbwriter_install"
 proc arco_dbwriter_install {} {
    global CHECK_TESTSUITE_INSTALL_MODE
 
-   if {$CHECK_TESTSUITE_INSTALL_MODE == "automatic"} {
+   # If we are doing automatic installation, use it if available (since 9.1.3)
+   if {$CHECK_TESTSUITE_INSTALL_MODE == "automatic" && [is_version_in_range "9.1.3"]} {
       return [arco_dbwriter_install_auto]
    }
    return [arco_dbwriter_install_manual]
