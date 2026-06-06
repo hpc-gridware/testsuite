@@ -27,9 +27,9 @@
 # deletion rules and a mixed multi-user workload, and verifies the resulting
 # ARCO database content.
 #
-# This file currently contains the shared scaffolding (CS-2233): the
-# setup/cleanup functions and a scaffolding self-test. The workload and the
-# per-phase assertions are added by the follow-up sub-tasks CS-2234 .. CS-2240.
+# This file currently contains the shared scaffolding (CS-2233), the
+# first-hour workload and Phase C / D / E assertions; the daily, deletion and
+# restart phases are added by the follow-up sub-tasks CS-2237 .. CS-2239.
 #
 # @see dbwriter_long_lib.tcl
 
@@ -66,13 +66,14 @@ set check_cleanup_function "dbwriter_long_running_cleanup"
 
 # define test's procedure order
 # CS-2233 ships the scaffolding self-test (run level 0); CS-2241 adds the
-# Phase C check, CS-2235 adds the Phase D raw-data check (both at run level
-# 400); CS-2236 .. CS-2239 append the hourly/daily derived and deletion-rule
-# phase functions here.
+# Phase C check, CS-2235 adds the Phase D raw-data check, CS-2236 adds the
+# Phase E hourly derived check (all at run level 400); CS-2237 .. CS-2239
+# append the daily derived and deletion-rule phase functions here.
 set check_functions {}
 lappend check_functions "dbwriter_long_running_scaffolding"
 lappend check_functions "dbwriter_long_running_phase_c"
 lappend check_functions "dbwriter_long_running_phase_d"
+lappend check_functions "dbwriter_long_running_phase_e"
 
 # source the shared scaffolding library (dbwriter_xml / db / dbwriter_long)
 # and the job-load generator (workload)
@@ -726,4 +727,330 @@ proc dbwriter_long_running_phase_d {} {
 
    ts_log_fine "dbwriter long test: Phase D passed"
    return 0
+}
+
+# -------- Phase E: hourly derived assertions (CS-2012 regression) --------------
+
+##
+# @brief Wait until the dbwriter has computed the hourly derived rules for
+# the just-finished clock hour.
+#
+# Hourly <derive> rules are not computed at the hour boundary itself: the
+# dbwriter's DerivedValueThread schedules the next pass at
+# nextTimestamp + 71 minutes (ReportingDBWriter.java:909), of which 60 minutes
+# is the hour itself and ~11 minutes is the late-record settle window
+# (getDerivedValues uses a delay of 10 minutes). So a closed hour [H, H+1) is
+# computed by the dbwriter at roughly H+1:11.
+#
+# Phase C ran the first-hour workload inside one clock hour and Phase C's
+# advance reservation may have spilled into the following hour, so Phase E
+# waits until the next hour boundary after entry plus the dbwriter's 11-minute
+# settle window plus a safety margin for the compute pass itself. After this
+# wait every hour bucket that received jobs is closed AND the dbwriter has
+# stored the corresponding h_* rows.
+#
+# @param timeout maximum seconds to wait (default 5400: one full hour plus the
+#                derived-value settle and compute margin)
+# @return 0 once the boundary plus settle window has passed, else -1
+proc dbwriter_long_phase_e_wait_for_hour_close {{timeout 5400}} {
+   # 11 minutes settle window + 4 minutes safety for the compute pass itself
+   set safety 900
+   set t_now [clock seconds]
+   # start of the next clock hour
+   set next_boundary [expr {(($t_now / 3600) + 1) * 3600}]
+   set target [expr {$next_boundary + $safety}]
+   set wait_secs [expr {$target - $t_now}]
+   if {$wait_secs > $timeout} {
+      ts_log_severe "dbwriter long test: Phase E needs to wait ${wait_secs}s\
+                     for the hour to close, exceeds timeout ${timeout}s"
+      return -1
+   }
+   ts_log_fine "dbwriter long test: Phase E - waiting ${wait_secs}s for the\
+                test hour to close (boundary at\
+                [clock format $next_boundary -format {%Y-%m-%d %H:%M:%S}],\
+                +${safety}s for the dbwriter 11-minute settle window and the\
+                derived-value compute pass)"
+   sleep_for_seconds $wait_secs
+   return 0
+}
+
+##
+# @brief Poll until a value table has rows for a given hourly variable.
+#
+# The dbwriter writes the h_* row some seconds after the hour boundary, so
+# Phase E polls each (table, variable) pair instead of reading the count once.
+#
+# @param table    one of the value tables (sge_host_values, ...)
+# @param prefix   the table's column prefix (hv, uv, pv, qv, sv)
+# @param variable the hourly derived variable name (h_cpu, h_load, ...)
+# @param timeout  seconds to wait before giving up
+# @return 0 once at least one row exists, else -1
+proc dbwriter_long_phase_e_wait_for_variable {table prefix variable timeout} {
+   set where "${prefix}_variable = '$variable'"
+   set deadline [expr {[clock seconds] + $timeout}]
+   while {1} {
+      set n [db::count $table $where]
+      if {$n > 0} {
+         ts_log_fine "dbwriter long test: $table has $n rows for $variable"
+         return 0
+      }
+      if {[clock seconds] >= $deadline} {
+         ts_log_severe "dbwriter long test: $table has no rows for variable\
+                        '$variable' within ${timeout}s"
+         return -1
+      }
+      ts_log_fine "dbwriter long test: waiting for $table.$variable"
+      sleep_for_seconds 15
+   }
+}
+
+##
+# @brief Assert every expected hourly derived variable has at least one row.
+#
+# The list mirrors the seven dbwriter.xml hourly <derive> rules:
+#   - sge_host_values:      h_cpu, h_load, h_jobs_finished
+#   - sge_queue_values:     h_utilized
+#   - sge_user_values:      h_jobs_finished
+#   - sge_project_values:   h_jobs_finished
+#   - sge_statistic_values: h_lines_per_second
+# Each pair is polled individually so the failure message names the variable
+# that did not appear.
+#
+# @return 0 if every variable has rows, else -1
+proc dbwriter_long_phase_e_assert_rows_exist {} {
+   set per_variable_timeout 600
+   set rc 0
+   foreach {table prefix variable} {
+      sge_host_values      hv h_cpu
+      sge_host_values      hv h_load
+      sge_host_values      hv h_jobs_finished
+      sge_queue_values     qv h_utilized
+      sge_user_values      uv h_jobs_finished
+      sge_project_values   pv h_jobs_finished
+      sge_statistic_values sv h_lines_per_second
+   } {
+      if {[dbwriter_long_phase_e_wait_for_variable \
+              $table $prefix $variable $per_variable_timeout] != 0} {
+         set rc -1
+      }
+   }
+   return $rc
+}
+
+##
+# @brief Assert that no value table has duplicate hourly rows (CS-2012).
+#
+# CS-2012 was an Oracle-only regression where the dbwriter wrote the same
+# derived value many times for the same (object, variable, time_start)
+# triple. Phase E runs the analogous duplicate-row check on every value
+# table and reports the offending rows on failure.
+#
+# @return 0 if every value table is duplicate-free, else -1
+proc dbwriter_long_phase_e_assert_no_duplicates {} {
+   set rc 0
+   foreach {table prefix} {
+      sge_host_values      hv
+      sge_user_values      uv
+      sge_project_values   pv
+      sge_queue_values     qv
+      sge_statistic_values sv
+   } {
+      set sql "SELECT ${prefix}_parent, ${prefix}_variable,\
+                      ${prefix}_time_start, COUNT(*)\
+               FROM $table\
+               WHERE ${prefix}_variable LIKE 'h\\_%' ESCAPE '\\'\
+               GROUP BY ${prefix}_parent, ${prefix}_variable,\
+                        ${prefix}_time_start\
+               HAVING COUNT(*) > 1"
+      array set result {}
+      set columns {}
+      set n_dups [db::query $sql result columns]
+      if {$n_dups < 0} {
+         ts_log_severe "dbwriter long test: duplicate-row check on $table failed\
+                        - query returned an error"
+         set rc -1
+         array unset result
+         continue
+      }
+      if {$n_dups > 0} {
+         ts_log_severe "dbwriter long test: $table has $n_dups (parent, variable,\
+                        time_start) triples with duplicate rows - CS-2012\
+                        regression"
+         set lim [expr {$n_dups > 5 ? 5 : $n_dups}]
+         for {set i 0} {$i < $lim} {incr i} {
+            ts_log_severe "   parent=$result($i,0) variable=$result($i,1)\
+                            time_start=$result($i,2) count=$result($i,3)"
+         }
+         set rc -1
+      } else {
+         ts_log_fine "dbwriter long test: $table has no duplicate hourly rows"
+      }
+      array unset result
+   }
+   return $rc
+}
+
+##
+# @brief Read a single non-negative integer from a SELECT.
+#
+# Helper for the consistency check: runs sql, expects exactly one row with
+# one numeric column, returns the value rounded to an integer. Returns -1 on
+# any failure so callers can treat negative as "error".
+#
+# @param sql the SELECT statement returning one row with one numeric column
+# @return the integer value, or -1 on error (reported via ts_log_severe)
+proc dbwriter_long_phase_e_scalar {sql} {
+   array set r {}
+   set cols {}
+   set n [db::query $sql r cols]
+   if {$n < 0} {
+      return -1
+   }
+   if {$n != 1} {
+      ts_log_severe "dbwriter long test: expected one scalar row, got $n: $sql"
+      return -1
+   }
+   if {![info exists r(0,0)] || $r(0,0) eq ""} {
+      ts_log_severe "dbwriter long test: scalar query returned empty value: $sql"
+      return -1
+   }
+   return [expr {round($r(0,0))}]
+}
+
+##
+# @brief Assert SUM(h_jobs_finished) matches the raw sge_job_usage count.
+#
+# Parent task acceptance: hourly SUM(h_jobs_finished) over a day equals raw
+# COUNT(*) from sge_job_usage for that user / host / project. Phase E checks
+# the equality across all stored hours (which equals "over a day" while only
+# the first-hour workload has run). h_jobs_finished filters on j_pe_taskid =
+# 'NONE' and on ju_exit_status != -1, so the raw count uses the same filter.
+#
+# The check is run per user (workload::users), then once across all hosts
+# (the workload runs on a single exec host) and once across all projects
+# (the workload runs under one project, workload::get_project_name).
+#
+# @return 0 if every scope is consistent, else -1
+proc dbwriter_long_phase_e_assert_jobs_finished_consistency {} {
+   set rc 0
+
+   # ---- per user --------------------------------------------------------------
+   foreach user [workload::users] {
+      set raw [dbwriter_long_phase_e_scalar \
+         "SELECT COUNT(*) FROM sge_job, sge_job_usage\
+          WHERE j_id = ju_parent AND j_owner = '$user'\
+          AND j_pe_taskid = 'NONE' AND ju_exit_status != -1"]
+      set der [dbwriter_long_phase_e_scalar \
+         "SELECT COALESCE(SUM(uv_dvalue), 0)\
+          FROM sge_user_values, sge_user\
+          WHERE uv_parent = u_id AND u_user = '$user'\
+          AND uv_variable = 'h_jobs_finished'"]
+      if {$raw < 0 || $der < 0} {
+         set rc -1
+         continue
+      }
+      if {$raw != $der} {
+         ts_log_severe "dbwriter long test: h_jobs_finished mismatch for user\
+                        $user: raw count=$raw, SUM(h_jobs_finished)=$der"
+         set rc -1
+      } else {
+         ts_log_fine "dbwriter long test: h_jobs_finished consistent for user\
+                      $user ($raw)"
+      }
+   }
+
+   # ---- per host: the workload runs on a single exec host, so the totals over
+   #      sge_host_values equal the totals over sge_job_usage
+   set raw [dbwriter_long_phase_e_scalar \
+      "SELECT COUNT(*) FROM sge_job, sge_job_usage\
+       WHERE j_id = ju_parent\
+       AND j_pe_taskid = 'NONE' AND ju_exit_status != -1"]
+   set der [dbwriter_long_phase_e_scalar \
+      "SELECT COALESCE(SUM(hv_dvalue), 0)\
+       FROM sge_host_values\
+       WHERE hv_variable = 'h_jobs_finished'"]
+   if {$raw < 0 || $der < 0} {
+      set rc -1
+   } elseif {$raw != $der} {
+      ts_log_severe "dbwriter long test: h_jobs_finished mismatch over hosts:\
+                     raw count=$raw, SUM(h_jobs_finished)=$der"
+      set rc -1
+   } else {
+      ts_log_fine "dbwriter long test: h_jobs_finished consistent over hosts\
+                   ($raw)"
+   }
+
+   # ---- per project: every workload job runs under the test project ----------
+   set project [workload::get_project_name]
+   set raw [dbwriter_long_phase_e_scalar \
+      "SELECT COUNT(*) FROM sge_job, sge_job_usage\
+       WHERE j_id = ju_parent AND j_project = '$project'\
+       AND j_pe_taskid = 'NONE' AND ju_exit_status != -1"]
+   set der [dbwriter_long_phase_e_scalar \
+      "SELECT COALESCE(SUM(pv_dvalue), 0)\
+       FROM sge_project_values, sge_project\
+       WHERE pv_parent = p_id AND p_project = '$project'\
+       AND pv_variable = 'h_jobs_finished'"]
+   if {$raw < 0 || $der < 0} {
+      set rc -1
+   } elseif {$raw != $der} {
+      ts_log_severe "dbwriter long test: h_jobs_finished mismatch for project\
+                     $project: raw count=$raw, SUM(h_jobs_finished)=$der"
+      set rc -1
+   } else {
+      ts_log_fine "dbwriter long test: h_jobs_finished consistent for project\
+                   $project ($raw)"
+   }
+
+   return $rc
+}
+
+##
+# @brief Phase E - assert the hourly derived rules each fired exactly once.
+#
+# Runs at check run level 400 after Phase D. The first clock hour the workload
+# ran in must already be closed; this proc waits for that boundary, then:
+#   - asserts every expected h_* variable has at least one row,
+#   - asserts the CS-2012 regression: no value table has duplicate
+#     (parent, variable, time_start) triples,
+#   - asserts that for every user / host / project the hourly SUM of
+#     h_jobs_finished equals the raw COUNT(*) from sge_job_usage filtered to
+#     non-PE-task records that ended successfully.
+#
+# Acceptance (CS-2236): passes on master; reverting the CS-2012 fix turns the
+# duplicate-row assertion red with a useful message.
+#
+# @return 0 if Phase E passed, else -1 (errors reported via ts_log_severe)
+proc dbwriter_long_running_phase_e {} {
+   global CHECK_ACT_LEVEL
+
+   if {$CHECK_ACT_LEVEL != 400} {
+      return 0
+   }
+   ts_log_fine "dbwriter long test: Phase E - hourly derived assertions"
+
+   if {[dbwriter_long_phase_e_wait_for_hour_close] != 0} {
+      return -1
+   }
+
+   if {[db::connect] != 0} {
+      return -1
+   }
+
+   set rc 0
+   if {[dbwriter_long_phase_e_assert_rows_exist] != 0} {
+      set rc -1
+   }
+   if {[dbwriter_long_phase_e_assert_no_duplicates] != 0} {
+      set rc -1
+   }
+   if {[dbwriter_long_phase_e_assert_jobs_finished_consistency] != 0} {
+      set rc -1
+   }
+
+   db::disconnect
+   if {$rc == 0} {
+      ts_log_fine "dbwriter long test: Phase E passed"
+   }
+   return $rc
 }

@@ -69,6 +69,7 @@ namespace eval workload {
    variable queue_created 0    ;# 1 once setup_pe_queue created the queue
    variable project_created 0  ;# 1 once setup_project created the project
    variable background_jobs {} ;# job ids of the started pminiworm chains
+   variable first_hour_epoch 0 ;# clock seconds the first-hour workload started
 }
 
 ##
@@ -80,6 +81,29 @@ proc workload::users {} {
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
    return [list "root" $CHECK_USER \
                 $CHECK_FIRST_FOREIGN_SYSTEM_USER $CHECK_SECOND_FOREIGN_SYSTEM_USER]
+}
+
+##
+# @brief Epoch second when the first-hour workload started.
+#
+# Set by workload::run_first_hour after the hour-alignment wait. Read by the
+# follow-up phase assertions (Phase E, Phase F) to know which clock hour and
+# clock day the deterministic workload was active in.
+#
+# @return the start time of the first-hour workload as clock seconds, or 0
+#         if run_first_hour has not run yet
+proc workload::get_first_hour_epoch {} {
+   variable first_hour_epoch
+   return $first_hour_epoch
+}
+
+##
+# @brief Name of the project the workload jobs run under.
+#
+# @return the project name (used by per-project assertions)
+proc workload::get_project_name {} {
+   variable config
+   return $config(project_name)
 }
 
 ##
@@ -427,6 +451,7 @@ proc workload::wait_for_test_hour {needed_seconds} {
 # @return 0 on success, else -1 (error reported via ts_log_severe)
 proc workload::run_first_hour {host} {
    variable config
+   variable first_hour_epoch
 
    if {[workload::verify_users] != 0} {
       return -1
@@ -436,6 +461,7 @@ proc workload::run_first_hour {host} {
    }
 
    set hour_start [clock seconds]
+   set first_hour_epoch $hour_start
    set all_jobs {}
    foreach user [workload::users] {
       set ids [workload::submit_user_jobs $user $host]
