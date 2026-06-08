@@ -1,0 +1,297 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** system_tests/scheduler/sharetree_usage_booking *****************************
+#  NAME
+#     sharetree_usage_booking -- verify UU_/PR_/UPP_ usage after job finish
+#
+#  FUNCTION
+#     Asserts that sharetree booking targets the correct leaf for each
+#     finished job, based on the job's (user, project) tuple:
+#
+#       * a job without -P is booked into UU_usage on the user object
+#         (visible at the /CHECK_USER node). PR_usage and UPP_usage
+#         stay zero.
+#       * a job with -P is booked into PR_usage on the project and into
+#         UPP_usage on user.UU_project[project] (visible at /project and
+#         /project/CHECK_USER). UU_usage is NOT summed into - the per-
+#         finish decay does decay it (negligibly, with halftime = 7200),
+#         but no new usage is added.
+#
+#     This per-leaf-of-(user, project) routing is implemented in
+#     source/libs/sgeobj/ocs_Usage.cc decay_and_sum_usage: when a job
+#     has both user and project, user_usage_list aliases to UPP_usage
+#     (lines 264-302); UU_usage is reached only when project is null.
+#
+#     The test runs:
+#       1. one user-only finish - asserts UU_ > 0, PR_/UPP_ stay 0
+#       2. one project finish   - asserts UU_ stays ~ unchanged,
+#                                         PR_/UPP_ become > 0
+#       3. two more project finishes - asserts UU_ still ~ unchanged
+#                                              and PR_/UPP_ have grown
+#                                              to >= 1.8 * the after-
+#                                              one-project-finish value
+#                                              (sum-not-decay invariant,
+#                                              with halftime = 7200 s
+#                                              the decay over the test
+#                                              runtime is negligible).
+#
+#     The usage values are read via sge_share_mon, which exposes
+#       cpu/mem/io from UU_usage  on user nodes (top-level user leaf),
+#       cpu/mem/io from PR_usage  on project nodes (top-level project),
+#       cpu/mem/io from UPP_usage on a user-under-project leaf.
+#     See source/libs/sched/sge_sharetree_printing.cc print_node()
+#     lines 252-270 for the per-node usage source.
+#
+#  BACKGROUND
+#     This test was added as part of CS-1239 to pin the per-finish
+#     usage-value invariant before usage and decay handling moves out
+#     of the scheduler thread into the worker threads (sum) and the
+#     Timed Event Thread (decay). It must pass on both the unmodified
+#     tree and the refactored tree.
+#***********************************************************************************
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+
+set check_root_access_needs "yes"
+
+set check_name              "sharetree_usage_booking"
+set check_category          "SCHEDULER SHARETREE VERIFIED"
+set check_description(0)    "verify UU_/PR_/UPP_ usage values after job finish"
+
+set check_needs             "init_core_system"
+
+set check_setup_function    sharetree_usage_booking_setup
+set check_cleanup_function  sharetree_usage_booking_cleanup
+
+set check_functions {}
+lappend check_functions "usage_booked_after_finish"
+
+# -------- setup / cleanup ---------------------------------------------------------
+
+proc sharetree_usage_booking_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_PRODUCT_TYPE CHECK_USER
+   global sharetree_usage_booking_old_config
+   global sharetree_usage_booking_project
+
+   if {$CHECK_PRODUCT_TYPE ne "sgeee"} {
+      ts_log_config "test requires sgeee mode"
+      return 99
+   }
+
+   set sharetree_usage_booking_project "usage_booking.prj"
+
+   # Global config:
+   #   STREE_SPOOL_INTERVAL=1     spool the share tree promptly
+   #   SHARETREE_RESERVED_USAGE   execd reports reserved usage so a short
+   #                              sleeper produces measurable cpu credit
+   get_config sharetree_usage_booking_old_config
+   add_or_replace_array_param mc sharetree_usage_booking_old_config "qmaster_params" "STREE_SPOOL_INTERVAL" "1"
+   add_or_replace_array_param mc mc "execd_params"   "SHARETREE_RESERVED_USAGE" "true"
+   set_config mc
+
+   # Scheduler config:
+   #   weight_tickets_share > 0   enables sharetree booking
+   #   halftime 7200              7200 *hours* (~ 300 days) - the unit is
+   #                              hours, not seconds, so this makes decay
+   #                              over the few tens of seconds the test
+   #                              runs in completely negligible
+   #   usage_weight_list cpu=1    cpu is the only signal we observe
+   #   schedule_interval long     we drive scheduling via trigger_scheduling
+   # flush_submit_sec / flush_finish_sec are left at their default of 1
+   # (immediate flush); 0 would *disable* flushing.
+   set new_schedd(weight_tickets_share)      "10000"
+   set new_schedd(weight_tickets_functional) "0"
+   set new_schedd(usage_weight_list)         "cpu=1,mem=0,io=0"
+   set new_schedd(halftime)                  "7200"
+   set new_schedd(schedule_interval)         "0:5:0"
+   set_schedd_config new_schedd
+
+   add_project $sharetree_usage_booking_project
+
+   # Build a sharetree that materialises all three leaves we want to
+   # observe (UU_, PR_ and UPP_ via the user-under-project leaf).
+   del_sharetree
+   stree_buffer_init stree
+   stree_buffer_add_node stree "/$CHECK_USER" 100
+   stree_buffer_add_node stree "/$sharetree_usage_booking_project" 100
+   stree_buffer_add_node stree "/$sharetree_usage_booking_project/$CHECK_USER" 100
+   stree_buffer_commit stree
+}
+
+proc sharetree_usage_booking_cleanup {} {
+   global sharetree_usage_booking_old_config
+   global sharetree_usage_booking_project
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   del_sharetree
+   del_project $sharetree_usage_booking_project
+
+   reset_schedd_config
+   reset_config sharetree_usage_booking_old_config
+
+   unset -nocomplain sharetree_usage_booking_old_config
+   unset -nocomplain sharetree_usage_booking_project
+}
+
+# -------- helpers -----------------------------------------------------------------
+
+#****** sharetree_usage_booking/sharetree_usage_booking_cpu() *********************
+# Read sge_share_mon and return the cpu field for one sharetree node.
+#**********************************************************************************
+proc sharetree_usage_booking_cpu {node} {
+   sge_share_mon st
+   if {[lsearch -exact $st(index) $node] < 0} {
+      ts_log_severe "node $node not present in sge_share_mon output"
+      return 0
+   }
+   return $st($node,cpu)
+}
+
+#****** sharetree_usage_booking/sharetree_usage_booking_run_one() *****************
+# Submit one short sleeper, optionally with -P project, and wait until it
+# has fully ended and the finish has been processed.
+#**********************************************************************************
+proc sharetree_usage_booking_run_one {{project ""}} {
+   get_current_cluster_config_array ts_config
+
+   set args "-e /dev/null -o /dev/null"
+   if {$project ne ""} {
+      append args " -P $project"
+   }
+   append args " $ts_config(product_root)/examples/jobs/sleeper.sh 10"
+
+   set job_id [submit_job $args]
+   if {$job_id <= 0} {
+      return -1
+   }
+   if {[wait_for_jobend $job_id "" 120 0 1] != 0} {
+      return -1
+   }
+   # On the pre-CS-1239 tree the booking happens at the start of the next
+   # scheduling run; on the refactored tree the worker thread books
+   # immediately. Drive a scheduling run and give it a moment to settle.
+   trigger_scheduling
+   sleep_for_seconds 5 "waiting for usage to be booked into sharetree"
+   return 0
+}
+
+# -------- check function ----------------------------------------------------------
+
+proc usage_booked_after_finish {} {
+   global CHECK_USER
+   global sharetree_usage_booking_project
+
+   set user_node    "/$CHECK_USER"
+   set project_node "/$sharetree_usage_booking_project"
+   set upp_node     "/$sharetree_usage_booking_project/$CHECK_USER"
+
+   # 1. start from a known-zero baseline.
+   start_sge_bin "qconf" "-clearusage"
+   trigger_scheduling
+   sleep_for_seconds 3 "waiting for cleared usage to settle"
+
+   set u0  [sharetree_usage_booking_cpu $user_node]
+   set p0  [sharetree_usage_booking_cpu $project_node]
+   set up0 [sharetree_usage_booking_cpu $upp_node]
+   if {$u0 != 0 || $p0 != 0 || $up0 != 0} {
+      ts_log_severe "baseline non-zero after qconf -clearusage: u=$u0 p=$p0 upp=$up0"
+      return
+   }
+
+   # 2. user-only finish: usage is booked into UU_ on /CHECK_USER only.
+   # PR_ on /project and UPP_ on /project/CHECK_USER must stay at 0 -
+   # no job claimed the project, so its objects must not be touched.
+   if {[sharetree_usage_booking_run_one] != 0} {
+      return
+   }
+   set u1  [sharetree_usage_booking_cpu $user_node]
+   set p1  [sharetree_usage_booking_cpu $project_node]
+   set up1 [sharetree_usage_booking_cpu $upp_node]
+   ts_log_fine "after user-only finish: u=$u1 p=$p1 upp=$up1"
+   if {$u1 <= 0} {
+      ts_log_severe "expected UU_ on /CHECK_USER > 0 after user-only finish, got $u1"
+   }
+   if {$p1 != 0} {
+      ts_log_severe "expected PR_ on /project == 0 after user-only finish, got $p1: PR_ was touched by a job that did not request the project"
+   }
+   if {$up1 != 0} {
+      ts_log_severe "expected UPP_ on /project/CHECK_USER == 0 after user-only finish, got $up1: UPP_ was touched by a job that did not request the project"
+   }
+
+   # 3. first project finish: usage is booked into PR_ on /project and
+   # UPP_ on /project/CHECK_USER (the user.UU_project[project] sub-list).
+   # UU_ on /CHECK_USER is NOT summed into - decay_and_sum_usage aliases
+   # user_usage_list to UPP_ when project is set. UU_ does get the
+   # halftime-driven decay applied each time, but at halftime = 7200 s
+   # over ~ 30 s elapsed the decrease is negligible (~ 0.3 %).
+   if {[sharetree_usage_booking_run_one $sharetree_usage_booking_project] != 0} {
+      return
+   }
+   set u2  [sharetree_usage_booking_cpu $user_node]
+   set p2  [sharetree_usage_booking_cpu $project_node]
+   set up2 [sharetree_usage_booking_cpu $upp_node]
+   ts_log_fine "after first project finish: u=$u2 p=$p2 upp=$up2"
+   if {$u2 > $u1 * 1.05} {
+      ts_log_severe "expected UU_ on /CHECK_USER to stay ~$u1 after project finish, got $u2: UU_ was bumped by a job that requested the project (sum should have gone to UPP_)"
+   }
+   if {$p2 <= 0} {
+      ts_log_severe "expected PR_ on /project > 0 after project finish, got $p2"
+   }
+   if {$up2 <= 0} {
+      ts_log_severe "expected UPP_ on /project/CHECK_USER > 0 after project finish, got $up2"
+   }
+
+   # 4. two more project finishes - sum-not-decay invariant on PR_ and UPP_.
+   # With halftime = 7200 s and ~ 60 s between p2 and p4, decay between
+   # samples is < 1 %. After 3 project jobs total, p4 ~= 3 * p2 and
+   # up4 ~= 3 * up2. The threshold "1.8 * p2" rules out a broken
+   # implementation that would collapse to "last job only" (~= p2).
+   # UU_ must still not be summed into.
+   if {[sharetree_usage_booking_run_one $sharetree_usage_booking_project] != 0} {
+      return
+   }
+   if {[sharetree_usage_booking_run_one $sharetree_usage_booking_project] != 0} {
+      return
+   }
+   set u4  [sharetree_usage_booking_cpu $user_node]
+   set p4  [sharetree_usage_booking_cpu $project_node]
+   set up4 [sharetree_usage_booking_cpu $upp_node]
+   ts_log_fine "after third project finish: u=$u4 p=$p4 upp=$up4"
+   if {$u4 > $u1 * 1.05} {
+      ts_log_severe "expected UU_ on /CHECK_USER to stay ~$u1 after more project finishes, got $u4"
+   }
+   set p_floor  [expr {$p2  * 1.8}]
+   set up_floor [expr {$up2 * 1.8}]
+   if {$p4 < $p_floor} {
+      ts_log_severe "expected PR_ to be summed (not decayed): p2=$p2, p4=$p4, expected p4 >= $p_floor"
+   }
+   if {$up4 < $up_floor} {
+      ts_log_severe "expected UPP_ to be summed (not decayed): up2=$up2, up4=$up4, expected up4 >= $up_floor"
+   }
+}
