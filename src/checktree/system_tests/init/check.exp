@@ -88,7 +88,7 @@ proc init_system_test {host service} {
    ts_log_fine "testing systemd service $service_name on $host"
 
    if {$ret} {
-      set output [start_remote_prog $host "root" "systemctl" "status $service_name" prg_exit_state 60 0 "" "" 1 0]
+      set output [start_remote_prog $host "root" "systemctl" "--no-pager status $service_name" prg_exit_state 60 0 "" "" 1 0]
       ts_log_fine $output
       if {$prg_exit_state != 0} {
          lappend errors "systemctl status $service_name failed: $output: $output"

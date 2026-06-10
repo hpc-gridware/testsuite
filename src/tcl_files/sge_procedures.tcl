@@ -11036,7 +11036,7 @@ proc remove_from_init_system {host} {
       foreach service $services {
          set service_name [systemd_get_service_name $service]
          ts_log_fine "   -> $service_name"
-         set output [start_remote_prog $host "root" "systemctl" "status $service_name"]
+         set output [start_remote_prog $host "root" "systemctl" "--no-pager status $service_name"]
          ts_log_finer $output
          # 0 program is running or service is OK
          # 1 program is dead and /var/run pid file exists
