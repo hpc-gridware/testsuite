@@ -54,22 +54,32 @@ namespace eval workload {
       job_h_rt               600
       pe_slots               2
       pe_name                "dbwriter_long.pe"
+      pe_name_summary        "dbwriter_long_summary.pe"
       queue_name             "dbwriter_long.q"
+      queue_slots            32
       project_name           "dbwriter_long.prj"
       first_hour_budget      900
       hour_margin            15
       submit_retries         3
       worms_per_user         2
-      worm_sleep             120
+      worm_sleep             30
       worm_max_index         6000
-      ar_duration            7200
+      ar_duration                  7200
+      long_hours_past_midnight2    2
+      long_h_rt_grace              7200
+      long_array_tasks             3
+      long_pe_array_tasks          2
    }
 
-   variable pe_created 0       ;# 1 once setup_pe_queue created the PE
-   variable queue_created 0    ;# 1 once setup_pe_queue created the queue
-   variable project_created 0  ;# 1 once setup_project created the project
-   variable background_jobs {} ;# job ids of the started pminiworm chains
-   variable first_hour_epoch 0 ;# clock seconds the first-hour workload started
+   variable pe_created 0         ;# 1 once setup_pe_queue created the per-task PE
+   variable pe_summary_created 0 ;# 1 once setup_pe_queue created the summary PE
+   variable queue_created 0      ;# 1 once setup_pe_queue created the queue
+   variable project_created 0    ;# 1 once setup_project created the project
+   variable background_jobs {}   ;# job ids of the started pminiworm chains
+   variable first_hour_epoch 0   ;# clock seconds the first-hour workload started
+   variable long_running_jobs    ;# array, keyed by kind, of long-running job descriptors
+   array set long_running_jobs {}
+   variable long_target_end 0    ;# epoch the long-running jobs should finish at
 }
 
 ##
@@ -171,69 +181,90 @@ proc workload::expected_job_rows_per_user {} {
 }
 
 ##
-# @brief Create the parallel environment and queue for the tightly-coupled jobs.
+# @brief Create the parallel environments and queue for the tightly-coupled jobs.
 #
-# Creates a PE with control_slaves TRUE (tight integration) and a cluster
-# queue referencing it. Remembers what it created so cleanup_pe_queue can
-# remove exactly those objects.
+# Creates two PEs and a cluster queue across the given exec hosts:
+#   - pe_name        with accounting_summary FALSE (one accounting record per pe-task)
+#   - pe_name_summary with accounting_summary TRUE  (one summary record per job)
+# Both PEs are tightly integrated (control_slaves TRUE, job_is_first_task TRUE)
+# and added to the queue's pe_list. Remembers what it created so cleanup_pe_queue
+# can remove exactly those objects.
 #
-# @param host the host the queue is created on
+# @param hosts list of exec hosts the queue is created on
 # @return 0 on success, else -1 (error reported via ts_log_severe)
-proc workload::setup_pe_queue {host} {
+proc workload::setup_pe_queue {hosts} {
    variable config
    variable pe_created
+   variable pe_summary_created
    variable queue_created
 
-   # allow to start multiple pe slots at a time
-   set pe_def(slots)              [expr $config(pe_slots) * 10]
+   # base PE definition shared by the summary and per-task PEs
+   set pe_def(slots)              [expr {$config(pe_slots) * 10}]
    set pe_def(control_slaves)     "TRUE"
    set pe_def(allocation_rule)    "\$round_robin"
    # job_is_first_task TRUE: the master task counts as the job's first task, so
    # a PE job has exactly pe_slots tasks (the master plus the pe tasks)
    set pe_def(job_is_first_task)  "TRUE"
-   # accounting_summary FALSE: every task is reported and accounted on its own,
-   # so the dbwriter writes an individual record per task
-   set pe_def(accounting_summary) "FALSE"
    set pe_def(start_proc_args)    "NONE"
    set pe_def(stop_proc_args)     "NONE"
    set pe_def(user_lists)         "NONE"
    set pe_def(xuser_lists)        "NONE"
+
+   # per-task PE: every pe-task is reported and accounted on its own, so the
+   # dbwriter writes an individual record per task
+   set pe_def(accounting_summary) "FALSE"
    if {[add_pe $config(pe_name) pe_def] != 0} {
       ts_log_severe "workload: can not create PE $config(pe_name)"
       return -1
    }
    set pe_created 1
 
-   set q_def(slots)   [expr {$config(pe_slots) * 2}]
-   set q_def(pe_list) $config(pe_name)
-   if {[add_queue $config(queue_name) $host q_def] != 0} {
+   # summary PE: the master task aggregates the slave tasks' usage and the
+   # dbwriter writes one accounting record per job (or per array task)
+   set pe_def(accounting_summary) "TRUE"
+   if {[add_pe $config(pe_name_summary) pe_def] != 0} {
+      ts_log_severe "workload: can not create PE $config(pe_name_summary)"
+      return -1
+   }
+   set pe_summary_created 1
+
+   set q_def(slots)   $config(queue_slots)
+   set q_def(pe_list) "$config(pe_name) $config(pe_name_summary)"
+   if {[add_queue $config(queue_name) $hosts q_def] != 0} {
       ts_log_severe "workload: can not create queue $config(queue_name)"
       return -1
    }
    set queue_created 1
 
-   ts_log_fine "workload: created PE $config(pe_name) and queue $config(queue_name)"
+   ts_log_fine "workload: created PEs $config(pe_name) and\
+                $config(pe_name_summary), queue $config(queue_name) on\
+                [llength $hosts] host(s)"
    return 0
 }
 
 ##
-# @brief Remove the parallel environment and queue created by setup_pe_queue.
+# @brief Remove the parallel environments and queue created by setup_pe_queue.
 #
 # Idempotent - only removes objects setup_pe_queue actually created.
 #
-# @param host the host the queue was created on
-proc workload::cleanup_pe_queue {host} {
+# @param hosts list of exec hosts the queue was created on
+proc workload::cleanup_pe_queue {hosts} {
    variable config
    variable pe_created
+   variable pe_summary_created
    variable queue_created
 
    if {$queue_created} {
-      del_queue $config(queue_name) $host 0 1
+      del_queue $config(queue_name) $hosts 0 1
       set queue_created 0
    }
    if {$pe_created} {
       del_pe $config(pe_name)
       set pe_created 0
+   }
+   if {$pe_summary_created} {
+      del_pe $config(pe_name_summary)
+      set pe_summary_created 0
    }
 }
 
@@ -548,6 +579,12 @@ proc workload::delete_ar_reservation {ar_id} {
 # so an aborted test does not leave it resubmitting forever; workload::stop_-
 # background_load ends it earlier.
 #
+# The worms run in all.q so they do not compete with the workload jobs in
+# dbwriter_long.q. The trailing "-- -q all.q" tells pminiworm.sh to pass
+# "-q all.q" to every internal qsub (pminiworm.sh propagates everything after
+# "--" to the qsub it uses to respawn itself); the outer "-q all.q" places
+# the first generation in all.q as well.
+#
 # @return 0 once the background load has been started
 proc workload::start_background_load {} {
    variable config
@@ -555,19 +592,21 @@ proc workload::start_background_load {} {
    get_current_cluster_config_array ts_config
 
    set worm "$ts_config(testsuite_root_dir)/scripts/pminiworm.sh"
-   set worm_args "-s $config(worm_sleep) -i 1 -m $config(worm_max_index) -e $worm"
+   set worm_args "-s $config(worm_sleep) -i 1 -m $config(worm_max_index)\
+                  -e $worm -- -q all.q"
    set background_jobs {}
 
    foreach user [workload::users] {
       for {set i 0} {$i < $config(worms_per_user)} {incr i} {
          set jid [workload::submit_retry \
-            "-o /dev/null -e /dev/null $worm $worm_args" $user]
+            "-q all.q -o /dev/null -e /dev/null $worm $worm_args" $user]
          if {$jid > 0} {
             lappend background_jobs $jid
          }
       }
    }
-   ts_log_fine "workload: background load started ([llength $background_jobs] worms)"
+   ts_log_fine "workload: background load started ([llength $background_jobs]\
+                worms in all.q)"
    return 0
 }
 
@@ -585,4 +624,204 @@ proc workload::stop_background_load {} {
       wait_for_end_of_all_jobs 120
    }
    set background_jobs {}
+}
+
+##
+# @brief Submit the six long-running jobs used by Phase F.
+#
+# Each job is a long sleeper submitted as CHECK_USER into dbwriter_long.q.
+# Together they cover the per-accounting-record shapes the dbwriter has to
+# handle:
+#   - seq:   one sequential job          -> 1 final accounting record
+#   - arr:   one array job, 3 tasks      -> 3 final records (one per task)
+#   - pe_ns: one PE job (summary FALSE)  -> pe_slots records (one per pe-task)
+#   - pe_s:  one PE job (summary TRUE)   -> 1 final record
+#   - pa_ns: PE array (summary FALSE)    -> tasks * pe_slots final records
+#   - pa_s:  PE array (summary TRUE)     -> tasks final records (one per task)
+# At every midnight the job spans the qmaster writes one intermediate
+# accounting record per final-record shape (ju_exit_status = -1), so the jobs
+# need to be sized so they straddle two midnights to produce two intermediate
+# records per shape.
+#
+# The runtime is computed so the jobs finish long_hours_past_midnight2 hours
+# after the second midnight following the current day - the second intermediate
+# accounting record is written in the 10-minute window after that midnight,
+# and the test waits for the jobs to finish naturally before running the qacct
+# match in block 3 of Phase F. h_rt is set above the computed runtime by
+# long_h_rt_grace so a scheduler dispatch delay does not let the qmaster kill
+# the job. long_target_end is stored for wait_for_long_running_finish.
+#
+# The submitted job IDs and the expected shape are stored in the
+# long_running_jobs array (keyed by kind) so the Phase F assertions can derive
+# the expected sge_job_usage row count per job.
+#
+# @param ref_epoch  Phase F reference epoch (the same value passed to
+#                   dbwriter_long_phase_f_wait_for_midnight). Used to derive
+#                   "midnight 2" so submit and wait agree on the boundary
+#                   even when ref_epoch and the actual submission instant
+#                   straddle a midnight.
+# @return 0 if every job was submitted, else -1 (error reported via ts_log_severe)
+proc workload::submit_long_running {ref_epoch} {
+   variable config
+   variable long_running_jobs
+   variable long_target_end
+   global CHECK_USER
+   get_current_cluster_config_array ts_config
+
+   array unset long_running_jobs
+   array set long_running_jobs {}
+
+   # Target end time: long_hours_past_midnight2 hours past the second midnight
+   # after ref_epoch's day. clock add ... day handles DST.
+   set day_str [clock format $ref_epoch -format "%Y-%m-%d"]
+   set day_start [clock scan "$day_str 00:00:00" -format "%Y-%m-%d %H:%M:%S"]
+   set midnight2 [clock add $day_start 2 day]
+   set long_target_end [expr {$midnight2 + $config(long_hours_past_midnight2) * 3600}]
+   set runtime [expr {$long_target_end - [clock seconds]}]
+   set h_rt    [expr {$runtime + $config(long_h_rt_grace)}]
+   ts_log_fine "workload: long-running jobs sized to end at\
+                [clock format $long_target_end -format {%Y-%m-%d %H:%M:%S}]\
+                (runtime ${runtime}s, h_rt ${h_rt}s)"
+
+   set sleeper "$ts_config(product_root)/examples/jobs/sleeper.sh"
+   set pe_job  "$ts_config(testsuite_root_dir)/scripts/pe_job.sh"
+   set pe_task "$ts_config(testsuite_root_dir)/scripts/pe_task.sh"
+   set req     "-l h_rt=$h_rt -q $config(queue_name)"
+   set arr_t   $config(long_array_tasks)
+   set pa_t    $config(long_pe_array_tasks)
+   set slots   $config(pe_slots)
+
+   # One entry per long-running job kind: {kind name flags summary tasks
+   # pe_slots}. The flags strings reference $config(pe_name) and $slots; these
+   # are substituted at [list ...] construction time, so the list must stay
+   # below the local-variable initialisation above and must NOT be moved into
+   # the foreach loop where each iteration would re-evaluate them.
+   set defs [list \
+      [list seq   "dbwl_long_seq"   "-N dbwl_long_seq"              0 1     1] \
+      [list arr   "dbwl_long_arr"   "-N dbwl_long_arr -t 1-$arr_t"  0 $arr_t 1] \
+      [list pe_ns "dbwl_long_pe_ns" "-N dbwl_long_pe_ns -pe $config(pe_name) $slots"          0 1     $slots] \
+      [list pe_s  "dbwl_long_pe_s"  "-N dbwl_long_pe_s -pe $config(pe_name_summary) $slots"   1 1     $slots] \
+      [list pa_ns "dbwl_long_pa_ns" "-N dbwl_long_pa_ns -t 1-$pa_t -pe $config(pe_name) $slots"          0 $pa_t $slots] \
+      [list pa_s  "dbwl_long_pa_s"  "-N dbwl_long_pa_s -t 1-$pa_t -pe $config(pe_name_summary) $slots"   1 $pa_t $slots] \
+   ]
+
+   foreach def $defs {
+      lassign $def kind name flags summary tasks pe_slots
+
+      # PE jobs run pe_job.sh which orchestrates the pe-task starts; non-PE
+      # jobs run sleeper.sh directly
+      if {[string match "pe_*" $kind] || [string match "pa_*" $kind]} {
+         set cmd "$pe_job $pe_task 1 $runtime"
+         set io  "-o /dev/null -j y"
+      } else {
+         set cmd "$sleeper $runtime"
+         set io  "-o /dev/null -e /dev/null"
+      }
+      set jid [workload::submit_retry "$flags $req $io $cmd" $CHECK_USER]
+      if {$jid <= 0} {
+         ts_log_severe "workload: can not submit long-running job $kind"
+         return -1
+      }
+      set long_running_jobs($kind) [list \
+         jid      $jid \
+         kind     $kind \
+         name     $name \
+         summary  $summary \
+         tasks    $tasks \
+         pe_slots $pe_slots]
+      ts_log_fine "workload: submitted long-running $kind (jid $jid, tasks\
+                   $tasks, pe_slots $pe_slots, summary $summary)"
+   }
+   return 0
+}
+
+##
+# @brief List the kinds of long-running jobs that have been submitted.
+#
+# @return a list of kind keys (seq, arr, pe_ns, pe_s, pa_ns, pa_s) - empty if
+#         submit_long_running has not run yet
+proc workload::get_long_running_kinds {} {
+   variable long_running_jobs
+   return [lsort [array names long_running_jobs]]
+}
+
+##
+# @brief Return the descriptor of one long-running job.
+#
+# @param kind the kind key (as returned by get_long_running_kinds)
+# @return a dict with keys jid, kind, name, summary, tasks, pe_slots; "" if no
+#         such kind was submitted
+proc workload::get_long_running_job {kind} {
+   variable long_running_jobs
+   if {![info exists long_running_jobs($kind)]} {
+      return ""
+   }
+   return $long_running_jobs($kind)
+}
+
+##
+# @brief Wait for every long-running job to finish.
+#
+# Polls qstat for the recorded job IDs at a low frequency (long-running jobs
+# are not finishing in seconds). Returns once every job has left the system or
+# the timeout has expired.
+#
+# @param timeout maximum seconds to wait. Default: (long_target_end - now) plus
+#                4 h grace - the jobs are sized to finish at long_target_end,
+#                so anything beyond that plus a few hours of scheduler hiccups
+#                and the qmaster's accounting flush is a hang. Falls back to
+#                4 h if long_target_end is not set (submit_long_running was
+#                skipped).
+# @return 0 if every long-running job has finished, else -1 on timeout
+proc workload::wait_for_long_running_finish {{timeout 0}} {
+   variable config
+   variable long_running_jobs
+   variable long_target_end
+
+   if {[array size long_running_jobs] == 0} {
+      return 0
+   }
+
+   if {$timeout <= 0} {
+      set grace 14400
+      if {$long_target_end > 0} {
+         set timeout [expr {$long_target_end - [clock seconds] + $grace}]
+      }
+      if {$timeout < $grace} {
+         set timeout $grace
+      }
+   }
+
+   set jids {}
+   foreach kind [array names long_running_jobs] {
+      set jd $long_running_jobs($kind)
+      lappend jids [dict get $jd jid]
+   }
+   ts_log_fine "workload: waiting up to ${timeout}s for long-running jobs:\
+                $jids"
+
+   set deadline [expr {[clock seconds] + $timeout}]
+   while {1} {
+      set still_running {}
+      foreach jid $jids {
+         # is_job_running returns 1/0 while the job is in qstat output
+         # (running / queued), -1 once the job has left the system
+         if {[is_job_running $jid ""] != -1} {
+            lappend still_running $jid
+         }
+      }
+      set jids $still_running
+      if {[llength $jids] == 0} {
+         ts_log_fine "workload: all long-running jobs have finished"
+         return 0
+      }
+      if {[clock seconds] >= $deadline} {
+         ts_log_severe "workload: long-running jobs did not finish within\
+                        ${timeout}s, still in system: $jids"
+         return -1
+      }
+      ts_log_fine "workload: [llength $jids] long-running job(s) still in\
+                   system, waiting"
+      sleep_for_seconds 300
+   }
 }

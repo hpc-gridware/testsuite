@@ -306,6 +306,51 @@ proc dbwriter_xml::get_delete_rule {scope {sub_scopes {}}} {
 }
 
 ##
+# @brief List every <derive> rule of a given interval.
+#
+# Parses the active dbwriter.xml and returns one descriptor per <derive> node
+# whose interval matches. Each descriptor is a list {object variable table
+# prefix} where table/prefix come from db::value_table_for_object. Rules with
+# an unknown object are skipped with a ts_log_severe so a typo in dbwriter.xml
+# is visible.
+#
+# Phase F's "all configured daily rules fired" (CS-2011) check and Phase E's
+# rule self-test both walk this list instead of a hard-coded variable set, so
+# a new derive rule added to dbwriter.xml is automatically covered.
+#
+# @param interval the interval to filter on ("hour" or "day")
+# @return a list of {object variable table prefix} descriptors, or "" on parse
+#         error (reported via ts_log_severe)
+proc dbwriter_xml::list_derive_rules {interval} {
+   set doc [dbwriter_xml::read]
+   if {$doc eq ""} {
+      return ""
+   }
+   set rules {}
+   foreach node [[$doc documentElement] selectNodes {//derive}] {
+      if {[$node getAttribute interval ""] ne $interval} {
+         continue
+      }
+      set object   [$node getAttribute object   ""]
+      set variable [$node getAttribute variable ""]
+      if {$object eq "" || $variable eq ""} {
+         continue
+      }
+      set tp [db::value_table_for_object $object]
+      if {$tp eq ""} {
+         ts_log_severe "dbwriter_xml: unknown <derive> object '$object' for\
+                        variable '$variable' - extend\
+                        db::value_table_for_object"
+         continue
+      }
+      lassign $tp table prefix
+      lappend rules [list $object $variable $table $prefix]
+   }
+   $doc delete
+   return $rules
+}
+
+##
 # @brief Set a deletion rule's retention.
 #
 # Sets the retention of the <delete> rule identified by scope and sub_scopes.
@@ -426,17 +471,97 @@ proc db::now {} {
 }
 
 ##
+# @brief Engine-specific "start of today" timestamp expression.
+#
+# Used by the Phase F CS-1948 assertion: rows with a d_* time_start >= this
+# value would belong to the current (still-open) day and must not exist.
+#
+# Postgres uses LOCALTIMESTAMP (not CURRENT_TIMESTAMP) so the resulting value
+# is a timestamp WITHOUT time zone, matching the type of the <pfx>_time_start
+# column. With a non-UTC server, comparing a timestamptz to a timestamp would
+# shift the boundary by the server's TimeZone offset and either miss real
+# CS-1948 rows or false-positive on legitimate ones.
+#
+# @return the SQL expression for today's day-bucket start on the configured engine
+proc db::today_start {} {
+   switch -- [get_database_type] {
+      postgresql -
+      postgres   {return "DATE_TRUNC('day', LOCALTIMESTAMP)"}
+      oracle     {return "TRUNC(SYSDATE)"}
+      mysql      {return "CURDATE()"}
+      default    {return "DATE_TRUNC('day', LOCALTIMESTAMP)"}
+   }
+}
+
+##
+# @brief The SQL expression for the latest ju_end_time the dbwriter's daily
+# derived rule is guaranteed to have seen, on the configured engine.
+#
+# The daily <derive> rule for day D fires at midnight of D+1 + ~11 min and
+# SUMs the hourly h_jobs_finished buckets that exist at that moment. The
+# hourly bucket for the last hour of D, hour [D 23:00, D+1 00:00), also
+# fires at midnight of D+1 + ~11 min - the two rules race. Under a heavy
+# ingest load, the daily rule frequently runs before the last-hour hourly
+# bucket has been written, so d_jobs_finished for day D systematically
+# omits that hour.
+#
+# Phase F therefore restricts the raw COUNT(*) it compares against
+# SUM(d_jobs_finished) to records whose ju_end_time predates the at-risk
+# hour by at least one hour. The second-to-last hour's hourly rule fires
+# at midnight - 1 h + 11 min, well before the daily rule, so its records
+# are reliably accounted for.
+#
+# @return the SQL expression for "today's day-bucket start, minus one hour"
+proc db::daily_rule_cutoff {} {
+   switch -- [get_database_type] {
+      postgresql -
+      postgres   {return "(DATE_TRUNC('day', LOCALTIMESTAMP) - INTERVAL '1 hour')"}
+      oracle     {return "(TRUNC(SYSDATE) - 1/24)"}
+      mysql      {return "DATE_SUB(CURDATE(), INTERVAL 1 HOUR)"}
+      default    {return "(DATE_TRUNC('day', LOCALTIMESTAMP) - INTERVAL '1 hour')"}
+   }
+}
+
+##
 # @brief Apply engine-specific SQL substitutions.
 #
 # Translates engine-neutral placeholders in sql to the dialect of the
-# configured database engine. Currently the only placeholder is __NOW__ (the
-# current timestamp); the proc is the single extension point for further
-# MySQL / PostgreSQL / Oracle differences as later phases need them.
+# configured database engine. The recognised placeholders are:
+#   - __NOW__               current timestamp (db::now)
+#   - __TODAY_START__       start of today's day-bucket (db::today_start)
+#   - __DAILY_RULE_CUTOFF__ start of today's day-bucket minus one hour
+#                           (db::daily_rule_cutoff) - see there for the
+#                           midnight-race rationale
+# This proc is the single extension point for further MySQL / PostgreSQL /
+# Oracle differences as later phases need them.
 #
 # @param sql the SQL string with engine-neutral placeholders
 # @return the adapted SQL string
 proc db::adapt {sql} {
-   return [string map [list __NOW__ [db::now]] $sql]
+   return [string map [list \
+      __NOW__               [db::now] \
+      __TODAY_START__       [db::today_start] \
+      __DAILY_RULE_CUTOFF__ [db::daily_rule_cutoff]] $sql]
+}
+
+##
+# @brief The value table and column prefix for a dbwriter derive-rule object.
+#
+# Maps the object attribute of a <derive> rule in dbwriter.xml (host, user,
+# project, queue, statistic) to the value table the dbwriter writes to and
+# the prefix every column of that table uses.
+#
+# @param object the object attribute (host, user, project, queue, statistic)
+# @return a list {table prefix}, or "" if the object is unknown
+proc db::value_table_for_object {object} {
+   switch -- $object {
+      host      {return [list sge_host_values      hv]}
+      user      {return [list sge_user_values      uv]}
+      project   {return [list sge_project_values   pv]}
+      queue     {return [list sge_queue_values     qv]}
+      statistic {return [list sge_statistic_values sv]}
+      default   {return ""}
+   }
 }
 
 ##

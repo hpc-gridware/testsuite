@@ -28,8 +28,8 @@
 # ARCO database content.
 #
 # This file currently contains the shared scaffolding (CS-2233), the
-# first-hour workload and Phase C / D / E assertions; the daily, deletion and
-# restart phases are added by the follow-up sub-tasks CS-2237 .. CS-2239.
+# first-hour workload and Phase C / D / E / F assertions; the deletion and
+# restart phases are added by the follow-up sub-tasks CS-2238 .. CS-2239.
 #
 # @see dbwriter_long_lib.tcl
 
@@ -67,13 +67,15 @@ set check_cleanup_function "dbwriter_long_running_cleanup"
 # define test's procedure order
 # CS-2233 ships the scaffolding self-test (run level 0); CS-2241 adds the
 # Phase C check, CS-2235 adds the Phase D raw-data check, CS-2236 adds the
-# Phase E hourly derived check (all at run level 400); CS-2237 .. CS-2239
-# append the daily derived and deletion-rule phase functions here.
+# Phase E hourly derived check, CS-2237 adds the Phase F daily derived check
+# (all at run level 400); CS-2238 .. CS-2239 append the deletion-rule and
+# restart phase functions here.
 set check_functions {}
 lappend check_functions "dbwriter_long_running_scaffolding"
 lappend check_functions "dbwriter_long_running_phase_c"
 lappend check_functions "dbwriter_long_running_phase_d"
 lappend check_functions "dbwriter_long_running_phase_e"
+lappend check_functions "dbwriter_long_running_phase_f"
 
 # source the shared scaffolding library (dbwriter_xml / db / dbwriter_long)
 # and the job-load generator (workload)
@@ -109,9 +111,10 @@ ts_source "$CHECK_ACTUAL_TEST_PATH/dbwriter_long_workload"
 # @return 0 on success, else -1 (error reported via ts_log_severe)
 proc dbwriter_long_running_setup {} {
    global dbwriter_long_config_backup
-   global dbwriter_long_test_host
+   global dbwriter_long_test_hosts
    global dbwriter_long_online_usage_vars
    global dbwriter_long_report_variables
+   get_current_cluster_config_array ts_config
 
    # online_usage usage variables enabled for the test - used both when
    # enabling reporting and when asserting the online_usage fan-out
@@ -144,21 +147,26 @@ proc dbwriter_long_running_setup {} {
       return -1
    }
 
-   # a host for the test PE / queue - remembered so the cleanup function can
-   # remove the PE and queue again
-   set dbwriter_long_test_host [host_conf_get_suited_hosts]
+   # all exec nodes of the cluster - the queue spans every host so the
+   # long-running workload (CS-2237) can use the full cluster's slot capacity
+   set dbwriter_long_test_hosts $ts_config(execd_nodes)
+   if {[llength $dbwriter_long_test_hosts] == 0} {
+      ts_log_severe "dbwriter long test: ts_config(execd_nodes) is empty"
+      return -1
+   }
 
-   # raise the exec host slot capacity - the core-binding default slot count
-   # of the exec host can be lower than the workload needs
-   setup_host_slots_for_binding $dbwriter_long_test_host
+   # raise the exec host slot capacity on every test host - the core-binding
+   # default slot count of an exec host can be lower than the workload needs
+   setup_host_slots_for_binding $dbwriter_long_test_hosts
 
    # enable qmaster reporting (accounting, reporting, joblog, online_usage, ...)
    if {[dbwriter_long_enable_reporting] != 0} {
       return -1
    }
 
-   # create the tight-integration PE and queue used by the workload PE jobs
-   if {[workload::setup_pe_queue $dbwriter_long_test_host] != 0} {
+   # create the tight-integration PEs and the cluster queue used by the
+   # workload jobs - the queue spans every exec node
+   if {[workload::setup_pe_queue $dbwriter_long_test_hosts] != 0} {
       return -1
    }
 
@@ -198,18 +206,18 @@ proc dbwriter_long_running_setup {} {
 proc dbwriter_long_running_cleanup {} {
    global dbwriter_long_config_backup
    global dbwriter_long_exechost_backup
-   global dbwriter_long_test_host
+   global dbwriter_long_test_hosts
 
    db::disconnect
 
    delete_all_jobs
    wait_for_end_of_all_jobs 60
 
-   # remove the test PE and queue and restore the exec host slot capacity
-   if {[info exists dbwriter_long_test_host]} {
-      workload::cleanup_pe_queue $dbwriter_long_test_host
+   # remove the test PEs and queue and restore the exec host slot capacity
+   if {[info exists dbwriter_long_test_hosts]} {
+      workload::cleanup_pe_queue $dbwriter_long_test_hosts
       cleanup_host_slots_for_binding
-      unset dbwriter_long_test_host
+      unset dbwriter_long_test_hosts
    }
 
    # remove the test project
@@ -243,7 +251,7 @@ proc dbwriter_long_running_cleanup {} {
    unset -nocomplain ::dbwriter_long_exechost_backup
    unset -nocomplain ::dbwriter_long_online_usage_vars
    unset -nocomplain ::dbwriter_long_report_variables
-   unset -nocomplain ::dbwriter_long_test_host
+   unset -nocomplain ::dbwriter_long_test_hosts
 
    return 0
 }
@@ -560,16 +568,17 @@ proc dbwriter_long_phase_c_check_ar {host} {
 # @return 0 if Phase C passed, else -1 (error reported via ts_log_severe)
 proc dbwriter_long_running_phase_c {} {
    global CHECK_ACT_LEVEL check_description
-   global dbwriter_long_test_host
+   global dbwriter_long_test_hosts
 
    if {$CHECK_ACT_LEVEL != 400} {
       return 0
    }
    ts_log_fine $check_description(400)
 
-   # the test host, PE/queue, qmaster reporting and the dbwriter were prepared
-   # by dbwriter_long_running_setup
-   set host $dbwriter_long_test_host
+   # the test hosts, PE/queue, qmaster reporting and the dbwriter were prepared
+   # by dbwriter_long_running_setup. The first-hour workload and AR submission
+   # are queue-targeted, so any host from the list serves as their reference.
+   set host [lindex $dbwriter_long_test_hosts 0]
 
    # Phase C: run the first-hour deterministic workload
    if {[workload::run_first_hour $host] != 0} {
@@ -775,17 +784,18 @@ proc dbwriter_long_phase_e_wait_for_hour_close {{timeout 5400}} {
 }
 
 ##
-# @brief Poll until a value table has rows for a given hourly variable.
+# @brief Poll until a value table has rows for a given derived variable.
 #
-# The dbwriter writes the h_* row some seconds after the hour boundary, so
-# Phase E polls each (table, variable) pair instead of reading the count once.
+# The dbwriter writes the h_* / d_* row some seconds after the bucket
+# boundary, so callers poll each (table, variable) pair instead of reading
+# the count once. Reused by Phase E (hourly) and Phase F (daily).
 #
 # @param table    one of the value tables (sge_host_values, ...)
 # @param prefix   the table's column prefix (hv, uv, pv, qv, sv)
-# @param variable the hourly derived variable name (h_cpu, h_load, ...)
+# @param variable the derived variable name (h_cpu, d_load, ...)
 # @param timeout  seconds to wait before giving up
 # @return 0 once at least one row exists, else -1
-proc dbwriter_long_phase_e_wait_for_variable {table prefix variable timeout} {
+proc dbwriter_long_wait_for_value_row {table prefix variable timeout} {
    set where "${prefix}_variable = '$variable'"
    set deadline [expr {[clock seconds] + $timeout}]
    while {1} {
@@ -805,32 +815,35 @@ proc dbwriter_long_phase_e_wait_for_variable {table prefix variable timeout} {
 }
 
 ##
-# @brief Assert every expected hourly derived variable has at least one row.
+# @brief Assert every configured hourly <derive> rule has fired.
 #
-# The list mirrors the seven dbwriter.xml hourly <derive> rules:
-#   - sge_host_values:      h_cpu, h_load, h_jobs_finished
-#   - sge_queue_values:     h_utilized
-#   - sge_user_values:      h_jobs_finished
-#   - sge_project_values:   h_jobs_finished
-#   - sge_statistic_values: h_lines_per_second
-# Each pair is polled individually so the failure message names the variable
-# that did not appear.
+# Drives off dbwriter_xml::list_derive_rules so a new <derive interval="hour">
+# rule added to dbwriter.xml is automatically covered, the same way Phase F's
+# CS-2011 check covers daily rules. Each (table, variable) pair is polled
+# individually so a failure message names the variable that did not appear.
 #
-# @return 0 if every variable has rows, else -1
+# @return 0 if every hourly rule has produced a row, else -1
 proc dbwriter_long_phase_e_assert_rows_exist {} {
+   set rules [dbwriter_xml::list_derive_rules "hour"]
+   if {$rules eq ""} {
+      ts_log_severe "dbwriter long test: can not enumerate hourly derive rules"
+      return -1
+   }
+   if {[llength $rules] == 0} {
+      ts_log_severe "dbwriter long test: dbwriter.xml has no <derive\
+                     interval='hour'> rules - Phase E cannot verify hourly\
+                     derived values"
+      return -1
+   }
+
    set per_variable_timeout 600
    set rc 0
-   foreach {table prefix variable} {
-      sge_host_values      hv h_cpu
-      sge_host_values      hv h_load
-      sge_host_values      hv h_jobs_finished
-      sge_queue_values     qv h_utilized
-      sge_user_values      uv h_jobs_finished
-      sge_project_values   pv h_jobs_finished
-      sge_statistic_values sv h_lines_per_second
-   } {
-      if {[dbwriter_long_phase_e_wait_for_variable \
+   foreach rule $rules {
+      lassign $rule object variable table prefix
+      if {[dbwriter_long_wait_for_value_row \
               $table $prefix $variable $per_variable_timeout] != 0} {
+         ts_log_severe "dbwriter long test: hourly rule (object=$object,\
+                        variable=$variable) did not produce any row in $table"
          set rc -1
       }
    }
@@ -893,13 +906,14 @@ proc dbwriter_long_phase_e_assert_no_duplicates {} {
 ##
 # @brief Read a single non-negative integer from a SELECT.
 #
-# Helper for the consistency check: runs sql, expects exactly one row with
-# one numeric column, returns the value rounded to an integer. Returns -1 on
-# any failure so callers can treat negative as "error".
+# Shared helper for the consistency checks of Phase E (hourly) and Phase F
+# (daily): runs sql, expects exactly one row with one numeric column, returns
+# the value rounded to an integer. Returns -1 on any failure so callers can
+# treat negative as "error".
 #
 # @param sql the SELECT statement returning one row with one numeric column
 # @return the integer value, or -1 on error (reported via ts_log_severe)
-proc dbwriter_long_phase_e_scalar {sql} {
+proc dbwriter_long_scalar {sql} {
    array set r {}
    set cols {}
    set n [db::query $sql r cols]
@@ -936,11 +950,11 @@ proc dbwriter_long_phase_e_assert_jobs_finished_consistency {} {
 
    # ---- per user --------------------------------------------------------------
    foreach user [workload::users] {
-      set raw [dbwriter_long_phase_e_scalar \
+      set raw [dbwriter_long_scalar \
          "SELECT COUNT(*) FROM sge_job, sge_job_usage\
           WHERE j_id = ju_parent AND j_owner = '$user'\
           AND j_pe_taskid = 'NONE' AND ju_exit_status != -1"]
-      set der [dbwriter_long_phase_e_scalar \
+      set der [dbwriter_long_scalar \
          "SELECT COALESCE(SUM(uv_dvalue), 0)\
           FROM sge_user_values, sge_user\
           WHERE uv_parent = u_id AND u_user = '$user'\
@@ -961,11 +975,11 @@ proc dbwriter_long_phase_e_assert_jobs_finished_consistency {} {
 
    # ---- per host: the workload runs on a single exec host, so the totals over
    #      sge_host_values equal the totals over sge_job_usage
-   set raw [dbwriter_long_phase_e_scalar \
+   set raw [dbwriter_long_scalar \
       "SELECT COUNT(*) FROM sge_job, sge_job_usage\
        WHERE j_id = ju_parent\
        AND j_pe_taskid = 'NONE' AND ju_exit_status != -1"]
-   set der [dbwriter_long_phase_e_scalar \
+   set der [dbwriter_long_scalar \
       "SELECT COALESCE(SUM(hv_dvalue), 0)\
        FROM sge_host_values\
        WHERE hv_variable = 'h_jobs_finished'"]
@@ -982,11 +996,11 @@ proc dbwriter_long_phase_e_assert_jobs_finished_consistency {} {
 
    # ---- per project: every workload job runs under the test project ----------
    set project [workload::get_project_name]
-   set raw [dbwriter_long_phase_e_scalar \
+   set raw [dbwriter_long_scalar \
       "SELECT COUNT(*) FROM sge_job, sge_job_usage\
        WHERE j_id = ju_parent AND j_project = '$project'\
        AND j_pe_taskid = 'NONE' AND ju_exit_status != -1"]
-   set der [dbwriter_long_phase_e_scalar \
+   set der [dbwriter_long_scalar \
       "SELECT COALESCE(SUM(pv_dvalue), 0)\
        FROM sge_project_values, sge_project\
        WHERE pv_parent = p_id AND p_project = '$project'\
@@ -1051,6 +1065,785 @@ proc dbwriter_long_running_phase_e {} {
    db::disconnect
    if {$rc == 0} {
       ts_log_fine "dbwriter long test: Phase E passed"
+   }
+   return $rc
+}
+
+# -------- Phase F: daily derived assertions (CS-1948 + CS-2011 regression) -----
+
+##
+# @brief The n-th midnight strictly after a reference epoch (local time).
+#
+# clock add 1 day advances by exactly one calendar day, handling daylight-
+# saving transitions correctly. The first midnight is the start of the day
+# after the reference; the n-th is n-1 further days on.
+#
+# @param from_epoch the reference epoch (clock seconds)
+# @param n          which midnight to return (n >= 1)
+# @return the clock-seconds value of the requested midnight
+##
+# @brief Parse a database timestamp string to clock seconds.
+#
+# Accepts the "YYYY-MM-DD HH:MM:SS[.fffff]" format the sqlutil bridge returns
+# for timestamp columns across Postgres, Oracle and MySQL. The fractional
+# seconds are dropped - second precision is enough for every Phase F check.
+#
+# @param ts the timestamp string as read from the DB
+# @return clock seconds, or -1 if the string does not match the expected shape
+proc dbwriter_long_phase_f_parse_ts {ts} {
+   if {[regexp {^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})} $ts -> d t]} {
+      return [clock scan "$d $t" -format "%Y-%m-%d %H:%M:%S"]
+   }
+   return -1
+}
+
+proc dbwriter_long_phase_f_midnight_n {from_epoch n} {
+   set day_str [clock format $from_epoch -format "%Y-%m-%d"]
+   set day_start [clock scan "$day_str 00:00:00" -format "%Y-%m-%d %H:%M:%S"]
+   set midnight [clock add $day_start 1 day]
+   for {set i 1} {$i < $n} {incr i} {
+      set midnight [clock add $midnight 1 day]
+   }
+   return $midnight
+}
+
+##
+# @brief Wait until the n-th midnight after a reference epoch is past and the
+# dbwriter has computed the daily derived rules for the day that just ended.
+#
+# The daily <derive> rules go through the same DerivedValueThread loop as the
+# hourly rules (ReportingDBWriter.java:909), which schedules the next pass at
+# nextTimestamp + 71 min - so the day [D, D+1) is computed around 00:11 of
+# day D+1. Phase E uses a +15 min settle; Phase F doubles that to +30 min
+# because the dbwriter is also ingesting an entire day of background
+# pminiworm finishes plus the multi-host workload and its ingest queue can
+# legitimately lag a few minutes behind real time. With the longer settle the
+# daily SUM-vs-raw consistency check (F6) sees a stable snapshot rather than
+# racing the ingest queue.
+#
+# The proc never collapses the wait - Phase F runs only at run level 400 and
+# needs real wall-clock to surface CS-1948.
+#
+# @param from_epoch reference epoch (typically Phase F entry)
+# @param n          which midnight after from_epoch to wait for (n >= 1)
+# @return 0 once the midnight + settle window has passed
+proc dbwriter_long_phase_f_wait_for_midnight {from_epoch n} {
+   set safety 1800
+   set target_midnight [dbwriter_long_phase_f_midnight_n $from_epoch $n]
+   set target [expr {$target_midnight + $safety}]
+   set t_now [clock seconds]
+   if {$t_now >= $target} {
+      ts_log_fine "dbwriter long test: midnight $n already past + settled"
+      return 0
+   }
+   set wait_secs [expr {$target - $t_now}]
+   ts_log_fine "dbwriter long test: Phase F - waiting ${wait_secs}s for\
+                midnight $n (boundary at\
+                [clock format $target_midnight -format {%Y-%m-%d %H:%M:%S}],\
+                +${safety}s for the dbwriter's 11-minute settle window, the\
+                daily derived-value compute pass and the ingest backlog to\
+                drain)"
+   sleep_for_seconds $wait_secs
+   return 0
+}
+
+##
+# @brief Assert every configured daily <derive> rule has fired (CS-2011).
+#
+# Walks the live dbwriter.xml via dbwriter_xml::list_derive_rules and polls
+# each (table, variable) pair until at least one row exists. CS-2011 was that
+# some daily rules silently never produced rows; the assertion goes red the
+# moment a rule that the XML declares fails to write at least one row within
+# the timeout.
+#
+# @return 0 if every daily rule has produced a row, else -1
+proc dbwriter_long_phase_f_assert_all_daily_rules_fired {} {
+   set rules [dbwriter_xml::list_derive_rules "day"]
+   if {$rules eq ""} {
+      ts_log_severe "dbwriter long test: can not enumerate daily derive rules"
+      return -1
+   }
+   if {[llength $rules] == 0} {
+      ts_log_severe "dbwriter long test: dbwriter.xml has no <derive\
+                     interval='day'> rules - the test cannot verify daily\
+                     derived values"
+      return -1
+   }
+
+   set per_variable_timeout 1200
+   set rc 0
+   foreach rule $rules {
+      lassign $rule object variable table prefix
+      if {[dbwriter_long_wait_for_value_row \
+              $table $prefix $variable $per_variable_timeout] != 0} {
+         ts_log_severe "dbwriter long test: daily rule (object=$object,\
+                        variable=$variable) did not produce any row in $table\
+                        - CS-2011 regression"
+         set rc -1
+      }
+   }
+   return $rc
+}
+
+##
+# @brief Assert no value table has d_* rows in the still-open current day
+#        (CS-1948).
+#
+# CS-1948 was a boundary bug (<= vs <) that wrote a partial daily derived
+# row for the still-open current day after a midnight crossing. The check
+# uses db::adapt's __TODAY_START__ placeholder so the engine-specific "start
+# of today" expression is substituted at run time.
+#
+# @return 0 if no value table has a current-day d_* row, else -1
+proc dbwriter_long_phase_f_assert_no_partial_today {} {
+   set rc 0
+   foreach {table prefix} {
+      sge_host_values      hv
+      sge_user_values      uv
+      sge_project_values   pv
+      sge_queue_values     qv
+      sge_statistic_values sv
+   } {
+      set where "${prefix}_variable LIKE 'd\\_%' ESCAPE '\\'\
+                 AND ${prefix}_time_start >= __TODAY_START__"
+      set n [db::count $table $where]
+      if {$n < 0} {
+         ts_log_severe "dbwriter long test: partial-today check on $table\
+                        failed - query returned an error"
+         set rc -1
+         continue
+      }
+      if {$n > 0} {
+         ts_log_severe "dbwriter long test: $table has $n d_* rows for the\
+                        still-open current day - CS-1948 regression"
+         set rc -1
+      } else {
+         ts_log_fine "dbwriter long test: $table has no partial current-day\
+                      d_* rows"
+      }
+   }
+   return $rc
+}
+
+##
+# @brief Assert SUM(d_jobs_finished) matches the raw sge_job_usage count.
+#
+# Parallel of dbwriter_long_phase_e_assert_jobs_finished_consistency, but on
+# the daily aggregation. d_jobs_finished is the SUM of h_jobs_finished over a
+# day, so the equality SUM(d_jobs_finished) == COUNT(*) raw must still hold.
+# Runs per user (workload::users), per host (single sum) and per project
+# (workload::get_project_name), with the same j_pe_taskid='NONE' and
+# ju_exit_status != -1 filter the dbwriter.xml rule uses.
+#
+# @return 0 if every scope is consistent, else -1
+proc dbwriter_long_phase_f_assert_jobs_finished_consistency {} {
+   set rc 0
+
+   # The dbwriter computes d_jobs_finished at midnight + ~11 min for the just-
+   # closed day. Records from the still-open current day are not covered, and
+   # records ending in the very last hour of the closed day systematically
+   # race the daily rule (the last hour's hourly bucket and the daily SUM
+   # both fire at midnight + 11 min - under heavy ingest load the daily rule
+   # frequently SUMs before the last hourly bucket has been written). The raw
+   # COUNT(*) is therefore restricted to __DAILY_RULE_CUTOFF__ (= today_start
+   # - 1 hour) so it counts only records whose hourly bucket fired strictly
+   # before the daily rule. See db::daily_rule_cutoff for the rationale.
+
+   # ---- per user --------------------------------------------------------------
+   foreach user [workload::users] {
+      set raw [dbwriter_long_scalar \
+         "SELECT COUNT(*) FROM sge_job, sge_job_usage\
+          WHERE j_id = ju_parent AND j_owner = '$user'\
+          AND j_pe_taskid = 'NONE' AND ju_exit_status != -1\
+          AND ju_end_time < __DAILY_RULE_CUTOFF__"]
+      set der [dbwriter_long_scalar \
+         "SELECT COALESCE(SUM(uv_dvalue), 0)\
+          FROM sge_user_values, sge_user\
+          WHERE uv_parent = u_id AND u_user = '$user'\
+          AND uv_variable = 'd_jobs_finished'"]
+      if {$raw < 0 || $der < 0} {
+         set rc -1
+         continue
+      }
+      if {$raw != $der} {
+         ts_log_severe "dbwriter long test: d_jobs_finished mismatch for user\
+                        $user: raw count=$raw, SUM(d_jobs_finished)=$der"
+         set rc -1
+      } else {
+         ts_log_fine "dbwriter long test: d_jobs_finished consistent for user\
+                      $user ($raw)"
+      }
+   }
+
+   # ---- per host: all workload + background jobs go through dbwriter_long.q
+   #      and all.q on the test cluster's exec hosts, so the totals over
+   #      sge_host_values equal the totals over sge_job_usage
+   set raw [dbwriter_long_scalar \
+      "SELECT COUNT(*) FROM sge_job, sge_job_usage\
+       WHERE j_id = ju_parent\
+       AND j_pe_taskid = 'NONE' AND ju_exit_status != -1\
+       AND ju_end_time < __DAILY_RULE_CUTOFF__"]
+   set der [dbwriter_long_scalar \
+      "SELECT COALESCE(SUM(hv_dvalue), 0)\
+       FROM sge_host_values\
+       WHERE hv_variable = 'd_jobs_finished'"]
+   if {$raw < 0 || $der < 0} {
+      set rc -1
+   } elseif {$raw != $der} {
+      ts_log_severe "dbwriter long test: d_jobs_finished mismatch over hosts:\
+                     raw count=$raw, SUM(d_jobs_finished)=$der"
+      set rc -1
+   } else {
+      ts_log_fine "dbwriter long test: d_jobs_finished consistent over hosts\
+                   ($raw)"
+   }
+
+   # ---- per project: only the first-generation workload jobs (first-hour,
+   #      long-running and the first generation of every pminiworm chain) run
+   #      under the test project; pminiworm respawns do not carry the project
+   #      forward, so this check compares two filtered totals
+   set project [workload::get_project_name]
+   set raw [dbwriter_long_scalar \
+      "SELECT COUNT(*) FROM sge_job, sge_job_usage\
+       WHERE j_id = ju_parent AND j_project = '$project'\
+       AND j_pe_taskid = 'NONE' AND ju_exit_status != -1\
+       AND ju_end_time < __DAILY_RULE_CUTOFF__"]
+   set der [dbwriter_long_scalar \
+      "SELECT COALESCE(SUM(pv_dvalue), 0)\
+       FROM sge_project_values, sge_project\
+       WHERE pv_parent = p_id AND p_project = '$project'\
+       AND pv_variable = 'd_jobs_finished'"]
+   if {$raw < 0 || $der < 0} {
+      set rc -1
+   } elseif {$raw != $der} {
+      ts_log_severe "dbwriter long test: d_jobs_finished mismatch for project\
+                     $project: raw count=$raw, SUM(d_jobs_finished)=$der"
+      set rc -1
+   } else {
+      ts_log_fine "dbwriter long test: d_jobs_finished consistent for project\
+                   $project ($raw)"
+   }
+
+   return $rc
+}
+
+##
+# @brief Assert intermediate accounting rows for one long-running job kind.
+#
+# Per midnight crossing, the qmaster writes one intermediate accounting record
+# per (ja_task, pe_task) of every long-running job (within the first
+# INTERMEDIATE_ACCT_WINDOW = 10 minutes of the new day, gated on do_reporting
+# only). After n_midnights crossings the dbwriter must therefore have
+# n_midnights records per (ja_task, pe_task) for the job, each with
+# ju_exit_status = -1.
+#
+# Expected unique (j_task_number, j_pe_taskid) tuples per kind:
+#   - non-PE (seq, arr):           tasks      tuples (j_pe_taskid = 'NONE')
+#   - PE accounting_summary FALSE: tasks * pe_slots (master + pe_slots-1 slaves)
+#   - PE accounting_summary TRUE:  tasks      tuples (master only)
+# so the total intermediate row count is n_midnights * tasks * per_pet
+# where per_pet = summary ? 1 : pe_slots.
+#
+# Additional sanity, per (j_task_number, j_pe_taskid) stream, ordered by
+# ju_curr_time:
+#   - ju_wallclock is non-negative, numeric, and non-decreasing along the
+#     stream (each intermediate's snapshot is at least as old as the previous);
+#   - ju_wallclock is at most the elapsed time from the job's actual start
+#     (= ju_start_time of the first intermediate) to ju_end_time of the
+#     intermediate being checked, plus a small drift. ju_wallclock is the
+#     execd's wallclock snapshot, which cannot exceed real elapsed time;
+#   - ju_end_time of the k-th intermediate is around the k-th midnight
+#     (qmaster writes intermediate accounting records in the
+#     INTERMEDIATE_ACCT_WINDOW = 10 minute window after the boundary);
+#   - the (start, end) windows form a contiguous chain: ju_start_time of the
+#     k-th intermediate equals ju_end_time of the (k-1)-th, except for the
+#     first intermediate whose ju_start_time is the job's actual start time.
+#
+# @param jd          long-running job descriptor (from workload::get_long_running_job)
+# @param n_midnights number of midnights crossed so far (1 or 2)
+# @param ref_epoch   Phase F reference epoch (entry_epoch); used to derive the
+#                    k-th midnight via dbwriter_long_phase_f_midnight_n
+# @return 0 if every expectation holds, else -1
+proc dbwriter_long_phase_f_assert_intermediate_for_job {jd n_midnights ref_epoch} {
+   set jid     [dict get $jd jid]
+   set kind    [dict get $jd kind]
+   set tasks   [dict get $jd tasks]
+   set summary [dict get $jd summary]
+   set slots   [dict get $jd pe_slots]
+
+   set per_pet  [expr {$summary ? 1 : $slots}]
+   set expected_per_pet $n_midnights
+   set expected_total   [expr {$n_midnights * $tasks * $per_pet}]
+
+   # the k-th midnight (k = 1..n_midnights) the assertion expects ju_end_time
+   # of the k-th intermediate to land on
+   set midnights {}
+   for {set k 1} {$k <= $n_midnights} {incr k} {
+      lappend midnights [dbwriter_long_phase_f_midnight_n $ref_epoch $k]
+   }
+   # qmaster writes intermediates within INTERMEDIATE_ACCT_WINDOW = 10 min of
+   # the boundary; give it a generous extra to absorb ingest lag
+   set midnight_tol 900
+
+   set sql "SELECT j_task_number, j_pe_taskid, ju_curr_time, ju_wallclock,\
+                   ju_start_time, ju_end_time\
+            FROM sge_job, sge_job_usage\
+            WHERE j_id = ju_parent AND j_job_number = $jid\
+            AND ju_exit_status = -1\
+            ORDER BY j_task_number, j_pe_taskid, ju_curr_time"
+   array set r {}
+   set cols {}
+   set n_rows [db::query $sql r cols]
+   if {$n_rows < 0} {
+      ts_log_severe "dbwriter long test: intermediate query failed for kind\
+                     $kind (jid $jid)"
+      return -1
+   }
+   if {$n_rows != $expected_total} {
+      ts_log_severe "dbwriter long test: $kind (jid $jid) has $n_rows\
+                     intermediate accounting rows after $n_midnights\
+                     midnight(s), expected $expected_total ($tasks task(s) *\
+                     $per_pet per-pet * $n_midnights)"
+      return -1
+   }
+
+   # group rows by (j_task_number, j_pe_taskid) for the per-pet checks
+   array set streams {}
+   for {set i 0} {$i < $n_rows} {incr i} {
+      set key "$r($i,0)/$r($i,1)"
+      if {![info exists streams($key)]} {
+         set streams($key) {}
+      }
+      lappend streams($key) [list $r($i,2) $r($i,3) $r($i,4) $r($i,5)]
+   }
+   array unset r
+
+   set rc 0
+   foreach key [array names streams] {
+      set rows $streams($key)
+      set n [llength $rows]
+      if {$n != $expected_per_pet} {
+         ts_log_severe "dbwriter long test: $kind (jid $jid) pe-task $key has\
+                        $n intermediate row(s) after $n_midnights midnight(s),\
+                        expected $expected_per_pet"
+         set rc -1
+         continue
+      }
+
+      # the first intermediate's ju_start_time is, by design, the job's start
+      lassign [lindex $rows 0] _ _ st0 _
+      set job_start_epoch [dbwriter_long_phase_f_parse_ts $st0]
+      if {$job_start_epoch < 0} {
+         ts_log_severe "dbwriter long test: $kind (jid $jid) pe-task $key\
+                        first intermediate has un-parseable ju_start_time\
+                        '$st0'"
+         set rc -1
+         continue
+      }
+
+      set prev_wc -1
+      set prev_end_epoch 0
+      for {set k 1} {$k <= $n} {incr k} {
+         lassign [lindex $rows [expr {$k - 1}]] curr_time wc st et
+
+         set st_epoch [dbwriter_long_phase_f_parse_ts $st]
+         set et_epoch [dbwriter_long_phase_f_parse_ts $et]
+         if {$st_epoch < 0 || $et_epoch < 0} {
+            ts_log_severe "dbwriter long test: $kind (jid $jid) pe-task $key\
+                           intermediate $k has un-parseable timestamps\
+                           ju_start_time='$st' ju_end_time='$et'"
+            set rc -1
+            continue
+         }
+
+         # ju_wallclock numeric, non-decreasing, bounded by real elapsed time
+         if {$wc eq "" || ![string is double -strict $wc]} {
+            ts_log_severe "dbwriter long test: $kind (jid $jid) pe-task $key\
+                           intermediate $k has empty/non-numeric\
+                           ju_wallclock '$wc' at $curr_time"
+            set rc -1
+         } else {
+            if {$wc < $prev_wc} {
+               ts_log_severe "dbwriter long test: $kind (jid $jid) pe-task\
+                              $key ju_wallclock not monotonic across\
+                              intermediates: $prev_wc -> $wc"
+               set rc -1
+            }
+            set elapsed [expr {$et_epoch - $job_start_epoch}]
+            # ju_end_time is the accounting-period boundary (~midnight) but
+            # the execd snapshot is taken when the qmaster writes the record,
+            # which is up to INTERMEDIATE_ACCT_WINDOW = 10 min later - so wc
+            # can legitimately exceed (ju_end_time - job_start) by that much
+            if {$wc > $elapsed + 900} {
+               ts_log_severe "dbwriter long test: $kind (jid $jid) pe-task\
+                              $key intermediate $k ju_wallclock $wc exceeds\
+                              elapsed time since job start (${elapsed}s) by\
+                              more than the 10 min intermediate write window"
+               set rc -1
+            }
+            if {$wc < 0} {
+               ts_log_severe "dbwriter long test: $kind (jid $jid) pe-task\
+                              $key intermediate $k ju_wallclock $wc is\
+                              negative"
+               set rc -1
+            }
+            set prev_wc $wc
+         }
+
+         # ju_end_time should land in the qmaster's intermediate-write window
+         # just after the k-th midnight
+         set m_k [lindex $midnights [expr {$k - 1}]]
+         set drift [expr {$et_epoch - $m_k}]
+         if {$drift < -60 || $drift > $midnight_tol} {
+            ts_log_severe "dbwriter long test: $kind (jid $jid) pe-task $key\
+                           intermediate $k ju_end_time '$et' drifts ${drift}s\
+                           from midnight $k\
+                           ([clock format $m_k -format {%Y-%m-%d %H:%M:%S}])"
+            set rc -1
+         }
+
+         # ju_start_time chain: k=1 must be the job's actual start (already
+         # captured as job_start_epoch above); k>1 must equal the prior
+         # intermediate's ju_end_time. Allow 1 s slack to absorb any rounding.
+         if {$k == 1} {
+            # st_epoch == job_start_epoch by construction; nothing to verify
+         } else {
+            set delta [expr {abs($st_epoch - $prev_end_epoch)}]
+            if {$delta > 1} {
+               ts_log_severe "dbwriter long test: $kind (jid $jid) pe-task\
+                              $key intermediate $k ju_start_time '$st' is\
+                              not contiguous with prior ju_end_time\
+                              ([clock format $prev_end_epoch \
+                                  -format {%Y-%m-%d %H:%M:%S}]); delta\
+                              ${delta}s"
+               set rc -1
+            }
+         }
+         set prev_end_epoch $et_epoch
+      }
+   }
+   return $rc
+}
+
+##
+# @brief Assert intermediate accounting records for every long-running job.
+#
+# Iterates the long-running job descriptors (workload::get_long_running_kinds)
+# and calls the per-kind assertion. Continues over failures so every problem
+# is reported in one Phase F run.
+#
+# @param n_midnights how many midnights have crossed so far (1 or 2)
+# @param ref_epoch   Phase F reference epoch (entry_epoch), forwarded to the
+#                    per-kind assertion for midnight-time derivation
+# @return 0 if every kind passed, else -1
+proc dbwriter_long_phase_f_assert_intermediate_accounting {n_midnights ref_epoch} {
+   set rc 0
+   foreach kind [workload::get_long_running_kinds] {
+      set jd [workload::get_long_running_job $kind]
+      if {$jd eq ""} {
+         continue
+      }
+      if {[dbwriter_long_phase_f_assert_intermediate_for_job $jd $n_midnights \
+              $ref_epoch] != 0} {
+         set rc -1
+      } else {
+         ts_log_fine "dbwriter long test: $kind intermediate accounting rows\
+                      ok after $n_midnights midnight(s)"
+      }
+   }
+   return $rc
+}
+
+##
+# @brief Pick the host qacct is invoked on.
+#
+# Prefer the fileserver of ts_config(product_root) - it is where the
+# accounting file lives and qacct does not need NFS. If no fileserver is
+# configured, fall back to the qmaster host.
+#
+# @return a host name (non-empty); falls back to the master host
+proc dbwriter_long_phase_f_qacct_host {} {
+   get_current_cluster_config_array ts_config
+   set fs [fs_config_get_server_for_path $ts_config(product_root) 0]
+   if {$fs ne ""} {
+      return $fs
+   }
+   return $ts_config(master_host)
+}
+
+##
+# @brief Compare one numeric field of DB vs qacct.
+#
+# @param kind     long-running job kind (for the error message)
+# @param jid      job number (for the error message)
+# @param field    qacct field name (cpu, wallclock, ...)
+# @param db_val   database aggregate value
+# @param qa_val   qacct aggregate value
+# @param tol_abs  absolute tolerance (used when tol_rel is 0)
+# @param tol_rel  relative tolerance (0..1); 0 means use tol_abs
+# @return 0 if within tolerance, else -1 (error logged via ts_log_severe)
+proc dbwriter_long_phase_f_compare {kind jid field db_val qa_val tol_abs tol_rel} {
+   if {![string is double -strict $db_val] || \
+       ![string is double -strict $qa_val]} {
+      ts_log_severe "dbwriter long test: qacct compare $kind/$field ($jid):\
+                     non-numeric value db=$db_val qacct=$qa_val"
+      return -1
+   }
+   set diff [expr {abs($db_val - $qa_val)}]
+   set ok 1
+   if {$tol_rel > 0} {
+      set base [expr {abs($qa_val) > abs($db_val) ? abs($qa_val) : abs($db_val)}]
+      if {$base > 0 && $diff > $base * $tol_rel} {
+         set ok 0
+      }
+   } else {
+      if {$diff > $tol_abs} {
+         set ok 0
+      }
+   }
+   if {!$ok} {
+      set msg "dbwriter long test: qacct mismatch $kind/$field (jid $jid):\
+               db=$db_val qacct=$qa_val diff=$diff"
+      if {$tol_rel > 0} {
+         append msg " tol_rel=$tol_rel"
+      } else {
+         append msg " tol_abs=$tol_abs"
+      }
+      ts_log_severe $msg
+      return -1
+   }
+   ts_log_fine "dbwriter long test: qacct $kind/$field (jid $jid) matches\
+                ($db_val vs $qa_val)"
+   return 0
+}
+
+##
+# @brief Compare DB aggregates to qacct for every finished long-running job.
+#
+# Final assertion of Phase F. Every long-running job has finished, so qacct
+# can report its totals. The dbwriter has ingested every accounting record
+# (intermediate + final) into sge_job_usage. For each job:
+#   - SUM-rule fields  (cpu, mem):                    SUM(ju_*)   vs qacct
+#   - MAX-rule fields  (wallclock, ru_wallclock,
+#                       maxvmem):                     MAX(ju_*)   vs qacct
+# Tolerances: ±60 s for the wallclock fields, ±5 % for cpu / mem / maxvmem.
+#
+# qacct is invoked on the product-root fileserver if one is configured (the
+# accounting file lives there and no NFS hop is needed); otherwise on the
+# qmaster host.
+#
+# @return 0 if every job matches within tolerance, else -1
+proc dbwriter_long_phase_f_assert_qacct_match {} {
+   set host [dbwriter_long_phase_f_qacct_host]
+   set rc 0
+   set tol_rel 0.05
+   set tol_wc  60
+
+   foreach kind [workload::get_long_running_kinds] {
+      set jd [workload::get_long_running_job $kind]
+      if {$jd eq ""} {
+         continue
+      }
+      set jid [dict get $jd jid]
+
+      array unset qacct_info
+      if {[get_qacct $jid qacct_info $host "" 0 -1 0 1] != 0} {
+         ts_log_severe "dbwriter long test: get_qacct failed for $kind (jid\
+                        $jid) on $host"
+         set rc -1
+         continue
+      }
+
+      # DB aggregates: every sge_job_usage row of the job (intermediate +
+      # final) is included so the comparison shape mirrors qacct's sum_up=1
+      set sql "SELECT COALESCE(MAX(ju_wallclock),0)    AS db_wc,\
+                      COALESCE(MAX(ju_ru_wallclock),0) AS db_ru_wc,\
+                      COALESCE(SUM(ju_cpu),0)          AS db_cpu,\
+                      COALESCE(SUM(ju_mem),0)          AS db_mem,\
+                      COALESCE(MAX(ju_maxvmem),0)      AS db_maxvmem\
+               FROM sge_job, sge_job_usage\
+               WHERE j_id = ju_parent AND j_job_number = $jid"
+      array set r {}
+      set cols {}
+      set n [db::query $sql r cols]
+      if {$n != 1} {
+         ts_log_severe "dbwriter long test: DB aggregate query failed for\
+                        $kind (jid $jid)"
+         set rc -1
+         array unset r
+         continue
+      }
+      set db_wc      $r(0,0)
+      set db_ru_wc   $r(0,1)
+      set db_cpu     $r(0,2)
+      set db_mem     $r(0,3)
+      set db_maxvmem $r(0,4)
+      array unset r
+
+      foreach {field db_val qa_field tol_abs trel} [list \
+         wallclock    $db_wc      wallclock    $tol_wc 0       \
+         ru_wallclock $db_ru_wc   ru_wallclock $tol_wc 0       \
+         cpu          $db_cpu     cpu          0       $tol_rel \
+         mem          $db_mem     mem          0       $tol_rel \
+         maxvmem      $db_maxvmem maxvmem      0       $tol_rel \
+      ] {
+         if {![info exists qacct_info($qa_field)]} {
+            ts_log_severe "dbwriter long test: qacct has no '$qa_field' for\
+                           $kind (jid $jid)"
+            set rc -1
+            continue
+         }
+         set qa_val $qacct_info($qa_field)
+         if {[dbwriter_long_phase_f_compare $kind $jid $field $db_val $qa_val \
+                 $tol_abs $trel] != 0} {
+            set rc -1
+         }
+      }
+   }
+   return $rc
+}
+
+##
+# @brief Phase F - the multi-day part of the long-running dbwriter test.
+#
+# Runs at check run level 400 after Phase E. Submits the long-running jobs
+# (workload::submit_long_running) and starts the pminiworm background load
+# (workload::start_background_load), then drives three assertion blocks:
+#
+#   1. After midnight 1 (~30 min past the boundary, settle for the dbwriter's
+#      11-minute compute schedule plus the ingest backlog):
+#        - every <derive interval="day"> rule produced at least one row
+#          (CS-2011 regression: silently-missing daily rules);
+#        - no value table has a d_* row for the still-open current day
+#          (CS-1948 regression: <= vs < boundary);
+#        - the qmaster wrote one intermediate accounting record per
+#          (ja_task, pe_task) of every long-running job and the dbwriter
+#          stored each one as a sge_job_usage row with ju_exit_status = -1.
+#
+#   2. After midnight 2 (the boundary CS-1948 mis-handled with <= - the
+#      second pass is the discriminating one):
+#        - the rule-fired and partial-today checks repeat;
+#        - two intermediate records per (ja_task, pe_task), each one's
+#          ju_end_time near the corresponding midnight (within the
+#          INTERMEDIATE_ACCT_WINDOW = 10 min) and the (start, end) windows
+#          forming a contiguous chain from the job's actual start;
+#        - SUM(d_jobs_finished) per user / host / project equals
+#          COUNT(*) from sge_job_usage restricted to closed days (matching
+#          the dbwriter rule's filter).
+#
+#   3. After every long-running job has finished naturally (no qdel, no
+#      timeout-based termination): the DB aggregates of every job match the
+#      output of qacct -j <jid> within 5 % for cpu / mem / maxvmem and
+#      60 s for wallclock / ru_wallclock. qacct is invoked on the product-root
+#      fileserver if one is configured, else on the qmaster host.
+#
+# Each assertion block opens a fresh DB connection and closes it again so a
+# DB-side idle timeout cannot kill the spawned sqlutil session during the
+# multi-hour inter-block waits.
+#
+# Acceptance (CS-2237):
+#   - passes on master;
+#   - reverting CS-1948 turns the partial-today assertion red;
+#   - reverting CS-2011 (or removing the rule it fixed) turns the
+#     "all daily rules fired" assertion red.
+#
+# @return 0 if Phase F passed, else -1 (errors reported via ts_log_severe)
+proc dbwriter_long_running_phase_f {} {
+   global CHECK_ACT_LEVEL
+
+   if {$CHECK_ACT_LEVEL != 400} {
+      return 0
+   }
+   ts_log_fine "dbwriter long test: Phase F - daily derived assertions"
+
+   set entry_epoch [clock seconds]
+
+   # multi-day workload: long-running jobs (8 in total counting array tasks)
+   # plus the pminiworm chains as background load. entry_epoch is shared with
+   # wait_for_midnight so both compute the same midnight-2 boundary.
+   if {[workload::submit_long_running $entry_epoch] != 0} {
+      return -1
+   }
+   if {[workload::start_background_load] != 0} {
+      return -1
+   }
+
+   set rc 0
+
+   # The DB connection is opened only around the assertion blocks: the inter-
+   # block waits last 24+ hours, longer than any reasonable DB-side idle
+   # timeout would tolerate.
+
+   # ---- after the first midnight: the day Phase C/D/E ran in is now closed
+   #      and computed. Assert every daily rule fired, that no row already
+   #      sits in the just-started new day, and that one intermediate
+   #      accounting record per (ja_task, pe_task) of every long-running job
+   #      has been written.
+   if {[dbwriter_long_phase_f_wait_for_midnight $entry_epoch 1] != 0} {
+      set rc -1
+   } else {
+      if {[db::connect] != 0} {
+         set rc -1
+      } else {
+         if {[dbwriter_long_phase_f_assert_all_daily_rules_fired] != 0} {
+            set rc -1
+         }
+         if {[dbwriter_long_phase_f_assert_no_partial_today] != 0} {
+            set rc -1
+         }
+         if {[dbwriter_long_phase_f_assert_intermediate_accounting 1\
+                  $entry_epoch] != 0} {
+            set rc -1
+         }
+         db::disconnect
+      }
+   }
+
+   # ---- after the second midnight: this is the crossing CS-1948 mis-handled.
+   #      Re-run the rule-fired and partial-today checks (the second pass is
+   #      the discriminating one), assert two intermediate records per
+   #      (ja_task, pe_task) with the proper (start_time, end_time) chain and
+   #      add the daily SUM-vs-raw consistency.
+   if {[dbwriter_long_phase_f_wait_for_midnight $entry_epoch 2] != 0} {
+      set rc -1
+   } else {
+      if {[db::connect] != 0} {
+         set rc -1
+      } else {
+         if {[dbwriter_long_phase_f_assert_all_daily_rules_fired] != 0} {
+            set rc -1
+         }
+         if {[dbwriter_long_phase_f_assert_no_partial_today] != 0} {
+            set rc -1
+         }
+         if {[dbwriter_long_phase_f_assert_intermediate_accounting 2\
+                  $entry_epoch] != 0} {
+            set rc -1
+         }
+         if {[dbwriter_long_phase_f_assert_jobs_finished_consistency] != 0} {
+            set rc -1
+         }
+         db::disconnect
+      }
+   }
+
+   # ---- wait for every long-running job to finish naturally (no qdel), then
+   #      compare per-job DB aggregates to qacct.
+   if {[workload::wait_for_long_running_finish] != 0} {
+      set rc -1
+   } else {
+      if {[db::connect] != 0} {
+         set rc -1
+      } else {
+         if {[dbwriter_long_phase_f_assert_qacct_match] != 0} {
+            set rc -1
+         }
+         db::disconnect
+      }
+   }
+
+   if {$rc == 0} {
+      ts_log_fine "dbwriter long test: Phase F passed"
    }
    return $rc
 }
