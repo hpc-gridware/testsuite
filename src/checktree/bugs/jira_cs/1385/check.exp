@@ -31,7 +31,7 @@ set check_version_range     "9.1.2"
 
 # define test's name and run level descriptions
 set check_name            "issue_1385"
-set check_category        "BUG SCHEDULER SPOOLING VERIFIED"
+set check_category        "BUG SCHEDULER SHARETREE SPOOLING VERIFIED"
 set check_description(0)  "share tree usage booking must only store cpu, mem and io (and the finished_jobs counter) in user/project objects"
 
 # define test's dependencies

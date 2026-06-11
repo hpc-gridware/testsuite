@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "issue_2222"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_category        "SHARETREE VERIFIED"
 set check_description(0)  "hybrid user/project sharetree was broken (test sequential jobs)"
 set check_description(1)  "hybrid user/project sharetree was broken (test array jobs)"
 

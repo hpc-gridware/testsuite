@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2024,2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -36,12 +36,11 @@
 global check_name check_description check_needs check_functions
 global check_category
 global check_root_access_needs
-global stree
 
 # setup and cleanup functions
 set check_cleanup_function issue_1874_cleanup
 
-set check_category            "COMPATIBILITY SYSTEM VERIFIED"
+set check_category            "QCONF SHARETREE VERIFIED"
 set check_name                "issue_1874"
 set check_description(0)      "qconf -mstree aborts"
 set check_needs               "init_core_system"      ;# dependencies of this check (name of other check)
@@ -99,14 +98,17 @@ proc issue_1874_setup  {} {
 
 proc issue_1874_cleanup  {} {
    global ts_config
+   global stree
 
    # delete sharetree
    del_sharetree
    # add user
    del_user "1874_usr1"
    del_user "1874_usr2"
-   # remove project 
+   # remove project
    del_project "1874_prj1"
+
+   unset -nocomplain stree
 }
 
 proc create_stree1_1874 {} {
@@ -161,7 +163,7 @@ ${line}[format "%c" 27]"
 
    set master_arch [resolve_arch $ts_config(master_host)]
    set result [handle_vi_edit "$ts_config(product_root)/bin/$master_arch/qconf" "-mstree" $vi_commands $CHANGED_SHARETREE]
-   
+
    if {$result != 0} {
       ts_log_severe "qconf failed: issue 1874 might exist"
    }

@@ -31,31 +31,48 @@
 #     1) decay_via_halftime
 #        Sets `halftime 1` (the smallest accepted value; the field is
 #        in hours, so this is a 1-hour halflife) and clears
-#        `halflife_decay_list`. With 1-hour halflife and a 90 s wait,
-#        decay is small (~ 2 % using the Euler approximation in
-#        ocs_Usage.cc:77) but must be present: the assertion is that
-#        each post-wait value is strictly less than the corresponding
-#        pre-wait value.
+#        `halflife_decay_list`. With 1-hour halflife, the pinned 10 s
+#        TET interval (see setup), and a 90 s wait, ~9 decay ticks fire
+#        inside the measurement window. Each tick decays by
+#        2^(-10/3600) ~= 0.998; cumulative ~ 0.983 over the wait, i.e.
+#        ~ 1.7 % drop. The assertion is the strict invariant
+#        `p1 < p0` - we only need decay to be present, not large.
 #
 #     2) decay_via_halflife_decay_list
 #        Sets `halflife_decay_list cpu=1`. The per-usage-attribute
 #        halflife list takes values in *minutes* (and as a CULL Double
 #        accepts fractional values, with a practical floor at ~ 0.7 min
 #        before the Euler approximation goes negative). cpu=1 -> 1 min
-#        halflife. Over a 90 s wait the theoretical exponential factor
-#        is ~ 0.35; the Euler approximation produces smaller values.
-#        The assertion is that each post-wait cpu is below 1/2 of the
-#        corresponding pre-wait cpu.
+#        halflife. With the same pinned 10 s TET interval and 90 s
+#        wait, ~9 ticks fire, each decaying cpu by 2^(-10/60) ~= 0.891;
+#        cumulative ~ 0.354 - half-or-less of the pre-wait value. The
+#        assertion is `p1 < p0 / 2`.
 #
 #     Both check functions work on both the pre-CS-1239 tree (decay-
 #     on-finish in the scheduler) and the post-CS-1239 tree (periodic
-#     decay in the Timed Event Thread): after the wait period, the
-#     check submits a "ping" sleep-0 job. On the pre-refactor tree the
-#     ping triggers decay_and_sum_usage which catches up the decay
-#     before summing in a negligible contribution. On the post-refactor
-#     tree the TET task has already been decaying every few seconds
-#     and the ping is a no-op. In both cases the post-wait sge_share_mon
-#     read sees the decayed values.
+#     decay in the Timed Event Thread):
+#
+#     * Pre-refactor tree: decay happens at finish-time inside
+#       decay_and_sum_usage. The setup's USAGE_DECAY_INTERVAL
+#       qmaster_param is unknown to the pre-refactor qmaster and is
+#       silently ignored. After the wait the check submits a "ping"
+#       sleep-0 job; its finish triggers decay_and_sum_usage which
+#       catches up the full 90 s of decay before summing in a ~ 0
+#       contribution. sge_share_mon then sees the decayed values.
+#
+#     * Post-refactor tree: decay happens periodically in the TET task
+#       at the pinned 10 s cadence. By the time the ping fires the
+#       master UU_/PR_/UPP_ usage has already been decayed; the ping's
+#       sum_usage adds ~ 0 and does not touch the usage_time_stamp.
+#       The TET sharetree publish handler republishes after each tick
+#       so sge_share_mon's read of STN_combined_usage reflects the
+#       decayed state.
+#
+#     In both cases the post-wait sge_share_mon read sees the decayed
+#     values; the pinned interval is only needed for the post-refactor
+#     path, where without it the auto-derived 225 s cadence (1 h
+#     halftime / 16) would be longer than the 90 s wait and decay
+#     would phase-flip on whether a tick lands in `[p0, p1]`.
 #
 #  BACKGROUND
 #     Added as part of CS-1239. Both check functions must pass on the
@@ -102,6 +119,15 @@ proc sharetree_decay_periodic_setup {} {
 
    get_config sharetree_decay_periodic_old_config
    add_or_replace_array_param mc sharetree_decay_periodic_old_config "qmaster_params" "STREE_SPOOL_INTERVAL" "1"
+   # CS-1239: in the post-refactor tree decay is periodic (TET task). The
+   # auto-derived cadence with halftime=1h is 225 s, longer than this
+   # test's 90 s measurement window - so without pinning, no tick would
+   # fire between p0 and p1 reads and the strict `p1 < p0` assertion
+   # would phase-flip. Pin to 10 s so we see ~9 ticks per wait window.
+   # 10 s is also the new USAGE_DECAY_INTERVAL_MIN floor on the derive
+   # path (sge_conf.cc), so pinning here is consistent with what a tight
+   # halflife_decay_list would yield in production.
+   add_or_replace_array_param mc mc "qmaster_params" "USAGE_DECAY_INTERVAL" "10"
    add_or_replace_array_param mc mc "execd_params"   "SHARETREE_RESERVED_USAGE" "true"
    set_config mc
 
@@ -116,6 +142,14 @@ proc sharetree_decay_periodic_setup {} {
    set_schedd_config new_schedd
 
    add_project $sharetree_decay_periodic_project
+
+   # Force creation of the UU_ object for $CHECK_USER. The sharetree we
+   # commit below references "/$CHECK_USER" and stree_buffer_commit fails
+   # with "share tree contains reference to unknown user/project" if no
+   # UU_ object exists yet. A trivial job triggers auto-add via
+   # auto_user_*; we use qrsh hostname because it is synchronous and
+   # finishes within a second.
+   start_sge_bin "qrsh" "hostname"
 
    del_sharetree
    stree_buffer_init stree
@@ -236,10 +270,12 @@ proc sharetree_decay_periodic_measure {u0_var p0_var up0_var u1_var p1_var up1_v
    # 3. ping with a sleep-0 project job. On the pre-refactor tree the
    # finish triggers decay_and_sum_usage (decay catch-up + sum ~ 0). On
    # the post-refactor tree the TET task has already decayed and the
-   # ping is a no-op. The project ping touches user, project and UPP_
+   # ping needn't be done. The project ping touches user, project and UPP_
    # objects so all three are guaranteed to be decay-stamped fresh.
-   if {[sharetree_decay_periodic_run_one 0 $sharetree_decay_periodic_project] != 0} {
-      return 0
+   if {[is_version_in_range "" "9.2.0"]} {
+      if {[sharetree_decay_periodic_run_one 0 $sharetree_decay_periodic_project] != 0} {
+         return 0
+      }
    }
 
    set u1  [sharetree_decay_periodic_cpu $user_node]
@@ -254,8 +290,10 @@ proc sharetree_decay_periodic_measure {u0_var p0_var up0_var u1_var p1_var up1_v
 #****** sharetree_decay_periodic/decay_via_halftime() *****************************
 # Verifies that the top-level `halftime` field drives decay. Sets halftime
 # to the smallest accepted value (1, i.e. 1 hour) and clears
-# halflife_decay_list. The expected decay over the test's 90 s wait is
-# small (~ 2 % using the Euler approximation in ocs_Usage.cc:77) - this
+# halflife_decay_list. With the setup's pinned USAGE_DECAY_INTERVAL=10
+# (post-refactor only - ignored on the pre-refactor tree where decay is
+# finish-driven), the expected decay over the test's 90 s wait is
+# small (~ 1.7 % using the Euler approximation in ocs_Usage.cc:77) - this
 # check therefore asserts only the strict invariant "each post-wait value
 # is less than the corresponding pre-wait value".
 #**********************************************************************************
@@ -285,9 +323,12 @@ proc decay_via_halftime {} {
 #****** sharetree_decay_periodic/decay_via_halflife_decay_list() ******************
 # Verifies that the per-usage-attribute halflife_decay_list drives decay.
 # Sets cpu=1 (= 1 minute halflife for cpu, the only attribute we measure).
-# Over a 90 s wait the theoretical exponential factor is ~ 0.35; the
-# Euler approximation produces a smaller (faster-decayed) value, so 1/2
-# is a safe lower bound for the assertion.
+# Over a 90 s wait at the setup's pinned 10 s tick interval the cumulative
+# Euler-approximated factor is ~ 0.354 - half-or-less of the pre-wait
+# value. On the pre-refactor tree the same 90 s wait followed by the
+# ping's decay_and_sum_usage catch-up produces the same theoretical
+# ~ 0.35 factor in one shot. Either way, 1/2 is a safe lower bound for
+# the assertion.
 #**********************************************************************************
 proc decay_via_halflife_decay_list {} {
    # halflife_decay_list is in minutes per attribute (CULL Double).

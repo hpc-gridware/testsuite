@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -45,7 +45,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "qconf"
-set check_category        "EVENTCLIENT QCONF RQS TESTBIN VERIFIED"
+set check_category        "EVENTCLIENT QCONF RQS SHARETREE TESTBIN VERIFIED"
 set check_description(0)  "test all qconf options (test not complete)"
 
 # define test's dependencies

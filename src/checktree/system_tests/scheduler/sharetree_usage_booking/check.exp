@@ -132,6 +132,14 @@ proc sharetree_usage_booking_setup {} {
 
    add_project $sharetree_usage_booking_project
 
+   # Force creation of the UU_ object for $CHECK_USER. The sharetree we
+   # commit below references "/$CHECK_USER" and stree_buffer_commit fails
+   # with "share tree contains reference to unknown user/project" if no
+   # UU_ object exists yet. A trivial job triggers auto-add via
+   # auto_user_*; we use qrsh hostname because it is synchronous and
+   # finishes within a second.
+   start_sge_bin "qrsh" "hostname"
+
    # Build a sharetree that materialises all three leaves we want to
    # observe (UU_, PR_ and UPP_ via the user-under-project leaf).
    del_sharetree
