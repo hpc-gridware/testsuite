@@ -51,6 +51,17 @@
 #                      each a dict keyed by the json_keys (args: host user)
 #   lcfg(host)       - admin host to run on
 #   lcfg(user)       - user to run as
+#
+# The name-list engine (ts_namelist_json / ts_namelist_plain /
+# ts_namelist_consistency) drives a name-list switch (-scall, -spl, -sckptl, ...)
+# that produces an enveloped JSON array of bare name strings. It works on a "ncfg"
+# array:
+#   ncfg(obj_type) - schema type for ajv, e.g. "calendar-list" -> ocs-qconf-calendar-list.schema.json
+#   ncfg(show_opt) - qconf show option, e.g. "-scall"
+#   ncfg(envelope) - top-level json array key (lowercased object type), e.g. "calendar"
+#   ncfg(min_rows) - minimum number of names expected (e.g. 1 for the test object)
+#   ncfg(host)     - admin host to run on
+#   ncfg(user)     - user to run as
 
 ## @brief is the ajv JSON-Schema validator available on a host?
 #
@@ -695,5 +706,121 @@ proc ts_list_consistency {cfg_var} {
    # 4. at least min_rows records matched in both formats
    if {$compared < $cfg(min_rows)} {
       ts_log_severe "list $cfg(obj_type): only $compared record(s) present in both plain and json (expected >= $cfg(min_rows))"
+   }
+}
+
+# ============================================================================
+# Name-list engine (enveloped JSON arrays of bare names: -scall, -spl, ...)
+# ============================================================================
+
+## @brief run a name-list show switch in plain format and return the names
+#
+# The plain output of a name-list switch is simply one name per line (no header).
+# Comment lines (starting with '#') are skipped, matching the ASCII shower.
+#
+# @param[in] cfg_var name of the name-list config array
+# @return a list of names (possibly empty)
+#
+proc ts_namelist_plain_get {cfg_var} {
+   upvar $cfg_var cfg
+   global CHECK_USER prg_exit_state
+   set host $cfg(host)
+   if {$host == ""} {
+      set host [config_get_best_suited_admin_host]
+   }
+   set user $cfg(user)
+   if {$user == ""} {
+      set user $CHECK_USER
+   }
+
+   set out [start_sge_bin "qconf" $cfg(show_opt) $host $user]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qconf $cfg(show_opt) failed (exit $prg_exit_state):\n$out"
+      return {}
+   }
+   set names {}
+   foreach line [split $out "\n"] {
+      set line [string trim $line]
+      if {$line eq "" || [string index $line 0] eq "#"} {
+         continue
+      }
+      lappend names $line
+   }
+   return $names
+}
+
+## @brief validate the JSON output of a name-list switch
+#
+# Steps:
+#   1. read the list as json (qconf -fmt json <show_opt>)
+#   2. validate against the name-list schema (ajv enforces the array-of-strings)
+#   3. assert the envelope key holds a JSON array
+#   4. assert at least ncfg(min_rows) names are present
+#
+# @param[in] cfg_var name of the name-list config array (see file header)
+# @return nothing (failures are reported via ts_log_severe)
+#
+proc ts_namelist_json {cfg_var} {
+   upvar $cfg_var cfg
+
+   # 1. read the list as json
+   if {[get_object_json $cfg(show_opt) jdict jtext "" $cfg(host) $cfg(user)] != 0} {
+      return
+   }
+
+   # 2. schema validation (the schema's nameList $ref enforces string elements)
+   ts_json_validate $jtext $cfg(obj_type) $cfg(host)
+
+   # 3. the envelope key must be a JSON array
+   ts_json_assert_type $jtext $cfg(envelope) list "$cfg(obj_type)/$cfg(envelope)"
+
+   # 4. at least min_rows names present
+   if {![dict exists $jdict $cfg(envelope)]} {
+      ts_log_severe "json $cfg(obj_type): missing envelope key \"$cfg(envelope)\""
+      return
+   }
+   set n [llength [dict get $jdict $cfg(envelope)]]
+   if {$n < $cfg(min_rows)} {
+      ts_log_severe "json $cfg(obj_type): expected at least $cfg(min_rows) name(s) in \"$cfg(envelope)\" but found $n"
+   }
+}
+
+## @brief verify the plain (ASCII) name-list output has the expected names
+#
+# Steps:
+#   1. run the plain show and parse the names (one per line)
+#   2. assert at least ncfg(min_rows) names were parsed
+#
+# @param[in] cfg_var name of the name-list config array
+# @return nothing (failures are reported via ts_log_severe)
+#
+proc ts_namelist_plain {cfg_var} {
+   upvar $cfg_var cfg
+
+   set names [ts_namelist_plain_get cfg]
+   if {[llength $names] < $cfg(min_rows)} {
+      ts_log_severe "plain $cfg(obj_type): expected at least $cfg(min_rows) name(s) but parsed [llength $names]"
+   }
+}
+
+## @brief cross-check that the plain and json name lists are identical (as sets)
+#
+# Steps:
+#   1. read the list as json and as plain text
+#   2. assert the two name sets are equal (order-independent)
+#
+# @param[in] cfg_var name of the name-list config array
+# @return nothing (failures are reported via ts_log_severe)
+#
+proc ts_namelist_consistency {cfg_var} {
+   upvar $cfg_var cfg
+
+   if {[get_object_json $cfg(show_opt) jdict jtext "" $cfg(host) $cfg(user)] != 0} {
+      return
+   }
+   set jn [lsort [dict get $jdict $cfg(envelope)]]
+   set pn [lsort [ts_namelist_plain_get cfg]]
+   if {$jn ne $pn} {
+      ts_log_severe "namelist $cfg(obj_type): plain and json differ:\nplain: $pn\njson:  $jn"
    }
 }
