@@ -2422,9 +2422,15 @@ proc qconf_add_project {} {
    #   ts_log_severe "qconf -aprj should have failed for duplicate"
    #}
 
-   set ret [add_project "$MY_PROJECT_NAME" project 1 "" "" 0] ;# fast add duplicate
-   if {$ret != -2} {
-      ts_log_severe "qconf -Aprj should have failed for duplicate"
+   # CS-2309 (9.2.0+): -Aprj upserts (add-or-modify), so a duplicate add no longer
+   # fails - it modifies the existing project. That upsert behavior is verified by the
+   # project_qconf_enhancements check, so here we only assert the legacy "duplicate
+   # add must fail" behavior for pre-9.2.0 versions.
+   if {![is_version_in_range "9.2.0"]} {
+      set ret [add_project "$MY_PROJECT_NAME" project 1 "" "" 0] ;# fast add duplicate
+      if {$ret != -2} {
+         ts_log_severe "qconf -Aprj should have failed for duplicate"
+      }
    }
 
    del_project "$MY_PROJECT_NAME"
@@ -4309,33 +4315,39 @@ proc qconf_modifyreplace_rqs {} {
 
    get_rqs old_rqs_config
 
-   get_rqs_list result
-   set old_rqs_count [llength $result]
+   # CS-2307 (9.2.0+): -Mrqs/-mrqs upsert (modify-or-add the file's rqs, preserve the
+   # rest) instead of replacing the whole rqs list, so the "replace all" count checks
+   # below no longer hold. The upsert behavior is verified by rqs_qconf_enhancements;
+   # run the legacy replace-all assertions only for pre-9.2.0 versions.
+   if {![is_version_in_range "9.2.0"]} {
+      get_rqs_list result
+      set old_rqs_count [llength $result]
 
-   set rqs_name "qconf_modifyreplace_rqs"
+      set rqs_name "qconf_modifyreplace_rqs"
 
-   set rules     ""
-   lappend rules "to arch=sol-amd64"
-   set new_rqs_charray($rqs_name,limit) "$rules"
+      set rules     ""
+      lappend rules "to arch=sol-amd64"
+      set new_rqs_charray($rqs_name,limit) "$rules"
 
-   # Replace from CLI
-   set result [mod_rqs new_rqs_charray "" 0]
+      # Replace from CLI
+      set result [mod_rqs new_rqs_charray "" 0]
 
-   get_rqs_list result
-   set new_rqs_count [llength $result]
+      get_rqs_list result
+      set new_rqs_count [llength $result]
 
-   if { $old_rqs_count == $new_rqs_count } {
-      ts_log_severe "modify replace fast doesn't replaced all resource quota sets"
-   }
+      if { $old_rqs_count == $new_rqs_count } {
+         ts_log_severe "modify replace fast doesn't replaced all resource quota sets"
+      }
 
-   # Replace resource quota sets fast
-   set result [mod_rqs old_rqs_config ""]
+      # Replace resource quota sets fast
+      set result [mod_rqs old_rqs_config ""]
 
-   get_rqs_list result
-   set new_rqs_count [llength $result]
+      get_rqs_list result
+      set new_rqs_count [llength $result]
 
-   if { $old_rqs_count != $new_rqs_count } {
-      ts_log_severe "modify replace cli doesn't replaced all resource quota sets"
+      if { $old_rqs_count != $new_rqs_count } {
+         ts_log_severe "modify replace cli doesn't replaced all resource quota sets"
+      }
    }
 
    # try to replace resource quota set with insufficient permissions
@@ -4654,6 +4666,16 @@ proc qconf_issue_2445 {} {
 #*******************************************************************************
 proc qconf_Aconf {} {
    global ts_config
+
+   # CS-2311 (9.2.0+): -Aconf/-Mconf take a file|directory (basename = host key) and
+   # upsert each config (add-or-modify) instead of taking a hostname and failing with
+   # "configuration already exists". The new upsert/directory interface is verified by
+   # the config_qconf_enhancements check (config_qconf_enh_c2_upsert), so the legacy
+   # "already exists, not modified" assertion only applies to pre-9.2.0 versions.
+   if {[is_version_in_range "9.2.0"]} {
+      ts_log_fine "qconf_Aconf: legacy -Aconf <host> behavior replaced by CS-2311 upsert; covered by config_qconf_enhancements"
+      return
+   }
 
    # run qconf -Aconf with an already existing configuration
    set result [string trim [start_sge_bin "qconf" "-Aconf $ts_config(master_host)"]]

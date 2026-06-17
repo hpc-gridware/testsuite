@@ -9612,6 +9612,14 @@ proc sge_client_messages {msg_var action obj_type obj_name {on_host ""} {as_user
 
          set NOT_MODIFIED [translate_macro MSG_FILE_NOTCHANGED ]
          add_message_to_container messages -3 $NOT_MODIFIED
+
+         # CS-2309+ (9.2.0): qconf -a<obj> is an upsert, so adding an object that
+         # already exists modifies it instead of failing. Accept the "modified"
+         # message as a (non-error) success so callers do not see an unrecognized -999.
+         if {[is_version_in_range "9.2.0"]} {
+            set MODIFIED [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS $as_user $on_host $obj_name $obj_type]
+            add_message_to_container messages 1 $MODIFIED
+         }
       }
       "get" {
          # expect: does not exist [ object type, object name ]
@@ -9651,6 +9659,14 @@ proc sge_client_messages {msg_var action obj_type obj_name {on_host ""} {as_user
 
          set NOT_EXISTS [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS $obj_type $obj_name]
          add_message_to_container messages -1 $NOT_EXISTS
+
+         # CS-2309+ (9.2.0): qconf -m<obj> is an upsert, so modifying an object that
+         # does not exist adds it instead of failing. Accept the "added" message as a
+         # (non-error) success so callers do not see an unrecognized -999.
+         if {[is_version_in_range "9.2.0"]} {
+            set ADDED [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS $as_user $on_host $obj_name $obj_type]
+            add_message_to_container messages 1 $ADDED
+         }
       }
       "list" {
          # expect: object [ result ]
