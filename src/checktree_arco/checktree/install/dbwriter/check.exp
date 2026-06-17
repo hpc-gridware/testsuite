@@ -236,7 +236,8 @@ proc arco_dbwriter_install_manual {} {
              continue
           }
           -i $sp_id "Do you want to use the existing dbwriter configuration file? (y/n) * >> " {
-             send_to_spawn_id $sp_id "n"
+             # Test CS-2323: Repeat the dbwriter installation (menu item 60, arco_database_install, arco_dbwriter_install_manual
+             send_to_spawn_id $sp_id "y"
              continue
           }
           -i $sp_id "Do you want to repeat database connection setup*>> " {
