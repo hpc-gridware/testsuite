@@ -117,6 +117,7 @@ lappend generic_module_tests "test_uti_tq"
 lappend generic_module_tests "test_uti_string"
 lappend generic_module_tests "test_uti_dstring"
 lappend generic_module_tests "test_uti_uidgid"
+lappend generic_module_tests "test_uti_peopen"
 lappend generic_module_tests "test_uti_threads"
 lappend generic_module_tests "test_uti_thread_local"
 lappend generic_module_tests "test_uti_time"
@@ -167,16 +168,15 @@ proc generic_module_tests_cleanup {} {
    }
 }
 
-#****** module_tests/generic_module_tests_run() ************************************
-#  NAME
-#     generic_module_tests_run() -- run module tests
+## @brief Run all supported module test binaries on the configured hosts.
 #
-#  SYNOPSIS
-#     generic_module_tests_run { }
+# Iterates over the global generic_module_tests list and starts each binary
+# via start_test_bin on every host in generic_module_tests_test_hosts.
+# Most tests run as CHECK_USER; test_uti_peopen (CS-2333) is run as root
+# and told which non-root user to switch to. Failures are collected and
+# reported via ts_log_severe.
 #
-#  FUNCTION
-#     This test runs all supported module tests.
-#*******************************************************************************
+# @return none; reports failures through ts_log_severe
 proc generic_module_tests_run {} {
    global ts_config CHECK_USER
    global generic_module_tests generic_module_tests_test_hosts
@@ -191,7 +191,18 @@ proc generic_module_tests_run {} {
 
          # some tests (especially thread related tests) might take very long, so we set a timeout of 10 minutes
          set time_in_sec 600
-         set output [start_test_bin $module_test "" $host $CHECK_USER ret $time_in_sec]
+
+         # test_uti_peopen (CS-2333) exercises the root-only user-switch path
+         # of sge_peopen*/; it must run as root and is told which non-root user to
+         # switch to (argv[1]); otherwise it only skips.
+         set test_user $CHECK_USER
+         set test_args ""
+         if {$module_test eq "test_uti_peopen"} {
+            global CHECK_FIRST_FOREIGN_SYSTEM_USER
+            set test_user "root"
+            set test_args $CHECK_FIRST_FOREIGN_SYSTEM_USER
+         }
+         set output [start_test_bin $module_test $test_args $host $test_user ret $time_in_sec]
          if {$ret == 0} {
             ts_log_fine "   => $module_test ok"
             ts_log_fine $output
