@@ -94,8 +94,10 @@ proc issue_1597_get_spooled_load_names {host} {
    set host [resolve_host $host 1]
    set names {}
 
-   if {$ts_config(spooling_method) == "berkeleydb"} {
-      # berkeleydb spooling: dump the object with the spooledit utility
+   if {$ts_config(spooling_method) == "berkeleydb" || $ts_config(spooling_method) == "postgres"} {
+      # berkeleydb / postgres spooling: dump the object with the spooledit
+      # utility. Both backends speak the same operator-visible spooledit
+      # protocol; only the underlying storage differs.
       set output [start_sge_utilbin "spooledit" "dump EXECHOST:$host" $ts_config(master_host)]
       if {$prg_exit_state != 0} {
          ts_log_severe "spooledit dump EXECHOST:$host failed:\n$output"

@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -2800,18 +2800,22 @@ proc scale_timeout {timeout {does_computation 1} {does_spooling 1} {process_invo
 
    # respect spooling influence
    if {$does_spooling} {
-      # classic spooling is slower than BDB, assume 100% slower spooling
+      set spool_dir ""
       if {$ts_config(spooling_method) == "classic"} {
-         set ret [expr $ret * 2.0]
          set spool_dir [get_qmaster_spool_dir]
-      } else {
+      } elseif {$ts_config(spooling_method) == "berkeleydb"} {
          set spool_dir [get_bdb_spooldir]
+      } elseif {$ts_config(spooling_method) == "postgres"} {
+         # spooling in postgres database is slower than to a local file, assume 50% slower
+         set ret [expr $ret * 1.5]
       }
 
-      # spooling on NFS mounted filesystem, assume 50% slower spooling
-      set fstype [fs_config_get_filesystem_type $spool_dir $ts_config(master_host) 0]
-      if {[string match "nfs*" $fstype]} {
-         set ret [expr $ret * 1.5]
+      # spooling on NFS mounted filesystem (classic, berkeleydb), assume 50% slower spooling
+      if {$spool_dir ne ""} {
+         set fstype [fs_config_get_filesystem_type $spool_dir $ts_config(master_host) 0]
+         if {[string match "nfs*" $fstype]} {
+            set ret [expr $ret * 1.5]
+         }
       }
    }
 

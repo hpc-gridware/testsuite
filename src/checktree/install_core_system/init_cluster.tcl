@@ -34,6 +34,80 @@
 ##########################################################################
 #___INFO__MARK_END__
 
+#****** init_cluster/cleanup_postgres_spool_tables() ***************************
+#  NAME
+#     cleanup_postgres_spool_tables() -- drop the postgres spool tables
+#
+#  SYNOPSIS
+#     cleanup_postgres_spool_tables {}
+#
+#  FUNCTION
+#     For spooling_method=postgres, kill_running_system would otherwise
+#     leave the previous run's `config` and `jobs` tables in the remote
+#     PG database — deleting $SGE_ROOT/$SGE_CELL is enough for classic
+#     and berkeleydb (their state lives on disk) but not for postgres
+#     (state lives in a remote database). Without this step, a fresh
+#     install runs spoolinit against a database that already has
+#     populated tables and either fails outright or picks up stale
+#     rows from the previous cluster.
+#
+#     Connection params come from the ts_db_config entry named by
+#     ts_config(spool_database) (default spool_<commd_port>); the
+#     password is passed to psql via the PGPASSWORD env var so it
+#     does not appear on the process command line.
+#
+#     The psql binary is invoked on the **database host**
+#     (ts_db_config(...,dbhost)) rather than the master host —
+#     the dbhost is guaranteed to have psql installed (it's where
+#     PG itself lives), while the master host may not even have
+#     postgres-client installed. The connection still goes through
+#     the same hostname/port as qmaster uses at runtime, so we
+#     exercise the same pg_hba.conf path and don't accidentally
+#     rely on Unix-socket peer auth.
+#
+#     Best-effort: missing ts_db_config entry, missing psql binary,
+#     or unreachable database are logged via ts_log_info and the
+#     surrounding kill_running_system flow continues. A non-postgres
+#     spooling method makes this proc a no-op.
+#*******************************************************************************
+proc cleanup_postgres_spool_tables {} {
+   global ts_config ts_db_config CHECK_USER
+
+   if {$ts_config(spooling_method) != "postgres"} {
+      return 0
+   }
+
+   set spool_db_entry $ts_config(spool_database)
+   if {$spool_db_entry == ""} {
+      set spool_db_entry "spool_$ts_config(commd_port)"
+   }
+
+   if {![info exists ts_db_config($spool_db_entry,dbhost)]} {
+      ts_log_info "no ts_db_config entry \"$spool_db_entry\" — skipping postgres spool cleanup"
+      return 0
+   }
+
+   set pg_host   $ts_db_config($spool_db_entry,dbhost)
+   set pg_port   $ts_db_config($spool_db_entry,dbport)
+   set pg_dbname $ts_db_config($spool_db_entry,dbname)
+   set pg_user   $ts_db_config($spool_db_entry,username)
+   set pg_password ""
+   if {[info exists ts_db_config($spool_db_entry,password)]} {
+      set pg_password $ts_db_config($spool_db_entry,password)
+   }
+
+   ts_log_fine "dropping postgres spool tables on $pg_host:$pg_port/$pg_dbname as $pg_user"
+
+   set envlist(PGPASSWORD) $pg_password
+   set sql "DROP TABLE IF EXISTS config; DROP TABLE IF EXISTS jobs;"
+   set args "--no-password -h $pg_host -p $pg_port -d $pg_dbname -U $pg_user -v ON_ERROR_STOP=1 -c \"$sql\""
+   set output [start_remote_prog $pg_host $CHECK_USER "psql" $args prg_exit_state 60 0 "" envlist 1 0 0]
+   if {$prg_exit_state != 0} {
+      ts_log_info "postgres spool cleanup returned non-zero (best-effort, continuing):\n$output"
+   }
+   return $prg_exit_state
+}
+
 proc kill_running_system {} {
    global ts_config
    global CHECK_USER CORE_INSTALLED CHECK_INSTALL_RC
@@ -52,6 +126,13 @@ proc kill_running_system {} {
    shutdown_core_system
 
    if {$check_use_installed_system == 0} {
+      # For postgres spooling the cluster state lives in a remote DB,
+      # not on the local filesystem. Drop the spool tables BEFORE
+      # removing $SGE_ROOT/$SGE_CELL so a subsequent install sees a
+      # clean schema, matching the classic/berkeleydb fresh-state
+      # invariant that "kill_running_system leaves nothing behind".
+      cleanup_postgres_spool_tables
+
       if {[remote_file_isdirectory $ts_config(master_host) "$ts_config(product_root)/$ts_config(cell)"]} {
          # if the $SGE_ROOT/$SGE_CELL exists, delete it
          delete_directory "$ts_config(product_root)/$ts_config(cell)"

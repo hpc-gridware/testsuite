@@ -155,7 +155,7 @@ proc issue_1385_test {} {
       sleep_for_seconds 2
    }
    if {!$booked} {
-      ts_log_severe "project \"$issue_1385_project\" never got any share tree usage booked"
+      ts_log_severe "project \"$issue_1385_project\" never got any share tree usage booked:\n$usage_names"
       return
    }
 

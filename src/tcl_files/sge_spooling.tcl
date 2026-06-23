@@ -72,8 +72,8 @@ proc spool_classic_usage_names {object_type object_name list_name} {
    return $names
 }
 
-#****** sge_spooling/spool_bdb_usage_names() ************************************
-#  Internal: BerkeleyDB spooling implementation. Uses spooledit to dump the
+#****** sge_spooling/spool_db_usage_names() ************************************
+#  Internal: BerkeleyDB/PostgreSQL spooling implementation. Uses spooledit to dump the
 #  object, then walks the dump looking for UA_name entries inside the
 #  requested PR_/UU_ usage list. Returns an empty list on dump failure or
 #  empty usage list.
@@ -82,7 +82,7 @@ proc spool_classic_usage_names {object_type object_name list_name} {
 #  PR_debited_job_usage), so we track which top-level PR_/UU_ field we are
 #  currently inside.
 #*******************************************************************************
-proc spool_bdb_usage_names {object_type object_name list_name} {
+proc spool_db_usage_names {object_type object_name list_name} {
    get_current_cluster_config_array ts_config
 
    set names {}
@@ -91,7 +91,7 @@ proc spool_bdb_usage_names {object_type object_name list_name} {
       "user"    { set prefix "UU"; set dump_tag "USER" }
       "project" { set prefix "PR"; set dump_tag "PROJECT" }
       default {
-         ts_log_severe "spool_bdb_usage_names: unknown object_type \"$object_type\""
+         ts_log_severe "spool_db_usage_names: unknown object_type \"$object_type\""
          return $names
       }
    }
@@ -141,14 +141,14 @@ proc spool_bdb_usage_names {object_type object_name list_name} {
 #    or spooledit dump failed.
 #
 #  This is a thin dispatcher around spool_classic_usage_names /
-#  spool_bdb_usage_names; callers should use this entry point unless they
+#  spool_db_usage_names; callers should use this entry point unless they
 #  already know which spooling method is in use.
 #*******************************************************************************
 proc get_spooled_usage_names {object_type object_name list_name} {
    get_current_cluster_config_array ts_config
 
-   if {$ts_config(spooling_method) == "berkeleydb"} {
-      return [spool_bdb_usage_names $object_type $object_name $list_name]
+   if {$ts_config(spooling_method) == "berkeleydb" || $ts_config(spooling_method) == "postgres"} {
+      return [spool_db_usage_names $object_type $object_name $list_name]
    } else {
       return [spool_classic_usage_names $object_type $object_name $list_name]
    }

@@ -175,6 +175,19 @@ proc shadowd_migrate_test {} {
       if {$ts_config(spooling_method) == "classic"} {
          ts_log_fine "We have \"classic\" spooling to a shared qmaster spool dir."
          set spooling_ok 1
+      } elseif {$ts_config(spooling_method) == "postgres"} {
+         # postgres spooling: spool data lives in the remote DB, but
+         # the qmaster spool directory (heartbeat file, messages, pid,
+         # lock) still has to be on a shared filesystem so every
+         # shadowd can poll the heartbeat — that is the same
+         # precondition classic relies on, and the same "if it was
+         # not shared, install would have failed earlier" assumption
+         # applies here. The BDB-only check below additionally verifies
+         # the BDB env dir is NFSv4; PG has no equivalent
+         # second-storage check because the second store is a remote
+         # DB, not a filesystem.
+         ts_log_fine "We have \"postgres\" spooling; assuming the qmaster spool dir is shared (would have failed at install otherwise)."
+         set spooling_ok 1
       } else {
          if {$ts_config(spooling_method) == "berkeleydb"} {
             set bdb_spooldir [get_bdb_spooldir]

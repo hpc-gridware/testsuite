@@ -286,6 +286,32 @@ proc installer_create_and_compare_backup {{orig_backup_dir ""}} {
    return $prg_exit_state
 }
 
+## @brief look up a field of the postgres-spool ts_db_config entry
+#
+# Helper for the interactive installer's postgres-spooling prompts.
+# Resolves the ts_db_config entry name from ts_config(spool_database)
+# (default spool_<commd_port>, matching the auto-installer path's
+# convention) and returns the requested field's value.
+#
+# @param field  ts_db_config sub-field name (e.g., dbhost, dbport,
+#               dbname, username, password)
+# @return       the field's value, or empty string when the entry or
+#               field is absent (lets the caller decide whether to
+#               treat absence as default-accept or as an error)
+##
+proc postgres_install_get_field {field} {
+   global ts_config ts_db_config
+
+   set entry $ts_config(spool_database)
+   if {$entry == ""} {
+      set entry "spool_$ts_config(commd_port)"
+   }
+   if {[info exists ts_db_config($entry,$field)]} {
+      return $ts_db_config($entry,$field)
+   }
+   return ""
+}
+
 ## @brief perform an interactive upgrade from a backup
 #
 # @param bckp_dir directory where the backup is stored
@@ -348,6 +374,20 @@ proc installer_do_upgrade_from_backup {bckp_dir} {
    set ENTER_DATABASE_DIRECTORY_LOCAL_SPOOLING [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_DATABASE_DIRECTORY_LOCAL_SPOOLING] "*"]
    set ENTER_DATABASE_SERVER_DIRECTORY [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_SERVER_DATABASE_DIRECTORY] "*"]
    set DATABASE_DIR_NOT_ON_LOCAL_FS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DATABASE_DIR_NOT_ON_LOCAL_FS] "*"]
+   # postgres-spooling prompts emitted by SetSpoolingOptionsPostgres in
+   # source/dist/util/install_modules/inst_qmaster.sh (U7). Connection
+   # parameters come from the ts_db_config entry named by
+   # ts_config(spool_database); the matching auto-installer path
+   # (checktree/install_core_system/automatic/qmaster.tcl) reads the same
+   # entry to populate SPOOLING_PG_* in the auto-install template.
+   set POSTGRES_HOST                [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_HOST]]
+   set POSTGRES_PORT                [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_PORT] "*"]
+   set POSTGRES_DBNAME              [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_DBNAME]]
+   set POSTGRES_USER                [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_USER]]
+   set POSTGRES_SSLMODE             [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_SSLMODE]]
+   set POSTGRES_PGPASS_SETUP        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_PGPASS_SETUP]]
+   set POSTGRES_PGPASS_PATH         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_PGPASS_PATH] "*"]
+   set POSTGRES_PASSWORD            [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_PASSWORD]]
    set STARTUP_RPC_SERVER           [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_STARTUP_RPC_SERVER]]
    set EXECD_SPOOLING_DIR_NOROOT_NOADMINUSER [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_EXECD_SPOOLING_DIR_NOROOT_NOADMINUSER]]
    set EXECD_SPOOLING_DIR_NOROOT    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_EXECD_SPOOLING_DIR_NOROOT] "*"]
@@ -827,6 +867,96 @@ proc installer_do_upgrade_from_backup {bckp_dir} {
       -i $sp_id -- $DATABASE_DIR_NOT_ON_LOCAL_FS {
           ts_log_config "configured database directory not on local disk\nPlease run testsuite setup and configure Berkeley DB server and/or directory"
           set return_value 1
+      }
+
+      # ---- postgres-spooling prompts (matching SetSpoolingOptionsPostgres
+      # in source/dist/util/install_modules/inst_qmaster.sh). Connection
+      # parameters come from the ts_db_config entry named by
+      # ts_config(spool_database); the matching auto-installer path
+      # (checktree/install_core_system/automatic/qmaster.tcl) reads the
+      # same entry to populate the SPOOLING_PG_* template variables.
+
+      -i $sp_id -- $POSTGRES_HOST {
+         set pg_host [postgres_install_get_field "dbhost"]
+         ts_log_fine "\n -->testsuite: sending >$pg_host< (postgres host)"
+         ts_send $sp_id "$pg_host\n"
+         append install_output $expect_out(buffer)
+         log_user 1
+         exp_continue
+      }
+
+      -i $sp_id -- $POSTGRES_PORT {
+         set pg_port [postgres_install_get_field "dbport"]
+         ts_log_fine "\n -->testsuite: sending >$pg_port< (postgres port)"
+         ts_send $sp_id "$pg_port\n"
+         append install_output $expect_out(buffer)
+         log_user 1
+         exp_continue
+      }
+
+      -i $sp_id -- $POSTGRES_DBNAME {
+         set pg_dbname [postgres_install_get_field "dbname"]
+         ts_log_fine "\n -->testsuite: sending >$pg_dbname< (postgres dbname)"
+         ts_send $sp_id "$pg_dbname\n"
+         append install_output $expect_out(buffer)
+         log_user 1
+         exp_continue
+      }
+
+      -i $sp_id -- $POSTGRES_USER {
+         set pg_user [postgres_install_get_field "username"]
+         ts_log_fine "\n -->testsuite: sending >$pg_user< (postgres user)"
+         ts_send $sp_id "$pg_user\n"
+         append install_output $expect_out(buffer)
+         log_user 1
+         exp_continue
+      }
+
+      -i $sp_id -- $POSTGRES_SSLMODE {
+         # Mirror the auto-install default: disable SSL in testsuite
+         # clusters. Test PGs typically don't have SSL configured; libpq's
+         # default "prefer" would try to load client cert files and fail.
+         ts_log_fine "\n -->testsuite: sending >disable< (postgres sslmode)"
+         ts_send $sp_id "disable\n"
+         append install_output $expect_out(buffer)
+         log_user 1
+         exp_continue
+      }
+
+      -i $sp_id -- $POSTGRES_PGPASS_SETUP {
+         # If ts_db_config has a password, opt in to .pgpass setup; else
+         # decline and rely on pg_hba.conf peer/trust auth.
+         set pg_pw [postgres_install_get_field "password"]
+         if {$pg_pw == ""} {
+            ts_log_fine "\n -->testsuite: sending >$ANSWER_NO< (no .pgpass setup)"
+            ts_send $sp_id "$ANSWER_NO\n"
+         } else {
+            ts_log_fine "\n -->testsuite: sending >$ANSWER_YES< (.pgpass setup)"
+            ts_send $sp_id "$ANSWER_YES\n"
+         }
+         append install_output $expect_out(buffer)
+         log_user 1
+         exp_continue
+      }
+
+      -i $sp_id -- $POSTGRES_PGPASS_PATH {
+         # Accept the installer's default (under $SGE_ROOT/$SGE_CELL/common).
+         ts_log_fine "\n -->testsuite: sending >RETURN< (default .pgpass path)"
+         ts_send $sp_id "\n"
+         append install_output $expect_out(buffer)
+         log_user 1
+         exp_continue
+      }
+
+      -i $sp_id -- $POSTGRES_PASSWORD {
+         set pg_pw [postgres_install_get_field "password"]
+         # Password input is read without echo (stty -echo) on the
+         # installer side, so do NOT log it; only log a redacted notice.
+         ts_log_fine "\n -->testsuite: sending postgres password (redacted)"
+         ts_send $sp_id "$pg_pw\n"
+         append install_output $expect_out(buffer)
+         log_user 1
+         exp_continue
       }
 
       -i $sp_id -- $IJS_SELECTION {

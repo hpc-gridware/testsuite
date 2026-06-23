@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -157,6 +157,21 @@ proc install_qmaster {{report_var report}} {
    set DATABASE_DIR_NOT_ON_LOCAL_FS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DATABASE_DIR_NOT_ON_LOCAL_FS] "*"]
    set STARTUP_RPC_SERVER [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_STARTUP_RPC_SERVER]]
    set DONT_KNOW_HOW_TO_TEST_FOR_LOCAL_FS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DONT_KNOW_HOW_TO_TEST_FOR_LOCAL_FS]]
+
+   # postgres spooling — prompts emitted by SetSpoolingOptionsPostgres in
+   # source/dist/util/install_modules/inst_qmaster.sh (U7). Connection
+   # parameters come from the ts_db_config entry named by
+   # ts_config(spool_database); the matching auto-installer path in
+   # checktree/install_core_system/automatic/qmaster.tcl reads the same
+   # entry to populate the SPOOLING_PG_* template variables.
+   set POSTGRES_HOST         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_HOST]]
+   set POSTGRES_PORT         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_PORT] "*"]
+   set POSTGRES_DBNAME       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_DBNAME]]
+   set POSTGRES_USER         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_USER]]
+   set POSTGRES_SSLMODE      [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_SSLMODE]]
+   set POSTGRES_PGPASS_SETUP [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_PGPASS_SETUP]]
+   set POSTGRES_PGPASS_PATH  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_PGPASS_PATH] "*"]
+   set POSTGRES_PASSWORD     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_PASSWORD]]
 
    # csp
    set CSP_COPY_CERTS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CSP_COPY_CERTS]]
@@ -731,6 +746,70 @@ proc install_qmaster {{report_var report}} {
             test_report report $curr_task_nr $report_id result [get_result_failed]
             test_report report $curr_task_nr $report_id value $msg
             return
+         }
+
+         #
+         # PostgreSQL spooling prompts (paired with SetSpoolingOptionsPostgres
+         # in source/dist/util/install_modules/inst_qmaster.sh). Connection
+         # parameters come from the ts_db_config entry named by
+         # ts_config(spool_database); see postgres_install_get_field in
+         # tcl_files/ocs_installer.tcl.
+         #
+         -i $sp_id $POSTGRES_HOST {
+            install_send_answer $sp_id [postgres_install_get_field "dbhost"]
+            continue
+         }
+
+         -i $sp_id $POSTGRES_PORT {
+            install_send_answer $sp_id [postgres_install_get_field "dbport"]
+            continue
+         }
+
+         -i $sp_id $POSTGRES_DBNAME {
+            install_send_answer $sp_id [postgres_install_get_field "dbname"]
+            continue
+         }
+
+         -i $sp_id $POSTGRES_USER {
+            install_send_answer $sp_id [postgres_install_get_field "username"]
+            continue
+         }
+
+         -i $sp_id $POSTGRES_SSLMODE {
+            # Mirror the auto-install default: disable SSL in testsuite
+            # clusters. Test PGs typically have no SSL configured; libpq's
+            # default "prefer" would try client cert files and fail.
+            install_send_answer $sp_id "disable"
+            continue
+         }
+
+         -i $sp_id $POSTGRES_PGPASS_SETUP {
+            # If ts_db_config has a password, opt in to .pgpass setup;
+            # else decline and rely on pg_hba.conf peer/trust auth.
+            if {[postgres_install_get_field "password"] == ""} {
+               install_send_answer $sp_id $ANSWER_NO
+            } else {
+               install_send_answer $sp_id $ANSWER_YES
+            }
+            continue
+         }
+
+         -i $sp_id $POSTGRES_PGPASS_PATH {
+            # Accept installer default ($SGE_ROOT/$SGE_CELL/common/.pgpass).
+            install_send_answer $sp_id ""
+            continue
+         }
+
+         -i $sp_id $POSTGRES_PASSWORD {
+            # Installer reads with stty -echo so the password never
+            # appears on the operator's screen; bypass
+            # install_send_answer (which logs every value) and send via
+            # ts_send directly so the cleartext does not land in the
+            # testsuite log either. Log a redacted notice instead.
+            ts_log_newline FINER
+            ts_log_finer "--> testsuite: sending postgres password (redacted)"
+            ts_send $sp_id "[postgres_install_get_field {password}]\n"
+            continue
          }
 
          #

@@ -81,6 +81,8 @@ proc backup_restore_do_backup_restore {} {
    set spool_dir [get_spool_dir $ts_config(master_host) spooldb]
    if {$spooling_method == "classic"} {
       ts_log_fine "classic spooling detected"
+   } elseif {$spooling_method == "postgres"} {
+      ts_log_fine "postgres spooling detected"
    } else {
       ts_log_fine "berkeleydb local spooling detected"
    }
@@ -331,6 +333,8 @@ proc backup_restore_cleanup {} {
    set spool_dir [get_spool_dir $ts_config(master_host) spooldb]
    if {$spooling_method == "classic"} {
       ts_log_fine "classic spooling detected"
+   } elseif {$spooling_method == "postgres"} {
+      ts_log_fine "postgres spooling detected"
    } else {
       ts_log_fine "berkeleydb local spooling detected"
    }

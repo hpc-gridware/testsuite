@@ -3995,9 +3995,98 @@ proc config_testsuite_spooling_method { only_check name config_array } {
    array set spool_list {
       classic ""
       berkeleydb ""
+      postgres ""
       }
 
    return [config_generic $only_check $name config $help_text "choice" 0 1 spool_list]
+}
+
+#****** config/config_testsuite_spool_database() *******************************
+#  NAME
+#     config_testsuite_spool_database() -- ts_db_config entry name for PG spool
+#
+#  SYNOPSIS
+#     config_testsuite_spool_database { only_check name config_array }
+#
+#  FUNCTION
+#     Names the ts_db_config entry that supplies the PG host/port/dbname/user
+#     used to write the auto-install template and to drive the
+#     spooling-method tests.
+#
+#     When spooling_method=postgres the value is mandatory and MUST resolve
+#     to an existing postgres-typed entry in ts_db_config(databaselist);
+#     "none" / empty / unknown / wrong-dbtype values are rejected with a
+#     directing error message. The list of valid options is the set of
+#     databaselist entries whose `dbtype` field equals "postgres", so the
+#     operator picks from the existing database configuration rather than
+#     typing a free-form name.
+#
+#     For any other spooling_method the value is unused; "none" is the
+#     conventional empty placeholder accepted as a no-op.
+#*******************************************************************************
+proc config_testsuite_spool_database { only_check name config_array } {
+   global ts_db_config
+   upvar $config_array config
+
+   set help_text { "Name of the ts_db_config entry that holds the PostgreSQL"
+                   "host / port / dbname / user used for postgres spooling."
+                   "Mandatory when spooling_method=postgres; choose one of"
+                   "the postgres-typed entries from your database"
+                   "configuration. Use \"none\" for non-postgres spooling." }
+
+   # Figure out the active spooling method so we can drop the requirement
+   # cleanly for classic / berkeleydb runs.
+   set spooling_method ""
+   if {[info exists config(spooling_method)]} {
+      set spooling_method $config(spooling_method)
+   }
+
+   if {$spooling_method != "postgres"} {
+      # Not postgres → field is unused. Accept any string (including "none"
+      # / empty) without validation. Stay on `string` mode so existing
+      # configs that carry "none" continue to load.
+      return [config_generic $only_check $name config $help_text "string"]
+   }
+
+   # Build the list of postgres-typed databases from ts_db_config. Empty
+   # list → fail-fast with a clear pointer to the database-config screen
+   # instead of dropping the operator into an empty choice prompt.
+   array set pg_choices {}
+   if {[info exists ts_db_config(databaselist)]} {
+      foreach db $ts_db_config(databaselist) {
+         if {[info exists ts_db_config($db,dbtype)]
+             && $ts_db_config($db,dbtype) == "postgres"} {
+            set pg_choices($db) ""
+         }
+      }
+   }
+
+   if {[array size pg_choices] == 0} {
+      puts "spooling_method=postgres requires at least one postgres-typed entry"
+      puts "in the testsuite database configuration. Configure one via the"
+      puts "database-configuration menu (dbtype=postgres) and re-run setup."
+      return -1
+   }
+
+   # Reject the legacy "none" / empty value with a directing message —
+   # config_generic's choice mode would otherwise silently treat "none"
+   # as the null_value default and pass.
+   if {$only_check == 1 && [info exists config($name)]} {
+      set current $config($name)
+      if {$current == "" || $current == "none"} {
+         puts "spool_database is mandatory when spooling_method=postgres."
+         puts "Available postgres databases: [lsort [array names pg_choices]]"
+         return -1
+      }
+      if {![info exists pg_choices($current)]} {
+         puts "spool_database \"$current\" is not a postgres-typed entry"
+         puts "in ts_db_config. Available postgres databases:"
+         puts "  [lsort [array names pg_choices]]"
+         return -1
+      }
+   }
+
+   return [config_generic $only_check $name config $help_text "choice" 0 1 pg_choices]
 }
 
 #****** config/config_testsuite_bdb_dir() **************************************
@@ -5377,12 +5466,45 @@ proc config_build_ts_config_1_25 {} {
    set ts_config(version) "1.25"
 }
 
+proc config_build_ts_config_1_26 {} {
+   global ts_config
+
+   # insert new parameter after spooling_method
+   set insert_pos $ts_config(spooling_method,pos)
+   incr insert_pos 1
+
+   # move positions of following parameters
+   set names [array names ts_config "*,pos"]
+   foreach name $names {
+      if { $ts_config($name) >= $insert_pos } {
+         set ts_config($name) [ expr ( $ts_config($name) + 1 ) ]
+      }
+   }
+
+   # new parameter spool_database — name of a ts_db_config entry holding
+   # the PostgreSQL connection parameters used by spooling_method=postgres.
+   # Default convention parallels arco_<commd_port>: the entry name
+   # spool_<commd_port> is looked up at install / runtime; missing entry
+   # is reported via ts_log_config and the run skips cleanly. Only
+   # consulted when spooling_method=postgres.
+   set parameter "spool_database"
+   set ts_config($parameter)            "none"
+   set ts_config($parameter,desc)       "Name of the ts_db_config entry for postgres spooling (consulted only when spooling_method=postgres; default spool_<commd_port>)"
+   set ts_config($parameter,default)    "none"
+   set ts_config($parameter,setup_func) "config_testsuite_spool_database"
+   set ts_config($parameter,onchange)   "stop"
+   set ts_config($parameter,pos)        $insert_pos
+
+   # now we have a configuration version 1.26
+   set ts_config(version) "1.26"
+}
+
 ################################################################################
 #  MAIN                                                                        #
 ################################################################################
 
 global actual_ts_config_version      ;# actual config version number
-set actual_ts_config_version "1.25"
+set actual_ts_config_version "1.26"
 
 # first source of config.tcl: create ts_config
 if {![info exists ts_config]} {
@@ -5413,6 +5535,7 @@ if {![info exists ts_config]} {
    config_build_ts_config_1_23
    config_build_ts_config_1_24
    config_build_ts_config_1_25
+   config_build_ts_config_1_26
 }
 
 ###

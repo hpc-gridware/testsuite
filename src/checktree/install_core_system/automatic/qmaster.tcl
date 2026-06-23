@@ -193,6 +193,54 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
    append auto_config_content "GID_RANGE=\"$gid_range\"\n"
    append auto_config_content "SPOOLING_METHOD=\"$ts_config(spooling_method)\"\n"
    append auto_config_content "DB_SPOOLING_DIR=\"$db_dir\"\n"
+
+   # PostgreSQL spooling: emit the SPOOLING_PG_* template variables so
+   # inst_sge -auto can build the libpq conninfo and (optionally) the
+   # .pgpass file. Connection parameters come from a ts_db_config entry;
+   # the entry name defaults to spool_<commd_port> (parallel to
+   # arco_<commd_port> for the dbwriter accounting database) but can be
+   # overridden via ts_config(spool_database). Missing entry → log and
+   # bail cleanly so the run does not silently fall back to wrong
+   # credentials.
+   if {$ts_config(spooling_method) == "postgres"} {
+      global ts_db_config
+
+      set spool_db_entry $ts_config(spool_database)
+      if {$spool_db_entry == ""} {
+         set spool_db_entry "spool_$ts_config(commd_port)"
+      }
+
+      if {![info exists ts_db_config($spool_db_entry,dbhost)]} {
+         ts_log_config "spooling_method=postgres but ts_db_config entry \"$spool_db_entry\" is missing — postgres install cannot proceed"
+         return -1
+      }
+
+      set pg_host     $ts_db_config($spool_db_entry,dbhost)
+      set pg_port     $ts_db_config($spool_db_entry,dbport)
+      set pg_dbname   $ts_db_config($spool_db_entry,dbname)
+      set pg_user     $ts_db_config($spool_db_entry,username)
+      set pg_password ""
+      if {[info exists ts_db_config($spool_db_entry,password)]} {
+         set pg_password $ts_db_config($spool_db_entry,password)
+      }
+
+      append auto_config_content "SPOOLING_PG_HOST=\"$pg_host\"\n"
+      append auto_config_content "SPOOLING_PG_PORT=\"$pg_port\"\n"
+      append auto_config_content "SPOOLING_PG_DBNAME=\"$pg_dbname\"\n"
+      append auto_config_content "SPOOLING_PG_USER=\"$pg_user\"\n"
+      # SSLMODE and PASSFILE are not first-class ts_db_config fields
+      # today (the testsuite's database config was designed around the
+      # dbwriter use case). Default SSLMODE to "disable" for the test
+      # cluster: testsuite-managed PG instances rarely have SSL
+      # configured, and libpq's default ("prefer") tries SSL and fails
+      # looking for client cert files when the test PG accepts plain
+      # TCP. Operators wiring up production PG override this in their
+      # own auto-install template. PASSFILE stays empty so the
+      # installer picks the default $SGE_ROOT/$SGE_CELL/common/.pgpass.
+      append auto_config_content "SPOOLING_PG_SSLMODE=\"disable\"\n"
+      append auto_config_content "SPOOLING_PG_PASSFILE=\"\"\n"
+      append auto_config_content "SPOOLING_PG_PASSWORD=\"$pg_password\"\n"
+   }
    # exec/shadowd host install: only use the given host in the host lists
    if {$exechost || $shadowd} {
       append auto_config_content "ADMIN_HOST_LIST=\"$host\"\n"

@@ -27,18 +27,18 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2024,2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
 
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 # define test's name and run level descriptions
@@ -48,7 +48,7 @@ set check_description(0)  "test spooledit"
 
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function spooledit_setup
@@ -66,9 +66,9 @@ lappend check_functions "spooledit_dump"
 # Currently we don't need setup/cleanup
 proc spooledit_setup {} {
    global ts_config
-   
-   if {$ts_config(spooling_method) != "berkeleydb"} {
-      ts_log_config "this test only works for spooling_method == berkeleydb"
+
+   if {$ts_config(spooling_method) != "berkeleydb" && $ts_config(spooling_method) != "postgres"} {
+      ts_log_config "this test only works for spooling_method == berkeleydb or postgres"
    }
 }
 
@@ -79,7 +79,7 @@ proc spooledit_setup {} {
 proc spooledit_list {} {
    global ts_config
 
-   if {$ts_config(spooling_method) != "berkeleydb"} {
+   if {$ts_config(spooling_method) != "berkeleydb" && $ts_config(spooling_method) != "postgres"} {
       return
    }
 
@@ -91,8 +91,8 @@ proc spooledit_list {} {
       set num_objs [llength $spooled_objects]
       ts_log_fine "spooledit list reported $num_objs spooled objects"
 
-      
-      foreach object $spooled_objects {      
+
+      foreach object $spooled_objects {
          if {[string match "JOBSCRIPT*" $object] != 0} {
             ts_log_severe "found remaining job script in bdb database"
             break
@@ -109,7 +109,7 @@ proc spooledit_list {} {
 proc spooledit_dump {} {
    global ts_config
 
-   if {$ts_config(spooling_method) != "berkeleydb"} {
+   if {$ts_config(spooling_method) != "berkeleydb" && $ts_config(spooling_method) != "postgres"} {
       return
    }
 

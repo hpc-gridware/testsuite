@@ -211,7 +211,7 @@ proc diff_macro_files { file_a file_b { ignore_backslash_at_end 1 } } {
 #     is_macro_available() -- check if macro is existing
 #
 #  SYNOPSIS
-#     is_macro_available { macro_name } 
+#     is_macro_available { macro_name }
 #
 #  FUNCTION
 #     Figure out if the specified macro is available.
@@ -473,7 +473,7 @@ proc update_macro_messages_list {} {
    ts_log_finer "checking file \"$filename\""
    if {[file isfile $filename]} {
       set update_required 0
-      
+
       # If source code messages files (msg_*.h) have changed since we last parsed
       # them, we'll have to do an update.
       if {!$fast_setup && $ts_config(source_dir) != "none"} {
@@ -561,7 +561,7 @@ proc update_macro_messages_list {} {
       set output [start_remote_prog $copy_host $CHECK_USER "cp" "$copy_path $filename"]
       ts_log_fine $output
       if {$prg_exit_state != 0} {
-         ts_log_severe "${copy_host}($CHECK_USER): Cannot copy messages file \"$copy_path\" to \"$filename\"!" 
+         ts_log_severe "${copy_host}($CHECK_USER): Cannot copy messages file \"$copy_path\" to \"$filename\"!"
          testsuite_shutdown 1
       }
       wait_for_remote_file [gethostname] $CHECK_USER $filename
@@ -831,7 +831,7 @@ proc get_internal_message_number_from_id { id } {
 #     translate_all_macros() -- helper function to find out if macro is L10Ned
 #
 #  SYNOPSIS
-#     translate_all_macros { } 
+#     translate_all_macros { }
 #
 #  FUNCTION
 #     This procedure can be used to generate a file in /tmp/unused_macros.txt
@@ -1364,7 +1364,7 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_IF_NOT_OK_STOP_INSTALLATION" { set value "Hit <RETURN> if this is ok or stop the installation with Ctrl-C >> " }
       "DISTINST_DNS_DOMAIN_QUESTION" { set value "Are all hosts of your cluster in a single DNS domain (y/n) \[y\] >> " }
       "DISTINST_SERVICE_TAGS_SUPPORT" { set value "Are you going to enable Service Tags support? (y/n) \[y\] >> " }
-      "DISTINST_CHOOSE_SPOOLING_METHOD" { set value "Your SGE binaries are compiled to link the spooling libraries\nduring runtime (dynamically). So you can choose between Berkeley DB \nspooling and Classic spooling method.\nPlease choose a spooling method (berkeleydb|classic) \[%s\] >> " }
+      "DISTINST_CHOOSE_SPOOLING_METHOD" { set value "Your * binaries are compiled to link the spooling libraries\nduring runtime (dynamically). So you can choose between * spooling*.\nPlease choose a spooling method (*) \[%s\] >> " }
       "DISTINST_ENTER_SPOOL_DIR" { set value "Please enter a qmaster spool directory now! >>" }
       "DISTINST_ENTER_QMASTER_SPOOL_DIR" { set value "Enter a qmaster spool directory * >>" }
       "DISTINST_USING_GID_RANGE_HIT_RETURN" { set value "\nUsing >%s< as gid range. Hit <RETURN> to continue >> " }
@@ -1389,6 +1389,14 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_CURRENT_GRID_ROOT_DIRECTORY" { set value "The * root directory is:\n\n   \\\$SGE_ROOT = %s\n\nIf this directory is not correct (e.g. it may contain an automounter\nprefix) enter the correct path to this directory or hit <RETURN>\nto use default \[%s\] >> " }
       "DISTINST_INSTALL_FAIL" { set value "Uninstallation  failed after %s retries" }
       "DISTINST_DATABASE_LOCAL_SPOOLING" { set value "Do you want to use a Berkeley DB Spooling Server? (y/n) \[n\] >> " }
+      "DISTINST_POSTGRES_HOST" { set value "*PostgreSQL host*>> *" }
+      "DISTINST_POSTGRES_PORT" { set value "*PostgreSQL port*>> *" }
+      "DISTINST_POSTGRES_DBNAME" { set value "*Database name*>> *" }
+      "DISTINST_POSTGRES_USER" { set value "*Database user*>> *" }
+      "DISTINST_POSTGRES_SSLMODE" { set value "*SSL mode*>> *" }
+      "DISTINST_POSTGRES_PGPASS_SETUP" { set value "*pgpass file with a password*>> *" }
+      "DISTINST_POSTGRES_PGPASS_PATH" { set value "*pgpass path*>> *" }
+      "DISTINST_POSTGRES_PASSWORD" { set value "*Database password*>> *" }
       "DISTINST_EXECD_SPOOLING_DIR_NOROOT_NOADMINUSER" { set value "\nPlease give the basic configuration parameters of your *\ninstallation:\n\n   <execd_spool_dir>\n\nThe pathname of the spool directory of the execution hosts. You\nmust have the right to create this directory and to write into it.\n" }
       "DISTINST_EXECD_SPOOLING_DIR_NOROOT" { set value "\nPlease give the basic configuration parameters of your *\ninstallation:\n\n   <execd_spool_dir>\n\nThe pathname of the spool directory of the execution hosts. User >%s<\nmust have the right to create this directory and to write into it.\n" }
       "DISTINST_EXECD_SPOOLING_DIR_DEFAULT" { set value "Default: \[%s\] >> " }

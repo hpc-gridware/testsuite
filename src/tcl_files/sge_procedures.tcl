@@ -3966,7 +3966,7 @@ proc get_spooled_jobs {} {
    set supported 0
 
    # BDB implementation
-   if {$ts_config(spooling_method) == "berkeleydb" } {
+   if {$ts_config(spooling_method) == "berkeleydb" || $ts_config(spooling_method) == "postgres"} {
       ts_log_finer "we have berkeleydb spooling ..."
       set supported 1
       set execute_host $ts_config(master_host)
@@ -10475,16 +10475,16 @@ proc check_shadowd_settings { shadowd_host } {
       if { $ts_config(spooling_method) == "classic" } {
          ts_log_fine "We have \"classic\" spooling to a shared qmaster spool dir."
          set spooling_ok 1
-      } else {
-         if {$ts_config(spooling_method) == "berkeleydb"} {
-            set bdb_spooldir [get_bdb_spooldir]
-            set fstype [fs_config_get_filesystem_type $bdb_spooldir $ts_config(master_host) 0]
-            if {$fstype == "nfs4"} {
-               ts_log_fine "We have \"berkeleydb\" spooling on NFS v4"
-               set spooling_ok 1
-
-            }
+      } elseif {$ts_config(spooling_method) == "berkeleydb"} {
+         set bdb_spooldir [get_bdb_spooldir]
+         set fstype [fs_config_get_filesystem_type $bdb_spooldir $ts_config(master_host) 0]
+         if {$fstype == "nfs4"} {
+            ts_log_fine "We have \"berkeleydb\" spooling on NFS v4"
+            set spooling_ok 1
          }
+      } elseif {$ts_config(spooling_method) == "postgres"} {
+         ts_log_fine "We have \"postgres\" spooling (shared by definition)."
+         set spooling_ok 1
       }
 
       if {!$spooling_ok} {

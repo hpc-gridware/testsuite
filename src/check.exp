@@ -2337,12 +2337,18 @@ proc update_ts_config_version {} {
       config_build_ts_config_1_24
       show_config ts_config
       wait_for_enter
-      return 0
    }
 
    if {[string compare $ts_config(version) "1.24"] == 0} {
       puts "\ntestsuite configuration update from 1.24 to 1.25 ..."
       config_build_ts_config_1_25
+      show_config ts_config
+      wait_for_enter
+   }
+
+   if {[string compare $ts_config(version) "1.25"] == 0} {
+      puts "\ntestsuite configuration update from 1.25 to 1.26 ..."
+      config_build_ts_config_1_26
       show_config ts_config
       wait_for_enter
       return 0

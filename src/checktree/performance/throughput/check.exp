@@ -4458,8 +4458,16 @@ proc create_reports {results_array job_array_name schedd_array_name monitoring_n
    ts_log_fine "-> $qmaster_messages"
    ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "mv" "$qmaster_messages $results_dir/qmaster_messages"]
    ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "touch" "$qmaster_messages"]
+   # we also move the unexpected output file to the results directory
    ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "mv" "$unexpected_out_filename $results_dir/unexpected_output.txt"]
+   # as well as bootstrap and accounting file
    ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "cp" "$ts_config(product_root)/$ts_config(cell)/common/bootstrap $results_dir/bootstrap"]
+   set accounting_file "accounting"
+   if {[is_version_in_range "9.0.0"]} {
+      append accounting_file ".jsonl"
+   }
+   set accounting_path "$ts_config(product_root)/$ts_config(cell)/common/$accounting_file"
+   ts_log_fine [start_remote_prog $ts_config(master_host) $CHECK_USER "mv" "$accounting_path $results_dir/$accounting_file"]
 
    # create analysis, dump html and gif's
    analyse_dump_data_file $prot_output_file 1
