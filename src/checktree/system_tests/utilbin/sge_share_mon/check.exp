@@ -536,8 +536,8 @@ proc share_mon_usage_in_spool {} {
                   $user_names\n\
                   sge_book_finished_job_usage / sge_sharetree_tick_handler short-circuit was\
                   bypassed"
-         # versions before 9.2.0 in berkeleydb spooling have entries with value 0.0 - skip the test for this setup
-         if {[is_version_in_range "" "9.2.0"] && $ts_config(spooling_method) == "berkeleydb"} {
+         # versions before 9.2.0 sometimes have entries with value 0.0 - skip the test for this setup
+         if {[is_version_in_range "" "9.2.0"]} {
             ts_log_info $msg
          } else {
             ts_log_severe $msg
