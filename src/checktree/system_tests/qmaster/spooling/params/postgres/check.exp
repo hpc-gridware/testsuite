@@ -1,0 +1,408 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# Test the postgres spooling_params validation surface: each libpq /
+# xxQS_NAMExx keyword is verified by mutating the bootstrap's
+# `spooling_params` line and running `spooledit list CQUEUE:all.q`
+# against the modified value. qmaster is shut down for the duration of
+# the test (spooledit reads the bootstrap directly; an active qmaster
+# would race with the rewrites).
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+
+set check_root_access_needs   "yes"
+# We shut the cluster down ourselves in setup and bring it back up in
+# cleanup; the framework should not pre-check liveness for us.
+set check_need_running_system "no"
+
+set check_name            "spooling_params_postgres"
+set check_category        "QMASTER POSTGRES SPOOLING VERIFIED"
+set check_description(0)  "validate postgres spooling_params keyword handling"
+
+# Depends on a freshly installed core system so a known CQUEUE:all.q
+# exists for the positive `spooledit list` probe.
+set check_needs           "init_core_system"
+
+set check_setup_function   spooling_params_postgres_setup
+set check_cleanup_function spooling_params_postgres_cleanup
+
+set check_functions {}
+lappend check_functions "spooling_params_postgres_host"
+lappend check_functions "spooling_params_postgres_port"
+lappend check_functions "spooling_params_postgres_dbname"
+lappend check_functions "spooling_params_postgres_user"
+lappend check_functions "spooling_params_postgres_passfile"
+lappend check_functions "spooling_params_postgres_password_rejected"
+lappend check_functions "spooling_params_postgres_sslmode_simple"
+lappend check_functions "spooling_params_postgres_sslmode_invalid"
+
+# Module-private state shared across setup / check / cleanup.
+global spooling_params_postgres_saved
+set spooling_params_postgres_saved ""
+
+# -------- helpers ----------------------------------------------------
+
+# Reads the current `spooling_params` value from the bootstrap file via
+# the shared bootstrap_file_read helper. Returns "" when the file cannot
+# be read or the keyword is absent. Using bootstrap_file_read/write
+# matters because the live bootstrap file is not writable by default
+# (mode 0444) — bootstrap_file_write chmods it 0644 before the write and
+# restores the original mode afterwards.
+proc spooling_params_postgres_get_current {} {
+   array unset bs
+   if {[bootstrap_file_read bs] == 0} {
+      return ""
+   }
+   if {![info exists bs(spooling_params)]} {
+      return ""
+   }
+   return [string trim $bs(spooling_params)]
+}
+
+# Rewrites the bootstrap file with `new_params` replacing the existing
+# `spooling_params` value. All other entries are preserved verbatim by
+# bootstrap_file_write (it merges this single key into the existing
+# file).
+proc spooling_params_postgres_write {new_params} {
+   array unset patch
+   set patch(spooling_params) $new_params
+   bootstrap_file_write patch
+}
+
+# Returns a modified spooling_params string with `key=` replaced by
+# `key=new_value`. Setting `new_value` to "" removes the key. Appends
+# the key at the end when absent.
+proc spooling_params_postgres_replace_key {params key new_value} {
+   set tokens [split $params " "]
+   set out [list]
+   set found 0
+   foreach tok $tokens {
+      if {$tok == ""} {
+         continue
+      }
+      if {[regexp "^${key}=" $tok]} {
+         set found 1
+         if {$new_value != ""} {
+            lappend out "$key=$new_value"
+         }
+      } else {
+         lappend out $tok
+      }
+   }
+   if {!$found && $new_value != ""} {
+      lappend out "$key=$new_value"
+   }
+   return [join $out " "]
+}
+
+# Runs `spooledit list CQUEUE:all.q` on the master host and returns
+# [list exit_state output]. Note: spooledit reads the bootstrap each
+# invocation, so the most-recent write_remote_file is what it sees.
+proc spooling_params_postgres_run_spooledit {} {
+   global prg_exit_state
+   get_current_cluster_config_array ts_config
+   set output [start_sge_utilbin "spooledit" "list CQUEUE:all.q" $ts_config(master_host)]
+   return [list $prg_exit_state $output]
+}
+
+# Verifies spooledit succeeds and its output names CQUEUE:all.q. Emits
+# a ts_log_severe and returns 0 on either condition failing.
+proc spooling_params_postgres_expect_ok {scenario} {
+   set result [spooling_params_postgres_run_spooledit]
+   set exit_state [lindex $result 0]
+   set output [lindex $result 1]
+   if {$exit_state != 0} {
+      ts_log_severe "$scenario: spooledit list CQUEUE:all.q expected to succeed but exited $exit_state\n$output"
+      return 0
+   }
+   if {![string match "*CQUEUE:all.q*" $output]} {
+      ts_log_severe "$scenario: spooledit list CQUEUE:all.q exited 0 but output missing CQUEUE:all.q\n$output"
+      return 0
+   }
+   ts_log_fine "$scenario: spooledit succeeded as expected"
+   return 1
+}
+
+# Verifies spooledit fails with a non-zero exit. Emits a ts_log_severe
+# and returns 0 if it unexpectedly succeeds.
+proc spooling_params_postgres_expect_fail {scenario {expected_marker ""}} {
+   set result [spooling_params_postgres_run_spooledit]
+   set exit_state [lindex $result 0]
+   set output [lindex $result 1]
+   if {$exit_state == 0} {
+      ts_log_severe "$scenario: spooledit list CQUEUE:all.q expected to fail but exited 0\n$output"
+      return 0
+   }
+   if {$expected_marker != "" && ![string match "*${expected_marker}*" $output]} {
+      ts_log_severe "$scenario: spooledit failed as expected but output did not contain '$expected_marker'\n$output"
+      return 0
+   }
+   ts_log_fine "$scenario: spooledit failed as expected (exit $exit_state)"
+   return 1
+}
+
+# Restores the saved spooling_params to the bootstrap so the next check
+# starts from a known-good baseline.
+proc spooling_params_postgres_restore {} {
+   global spooling_params_postgres_saved
+   if {$spooling_params_postgres_saved != ""} {
+      spooling_params_postgres_write $spooling_params_postgres_saved
+   }
+}
+
+# -------- setup / cleanup --------------------------------------------
+
+proc spooling_params_postgres_setup {} {
+   global spooling_params_postgres_saved
+   get_current_cluster_config_array ts_config
+
+   if {$ts_config(spooling_method) != "postgres"} {
+      ts_log_config "postgres spooling_params test: spooling_method is\
+                     '$ts_config(spooling_method)'; skipping"
+      return 99
+   }
+
+   set spooling_params_postgres_saved [spooling_params_postgres_get_current]
+   if {$spooling_params_postgres_saved == ""} {
+      ts_log_config "postgres spooling_params test: could not read\
+                     spooling_params from bootstrap; skipping"
+      return 99
+   }
+   ts_log_fine "saved spooling_params: $spooling_params_postgres_saved"
+
+   # Shut qmaster down so the spooledit-driven probes are the only
+   # readers of the bootstrap during the test. An active qmaster would
+   # cache the original spooling_params and never see the rewrites.
+   if {[is_qmaster_alive $ts_config(master_host) [get_qmaster_spool_dir]]} {
+      ts_log_fine "shutting qmaster down for spooling_params tests"
+      shutdown_qmaster $ts_config(master_host) [get_qmaster_spool_dir]
+   }
+
+   return 0
+}
+
+proc spooling_params_postgres_cleanup {} {
+   global spooling_params_postgres_saved
+   get_current_cluster_config_array ts_config
+
+   if {$ts_config(spooling_method) != "postgres"} {
+      return
+   }
+
+   # Always put the original spooling_params back, even when individual
+   # checks left the file mutated.
+   spooling_params_postgres_restore
+
+   if {![is_qmaster_alive $ts_config(master_host) [get_qmaster_spool_dir]]} {
+      ts_log_fine "restarting qmaster after spooling_params tests"
+      startup_qmaster
+   }
+}
+
+# -------- check functions --------------------------------------------
+
+# Positive: keep the configured host, expect CQUEUE:all.q to list.
+# Negative: point host= at a name that cannot resolve, expect failure.
+proc spooling_params_postgres_host {} {
+   global spooling_params_postgres_saved
+   get_current_cluster_config_array ts_config
+   if {$ts_config(spooling_method) != "postgres"} {
+      return
+   }
+
+   spooling_params_postgres_write $spooling_params_postgres_saved
+   spooling_params_postgres_expect_ok "host positive (keep configured)"
+
+   set bad [spooling_params_postgres_replace_key \
+            $spooling_params_postgres_saved "host" "no-such-host.invalid"]
+   spooling_params_postgres_write $bad
+   spooling_params_postgres_expect_fail "host negative (unresolvable)"
+
+   spooling_params_postgres_restore
+}
+
+# Positive: keep configured port. Negative: TCP port 1 (privileged and
+# unused by PG).
+proc spooling_params_postgres_port {} {
+   global spooling_params_postgres_saved
+   get_current_cluster_config_array ts_config
+   if {$ts_config(spooling_method) != "postgres"} {
+      return
+   }
+
+   spooling_params_postgres_write $spooling_params_postgres_saved
+   spooling_params_postgres_expect_ok "port positive (keep configured)"
+
+   set bad [spooling_params_postgres_replace_key \
+            $spooling_params_postgres_saved "port" "1"]
+   spooling_params_postgres_write $bad
+   spooling_params_postgres_expect_fail "port negative (port 1)"
+
+   spooling_params_postgres_restore
+}
+
+# Positive: keep configured dbname. Negative: a name that does not
+# exist on the server.
+proc spooling_params_postgres_dbname {} {
+   global spooling_params_postgres_saved
+   get_current_cluster_config_array ts_config
+   if {$ts_config(spooling_method) != "postgres"} {
+      return
+   }
+
+   spooling_params_postgres_write $spooling_params_postgres_saved
+   spooling_params_postgres_expect_ok "dbname positive (keep configured)"
+
+   set bad [spooling_params_postgres_replace_key \
+            $spooling_params_postgres_saved "dbname" "ts_nosuch_db_xxx"]
+   spooling_params_postgres_write $bad
+   spooling_params_postgres_expect_fail "dbname negative (no such DB)"
+
+   spooling_params_postgres_restore
+}
+
+# Positive: keep configured user. Negative: a role that does not
+# exist on the server.
+proc spooling_params_postgres_user {} {
+   global spooling_params_postgres_saved
+   get_current_cluster_config_array ts_config
+   if {$ts_config(spooling_method) != "postgres"} {
+      return
+   }
+
+   spooling_params_postgres_write $spooling_params_postgres_saved
+   spooling_params_postgres_expect_ok "user positive (keep configured)"
+
+   set bad [spooling_params_postgres_replace_key \
+            $spooling_params_postgres_saved "user" "ts_nosuch_user_xxx"]
+   spooling_params_postgres_write $bad
+   spooling_params_postgres_expect_fail "user negative (no such role)"
+
+   spooling_params_postgres_restore
+}
+
+# Positive: keep configured passfile (only if one is present in the
+# saved params). Negative: point passfile= at a non-existent path —
+# expect spooledit to fail with the MSG_POSTGRES_PASSFILESTAT message.
+proc spooling_params_postgres_passfile {} {
+   global spooling_params_postgres_saved
+   get_current_cluster_config_array ts_config
+   if {$ts_config(spooling_method) != "postgres"} {
+      return
+   }
+
+   if {![regexp {(^|[ \t])passfile=} $spooling_params_postgres_saved]} {
+      ts_log_config "passfile= not in spooling_params; skipping passfile checks"
+      return
+   }
+
+   spooling_params_postgres_write $spooling_params_postgres_saved
+   spooling_params_postgres_expect_ok "passfile positive (keep configured)"
+
+   set bad [spooling_params_postgres_replace_key \
+            $spooling_params_postgres_saved \
+            "passfile" "/tmp/ts_nosuch_passfile_xxx"]
+   spooling_params_postgres_write $bad
+   spooling_params_postgres_expect_fail "passfile negative (missing file)"
+
+   spooling_params_postgres_restore
+}
+
+# Adding password= to a world-readable bootstrap is forbidden by
+# policy (KTD-9). Expect spooledit to fail with the dedicated
+# password-rejection message.
+proc spooling_params_postgres_password_rejected {} {
+   global spooling_params_postgres_saved
+   get_current_cluster_config_array ts_config
+   if {$ts_config(spooling_method) != "postgres"} {
+      return
+   }
+
+   set bad [spooling_params_postgres_replace_key \
+            $spooling_params_postgres_saved "password" "secret"]
+   spooling_params_postgres_write $bad
+   spooling_params_postgres_expect_fail "password rejected" "password"
+
+   spooling_params_postgres_restore
+}
+
+# Sweep the simple libpq sslmode values. Each value should be accepted
+# by libpq's keyword parser; the actual TLS outcome depends on the
+# PostgreSQL server configuration and is not asserted here — log
+# whatever spooledit reports. The negative path lives in the separate
+# `_sslmode_invalid` check below.
+proc spooling_params_postgres_sslmode_simple {} {
+   global spooling_params_postgres_saved
+   get_current_cluster_config_array ts_config
+   if {$ts_config(spooling_method) != "postgres"} {
+      return
+   }
+
+   foreach mode {disable allow prefer require} {
+      set params [spooling_params_postgres_replace_key \
+                  $spooling_params_postgres_saved "sslmode" $mode]
+      spooling_params_postgres_write $params
+      set result [spooling_params_postgres_run_spooledit]
+      set exit_state [lindex $result 0]
+      set output [lindex $result 1]
+      ts_log_fine "sslmode=$mode: spooledit exit=$exit_state\n$output"
+      # We do not enforce success/failure here because server config
+      # (pg_hba.conf hostssl vs host) varies across deployments.
+      # The asserted contract is "no libpq parse error" — surface
+      # known parse-error markers as failures.
+      if {[string match "*invalid sslmode*" $output] ||
+          [string match "*unrecognized sslmode*" $output]} {
+         ts_log_severe "sslmode=$mode rejected by libpq parser: $output"
+      }
+   }
+
+   spooling_params_postgres_restore
+}
+
+# A clearly invalid sslmode value must be rejected by libpq's
+# conninfo parser before any connect attempt.
+proc spooling_params_postgres_sslmode_invalid {} {
+   global spooling_params_postgres_saved
+   get_current_cluster_config_array ts_config
+   if {$ts_config(spooling_method) != "postgres"} {
+      return
+   }
+
+   set bad [spooling_params_postgres_replace_key \
+            $spooling_params_postgres_saved "sslmode" "verify-bogus"]
+   spooling_params_postgres_write $bad
+   spooling_params_postgres_expect_fail "sslmode invalid (verify-bogus)"
+
+   spooling_params_postgres_restore
+}
+
+# Certificate-based sslmodes (verify-ca / verify-full with
+# sslrootcert / sslcert / sslkey) are intentionally not exercised
+# here because that requires provisioning trusted certs on both the
+# PG server and the client side, which is out of scope for the
+# testsuite. Document the path as a manual-test follow-up rather
+# than ship a check that is impossible to keep green automatically.
