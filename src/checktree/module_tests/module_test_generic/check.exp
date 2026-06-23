@@ -104,6 +104,8 @@ lappend generic_module_tests "test_sched_eval_performance"
 lappend generic_module_tests "test_sched_resource_utilization"
 lappend generic_module_tests "test_sched_load_formula"
 
+lappend generic_module_tests "test_procedure_qquota_json"
+
 lappend generic_module_tests "test_spool_flatfile"
 
 lappend generic_module_tests "test_uti_bitfield"
