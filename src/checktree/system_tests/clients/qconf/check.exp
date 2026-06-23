@@ -4645,6 +4645,8 @@ proc qconf_issue_2445 {} {
    } else {
       ts_log_fine  "qsub -S NONE negative test for IZ 2445 passed"
    }
+
+   delete_job $job_id
 }
 
 

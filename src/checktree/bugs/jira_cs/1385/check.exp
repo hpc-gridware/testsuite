@@ -105,92 +105,6 @@ proc issue_1385_cleanup {} {
 
 # -------- local test procedures: utilities -----------------------------------
 
-#****** issue_1385/issue_1385_classic_usage_names() ***************************
-# classic spooling: read the project spool file and return the usage attribute
-# names of the requested usage list ("usage" or "long_term_usage").
-#******************************************************************************
-proc issue_1385_classic_usage_names {which} {
-   get_current_cluster_config_array ts_config
-   global CHECK_USER issue_1385_project
-
-   set names {}
-   set spool_file "[get_spool_dir $ts_config(master_host) qmaster]/projects/$issue_1385_project"
-
-   # the project object is spooled when it is created, but guard anyway
-   if {![is_remote_file $ts_config(master_host) $CHECK_USER $spool_file 1]} {
-      return $names
-   }
-
-   get_file_content $ts_config(master_host) $CHECK_USER $spool_file file_lines
-   for {set i 1} {$i <= $file_lines(0)} {incr i} {
-      set line [string trim $file_lines($i)]
-      if {[lindex $line 0] == $which} {
-         # everything behind the leading keyword is a space separated list
-         # of <name>=<value> tokens (or the literal NONE)
-         set value [string trim [string range $line [string length $which] end]]
-         if {$value != "NONE"} {
-            foreach token $value {
-               lappend names [lindex [split $token "="] 0]
-            }
-         }
-         break
-      }
-   }
-   return $names
-}
-
-#****** issue_1385/issue_1385_bdb_usage_names() *******************************
-# berkeleydb spooling: dump the project object with the spooledit utility and
-# return the usage attribute names of the requested usage list. The dump also
-# contains usage names of unrelated lists (PR_debited_job_usage, PR_project),
-# so we track which PR_ list field we are currently inside.
-#******************************************************************************
-proc issue_1385_bdb_usage_names {which} {
-   get_current_cluster_config_array ts_config
-   global issue_1385_project
-
-   set field "PR_$which"
-   set names {}
-
-   set output [start_sge_utilbin "spooledit" "dump PROJECT:$issue_1385_project" $ts_config(master_host)]
-   if {$prg_exit_state != 0} {
-      ts_log_severe "spooledit dump PROJECT:$issue_1385_project failed:\n$output"
-      return $names
-   }
-
-   set context ""
-   foreach line [split $output "\n"] {
-      # a cull dump line looks like:  /* <FIELDNAME> */ <value>
-      if {[regexp {/\* +([A-Za-z0-9_ ]+?) +\*/} $line -> dumped_field]} {
-         # every top level PR_ field starts a new section
-         if {[string match "PR_*" $dumped_field]} {
-            set context $dumped_field
-         }
-      }
-      # collect UA_name values, but only while inside the requested list
-      if {$context == $field} {
-         if {[regexp {/\* +UA_name +\*/ +"([^"]*)"} $line -> name]} {
-            lappend names $name
-         }
-      }
-   }
-   return $names
-}
-
-#****** issue_1385/issue_1385_get_usage_names() *******************************
-# Return the usage attribute names of the spooled project "usage" or
-# "long_term_usage" list, regardless of the spooling method in use.
-#******************************************************************************
-proc issue_1385_get_usage_names {which} {
-   get_current_cluster_config_array ts_config
-
-   if {$ts_config(spooling_method) == "berkeleydb"} {
-      return [issue_1385_bdb_usage_names $which]
-   } else {
-      return [issue_1385_classic_usage_names $which]
-   }
-}
-
 #****** issue_1385/issue_1385_check_usage() ***********************************
 # Verify that a spooled usage list only contains attributes that are relevant
 # for share tree usage. Returns a (possibly empty) list of error strings.
@@ -233,7 +147,7 @@ proc issue_1385_test {} {
    # wait until the spooled project object shows the booked usage
    set booked 0
    for {set i 0} {$i < 30} {incr i} {
-      if {[lsearch -exact [issue_1385_get_usage_names "long_term_usage"] "cpu"] >= 0} {
+      if {[lsearch -exact [get_spooled_usage_names "project" $issue_1385_project "long_term_usage"] "cpu"] >= 0} {
          set booked 1
          break
       }
@@ -249,7 +163,7 @@ proc issue_1385_test {} {
    # but cpu, mem, io and the finished_jobs counter (CS-1385)
    set errors {}
    foreach which {usage long_term_usage} {
-      set names [issue_1385_get_usage_names $which]
+      set names [get_spooled_usage_names "project" $issue_1385_project $which]
       ts_log_fine "spooled $which of project $issue_1385_project: $names"
       set errors [concat $errors [issue_1385_check_usage $which $names]]
    }

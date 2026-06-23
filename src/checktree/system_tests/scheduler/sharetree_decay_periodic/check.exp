@@ -53,7 +53,7 @@
 #     decay in the Timed Event Thread):
 #
 #     * Pre-refactor tree: decay happens at finish-time inside
-#       decay_and_sum_usage. The setup's USAGE_DECAY_INTERVAL
+#       decay_and_sum_usage. The setup's STREE_TICK_INTERVAL
 #       qmaster_param is unknown to the pre-refactor qmaster and is
 #       silently ignored. After the wait the check submits a "ping"
 #       sleep-0 job; its finish triggers decay_and_sum_usage which
@@ -117,18 +117,15 @@ proc sharetree_decay_periodic_setup {} {
 
    set sharetree_decay_periodic_project "decay_periodic.prj"
 
+   # In 9.2.0 and higher sharetree calculations are done in timed event thread - set a short interval.
    get_config sharetree_decay_periodic_old_config
-   add_or_replace_array_param mc sharetree_decay_periodic_old_config "qmaster_params" "STREE_SPOOL_INTERVAL" "1"
-   # CS-1239: in the post-refactor tree decay is periodic (TET task). The
-   # auto-derived cadence with halftime=1h is 225 s, longer than this
-   # test's 90 s measurement window - so without pinning, no tick would
-   # fire between p0 and p1 reads and the strict `p1 < p0` assertion
-   # would phase-flip. Pin to 10 s so we see ~9 ticks per wait window.
-   # 10 s is also the new USAGE_DECAY_INTERVAL_MIN floor on the derive
-   # path (sge_conf.cc), so pinning here is consistent with what a tight
-   # halflife_decay_list would yield in production.
-   add_or_replace_array_param mc mc "qmaster_params" "USAGE_DECAY_INTERVAL" "10"
-   add_or_replace_array_param mc mc "execd_params"   "SHARETREE_RESERVED_USAGE" "true"
+   if {[is_version_in_range "9.2.0"]} {
+      add_or_replace_array_param mc sharetree_decay_periodic_old_config "qmaster_params" "STREE_TICK_INTERVAL" "1"
+   }
+
+   # We start sleeper jobs but want to see cpu usage for sharetree calculations.
+   # This is what SHARETREE_RESERVED_USAGE gives us.
+   add_or_replace_array_param mc sharetree_decay_periodic_old_config "execd_params"   "SHARETREE_RESERVED_USAGE" "true"
    set_config mc
 
    # Common scheduler config. The decay-rate knobs (halftime,
@@ -290,7 +287,7 @@ proc sharetree_decay_periodic_measure {u0_var p0_var up0_var u1_var p1_var up1_v
 #****** sharetree_decay_periodic/decay_via_halftime() *****************************
 # Verifies that the top-level `halftime` field drives decay. Sets halftime
 # to the smallest accepted value (1, i.e. 1 hour) and clears
-# halflife_decay_list. With the setup's pinned USAGE_DECAY_INTERVAL=10
+# halflife_decay_list. With the setup's pinned STREE_TICK_INTERVAL=10
 # (post-refactor only - ignored on the pre-refactor tree where decay is
 # finish-driven), the expected decay over the test's 90 s wait is
 # small (~ 1.7 % using the Euler approximation in ocs_Usage.cc:77) - this

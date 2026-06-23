@@ -109,8 +109,12 @@ proc sharetree_usage_booking_setup {} {
    #   SHARETREE_RESERVED_USAGE   execd reports reserved usage so a short
    #                              sleeper produces measurable cpu credit
    get_config sharetree_usage_booking_old_config
-   add_or_replace_array_param mc sharetree_usage_booking_old_config "qmaster_params" "STREE_SPOOL_INTERVAL" "1"
-   add_or_replace_array_param mc mc "execd_params"   "SHARETREE_RESERVED_USAGE" "true"
+
+   # In 9.2.0 and higher sharetree calculations are done in timed event thread - set a short interval.
+   if {[is_version_in_range "9.2.0"]} {
+      add_or_replace_array_param mc sharetree_usage_booking_old_config "qmaster_params" "STREE_TICK_INTERVAL" "1"
+   }
+   add_or_replace_array_param mc sharetree_usage_booking_old_config "execd_params"   "SHARETREE_RESERVED_USAGE" "true"
    set_config mc
 
    # Scheduler config:

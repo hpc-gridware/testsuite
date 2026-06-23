@@ -62,6 +62,8 @@ set check_cleanup_level_function sge_share_mon_cleanup
 set check_functions ""
 lappend check_functions "share_mon_sharetree"
 lappend check_functions "share_mon_permissions"
+lappend check_functions "share_mon_usage_time_stamp"
+lappend check_functions "share_mon_usage_in_spool"
 
 # -------- local test procedures: initialization------------------------------
 
@@ -69,7 +71,7 @@ proc sge_share_mon_setup  {} {
    global ts_config
    global CHECK_ACT_LEVEL
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
-   global have_share_tree submitted_jobs
+   global have_share_tree submitted_jobs sge_share_mon_backup
 
    switch -- $CHECK_ACT_LEVEL {
       0 {
@@ -87,15 +89,18 @@ proc sge_share_mon_setup  {} {
 
    # make sure there is no sharetree in the beginning
    del_sharetree
+   # delete the users as well, they might contain spooled usage from an earlier test
+   del_user $CHECK_USER "" "" 0
+   del_user $CHECK_FIRST_FOREIGN_SYSTEM_USER "" "" 0
+   del_user $CHECK_SECOND_FOREIGN_SYSTEM_USER "" "" 0
+
+   # delete the mytestproject and re-add it to make sure there is no old usage spooled
+   del_project "mytestproject"
+   add_project "mytestproject"
 
    if {$have_share_tree} {
       # we want to reference the CHECK_USER in a sharetree
-      del_user $CHECK_USER "" "" 0
       add_user $CHECK_USER
-
-      # first and second foreign user will be created after submitting jobs under default nodes
-      del_user $CHECK_FIRST_FOREIGN_SYSTEM_USER "" "" 0
-      del_user $CHECK_SECOND_FOREIGN_SYSTEM_USER "" "" 0
 
       # makes sure, sge_schedd knows about deletion of users
       trigger_scheduling
@@ -109,15 +114,30 @@ proc sge_share_mon_setup  {} {
       stree_buffer_add_node stree "/mytestproject/$CHECK_USER" 50
       stree_buffer_commit stree
    }
+
+   # STREE_SPOOL_INTERVAL=1 so share_mon_usage_in_spool can inspect spooled
+   # user/project objects within the test's runtime instead of waiting the
+   # 240 s default cadence.
+   get_config sge_share_mon_backup
+   if {[is_version_in_range "9.2.0"]} {
+      add_or_replace_array_param conf sge_share_mon_backup "qmaster_params" "STREE_TICK_INTERVAL" "1"
+      add_or_replace_array_param conf conf "qmaster_params" "STREE_SPOOL_INTERVAL" "1"
+   } else {
+      add_or_replace_array_param conf sge_share_mon_backup "qmaster_params" "STREE_SPOOL_INTERVAL" "1"
+   }
+
+   set_config conf
 }
 
 proc sge_share_mon_cleanup  {} {
    global ts_config
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
-   global have_share_tree submitted_jobs
+   global have_share_tree submitted_jobs sge_share_mon_backup
 
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   reset_config sge_share_mon_backup
 
    if {$have_share_tree} {
       del_sharetree
@@ -129,7 +149,7 @@ proc sge_share_mon_cleanup  {} {
       trigger_scheduling
    }
 
-   unset -nocomplain have_share_tree submitted_jobs
+   unset -nocomplain have_share_tree submitted_jobs sge_share_mon_backup
 }
 
 #****** sge_share_mon/share_mon_sharetree_check_node() ******************************
@@ -314,4 +334,215 @@ proc share_mon_permissions {} {
    }
 }
 
+
+#****** sge_share_mon/share_mon_sharetree_check_usage_time() ********************
+#  NAME
+#     share_mon_sharetree_check_usage_time() -- assert non-zero usage_time
+#
+#  SYNOPSIS
+#     share_mon_sharetree_check_usage_time { sharetree_var node }
+#
+#  FUNCTION
+#     Looks up the given node in the sge_share_mon output and reports a
+#     severe error if its usage_time field is 0. Used by
+#     share_mon_usage_time_stamp() to verify that user and project leaves
+#     both carry a real timestamp once usage has been booked - the project
+#     side was the bug fixed in CS-2317 (sge_share_mon previously printed
+#     usage_time=0 for project-only nodes because the printer only read
+#     UU_usage_time_stamp and never PR_usage_time_stamp).
+#*******************************************************************************
+proc share_mon_sharetree_check_usage_time {sharetree_var node} {
+   upvar $sharetree_var sharetree
+
+   set pos [lsearch -exact $sharetree(index) $node]
+   if {$pos < 0} {
+      ts_log_severe "couldn't find node $node in sge_share_mon output"
+      return
+   }
+
+   set ts $sharetree($node,usage_time)
+   if {$ts == 0} {
+      ts_log_severe "node $node in sge_share_mon output has usage_time=0;\
+                     usage was booked but the printer did not report the stamp. See CS-2317."
+   }
+}
+
+#****** sge_share_mon/share_mon_usage_time_stamp() ******************************
+#  NAME
+#     share_mon_usage_time_stamp() -- verify non-zero usage_time on user and
+#                                     project leaves
+#
+#  SYNOPSIS
+#     share_mon_usage_time_stamp { }
+#
+#  FUNCTION
+#     Regression coverage for CS-2317: prior to the fix in
+#     sge_sharetree_printing.cc, sge_share_mon always reported
+#     usage_time=0 for project leaves because the printer fell back to 0
+#     when no user matched, instead of also reading PR_usage_time_stamp.
+#
+#     This check submits one plain user job and one project job (both as
+#     CHECK_USER) so that:
+#        - UU_usage_time_stamp gets set on the CHECK_USER object via the
+#          plain user job (drives /CHECK_USER and any UPP leaf using it),
+#        - PR_usage_time_stamp gets set on the mytestproject object via
+#          the project job (drives /mytestproject).
+#     After both jobs finish (and one share-tree tick has had a chance to
+#     republish, STREE_TICK_INTERVAL=1 in the setup), it verifies that
+#     sge_share_mon reports a non-zero usage_time on the user node, the
+#     project node, and the UPP leaf.
+#
+#     The function uses its own job-id list so it is independent of
+#     share_mon_sharetree().
+#*******************************************************************************
+proc share_mon_usage_time_stamp {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global have_share_tree
+   global submitted_jobs
+
+   if {!$have_share_tree} {
+      return
+   }
+
+   set my_jobs {}
+
+   # 1) plain user job - stamps UU_usage_time_stamp on CHECK_USER
+   set user_args "$ts_config(product_root)/examples/jobs/sleeper.sh 5"
+   set job_id [submit_job $user_args 1 60 "" $CHECK_USER]
+   wait_for_jobstart $job_id "" 5
+   lappend my_jobs $job_id
+   lappend submitted_jobs $job_id
+
+   # 2) project job - stamps PR_usage_time_stamp on mytestproject
+   set project_args "-P mytestproject $ts_config(product_root)/examples/jobs/sleeper.sh 5"
+   set job_id [submit_job $project_args 1 60 "" $CHECK_USER]
+   wait_for_jobstart $job_id "" 5
+   lappend my_jobs $job_id
+   lappend submitted_jobs $job_id
+
+   # Wait for our jobs to finish so worker booking has landed in
+   # UU_/PR_usage_time_stamp before we read them via sge_share_mon.
+   foreach jid $my_jobs {
+      wait_for_jobend $jid "" 60 0
+   }
+
+   # Let the TET share-tree tick republish (STREE_TICK_INTERVAL pinned to 1 s
+   # in the setup); a couple of ticks is plenty.
+   sleep_for_seconds 3
+
+   sge_share_mon sharetree
+   share_mon_sharetree_check_usage_time sharetree "/$CHECK_USER"
+   share_mon_sharetree_check_usage_time sharetree "/mytestproject"
+   share_mon_sharetree_check_usage_time sharetree "/mytestproject/$CHECK_USER"
+}
+
+#****** sge_share_mon/share_mon_usage_in_spool() ********************************
+#  NAME
+#     share_mon_usage_in_spool() -- verify spool-side gating of usage booking
+#
+#  SYNOPSIS
+#     share_mon_usage_in_spool { }
+#
+#  FUNCTION
+#     Verifies that share-tree usage is booked into spooled user / project
+#     objects exactly when a share tree is configured, and not otherwise.
+#
+#     This is the spooling-side regression coverage for the CS-1239 gate in
+#     sge_book_finished_job_usage() and sge_sharetree_tick_handler(): both
+#     short-circuit when no SHARETREE object exists in the master list, so
+#     no UU_/PR_usage entries are produced and nothing reaches the spool.
+#     Pre-CS-1239 the same behaviour fell out implicitly from the absence of
+#     UU/PR objects in the master lists (see calc_usage.md); the gate makes
+#     it explicit.
+#
+#     Level 0 (no share tree):
+#        - explicitly add CHECK_USER so we have a UU object to inspect,
+#        - submit a couple of short jobs as CHECK_USER,
+#        - assert that the spooled user shows no usage attributes,
+#        - delete CHECK_USER (level 0 cleanup does not touch users).
+#
+#     Level 1 (with share tree):
+#        - CHECK_USER and the "mytestproject" project already exist,
+#        - submit a user job and a project job (both as CHECK_USER),
+#        - assert that both spooled objects show cpu, mem and io in usage.
+#
+#     STREE_SPOOL_INTERVAL is pinned to 1 s in the setup so the spool catches
+#     up within seconds of job finish.
+#*******************************************************************************
+proc share_mon_usage_in_spool {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global have_share_tree
+   global submitted_jobs
+
+   set sleeper "$ts_config(product_root)/examples/jobs/sleeper.sh 5"
+   set my_jobs {}
+
+   set job_id [submit_job $sleeper 1 60 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
+   wait_for_jobstart $job_id "" 5
+   lappend my_jobs $job_id
+   lappend submitted_jobs $job_id
+
+   if {$have_share_tree} {
+      set job_id [submit_job "-P mytestproject $sleeper" 1 60 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
+      wait_for_jobstart $job_id "" 5
+      lappend my_jobs $job_id
+      lappend submitted_jobs $job_id
+   }
+
+   foreach jid $my_jobs {
+      wait_for_jobend $jid "" 60 0
+   }
+
+   # Wait long enough for the share-tree spool handler to drain the dirty
+   # FIFOs. STREE_SPOOL_INTERVAL=1 s in the setup; a handful of seconds
+   # gives the resume-drain cadence plenty of room.
+   sleep_for_seconds 5
+
+   set user_names [get_spooled_usage_names "user" $CHECK_FIRST_FOREIGN_SYSTEM_USER "usage"]
+
+   if {$have_share_tree} {
+      # Sharetree present -> worker booking must reach the spool.
+      foreach attr {cpu mem io} {
+         if {[lsearch -exact $user_names $attr] < 0} {
+            ts_log_severe "spooled user $CHECK_FIRST_FOREIGN_SYSTEM_USER is missing \"$attr\" in usage list;\
+                           share-tree usage booking did not reach the spool. Got: $user_names"
+         }
+      }
+
+      # mytestproject is an interior node in the share tree (it has user-leaves
+      # below it). In 9.2.x (CS-1239 worker-thread booking) the booking pipeline
+      # writes PR_usage on the project object unconditionally whenever a job
+      # submits with -P, so the spooled project carries cpu/mem/io even for
+      # interior nodes; this is the shadow of UPP_usage on the user that the
+      # sibling sharetree_usage_booking / sharetree_decay_periodic tests rely
+      # on. Earlier branches (9.1.x) go through the scheduler order pipeline
+      # and the foreign-user/auto-leaf case ends up spooling an empty
+      # PR_usage, so the assertion is gated to 9.2.0+.
+      set project_names [get_spooled_usage_names "project" "mytestproject" "usage"]
+      if {[is_version_in_range "9.2.0"]} {
+         foreach attr {cpu mem io} {
+            if {[lsearch -exact $project_names $attr] < 0} {
+               ts_log_severe "spooled project mytestproject is missing \"$attr\" in usage list;\
+                              share-tree usage booking did not reach the spool. Got: $project_names"
+            }
+         }
+      }
+   } else {
+      # No sharetree -> gate must suppress all booking; spool must stay clean.
+      if {[llength $user_names] > 0} {
+         set msg "spooled user $CHECK_FIRST_FOREIGN_SYSTEM_USER carries usage entries without a configured share tree:\
+                  $user_names\n\
+                  sge_book_finished_job_usage / sge_sharetree_tick_handler short-circuit was\
+                  bypassed"
+         # versions before 9.2.0 in berkeleydb spooling have entries with value 0.0 - skip the test for this setup
+         if {[is_version_in_range "" "9.2.0"] && $ts_config(spooling_method) == "berkeleydb"} {
+            ts_log_info $msg
+         } else {
+            ts_log_severe $msg
+         }
+      }
+   }
+}
 
