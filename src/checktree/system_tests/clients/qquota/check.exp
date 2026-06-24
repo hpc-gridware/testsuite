@@ -61,6 +61,7 @@ lappend check_functions "qquota_help"                   ;# print this help
 #lappend check_functions "qquota_option_h"
 lappend check_functions "qquota_option_l"
 lappend check_functions "qquota_option_u"
+lappend check_functions "qquota_memory_limit"   ;# DRAFT (CS-2348)
 #lappend check_functions "qquota_option_pe"
 #lappend check_functions "qquota_option_P"
 #lappend check_functions "qquota_option_q"
@@ -201,6 +202,53 @@ proc qquota_option_u {} {
 
    delete_all_jobs
    wait_for_end_of_all_jobs 20
+}
+
+## @brief DRAFT (CS-2348): qquota must render a typed (memory) static RQS limit
+#  correctly and must not crash.
+#
+# `test_memory` ("tm") is a MEMORY, non-consumable complex created in qquota_setup,
+# so a static "to test_memory=<mem>" limit exercises the controller's static-value
+# parse path. That path used std::stoul(), which crashed on a malformed value and
+# silently mis-parsed typed values (e.g. "4G" -> 4). The fix uses parse_ulong_val().
+# See CS-2348.
+#
+# TODO (reviewer): confirm the exact rendered memory token against a live run and
+# tighten the assertion. The fix parses 4G as 4*1024^3; expected display is "4.000G".
+# The key regression to catch is a bare "4" (the old std::stoul result) or a crash.
+#
+# @return none; reports failures via ts_log_severe
+proc qquota_memory_limit {} {
+   global ts_config CHECK_USER
+
+   ts_log_fine "checking qquota rendering of a memory RQS limit (CS-2348) ..."
+
+   # RQS with a static 4G limit on the non-consumable MEMORY complex test_memory
+   set rqs_name "qquota_mem_test"
+   set rules {}
+   lappend rules "users {*} to test_memory=4G"
+   set rqs_charray($rqs_name,limit)   $rules
+   set rqs_charray($rqs_name,enabled) "true"
+   if {[add_rqs rqs_charray] != 0} {
+      ts_log_severe "could not add rqs $rqs_name"
+      return
+   }
+
+   set result [start_sge_bin "qquota" "-l test_memory" "" "" exit_code]
+   ts_log_fine "qquota -l test_memory exit=$exit_code\n$result"
+
+   # With CS-2348 qquota parses 4G correctly (4*1024^3) AND renders the limit
+   # human-readably by attribute type as "test_memory=4.000G". Previously std::stoul
+   # parsed "4G" as 4 and the plain view showed a raw, truncated byte count.
+   if {$exit_code != 0} {
+      ts_log_severe "qquota crashed / non-zero exit on a memory RQS limit (exit=$exit_code) - CS-2348"
+   } elseif {[string match "*test_memory=4.000G*" $result]} {
+      ts_log_fine "OK: memory limit rendered as 4.000G"
+   } else {
+      ts_log_severe "qquota did not render the memory limit as 4.000G; got: $result (CS-2348)"
+   }
+
+   del_rqs $rqs_name
 }
 
 proc qquota_count_entries { func_name qquota_options expected_entries } {
