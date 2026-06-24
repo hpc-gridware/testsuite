@@ -70,7 +70,12 @@ lappend generic_module_tests "test_qmaster_timed_event"
 lappend generic_module_tests "test_uti_profiling"
 
 lappend generic_module_tests "test_commlib_issue"
-lappend generic_module_tests "test_comm_xml_parse"
+# test_comm_xml_parse was added in 9.2.0; its test binary is not installed on
+# older clusters, so only run it there (avoids a spurious "binary not available"
+# failure).
+if {[is_version_in_range "9.2.0"]} {
+   lappend generic_module_tests "test_comm_xml_parse"
+}
 
 #lappend generic_module_tests "test_common_heartbeat" ;# only used in shadowd_migrate test
 lappend generic_module_tests "test_common_category"
@@ -92,8 +97,12 @@ lappend generic_module_tests "test_sgeobj_range"
 lappend generic_module_tests "test_sgeobj_resource_quota"
 lappend generic_module_tests "test_sgeobj_schedd_conf"
 lappend generic_module_tests "test_sgeobj_utility"
-lappend generic_module_tests "test_sgeobj_ulong"
-lappend generic_module_tests "test_sgeobj_var"
+# test_sgeobj_ulong / test_sgeobj_var were added in 9.2.0 (security fixes
+# CS-2349 / CS-2350); their binaries do not exist on older clusters.
+if {[is_version_in_range "9.2.0"]} {
+   lappend generic_module_tests "test_sgeobj_ulong"
+   lappend generic_module_tests "test_sgeobj_var"
+}
 if {[ge_has_feature "gcs"]} {
    if {[is_version_in_range "9.1.0"]} {
       lappend generic_module_tests "test_sgeobj_RequestLimits"
@@ -107,9 +116,13 @@ lappend generic_module_tests "test_sched_eval_performance"
 lappend generic_module_tests "test_sched_resource_utilization"
 lappend generic_module_tests "test_sched_load_formula"
 
-lappend generic_module_tests "test_procedure_qquota_json"
-lappend generic_module_tests "test_procedure_qquota_plain"
-lappend generic_module_tests "test_procedure_qrstat_json"
+# The procedure (stored-procedure) module tests were all added in 9.2.0; their
+# binaries are not installed on older clusters.
+if {[is_version_in_range "9.2.0"]} {
+   lappend generic_module_tests "test_procedure_qquota_json"
+   lappend generic_module_tests "test_procedure_qquota_plain"
+   lappend generic_module_tests "test_procedure_qrstat_json"
+}
 
 lappend generic_module_tests "test_spool_flatfile"
 
@@ -124,9 +137,13 @@ lappend generic_module_tests "test_uti_tq"
 lappend generic_module_tests "test_uti_string"
 lappend generic_module_tests "test_uti_dstring"
 lappend generic_module_tests "test_uti_uidgid"
-lappend generic_module_tests "test_uti_authinfo"
-lappend generic_module_tests "test_uti_parse_num"
-lappend generic_module_tests "test_uti_peopen"
+# test_uti_authinfo / test_uti_parse_num / test_uti_peopen were added in 9.2.0
+# (security fixes CS-2346 / CS-2348 / CS-2333); not installed on older clusters.
+if {[is_version_in_range "9.2.0"]} {
+   lappend generic_module_tests "test_uti_authinfo"
+   lappend generic_module_tests "test_uti_parse_num"
+   lappend generic_module_tests "test_uti_peopen"
+}
 lappend generic_module_tests "test_uti_threads"
 lappend generic_module_tests "test_uti_thread_local"
 lappend generic_module_tests "test_uti_time"
