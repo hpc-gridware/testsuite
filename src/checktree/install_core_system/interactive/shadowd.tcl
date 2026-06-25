@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -40,6 +40,7 @@ proc install_shadowd {} {
    global CHECK_DEBUG_LEVEL CHECK_EXECD_INSTALL_OPTIONS
    global CHECK_COMMD_PORT
    global CHECK_MAIN_RESULTS_DIR
+   global CHECK_INSTALL_RC
 
    set CORE_INSTALLED ""
    read_install_list
@@ -213,7 +214,11 @@ proc install_shadowd {} {
             }
 
             -i $sp_id $INSTALL_SCRIPT {
-               install_send_answer $sp_id $ANSWER_NO
+               if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $shadow_host]} {
+                  install_send_answer $sp_id $ANSWER_YES
+               } else {
+                  install_send_answer $sp_id $ANSWER_NO
+               }
                continue
             }
 
