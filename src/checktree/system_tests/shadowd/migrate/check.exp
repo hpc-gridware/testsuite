@@ -122,8 +122,11 @@ proc shadowd_migrate_cleanup  {} {
 
 
 proc shadowd_migrate_test {} {
-   global ts_config  CHECK_ACT_LEVEL check_description
-   global CHECK_USER file_procedure_logfile_wait_sp_id
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ACT_LEVEL
+   global CHECK_INSTALL_RC
+   global check_description
+   global file_procedure_logfile_wait_sp_id
 
    if {$ts_config(shadowd_hosts) eq "none"} {
       set nr_shadowds 0
@@ -234,9 +237,7 @@ proc shadowd_migrate_test {} {
          ts_log_fine "   reading heartbeat file ..."
          ts_log_fine "   $heartbeat_file"
 
-
          set result [start_remote_prog $ts_config(master_host) $CHECK_USER "cat" $heartbeat_file]
-
          set heartbeat [string trimleft [string trim $result] "0"]
          ts_log_fine "   setting heartbeat from $heartbeat to 98 ..."
          set result [start_remote_prog $ts_config(master_host) $CHECK_USER "echo" "98 > $heartbeat_file"]
@@ -244,7 +245,6 @@ proc shadowd_migrate_test {} {
          set result [start_remote_prog $ts_config(master_host) $CHECK_USER "cat" $heartbeat_file]
          set heartbeat [string trimleft [string trim $result] "0"]
          ts_log_fine "   heartbeat set to $heartbeat !"
-
 
          # Restart qmaster (with SGE_TEST_HEARTBEAT_TIMEOUT environment variable value set to 600)
          set my_env(SGE_TEST_HEARTBEAT_TIMEOUT) 600
@@ -442,6 +442,15 @@ proc shadowd_migrate_test {} {
          }
          shutdown_system_daemon $new_act_qmaster "qmaster"
 
+         # We start sge_qmaster on the original qmaster host.
+         # When this is done via Systemd (calling the sgemaster script), sge_qmaster will *not* be started
+         # as the act_qmaster file still contains the hostname of the shadow host ($new_act_qmaster)
+         # Need to update act_qmaster.
+         if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
+            set act_qmaster_file "$ts_config(product_root)/$ts_config(cell)/common/act_qmaster"
+            set output [start_remote_prog $ts_config(master_host) $CHECK_USER "echo" "$ts_config(master_host) >$act_qmaster_file"]
+            ts_log_fine $output
+         }
          startup_qmaster
          foreach host $ts_config(shadowd_hosts) {
             startup_shadowd $host
@@ -500,6 +509,18 @@ proc shadowd_migrate_test {} {
          }
 
          ts_log_fine "restarting qmaster on host $ts_config(master_host) ..."
+         # We start sge_qmaster on the original qmaster host.
+         # When this is done via Systemd (calling the sgemaster script), sge_qmaster will *not* be started
+         # as the act_qmaster file still contains the hostname of the shadow host ($new_act_qmaster)
+         # Need to update act_qmaster.
+         # And we need to shutdown the shadowd on the master host, otherwise systemctl start will do nothing,
+         # as (parts of) the service is still running.
+         if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
+            set act_qmaster_file "$ts_config(product_root)/$ts_config(cell)/common/act_qmaster"
+            set output [start_remote_prog $ts_config(master_host) $CHECK_USER "echo" "$ts_config(master_host) >$act_qmaster_file"]
+            ts_log_fine $output
+            shutdown_shadowd $ts_config(master_host)
+         }
          startup_qmaster
 
          # wait for lock file to vanish (might be delayed due to slow NFS)
@@ -657,6 +678,16 @@ proc shadowd_migrate_test {} {
           $CHECK_ACT_LEVEL == 6 ||
           $CHECK_ACT_LEVEL == 7 ||
           $CHECK_ACT_LEVEL == 9} {
+
+         # These tests modify the act_qmaster file to something invalid, then startup sge_qmaster and expect
+         # it to come up and overwrite the act_qmaster file.
+         # If starting up sge_qmaster is done through the sgemaster script (via systemd),
+         # this test will not work. The sgemaster script checks act_qmaster and will do nothing if it doesn't
+         # contain the current hostname.
+         if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
+            ts_log_info "runlevel $CHECK_ACT_LEVEL is not supported when RC files / systemd are installed"
+            return
+         }
 
          # shut down qmaster
          shutdown_system_daemon $ts_config(master_host) "qmaster"

@@ -1373,3 +1373,18 @@ proc setup_ids {} {
       }
    }
 }
+
+# When we have installed sge_shadowd on the master host (which we usually do)
+# then inst_sge started sge_shadowd via sgemaster -shadowd start.
+# If we have the systemd service ocs<port>-qmaster.service installed, it will not see
+# the sge_shadowd - re-start qmaster and shadowd.
+proc systemd_restart_master_after_shadowd_install {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_INSTALL_RC
+
+   if {[lsearch -exact $ts_config(shadowd_hosts) $ts_config(master_host)] >= 0} {
+      if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
+         shutdown_and_restart_qmaster
+      }
+   }
+}

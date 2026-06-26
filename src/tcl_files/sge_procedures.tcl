@@ -7147,9 +7147,11 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""} {start_debug_
       ts_log_fine "starting up qmaster $schedd_message on host \"$start_host\" as user \"$startup_user\""
       # if we have an env list, cannot use systemd to startup qmaster
       if {$env_list == "" && $CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
+         ts_log_fine "   -> via systemd"
          set service_name [systemd_get_service_name "qmaster"]
          set output [start_remote_prog $start_host $startup_user "systemctl" "start $service_name"]
       } else {
+         ts_log_fine "   -> starting the sge_qmaster binary"
          set output [start_remote_prog $start_host $startup_user "$ts_config(product_root)/bin/${arch}/sge_qmaster" ";sleep 2" prg_exit_state 60 0 "" envlist]
       }
    }
@@ -7770,9 +7772,9 @@ proc shutdown_qmaster {{hostname ""} {qmaster_spool_dir ""} {timeout 60}} {
 #     sge_procedures/startup_shadowd()
 #*******************************
 proc shutdown_shadowd { hostname } {
+   get_current_cluster_config_array ts_config
    global CHECK_ADMIN_USER_SYSTEM
    global CHECK_USER
-   get_current_cluster_config_array ts_config
 
    set shadowd_pid [get_shadowd_pid $hostname]
    if {$shadowd_pid == 0} {
@@ -7855,8 +7857,7 @@ proc shutdown_all_shadowd {hostname} {
 
    # if we are running under systemd control, then use systemctl stop to shutdown the shadowd
    # BUT: only on non qmaster hosts - on the qmaster host shutting down the master will also stop shadowd
-   # DISABLED for now: No rc-scripts are installed on shadow hosts, see CS-1218
-   if {0 && $CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"] && [host_has_systemd $hostname] && [systemd_is_service_active $hostname "qmaster"]} {
+   if {$CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"] && [host_has_systemd $hostname] && [systemd_is_service_active $hostname "qmaster"]} {
       if {$hostname != $ts_config(master_host)} {
          ts_log_fine "killing shadowd on host $hostname, via systemd"
          systemd_stop_service $hostname "qmaster"
@@ -8361,12 +8362,19 @@ proc shutdown_core_system {{only_hooks 0} {with_additional_clusters 0}} {
       ts_log_fine $result
    }
 
+   # shutdown all shadowds
+   if {$ts_config(shadowd_hosts) ne "none"} {
+      foreach host $ts_config(shadowd_hosts) {
+         shutdown_all_shadowd $host
+      }
+   }
+
    # give execds some time to shutdown
    wait_for_unknown_load 60 all.q 0
 
    # shutdown qmaster via systemd
    set qmaster_shutdown 0
-   if {$CHECK_INSTALL_RC == 1 && [ge_has_feature "systemd"]} {
+   if {$use_systemd_if_available} {
       if {[host_has_systemd $ts_config(master_host)] && [systemd_is_service_active $ts_config(master_host) "qmaster"]} {
          if {[systemd_stop_service $ts_config(master_host) "qmaster"]} {
             set qmaster_shutdown 1
@@ -10338,6 +10346,8 @@ proc startup_shadowd {hostname {env_list ""}} {
    global CHECK_ADMIN_USER_SYSTEM CHECK_USER CHECK_INSTALL_RC
    get_current_cluster_config_array ts_config
 
+   set ret 0
+
    if {$env_list != ""} {
       upvar $env_list envlist
    }
@@ -10352,22 +10362,38 @@ proc startup_shadowd {hostname {env_list ""}} {
       set startup_user $CHECK_USER
    }
 
-   # if we started qmaster on the master host via systemd, then sge_shadowd is also already running
-   if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $hostname] && $hostname == $ts_config(master_host)} {
-      return 0
+   if {$env_list == "" && $CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $hostname]} {
+      # if we started qmaster on the master host via systemd, then sge_shadowd is also already running
+      if {$hostname == $ts_config(master_host)} {
+         ts_log_fine "not starting up shadowd on host \"$hostname\" as user \"$startup_user\" on the master host"
+         ts_log_fine "it has already been started via systemd together with the qmaster"
+      } else {
+         ts_log_fine "starting up shadowd on host \"$hostname\" as user \"$startup_user\" via systemd"
+         set service [systemd_get_service_name "qmaster"]
+         set output [start_remote_prog $hostname $startup_user "systemctl" "start $service"]
+         ts_log_fine $output
+         if {$prg_exit_state != 0} {
+            ts_log_severe "systemctl start $service as $startup_user on host $hostname failed:\n$output"
+            set ret -1
+         }
+      }
+   } else {
+      ts_log_fine "starting up shadowd on host \"$hostname\" as user \"$startup_user\" via sgemaster script"
+
+      set output [start_remote_prog $hostname $startup_user "$ts_config(product_root)/$ts_config(cell)/common/sgemaster" "-shadowd start" prg_exit_state 60 0 "" envlist]
+      ts_log_fine $output
+      if {[string first "starting sge_shadowd" $output] >= 0} {
+         if {![is_daemon_running $hostname "sge_shadowd"]} {
+            ts_log_severe "sgemaster -shadowd start seemed to succeed, but sge_shadowd is not running"
+            set ret -1
+         }
+      } else {
+         ts_log_severe "could not start shadowd on host $hostname:\noutput:\"$output\""
+         set ret -1
+      }
    }
 
-   ts_log_fine "starting up shadowd on host \"$hostname\" as user \"$startup_user\""
-
-   set output [start_remote_prog "$hostname" "$startup_user" "$ts_config(product_root)/$ts_config(cell)/common/sgemaster" "-shadowd start" prg_exit_state 60 0 "" envlist]
-   ts_log_fine $output
-   if { [string first "starting sge_shadowd" $output] >= 0 } {
-       if { [is_daemon_running $hostname "sge_shadowd"] == 1 } {
-          return 0
-       }
-   }
-   ts_log_severe "could not start shadowd on host $hostname:\noutput:\"$output\""
-   return -1
+   return $ret
 }
 
 

@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -148,5 +148,11 @@ proc install_shadowd {} {
          }
       }
    }
+
+   # When we have installed sge_shadowd on the master host (which we usually do)
+   # then inst_sge started sge_shadowd via sgemaster -shadowd start.
+   # If we have the systemd service ocs<port>-qmaster.service installed, it will not see
+   # the sge_shadowd - re-start qmaster and shadowd.
+   systemd_restart_master_after_shadowd_install
 }
 
