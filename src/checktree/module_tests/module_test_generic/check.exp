@@ -122,6 +122,7 @@ if {[is_version_in_range "9.2.0"]} {
    lappend generic_module_tests "test_procedure_qquota_json"
    lappend generic_module_tests "test_procedure_qquota_plain"
    lappend generic_module_tests "test_procedure_qrstat_json"
+   lappend generic_module_tests "test_procedure_qstat_summary"
 }
 
 lappend generic_module_tests "test_spool_flatfile"
