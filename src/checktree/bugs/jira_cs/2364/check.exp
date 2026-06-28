@@ -1,0 +1,128 @@
+#___INFO__MARK_BEGIN__
+##########################################################################
+#
+#  The Contents of this file are made available subject to the terms of
+#  the Sun Industry Standards Source License Version 1.2
+#
+#  Sun Microsystems Inc., March, 2001
+#
+#
+#  Sun Industry Standards Source License Version 1.2
+#  =================================================
+#  The contents of this file are subject to the Sun Industry Standards
+#  Source License Version 1.2 (the "License"); You may not use this file
+#  except in compliance with the License. You may obtain a copy of the
+#  License at http://gridengine.sunsource.net/Gridengine_SISSL_license.html
+#
+#  Software provided under this License is provided on an "AS IS" basis,
+#  WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING,
+#  WITHOUT LIMITATION, WARRANTIES THAT THE SOFTWARE IS FREE OF DEFECTS,
+#  MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE, OR NON-INFRINGING.
+#  See the License for the specific provisions governing your rights and
+#  obligations concerning the Software.
+#
+#  The Initial Developer of the Original Code is: Sun Microsystems, Inc.
+#
+#  Copyright: 2001 by Sun Microsystems, Inc.
+#
+#  All Rights Reserved.
+#
+#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#
+##########################################################################
+#___INFO__MARK_END__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+global issue_2364_job_id
+
+# The unsafe-spool-key guard that caused the regression was introduced in 9.2.0.
+set check_version_range "9.2.0"
+
+# define test's name and run level descriptions
+set check_name            "issue_2364"
+set check_category        "BUG SPOOLING VERIFIED"
+set check_description(0)  "job script spool file is removed when the job is deleted"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_cleanup_function "issue_2364_cleanup"
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "issue_2364_check"
+
+# -------- local test procedures ----------------------------------------------
+
+##
+# @brief Verify job script spool files are cleaned up when a job is deleted.
+#
+# CS-2364 added a defence-in-depth guard (spool_flatfile_key_is_safe()) to the
+# flatfile spool layer. The first version of that guard rejected any object key
+# containing a '/'. The job script key embeds the spool path
+# "job_scripts/<jobid>", so the guard silently refused to unlink the spooled
+# script when the job was deleted, leaking files into the qmaster spool
+# directory.
+#
+# This test submits a (held) script job, confirms its script was spooled to
+# "<qmaster_spool_dir>/job_scripts/<jobid>", deletes the job and verifies that
+# the spooled script file is actually removed.
+#
+# @note Only the classic (flatfile) spooling stores the job script as a file -
+#       berkeleydb spooling keeps it inside the database, so the regression
+#       cannot occur there and the test is skipped for berkeleydb.
+##
+proc issue_2364_check {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER issue_2364_job_id
+
+   # the job script is only stored as a file with classic (flatfile) spooling
+   if {$ts_config(spooling_method) == "berkeleydb"} {
+      ts_log_config "test needs classic (flatfile) spooling - skipping for berkeleydb"
+      return
+   }
+
+   # submit a held script job: the script is spooled at submit time and the
+   # job stays pending, so the script file is present until we delete the job
+   set issue_2364_job_id [submit_job "-h $ts_config(product_root)/examples/jobs/sleeper.sh 60"]
+   if {$issue_2364_job_id <= 0} {
+      ts_log_severe "could not submit job to test job script spool cleanup"
+      return
+   }
+
+   set script_file "[get_qmaster_spool_dir]/job_scripts/$issue_2364_job_id"
+
+   # the spooled script file must exist after submit (precondition / sanity)
+   if {[wait_for_remote_file $ts_config(master_host) $CHECK_USER $script_file 30 0 0] != 0} {
+      ts_log_severe "job script was not spooled to $script_file - cannot test cleanup"
+      return
+   }
+
+   # delete the job - this must remove the spooled script file
+   delete_job $issue_2364_job_id 1
+
+   # the regression check: the spool file must be gone now
+   if {[wait_for_remote_file $ts_config(master_host) $CHECK_USER $script_file 60 0 1] != 0} {
+      ts_log_severe "job script spool file $script_file was not removed on job deletion (CS-2364 regression)"
+   }
+
+   set issue_2364_job_id 0
+}
+
+proc issue_2364_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global issue_2364_job_id
+
+   # remove a leftover job if the test bailed out early
+   if {[info exists issue_2364_job_id] && $issue_2364_job_id > 0} {
+      delete_job $issue_2364_job_id 1
+   }
+   unset -nocomplain issue_2364_job_id
+}
