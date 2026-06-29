@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -38,7 +38,7 @@
 #     tight_integration_monitor() -- monitor a tightly integrated job
 #
 #  SYNOPSIS
-#     tight_integration_monitor {id master_node started_var finished_var 
+#     tight_integration_monitor {id master_node started_var finished_var
 #                                jobid_var info_var {iz_578 0}}
 #
 #  FUNCTION
@@ -68,7 +68,7 @@
 #     "master submitted"
 #     "master finished"
 #     "unexpected job output"
-#     
+#
 #
 #  EXAMPLE
 #     set id [submit_with_method "qsub" "-pe tight 4 -masterq $master_queue -cwd -N tight" \
@@ -176,7 +176,7 @@ proc tight_integration_monitor {id master_node started_var finished_var jobid_va
                   "sleeping ?? seconds*" {
                      ts_log_fine "got sleep output of master task"
                   }
-                    
+
                   "_start_mark_:(*)*" {
                      ts_log_fine "got start mark from remote prog shell script"
                   }
@@ -230,10 +230,10 @@ proc tight_integration_monitor {id master_node started_var finished_var jobid_va
 #     tight_integration_job_finished() -- tightly integrated job finished?
 #
 #  SYNOPSIS
-#     tight_integration_job_finished {job_state} 
+#     tight_integration_job_finished {job_state}
 #
 #  FUNCTION
-#     Checks if a tightly integrated job monitored by 
+#     Checks if a tightly integrated job monitored by
 #     tight_integration_monitor() has finished.
 #
 #  INPUTS
@@ -253,7 +253,7 @@ proc tight_integration_job_finished {job_state} {
          ts_log_severe "job returned with state \"$job_state\" - not expected job termination"
          set job_finished 1
       }
-      
+
       "unknown" -
       "task started" -
       "task running" -
@@ -291,20 +291,27 @@ proc tight_integration_job_finished {job_state} {
 #  INPUTS
 #     {clear_queues 1} - optional: clear all queues
 #     {do_force 0}     - optional: do a forced qdel instead of standard qdel
+#     {timeout 60}     - optional: timeout for the qdel call
 #
 #  RESULT
 #     1 on success, 0 on error !!!
 #*******************************************************************************
-proc delete_all_jobs {{clear_queues 1} {do_force 0}} {
+proc delete_all_jobs {{clear_queues 1} {do_force 0} {timeout 60}} {
    get_current_cluster_config_array ts_config
 
    ts_log_fine "deleting all jobs"
 
+   # Performance depends on the spooling method and target (local vs. NFS).
+   set timeout [scale_timeout $timeout 0 1]
+
+   set time_start [clock milliseconds]
    if {$do_force == 0} {
-      start_sge_bin "qdel" "-u '*' '*'"
+      start_sge_bin "qdel" "-u '*' '*'" "" "" prg_exit_state $timeout
    } else {
-      start_sge_bin "qdel" "-f -u '*' '*'"
+      start_sge_bin "qdel" "-f -u '*' '*'" "" "" prg_exit_state $timeout
    }
+   set time_end [clock milliseconds]
+   ts_log_fine "qdel -u '*' '*' took [format "%0.3f" [expr ($time_end - $time_start) / 1000.0]] seconds"
 
    if {$prg_exit_state == 0} {
       set ret 1
