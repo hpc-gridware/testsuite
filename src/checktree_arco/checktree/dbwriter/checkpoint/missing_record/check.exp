@@ -1,0 +1,252 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** dbwriter/checkpoint/missing_record **************************************
+#  NAME
+#     missing_record -- dbwriter self-heals when sge_checkpoint table is empty
+#
+#  FUNCTION
+#     Verifies the fix for the bug where dbwriter discards a leftover
+#     reporting.processing file (rename to reporting.invalid.<timestamp>) if
+#     the sge_checkpoint table contains no row for ch_id=1.
+#
+#     readCheckpoint() now logs a warning, inserts the missing row
+#     (ch_id=1, ch_line=0, ch_time=now()), commits it and returns 0 so that
+#     the leftover working file is processed from line 0 instead of being
+#     moved aside.
+#
+#     Test scenario:
+#       * enable reporting and shut dbwriter down so a job writes reporting
+#         records but nothing consumes them
+#       * submit a small job (qrsh hostname) to produce reporting entries
+#       * rename reporting.jsonl -> reporting.jsonl.processing to simulate
+#         the "leftover from a previous, incomplete run" condition (this is
+#         the only path that calls readCheckpoint() at startup)
+#       * DELETE FROM sge_checkpoint to provoke the empty-table condition
+#       * tail -f the dbwriter log, start dbwriter, and verify the new
+#         "No row found in sge_checkpoint" warning appears AND the working
+#         file is processed end-to-end ("Processed N lines in X.XXs ...")
+#********************************************************************************
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+
+# fixed in 9.1.3
+set check_version_range   "9.1.3"
+
+# define test's name and run level descriptions
+set check_name            "arco_dbwriter_checkpoint_missing_record"
+set check_category        "DBWRITER VERIFIED"
+set check_description(0)  "dbwriter self-heals when sge_checkpoint table is empty"
+
+# define test's dependencies
+set check_needs           "init_core_system arco_database_install"
+
+# setup and cleanup functions
+set check_setup_function arco_dbwriter_checkpoint_missing_record_setup
+set check_cleanup_function arco_dbwriter_checkpoint_missing_record_cleanup
+
+# define test's procedure order
+set check_functions ""
+lappend check_functions "arco_dbwriter_checkpoint_missing_record_execute"
+
+# -------- local test procedures: initialization------------------------------
+
+proc arco_dbwriter_checkpoint_missing_record_setup {} {
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global sqlutil_id sqlutil_sp_id
+   global arco_dbwriter_checkpoint_missing_record_org_config
+
+   set sqlutil_id ""
+
+   ts_log_fine "Create sqlutil as $CHECK_FIRST_FOREIGN_SYSTEM_USER"
+   set sqlutil_id [sqlutil_create $CHECK_FIRST_FOREIGN_SYSTEM_USER]
+   if {$sqlutil_id == "-1"} {
+      ts_log_severe "Can not create sqlutil"
+      set sqlutil_id ""
+      return -1
+   }
+   set sqlutil_sp_id [lindex $sqlutil_id 1]
+
+   if {[sqlutil_connect $sqlutil_sp_id] != 0} {
+      ts_log_severe "Can not connect to database"
+      close_spawn_process $sqlutil_id
+      set sqlutil_id ""
+      return -2
+   }
+
+   ts_log_fine "sqlutil created ($sqlutil_id)"
+
+   # we change reporting params - make a backup of the global config
+   get_config arco_dbwriter_checkpoint_missing_record_org_config
+
+   # enable reporting with a short flush_time so the reporting file is populated
+   # quickly after the test job finishes
+   set delimiter " "
+   add_or_replace_array_param new_conf arco_dbwriter_checkpoint_missing_record_org_config \
+      reporting_params "reporting" "true" $delimiter
+   add_or_replace_array_param new_conf new_conf reporting_params "flush_time" "00:00:03" $delimiter
+   set_config new_conf
+}
+
+
+proc arco_dbwriter_checkpoint_missing_record_cleanup {} {
+   global sqlutil_id sqlutil_sp_id
+   global arco_dbwriter_checkpoint_missing_record_org_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   if {$sqlutil_id != ""} {
+      close_spawn_process $sqlutil_id
+   }
+   set sqlutil_id ""
+   set sqlutil_sp_id ""
+
+   # restore the global config (reverts the reporting changes from setup)
+   reset_config arco_dbwriter_checkpoint_missing_record_org_config
+
+   if {[get_dbwriter_status 0] == 0} {
+      if {[shutdown_dbwriter] != 0} {
+         ts_log_severe "Can not stop dbwriter"
+      }
+   }
+
+   # clear the database so the next test starts with a clean state
+   arco_clean_database
+
+   unset -nocomplain sqlutil_id sqlutil_sp_id
+   unset -nocomplain arco_dbwriter_checkpoint_missing_record_org_config
+}
+
+proc arco_dbwriter_checkpoint_missing_record_execute {} {
+   global ts_config CHECK_ACT_LEVEL CHECK_USER
+   global arco_config
+   global check_description
+   global sqlutil_sp_id
+   global DBWRITER_LOG_FNAME
+
+   ts_log_fine $check_description($CHECK_ACT_LEVEL)
+
+   set dbwriter_host $arco_config(dbwriter_host)
+   set reporting_file "$ts_config(product_root)/$ts_config(cell)/common/reporting.jsonl"
+   set processing_file "${reporting_file}.processing"
+
+   # 1) Make sure dbwriter is not running. The test relies on the reporting
+   #    file accumulating data while dbwriter is down.
+   if {[get_dbwriter_status 0] == 0} {
+      if {[shutdown_dbwriter] != 0} {
+         ts_log_severe "Can not stop dbwriter"
+         return -1
+      }
+   }
+
+   # Start with a clean slate: drop any leftover reporting / .processing
+   # files and any stale dbwriter.log from earlier runs.
+   delete_remote_file $dbwriter_host $CHECK_USER $reporting_file
+   delete_remote_file $dbwriter_host $CHECK_USER $processing_file
+   if {[file isfile $DBWRITER_LOG_FNAME] == 1} {
+      delete_file $DBWRITER_LOG_FNAME
+   }
+
+   # 2) Run a small job so the qmaster writes reporting records to disk.
+   start_sge_bin "qrsh" "hostname"
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qrsh hostname failed (exit code $prg_exit_state)"
+      return -1
+   }
+
+   # Wait for the reporting file to be flushed (flush_time=00:00:03 from setup).
+   if {[wait_for_remote_file $dbwriter_host $CHECK_USER $reporting_file 30] != 0} {
+      ts_log_severe "reporting file $reporting_file was not created"
+      return -1
+   }
+   # Give the qmaster a bit more time to flush all records of the job.
+   after 1000
+
+   # 3) Simulate "leftover from a previous, incomplete dbwriter run" by
+   #    renaming reporting.jsonl -> reporting.jsonl.processing. This is the
+   #    only state in which dbwriter calls readCheckpoint() at startup.
+   start_remote_prog $dbwriter_host $CHECK_USER "mv" "$reporting_file $processing_file"
+   if {$prg_exit_state != 0} {
+      ts_log_severe "Can not rename $reporting_file to $processing_file"
+      return -1
+   }
+
+   # 4) Empty the sge_checkpoint table - this is the condition the fix is
+   #    supposed to recover from.
+   if {[sqlutil_exec $sqlutil_sp_id "DELETE FROM sge_checkpoint"] != 0} {
+      ts_log_severe "Can not DELETE FROM sge_checkpoint"
+      return -1
+   }
+
+   # 5) Tail the dbwriter log file before starting dbwriter so we capture
+   #    everything from the first line of output.
+   init_logfile_wait $dbwriter_host $DBWRITER_LOG_FNAME 1
+
+   # 6) Start dbwriter. With the fix in place it should log the new warning,
+   #    insert the missing checkpoint row (ch_id=1, ch_line=0) and process
+   #    the leftover working file from line 0.
+   if {[startup_dbwriter] != 0} {
+      ts_log_severe "Can not start dbwriter"
+      close_logfile_wait
+      return -1
+   }
+
+   # 7) Wait for either the new "No row found in sge_checkpoint" warning
+   #    (good - self-heal kicked in) or the old "Received invalid checkpoint"
+   #    severe message (bad - regression). A single logfile_wait exits on
+   #    whichever appears first and returns its accumulated tail buffer,
+   #    which we then inspect to determine which message was logged.
+   set warning_msg "No row found in sge_checkpoint"
+   set invalid_msg "Received invalid checkpoint"
+   set wait_ret ""
+   set tail_output [logfile_wait $warning_msg 60 0 0 wait_ret [list $invalid_msg]]
+
+   if {[string match "*${invalid_msg}*" $tail_output]} {
+      ts_log_severe "Self-heal of empty sge_checkpoint table did not kick in: dbwriter logged \"Received invalid checkpoint\" and would rename the working file to reporting.jsonl.invalid.<timestamp>"
+      close_logfile_wait
+      return -1
+   } elseif {![string match "*${warning_msg}*" $tail_output]} {
+      ts_log_severe "Did not see the expected \"$warning_msg\" warning in dbwriter.log within 60s"
+      close_logfile_wait
+      return -1
+   }
+
+   # 8) The leftover working file must be processed end-to-end. dbwriter
+   #    logs "Processed {N} lines in {S}s ({R} lines/s)" once it has parsed
+   #    the file. Matching " lines in " is specific enough.
+   set processed_ret ""
+   logfile_wait " lines in " 60 1 0 processed_ret
+   if {$processed_ret != 0} {
+      ts_log_severe "dbwriter did not log \"Processed N lines in X.XXs (XXX lines/s)\" - the working file was not processed end-to-end"
+      return -1
+   }
+
+   return 0
+}
