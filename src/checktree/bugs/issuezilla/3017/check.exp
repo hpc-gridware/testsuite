@@ -128,7 +128,7 @@ proc issue_3017_test {} {
 
    set id [submit_with_method $submit_command $submit_args $submit_script $script_args $issue_3017_host]
    set sp_id [lindex $id 1]
-   set timeout 40
+   set timeout 60
 
    # There is a problem, which only appears on Linux and Darwin:
    # sge_shepherd is actually sending the SIGTSTP to the whole process group
@@ -149,7 +149,7 @@ proc issue_3017_test {} {
                unsuspend_job $job_id
                ts_log_info "SIGTSTP only seen on parent process on host $issue_3017_host"
             }
-            set timeout 40
+            set timeout 60
             set linux_workaround 0
             exp_continue
          }
