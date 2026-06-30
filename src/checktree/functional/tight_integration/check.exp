@@ -82,7 +82,7 @@ global TIGHT_INTEGRATION_WARNING_MESSAGES
 
 set TIGHT_INTEGRATION_FUNCTIONAL_SLOTS 5
 set TIGHT_INTEGRATION_FUNCTIONAL_DURATION 10
-set TIGHT_INTEGRATION_MASSIVE_SLOTS 200
+set TIGHT_INTEGRATION_MASSIVE_SLOTS 192
 set TIGHT_INTEGRATION_MASSIVE_DURATION 120
 
 global host_config_backup
@@ -146,8 +146,10 @@ proc tight_integration_setup {} {
    add_pe tight pe
 
    # create a queue
+   # per-host slot count for tight.q (on @allhosts): with N hosts the massive
+   # test runs N * <slots> tasks (capped by TIGHT_INTEGRATION_MASSIVE_SLOTS).
    set queue_conf(load_thresholds) "np_load_avg=11"
-   set queue_conf(slots) 10
+   set queue_conf(slots) 64
    set queue_conf(rerun) "true"
    add_queue "tight.q" "@allhosts" queue_conf
 
