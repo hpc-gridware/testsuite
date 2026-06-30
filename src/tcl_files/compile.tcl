@@ -2450,6 +2450,9 @@ proc wait_for_distribution_files {host arch_list report_var} {
    global CHECK_USER
    upvar $report_var report
 
+   # create task in HTML output
+   set task_nr [report_create_task report "wait for distribution files" $host]
+
    # per architecture
    #  - get the compile host
    #  - get a list of binary files (in bin, utilbin, examples/jobsbin, testbin)
@@ -2460,6 +2463,29 @@ proc wait_for_distribution_files {host arch_list report_var} {
          foreach path "bin utilbin examples/jobsbin testbin" {
             set files [remote_get_files_in_directory $compile_host "$ts_config(product_root)/$path/$arch"]
             set host_files($arch) [concat $host_files($arch) $files]
+         }
+      }
+   }
+   # We install common usually on the java compile host.
+   set common_host [host_conf_get_java_compile_host]
+   if {$common_host ne ""} {
+      set host_files(common) {}
+      foreach path "3rd_party ckpt dtrace hadoop include mpi util" {
+         analyze_directory_structure $common_host $CHECK_USER "$ts_config(product_root)/$path" "" files ""
+         foreach f $files {
+            lappend host_files(common) "$ts_config(product_root)/$path/$f"
+         }
+      }
+   }
+
+   # We install doc and man on the doc compile host.
+   set doc_host [host_conf_get_doc_compile_host]
+   if {$doc_host ne ""} {
+      set host_files(doc) {}
+      foreach path "doc man" {
+         analyze_directory_structure $doc_host $CHECK_USER "$ts_config(product_root)/$path" "" files ""
+         foreach f $files {
+            lappend host_files(doc) "$ts_config(product_root)/$path/$f"
          }
       }
    }
@@ -2486,6 +2512,7 @@ proc wait_for_distribution_files {host arch_list report_var} {
       return 0
    }
 
+   report_finish_task report $task_nr 0
    return 1
 }
 
@@ -2528,7 +2555,7 @@ proc build_distribution {arch_list report_var} {
    }
 
    # wait for distribution files to be available on the host we call mk_dist on
-   if {![wait_for_distribution_files $host $arch_list report_var]} {
+   if {![wait_for_distribution_files $host $arch_list report]} {
       return 0
    }
 
