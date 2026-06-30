@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -38,10 +38,10 @@
 #    exec_compile_hooks() -- execute a compile hooks
 #
 #  SYNOPSIS
-#    exec_compile_hooks { compile_hosts report } 
+#    exec_compile_hooks { compile_hosts report }
 #
 #  FUNCTION
-#     ??? 
+#     ???
 #
 #  INPUTS
 #    compile_hosts --  list of all compile hosts
@@ -65,12 +65,12 @@ proc exec_compile_hooks { compile_hosts a_report } {
    global ts_checktree
 
    upvar $a_report report
-   
+
    set error_count 0
    for {set i 0} {$i < $ts_checktree(next_free)} {incr i 1} {
       for {set ii 0} {[info exists ts_checktree($i,compile_hooks_${ii})]} {incr ii 1} {
          set compile_proc $ts_checktree($i,compile_hooks_${ii})
-         
+
          if {[info procs $compile_proc] != $compile_proc} {
             report_add_message report "Can not execute compile hook ${ii} of checktree $ts_checktree($i,dir_name), compile proc not found"
             return -1
@@ -92,7 +92,7 @@ proc exec_compile_hooks { compile_hosts a_report } {
 #    exec_compile_clean_hooks() -- execute a compile clean hook
 #
 #  SYNOPSIS
-#    exec_compile_clean_hooks { compile_hosts report } 
+#    exec_compile_clean_hooks { compile_hosts report }
 #
 #  FUNCTION
 #     This method executes all registered compile_clean hooks of the
@@ -118,14 +118,14 @@ proc exec_compile_hooks { compile_hosts a_report } {
 proc exec_compile_clean_hooks { compile_hosts a_report } {
    global ts_checktree
    upvar $a_report report
-   
+
    ts_log_fine "execute exec_compile_clean_hooks ..."
    set error_count 0
    for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,compile_clean_hooks_${ii})]} {incr ii 1} {
-         
+
          set compile_clean_proc $ts_checktree($i,compile_clean_hooks_${ii})
-         
+
          if { [info procs $compile_clean_proc ] != $compile_clean_proc } {
             report_add_message report "Can not execute compile_clean hook ${ii} of checktree $ts_checktree($i,dir_name), compile proc not found"
             return -1
@@ -147,12 +147,12 @@ proc exec_compile_clean_hooks { compile_hosts a_report } {
 #     exec_checktree_clean_hooks() -- execute all cleanup hooks
 #
 #  SYNOPSIS
-#     exec_checktree_clean_hooks { } 
+#     exec_checktree_clean_hooks { }
 #
 #  FUNCTION
 #
 #     execute all cleanup hooks for additional checktrees
-#     
+#
 #
 #  INPUTS
 #
@@ -163,15 +163,15 @@ proc exec_compile_clean_hooks { compile_hosts a_report } {
 #
 #*******************************************************************************
 proc exec_checktree_clean_hooks { } {
-   
+
    global ts_checktree
 
    set error_count 0
    for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,checktree_clean_hooks_${ii})]} {incr ii 1} {
-         
+
          set clean_proc $ts_checktree($i,checktree_clean_hooks_${ii})
-         
+
          if { [info procs $clean_proc ] != $clean_proc } {
             ts_log_warning "Can not execute clean_proc hook ${ii} of checktree $ts_checktree($i,dir_name), clean proc not found"
             return -1
@@ -195,10 +195,10 @@ proc exec_checktree_clean_hooks { } {
 #    exec_install_binaries_hooks() -- ???
 #
 #  SYNOPSIS
-#    exec_install_binaries_hooks { } 
+#    exec_install_binaries_hooks { }
 #
 #  FUNCTION
-#     Execute all registered install_binaries_hooks 
+#     Execute all registered install_binaries_hooks
 #
 #  INPUTS
 #    arch_list   -- list of architectures
@@ -224,9 +224,9 @@ proc exec_install_binaries_hooks { arch_list a_report } {
    set error_count 0
    for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,install_binary_hooks_${ii})]} {incr ii 1} {
-         
+
          set prog $ts_checktree($i,install_binary_hooks_${ii})
-         
+
          if { [info procs $prog ] != $prog } {
             ts_log_severe "Can not execute compile hook $ts_checktree($i,install_binary_hooks_${ii}), compile prog not found"
             return -1
@@ -248,7 +248,7 @@ proc exec_install_binaries_hooks { arch_list a_report } {
 #    exec_shutdown_hooks() -- execute all shutdown hooks
 #
 #  SYNOPSIS
-#    exec_shutdown_hooks { } 
+#    exec_shutdown_hooks { }
 #
 #  FUNCTION
 #     Executes all registered shutdown hooks
@@ -258,13 +258,13 @@ proc exec_install_binaries_hooks { arch_list a_report } {
 #  RESULT
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -275,9 +275,9 @@ proc exec_shutdown_hooks {} {
    set error_count 0
    for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,shutdown_hooks_${ii})]} {incr ii 1} {
-         
+
          set shutdown_hook $ts_checktree($i,shutdown_hooks_${ii})
-         
+
          if { [info procs $shutdown_hook ] != $shutdown_hook } {
             ts_log_fine "Can not execute shutdown hook ${ii} of checktree $ts_checktree($i,dir_name), shutdown proc not found"
             return -1
@@ -298,7 +298,7 @@ proc exec_shutdown_hooks {} {
 #     exec_start_runlevel_hooks() -- execute runlevel hooks
 #
 #  SYNOPSIS
-#     exec_start_runlevel_hooks { is_starting was_error } 
+#     exec_start_runlevel_hooks { is_starting was_error }
 #
 #  FUNCTION
 #     execute registered start runlevel hooks procedures
@@ -337,7 +337,7 @@ proc exec_start_runlevel_hooks { is_starting was_error path } {
       for {set ii 0} {[info exists ts_checktree($i,start_runlevel_hooks_${ii})]} {incr ii 1} {
          if {$init_node_nr < $i} {
             continue
-         } 
+         }
          set start_test_hook $ts_checktree($i,start_runlevel_hooks_${ii})
          if { [info procs $start_test_hook] != $start_test_hook } {
             ts_log_fine "Can not execute start_runlevel_hooks ${ii} of checktree $ts_checktree($i,dir_name), proc \"$start_test_hook\" not found"
@@ -361,7 +361,7 @@ proc exec_start_runlevel_hooks { is_starting was_error path } {
 #    exec_startup_hooks() -- execute all startup hooks
 #
 #  SYNOPSIS
-#    exec_startup_hooks { } 
+#    exec_startup_hooks { }
 #
 #  FUNCTION
 #     Executes all registered startup hooks
@@ -372,13 +372,13 @@ proc exec_start_runlevel_hooks { is_starting was_error path } {
 #  RESULT
 #
 #  EXAMPLE
-#     ??? 
+#     ???
 #
 #  NOTES
-#     ??? 
+#     ???
 #
 #  BUGS
-#     ??? 
+#     ???
 #
 #  SEE ALSO
 #     ???/???
@@ -389,9 +389,9 @@ proc exec_startup_hooks {} {
    set error_count 0
    for {set i 0} { $i < $ts_checktree(next_free)} {incr i 1 } {
       for {set ii 0} {[info exists ts_checktree($i,startup_hooks_${ii})]} {incr ii 1} {
-         
+
          set startup_hook $ts_checktree($i,startup_hooks_${ii})
-         
+
          if { [info procs $startup_hook ] != $startup_hook } {
             ts_log_severe "Can not execute startup hook ${ii} of checktree $ts_checktree($i,dir_name), startup proc not found"
             return -1
@@ -412,7 +412,7 @@ proc exec_startup_hooks {} {
 #    checktree_get_required_hosts() -- get a list of required hosts of all checktrees
 #
 #  SYNOPSIS
-#    checktree_get_required_hosts { } 
+#    checktree_get_required_hosts { }
 #
 #  FUNCTION
 #     get a list of required hosts of all checktrees
@@ -457,7 +457,7 @@ proc checktree_get_required_hosts {} {
 #     checktree_get_required_ports() -- get required ports from hook functions
 #
 #  SYNOPSIS
-#     checktree_get_required_ports { } 
+#     checktree_get_required_ports { }
 #
 #  FUNCTION
 #     Call all required_ports_hook functions and return the port list of
@@ -495,6 +495,36 @@ proc checktree_get_required_ports {} {
       }
    }
    return $required_ports
+}
+
+##
+# @brief get the distribution files for all checktrees
+#
+# Returns the file names of all distribution files
+# of all configured checktrees.
+#
+# File names are relative to $SGE_ROOT.
+#
+# @return list of file names
+proc checktree_get_dist_files {} {
+   get_current_cluster_config_array ts_config
+   global ts_checktree
+
+   set dist_files {}
+   for {set i 0} {$i < $ts_checktree(next_free)} {incr i 1 } {
+      if {[info exists ts_checktree($i,get_dist_files_hook)]} {
+         set get_dist_files_hook $ts_checktree($i,get_dist_files_hook)
+         if {[info procs $get_dist_files_hook] != $get_dist_files_hook } {
+            ts_log_fine "Can not execute get_dist_files_hook of checktree $ts_checktree($i,dir_name), proc not found"
+         } else {
+            set files [$get_dist_files_hook]
+            foreach f $files {
+               lappend dist_files "$ts_config(product_root)/$f"
+            }
+         }
+      }
+   }
+   return $dist_files
 }
 
 proc checktree_get_check_levels_by_path {path} {

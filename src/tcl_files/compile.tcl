@@ -2490,6 +2490,9 @@ proc wait_for_distribution_files {host arch_list report_var} {
       }
    }
 
+   # We might have checktrees configured which also install files to $SGE_ROOT.
+   set host_files(hooks) [checktree_get_dist_files]
+
    # once we have all these files wait on the target host for them to appear
    set errors {}
    foreach arch [array names host_files] {

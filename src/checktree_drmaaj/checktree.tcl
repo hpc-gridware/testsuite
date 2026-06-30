@@ -42,6 +42,8 @@ set ts_checktree($drmaaj_checktree_nr,setup_hooks_0_version)      "1.0"
 set ts_checktree($drmaaj_checktree_nr,compile_hooks_0)        "drmaaj_compile"
 set ts_checktree($drmaaj_checktree_nr,compile_clean_hooks_0)  "drmaaj_compile_clean"
 set ts_checktree($drmaaj_checktree_nr,install_binary_hooks_0) "drmaaj_install_binaries"
+
+set ts_checktree($drmaaj_checktree_nr,get_dist_files_hook)    "drmaaj_get_distribution_files"
 set ts_checktree($drmaaj_checktree_nr,mk_dist_options)        "-drmaaj"
 
 #set ts_checktree($drmaaj_checktree_nr,shutdown_hooks_0)       ""
@@ -225,3 +227,15 @@ proc drmaaj_test_run_level_check {is_starting was_error} {
    # anything to do?
    return 0
 }
+
+##
+# @brief get the distribution files
+#
+# Returns the file names of all drmaaj distribution files.
+# File names are relative to $SGE_ROOT.
+#
+# @return list of file names
+proc drmaaj_get_distribution_files {} {
+   return "lib/drmaa.jar"
+}
+

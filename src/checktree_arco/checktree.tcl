@@ -59,6 +59,8 @@ set ts_checktree($arco_checktree_nr,checktree_clean_hooks_0)  "arco_clean"
 set ts_checktree($arco_checktree_nr,compile_hooks_0)        "arco_compile"
 set ts_checktree($arco_checktree_nr,compile_clean_hooks_0)  "arco_compile_clean"
 set ts_checktree($arco_checktree_nr,install_binary_hooks_0) "arco_install_binaries"
+
+set ts_checktree($arco_checktree_nr,get_dist_files_hook)    "arco_get_distribution_files"
 set ts_checktree($arco_checktree_nr,mk_dist_options)        "-arco"
 
 set ts_checktree($arco_checktree_nr,shutdown_hooks_0)       "shutdown_dbwriter"
@@ -1141,5 +1143,26 @@ proc arco_get_java_home {host} {
    }
 
    return $ret
+}
+
+##
+# @brief get the distribution files
+#
+# Returns the file names of all dbwriter distribution files.
+# File names are relative to $SGE_ROOT.
+#
+# @return list of file names
+proc arco_get_distribution_files {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set dist_files {}
+   set host [host_conf_get_java_compile_host]
+   analyze_directory_structure $host $CHECK_USER "$ts_config(product_root)/dbwriter" "" files ""
+   foreach f $files {
+      lappend dist_files "dbwriter/$f"
+   }
+
+   return $dist_files
 }
 
