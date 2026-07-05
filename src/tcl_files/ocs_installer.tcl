@@ -1498,6 +1498,85 @@ proc installer_do_upgrade_execd {} {
    return 0
 }
 
+## @brief Verify that a classic spool tree carries the hardened permissions
+#         after an upgrade (CS-2352).
+#
+# After an upgrade from a previous version the reused classic spool tree may
+# still carry the old permissive modes (0755 directories, 0666 files), because
+# a directory that already exists is not re-chmod'd and spool files that are not
+# rewritten keep their old mode. The upgrade procedure hardens the qmaster spool
+# object directories and common/local_conf to owner-only (0700 dirs / 0600
+# files). This check asserts that none of those objects is still accessible to
+# group or other.
+#
+# Only relevant for classic spooling; a no-op for other spooling methods. The
+# execd spool and the sequence-number files under the spool directory are
+# outside the CS-2352 scope and therefore not inspected.
+#
+# @return 0 if all inspected objects are owner-only, 1 if any violation is found
+proc installer_check_classic_spool_permissions {} {
+   get_current_cluster_config_array ts_config
+
+   if {$ts_config(spooling_method) != "classic"} {
+      ts_log_fine "spooling_method is \"$ts_config(spooling_method)\" (not classic) - skipping spool permission check"
+      return 0
+   }
+
+   set host $ts_config(master_host)
+
+   # do_cleanup must be 0 - otherwise get_local_spool_dir would wipe the spool!
+   set spooldir [get_local_spool_dir $host qmaster 0]
+   if {$spooldir == ""} {
+      set spooldir "$ts_config(product_root)/$ts_config(cell)/spool/qmaster"
+   }
+   set common_dir "$ts_config(product_root)/$ts_config(cell)/common"
+
+   # CS-2352 hardening scope: the qmaster object directories (mirroring
+   # spool_classic_default_startup_func) plus common/local_conf. We inspect only
+   # these named roots, so the seqnum files under the spool dir (644) and the
+   # execd spool are not misreported.
+   set obj_dirs {jobs cqueues qinstances exec_hosts admin_hosts submit_hosts \
+                 centry job_scripts pe ckpt usersets calendars hostgroups \
+                 users projects resource_quotas advance_reservations roles}
+   set roots {}
+   foreach d $obj_dirs {
+      lappend roots "$spooldir/$d"
+   }
+   lappend roots "$common_dir/local_conf"
+   # managers/operators are plain files at the spool root (they list the admin
+   # accounts); find accepts file paths as roots, so -type f -perm /077 flags
+   # them if they are still group/other accessible.
+   lappend roots "$spooldir/managers"
+   lappend roots "$spooldir/operators"
+   set root_list [join $roots " "]
+
+   set find_binary [get_binary_path $host "find"]
+
+   # A directory or file with any group/other permission bit set (-perm /077)
+   # is a leftover from a pre-CS-2352 spool and counts as a violation. Absent
+   # roots (older layouts) are silently skipped via 2>/dev/null.
+   set violations {}
+   foreach type {d f} {
+      set out [start_remote_prog $host "root" $find_binary \
+               "$root_list -type $type -perm /077 -print 2>/dev/null"]
+      foreach line [split $out "\n"] {
+         set line [string trim $line]
+         if {$line != "" &&
+             ([string match "$spooldir/*" $line] || [string match "$common_dir/local_conf*" $line])} {
+            lappend violations $line
+         }
+      }
+   }
+
+   if {[llength $violations] > 0} {
+      ts_log_severe "classic spool objects still group/other accessible after upgrade (CS-2352, expected dirs 0700 / files 0600):\n[join $violations \n]"
+      return 1
+   }
+
+   ts_log_fine "classic spool permissions correctly hardened after upgrade (no group/other access on objects or local_conf)"
+   return 0
+}
+
 ## @brief  test cluster after upgrade
 #
 # @return     0 on success, 1 on failure
@@ -1516,6 +1595,12 @@ proc installer_test_cluster_after_upgrade {} {
    if {$jid == 1 || ($jid % 2000) != 0} {
       ts_log_severe "Job submission after upgrade failed, expected jid that is divisible by 2000, got $jid"
       return 1
+   }
+
+   # CS-2352: verify the reused classic spool tree was re-hardened by the upgrade
+   set ret [installer_check_classic_spool_permissions]
+   if {$ret != 0} {
+      return $ret
    }
 
    # @todo: here version specific tests could be added

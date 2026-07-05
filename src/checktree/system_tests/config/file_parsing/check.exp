@@ -78,6 +78,7 @@ proc file_parsing_setup {} {
   global file_parsing_job_host
   global CHECK_USE_HUDSON
   global JENKINS_MODE
+  global CHECK_USER
 
   if {$CHECK_USE_HUDSON == 1 || $JENKINS_MODE == 1} {
      ts_log_config "Test is not supported in this parallel run due to the usage of \$HOME/.sgerequest file"
@@ -90,6 +91,19 @@ proc file_parsing_setup {} {
   set file_parsing_job_script           "$CHECK_JOB_OUTPUT_DIR/request_job.sh"
   set file_parsing_option_file          "$CHECK_JOB_OUTPUT_DIR/option_file"
   set file_parsing_job_host             [host_conf_get_suited_hosts]
+
+  # The test uses the real cluster and home request files as fixtures and
+  # deletes them during the run. Back up any pre-existing originals so cleanup
+  # can restore them; otherwise the installed common/sge_request is left removed,
+  # which breaks later save_config/upgrade_config checks (they expect it).
+  set saved_cluster_request_file "${file_parsing_cluster_request_file}.file_parsing_saved"
+  set saved_home_request_file    "${file_parsing_home_request_file}.file_parsing_saved"
+  if {[is_remote_file $file_parsing_job_host $CHECK_USER $file_parsing_cluster_request_file 1]} {
+     start_remote_prog $file_parsing_job_host $CHECK_USER "cp" "-f $file_parsing_cluster_request_file $saved_cluster_request_file"
+  }
+  if {[is_remote_file $file_parsing_job_host $CHECK_USER $file_parsing_home_request_file 1]} {
+     start_remote_prog $file_parsing_job_host $CHECK_USER "cp" "-f $file_parsing_home_request_file $saved_home_request_file"
+  }
 }
 
 
@@ -556,8 +570,21 @@ proc file_parsing_cleanup {} {
    global file_parsing_cluster_request_file file_parsing_home_request_file   
 
    delete_remote_file $file_parsing_job_host $CHECK_USER $file_parsing_option_file
-   delete_remote_file $file_parsing_job_host $CHECK_USER $file_parsing_cluster_request_file
-   delete_remote_file $file_parsing_job_host $CHECK_USER $file_parsing_home_request_file
+
+   # Restore the pre-existing request files saved in file_parsing_setup; only
+   # delete the test's own file if there was no original to restore.
+   set saved_cluster_request_file "${file_parsing_cluster_request_file}.file_parsing_saved"
+   set saved_home_request_file    "${file_parsing_home_request_file}.file_parsing_saved"
+   if {[is_remote_file $file_parsing_job_host $CHECK_USER $saved_cluster_request_file 1]} {
+      start_remote_prog $file_parsing_job_host $CHECK_USER "mv" "-f $saved_cluster_request_file $file_parsing_cluster_request_file"
+   } else {
+      delete_remote_file $file_parsing_job_host $CHECK_USER $file_parsing_cluster_request_file
+   }
+   if {[is_remote_file $file_parsing_job_host $CHECK_USER $saved_home_request_file 1]} {
+      start_remote_prog $file_parsing_job_host $CHECK_USER "mv" "-f $saved_home_request_file $file_parsing_home_request_file"
+   } else {
+      delete_remote_file $file_parsing_job_host $CHECK_USER $file_parsing_home_request_file
+   }
    delete_remote_file $file_parsing_job_host $CHECK_USER $file_parsing_local_request_file
 
    delete_all_jobs

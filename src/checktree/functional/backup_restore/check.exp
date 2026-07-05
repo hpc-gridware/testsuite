@@ -321,6 +321,11 @@ proc backup_restore_check_cluster {} {
    if {![info exists qrstat_info(name)] || $qrstat_info(name) != "TEST_AR"} {
       ts_log_severe "advance reservation $test_ar has not been properly restored"
    }
+
+   # CS-2352: the classic restore copies the spool objects back with "cp -R",
+   # which reintroduces the backed-up modes (0755 dirs / 0644 files). Verify the
+   # restore re-hardened them to owner-only (0700/0600). No-op for non-classic.
+   installer_check_classic_spool_permissions
 }
 
 proc backup_restore_cleanup {} {

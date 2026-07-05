@@ -206,14 +206,23 @@ proc jsv_issues_job_start_user_drmaa {} {
    # unset SGE_ROOT and try test_drmaa -h
    ts_log_fine "starting single threaded test $drmaa_binary_name -h without SGE_ROOT"
 
-   # Submit a drmaa job
+   # Submit a drmaa job (the modified global sge_request injects the -jsv).
+   # Wrap in catch so the global sge_request is always restored below, even if
+   # the submit aborts - otherwise the cluster keeps the test's modified file
+   # (and an orphaned .saved copy), which breaks later save_config/upgrade_config.
    # if the issue is present the binary might return (null) as user or die
-   submit_drmaa_job $host job_id
+   set submit_result [catch {submit_drmaa_job $host job_id} submit_error]
 
-   # remove the sge_request file and optionally restore the original
+   # remove the test's sge_request file and restore the original (always runs)
    file delete $global_file
    if {$did_copy == 1} {
       file copy $saved_global_file $global_file
+      file delete $saved_global_file
+   }
+
+   # now that the original file is restored, propagate an abort from the submit
+   if {$submit_result != 0} {
+      return -code $submit_result $submit_error
    }
 
    # submit jobs and store qstat -j output
