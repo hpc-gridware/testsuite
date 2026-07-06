@@ -1544,13 +1544,13 @@ proc installer_check_classic_spool_permissions {} {
    foreach d $obj_dirs {
       lappend roots "$spooldir/$d"
    }
-   # Configuration objects: from 9.2.0 the global (configuration) and scheduler
-   # (sched_configuration) configuration and the per-host local_conf are spooled
-   # in the spool directory (owner-only); before 9.2.0 local_conf lived in the
-   # common directory. Gate the inspected roots on the version under test.
+   # Configuration objects: from 9.2.0 the global and per-host configurations are
+   # spooled in the "configs" directory and the scheduler configuration
+   # (sched_configuration) as a file, both under the spool directory (owner-only);
+   # before 9.2.0 the per-host configuration lived in common/local_conf. Gate the
+   # inspected roots on the version under test.
    if {[is_version_in_range "9.2.0"]} {
-      lappend roots "$spooldir/local_conf"
-      lappend roots "$spooldir/configuration"
+      lappend roots "$spooldir/configs"
       lappend roots "$spooldir/sched_configuration"
    } else {
       lappend roots "$common_dir/local_conf"
