@@ -1,0 +1,102 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# Optional coverage for the "move configuration into the spool directory" work
+# (CS-2386): from 9.2.0 classic spooling stores the configuration in the spool
+# directory and the classic spooling parameter is a single absolute spool
+# directory path. The obsolete two-argument "<common_dir>;<spool_dir>" form must
+# be rejected fast (MSG_SPOOL_LEGACYCLASSICPARAMS) so an un-migrated bootstrap
+# fails loudly at startup instead of booting against a stale layout. This check
+# verifies the shipped classic spooling library (via spoolinit) enforces that.
+#
+# NOTE (needs a first TS run to validate): this is a newly authored check that
+# was not executed. Confirm on the first run:
+#   1. it is discovered/registered (leaf dir under checktree with check.exp);
+#   2. the ';' in the legacy param survives the remote shell as a single spoolinit
+#      argument (embedded quoting in $args below) - adjust quoting if it splits;
+#   3. start_sge_utilbin captures the error message (it may be on stderr).
+
+# define test's name and run level descriptions
+set check_name            "classic_legacy_spooling_params"
+set check_category        "COMPATIBILITY SYSTEM SPOOLING VERIFIED"
+set check_description(0)  "classic spooling rejects the obsolete <common_dir>;<spool_dir> spooling params (fail-fast, CS-2386)"
+
+set check_root_access_needs "no"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# no setup/cleanup needed - the check only runs a utility binary with bogus,
+# non-existent paths (rejected during parameter parsing before any filesystem or
+# cluster state is touched).
+
+# define test's procedure order
+set check_functions ""
+lappend check_functions "classic_legacy_spooling_params_check"
+
+## @brief Assert that classic spooling rejects the legacy two-argument params.
+#
+# Runs spoolinit with a legacy "<common_dir>;<spool_dir>" classic spooling
+# parameter and requires it to fail with the MSG_SPOOL_LEGACYCLASSICPARAMS
+# message. Skipped for non-classic spooling and for versions < 9.2.0 (where the
+# two-argument form was still the required form).
+#
+# @return none (reports failures via ts_log_severe)
+proc classic_legacy_spooling_params_check {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   if {$ts_config(spooling_method) != "classic"} {
+      ts_log_fine "spooling_method is \"$ts_config(spooling_method)\" (not classic) - skipping"
+      return
+   }
+   if {![is_version_in_range "9.2.0"]} {
+      ts_log_fine "version under test < 9.2.0 - legacy spooling_params still supported, skipping"
+      return
+   }
+
+   set host $ts_config(master_host)
+
+   # Two non-existent absolute paths joined by ';' reproduce the obsolete
+   # "<common_dir>;<spool_dir>" classic spooling parameter. It is rejected during
+   # context creation (before the filesystem is touched), so the paths need not
+   # exist. The ';' must reach spoolinit inside a single argument - hence the
+   # embedded double-quotes in the argument string.
+   set legacy_params "/nonexistent_common_dir;/nonexistent_spool_dir"
+   set args "classic libspoolc \"$legacy_params\" init"
+
+   set output [start_sge_utilbin "spoolinit" $args $host $CHECK_USER prg_exit_state]
+
+   if {$prg_exit_state == 0} {
+      ts_log_severe "spoolinit accepted the legacy <common_dir>;<spool_dir> spooling params (expected a fail-fast rejection).\nOutput:\n$output"
+      return
+   }
+
+   # MSG_SPOOL_LEGACYCLASSICPARAMS: "obsolete classic spooling parameter format:
+   # expected a single spool directory path, but the bootstrap file still uses
+   # the legacy common_dir;spool_dir form - please migrate it"
+   if {![string match "*obsolete classic spooling parameter format*" $output] &&
+       ![string match "*legacy common_dir;spool_dir form*" $output]} {
+      ts_log_severe "spoolinit rejected the legacy params (exit $prg_exit_state) but without the expected MSG_SPOOL_LEGACYCLASSICPARAMS message.\nOutput:\n$output"
+      return
+   }
+
+   ts_log_fine "classic spooling correctly rejects the legacy <common_dir>;<spool_dir> params with the fail-fast message"
+}
