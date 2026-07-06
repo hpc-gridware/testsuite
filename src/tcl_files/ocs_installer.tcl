@@ -1505,8 +1505,9 @@ proc installer_do_upgrade_execd {} {
 # still carry the old permissive modes (0755 directories, 0666 files), because
 # a directory that already exists is not re-chmod'd and spool files that are not
 # rewritten keep their old mode. The upgrade procedure hardens the qmaster spool
-# object directories and common/local_conf to owner-only (0700 dirs / 0600
-# files). This check asserts that none of those objects is still accessible to
+# object directories, the configuration files and local_conf to owner-only
+# (0700 dirs / 0600 files). This check asserts that none of those objects is
+# still accessible to
 # group or other.
 #
 # Only relevant for classic spooling; a no-op for other spooling methods. The
@@ -1532,9 +1533,10 @@ proc installer_check_classic_spool_permissions {} {
    set common_dir "$ts_config(product_root)/$ts_config(cell)/common"
 
    # CS-2352 hardening scope: the qmaster object directories (mirroring
-   # spool_classic_default_startup_func) plus common/local_conf. We inspect only
-   # these named roots, so the seqnum files under the spool dir (644) and the
-   # execd spool are not misreported.
+   # spool_classic_default_startup_func), the configuration files and local_conf
+   # (in the spool dir from 9.2.0, else common/local_conf). We inspect only these
+   # named roots, so the seqnum files under the spool dir (644) and the execd
+   # spool are not misreported.
    set obj_dirs {jobs cqueues qinstances exec_hosts admin_hosts submit_hosts \
                  centry job_scripts pe ckpt usersets calendars hostgroups \
                  users projects resource_quotas advance_reservations roles}
@@ -1542,7 +1544,17 @@ proc installer_check_classic_spool_permissions {} {
    foreach d $obj_dirs {
       lappend roots "$spooldir/$d"
    }
-   lappend roots "$common_dir/local_conf"
+   # Configuration objects: from 9.2.0 the global (configuration) and scheduler
+   # (sched_configuration) configuration and the per-host local_conf are spooled
+   # in the spool directory (owner-only); before 9.2.0 local_conf lived in the
+   # common directory. Gate the inspected roots on the version under test.
+   if {[is_version_in_range "9.2.0"]} {
+      lappend roots "$spooldir/local_conf"
+      lappend roots "$spooldir/configuration"
+      lappend roots "$spooldir/sched_configuration"
+   } else {
+      lappend roots "$common_dir/local_conf"
+   }
    # managers/operators are plain files at the spool root (they list the admin
    # accounts); find accepts file paths as roots, so -type f -perm /077 flags
    # them if they are still group/other accessible.
