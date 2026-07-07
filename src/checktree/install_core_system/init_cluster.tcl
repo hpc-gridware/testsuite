@@ -301,9 +301,16 @@ proc cleanup_system {} {
   if { [string first $NO_ACCESS_LIST_DEFINED $result] >= 0 } {
      ts_log_fine "no userset list defined"
   } else {
+     # defaultdepartment is reserved in all versions. From 9.2.0 the manager and
+     # operator usersets back the manager/operator lists (CS-2394) and are also
+     # reserved; keep the old behaviour (delete such a userset) for older versions.
+     set reserved_usersets {defaultdepartment}
+     if {[is_version_in_range "9.2.0"]} {
+        lappend reserved_usersets manager operator
+     }
      foreach elem $result {
-        if { [ string compare $elem defaultdepartment ] == 0 } {
-           ts_log_fine "skipping \"defaultdepartment\" ..."
+        if { [lsearch -exact $reserved_usersets $elem] >= 0 } {
+           ts_log_fine "skipping reserved userset \"$elem\" ..."
            continue
         }
         ts_log_fine "removing userset list $elem."
