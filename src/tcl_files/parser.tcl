@@ -3058,7 +3058,10 @@ proc qstat_ext_plain_parse { output {param ""} } {
 # @param user User to run the qstat command as (optional, default is the CHECK_USER)
 # @param add_args Additional arguments to pass to qstat (optional)
 # @param qstat_output_var Name of variable to store raw qstat output (optional)
-proc qstat_F_plain_parse {result_array_var {params ""} {user ""} {add_args ""} {qstat_output_var ""}} {
+# @param env_var Name of a caller-side array whose entries are added to the qstat process
+#                environment (optional). Useful for env-var-driven qstat features such as
+#                SGE_QSTAT_LOAD_AVG (CS-2387). SGE_LONG_QNAMES is still forced to 80.
+proc qstat_F_plain_parse {result_array_var {params ""} {user ""} {add_args ""} {qstat_output_var ""} {env_var ""}} {
    get_current_cluster_config_array ts_config
    global queue_name
 
@@ -3074,6 +3077,12 @@ proc qstat_F_plain_parse {result_array_var {params ""} {user ""} {add_args ""} {
 
    # Run usual command
    set myenv(SGE_LONG_QNAMES) 80
+   if {$env_var ne ""} {
+      upvar $env_var caller_env
+      foreach {name value} [array get caller_env] {
+         set myenv($name) $value
+      }
+   }
    set result [start_sge_bin "qstat" "$add_args -F $args" "" $user prg_exit_state 60 "" "bin" output_lines myenv]
    parse_multiline_list result parsed_out
 

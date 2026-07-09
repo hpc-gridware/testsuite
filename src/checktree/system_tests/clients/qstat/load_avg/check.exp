@@ -1,0 +1,285 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# Test for CS-2387: qstat honours the SGE_QSTAT_LOAD_AVG env var and shows the
+# selected load variable in the load_avg column of `qstat -f`.
+#
+# In 9.1.x the default load variable is "load_avg", so the test overrides with
+# SGE_QSTAT_LOAD_AVG=np_load_avg. In 9.2.x+ the default flips to "np_load_avg",
+# so the test overrides with SGE_QSTAT_LOAD_AVG=load_avg. Either way we verify
+# both the default and the override against the raw hl:<variable> values that
+# qstat -F reports for the same queue instance.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+# SGE_QSTAT_LOAD_AVG was introduced in 9.1.4.
+set check_version_range "9.1.4"
+
+set check_name           "qstat_load_avg_env"
+set check_category       "QSTAT VERIFIED"
+set check_description(0) "SGE_QSTAT_LOAD_AVG selects the qstat -f load_avg column (CS-2387)"
+
+set check_needs          "init_core_system"
+
+set check_setup_function qstat_load_avg_env_setup
+set check_cleanup_function qstat_load_avg_env_cleanup
+
+set check_functions {}
+lappend check_functions "qstat_load_avg_env_test"
+
+# -------- local test procedures: initialization -----------------------------
+
+# Pick the exec host with the most processors (must have >= 2). The choice
+# is done via one qstat -F num_proc call so we do not depend on remote
+# shell access to /proc.
+proc qstat_load_avg_env_setup {} {
+   get_current_cluster_config_array ts_config
+   global qstat_load_avg_env_host
+
+   set qstat_load_avg_env_host ""
+
+   # Query num_proc per queue instance in one shot.
+   if {[catch {qstat_F_plain_parse qstat_data "num_proc"} err]} {
+      ts_log_config "qstat -F num_proc failed: $err"
+      return 99
+   }
+
+   set best_host ""
+   set best_num_proc 0
+   foreach exec_host $ts_config(execd_nodes) {
+      set queue_instance "all.q@$exec_host"
+      set key "${queue_instance},hl:num_proc"
+      if {![info exists qstat_data($key)]} {
+         ts_log_fine "no hl:num_proc for $queue_instance, skipping"
+         continue
+      }
+      # hl:num_proc is emitted as an integer.
+      set num_proc [expr {int($qstat_data($key))}]
+      ts_log_fine "$exec_host: hl:num_proc=$num_proc"
+      if {$num_proc > $best_num_proc} {
+         set best_num_proc $num_proc
+         set best_host $exec_host
+      }
+   }
+
+   if {$best_host eq "" || $best_num_proc < 2} {
+      ts_log_config "no exec host with hl:num_proc >= 2 found\
+                     (best was $best_host with $best_num_proc)"
+      return 99
+   }
+
+   set qstat_load_avg_env_host $best_host
+   ts_log_fine "selected exec host $qstat_load_avg_env_host (hl:num_proc=$best_num_proc)"
+}
+
+proc qstat_load_avg_env_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global qstat_load_avg_env_host
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   unset -nocomplain qstat_load_avg_env_host
+}
+
+# -------- helpers -----------------------------------------------------------
+
+# Return 1 if two %2.2f-rendered load numbers agree at the display's
+# resolution. Tolerance is one full display digit (0.01) rather than half
+# a digit (0.005), because at an exact half-digit (e.g. raw=0.125) IEEE
+# round-half-even sends the qstat display to 0.12 while the raw is 0.125,
+# giving an exact diff of 0.005 — a stricter `< 0.005` bound then flags a
+# perfectly correct display as wrong.
+proc qstat_load_avg_env_close_enough {a b} {
+   return [expr {abs($a - $b) < 0.01}]
+}
+
+# Ensure the exec host's load_avg is above 0.1 so the display value is
+# distinguishable from noise. If it isn't, warm the host up with a short
+# worker.sh burst and wait for the job to finish; the Linux load average
+# lingers for long enough afterwards to run qstat twice.
+proc qstat_load_avg_env_ensure_load {queue_instance host} {
+   get_current_cluster_config_array ts_config
+
+   if {[catch {qstat_F_plain_parse qstat_data "load_avg"} err]} {
+      ts_log_severe "qstat -F load_avg failed: $err"
+      return 0
+   }
+   set current $qstat_data(${queue_instance},load_avg)
+   ts_log_fine "$queue_instance current load_avg=$current"
+   if {$current > 0.1} {
+      return 1
+   }
+
+   # worker.sh <time_seconds> <nprocs>. 60s at 2 procs pushes the 1-minute
+   # load well past 0.1 on any sensible host and lets us wait for the job
+   # to end before measuring.
+   set worker "$ts_config(product_root)/examples/jobs/worker.sh"
+   set job_id [submit_job "-q all.q -l h=$host $worker 60 2"]
+   if {$job_id <= 0} {
+      ts_log_severe "could not submit load-generating worker.sh job"
+      return 0
+   }
+   if {[wait_for_jobend $job_id "" 180 0] != 0} {
+      ts_log_severe "worker.sh job $job_id did not finish in time"
+      delete_job $job_id 0 0 0
+      wait_for_end_of_all_jobs
+      return 0
+   }
+
+   # Re-check. Load will have peaked while the job ran and now be decaying,
+   # but should still be comfortably above 0.1 for at least a minute.
+   if {[catch {qstat_F_plain_parse qstat_data2 "load_avg"} err]} {
+      ts_log_severe "qstat -F load_avg failed after warmup: $err"
+      return 0
+   }
+   set after $qstat_data2(${queue_instance},load_avg)
+   ts_log_fine "$queue_instance load_avg after warmup=$after"
+   if {$after <= 0.1} {
+      ts_log_severe "load_avg still <= 0.1 after warmup ($after) — cannot verify display"
+      return 0
+   }
+   return 1
+}
+
+# Fetch the display + raw values, either with the caller-provided env or
+# with the process default. Populates the caller's array with 4 entries:
+#   display   -> qstat_data($qi,load_avg)              (2-decimal display)
+#   raw_lav   -> qstat_data($qi,hl:load_avg)           (raw double)
+#   raw_np    -> qstat_data($qi,hl:np_load_avg)        (raw double)
+#   num_proc  -> qstat_data($qi,hl:num_proc)           (int, useful for log)
+# env_var_name is the name of an env-array in the caller's scope, or "".
+proc qstat_load_avg_env_snapshot {queue_instance result_var env_var_name} {
+   upvar $result_var out
+   array unset out
+
+   if {$env_var_name eq ""} {
+      if {[catch {qstat_F_plain_parse qstat_data "num_proc,load_avg,np_load_avg"} err]} {
+         ts_log_severe "qstat -F num_proc,load_avg,np_load_avg failed: $err"
+         return 0
+      }
+   } else {
+      upvar $env_var_name caller_env
+      # qstat_F_plain_parse takes the env-array name and reads it via upvar;
+      # forward the name string, not the array contents.
+      set fields "num_proc,load_avg,np_load_avg"
+      if {[catch {qstat_F_plain_parse qstat_data $fields "" "" "" caller_env} err]} {
+         ts_log_severe "qstat -F ... with $env_var_name failed: $err"
+         return 0
+      }
+   }
+
+   foreach {key out_key} {
+      load_avg          display
+      hl:load_avg       raw_lav
+      hl:np_load_avg    raw_np
+      hl:num_proc       num_proc
+   } {
+      set full "${queue_instance},${key}"
+      if {![info exists qstat_data($full)]} {
+         ts_log_severe "$full missing from qstat -F output"
+         return 0
+      }
+      set out($out_key) $qstat_data($full)
+   }
+   return 1
+}
+
+# -------- test function -----------------------------------------------------
+
+proc qstat_load_avg_env_test {} {
+   get_current_cluster_config_array ts_config
+   global qstat_load_avg_env_host
+
+   set host $qstat_load_avg_env_host
+   set queue_instance "all.q@$host"
+
+   # 9.2.x+ default is np_load_avg, override with load_avg to prove the knob works.
+   # 9.1.x default is load_avg, override with np_load_avg.
+   if {[is_version_in_range "9.2.0"]} {
+      set default_var  "np_load_avg"
+      set override_var "load_avg"
+   } else {
+      set default_var  "load_avg"
+      set override_var "np_load_avg"
+   }
+   ts_log_fine "expecting default variable $default_var, override variable $override_var"
+
+   # Make sure the host actually has load worth measuring.
+   if {![qstat_load_avg_env_ensure_load $queue_instance $host]} {
+      return
+   }
+
+   # Snapshot 1: no env override — display column should equal hl:$default_var.
+   if {![qstat_load_avg_env_snapshot $queue_instance snap_default ""]} {
+      return
+   }
+   set msg "default snapshot: display=$snap_default(display)"
+   append msg " hl:load_avg=$snap_default(raw_lav)"
+   append msg " hl:np_load_avg=$snap_default(raw_np)"
+   append msg " hl:num_proc=$snap_default(num_proc)"
+   ts_log_fine $msg
+
+   if {$default_var eq "load_avg"} {
+      set expected_default $snap_default(raw_lav)
+   } else {
+      set expected_default $snap_default(raw_np)
+   }
+   if {![qstat_load_avg_env_close_enough $snap_default(display) $expected_default]} {
+      set msg "qstat -f without SGE_QSTAT_LOAD_AVG:"
+      append msg " display=$snap_default(display),"
+      append msg " expected ~$expected_default (from hl:$default_var)"
+      ts_log_severe $msg
+   } else {
+      ts_log_fine "default matches hl:$default_var"
+   }
+
+   # Snapshot 2: env override — display column should equal hl:$override_var.
+   set env_arr(SGE_QSTAT_LOAD_AVG) $override_var
+   if {![qstat_load_avg_env_snapshot $queue_instance snap_override env_arr]} {
+      return
+   }
+   set msg "override snapshot: display=$snap_override(display)"
+   append msg " hl:load_avg=$snap_override(raw_lav)"
+   append msg " hl:np_load_avg=$snap_override(raw_np)"
+   ts_log_fine $msg
+
+   if {$override_var eq "load_avg"} {
+      set expected_override $snap_override(raw_lav)
+   } else {
+      set expected_override $snap_override(raw_np)
+   }
+   if {![qstat_load_avg_env_close_enough $snap_override(display) $expected_override]} {
+      set msg "qstat -f with SGE_QSTAT_LOAD_AVG=$override_var:"
+      append msg " display=$snap_override(display),"
+      append msg " expected ~$expected_override (from hl:$override_var)"
+      ts_log_severe $msg
+   } else {
+      ts_log_fine "override to $override_var matches hl:$override_var"
+   }
+}
