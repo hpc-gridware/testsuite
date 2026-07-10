@@ -1,0 +1,263 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2404: DRMAA submissions must apply the same request-precedence rules as
+# qsub does. Stack a distinct -q (and -l h_rt) value at each source tier
+# (global sge_request, .sge_request in cwd, script special comment,
+# DRMAA_NATIVE_SPECIFICATION) and verify the highest-precedence tier wins.
+# Before the fix in source/libs/japi/drmaa.cc:merge_drmaa_options the
+# native-spec -q got unioned with the sge_request default instead of
+# overriding it.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+# CS-2404 fix landed on the V91_BRANCH heading towards 9.1.4.
+set check_version_range "9.1.4"
+
+set check_name           "issue_2404"
+set check_category       "BUG DRMAA VERIFIED"
+set check_description(0) "DRMAA request precedence: native spec overrides sge_request (CS-2404)"
+
+set check_needs          "init_core_system"
+
+set check_setup_function drmaa_cs2404_setup
+set check_cleanup_function drmaa_cs2404_cleanup
+
+set check_functions {}
+lappend check_functions "drmaa_cs2404_test"
+
+# Four real cluster queues attached to @allhosts, so every host provides one
+# qinstance for each tier's queue. qsub validation (turned on by default in
+# recent releases) rejects references to unknown queues even for held jobs,
+# which is why we can't just use fake all.q@<host> names.
+#
+# We keep tmpdir and its files on the qmaster host — start_sge_bin(test_bin,
+# ..., $cd_dir, ...) launches the DRMAA client from that host, and DRMAA in
+# turn reads .sge_request / the script from the local (== qmaster) filesystem.
+# All files therefore go through remote_file_mkdir / write_remote_file to
+# avoid NFS visibility races between the testsuite driver and the qmaster.
+proc drmaa_cs2404_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global drmaa_cs2404_state
+
+   array unset drmaa_cs2404_state
+
+   set drmaa_cs2404_state(q_global)     "cs2404_1.q"
+   set drmaa_cs2404_state(q_cwd)        "cs2404_2.q"
+   set drmaa_cs2404_state(q_script)     "cs2404_3.q"
+   set drmaa_cs2404_state(q_native)     "cs2404_4.q"
+
+   set drmaa_cs2404_state(h_rt_global)  100
+   set drmaa_cs2404_state(h_rt_cwd)     200
+   set drmaa_cs2404_state(h_rt_script)  300
+   set drmaa_cs2404_state(h_rt_native)  400
+
+   set master_host $ts_config(master_host)
+
+   # Refuse to run if another testsuite instance already has a ~/.sge_request
+   # in this user's home — see the same guard in checktree/functional/jsv/jsv_full.
+   # We would happily coexist with our own .sge_request in a tmpdir, but a
+   # home-dir one would participate in every submit and produce false results.
+   set home_path [get_home_dir_path $CHECK_USER $master_host]
+   set home_file "$home_path/.sge_request"
+   if {[file exists $home_file]} {
+      ts_log_config "$home_file exists — another testsuite run is probably active,\
+                     or the user has a persistent .sge_request; skipping to avoid interference"
+      return 99
+   }
+
+   # Four cluster queues; @allhosts guarantees each has at least one qinstance
+   # regardless of how many execution hosts the testsuite cluster provides.
+   set drmaa_cs2404_state(queues) [list \
+      $drmaa_cs2404_state(q_global) \
+      $drmaa_cs2404_state(q_cwd) \
+      $drmaa_cs2404_state(q_script) \
+      $drmaa_cs2404_state(q_native)]
+   foreach q $drmaa_cs2404_state(queues) {
+      set q_conf(slots) 1
+      if {[add_queue $q "@allhosts" q_conf] != 0} {
+         ts_log_config "could not create queue $q; skipping"
+         return 99
+      }
+   }
+
+   # Global sge_request tier: -q + -l h_rt.
+   append_to_sge_request_file "-q $drmaa_cs2404_state(q_global)"
+   append_to_sge_request_file "-l h_rt=$drmaa_cs2404_state(h_rt_global)"
+
+   # cwd tier: create tmpdir + .sge_request on the qmaster host so DRMAA
+   # (running there via start_sge_bin) reads them without NFS staleness.
+   set tmp_dir [get_tmp_directory_name $master_host]
+   set drmaa_cs2404_state(tmp_dir) $tmp_dir
+   remote_file_mkdir $master_host $tmp_dir $CHECK_USER
+
+   set cwd_req "$tmp_dir/.sge_request"
+   set cwd_data(0) 2
+   set cwd_data(1) "-q $drmaa_cs2404_state(q_cwd)"
+   set cwd_data(2) "-l h_rt=$drmaa_cs2404_state(h_rt_cwd)"
+   write_remote_file $master_host $CHECK_USER $cwd_req cwd_data
+
+   # Script tier: same tmpdir. #$ comments carry a distinct -q / -l h_rt.
+   set script_path "$tmp_dir/drmaa_cs2404_script.sh"
+   set script_data(0) 4
+   set script_data(1) "#!/bin/sh"
+   set script_data(2) "#\$ -q $drmaa_cs2404_state(q_script)"
+   set script_data(3) "#\$ -l h_rt=$drmaa_cs2404_state(h_rt_script)"
+   set script_data(4) "exit 0"
+   write_remote_file $master_host $CHECK_USER $script_path script_data "0755"
+
+   set drmaa_cs2404_state(script_path) $script_path
+}
+
+proc drmaa_cs2404_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global drmaa_cs2404_state
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # restore sge_request from the util/sge_request template
+   restore_sge_request_file
+
+   # drop the four per-tier queues
+   if {[info exists drmaa_cs2404_state(queues)]} {
+      foreach q $drmaa_cs2404_state(queues) {
+         del_queue $q "" 0 1
+      }
+   }
+
+   # remove tmpdir on the qmaster host
+   if {[info exists drmaa_cs2404_state(tmp_dir)]} {
+      remote_delete_directory $ts_config(master_host) $drmaa_cs2404_state(tmp_dir)
+   }
+
+   array unset drmaa_cs2404_state
+}
+
+# -------- helper -----------------------------------------------------------
+
+# Run test_drmaa_cs2404 with cwd=<tmp_dir> and the given native spec, return
+# the job id it printed on stdout. Returns "" on failure (severe already
+# logged). The env override forces the client to look for its .sge_request in
+# tmp_dir (which is exactly where DRMAA's opt_list_append_opts_from_default_files
+# looks — it walks pwd(3)).
+proc drmaa_cs2404_submit {native_spec} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global drmaa_cs2404_state
+
+   set host $ts_config(master_host)
+   set script $drmaa_cs2404_state(script_path)
+   set tmp_dir $drmaa_cs2404_state(tmp_dir)
+
+   set prg_exit_state 0
+   set args "$script \"$native_spec\""
+   set output [start_sge_bin "test_drmaa_cs2404" $args $host $CHECK_USER prg_exit_state 120 \
+                             $tmp_dir "testbin"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "test_drmaa_cs2404 failed (exit=$prg_exit_state)\
+                     native_spec=\"$native_spec\":\n$output"
+      return ""
+   }
+
+   # First non-empty line of stdout is the jobid; anything else is diagnostic.
+   set job_id ""
+   foreach line [split $output "\n"] {
+      set line [string trim $line]
+      if {$line ne "" && [regexp {^\d+$} $line]} {
+         set job_id $line
+         break
+      }
+   }
+   if {$job_id eq ""} {
+      ts_log_severe "test_drmaa_cs2404 produced no jobid on stdout\
+                     for native_spec=\"$native_spec\":\n$output"
+   }
+   return $job_id
+}
+
+# -------- test function ----------------------------------------------------
+
+proc drmaa_cs2404_test {} {
+   get_current_cluster_config_array ts_config
+   global drmaa_cs2404_state
+
+   set native_spec "-q $drmaa_cs2404_state(q_native) -l h_rt=$drmaa_cs2404_state(h_rt_native)"
+   set job_id [drmaa_cs2404_submit $native_spec]
+   if {$job_id eq ""} {
+      return
+   }
+
+   if {![get_qstat_j_info $job_id qstat_j]} {
+      ts_log_severe "qstat -j $job_id failed"
+      delete_job $job_id 0 0 0
+      return
+   }
+
+   # hard_queue_list: expect the native-spec queue name only.
+   set expected_q $drmaa_cs2404_state(q_native)
+   if {![info exists qstat_j(hard_queue_list)]} {
+      ts_log_severe "qstat -j $job_id output has no hard_queue_list:\n$qstat_j(output)"
+   } else {
+      set observed_q [string trim $qstat_j(hard_queue_list)]
+      # hard_queue_list from qstat -j is a comma-separated list within a single tier.
+      # After the fix we expect ONLY the native-spec queue; earlier lower-tier
+      # queue names must have been dropped by the -q override in
+      # merge_drmaa_options.
+      if {$observed_q ne $expected_q} {
+         ts_log_severe "CS-2404 regression: expected hard_queue_list=\"$expected_q\",\
+                        got \"$observed_q\""
+      } else {
+         ts_log_fine "hard_queue_list matches native-spec override: $observed_q"
+      }
+   }
+
+   # hard_resource_list: expect the native-spec h_rt value (last-wins-per-variable).
+   set expected_h_rt $drmaa_cs2404_state(h_rt_native)
+   if {![info exists qstat_j(hard_resource_list)]} {
+      ts_log_severe "qstat -j $job_id output has no hard_resource_list:\n$qstat_j(output)"
+   } else {
+      set observed_hr [string trim $qstat_j(hard_resource_list)]
+      # hard_resource_list may include other resources too. Extract h_rt.
+      set observed_h_rt ""
+      if {[regexp {h_rt=(\d+)} $observed_hr _ observed_h_rt]} {
+         if {$observed_h_rt != $expected_h_rt} {
+            ts_log_severe "last-wins-per-variable failed for -l h_rt:\
+                           expected $expected_h_rt, got $observed_h_rt\
+                           (hard_resource_list=\"$observed_hr\")"
+         } else {
+            ts_log_fine "hard_resource_list h_rt matches native-spec override: $observed_h_rt"
+         }
+      } else {
+         ts_log_severe "hard_resource_list has no h_rt entry:\n$observed_hr"
+      }
+   }
+
+   delete_job $job_id 0 0 0
+}
