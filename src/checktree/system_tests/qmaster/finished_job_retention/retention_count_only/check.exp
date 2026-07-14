@@ -1,0 +1,178 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** finished_job_retention/retention_count_only ***************************
+#  NAME
+#     retention_count_only -- verify max-based pruning without a time cap
+#
+#  FUNCTION
+#     Configure finished_jobs_max=5, finished_jobs_keep_time=0 (unbounded
+#     age). Submit 5 short jobs; verify all 5 appear in qstat -s f. Then
+#     submit 3 more; verify count settles at 5 (the sweep evicts the 3
+#     oldest to keep the total at max=5). Verify the retained set contains
+#     the 5 newest job-IDs.
+#********************************************************************************
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range     "9.2.0"
+
+set check_name              "retention_count_only"
+set check_category          "FINISHED_JOB QMASTER VERIFIED"
+set check_description(0)    "CS-1908 finished_jobs_max-based pruning"
+
+set check_needs             "init_core_system"
+
+set check_setup_function   fjr_count_only_setup
+set check_cleanup_function fjr_count_only_cleanup
+
+set check_functions {}
+lappend check_functions "fjr_count_only_test"
+
+# -------- setup / cleanup -----------------------------------------------------
+
+proc fjr_count_only_setup {} {
+   get_current_cluster_config_array ts_config
+   global fjr_count_only_old_config
+
+   if {[ge_has_feature "finished_job_retention"] == 0} {
+      ts_log_config "CS-1908 finished-job retention not supported by this build (qstat -help lacks 'f' state)"
+      return 99
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   get_config fjr_count_only_old_config
+
+   set new_config(finished_jobs_keep_time) "00:00:00"
+   set new_config(finished_jobs_max)       "5"
+   add_or_replace_array_param new_config fjr_count_only_old_config "qmaster_params" "FINISHED_JOBS_SWEEP_INTERVAL" "00:00:05" " "
+   set_config new_config
+   sleep_for_seconds 2 "let mconf settle"
+}
+
+proc fjr_count_only_cleanup {} {
+   global fjr_count_only_old_config
+
+   # Restore the pre-test config first so retention is off; otherwise
+   # wait_for_end_of_all_jobs times out on retained finished jobs.
+   reset_config fjr_count_only_old_config
+   unset -nocomplain fjr_count_only_old_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+# -------- helpers -------------------------------------------------------------
+
+proc fjr_count_only_retained_jids {} {
+   set out [start_sge_bin "qstat" "-s f"]
+   set jids {}
+   foreach line [split $out "\n"] {
+      set trim [string trim $line]
+      if {[regexp {^([0-9]+)\s+} $trim -> jid]} {
+         lappend jids $jid
+      }
+   }
+   return $jids
+}
+
+# Wait until qstat -s f reports exactly `expected_count` retained rows, or
+# timeout. Returns 0 on success, -1 on timeout.
+proc fjr_count_only_wait_for_count {expected_count timeout_seconds} {
+   for {set i 0} {$i < $timeout_seconds} {incr i} {
+      if {[llength [fjr_count_only_retained_jids]] == $expected_count} {
+         return 0
+      }
+      sleep_for_seconds 1
+   }
+   return -1
+}
+
+# -------- test ---------------------------------------------------------------
+
+proc fjr_count_only_test {} {
+   ts_log_fine "submit 5 short jobs (== finished_jobs_max)"
+   set first_batch {}
+   for {set i 0} {$i < 5} {incr i} {
+      set jid [submit_job "-o /dev/null -j y -b y sleep 1"]
+      if {$jid <= 0} {
+         ts_log_severe "submit_job failed at i=$i"
+         return
+      }
+      lappend first_batch $jid
+      # NB: use wait_for_jobend (plain qstat = p|r|s), NOT wait_for_job_end
+      # (qstat -j "not found") — the latter blocks until sweep-time prune.
+      wait_for_jobend $jid "" 60 0
+   }
+
+   ts_log_fine "expect qstat -s f to show all 5 within 20s"
+   if {[fjr_count_only_wait_for_count 5 20] < 0} {
+      ts_log_severe "expected 5 retained rows, saw [llength [fjr_count_only_retained_jids]]: [fjr_count_only_retained_jids]"
+      return
+   }
+   foreach jid $first_batch {
+      if {[lsearch -exact [fjr_count_only_retained_jids] $jid] < 0} {
+         ts_log_severe "job $jid missing from qstat -s f after first batch"
+      }
+   }
+
+   ts_log_fine "submit 3 more jobs; oldest 3 of the first batch should be evicted"
+   set second_batch {}
+   for {set i 0} {$i < 3} {incr i} {
+      set jid [submit_job "-o /dev/null -j y -b y sleep 1"]
+      if {$jid <= 0} {
+         ts_log_severe "submit_job failed in second batch at i=$i"
+         return
+      }
+      lappend second_batch $jid
+      wait_for_jobend $jid "" 60 0
+   }
+
+   ts_log_fine "expect qstat -s f count to settle back at 5 within 30s"
+   if {[fjr_count_only_wait_for_count 5 30] < 0} {
+      ts_log_severe "expected 5 retained after 3 more submitted, saw [llength [fjr_count_only_retained_jids]]"
+      return
+   }
+
+   set present [fjr_count_only_retained_jids]
+   ts_log_fine "retained after eviction: $present"
+
+   foreach jid $second_batch {
+      if {[lsearch -exact $present $jid] < 0} {
+         ts_log_severe "newest job $jid missing from qstat -s f — max-eviction should keep newest"
+      }
+   }
+
+   set oldest_three [lrange $first_batch 0 2]
+   foreach jid $oldest_three {
+      if {[lsearch -exact $present $jid] >= 0} {
+         ts_log_severe "oldest job $jid still retained — max-eviction should drop oldest first"
+      }
+   }
+}

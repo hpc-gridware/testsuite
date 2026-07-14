@@ -1,0 +1,195 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** finished_job_retention/retention_time_only ****************************
+#  NAME
+#     retention_time_only -- verify keep_time pruning without a count cap
+#
+#  FUNCTION
+#     Configure finished_jobs_keep_time=30s, finished_jobs_max=0 (unbounded).
+#     Also set finished_jobs_sweep_interval=5s so the sweep fires often
+#     enough for a bounded test run. Submit two batches of jobs:
+#       * Batch 1: at t=0. Verify they appear in qstat -s f during 0..30s
+#         and disappear by t=45s (30s keep + up to 5s sweep + slack).
+#       * Batch 2: at t=15s. Verify they are still retained at t=40s (i.e.
+#         younger than 30s at that moment) even though Batch 1 has been
+#         evicted.
+#********************************************************************************
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range     "9.2.0"
+
+set check_name              "retention_time_only"
+set check_category          "FINISHED_JOB QMASTER VERIFIED"
+set check_description(0)    "CS-1908 keep_time-based pruning"
+
+set check_needs             "init_core_system"
+
+set check_setup_function   fjr_time_only_setup
+set check_cleanup_function fjr_time_only_cleanup
+
+set check_functions {}
+lappend check_functions "fjr_time_only_test"
+
+# -------- setup / cleanup -----------------------------------------------------
+
+proc fjr_time_only_setup {} {
+   get_current_cluster_config_array ts_config
+   global fjr_time_only_old_config
+
+   if {[ge_has_feature "finished_job_retention"] == 0} {
+      ts_log_config "CS-1908 finished-job retention not supported by this build (qstat -help lacks 'f' state)"
+      return 99
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   get_config fjr_time_only_old_config
+
+   set new_config(finished_jobs_keep_time) "00:00:30"
+   set new_config(finished_jobs_max)       "0"
+   add_or_replace_array_param new_config fjr_time_only_old_config "qmaster_params" "FINISHED_JOBS_SWEEP_INTERVAL" "00:00:05" " "
+   set_config new_config
+   sleep_for_seconds 2 "let mconf settle"
+}
+
+proc fjr_time_only_cleanup {} {
+   global fjr_time_only_old_config
+
+   # Restore the pre-test config first so retention is off; otherwise
+   # wait_for_end_of_all_jobs times out on retained finished jobs.
+   reset_config fjr_time_only_old_config
+   unset -nocomplain fjr_time_only_old_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+# -------- helpers -------------------------------------------------------------
+
+# Extract the set of job-IDs currently retained per qstat -s f.
+proc fjr_time_only_retained_jids {} {
+   set out [start_sge_bin "qstat" "-s f"]
+   set jids {}
+   foreach line [split $out "\n"] {
+      set trim [string trim $line]
+      if {[regexp {^([0-9]+)\s+} $trim -> jid]} {
+         lappend jids $jid
+      }
+   }
+   return $jids
+}
+
+# Wait until every jid in `expected` appears in qstat -s f, or timeout.
+proc fjr_time_only_wait_for_retained {expected timeout_seconds} {
+   for {set i 0} {$i < $timeout_seconds} {incr i} {
+      set present [fjr_time_only_retained_jids]
+      set all_there 1
+      foreach jid $expected {
+         if {[lsearch -exact $present $jid] < 0} {
+            set all_there 0
+            break
+         }
+      }
+      if {$all_there} { return 0 }
+      sleep_for_seconds 1
+   }
+   return -1
+}
+
+# Wait until every jid in `expected` disappears from qstat -s f.
+proc fjr_time_only_wait_for_pruned {expected timeout_seconds} {
+   for {set i 0} {$i < $timeout_seconds} {incr i} {
+      set present [fjr_time_only_retained_jids]
+      set any_left 0
+      foreach jid $expected {
+         if {[lsearch -exact $present $jid] >= 0} {
+            set any_left 1
+            break
+         }
+      }
+      if {!$any_left} { return 0 }
+      sleep_for_seconds 1
+   }
+   return -1
+}
+
+# -------- test ---------------------------------------------------------------
+
+proc fjr_time_only_test {} {
+   ts_log_fine "Batch 1: submit two short jobs at t=0"
+   set b1_a [submit_job "-o /dev/null -j y -b y sleep 1"]
+   set b1_b [submit_job "-o /dev/null -j y -b y sleep 1"]
+   if {$b1_a <= 0 || $b1_b <= 0} {
+      ts_log_severe "submit failed (b1_a=$b1_a b1_b=$b1_b)"
+      return
+   }
+   # NB: use wait_for_jobend (plain qstat = p|r|s), NOT wait_for_job_end
+   # (qstat -j "not found") — the latter blocks until the sweep-time prune,
+   # which is exactly the window this test is trying to measure.
+   wait_for_jobend $b1_a "" 60 0
+   wait_for_jobend $b1_b "" 60 0
+   set t0 [clock seconds]
+
+   ts_log_fine "Batch 1 should appear in qstat -s f within 10s"
+   if {[fjr_time_only_wait_for_retained "$b1_a $b1_b" 10] < 0} {
+      ts_log_severe "Batch 1 (jobs $b1_a $b1_b) not visible in qstat -s f"
+      return
+   }
+
+   ts_log_fine "wait ~15s, submit Batch 2"
+   sleep_for_seconds 15 "gap between batches"
+   set b2_a [submit_job "-o /dev/null -j y -b y sleep 1"]
+   if {$b2_a <= 0} {
+      ts_log_severe "batch 2 submit failed"
+      return
+   }
+   wait_for_jobend $b2_a "" 60 0
+   if {[fjr_time_only_wait_for_retained $b2_a 10] < 0} {
+      ts_log_severe "Batch 2 job $b2_a not visible in qstat -s f"
+      return
+   }
+
+   ts_log_fine "wait for Batch 1 to be pruned by keep_time (bound: sweep_interval + keep_time + slack)"
+   # keep_time=30s from Batch 1 finish (~t0); wait until at least t0+40s.
+   set now [clock seconds]
+   set need_wait [expr {40 - ($now - $t0)}]
+   if {$need_wait > 0} {
+      sleep_for_seconds $need_wait "letting Batch 1 age past keep_time"
+   }
+   if {[fjr_time_only_wait_for_pruned "$b1_a $b1_b" 20] < 0} {
+      ts_log_severe "Batch 1 jobs $b1_a $b1_b still retained after keep_time+slack; qstat -s f shows [fjr_time_only_retained_jids]"
+   }
+
+   ts_log_fine "Batch 2 (~25s old) should still be retained at this point"
+   set present [fjr_time_only_retained_jids]
+   if {[lsearch -exact $present $b2_a] < 0} {
+      ts_log_severe "Batch 2 job $b2_a pruned too early (age ~25s < keep_time 30s)"
+   }
+}

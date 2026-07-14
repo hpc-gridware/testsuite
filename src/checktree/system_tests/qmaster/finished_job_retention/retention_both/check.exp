@@ -1,0 +1,203 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** finished_job_retention/retention_both *********************************
+#  NAME
+#     retention_both -- keep_time OR max, whichever bites first
+#
+#  FUNCTION
+#     Configure BOTH tunables non-zero. Exercise the "whichever bites first"
+#     eviction rule by two scenarios:
+#
+#       (a) time-bite:  keep_time=15s, max=100.
+#           Submit 3 jobs, wait 20s. Assert all 3 gone (time evicts before
+#           count could bite).
+#
+#       (b) count-bite: keep_time=05:00, max=3.
+#           Submit 3 jobs, then a 4th. Assert count settles at 3 (max evicts
+#           the oldest before its keep_time expires).
+#********************************************************************************
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range     "9.2.0"
+
+set check_name              "retention_both"
+set check_category          "FINISHED_JOB QMASTER VERIFIED"
+set check_description(0)    "CS-1908 combined keep_time + max: whichever bites first"
+
+set check_needs             "init_core_system"
+
+set check_setup_function   fjr_both_setup
+set check_cleanup_function fjr_both_cleanup
+
+set check_functions {}
+lappend check_functions "fjr_both_time_bite_test"
+lappend check_functions "fjr_both_count_bite_test"
+
+# -------- setup / cleanup -----------------------------------------------------
+
+proc fjr_both_setup {} {
+   get_current_cluster_config_array ts_config
+   global fjr_both_old_config
+
+   if {[ge_has_feature "finished_job_retention"] == 0} {
+      ts_log_config "CS-1908 finished-job retention not supported by this build (qstat -help lacks 'f' state)"
+      return 99
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   get_config fjr_both_old_config
+}
+
+proc fjr_both_cleanup {} {
+   global fjr_both_old_config
+
+   # Restore the pre-test config first so retention is off; otherwise
+   # wait_for_end_of_all_jobs times out on retained finished jobs.
+   reset_config fjr_both_old_config
+   unset -nocomplain fjr_both_old_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+# -------- helpers -------------------------------------------------------------
+
+proc fjr_both_apply {keep_time max} {
+   get_config current_config
+   set new_config(finished_jobs_keep_time) $keep_time
+   set new_config(finished_jobs_max)       $max
+   add_or_replace_array_param new_config current_config "qmaster_params" "FINISHED_JOBS_SWEEP_INTERVAL" "00:00:05" " "
+   set_config new_config
+   sleep_for_seconds 2 "let mconf settle"
+}
+
+proc fjr_both_retained_jids {} {
+   set out [start_sge_bin "qstat" "-s f"]
+   set jids {}
+   foreach line [split $out "\n"] {
+      set trim [string trim $line]
+      if {[regexp {^([0-9]+)\s+} $trim -> jid]} {
+         lappend jids $jid
+      }
+   }
+   return $jids
+}
+
+proc fjr_both_wait_for_count {expected timeout_seconds} {
+   for {set i 0} {$i < $timeout_seconds} {incr i} {
+      if {[llength [fjr_both_retained_jids]] == $expected} { return 0 }
+      sleep_for_seconds 1
+   }
+   return -1
+}
+
+# -------- test (a): time bites first ------------------------------------------
+
+proc fjr_both_time_bite_test {} {
+   ts_log_fine "scenario (a): keep_time=15s, max=100 -- time bites first"
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   fjr_both_apply "00:00:15" "100"
+
+   set jids {}
+   for {set i 0} {$i < 3} {incr i} {
+      set jid [submit_job "-o /dev/null -j y -b y sleep 1"]
+      if {$jid <= 0} {
+         ts_log_severe "submit failed at i=$i"
+         return
+      }
+      lappend jids $jid
+      # NB: use wait_for_jobend (plain qstat = p|r|s), NOT wait_for_job_end
+      # (qstat -j "not found") — the latter blocks until sweep-time prune.
+      wait_for_jobend $jid "" 60 0
+   }
+
+   ts_log_fine "verify 3 retained shortly after finish"
+   if {[fjr_both_wait_for_count 3 10] < 0} {
+      ts_log_severe "expected 3 retained, saw [llength [fjr_both_retained_jids]]"
+      return
+   }
+
+   ts_log_fine "wait 25s > keep_time+sweep+slack; expect 0 retained"
+   sleep_for_seconds 25 "wait for keep_time eviction"
+   if {[fjr_both_wait_for_count 0 15] < 0} {
+      ts_log_severe "expected 0 retained after keep_time+slack, saw [llength [fjr_both_retained_jids]]: [fjr_both_retained_jids]"
+   }
+}
+
+# -------- test (b): count bites first -----------------------------------------
+
+proc fjr_both_count_bite_test {} {
+   ts_log_fine "scenario (b): keep_time=5m, max=3 -- count bites first"
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   fjr_both_apply "00:05:00" "3"
+
+   set jids {}
+   for {set i 0} {$i < 3} {incr i} {
+      set jid [submit_job "-o /dev/null -j y -b y sleep 1"]
+      if {$jid <= 0} {
+         ts_log_severe "submit failed at i=$i"
+         return
+      }
+      lappend jids $jid
+      # NB: use wait_for_jobend (plain qstat = p|r|s), NOT wait_for_job_end
+      # (qstat -j "not found") — the latter blocks until sweep-time prune.
+      wait_for_jobend $jid "" 60 0
+   }
+
+   if {[fjr_both_wait_for_count 3 20] < 0} {
+      ts_log_severe "expected 3 retained, saw [llength [fjr_both_retained_jids]]"
+      return
+   }
+
+   ts_log_fine "submit a 4th; oldest of the first three should be evicted"
+   set fourth [submit_job "-o /dev/null -j y -b y sleep 1"]
+   if {$fourth <= 0} {
+      ts_log_severe "4th submit failed"
+      return
+   }
+   wait_for_jobend $fourth "" 60 0
+
+   if {[fjr_both_wait_for_count 3 30] < 0} {
+      ts_log_severe "expected count to stay at 3 after 4th finished, saw [llength [fjr_both_retained_jids]]"
+      return
+   }
+
+   set present [fjr_both_retained_jids]
+   if {[lsearch -exact $present $fourth] < 0} {
+      ts_log_severe "4th job $fourth missing from qstat -s f — count-bite should keep newest"
+   }
+   set oldest [lindex $jids 0]
+   if {[lsearch -exact $present $oldest] >= 0} {
+      ts_log_severe "oldest job $oldest still retained — count-bite should drop oldest"
+   }
+}

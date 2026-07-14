@@ -1,0 +1,183 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** finished_job_retention/array_partial_qdel *****************************
+#  NAME
+#     array_partial_qdel -- verify partial-array qdel retains finished JATs
+#                           and drops pending ones (U4)
+#
+#  FUNCTION
+#     Submit a serialized array (-tc 1) whose per-task runtime is short enough
+#     that a subset naturally finishes before we qdel, but long enough that a
+#     tail of pending tasks remains at qdel-time. Assert:
+#
+#       * the JATs that had already reached JFINISHED before qdel stay
+#         retained (visible in qstat -s f -g d);
+#       * the pending tasks were dropped from JB_ja_n_h_ids — they never
+#         appear as new retained entries after qdel, and no new dispatch
+#         is attempted (the retained-JAT count does not keep growing over
+#         time after qdel);
+#       * qstat -s p on the array is empty after qdel.
+#********************************************************************************
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range     "9.2.0"
+
+set check_name              "retention_array_partial_qdel"
+set check_category          "QMASTER VERIFIED"
+set check_description(0)    "CS-1908 U4 partial-array qdel: retain finished, drop pending"
+
+set check_needs             "init_core_system"
+
+set check_setup_function   fjr_apdel_setup
+set check_cleanup_function fjr_apdel_cleanup
+
+set check_functions {}
+lappend check_functions "fjr_apdel_test"
+
+# -------- setup / cleanup -----------------------------------------------------
+
+proc fjr_apdel_setup {} {
+   get_current_cluster_config_array ts_config
+   global fjr_apdel_old_config
+
+   if {[ge_has_feature "finished_job_retention"] == 0} {
+      ts_log_config "CS-1908 finished-job retention not supported by this build (qstat -help lacks 'f' state)"
+      return 99
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   get_config fjr_apdel_old_config
+
+   set new_config(finished_jobs_keep_time) "00:05:00"
+   set new_config(finished_jobs_max)       "100"
+   add_or_replace_array_param new_config fjr_apdel_old_config "qmaster_params" "FINISHED_JOBS_SWEEP_INTERVAL" "00:00:05" " "
+   set_config new_config
+   sleep_for_seconds 2 "let mconf settle"
+}
+
+proc fjr_apdel_cleanup {} {
+   global fjr_apdel_old_config
+
+   reset_config fjr_apdel_old_config
+   unset -nocomplain fjr_apdel_old_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+# -------- helpers -------------------------------------------------------------
+
+# Count JAT rows (per-task drill-down) for a given jid in qstat -s f -g d.
+proc fjr_apdel_retained_task_count {jid} {
+   set out [start_sge_bin "qstat" "-s f -g d"]
+   set n 0
+   foreach l [split $out "\n"] {
+      if {[regexp "^\\s*$jid\\s+" $l]} { incr n }
+   }
+   return $n
+}
+
+# Count pending rows (state 'qw' etc.) for a given jid in qstat -s p -g d.
+proc fjr_apdel_pending_task_count {jid} {
+   set out [start_sge_bin "qstat" "-s p -g d"]
+   set n 0
+   foreach l [split $out "\n"] {
+      if {[regexp "^\\s*$jid\\s+" $l]} { incr n }
+   }
+   return $n
+}
+
+# -------- test ----------------------------------------------------------------
+
+proc fjr_apdel_test {} {
+   ts_log_fine "submit -t 1-5 -tc 1 sleep 4; total ~20s serialized"
+   set jid [submit_job "-o /dev/null -j y -b y -t 1-5 -tc 1 sleep 4"]
+   if {$jid <= 0} {
+      ts_log_severe "array submit failed (rc=$jid)"
+      return
+   }
+
+   # Wait long enough that at least 2 tasks have finished (~10s in — task 1
+   # started at t=0, finishes at ~t=4; task 2 finishes at ~t=8; task 3 is
+   # running at t=10). Enough slack that the harness's scheduling latency
+   # doesn't leave us with 0 finished, but not so long that all 5 finish.
+   sleep_for_seconds 10 "let 2-3 tasks finish serialized"
+
+   set retained_before [fjr_apdel_retained_task_count $jid]
+   set pending_before  [fjr_apdel_pending_task_count $jid]
+   ts_log_fine "before qdel: retained=$retained_before pending=$pending_before"
+   if {$retained_before < 1} {
+      ts_log_severe "expected >=1 retained task before qdel, saw $retained_before — timing may be off (scheduler slower than assumed)"
+      return
+   }
+   if {$pending_before < 1} {
+      ts_log_severe "expected >=1 pending task before qdel, saw $pending_before — timing may be off (all tasks finished already)"
+      return
+   }
+
+   ts_log_fine "qdel the array"
+   set out [start_sge_bin "qdel" "$jid" "" "" prg_exit_state]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qdel $jid failed (exit=$prg_exit_state); output:\n$out"
+      return
+   }
+
+   sleep_for_seconds 6 "let qdel + any in-flight task settle"
+
+   # Pending must be zero — the qdel cleared JB_ja_n_h_ids.
+   set pending_after [fjr_apdel_pending_task_count $jid]
+   if {$pending_after != 0} {
+      ts_log_severe "after qdel: expected 0 pending tasks, saw $pending_after (JB_ja_n_h_ids not cleared?)"
+   }
+
+   # Retained count must not have grown beyond the pre-qdel count + the
+   # in-flight task (which may or may not have completed enough to become
+   # JFINISHED before qdel aborted it). At most retained_before + 1.
+   set retained_mid [fjr_apdel_retained_task_count $jid]
+   ts_log_fine "after qdel: retained=$retained_mid pending=$pending_after"
+   set retained_ceiling [expr {$retained_before + 1}]
+   if {$retained_mid > $retained_ceiling} {
+      ts_log_severe "after qdel: retained=$retained_mid > ceiling=$retained_ceiling (pending tasks were dispatched despite qdel?)"
+   }
+
+   # Pre-qdel retained JATs must still be there.
+   if {$retained_mid < $retained_before} {
+      ts_log_severe "after qdel: retained shrank ($retained_before -> $retained_mid) — retention should not evict already-finished JATs on qdel"
+   }
+
+   # And nothing should keep growing: sample once more after another sweep
+   # interval to confirm the scheduler isn't quietly dispatching pending.
+   sleep_for_seconds 8 "confirm no dispatch of dropped-pending tasks"
+   set retained_final [fjr_apdel_retained_task_count $jid]
+   if {$retained_final > $retained_mid} {
+      ts_log_severe "retained grew after settle: $retained_mid -> $retained_final (dispatch of dropped-pending?)"
+   }
+}

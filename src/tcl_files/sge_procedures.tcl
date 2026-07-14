@@ -451,6 +451,16 @@ proc ge_has_feature {feature {quiet 0}} {
                set result 0
             }
          }
+         "finished_job_retention" {
+            # CS-1908 adds an "f" letter to qstat's -s option, plus the
+            # matching "finished jobs" wording in the help usage line.
+            # Pre-CS-1908 qstat prints "-s {p|r|s|hu|...}" without the "f".
+            set result 0
+            set output [start_sge_bin "qstat" "-help"]
+            if {[string first "|f|" $output] >= 0} {
+               set result 1
+            }
+         }
          default {
             ts_log_severe "testsuite error: Unsupported feature string \"$feature\""
             set result 0

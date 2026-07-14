@@ -1,0 +1,184 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** finished_job_retention/modify_rejected ********************************
+#  NAME
+#     modify_rejected -- verify qalter/qhold/qrls/qmod against a retained
+#                        finished JAT do not silently mutate it (R14 / R14a)
+#
+#  FUNCTION
+#     A retained JFINISHED job must survive mod-shape commands unchanged.
+#     Under U6 the qmaster mod handler emits an INFO answer
+#     ("job N is already finished; modification requests are not applied")
+#     when every task of the target job is JFINISHED, and the command
+#     completes with STATUS_OK (informational — not an error exit).
+#
+#     This check exercises the four end-user surfaces and asserts:
+#       (a) qalter -h u <jid>
+#       (b) qhold <jid>
+#       (c) qrls <jid>
+#       (d) qmod -sj <jid>
+#     Each attempt must either return an INFO/ERROR message referring to the
+#     finished state, OR exit non-zero. In every case the target JAT must
+#     still be present under qstat -s f afterwards (not modified, not evicted).
+#********************************************************************************
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range     "9.2.0"
+
+set check_name              "retention_modify_rejected"
+set check_category          "QMASTER VERIFIED"
+set check_description(0)    "CS-1908 mod/hold/rls/mod-signal on retained finished JAT"
+
+set check_needs             "init_core_system"
+
+set check_setup_function   fjr_modrej_setup
+set check_cleanup_function fjr_modrej_cleanup
+
+set check_functions {}
+lappend check_functions "fjr_modrej_qalter_test"
+lappend check_functions "fjr_modrej_qhold_test"
+lappend check_functions "fjr_modrej_qrls_test"
+lappend check_functions "fjr_modrej_qmod_test"
+
+# -------- setup / cleanup -----------------------------------------------------
+
+proc fjr_modrej_setup {} {
+   get_current_cluster_config_array ts_config
+   global fjr_modrej_old_config
+
+   if {[ge_has_feature "finished_job_retention"] == 0} {
+      ts_log_config "CS-1908 finished-job retention not supported by this build (qstat -help lacks 'f' state)"
+      return 99
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   get_config fjr_modrej_old_config
+
+   set new_config(finished_jobs_keep_time) "00:05:00"
+   set new_config(finished_jobs_max)       "100"
+   add_or_replace_array_param new_config fjr_modrej_old_config "qmaster_params" "FINISHED_JOBS_SWEEP_INTERVAL" "00:00:05" " "
+   set_config new_config
+   sleep_for_seconds 2 "let mconf settle"
+}
+
+proc fjr_modrej_cleanup {} {
+   global fjr_modrej_old_config
+
+   reset_config fjr_modrej_old_config
+   unset -nocomplain fjr_modrej_old_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+# -------- helpers -------------------------------------------------------------
+
+# Submit a sleep-1 job, wait for it to finish + report + be retained,
+# and return its job-id. Returns -1 on failure.
+proc fjr_modrej_new_retained_job {} {
+   set jid [submit_job "-o /dev/null -j y -b y sleep 1"]
+   if {$jid <= 0} {
+      ts_log_severe "submit_job failed (rc=$jid)"
+      return -1
+   }
+   # is_job_running (used by wait_for_jobend) reads plain qstat, which under
+   # CS-1908 excludes JFINISHED — so this returns as soon as the JAT flips
+   # to JFINISHED and lands on the retained list. No fixed sleep needed.
+   wait_for_jobend $jid "" 60 0
+
+   set out [start_sge_bin "qstat" "-s f"]
+   if {![regexp -line "^\\s*$jid\\s+" $out]} {
+      ts_log_severe "new job $jid not retained (qstat -s f missing it):\n$out"
+      return -1
+   }
+   return $jid
+}
+
+# Assert the given jid is still present in qstat -s f (not evicted by whatever
+# mod command was just tried).
+proc fjr_modrej_assert_still_retained {jid tag} {
+   set out [start_sge_bin "qstat" "-s f"]
+   if {![regexp -line "^\\s*$jid\\s+" $out]} {
+      ts_log_severe "$tag: job $jid disappeared from qstat -s f after mod attempt — retention must not evict on mod-shape commands"
+   }
+}
+
+# Common shape: run `bin args` against a retained jid, assert observable
+# no-op behavior: either non-zero exit OR "finished" substring in output.
+# The target JAT must remain in qstat -s f afterwards.
+proc fjr_modrej_run_and_assert {bin args_before jid args_after tag} {
+   set full_args "$args_before$jid$args_after"
+   set out [start_sge_bin $bin $full_args "" "" prg_exit_state]
+
+   set text_ok  [expr {[string first "finished" $out] >= 0 || [string first "already" $out] >= 0}]
+   set exit_ok  [expr {$prg_exit_state != 0}]
+
+   if {!$text_ok && !$exit_ok} {
+      ts_log_severe "$tag: no reject signal — exit=$prg_exit_state, no 'finished'/'already' in output:\n$out"
+   }
+   fjr_modrej_assert_still_retained $jid $tag
+}
+
+# -------- test (a): qalter -h u ------------------------------------------------
+
+proc fjr_modrej_qalter_test {} {
+   ts_log_fine "qalter -h u against a retained finished job"
+   set jid [fjr_modrej_new_retained_job]
+   if {$jid < 0} { return }
+   fjr_modrej_run_and_assert "qalter" "-h u " $jid "" "qalter"
+}
+
+# -------- test (b): qhold ------------------------------------------------------
+
+proc fjr_modrej_qhold_test {} {
+   ts_log_fine "qhold against a retained finished job"
+   set jid [fjr_modrej_new_retained_job]
+   if {$jid < 0} { return }
+   fjr_modrej_run_and_assert "qhold" "" $jid "" "qhold"
+}
+
+# -------- test (c): qrls -------------------------------------------------------
+
+proc fjr_modrej_qrls_test {} {
+   ts_log_fine "qrls against a retained finished job"
+   set jid [fjr_modrej_new_retained_job]
+   if {$jid < 0} { return }
+   fjr_modrej_run_and_assert "qrls" "" $jid "" "qrls"
+}
+
+# -------- test (d): qmod -sj (suspend) ---------------------------------------
+
+proc fjr_modrej_qmod_test {} {
+   ts_log_fine "qmod -sj against a retained finished job"
+   set jid [fjr_modrej_new_retained_job]
+   if {$jid < 0} { return }
+   fjr_modrej_run_and_assert "qmod" "-sj " $jid "" "qmod -sj"
+}

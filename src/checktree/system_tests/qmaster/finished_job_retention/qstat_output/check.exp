@@ -1,0 +1,265 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** finished_job_retention/qstat_output ***********************************
+#  NAME
+#     qstat_output -- verify qstat output surfaces for retained finished jobs
+#
+#  FUNCTION
+#     Covers SC3 (plain / JSON / XML) and SC7 (mixed-state array split under
+#     -s prf):
+#       * qstat -s f plain: row present with state char 'f'
+#       * qstat -j <jid>: end_time row present for a retained finished JAT
+#       * qstat -s f -fmt json: JSON envelope carries the CS-1908
+#         'jobs_finished_retained' key (renamed from the pre-9.2 stub name)
+#       * qstat -s f -fmt xml: XML envelope carries the 'finished_retained'
+#         tag (renamed for the same reason)
+#       * qstat -s f -g d: per-JAT drill-down for an array vs the summary row
+#         emitted by the default -s f (one line per JB)
+#********************************************************************************
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range     "9.2.0"
+
+set check_name              "retention_qstat_output"
+set check_category          "QMASTER VERIFIED"
+set check_description(0)    "CS-1908 qstat -s f / -j / -fmt json|xml / -g d surfaces"
+
+set check_needs             "init_core_system"
+
+set check_setup_function   fjr_qstat_out_setup
+set check_cleanup_function fjr_qstat_out_cleanup
+
+set check_functions {}
+lappend check_functions "fjr_qstat_out_plain_test"
+lappend check_functions "fjr_qstat_out_j_endtime_test"
+lappend check_functions "fjr_qstat_out_json_test"
+lappend check_functions "fjr_qstat_out_xml_test"
+lappend check_functions "fjr_qstat_out_gd_test"
+
+# -------- setup / cleanup -----------------------------------------------------
+
+proc fjr_qstat_out_setup {} {
+   get_current_cluster_config_array ts_config
+   global fjr_qstat_out_old_config
+
+   if {[ge_has_feature "finished_job_retention"] == 0} {
+      ts_log_config "CS-1908 finished-job retention not supported by this build (qstat -help lacks 'f' state)"
+      return 99
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   get_config fjr_qstat_out_old_config
+
+   # Enable retention with a generous keep_time (5 min) so no test racing the
+   # sweep. sweep_interval short so any prune we do trigger settles quickly.
+   set new_config(finished_jobs_keep_time) "00:05:00"
+   set new_config(finished_jobs_max)       "100"
+   add_or_replace_array_param new_config fjr_qstat_out_old_config "qmaster_params" "FINISHED_JOBS_SWEEP_INTERVAL" "00:00:05" " "
+   set_config new_config
+   sleep_for_seconds 2 "let mconf settle"
+}
+
+proc fjr_qstat_out_cleanup {} {
+   global fjr_qstat_out_old_config
+
+   # Restore config first (retention off) so wait_for_end_of_all_jobs isn't
+   # blocked by retained finished jobs.
+   reset_config fjr_qstat_out_old_config
+   unset -nocomplain fjr_qstat_out_old_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+# -------- helpers -------------------------------------------------------------
+
+# Submit a short single job, wait for it to finish, return the job-id.
+# NB: wait_for_job_end waits for qstat -j "not found", which under retention
+# means the sweep-time prune — the wrong primitive. wait_for_jobend uses
+# is_job_running (plain qstat = p|r|s only), which returns as soon as the
+# JAT flips to JFINISHED — exactly the sync point we want.
+proc fjr_qstat_out_submit_short_and_settle {} {
+   set jid [submit_job "-o /dev/null -j y -b y sleep 1"]
+   if {$jid <= 0} {
+      ts_log_severe "submit_job failed (rc=$jid)"
+      return -1
+   }
+   wait_for_jobend $jid "" 60 0
+   return $jid
+}
+
+# Poll qstat -s f until the given jid appears, or timeout. qstat right-aligns
+# the job-ID column so the jid is preceded by whitespace on its row — walk
+# lines rather than trying to match across the whole blob.
+proc fjr_qstat_out_wait_for_retained {jid timeout_seconds} {
+   for {set i 0} {$i < $timeout_seconds} {incr i} {
+      set out [start_sge_bin "qstat" "-s f"]
+      foreach l [split $out "\n"] {
+         if {[regexp "^\\s*$jid\\s+" $l]} { return 0 }
+      }
+      sleep_for_seconds 1
+   }
+   return -1
+}
+
+# -------- test 1: plain qstat -s f shows 'f' state char -----------------------
+
+proc fjr_qstat_out_plain_test {} {
+   ts_log_fine "plain -s f: submit + verify row with state 'f'"
+   set jid [fjr_qstat_out_submit_short_and_settle]
+   if {$jid < 0} { return }
+
+   if {[fjr_qstat_out_wait_for_retained $jid 15] < 0} {
+      ts_log_severe "job $jid not visible in qstat -s f"
+      return
+   }
+
+   set out [start_sge_bin "qstat" "-s f"]
+   set line ""
+   foreach l [split $out "\n"] {
+      if {[regexp "^\\s*$jid\\s+" $l]} { set line $l; break }
+   }
+   if {$line eq ""} {
+      ts_log_severe "no qstat -s f row for job $jid"
+      return
+   }
+
+   # The state column is the 5th whitespace-separated token
+   # (jobid prio name user state submit/start slot).
+   set toks [regexp -all -inline {\S+} $line]
+   set state [lindex $toks 4]
+   if {![regexp {f} $state]} {
+      ts_log_severe "expected state to contain 'f' for finished job $jid, got '$state' (line: $line)"
+   }
+}
+
+# -------- test 2: qstat -j shows end_time row ---------------------------------
+
+proc fjr_qstat_out_j_endtime_test {} {
+   ts_log_fine "qstat -j: verify end_time row emitted for retained JAT"
+   set jid [fjr_qstat_out_submit_short_and_settle]
+   if {$jid < 0} { return }
+   if {[fjr_qstat_out_wait_for_retained $jid 15] < 0} {
+      ts_log_severe "job $jid not visible in qstat -s f"
+      return
+   }
+
+   set out [start_sge_bin "qstat" "-j $jid"]
+   if {[string first "end_time" $out] < 0} {
+      ts_log_severe "qstat -j $jid missing 'end_time' row; output was:\n$out"
+      return
+   }
+   # Also verify the value looks like a non-zero microsecond timestamp
+   # rather than the literal "0" (previous bug where retained jobs had
+   # JAT_end_time unstamped for qrsh-shape reports).
+   if {[regexp {end_time:\s*0(\s|$)} $out]} {
+      ts_log_severe "qstat -j $jid end_time is 0 — not stamped by qmaster; output was:\n$out"
+   }
+}
+
+# -------- test 3: JSON output has jobs_finished_retained ----------------------
+
+proc fjr_qstat_out_json_test {} {
+   ts_log_fine "-fmt json: envelope carries 'jobs_finished_retained' key"
+   set jid [fjr_qstat_out_submit_short_and_settle]
+   if {$jid < 0} { return }
+   if {[fjr_qstat_out_wait_for_retained $jid 15] < 0} {
+      ts_log_severe "job $jid not visible in qstat -s f"
+      return
+   }
+
+   set out [start_sge_bin "qstat" "-s f -fmt json"]
+   if {[string first "jobs_finished_retained" $out] < 0} {
+      ts_log_severe "qstat -s f -fmt json missing 'jobs_finished_retained' key; output was:\n$out"
+      return
+   }
+   # sanity: the old placeholder key should NOT be present (KTD3 rename)
+   if {[regexp {"jobs_finished"\s*:} $out]} {
+      ts_log_severe "qstat -s f -fmt json contains legacy 'jobs_finished' key (should be jobs_finished_retained under KTD3); output was:\n$out"
+   }
+}
+
+# -------- test 4: XML output has finished_retained tag ------------------------
+
+proc fjr_qstat_out_xml_test {} {
+   ts_log_fine "-fmt xml: envelope carries <finished_retained> tag"
+   set jid [fjr_qstat_out_submit_short_and_settle]
+   if {$jid < 0} { return }
+   if {[fjr_qstat_out_wait_for_retained $jid 15] < 0} {
+      ts_log_severe "job $jid not visible in qstat -s f"
+      return
+   }
+
+   set out [start_sge_bin "qstat" "-s f -fmt xml"]
+   if {[string first "finished_retained" $out] < 0} {
+      ts_log_severe "qstat -s f -fmt xml missing 'finished_retained' tag; output was:\n$out"
+   }
+}
+
+# -------- test 5: -g d drills to per-JAT for an array -------------------------
+
+proc fjr_qstat_out_gd_test {} {
+   ts_log_fine "array + -g d: verify per-JAT drill-down vs summary default"
+
+   set jid [submit_job "-o /dev/null -j y -b y -t 1-3 sleep 1"]
+   if {$jid <= 0} {
+      ts_log_severe "array submit failed (rc=$jid)"
+      return
+   }
+   # is_job_running returns 1 while any array task is still in p|r|s, and -1
+   # only when every task has flipped to JFINISHED — the right sync point.
+   wait_for_jobend $jid "" 60 0
+   if {[fjr_qstat_out_wait_for_retained $jid 15] < 0} {
+      ts_log_severe "array job $jid not visible in qstat -s f"
+      return
+   }
+
+   # Default -s f: one summary row per JB.
+   set out_summary [start_sge_bin "qstat" "-s f"]
+   set summary_rows 0
+   foreach l [split $out_summary "\n"] {
+      if {[regexp "^\\s*$jid\\s+" $l]} { incr summary_rows }
+   }
+   if {$summary_rows != 1} {
+      ts_log_severe "expected 1 summary row for array $jid under default -s f, got $summary_rows; output:\n$out_summary"
+      return
+   }
+
+   # -g d: one row per finished JAT (task).
+   set out_gd [start_sge_bin "qstat" "-s f -g d"]
+   set gd_rows 0
+   foreach l [split $out_gd "\n"] {
+      if {[regexp "^\\s*$jid\\s+" $l]} { incr gd_rows }
+   }
+   if {$gd_rows != 3} {
+      ts_log_severe "expected 3 per-JAT rows for array $jid under -s f -g d, got $gd_rows; output:\n$out_gd"
+   }
+}

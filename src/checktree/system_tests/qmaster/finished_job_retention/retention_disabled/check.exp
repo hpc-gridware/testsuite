@@ -1,0 +1,145 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** finished_job_retention/retention_disabled *****************************
+#  NAME
+#     retention_disabled -- verify feature-off (default) has zero regression
+#
+#  FUNCTION
+#     Both tunables default to 0. Submit a short job, verify it finishes and
+#     leaves master_job_list immediately (pre-CS-1908 behaviour: sge_bury_job
+#     inline at COMMIT_ST_FINISHED_FAILED_EE). qstat -s f returns empty.
+#********************************************************************************
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range     "9.2.0"
+
+set check_name              "retention_disabled"
+set check_category          "FINISHED_JOB QMASTER VERIFIED"
+set check_description(0)    "CS-1908 feature-off: finished jobs are buried immediately"
+
+set check_needs             "init_core_system"
+
+set check_setup_function   fjr_disabled_setup
+set check_cleanup_function fjr_disabled_cleanup
+
+set check_functions {}
+lappend check_functions "fjr_disabled_test"
+
+# -------- setup / cleanup -----------------------------------------------------
+
+proc fjr_disabled_setup {} {
+   get_current_cluster_config_array ts_config
+   global fjr_disabled_old_config
+
+   if {[ge_has_feature "finished_job_retention"] == 0} {
+      ts_log_config "CS-1908 finished-job retention not supported by this build (qstat -help lacks 'f' state)"
+      return 99
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   get_config fjr_disabled_old_config
+
+   # explicitly turn retention OFF (in case a previous test left it on)
+   get_config snap
+   set snap(finished_jobs_keep_time) "00:00:00"
+   set snap(finished_jobs_max)       "0"
+   set_config snap "global" 0 0
+   sleep_for_seconds 2 "let mconf settle"
+}
+
+proc fjr_disabled_cleanup {} {
+   global fjr_disabled_old_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   reset_config fjr_disabled_old_config
+   unset -nocomplain fjr_disabled_old_config
+}
+
+# -------- helpers -------------------------------------------------------------
+
+# Count job-lines emitted by `qstat -s f`. Only rows whose first non-whitespace
+# token is a decimal job-ID are counted, so header lines and separator dashes
+# are ignored. Returns the count (0 or more).
+proc fjr_qstat_retained_count {} {
+   set out [start_sge_bin "qstat" "-s f"]
+   set count 0
+   foreach line [split $out "\n"] {
+      set trim [string trim $line]
+      if {[regexp {^[0-9]+\s+} $trim]} {
+         incr count
+      }
+   }
+   return $count
+}
+
+# Wait until qstat -s f reports zero retained jobs (or timeout).
+proc fjr_wait_for_retained_zero {timeout_seconds} {
+   for {set i 0} {$i < $timeout_seconds} {incr i} {
+      if {[fjr_qstat_retained_count] == 0} {
+         return 0
+      }
+      sleep_for_seconds 1
+   }
+   return -1
+}
+
+# -------- test ---------------------------------------------------------------
+
+proc fjr_disabled_test {} {
+   ts_log_fine "submit a short job with retention off"
+   set job_id [submit_job "-o /dev/null -j y -b y sleep 1"]
+   if {$job_id <= 0} {
+      ts_log_severe "submit_job failed"
+      return
+   }
+
+   # let the job start, run, exit and reach qmaster's job_exit handler.
+   # Under retention-OFF the job is buried immediately after JFINISHED, so
+   # wait_for_job_end (which waits for qstat -j to say "not found") returns
+   # as soon as sge_bury_ja_task runs inline.
+   wait_for_job_end $job_id 60
+
+   ts_log_fine "verify qstat -s f shows no retention rows within 30s"
+   if {[fjr_wait_for_retained_zero 30] < 0} {
+      ts_log_severe "retention-off but qstat -s f still shows $[fjr_qstat_retained_count] rows after job finished"
+   }
+
+   ts_log_fine "verify qstat -j on the finished job returns 'jobs do not exist'"
+   set out [start_sge_bin "qstat" "-j $job_id" "" "" prg_exit_state]
+   # qstat -j on a non-existent job exits with rc != 0 and prints
+   # "Following jobs do not exist". Under retention-off the job is buried
+   # immediately, so this must be the response.
+   if {[string first "do not exist" $out] < 0} {
+      ts_log_severe "expected 'Following jobs do not exist' from qstat -j $job_id, got: $out"
+   }
+}
