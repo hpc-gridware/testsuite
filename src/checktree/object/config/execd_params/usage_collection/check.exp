@@ -1,7 +1,7 @@
 #___INFO__MARK_BEGIN_NEW__
 ###########################################################################
 #
-#  Copyright 2025 HPC-Gridware GmbH
+#  Copyright 2025-2026 HPC-Gridware GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -49,6 +49,7 @@ lappend check_functions "config_usage_collection_PDC"
 lappend check_functions "config_usage_collection_HYBRID"
 lappend check_functions "config_usage_collection_TRUE"
 lappend check_functions "config_usage_collection_change"
+lappend check_functions "config_usage_collection_qacct_sane"
 
 # -------- local test procedures: initialization------------------------------
 
@@ -56,24 +57,30 @@ proc config_usage_collection_setup {} {
    get_current_cluster_config_array ts_config
    global config_usage_collection_hosts config_usage_collection_backup
 
-   # we need an exec host with systemd
+   # we can exercise systemd-based and pdc-based usage collection independently;
+   # skip only if neither host type is available
    set config_usage_collection_hosts(systemd) [systemd_get_suited_hosts]
    if {$config_usage_collection_hosts(systemd) eq ""} {
-      ts_log_config "No host with systemd found"
-      return 99
+      ts_log_info "No host with systemd found - systemd cases will be skipped"
    } else {
       ts_log_fine "Found systemd host: $config_usage_collection_hosts(systemd)"
    }
    set config_usage_collection_hosts(pdc) [systemd_get_non_systemd_hosts]
    if {$config_usage_collection_hosts(pdc) eq ""} {
-      ts_log_config "No non systemd host found"
-      return 99
+      ts_log_info "No non systemd host found - pdc cases will be skipped"
    } else {
       ts_log_fine "Found non systemd host: $config_usage_collection_hosts(pdc)"
+   }
+   if {$config_usage_collection_hosts(systemd) eq "" && $config_usage_collection_hosts(pdc) eq ""} {
+      ts_log_config "Neither a systemd nor a non-systemd exec host is available"
+      return 99
    }
 
    foreach type "systemd pdc" {
       if {$config_usage_collection_hosts($type) ne ""} {
+         # make sure that we get enough slots to run jobs in parallel
+         setup_host_slots_for_binding
+
          # backup the execd_params of the hosts
          get_config conf_backup $config_usage_collection_hosts($type)
          set config_usage_collection_backup($type) [array get conf_backup]
@@ -95,6 +102,10 @@ proc config_usage_collection_cleanup {} {
    # reset config of our test hosts
    foreach type "systemd pdc" {
       if {$config_usage_collection_hosts($type) ne ""} {
+         # restore slots settings
+         cleanup_host_slots_for_binding
+
+         # restore execd_params
          array set conf $config_usage_collection_backup($type)
          reset_config_and_propagate conf $config_usage_collection_hosts($type)
       }
@@ -372,6 +383,100 @@ proc config_usage_collection_change {} {
 
          # cleanup
          delete_job $job_id
+      }
+   }
+}
+
+# verify that the qacct accounting record for completed jobs contains sane
+# numeric values for the usage fields cpu, mem, maxvmem and maxrss.
+#
+# Regression guard: on cgroup v1 hosts (e.g. Rocky/Alma 8) systemd may report
+# the property MemoryPeak as available on the bus but return UINT64_MAX to
+# signal "no data". Cast to double this rounds up to 2^64 and used to surface
+# in qacct as maxrss=18446744073709551616. Any usage field exceeding a very
+# generous sanity ceiling of 1e18 indicates a systemd sentinel or similar
+# overflow leaking into the accounting record.
+#
+# The failure appears to be timing / poll-cycle dependent (a single short job
+# does not reliably trigger it), so this check submits a batch of binary
+# sleep jobs with varying runtimes (1..num_jobs seconds) to cover both jobs
+# that exit before the first execd usage poll and jobs that live across
+# multiple polls.
+proc config_usage_collection_qacct_sane {} {
+   get_current_cluster_config_array ts_config
+   global config_usage_collection_hosts config_usage_collection_backup
+
+   set sanity_ceiling 1.0e18
+   set uint64_max_as_double "18446744073709551616"
+   set num_jobs 100
+
+   add_or_replace_array_param conf config_usage_collection_backup "execd_params" "USAGE_COLLECTION" "TRUE"
+
+   foreach type "systemd pdc" {
+      if {$config_usage_collection_hosts($type) eq ""} {
+         continue
+      }
+      set host $config_usage_collection_hosts($type)
+      set_config_and_propagate conf $host
+
+      # submit num_jobs binary sleep jobs with runtimes 1..num_jobs seconds
+      set job_ids {}
+      for {set i 1} {$i <= $num_jobs} {incr i} {
+         set jobname "qacct_sane_${type}_$i"
+         set job_id [submit_job "-b y -l h=$host -N $jobname /bin/sleep $i"]
+         if {$job_id <= 0} {
+            ts_log_severe "could not submit sleep job #$i to host $host"
+         } else {
+            lappend job_ids $job_id
+         }
+      }
+      if {[llength $job_ids] == 0} {
+         continue
+      }
+      ts_log_fine "submitted [llength $job_ids] sleep jobs to host $host"
+
+      # worst-case wall time is sum(1..num_jobs) if the host runs one slot;
+      # give the cluster generous room and let the shared waiter poll qstat
+      set wait_timeout [expr {$num_jobs * ($num_jobs + 1) / 2 + 120}]
+      if {[wait_for_end_of_all_jobs $wait_timeout 0] != 0} {
+         ts_log_severe "not all sleep jobs finished within ${wait_timeout}s on host $host"
+         continue
+      }
+
+      # check the qacct record of every submitted job; log per-job details
+      # only on failure to keep the log readable on the happy path
+      set bad_count 0
+      foreach job_id $job_ids {
+         if {[get_qacct $job_id qacct_info $ts_config(master_host) "" 0 1 30] != 0} {
+            ts_log_severe "no qacct record for job $job_id on host $host"
+            incr bad_count
+            continue
+         }
+         foreach field "cpu mem maxvmem maxrss" {
+            if {![info exists qacct_info($field)]} {
+               ts_log_severe "qacct record for job $job_id on host $host is missing field $field"
+               incr bad_count
+               continue
+            }
+            set value [lindex $qacct_info($field) 0]
+            set numeric [transform_unit $value]
+            if {$value eq $uint64_max_as_double || $numeric eq $uint64_max_as_double} {
+               ts_log_severe "qacct field $field for job $job_id on host $host is\
+                              UINT64_MAX-as-double ($value): systemd sentinel leaked into accounting"
+               incr bad_count
+            } elseif {$numeric > $sanity_ceiling} {
+               ts_log_severe "qacct field $field for job $job_id on host $host is\
+                              unreasonably large ($value): systemd sentinel or overflow"
+               incr bad_count
+            } else {
+               ts_log_fine "job $job_id: $field: $value: OK"
+            }
+         }
+      }
+      if {$bad_count == 0} {
+         ts_log_fine "all [llength $job_ids] qacct records on host $host contain sane usage values"
+      } else {
+         ts_log_fine "$bad_count qacct issue(s) detected on host $host across [llength $job_ids] jobs"
       }
    }
 }
