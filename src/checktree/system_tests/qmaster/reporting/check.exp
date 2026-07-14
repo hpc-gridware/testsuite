@@ -71,7 +71,9 @@ set check_name            "reporting"
 set check_category        "ACCOUNTING REPORTING JOB_SYNC VERIFIED JENKINS_DISABLED"
 set check_description(0)  "Test reporting parameters and qmaster reporting (old colon separated format)"
 set check_description(1)  "Test reporting parameters and qmaster reporting (JSON format)"
+set check_description(2)  "Test reporting parameters and qmaster reporting (JSON format, sync_write=true)"
 set check_version_range(1) "9.0.0"
+set check_version_range(2) "9.1.4"
 
 # define test's dependencies
 set check_needs           "init_core_system"
@@ -176,6 +178,11 @@ proc reporting_setup_level {} {
          append reporting_file ".jsonl"
          append reporting_acct_file ".jsonl"
       }
+   }
+   # runlevel 2 exercises the JSON format with reporting_params sync_write=true
+   # (CS-2411). The .jsonl file paths are already set above via the level>=1 branch.
+   if {$CHECK_ACT_LEVEL == 2} {
+      append reporting_format_config " sync_write=true"
    }
 
    # make sure the right format is in place
@@ -1551,7 +1558,8 @@ proc reporting_no_comment_in_json {} {
             ts_log_severe "reporting file does not start with comment\n$accounting_head"
          }
       }
-      1 {
+      default {
+         # level 1 (JSON) and level 2 (JSON + sync_write) share the no-comment invariant
          if {[string index $accounting_head 0] == "#"} {
             ts_log_severe "accounting file starts with comment, this is issue CS-412:\n$reporting_head"
          }
