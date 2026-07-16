@@ -61,7 +61,7 @@ lappend check_functions "qquota_help"                   ;# print this help
 #lappend check_functions "qquota_option_h"
 lappend check_functions "qquota_option_l"
 lappend check_functions "qquota_option_u"
-lappend check_functions "qquota_memory_limit"   ;# DRAFT (CS-2348)
+lappend check_functions "qquota_memory_limit"   ;# CS-2348
 #lappend check_functions "qquota_option_pe"
 #lappend check_functions "qquota_option_P"
 #lappend check_functions "qquota_option_q"
@@ -204,7 +204,7 @@ proc qquota_option_u {} {
    wait_for_end_of_all_jobs 20
 }
 
-## @brief DRAFT (CS-2348): qquota must render a typed (memory) static RQS limit
+## @brief CS-2348: qquota must render a typed (memory) static RQS limit
 #  correctly and must not crash.
 #
 # `test_memory` ("tm") is a MEMORY, non-consumable complex created in qquota_setup,
@@ -213,9 +213,9 @@ proc qquota_option_u {} {
 # silently mis-parsed typed values (e.g. "4G" -> 4). The fix uses parse_ulong_val().
 # See CS-2348.
 #
-# TODO (reviewer): confirm the exact rendered memory token against a live run and
-# tighten the assertion. The fix parses 4G as 4*1024^3; expected display is "4.000G".
-# The key regression to catch is a bare "4" (the old std::stoul result) or a crash.
+# Non-consumable limits are printed verbatim from RQRL_value (the configured
+# string), so the expected token is "test_memory=4G". Only consumables go through
+# sge_get_dominant_stringval() and render by attribute type ("4.000G").
 #
 # @return none; reports failures via ts_log_severe
 proc qquota_memory_limit {} {
@@ -237,15 +237,14 @@ proc qquota_memory_limit {} {
    set result [start_sge_bin "qquota" "-l test_memory" "" "" exit_code]
    ts_log_fine "qquota -l test_memory exit=$exit_code\n$result"
 
-   # With CS-2348 qquota parses 4G correctly (4*1024^3) AND renders the limit
-   # human-readably by attribute type as "test_memory=4.000G". Previously std::stoul
-   # parsed "4G" as 4 and the plain view showed a raw, truncated byte count.
+   # The regressions to catch are a crash / non-zero exit, or a truncated value
+   # such as a bare "4" (what std::stoul made of "4G" before the fix).
    if {$exit_code != 0} {
       ts_log_severe "qquota crashed / non-zero exit on a memory RQS limit (exit=$exit_code) - CS-2348"
-   } elseif {[string match "*test_memory=4.000G*" $result]} {
-      ts_log_fine "OK: memory limit rendered as 4.000G"
+   } elseif {[string match "*test_memory=4G*" $result]} {
+      ts_log_fine "OK: memory limit rendered as 4G"
    } else {
-      ts_log_severe "qquota did not render the memory limit as 4.000G; got: $result (CS-2348)"
+      ts_log_severe "qquota did not render the memory limit as 4G; got: $result (CS-2348)"
    }
 
    del_rqs $rqs_name
