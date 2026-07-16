@@ -80,6 +80,9 @@ proc arco_init_variables {} {
    set DBWRITER_LOG_FNAME "$ts_config(product_root)\/$ts_config(cell)\/spool\/dbwriter\/dbwriter.log"
 
    set ARCO_TABLES {}
+   if {[is_version_in_range "9.1.4"]} {
+      lappend ARCO_TABLES sge_job_usage_values
+   }
    lappend ARCO_TABLES sge_job_usage
    lappend ARCO_TABLES sge_job_log
    lappend ARCO_TABLES sge_job_request
