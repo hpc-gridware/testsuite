@@ -77,7 +77,6 @@ proc dbwriter_custom_usage_setup {} {
          return 99
       }
    }
-   wait_for_enter
 }
 
 proc dbwriter_custom_usage_cleanup {} {
@@ -95,7 +94,6 @@ proc dbwriter_custom_usage_cleanup {} {
    reset_config dbwriter_custom_usage_backup
 
    unset -nocomplain dbwriter_custom_usage_backup
-wait_for_enter
    # clean data from arco database
    arco_clean_database
 }
