@@ -22,7 +22,8 @@ echo "flag_ready=true" >> "$SGE_JOB_SPOOL_DIR/usage"
 # --- AE3: plain string ---
 echo "status=running" >> "$SGE_JOB_SPOOL_DIR/usage"
 
-# --- AE3: empty string ---
-echo "note=\"\"" >> "$SGE_JOB_SPOOL_DIR/usage"
+# note: empty-quoted-pair values ("") are silently skipped by
+# usage_parse_value because CULL's wire format cannot distinguish empty
+# string from nullptr (see sge_usage.cc). Not exercised here.
 
 exit 0

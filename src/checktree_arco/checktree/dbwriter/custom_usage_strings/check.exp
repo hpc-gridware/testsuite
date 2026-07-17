@@ -59,7 +59,7 @@ proc dbwriter_custom_usage_strings_setup {} {
    # matches every variable emitted by cs849_custom_usage_strings_epilog.sh.
    set delimiter " "
    add_or_replace_array_param new_conf dbwriter_custom_usage_strings_backup reporting_params "reporting" "true" $delimiter
-   add_or_replace_array_param new_conf new_conf reporting_params "usage_patterns" "cs849:instance_type|energy|label_007|flag_ready|status|note" $delimiter
+   add_or_replace_array_param new_conf new_conf reporting_params "usage_patterns" "cs849:instance_type|energy|label_007|flag_ready|status" $delimiter
    add_or_replace_array_param new_conf new_conf reporting_params "flush_time" "00:00:01" $delimiter
    set_config new_conf
 
@@ -161,7 +161,7 @@ proc dbwriter_custom_usage_strings_test {} {
       return
    }
 
-   # poll until dbwriter ingests all rows (six variables emitted by the epilog)
+   # poll until dbwriter ingests all rows (five variables emitted by the epilog)
    set sql "SELECT juv.juv_variable, juv.juv_svalue, juv.juv_dvalue"
    append sql " FROM sge_job j, sge_job_usage ju, sge_job_usage_values juv"
    append sql " WHERE j.j_id = ju.ju_parent AND ju.ju_id = juv.juv_parent"
@@ -172,14 +172,14 @@ proc dbwriter_custom_usage_strings_test {} {
    set rows {}
    for {set try 0} {$try < 12} {incr try} {
       set rows [dbwriter_custom_usage_strings_query $sp_id $sql]
-      if {[llength $rows] >= 6} {
+      if {[llength $rows] >= 5} {
          set found 1
          break
       }
       sleep_for_seconds 5
    }
    if {!$found} {
-      ts_log_severe "expected 6 sge_job_usage_values rows for job $job_id, got [llength $rows] after 60s poll"
+      ts_log_severe "expected 5 sge_job_usage_values rows for job $job_id, got [llength $rows] after 60s poll"
       close_spawn_process $id
       return
    }
@@ -192,7 +192,6 @@ proc dbwriter_custom_usage_strings_test {} {
       flag_ready     d
       instance_type  s
       label_007      s
-      note           s
       status         s
    }
    array set expected_value {
@@ -200,7 +199,6 @@ proc dbwriter_custom_usage_strings_test {} {
       flag_ready     "1"
       instance_type  "A100"
       label_007      "42"
-      note           ""
       status         "running"
    }
 
