@@ -27,7 +27,7 @@ global check_functions
 global check_root_access_needs
 global check_version_range
 
-set check_version_range "9.1.4"
+set check_version_range "9.2.0"
 
 # define test's name and run level descriptions
 set check_name            "dbwriter_custom_usage_strings"
