@@ -219,13 +219,38 @@ proc dbwriter_custom_usage_numeric_test {} {
       array unset row_a
    }
 
-   # aggregate XOR regression guard across the whole test (finding-2 assertion)
-   set aggregate_sql "SELECT COUNT(*) AS n FROM sge_job_usage_values WHERE juv_svalue IS NOT NULL"
-   set agg_rows [dbwriter_custom_usage_query $sp_id $aggregate_sql]
-   if {[llength $agg_rows] > 0} {
-      array set agg [lindex $agg_rows 0]
-      if {$agg(n) != 0} {
-         ts_log_severe "XOR-invariant regression: $agg(n) rows have non-NULL juv_svalue in the numeric-only CS-1266 phase"
+   # XOR-invariant regression guards. Two aggregates:
+   #
+   # (1) Scoped to this job's rows only: since this test submits a job with a
+   #     purely-numeric epilog, every juv_svalue for its rows must be NULL.
+   #     Scoping to job_id keeps the check meaningful even when other tests
+   #     (e.g. the CS-849 custom_usage_strings test) run in the same session
+   #     and leave string rows in the table before their cleanup fires.
+   set scoped_sql "SELECT COUNT(*) AS n"
+   append scoped_sql " FROM sge_job j, sge_job_usage ju, sge_job_usage_values juv"
+   append scoped_sql " WHERE j.j_id = ju.ju_parent"
+   append scoped_sql " AND ju.ju_id = juv.juv_parent"
+   append scoped_sql " AND j.j_job_number = $job_id"
+   append scoped_sql " AND juv.juv_svalue IS NOT NULL"
+   set scoped_rows [dbwriter_custom_usage_query $sp_id $scoped_sql]
+   if {[llength $scoped_rows] > 0} {
+      array set scoped_agg [lindex $scoped_rows 0]
+      if {$scoped_agg(n) != 0} {
+         ts_log_severe "XOR-invariant regression: $scoped_agg(n) rows for job $job_id have non-NULL juv_svalue despite numeric-only epilog"
+      }
+   }
+
+   # (2) Global timeless check: no row anywhere in the table may have BOTH
+   #     juv_svalue AND juv_dvalue populated. Catches the exact
+   #     HostValueManager dual-column write pattern the finding-2 divergence
+   #     note warned about, and holds regardless of which tests ran before.
+   set both_sql "SELECT COUNT(*) AS n FROM sge_job_usage_values"
+   append both_sql " WHERE juv_svalue IS NOT NULL AND juv_dvalue IS NOT NULL"
+   set both_rows [dbwriter_custom_usage_query $sp_id $both_sql]
+   if {[llength $both_rows] > 0} {
+      array set both_agg [lindex $both_rows 0]
+      if {$both_agg(n) != 0} {
+         ts_log_severe "XOR-invariant regression: $both_agg(n) rows have BOTH juv_svalue AND juv_dvalue populated"
       }
    }
 
