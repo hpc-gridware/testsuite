@@ -1,0 +1,259 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.2.0"
+
+# define test's name and run level descriptions
+set check_name            "dbwriter_custom_usage_strings"
+set check_category        "DBWRITER JOB_SYNC VERIFIED"
+set check_description(0)  "verify string custom usage values from acct records land in juv_svalue / juv_dvalue with correct XOR (CS-849)"
+
+# define test's dependencies
+set check_needs           "init_core_system arco_database_install arco_dbwriter_install"
+
+# setup and cleanup functions
+set check_setup_function dbwriter_custom_usage_strings_setup
+set check_cleanup_function dbwriter_custom_usage_strings_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "dbwriter_custom_usage_strings_test"
+
+# -------- local test procedures: initialization------------------------------
+
+proc dbwriter_custom_usage_strings_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH
+   global dbwriter_custom_usage_strings_backup
+
+   # backup the global config so cleanup can restore
+   get_config dbwriter_custom_usage_strings_backup
+
+   # enable reporting + whitelist the test's custom-usage variables. usage_patterns
+   # matches every variable emitted by cs849_custom_usage_strings_epilog.sh.
+   set delimiter " "
+   add_or_replace_array_param new_conf dbwriter_custom_usage_strings_backup reporting_params "reporting" "true" $delimiter
+   add_or_replace_array_param new_conf new_conf reporting_params "usage_patterns" "cs849:instance_type|energy|label_007|flag_ready|status" $delimiter
+   add_or_replace_array_param new_conf new_conf reporting_params "flush_time" "00:00:01" $delimiter
+   set_config new_conf
+
+   # create a dedicated test queue on @allhosts with the mixed-usage epilog
+   # attached. Ships the epilog next to check.exp (referenced via
+   # CHECK_ACTUAL_TEST_PATH) so every cluster host sees the same committed
+   # bytes -- avoids the NFS-write-visibility race a runtime TCL open/puts
+   # /close would hit.
+   set queue_conf(epilog) "$CHECK_ACTUAL_TEST_PATH/cs849_custom_usage_strings_epilog.sh"
+   add_queue "test.q" "@allhosts" queue_conf
+
+   # start dbwriter if it isn't already running
+   if {[get_dbwriter_status 0] != 0} {
+      ts_log_fine "starting dbwriter"
+      if {[startup_dbwriter] != 0} {
+         ts_log_config "could not start dbwriter"
+         return 99
+      }
+   }
+}
+
+proc dbwriter_custom_usage_strings_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global dbwriter_custom_usage_strings_backup
+
+   ts_log_fine "shutting down dbwriter"
+   shutdown_dbwriter
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   del_queue "test.q" "@allhosts" 0 1
+   reset_config dbwriter_custom_usage_strings_backup
+
+   unset -nocomplain dbwriter_custom_usage_strings_backup
+
+   arco_clean_database
+}
+
+# helper: run a single SQL query via sqlutil and return the result rows as
+# a list of row-dicts (each row is a flat list of key/value pairs).
+proc dbwriter_custom_usage_strings_query {sp_id sql} {
+   array set result_array {}
+   set column_names {}
+   set res [sqlutil_query $sp_id "$sql" result_array column_names]
+   if {$res < 0} {
+      ts_log_severe "sqlutil_query failed for: $sql"
+      return {}
+   }
+   set rows {}
+   for {set i 0} {$i < $res} {incr i} {
+      set row_dict {}
+      set col 0
+      foreach col_name $column_names {
+         lappend row_dict $col_name $result_array($i,$col)
+         incr col
+      }
+      lappend rows $row_dict
+   }
+   return $rows
+}
+
+# sqlutil renders SQL NULL as the literal string "null" (lowercase) or "NULL",
+# and empty strings as "". Return 1 when the value is a NULL rendering, else 0.
+# Empty-string values ARE distinguishable from NULL by the DB (the empty-string
+# note test relies on that), so an empty string is NOT treated as NULL here.
+proc dbwriter_custom_usage_strings_is_null {value} {
+   if {[string tolower $value] eq "null"} {
+      return 1
+   }
+   return 0
+}
+
+# submit a short-running job, wait for it to finish and for dbwriter to
+# ingest its acct record, then query sge_job_usage_values and assert the
+# XOR-typed persistence.
+proc dbwriter_custom_usage_strings_test {} {
+   get_current_cluster_config_array ts_config
+
+   ts_log_fine "submitting sleep job that triggers the mixed-type epilog"
+   set job_id [submit_job "-sync y -q test.q $ts_config(product_root)/examples/jobs/sleeper.sh 5"]
+   if {$job_id <= 0} {
+      ts_log_severe "could not submit test job"
+      return
+   }
+
+   wait_for_end_of_all_jobs 60
+
+   ts_log_fine "connecting to arco database"
+   set id [sqlutil_create]
+   if {$id == "-1"} {
+      ts_log_severe "sqlutil_create failed"
+      return
+   }
+   set sp_id [lindex $id 1]
+   if {[sqlutil_connect $sp_id] != 0} {
+      ts_log_severe "could not connect to arco database"
+      close_spawn_process $id
+      return
+   }
+
+   # poll until dbwriter ingests all rows (five variables emitted by the epilog)
+   set sql "SELECT juv.juv_variable, juv.juv_svalue, juv.juv_dvalue"
+   append sql " FROM sge_job j, sge_job_usage ju, sge_job_usage_values juv"
+   append sql " WHERE j.j_id = ju.ju_parent AND ju.ju_id = juv.juv_parent"
+   append sql " AND j.j_job_number = $job_id"
+   append sql " ORDER BY juv.juv_variable"
+
+   set found 0
+   set rows {}
+   for {set try 0} {$try < 12} {incr try} {
+      set rows [dbwriter_custom_usage_strings_query $sp_id $sql]
+      if {[llength $rows] >= 5} {
+         set found 1
+         break
+      }
+      sleep_for_seconds 5
+   }
+   if {!$found} {
+      ts_log_severe "expected 5 sge_job_usage_values rows for job $job_id, got [llength $rows] after 60s poll"
+      close_spawn_process $id
+      return
+   }
+
+   # per-variable XOR expectations. Two parallel arrays keyed by variable
+   # name: which(var) selects the column ("s" = juv_svalue, "d" = juv_dvalue)
+   # and value(var) is the expected persisted value.
+   array set which {
+      energy         d
+      flag_ready     d
+      instance_type  s
+      label_007      s
+      status         s
+   }
+   array set expected_value {
+      energy         "6915"
+      flag_ready     "1"
+      instance_type  "A100"
+      label_007      "42"
+      status         "running"
+   }
+
+   foreach row $rows {
+      array set row_a $row
+      set name $row_a(juv_variable)
+      set svalue $row_a(juv_svalue)
+      set dvalue $row_a(juv_dvalue)
+
+      if {![info exists which($name)]} {
+         ts_log_info "unexpected juv_variable=$name (svalue='$svalue', dvalue='$dvalue')"
+         array unset row_a
+         continue
+      }
+      set var_which $which($name)
+      set var_expected $expected_value($name)
+
+      if {$var_which eq "s"} {
+         # expect juv_svalue populated (may be empty string for `note`), juv_dvalue NULL
+         if {[dbwriter_custom_usage_strings_is_null $svalue]} {
+            ts_log_severe "juv_variable=$name expected svalue='$var_expected', got NULL"
+         } elseif {$svalue ne $var_expected} {
+            ts_log_severe "juv_variable=$name expected svalue='$var_expected', got '$svalue'"
+         } else {
+            ts_log_fine "juv_variable=$name svalue='$svalue' (ok)"
+         }
+         # juv_dvalue must render as SQL NULL for string rows
+         if {!(($dvalue eq "") || [dbwriter_custom_usage_strings_is_null $dvalue])} {
+            ts_log_severe "XOR violated: juv_variable=$name has non-NULL juv_dvalue='$dvalue' alongside svalue"
+         }
+      } else {
+         # expect juv_dvalue populated, juv_svalue NULL
+         if {[expr abs($dvalue - $var_expected)] > 0.001} {
+            ts_log_severe "juv_variable=$name expected dvalue=$var_expected, got $dvalue"
+         } else {
+            ts_log_fine "juv_variable=$name dvalue=$dvalue (ok)"
+         }
+         # juv_svalue must render as SQL NULL for numeric rows
+         if {!(($svalue eq "") || [dbwriter_custom_usage_strings_is_null $svalue])} {
+            ts_log_severe "XOR violated: juv_variable=$name has non-NULL juv_svalue='$svalue' alongside dvalue"
+         }
+      }
+      array unset row_a
+   }
+
+   # aggregate XOR: no row should have BOTH svalue AND dvalue populated
+   set aggregate_sql "SELECT COUNT(*) AS n FROM sge_job_usage_values"
+   append aggregate_sql " WHERE juv_svalue IS NOT NULL AND juv_dvalue IS NOT NULL"
+   set agg_rows [dbwriter_custom_usage_strings_query $sp_id $aggregate_sql]
+   if {[llength $agg_rows] > 0} {
+      array set agg [lindex $agg_rows 0]
+      if {$agg(n) != 0} {
+         ts_log_severe "XOR-invariant regression: $agg(n) rows have BOTH juv_svalue AND juv_dvalue populated"
+      }
+   }
+
+   close_spawn_process $id
+}
