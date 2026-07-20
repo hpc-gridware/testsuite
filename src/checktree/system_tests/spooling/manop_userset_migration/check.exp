@@ -1,0 +1,310 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# Coverage for the manager/operator -> reserved access list migration (CS-2394).
+#
+# Since 9.2 managers and operators are no longer stored in the "managers" and
+# "operators" files of the qmaster spool directory: they are the members of the
+# two reserved access lists (usersets) "manager" and "operator". The qmaster does
+# NOT read the old files any more - the read fallback was removed - so the ONLY
+# migration path is the upgrade procedure:
+#
+#    save_config.sh (old cluster) -> "qconf -sm"/"-so" -> managers/operators file
+#    load_config.sh (new cluster) -> "qconf -am"/"-ao" -> reserved access lists
+#
+# That makes this check the most important test of CS-2394: it is not testing the
+# upgrade around the feature, it IS the feature's migration path.
+#
+# MODEL: the checktree_gcs "upgrade_config" check
+# (upgrade_config_as_upgrade_from_specific_version), NOT the CS-2386
+# classic_upgrade_migration check. Rationale, learned the hard way on the first
+# run: driving the interactive "inst_sge -upd" via
+# installer_do_upgrade_from_backup fails with
+#     "Bootstrap file already exists in selected <sge_root>/<sge_cell>.
+#      ... delete <sge_root>/default directory and restart the upgrade" (exit 2)
+# because -upd wants to create the cell from scratch. The upgrade_config pattern
+# (copy backup -> upgrade_config.sh -> load_config.sh into the RUNNING cluster)
+# exercises exactly the migration we care about (-am/-ao into the usersets),
+# needs no cell teardown, and is the pattern that is known to work.
+#
+# Two checks:
+#   1. manop_userset_migration_check       - the migration itself.
+#   2. manop_reserved_name_collision_check - load_config.sh must refuse a pre-9.2
+#      backup carrying a user-defined access list named "manager".
+#
+# ####################  FIRST RUN FINDINGS (2026-07-16)  ###################
+#   * The testsuite runs the INSTALLED scripts ($ts_config(product_root)/util/
+#     upgrade_modules/...), not the source tree. The CS-2394 collision guard must
+#     be installed before check 2 can pass - otherwise load_config.sh runs the old
+#     script, loads everything, and only the qmaster-side invariant rejects the
+#     "-Au manager" with "may not remove user \"root\" from manager list".
+#     That is a DIFFERENT (second line of defence) mechanism - see check 2's
+#     assertion, which deliberately distinguishes the two.
+#   * Still to confirm: whether markers survive upgrade_config.sh untouched (it
+#     rewrites backup files in place).
+# #########################################################################
+
+# The old version to upgrade FROM. Must be a pre-9.2 fixture under
+# resources/backups/ whose "managers"/"operators" files exist. 9.1.0 is the newest.
+global manop_upgrade_from_version
+set    manop_upgrade_from_version "9.1.0"
+
+# Marker names injected into the fixture's managers/operators files. They must NOT
+# be root or the admin user: the new qmaster SEEDS root + admin into the reserved
+# access lists on startup, so asserting on those would pass even if no migration
+# happened at all. The markers are what make this check prove migration.
+# ("qconf -am" does not require the user to exist - sge_add_manop() stores the
+# name; only the userset interface validates entries.)
+global manop_marker_manager manop_marker_operator
+set    manop_marker_manager  "cs2394mgr"
+set    manop_marker_operator "cs2394op"
+
+# define test's name and run level descriptions
+set check_name            "manop_userset_migration"
+set check_category        "COMPATIBILITY SYSTEM SPOOLING VERIFIED"
+set check_description(0)  "upgrade of a pre-9.2 configuration migrates managers/operators into the reserved manager/operator access lists (CS-2394)"
+
+set check_root_access_needs "yes"
+
+# needs a running installed cluster to load the old configuration into
+set check_needs           "init_core_system"
+
+# The check loads a foreign (9.1.0) configuration into the running cluster and
+# adds managers/operators - restore a fresh cluster so later checks are unaffected.
+set check_cleanup_function "manop_userset_migration_cleanup"
+
+set check_functions ""
+lappend check_functions "manop_userset_migration_check"
+lappend check_functions "manop_reserved_name_collision_check"
+
+## @brief true if $path exists on $host (as $user).
+proc manop_remote_exists {host user path} {
+   start_remote_prog $host $user "test" "-e $path" prg_exit_state
+   return [expr {$prg_exit_state == 0}]
+}
+
+## @brief Run util/upgrade_modules/upgrade_config.sh on a saved configuration.
+#
+# NOTE: this mirrors installer_upgrade_config() of the checktree_gcs
+# "upgrade_config" check, which is defined check-locally there and therefore not
+# available to us. Keep in sync with it.
+#
+# @param backup_dir the (already copied) backup directory - it is rewritten in place
+# @return 1 on success, 0 on failure
+proc manop_upgrade_config {backup_dir} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set log_file [get_tmp_file_name]
+   set hostname [installer_get_hostname]
+   installer_set_env_for_upgrade env_array
+
+   set upgrade_script "$ts_config(product_root)/util/upgrade_modules/upgrade_config.sh"
+   set arguments "$backup_dir $log_file -log I"
+   set result [start_remote_prog $hostname $CHECK_USER $upgrade_script $arguments \
+                                 prg_exit_state 300 0 $ts_config(product_root) env_array]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "upgrade_config.sh failed, see log file $log_file for details:\n$result"
+      return 0
+   }
+   return 1
+}
+
+## @brief Append a name to a file of the backup copy (one name per line).
+#
+# Uses get_file_content/write_remote_file rather than a remote shell redirect, so
+# no quoting has to survive start_remote_prog.
+#
+# @return 1 on success, 0 on failure
+proc manop_append_to_file {host user file name} {
+   if {![manop_remote_exists $host $user $file]} {
+      ts_log_severe "cannot append \"$name\": $file does not exist on $host"
+      return 0
+   }
+   get_file_content $host $user $file content
+   set lines $content(0)
+   incr lines
+   set content($lines) $name
+   set content(0) $lines
+   write_remote_file $host $user $file content
+   return 1
+}
+
+## @brief Upgrade a pre-9.2 configuration into the running cluster and assert that
+#         the managers/operators of the old cluster arrive in the reserved access
+#         lists.
+#
+# @return none (reports failures via ts_log_severe)
+proc manop_userset_migration_check {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER manop_upgrade_from_version
+   global manop_marker_manager manop_marker_operator
+
+   if {![is_version_in_range "9.2.0"]} {
+      ts_log_fine "version under test < 9.2.0 - migration not applicable, skipping"
+      return
+   }
+
+   set host  $ts_config(master_host)
+   set spool [get_spool_dir $host qmaster]
+
+   set fixture [installer_get_backup_dir $manop_upgrade_from_version]
+   if {![is_remote_path $host $CHECK_USER $fixture]} {
+      ts_log_severe "backup fixture $manop_upgrade_from_version not found at $fixture - cannot test the manop migration"
+      return
+   }
+   if {![manop_remote_exists $host $CHECK_USER "$fixture/managers"]} {
+      ts_log_severe "no managers file in backup fixture $fixture - it is not a pre-9.2 backup"
+      return
+   }
+
+   # 1. work on a copy (upgrade_config.sh rewrites the backup in place) and inject
+   #    marker names, so that a passing assertion proves MIGRATION and not the
+   #    root/admin seeding the new qmaster does anyway
+   set bckp_dir [get_tmp_directory_name $host]
+   copy_directory $fixture $bckp_dir
+   if {![manop_append_to_file $host $CHECK_USER "$bckp_dir/managers" $manop_marker_manager] ||
+       ![manop_append_to_file $host $CHECK_USER "$bckp_dir/operators" $manop_marker_operator]} {
+      return
+   }
+
+   # 2. upgrade the saved configuration and load it into the running cluster
+   if {![manop_upgrade_config $bckp_dir]} {
+      return
+   }
+   installer_load_config $bckp_dir
+
+   # 3. the old managers/operators reached the manager/operator lists.
+   #    -sm/-so are unchanged interfaces and now read the reserved access lists.
+   set managers [start_sge_bin "qconf" "-sm"]
+   if {[lsearch -exact $managers $manop_marker_manager] < 0} {
+      ts_log_severe "manager \"$manop_marker_manager\" of the old configuration was not migrated - qconf -sm reports:\n$managers"
+   }
+   if {[lsearch -exact $managers "root"] < 0} {
+      ts_log_severe "root missing from the manager list - qconf -sm reports:\n$managers"
+   }
+   set operators [start_sge_bin "qconf" "-so"]
+   if {[lsearch -exact $operators $manop_marker_operator] < 0} {
+      ts_log_severe "operator \"$manop_marker_operator\" of the old configuration was not migrated - qconf -so reports:\n$operators"
+   }
+
+   # 4. same object, other view: the reserved access lists hold the members and are
+   #    listed like any other access list (CS-2394 opened the userset interface)
+   set acls [start_sge_bin "qconf" "-sul"]
+   foreach acl {manager operator} {
+      if {[lsearch -exact $acls $acl] < 0} {
+         ts_log_severe "reserved access list \"$acl\" not listed by qconf -sul:\n$acls"
+      }
+   }
+   set manager_acl [start_sge_bin "qconf" "-su manager"]
+   if {![string match "*$manop_marker_manager*" $manager_acl]} {
+      ts_log_severe "manager \"$manop_marker_manager\" is not an entry of the \"manager\" access list - the manop CLI and the userset interface disagree:\n$manager_acl"
+   }
+
+   # 5. on disk: members live in the usersets object dir ...
+   foreach acl {manager operator} {
+      if {![manop_remote_exists $host $CHECK_USER "$spool/usersets/$acl"]} {
+         ts_log_severe "reserved access list not spooled at $spool/usersets/$acl"
+      }
+   }
+   # ... and the legacy files are never written again
+   foreach old {managers operators} {
+      if {[manop_remote_exists $host $CHECK_USER "$spool/$old"]} {
+         ts_log_severe "legacy $spool/$old present - it must not be written any more"
+      }
+   }
+
+   start_remote_prog $host $CHECK_USER "rm" "-rf $bckp_dir" prg_exit_state
+}
+
+## @brief A pre-9.2 backup carrying a user-defined access list named "manager"
+#         must be refused by load_config.sh before anything is loaded.
+#
+# @return none (reports failures via ts_log_severe)
+proc manop_reserved_name_collision_check {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER manop_upgrade_from_version
+
+   if {![is_version_in_range "9.2.0"]} {
+      ts_log_fine "version under test < 9.2.0 - guard not applicable, skipping"
+      return
+   }
+
+   set host $ts_config(master_host)
+
+   set fixture [installer_get_backup_dir $manop_upgrade_from_version]
+   if {![is_remote_path $host $CHECK_USER $fixture]} {
+      ts_log_severe "backup fixture $manop_upgrade_from_version not found at $fixture"
+      return
+   }
+   set bckp_dir [get_tmp_directory_name $host]
+   copy_directory $fixture $bckp_dir
+
+   # a pre-9.2 cluster with a user-defined access list named "manager"
+   set acl_file "$bckp_dir/usersets/manager"
+   set acl(0) 5
+   set acl(1) "name    manager"
+   set acl(2) "type    ACL"
+   set acl(3) "fshare  0"
+   set acl(4) "oticket 0"
+   set acl(5) "entries alice"
+   write_remote_file $host $CHECK_USER $acl_file acl
+   if {![manop_remote_exists $host $CHECK_USER $acl_file]} {
+      ts_log_severe "cannot create the colliding access list fixture at $acl_file"
+      return
+   }
+
+   # run load_config.sh directly - installer_load_config cannot be used here: it
+   # reports any non-zero exit as an error, and a non-zero exit is what we WANT
+   set backup_script "$ts_config(product_root)/util/upgrade_modules/load_config.sh"
+   set log_file [get_tmp_file_name]
+   set arguments "$bckp_dir $log_file -mode upgrade -log I -on_error cont_if_exist"
+   installer_set_env_for_upgrade env_array
+   set result [start_remote_prog $host $CHECK_USER $backup_script $arguments \
+                                 prg_exit_state 60 0 $ts_config(product_root) env_array]
+
+   if {$prg_exit_state == 0} {
+      ts_log_severe "load_config.sh accepted a pre-9.2 backup with a user-defined access list named \"manager\" - the CS-2394 collision guard did not fire.\nOutput:\n$result"
+      return
+   }
+
+   # A non-zero exit is NOT sufficient: without the guard, load_config.sh loads the
+   # whole configuration and only the qmaster-side invariant rejects the
+   # "-Au manager" with "may not remove user \"root\" from manager list" - which is
+   # also non-zero and also mentions "manager". Assert on the guard's own wording,
+   # and that NOTHING was loaded.
+   if {![string match "*user-defined access list*" $result]} {
+      ts_log_severe "load_config.sh failed, but NOT with the CS-2394 collision guard.\nMost likely the guard is not present in the INSTALLED\n$backup_script\n(the testsuite runs the installed scripts, not the source tree).\nOutput:\n$result"
+      return
+   }
+   if {[string match "*qconf -ah*" $result]} {
+      ts_log_severe "the collision guard fired, but only AFTER objects had been loaded - it must abort before IterativeLoad.\nOutput:\n$result"
+      return
+   }
+   ts_log_fine "collision guard fired before loading anything, as expected:\n$result"
+
+   start_remote_prog $host $CHECK_USER "rm" "-rf $bckp_dir" prg_exit_state
+}
+
+## @brief Restore a fresh cluster: the check loaded a foreign configuration and
+#         added managers/operators to the running cluster.
+proc manop_userset_migration_cleanup {} {
+   installer_reinstall_fresh_cluster
+}
