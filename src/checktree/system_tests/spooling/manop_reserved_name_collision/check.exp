@@ -1,0 +1,120 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2394: since 9.2 the access list (userset) names "manager" and "operator" are
+# reserved. A pre-9.2 cluster may contain a user-defined access list of that name.
+# It cannot be carried over automatically (every reference to it would silently
+# resolve to the reserved list), so load_config.sh refuses such a backup before
+# loading anything. This check verifies that guard.
+#
+# Non-destructive: the guard aborts before IterativeLoad, so nothing is loaded into
+# the running cluster.
+#
+# NOTE: the testsuite runs the INSTALLED scripts
+# ($product_root/util/upgrade_modules/load_config.sh), not the source tree - the
+# CS-2394 guard must be installed for this check to pass.
+
+global check_name check_category check_description check_needs
+global check_root_access_needs check_functions check_version_range
+
+set check_name              "manop_reserved_name_collision"
+set check_category          "COMPATIBILITY SYSTEM SPOOLING VERIFIED"
+set check_description(0)     "load_config.sh refuses a pre-9.2 backup that uses the reserved access list name manager/operator (CS-2394)"
+set check_version_range     "9.2.0"
+
+set check_root_access_needs "yes"
+set check_needs             "init_core_system"
+
+set check_functions ""
+lappend check_functions "manop_reserved_name_collision_check"
+
+# The pre-9.2 fixture to build the colliding backup from.
+global manop_collision_from_version
+set    manop_collision_from_version "9.1.0"
+
+## @brief true if $path exists on $host (as $user).
+proc manop_collision_remote_exists {host user path} {
+   start_remote_prog $host $user "test" "-e $path" prg_exit_state
+   return [expr {$prg_exit_state == 0}]
+}
+
+## @brief A pre-9.2 backup carrying a user-defined access list named "manager"
+#         must be refused by load_config.sh before anything is loaded.
+#
+# @return none (reports failures via ts_log_severe)
+proc manop_reserved_name_collision_check {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER manop_collision_from_version
+
+   set host $ts_config(master_host)
+
+   set fixture [installer_get_backup_dir $manop_collision_from_version]
+   if {![is_remote_path $host $CHECK_USER $fixture]} {
+      ts_log_severe "backup fixture $manop_collision_from_version not found at $fixture"
+      return
+   }
+   set bckp_dir [get_tmp_directory_name $host]
+   copy_directory $fixture $bckp_dir
+
+   # a pre-9.2 cluster with a user-defined access list named "manager"
+   set acl_file "$bckp_dir/usersets/manager"
+   set acl(0) 5
+   set acl(1) "name    manager"
+   set acl(2) "type    ACL"
+   set acl(3) "fshare  0"
+   set acl(4) "oticket 0"
+   set acl(5) "entries alice"
+   write_remote_file $host $CHECK_USER $acl_file acl
+   if {![manop_collision_remote_exists $host $CHECK_USER $acl_file]} {
+      ts_log_severe "cannot create the colliding access list fixture at $acl_file"
+      return
+   }
+
+   # run load_config.sh directly - installer_load_config cannot be used here: it
+   # reports any non-zero exit as an error, and a non-zero exit is what we WANT
+   set backup_script "$ts_config(product_root)/util/upgrade_modules/load_config.sh"
+   set log_file [get_tmp_file_name]
+   set arguments "$bckp_dir $log_file -mode upgrade -log I -on_error cont_if_exist"
+   installer_set_env_for_upgrade env_array
+   set result [start_remote_prog $host $CHECK_USER $backup_script $arguments \
+                                 prg_exit_state 60 0 $ts_config(product_root) env_array]
+
+   if {$prg_exit_state == 0} {
+      ts_log_severe "load_config.sh accepted a pre-9.2 backup with a user-defined access list named \"manager\" - the CS-2394 collision guard did not fire.\nOutput:\n$result"
+      return
+   }
+
+   # A non-zero exit is NOT sufficient: without the guard, load_config.sh loads the
+   # whole configuration and only the qmaster-side invariant rejects the
+   # "-Au manager" with "may not remove user \"root\" from manager list" - which is
+   # also non-zero and also mentions "manager". Assert on the guard's own wording,
+   # and that NOTHING was loaded.
+   if {![string match "*user-defined access list*" $result]} {
+      ts_log_severe "load_config.sh failed, but NOT with the CS-2394 collision guard.\nMost likely the guard is not present in the INSTALLED\n$backup_script\n(the testsuite runs the installed scripts, not the source tree).\nOutput:\n$result"
+      return
+   }
+   if {[string match "*qconf -ah*" $result]} {
+      ts_log_severe "the collision guard fired, but only AFTER objects had been loaded - it must abort before IterativeLoad.\nOutput:\n$result"
+      return
+   }
+   ts_log_fine "collision guard fired before loading anything, as expected"
+
+   start_remote_prog $host $CHECK_USER "rm" "-rf $bckp_dir" prg_exit_state
+}

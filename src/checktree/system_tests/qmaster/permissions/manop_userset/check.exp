@@ -1,0 +1,154 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2394: managers and operators are the members of the reserved "manager" and
+# "operator" access lists (usersets). The access list interface (-au/-du/-mu/-Mu/-Au)
+# operates on them like any other access list, but changing them must require
+# MANAGER rights - the same requirement the (retired) -am/-dm/-ao/-do path always
+# enforced. Modifying an ordinary access list only requires OPERATOR rights, so
+# without a dedicated guard an operator could promote users to manager via
+# "qconf -au user manager". This check verifies that guard.
+#
+# There was no equivalent test for the old manager/operator lists, which is why the
+# gap was possible in the first place.
+
+global check_name check_category check_description check_needs
+global check_root_access_needs check_functions check_version_range
+
+set check_name              "manop_userset_permission"
+set check_category          "OBJECT MANAGER OPERATOR QCONF PERMISSION VERIFIED"
+set check_description(0)     "only managers may modify the reserved manager/operator access lists (CS-2394)"
+set check_version_range     "9.2.0"
+
+set check_root_access_needs "yes"
+set check_needs             "init_core_system"
+
+set check_setup_function    "manop_userset_perm_setup"
+set check_cleanup_function  "manop_userset_perm_cleanup"
+
+set check_functions ""
+lappend check_functions "manop_userset_perm_test"
+
+## @brief Make the first foreign user an operator (but NOT a manager).
+proc manop_userset_perm_setup {} {
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER manop_perm_operator manop_perm_victim
+   global CHECK_SECOND_FOREIGN_SYSTEM_USER
+
+   set manop_perm_operator $CHECK_FIRST_FOREIGN_SYSTEM_USER
+   set manop_perm_victim   $CHECK_SECOND_FOREIGN_SYSTEM_USER
+
+   # add_operator uses qconf -ao as the admin/manager user
+   if {[add_operator $manop_perm_operator] != 0} {
+      ts_log_severe "could not add \"$manop_perm_operator\" to the operator list for the test setup"
+      return -1
+   }
+   return 0
+}
+
+## @brief Remove the operator again; make sure no test manager remains.
+proc manop_userset_perm_cleanup {} {
+   global manop_perm_operator manop_perm_victim CHECK_USER
+
+   # remove a possibly leftover test manager (ignore errors)
+   catch {del_manager $manop_perm_victim "" $CHECK_USER 0}
+   catch {delete_operator $manop_perm_operator}
+   unset -nocomplain manop_perm_operator manop_perm_victim
+}
+
+## @brief Run a qconf sub-command as a given user and return its output.
+proc manop_perm_qconf {args_str host user} {
+   set out [start_sge_bin "qconf" $args_str $host $user prg_exit_state]
+   return $out
+}
+
+## @brief The privilege check.
+#
+# @return none (reports failures via ts_log_severe)
+proc manop_userset_perm_test {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER manop_perm_operator manop_perm_victim
+
+   set host   $ts_config(master_host)
+   set op     $manop_perm_operator
+   set victim $manop_perm_victim
+
+   # -----------------------------------------------------------------------
+   # 1. An OPERATOR must NOT be able to modify the reserved access lists.
+   #    The operator can read usersets (US_LIST GET needs operator rights), so
+   #    this specifically exercises the manager-only guard in userset_mod().
+   # -----------------------------------------------------------------------
+
+   # via the access list interface (the escalation path that must be blocked)
+   set out [manop_perm_qconf "-au $victim manager" $host $op]
+   if {![string match "*must be manager*" $out]} {
+      ts_log_severe "operator \"$op\" was NOT denied when adding a manager via 'qconf -au $victim manager' - the manager-only guard is missing.\nOutput:\n$out"
+   }
+
+   # via the convenience interface (-am is now -au manager)
+   set out [manop_perm_qconf "-am $victim" $host $op]
+   if {![string match "*must be manager*" $out]} {
+      ts_log_severe "operator \"$op\" was NOT denied when running 'qconf -am $victim'.\nOutput:\n$out"
+   }
+
+   # the operator access list is protected the same way
+   set out [manop_perm_qconf "-au $victim operator" $host $op]
+   if {![string match "*must be manager*" $out]} {
+      ts_log_severe "operator \"$op\" was NOT denied when adding an operator via 'qconf -au $victim operator'.\nOutput:\n$out"
+   }
+
+   # make sure the denied operations really had NO effect
+   set managers [manop_perm_qconf "-sm" $host $CHECK_USER]
+   if {[lsearch -exact $managers $victim] >= 0} {
+      ts_log_severe "\"$victim\" ended up in the manager list although every attempt should have been denied:\n$managers"
+   }
+
+   # -----------------------------------------------------------------------
+   # 2. A MANAGER can modify the reserved access lists (no over-restriction).
+   # -----------------------------------------------------------------------
+
+   set out [manop_perm_qconf "-am $victim" $host $CHECK_USER]
+   set managers [manop_perm_qconf "-sm" $host $CHECK_USER]
+   if {[lsearch -exact $managers $victim] < 0} {
+      ts_log_severe "manager \"$CHECK_USER\" could not add \"$victim\" to the manager list via -am:\n$out\n-sm:\n$managers"
+   }
+
+   # same object, other view: -su manager shows the new entry
+   set acl [manop_perm_qconf "-su manager" $host $CHECK_USER]
+   if {![string match "*$victim*" $acl]} {
+      ts_log_severe "\"$victim\" is not an entry of the \"manager\" access list (-am and the access list view disagree):\n$acl"
+   }
+
+   # clean the test manager up again (via -dm)
+   set out [manop_perm_qconf "-dm $victim" $host $CHECK_USER]
+   set managers [manop_perm_qconf "-sm" $host $CHECK_USER]
+   if {[lsearch -exact $managers $victim] >= 0} {
+      ts_log_severe "manager could not remove \"$victim\" from the manager list via -dm:\n$out\n-sm:\n$managers"
+   }
+
+   # -----------------------------------------------------------------------
+   # 3. The invariant still holds: root cannot be removed, even by a manager.
+   # -----------------------------------------------------------------------
+
+   set out [manop_perm_qconf "-dm root" $host $CHECK_USER]
+   set managers [manop_perm_qconf "-sm" $host $CHECK_USER]
+   if {[lsearch -exact $managers "root"] < 0} {
+      ts_log_severe "root was removed from the manager list - it must be refused:\n$out"
+   }
+}

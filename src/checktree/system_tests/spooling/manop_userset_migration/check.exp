@@ -44,19 +44,13 @@
 # exercises exactly the migration we care about (-am/-ao into the usersets),
 # needs no cell teardown, and is the pattern that is known to work.
 #
-# Two checks:
-#   1. manop_userset_migration_check       - the migration itself.
-#   2. manop_reserved_name_collision_check - load_config.sh must refuse a pre-9.2
-#      backup carrying a user-defined access list named "manager".
+# This check does the migration itself. The related guard (load_config.sh must
+# refuse a pre-9.2 backup that uses the reserved name "manager"/"operator") is a
+# separate check: manop_reserved_name_collision.
 #
 # ####################  FIRST RUN FINDINGS (2026-07-16)  ###################
 #   * The testsuite runs the INSTALLED scripts ($ts_config(product_root)/util/
-#     upgrade_modules/...), not the source tree. The CS-2394 collision guard must
-#     be installed before check 2 can pass - otherwise load_config.sh runs the old
-#     script, loads everything, and only the qmaster-side invariant rejects the
-#     "-Au manager" with "may not remove user \"root\" from manager list".
-#     That is a DIFFERENT (second line of defence) mechanism - see check 2's
-#     assertion, which deliberately distinguishes the two.
+#     upgrade_modules/...), not the source tree.
 #   * Still to confirm: whether markers survive upgrade_config.sh untouched (it
 #     rewrites backup files in place).
 # #########################################################################
@@ -92,7 +86,6 @@ set check_cleanup_function "manop_userset_migration_cleanup"
 
 set check_functions ""
 lappend check_functions "manop_userset_migration_check"
-lappend check_functions "manop_reserved_name_collision_check"
 
 ## @brief true if $path exists on $host (as $user).
 proc manop_remote_exists {host user path} {
@@ -230,75 +223,6 @@ proc manop_userset_migration_check {} {
          ts_log_severe "legacy $spool/$old present - it must not be written any more"
       }
    }
-
-   start_remote_prog $host $CHECK_USER "rm" "-rf $bckp_dir" prg_exit_state
-}
-
-## @brief A pre-9.2 backup carrying a user-defined access list named "manager"
-#         must be refused by load_config.sh before anything is loaded.
-#
-# @return none (reports failures via ts_log_severe)
-proc manop_reserved_name_collision_check {} {
-   get_current_cluster_config_array ts_config
-   global CHECK_USER manop_upgrade_from_version
-
-   if {![is_version_in_range "9.2.0"]} {
-      ts_log_fine "version under test < 9.2.0 - guard not applicable, skipping"
-      return
-   }
-
-   set host $ts_config(master_host)
-
-   set fixture [installer_get_backup_dir $manop_upgrade_from_version]
-   if {![is_remote_path $host $CHECK_USER $fixture]} {
-      ts_log_severe "backup fixture $manop_upgrade_from_version not found at $fixture"
-      return
-   }
-   set bckp_dir [get_tmp_directory_name $host]
-   copy_directory $fixture $bckp_dir
-
-   # a pre-9.2 cluster with a user-defined access list named "manager"
-   set acl_file "$bckp_dir/usersets/manager"
-   set acl(0) 5
-   set acl(1) "name    manager"
-   set acl(2) "type    ACL"
-   set acl(3) "fshare  0"
-   set acl(4) "oticket 0"
-   set acl(5) "entries alice"
-   write_remote_file $host $CHECK_USER $acl_file acl
-   if {![manop_remote_exists $host $CHECK_USER $acl_file]} {
-      ts_log_severe "cannot create the colliding access list fixture at $acl_file"
-      return
-   }
-
-   # run load_config.sh directly - installer_load_config cannot be used here: it
-   # reports any non-zero exit as an error, and a non-zero exit is what we WANT
-   set backup_script "$ts_config(product_root)/util/upgrade_modules/load_config.sh"
-   set log_file [get_tmp_file_name]
-   set arguments "$bckp_dir $log_file -mode upgrade -log I -on_error cont_if_exist"
-   installer_set_env_for_upgrade env_array
-   set result [start_remote_prog $host $CHECK_USER $backup_script $arguments \
-                                 prg_exit_state 60 0 $ts_config(product_root) env_array]
-
-   if {$prg_exit_state == 0} {
-      ts_log_severe "load_config.sh accepted a pre-9.2 backup with a user-defined access list named \"manager\" - the CS-2394 collision guard did not fire.\nOutput:\n$result"
-      return
-   }
-
-   # A non-zero exit is NOT sufficient: without the guard, load_config.sh loads the
-   # whole configuration and only the qmaster-side invariant rejects the
-   # "-Au manager" with "may not remove user \"root\" from manager list" - which is
-   # also non-zero and also mentions "manager". Assert on the guard's own wording,
-   # and that NOTHING was loaded.
-   if {![string match "*user-defined access list*" $result]} {
-      ts_log_severe "load_config.sh failed, but NOT with the CS-2394 collision guard.\nMost likely the guard is not present in the INSTALLED\n$backup_script\n(the testsuite runs the installed scripts, not the source tree).\nOutput:\n$result"
-      return
-   }
-   if {[string match "*qconf -ah*" $result]} {
-      ts_log_severe "the collision guard fired, but only AFTER objects had been loaded - it must abort before IterativeLoad.\nOutput:\n$result"
-      return
-   }
-   ts_log_fine "collision guard fired before loading anything, as expected:\n$result"
 
    start_remote_prog $host $CHECK_USER "rm" "-rf $bckp_dir" prg_exit_state
 }

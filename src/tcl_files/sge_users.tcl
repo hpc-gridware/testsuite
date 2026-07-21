@@ -533,8 +533,17 @@ proc add_operator { anOperator } {
    set result [start_sge_bin "qconf" "-ao $anOperator" ]
    set result [string trim $result]
 
-   set ADDEDTOLIST   [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SGETEXT_ADDEDTOLIST_SSSS] "*" "*" $anOperator "*" ]
-   set ALREADYEXISTS [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SGETEXT_ALREADYEXISTS_SS] "*" $anOperator ]
+   # CS-2431: from 9.2 on, operators are members of the reserved "operator" access
+   # list, so -ao reports the access-list messages instead of the old
+   # "added X to operator list" / "operator X already exists". The testsuite runs
+   # against multiple versions, so accept the wording of the version under test.
+   if {[is_version_in_range "9.2.0"]} {
+      set ADDEDTOLIST   [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_ACL_ADDTOACL_SS] $anOperator "operator" ]
+      set ALREADYEXISTS [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_ACL_USERINACL_SS] $anOperator "operator" ]
+   } else {
+      set ADDEDTOLIST   [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SGETEXT_ADDEDTOLIST_SSSS] "*" "*" $anOperator "*" ]
+      set ALREADYEXISTS [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SGETEXT_ALREADYEXISTS_SS] "*" $anOperator ]
+   }
 
    if {[string match $ADDEDTOLIST $result]} {
       ts_log_fine "added $anOperator to operator list"
@@ -577,8 +586,14 @@ proc delete_operator {anOperator} {
    set result [start_sge_bin "qconf" "-do $anOperator"]
    set result [string trim $result]
 
-   set REMOVEDFROMLIST [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SGETEXT_REMOVEDFROMLIST_SSSS] "*" "*" $anOperator "*" ]
-   set DOESNOTEXIST [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SGETEXT_DOESNOTEXIST_SS] "*" $anOperator ]
+   # CS-2431: from 9.2 on, -do reports the access-list messages (see add_operator).
+   if {[is_version_in_range "9.2.0"]} {
+      set REMOVEDFROMLIST [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_ACL_DELFROMACL_SS] $anOperator "operator" ]
+      set DOESNOTEXIST [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_ACL_USERNOTINACL_SS] $anOperator "operator" ]
+   } else {
+      set REMOVEDFROMLIST [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SGETEXT_REMOVEDFROMLIST_SSSS] "*" "*" $anOperator "*" ]
+      set DOESNOTEXIST [translate $ts_config(master_host) 1 0 0 [sge_macro MSG_SGETEXT_DOESNOTEXIST_SS] "*" $anOperator ]
+   }
 
    if {[string match $REMOVEDFROMLIST $result]} {
       ts_log_fine "removed $anOperator from operator list"
