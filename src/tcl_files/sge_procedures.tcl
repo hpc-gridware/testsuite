@@ -5766,7 +5766,11 @@ proc get_standard_job_info {jobid {add_empty 0} {get_all 0}} {
 
    # some tests need this done via catch/exec because there is no additional user
    # who can run this in an open connetion.
-   set result [start_sge_bin "qstat" "-u \"*\" -g t"]
+   # Widen the queuename column so FQDNs (e.g. host.subdomain.tld) survive
+   # verbatim — otherwise callers like master_queue_of read a truncated
+   # host from the parsed queue field and downstream resolution fails.
+   set myenv(SGE_LONG_QNAMES) 100
+   set result [start_sge_bin "qstat" "-u \"*\" -g t" "" "" prg_exit_state 60 "" "bin" output_lines myenv]
 
    if {$prg_exit_state != 0} {
       ts_log_severe "qstat failed:\n$result"
