@@ -238,6 +238,163 @@ proc fjr_load_wait_for_count_eq {target timeout_seconds} {
    return -1
 }
 
+# Log RSS of the qmaster process and total spool-dir size at a given
+# checkpoint. Numbers feed the sge_conf(5) sizing notes — a full-scale
+# runlevel-100 run should produce quotable memory/spool numbers.
+proc fjr_load_log_sizing {label retained_count} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   # RSS of sge_qmaster (kB). Use the testsuite's get_qmaster_pid helper
+   # so we do not have to shell-quote a compound command through
+   # start_remote_prog. `ps -o rss= -p <pid>` returns just the RSS value.
+   set qmaster_pid [get_qmaster_pid]
+   set rss_kb "?"
+   if {$qmaster_pid > 0} {
+      set rss_out [start_remote_prog $ts_config(master_host) $CHECK_USER \
+                   "ps" "-o rss= -p $qmaster_pid" prg_exit_state 60 0 "" "" 0 0]
+      set trimmed [string trim $rss_out]
+      if {[regexp {^\d+$} $trimmed]} { set rss_kb $trimmed }
+   }
+
+   # Spool dir size — covers whichever backend (classic files, BDB env,
+   # Postgres client cache). Not perfect for Postgres (real data lives
+   # in the DB), but a useful lower bound. `du -sk` prints "<kB>\t<path>"
+   # so grep the leading numeric token.
+   set spool_dir [get_qmaster_spool_dir]
+   set spool_kb "?"
+   if {[string length $spool_dir] > 0} {
+      set du_out [start_remote_prog $ts_config(master_host) $CHECK_USER \
+                  "du" "-sk $spool_dir" prg_exit_state 120 0 "" "" 0 0]
+      if {[regexp {^\s*(\d+)} $du_out -> tok]} { set spool_kb $tok }
+   }
+
+   set per_entry_kb "?"
+   if {$rss_kb ne "?" && $retained_count > 0} {
+      set per_entry_kb [format "%.2f" [expr {double($rss_kb) / $retained_count}]]
+   }
+
+   ts_log_info "== sizing @ $label: retained=$retained_count qmaster_rss=${rss_kb}kB spool_dir=${spool_kb}kB per_entry_rss=${per_entry_kb}kB"
+}
+
+# Grab one retained jid from qstat -s f so a post-restart qstat -j probe
+# can tell us whether the JB survived the reload but qstat -s f can't find
+# it, or the JB was actually dropped.
+proc fjr_load_sample_one_jid {} {
+   set out [start_sge_bin "qstat" "-s f"]
+   foreach l [split $out "\n"] {
+      if {[regexp {^\s*([0-9]+)\s+} $l -> jid]} {
+         return $jid
+      }
+   }
+   return -1
+}
+
+# Measure qmaster startup time under a large retained set. Shutdown +
+# restart while N entries live on the spool; time until qstat -s f
+# returns the same count. Emit as a sizing measurement.
+proc fjr_load_measure_startup {retained_count} {
+   ts_log_fine "measure qmaster startup with $retained_count retained entries on spool"
+
+   # Sample one retained jid so we can probe it with qstat -j after restart.
+   set sample_jid [fjr_load_sample_one_jid]
+   ts_log_info "sample retained jid before shutdown = $sample_jid"
+
+   set t0 [clock milliseconds]
+   shutdown_and_restart_qmaster
+   # wait_for_load_from_all_queues is the harness's is-qmaster-alive signal
+   # under simhost; use it here for restart-complete detection.
+   wait_for_load_from_all_queues 120 1 0
+   set t_up [expr {[clock milliseconds] - $t0}]
+
+   # Immediate diagnostic: does qstat -j see the sampled jid?
+   # * "does not exist" → the JB was dropped from master_job_list at reload
+   #   (reload bug or unexpected setup-time cleanup)
+   # * shows JAT detail → the JB is in memory but qstat -s f can't find it
+   #   (filter/stored-procedure regression, or the retention config was
+   #   cleared and the sweep pruned immediately)
+   if {$sample_jid > 0} {
+      set out [start_sge_bin "qstat" "-j $sample_jid" "" "" prg_exit_state]
+      ts_log_info "post-restart qstat -j $sample_jid (exit=$prg_exit_state):\n$out"
+   }
+
+   # Log the current retention config in case something reset it.
+   # `-all -inline -line` captures every matching line, not just the first.
+   set out [start_sge_bin "qconf" "-sconf" "" "" prg_exit_state]
+   set fjt [regexp -all -inline -line {^finished_jobs_.*$} $out]
+   set qmp [regexp -all -inline -line {^qmaster_params.*$} $out]
+   ts_log_info "post-restart config: [join $fjt {; }]  |  [join $qmp {; }]"
+
+   # Compare all three qstat filter surfaces so we can localize the bug:
+   #  * -s f  → retained-finished view (what we expect)
+   #  * -s a  → all states including finished (belt-and-braces same view)
+   #  * plain → no -s (default p|r|s, retained finished MUST NOT show)
+   # If -s f = 0 but -s a > 0 we have a filter regression in the finished
+   # branch. If both are 0 but plain also 0 with qstat -j working, we have
+   # a mismatch between the retention state expected by the stored
+   # procedures vs the actual JAT_status after reload.
+   set out_f  [start_sge_bin "qstat" "-s f" "" "" exit_f]
+   set out_a  [start_sge_bin "qstat" "-s a" "" "" exit_a]
+   set out_pl [start_sge_bin "qstat" ""     "" "" exit_pl]
+   set count_f  0
+   set count_a  0
+   set count_pl 0
+   foreach l [split $out_f  "\n"] { if {[regexp {^\s*[0-9]+\s+} $l]} { incr count_f  } }
+   foreach l [split $out_a  "\n"] { if {[regexp {^\s*[0-9]+\s+} $l]} { incr count_a  } }
+   foreach l [split $out_pl "\n"] { if {[regexp {^\s*[0-9]+\s+} $l]} { incr count_pl } }
+   ts_log_info "post-restart qstat counts: -s f=$count_f (exit=$exit_f); -s a=$count_a (exit=$exit_a); plain=$count_pl (exit=$exit_pl)"
+
+   # After restart, wait for qstat -s f to return the full retained count
+   # (reload finished). This is the number that matters for capacity
+   # planning: "how long until qstat -s f is usable after a bounce."
+   #
+   # Two failure modes to catch and flag as regressions:
+   #  (A) count never reaches the target — either reload dropped entries or
+   #      qstat -s f can't see them;
+   #  (B) count reaches some peak and then DECREASES — the sweep is pruning
+   #      retained ja_tasks even though retention is enabled. Caught in
+   #      CS-1908 U5: the qmaster startup used to bootstrap the sweep with
+   #      sweep_all=1 unconditionally, draining retained entries on every
+   #      restart regardless of the current retention config. R3/R4 require
+   #      retained ja_tasks to survive across restarts.
+   set target $retained_count
+   set poll_start [clock milliseconds]
+   set poll_timeout_ms 300000
+   set observed -1
+   set peak_observed 0
+   set last_logged -1
+   set decrease_detected 0
+   while {[expr {[clock milliseconds] - $poll_start}] < $poll_timeout_ms} {
+      set observed [fjr_load_retained_count]
+      if {$observed != $last_logged} {
+         ts_log_fine "  qstat -s f during reload wait: observed=$observed target=$target peak=$peak_observed"
+         set last_logged $observed
+      }
+      if {$observed > $peak_observed} {
+         set peak_observed $observed
+      }
+      # Detect (B) early: once we have SOME reloaded count, if the count
+      # drops even once while below target, the sweep is illegally
+      # draining retained entries. Bail out immediately with a severe
+      # rather than waiting the full 5-min timeout.
+      if {$peak_observed > 0 && $observed < $peak_observed && $observed < $target} {
+         set decrease_detected 1
+         break
+      }
+      if {$observed >= $target} { break }
+      sleep_for_seconds 2
+   }
+   set t_qstat_ready [expr {[clock milliseconds] - $t0}]
+
+   ts_log_info "== sizing @ startup: retained=$retained_count qmaster_up=${t_up}ms qstat_full=${t_qstat_ready}ms observed=$observed peak=$peak_observed"
+
+   if {$decrease_detected} {
+      ts_log_severe "retained count DECREASED after qmaster restart (peak=$peak_observed, observed=$observed, target=$target) — the retention sweep is draining retained ja_tasks despite retention being enabled (R3/R4 violation, see sge_thread_timer.cc bootstrap sweep_all flag)"
+   } elseif {$observed < $target} {
+      ts_log_severe "retained count did not reach target after ${poll_timeout_ms}ms (observed=$observed target=$target peak=$peak_observed) — reload from spool is incomplete or qstat -s f filter is broken; check post-restart diagnostics above"
+   }
+}
+
 # -------- test ----------------------------------------------------------------
 
 proc fjr_load_test {} {
@@ -300,6 +457,16 @@ proc fjr_load_test {} {
    }
    ts_log_fine "retained count reached >=$expected"
 
+   # Peak-retention sizing measurements (feeds sge_conf(5) sizing notes).
+   # Log RSS of sge_qmaster and total qmaster spool-dir size so a run at
+   # scale produces reference numbers we can quote in the man page.
+   fjr_load_log_sizing "peak_retention" $expected
+
+   # Startup-time under retained load — the sge_conf(5) startup sizing
+   # note claims BDB/Postgres backends are noticeably faster than classic
+   # at reloading the retained set. Measure the actual number here.
+   fjr_load_measure_startup $expected
+
    # Quick responsiveness probe: qstat -s p should return within a few
    # seconds even at scale (the retained set is only under -s f).
    set t0 [clock milliseconds]
@@ -338,4 +505,9 @@ proc fjr_load_test {} {
    }
    set drain_elapsed [expr {[clock seconds] - $drain_start}]
    ts_log_fine "drain complete after ${drain_elapsed}s (~${expected_ticks} ticks)"
+
+   # Post-drain sizing snapshot — proves memory and spool return to
+   # baseline once the retained set is gone. Sits alongside the peak
+   # measurement in the log for easy diff.
+   fjr_load_log_sizing "post_drain" 0
 }
