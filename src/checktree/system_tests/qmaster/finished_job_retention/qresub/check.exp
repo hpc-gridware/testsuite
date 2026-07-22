@@ -59,6 +59,7 @@ set check_cleanup_function fjr_qresub_cleanup
 set check_functions {}
 lappend check_functions "fjr_qresub_single_test"
 lappend check_functions "fjr_qresub_array_test"
+lappend check_functions "fjr_qresub_partial_array_test"
 
 # -------- setup / cleanup -----------------------------------------------------
 
@@ -191,5 +192,91 @@ proc fjr_qresub_array_test {} {
    }
    if {$new_rows != 3} {
       ts_log_severe "expected 3 retained JATs for resubmitted array $new_jid, saw $new_rows; qstat -s f -g d output:\n$out"
+   }
+}
+
+# -------- test (c): partially-retained array ----------------------------------
+# Under a count-cap retention (max=3) some tasks of a -t 1-5 array will be
+# pruned by the sweep before qresub runs. The qresub semantic ships as
+# "resubmit the FULL original array" — JB_ja_structure carries the original
+# 1-5 range and is untouched by the sweep, so the new job must run all
+# 5 tasks even though only 3 were still retained at qresub-time.
+
+proc fjr_qresub_partial_array_test {} {
+   ts_log_fine "partial array: max=3 forces sweep to prune 2 of 5 tasks; qresub must still resubmit the full 1-5 range"
+
+   # Tighten retention to max=3 so the sweep evicts 2 tasks after all 5 finish.
+   # keep_time stays large (from setup) — this test isolates the count-bite.
+   set new_config(finished_jobs_max) "3"
+   set_config new_config
+   sleep_for_seconds 2 "let mconf settle"
+
+   set jid [submit_job "-o /dev/null -j y -b y -t 1-5 sleep 1"]
+   if {$jid <= 0} {
+      ts_log_severe "-t 1-5 submit failed (rc=$jid)"
+      return
+   }
+   wait_for_jobend $jid "" 60 0
+
+   # Wait for the sweep to prune down to exactly 3 retained.
+   set retained_after_sweep -1
+   for {set i 0} {$i < 20} {incr i} {
+      set out [start_sge_bin "qstat" "-s f -g d"]
+      set c 0
+      foreach l [split $out "\n"] {
+         if {[regexp "^\\s*$jid\\s+" $l]} { incr c }
+      }
+      if {$c == 3} {
+         set retained_after_sweep 3
+         break
+      }
+      sleep_for_seconds 1
+   }
+   if {$retained_after_sweep != 3} {
+      ts_log_severe "expected retained count to settle at 3 (max=3) within 20s, still $c — count-cap sweep not firing"
+      return
+   }
+   ts_log_fine "sweep pruned 5 -> 3 retained as expected"
+
+   # qresub the partially-retained JB. Must succeed and yield a new array
+   # covering the full original 1-5 range (JB_ja_structure preserved).
+   set out [start_sge_bin "qresub" "$jid" "" "" prg_exit_state]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qresub $jid (partial array) failed (exit=$prg_exit_state); output:\n$out"
+      return
+   }
+   set new_jid [fjr_qresub_extract_jid $out]
+   if {$new_jid < 0} {
+      ts_log_severe "could not parse new array-id from qresub output:\n$out"
+      return
+   }
+   ts_log_fine "qresub'd partially-retained array $jid -> $new_jid"
+
+   wait_for_jobend $new_jid "" 60 0
+
+   # Give qacct's on-disk records a moment to flush. wait_for_jobend returns
+   # as soon as JAT_status flips to JFINISHED; the accounting file write is
+   # synchronous with sge_commit_job(_EE) but subject to reporting_params
+   # flush_time slack — a small settle window keeps this stable.
+   sleep_for_seconds 3 "let qacct records flush"
+
+   set out [start_sge_bin "qacct" "-j $new_jid" "" "" prg_exit_state]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qacct -j $new_jid failed (exit=$prg_exit_state); output:\n$out"
+      return
+   }
+   # qacct emits one section per completed task. Count sections whose
+   # "jobnumber" matches $new_jid.
+   set task_ids {}
+   foreach line [split $out "\n"] {
+      if {[regexp {^taskid\s+(\d+)} $line -> tid]} {
+         if {[lsearch -exact $task_ids $tid] < 0} {
+            lappend task_ids $tid
+         }
+      }
+   }
+   set n_tasks [llength $task_ids]
+   if {$n_tasks != 5} {
+      ts_log_severe "expected 5 tasks ran under resubmitted array $new_jid (full JB_ja_structure carried across), saw $n_tasks distinct task ids: $task_ids; qacct output:\n$out"
    }
 }
