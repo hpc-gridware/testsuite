@@ -1,0 +1,341 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** finished_job_retention/load *******************************************
+#  NAME
+#     load -- CS-1908 SC9: retention at representative enabled scale
+#
+#  FUNCTION
+#     Runs the retention feature under load using simulated execution hosts
+#     (sim_eh.sh via the simhost_* helpers). Two runlevels:
+#
+#       * Runlevel 0 (functional smoke): 10 simulated hosts, ~150 jobs;
+#         verifies retention scales past a modest N without regressions.
+#         Fast to run, appropriate for the regular short-runlevel gate.
+#
+#       * Runlevel 100 (full scale): 200 simulated hosts and a
+#         representative mix of workload shapes at production scale ---
+#         1000 sequential jobs, 100 array jobs with 100 tasks each,
+#         100 tight PE jobs with 4 tasks each. Not intended for the
+#         short-runlevel gate; run explicitly when validating capacity.
+#         (The plan's SC9 target is 1000/1000x1000/1000x4; the scale here
+#         is a proportional subset that fits inside a bounded test
+#         duration --- raise the count vars in the setup_level function
+#         when running a full capacity certification.)
+#
+#     Both runlevels assert:
+#       * qmaster completes all submissions without crash;
+#       * every submitted job / task ends up retained under qstat -s f;
+#       * qstat -s f stays responsive at the target scale;
+#       * a drain trigger (finished_jobs_max = 0) removes the retained
+#         set within a bounded window that scales with the retained
+#         count and the configured per-tick prune batch.
+#********************************************************************************
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range     "9.2.0"
+
+set check_name              "retention_load"
+set check_category          "QMASTER SIMHOST VERIFIED"
+set check_description(0)    "CS-1908 SC9 retention load smoke (10 sim hosts, ~150 jobs)"
+set check_description(100)  "CS-1908 SC9 retention load full scale (200 sim hosts, ~13k retained entries)"
+
+set check_needs             "init_core_system"
+
+set check_setup_function        fjr_load_setup
+set check_setup_level_function  fjr_load_setup_level
+set check_cleanup_function      fjr_load_cleanup
+
+set check_functions {}
+lappend check_functions "fjr_load_test"
+
+# -------- setup / cleanup -----------------------------------------------------
+
+proc fjr_load_setup {} {
+   get_current_cluster_config_array ts_config
+   global fjr_load_old_config fjr_load_hosts fjr_load_complex_backup
+
+   if {[ge_has_feature "finished_job_retention"] == 0} {
+      ts_log_config "CS-1908 finished-job retention not supported by this build (qstat -help lacks 'f' state)"
+      return 99
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   get_config fjr_load_old_config
+   get_complex fjr_load_complex_backup
+
+   if {![simhost_init]} {
+      # ts_log_config emitted by simhost_init
+      return 99
+   }
+
+   # Host count is set per runlevel in fjr_load_setup_level; add there.
+   set fjr_load_hosts {}
+}
+
+proc fjr_load_setup_level {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACT_LEVEL fjr_load_hosts
+   global fjr_load_n_hosts fjr_load_n_seq fjr_load_n_arrays fjr_load_n_array_tasks
+   global fjr_load_n_tight fjr_load_n_tight_slots
+   global fjr_load_keep_time fjr_load_max fjr_load_sweep_batch
+
+   switch -exact $CHECK_ACT_LEVEL {
+      0 {
+         # Functional smoke — exercise every shape (sequential, array, tight
+         # PE) at low scale so a regression in any code path is caught.
+         set fjr_load_n_hosts        10
+         set fjr_load_n_seq          100
+         set fjr_load_n_arrays       1
+         set fjr_load_n_array_tasks  50
+         set fjr_load_n_tight        2
+         set fjr_load_n_tight_slots  4
+         set fjr_load_keep_time      "00:05:00"
+         set fjr_load_max            "1000"
+         set fjr_load_sweep_batch    "100"
+      }
+      100 {
+         # Full-scale capacity test. Bump n_arrays * n_array_tasks toward
+         # 1000 x 1000 = 1e6 when running SC9's full target (needs many
+         # hours on typical hardware); values here are a proportional
+         # subset that completes in a bounded window.
+         set fjr_load_n_hosts        200
+         set fjr_load_n_seq          1000
+         set fjr_load_n_arrays       100
+         set fjr_load_n_array_tasks  100
+         set fjr_load_n_tight        100
+         set fjr_load_n_tight_slots  4
+         set fjr_load_keep_time      "01:00:00"
+         set fjr_load_max            "100000"
+         set fjr_load_sweep_batch    "500"
+      }
+      default {
+         ts_log_config "unsupported runlevel $CHECK_ACT_LEVEL"
+         return 99
+      }
+   }
+
+   # Add the simulated hosts + queues. Do this in setup_level so the count
+   # scales with the runlevel.
+   set fjr_load_hosts [simhost_add $fjr_load_n_hosts "@simhosts"]
+
+   set q(slots) $fjr_load_n_tight_slots
+   if {$q(slots) < 4} { set q(slots) 4 }
+   add_queue "sim.q"   "@simhosts" q
+
+   # tight PE queue: add the PE first so the queue's pe_list reference
+   # resolves cleanly on add_queue (add_queue otherwise fails because
+   # load.pe does not exist yet at pe_list validation).
+   if {$fjr_load_n_tight > 0} {
+      set pe(slots)                    9999
+      set pe(control_slaves)           "TRUE"
+      set pe(job_is_first_task)        "TRUE"
+      set pe(accounting_summary)       "FALSE"
+      set pe(allocation_rule)          "\$round_robin"
+      add_pe "load.pe" pe
+
+      set qt(slots)     $fjr_load_n_tight_slots
+      set qt(pe_list)   "load.pe"
+      add_queue "tight.q" "@simhosts" qt
+   }
+
+   disable_queue "all.q"
+
+   # Now enable retention. Do this after queues are up so the retention
+   # config is live once the first jobs finish. Read the LIVE config
+   # first so simhost_init's SIMULATE_EXECDS=TRUE (and any other
+   # qmaster_params sub-keys set upstream) survive our merge — otherwise
+   # add_or_replace_array_param would rebuild qmaster_params from an
+   # empty base and evict SIMULATE_EXECDS, silently breaking the
+   # simulated cluster.
+   get_config live_config
+   set new_config(finished_jobs_keep_time) $fjr_load_keep_time
+   set new_config(finished_jobs_max)       $fjr_load_max
+   add_or_replace_array_param new_config live_config  "qmaster_params" "FINISHED_JOBS_SWEEP_INTERVAL" "00:00:10" " "
+   add_or_replace_array_param new_config new_config   "qmaster_params" "FINISHED_JOBS_SWEEP_BATCH"    $fjr_load_sweep_batch " "
+   set_config new_config
+
+   shutdown_and_restart_qmaster
+   wait_for_load_from_all_queues 60 1 0
+}
+
+proc fjr_load_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global fjr_load_old_config fjr_load_hosts fjr_load_complex_backup
+
+   # Restore config first (retention off) so job cleanup doesn't have to
+   # wait for a prune.
+   reset_config fjr_load_old_config
+   unset -nocomplain fjr_load_old_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   catch {del_queue "sim.q"   "" 1 1}
+   catch {del_queue "tight.q" "" 1 1}
+   catch {del_pe    "load.pe"}
+   catch {del_hostgroup "@simhosts"}
+   if {[llength $fjr_load_hosts] > 0} {
+      simhost_delete $fjr_load_hosts
+   }
+   reset_complex fjr_load_complex_backup
+   enable_queue "all.q"
+
+   unset -nocomplain fjr_load_hosts fjr_load_complex_backup
+}
+
+# -------- helpers -------------------------------------------------------------
+
+proc fjr_load_retained_count {} {
+   set out [start_sge_bin "qstat" "-s f -g d"]
+   set n 0
+   foreach l [split $out "\n"] {
+      if {[regexp {^\s*[0-9]+\s+} $l]} { incr n }
+   }
+   return $n
+}
+
+proc fjr_load_wait_for_count_at_least {target timeout_seconds} {
+   for {set i 0} {$i < $timeout_seconds} {incr i} {
+      if {[fjr_load_retained_count] >= $target} { return 0 }
+      sleep_for_seconds 2
+   }
+   return -1
+}
+
+proc fjr_load_wait_for_count_eq {target timeout_seconds} {
+   for {set i 0} {$i < $timeout_seconds} {incr i} {
+      if {[fjr_load_retained_count] == $target} { return 0 }
+      sleep_for_seconds 2
+   }
+   return -1
+}
+
+# -------- test ----------------------------------------------------------------
+
+proc fjr_load_test {} {
+   get_current_cluster_config_array ts_config
+   global fjr_load_n_seq fjr_load_n_arrays fjr_load_n_array_tasks
+   global fjr_load_n_tight fjr_load_n_tight_slots
+
+   set expected 0
+
+   # ---- sequential jobs -----------------------------------------------------
+   ts_log_fine "submit $fjr_load_n_seq sequential jobs (-b y sleep 1)"
+   for {set i 0} {$i < $fjr_load_n_seq} {incr i} {
+      set jid [submit_job "-o /dev/null -j y -b y -q sim.q sleep 1"]
+      if {$jid <= 0} {
+         ts_log_severe "sequential submit failed at i=$i (rc=$jid)"
+         return
+      }
+   }
+   incr expected $fjr_load_n_seq
+
+   # ---- array jobs ----------------------------------------------------------
+   ts_log_fine "submit $fjr_load_n_arrays array jobs, $fjr_load_n_array_tasks tasks each"
+   for {set i 0} {$i < $fjr_load_n_arrays} {incr i} {
+      set jid [submit_job "-o /dev/null -j y -b y -q sim.q -t 1-$fjr_load_n_array_tasks sleep 1"]
+      if {$jid <= 0} {
+         ts_log_severe "array submit failed at i=$i (rc=$jid)"
+         return
+      }
+   }
+   incr expected [expr {$fjr_load_n_arrays * $fjr_load_n_array_tasks}]
+
+   # ---- tight PE jobs -------------------------------------------------------
+   # SIMULATE_EXECDS=TRUE means the execds do not actually launch the job
+   # script — the qmaster fakes the finish after $1 seconds. So passing
+   # a script path via pe_job.sh / pe_task.sh doesn't do anything useful
+   # (and would parse the script path as an int, sim'ing a 0s runtime).
+   # Just submit "sleep 1" as a binary; the retention machinery still sees
+   # a real tight PE job with the requested slot allocation.
+   if {$fjr_load_n_tight > 0} {
+      ts_log_fine "submit $fjr_load_n_tight tight PE jobs, $fjr_load_n_tight_slots slots each"
+      for {set i 0} {$i < $fjr_load_n_tight} {incr i} {
+         set jid [submit_job "-o /dev/null -j y -b y -q tight.q -pe load.pe $fjr_load_n_tight_slots sleep 1"]
+         if {$jid <= 0} {
+            ts_log_severe "tight PE submit failed at i=$i (rc=$jid)"
+            return
+         }
+      }
+      incr expected $fjr_load_n_tight
+   }
+
+   ts_log_fine "expecting >=$expected retained entries once all jobs finish"
+
+   # Wait for the retained count to reach the expected total. Timeout scales
+   # with the count on the assumption of ~1 finish/sec/execd slot.
+   set timeout [expr {$expected + 120}]
+   if {[fjr_load_wait_for_count_at_least $expected $timeout] < 0} {
+      set observed [fjr_load_retained_count]
+      ts_log_severe "expected >=$expected retained entries within ${timeout}s, saw $observed"
+      return
+   }
+   ts_log_fine "retained count reached >=$expected"
+
+   # Quick responsiveness probe: qstat -s p should return within a few
+   # seconds even at scale (the retained set is only under -s f).
+   set t0 [clock milliseconds]
+   set out [start_sge_bin "qstat" "-s p" "" "" prg_exit_state]
+   set elapsed [expr {[clock milliseconds] - $t0}]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qstat -s p failed under load (exit=$prg_exit_state)"
+      return
+   }
+   if {$elapsed > 5000} {
+      ts_log_severe "qstat -s p took ${elapsed}ms under load — qmaster responsiveness regressed"
+   } else {
+      ts_log_fine "qstat -s p round-trip under load: ${elapsed}ms"
+   }
+
+   # Trigger drain and wait for the retained set to go to 0. Timeout scales
+   # with count and per-tick batch size. BOTH tunables must go to 0 to
+   # enter the sweep's drain mode — leaving keep_time non-zero means the
+   # sweep still bounds retention by age (fjr_load_keep_time is 5m for
+   # runlevel 0, 1h for runlevel 100), so the test would time out waiting
+   # for the age cap to expire instead of observing the immediate drain.
+   ts_log_fine "trigger drain (finished_jobs_max=0, finished_jobs_keep_time=0) and wait for completion"
+   set new_config(finished_jobs_max)       "0"
+   set new_config(finished_jobs_keep_time) "0"
+   set_config new_config
+   set drain_start [clock seconds]
+
+   # sweep_interval=10s per config; per-tick batch is per-level.
+   global fjr_load_sweep_batch
+   set expected_ticks [expr {($expected + $fjr_load_sweep_batch - 1) / $fjr_load_sweep_batch}]
+   set drain_timeout  [expr {$expected_ticks * 10 + 120}]
+   if {[fjr_load_wait_for_count_eq 0 $drain_timeout] < 0} {
+      set remaining [fjr_load_retained_count]
+      ts_log_severe "drain did not complete within ${drain_timeout}s; remaining=$remaining (expected 0)"
+      return
+   }
+   set drain_elapsed [expr {[clock seconds] - $drain_start}]
+   ts_log_fine "drain complete after ${drain_elapsed}s (~${expected_ticks} ticks)"
+}

@@ -1,0 +1,219 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** finished_job_retention/sweep_all **************************************
+#  NAME
+#     sweep_all -- verify the U5 drain-mode sweep evicts in batches (KTD)
+#
+#  FUNCTION
+#     Retention keeps up to finished_jobs_max entries; when the operator
+#     drops finished_jobs_max to 0 at runtime with keep_time also 0 the
+#     sweep enters drain mode. The sweep must respect the per-tick prune
+#     cap (FINISHED_JOBS_SWEEP_BATCH) so the qmaster global lock is not
+#     held for an unbounded duration on a large drain.
+#
+#     This test:
+#       * populates the retained set with N finished jobs (N=50);
+#       * confirms the count is stable at N;
+#       * flips finished_jobs_max=0 at runtime;
+#       * samples the retained count at each expected sweep tick and
+#         asserts the drop-per-tick is bounded by
+#         FINISHED_JOBS_SWEEP_BATCH + slack (not "all at once");
+#       * asserts the drain finishes in a bounded window.
+#********************************************************************************
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range     "9.2.0"
+
+set check_name              "retention_sweep_all"
+set check_category          "QMASTER VERIFIED"
+set check_description(0)    "CS-1908 drain-mode sweep prunes in batches, not all at once"
+
+set check_needs             "init_core_system"
+
+set check_setup_function   fjr_swall_setup
+set check_cleanup_function fjr_swall_cleanup
+
+set check_functions {}
+lappend check_functions "fjr_swall_test"
+
+# -------- setup / cleanup -----------------------------------------------------
+
+proc fjr_swall_setup {} {
+   get_current_cluster_config_array ts_config
+   global fjr_swall_old_config
+
+   if {[ge_has_feature "finished_job_retention"] == 0} {
+      ts_log_config "CS-1908 finished-job retention not supported by this build (qstat -help lacks 'f' state)"
+      return 99
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   get_config fjr_swall_old_config
+
+   # Wide cap (100) so all 50 submitted jobs are retained; small batch (10)
+   # and short sweep_interval (5s) so the batched drain is observable in
+   # bounded time.
+   set new_config(finished_jobs_keep_time) "00:00:00"
+   set new_config(finished_jobs_max)       "100"
+   add_or_replace_array_param new_config fjr_swall_old_config "qmaster_params" "FINISHED_JOBS_SWEEP_INTERVAL" "00:00:05" " "
+   add_or_replace_array_param new_config new_config           "qmaster_params" "FINISHED_JOBS_SWEEP_BATCH"    "10"       " "
+   set_config new_config
+   sleep_for_seconds 2 "let mconf settle"
+}
+
+proc fjr_swall_cleanup {} {
+   global fjr_swall_old_config
+
+   reset_config fjr_swall_old_config
+   unset -nocomplain fjr_swall_old_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+# -------- helpers -------------------------------------------------------------
+
+# Count JAT rows under qstat -s f -g d (per-task drill-down).
+proc fjr_swall_retained_count {} {
+   set out [start_sge_bin "qstat" "-s f -g d"]
+   set n 0
+   foreach l [split $out "\n"] {
+      if {[regexp {^\s*[0-9]+\s+} $l]} { incr n }
+   }
+   return $n
+}
+
+# Poll until the retained count reaches or exceeds `target`, or timeout.
+proc fjr_swall_wait_for_count_at_least {target timeout_seconds} {
+   for {set i 0} {$i < $timeout_seconds} {incr i} {
+      if {[fjr_swall_retained_count] >= $target} { return 0 }
+      sleep_for_seconds 1
+   }
+   return -1
+}
+
+# Poll until the retained count is exactly `target`, or timeout.
+proc fjr_swall_wait_for_count_eq {target timeout_seconds} {
+   for {set i 0} {$i < $timeout_seconds} {incr i} {
+      if {[fjr_swall_retained_count] == $target} { return 0 }
+      sleep_for_seconds 1
+   }
+   return -1
+}
+
+# Snapshot the retained count. Wrapping the accessor lets us log at each tick.
+proc fjr_swall_snapshot {label} {
+   set c [fjr_swall_retained_count]
+   ts_log_fine "$label: retained=$c"
+   return $c
+}
+
+# -------- test ----------------------------------------------------------------
+
+proc fjr_swall_test {} {
+   global fjr_swall_old_config
+
+   set batch    10
+   set interval 5
+   set n_jobs   50
+
+   ts_log_fine "populate: submit -t 1-$n_jobs -b y sleep 1 (retention max=100)"
+   set jid [submit_job "-o /dev/null -j y -b y -t 1-$n_jobs sleep 1"]
+   if {$jid <= 0} {
+      ts_log_severe "array submit failed (rc=$jid)"
+      return
+   }
+   wait_for_jobend $jid "" 120 0
+
+   ts_log_fine "wait for all $n_jobs tasks to be retained"
+   if {[fjr_swall_wait_for_count_at_least $n_jobs 30] < 0} {
+      set c [fjr_swall_retained_count]
+      ts_log_severe "expected >=$n_jobs retained after all tasks finished, saw $c"
+      return
+   }
+
+   # Confirm the count is stable (max=100 > n_jobs, no keep_time → no prune).
+   sleep_for_seconds [expr {$interval + 2}] "confirm count stable across one sweep"
+   set stable_count [fjr_swall_retained_count]
+   if {$stable_count < $n_jobs} {
+      ts_log_severe "count dropped from $n_jobs to $stable_count without drain trigger — sweep pruning too aggressively"
+      return
+   }
+   ts_log_fine "count stable at $stable_count before drain trigger"
+
+   # Trigger drain mode: max=0 with keep_time already 0.
+   ts_log_fine "flip finished_jobs_max=0 to trigger drain"
+   set new_config(finished_jobs_max) "0"
+   set_config new_config
+   set t_drain_start [clock seconds]
+
+   # Sample the count at each expected sweep tick and confirm the drop is
+   # bounded by `batch + slack`, NOT the full N at once.
+   set slack       5
+   set max_drop    [expr {$batch + $slack}]
+   set prev        $stable_count
+   set n_ticks     [expr {($stable_count + $batch - 1) / $batch + 2}]  ;# how many ticks max
+   set n_ticks     [expr {$n_ticks < 20 ? 20 : $n_ticks}]              ;# safety upper bound
+
+   for {set t 1} {$t <= $n_ticks} {incr t} {
+      sleep_for_seconds $interval "wait for sweep tick $t"
+      set curr [fjr_swall_snapshot "tick $t (~t+[expr {$t * $interval}]s from drain-trigger)"]
+      set drop [expr {$prev - $curr}]
+
+      if {$drop < 0} {
+         ts_log_severe "retained count grew during drain ($prev -> $curr) — bug"
+         return
+      }
+      if {$drop > $max_drop} {
+         ts_log_severe "sweep tick $t pruned $drop entries in one go (prev=$prev curr=$curr; batch=$batch, slack=$slack) — the per-tick cap is not being honored, drain is unbounded"
+         return
+      }
+
+      set prev $curr
+      if {$curr == 0} {
+         ts_log_fine "drain complete after $t ticks (~[expr {$t * $interval}]s from trigger)"
+         break
+      }
+   }
+
+   if {[fjr_swall_retained_count] != 0} {
+      ts_log_severe "drain did not complete within $n_ticks ticks; remaining=[fjr_swall_retained_count]"
+      return
+   }
+
+   # Sanity: total drain time must be at least `ceil(N/batch) * interval`
+   # minus one tick's worth of slack — a one-shot prune would violate this.
+   set expected_min_drain [expr {(($n_jobs / $batch) - 1) * $interval}]
+   set actual_drain [expr {[clock seconds] - $t_drain_start}]
+   if {$actual_drain < $expected_min_drain} {
+      ts_log_severe "drain finished in ${actual_drain}s but the batched sweep should take at least ${expected_min_drain}s — the batch cap appears bypassed"
+   }
+}

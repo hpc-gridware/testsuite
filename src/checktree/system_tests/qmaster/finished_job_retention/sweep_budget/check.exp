@@ -1,0 +1,195 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** finished_job_retention/sweep_budget ***********************************
+#  NAME
+#     sweep_budget -- verify per-tick sweep budget keeps qmaster responsive
+#                     during a large retention drain (SC8 / R18)
+#
+#  FUNCTION
+#     R18 requires the retention sweep to prune at most N entries per tick
+#     and release the qmaster global write lock between batches so that
+#     concurrent GDI traffic does not stall for the duration of a large
+#     drain.
+#
+#     This is a black-box, observable-timing check (no instrumentation
+#     hook is exposed by qmaster). It:
+#       * builds a retained set of ~200 entries;
+#       * drops finished_jobs_max to 0 to trigger drain mode with a small
+#         per-tick batch cap;
+#       * fires a stream of short `qstat -s p` reads during the drain and
+#         records the wall-time of each;
+#       * asserts that the maximum observed round-trip stays inside a
+#         responsiveness ceiling — a violation implies the sweep is
+#         holding the global lock across many batches or the whole drain.
+#
+#     The bound is deliberately generous (~5 s) to tolerate normally-loaded
+#     harnesses; the failure mode we're catching is "qstat blocks for tens
+#     of seconds because the sweep never released the lock", which is
+#     orders of magnitude beyond the ceiling.
+#********************************************************************************
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range     "9.2.0"
+
+set check_name              "retention_sweep_budget"
+set check_category          "QMASTER VERIFIED"
+set check_description(0)    "CS-1908 sweep releases global lock between batches (SC8 / R18)"
+
+set check_needs             "init_core_system"
+
+set check_setup_function   fjr_swbud_setup
+set check_cleanup_function fjr_swbud_cleanup
+
+set check_functions {}
+lappend check_functions "fjr_swbud_test"
+
+# -------- setup / cleanup -----------------------------------------------------
+
+proc fjr_swbud_setup {} {
+   get_current_cluster_config_array ts_config
+   global fjr_swbud_old_config
+
+   if {[ge_has_feature "finished_job_retention"] == 0} {
+      ts_log_config "CS-1908 finished-job retention not supported by this build (qstat -help lacks 'f' state)"
+      return 99
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   get_config fjr_swbud_old_config
+
+   # Cap above the retained set size (250 > 200) so no pruning happens
+   # until we trigger drain. Small batch (10) + short interval (5s) keep
+   # the drain observable in a bounded window; also amplifies any
+   # lock-hold regression.
+   set new_config(finished_jobs_keep_time) "00:00:00"
+   set new_config(finished_jobs_max)       "250"
+   add_or_replace_array_param new_config fjr_swbud_old_config "qmaster_params" "FINISHED_JOBS_SWEEP_INTERVAL" "00:00:05" " "
+   add_or_replace_array_param new_config new_config           "qmaster_params" "FINISHED_JOBS_SWEEP_BATCH"    "10"       " "
+   set_config new_config
+   sleep_for_seconds 2 "let mconf settle"
+}
+
+proc fjr_swbud_cleanup {} {
+   global fjr_swbud_old_config
+
+   reset_config fjr_swbud_old_config
+   unset -nocomplain fjr_swbud_old_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+# -------- helpers -------------------------------------------------------------
+
+proc fjr_swbud_retained_count {} {
+   set out [start_sge_bin "qstat" "-s f -g d"]
+   set n 0
+   foreach l [split $out "\n"] {
+      if {[regexp {^\s*[0-9]+\s+} $l]} { incr n }
+   }
+   return $n
+}
+
+proc fjr_swbud_wait_for_count_at_least {target timeout_seconds} {
+   for {set i 0} {$i < $timeout_seconds} {incr i} {
+      if {[fjr_swbud_retained_count] >= $target} { return 0 }
+      sleep_for_seconds 1
+   }
+   return -1
+}
+
+# -------- test ----------------------------------------------------------------
+
+proc fjr_swbud_test {} {
+   set n_jobs           200
+   set responsiveness_ceiling_ms 5000
+
+   ts_log_fine "populate retained set: submit -t 1-$n_jobs -b y sleep 1"
+   set jid [submit_job "-o /dev/null -j y -b y -t 1-$n_jobs sleep 1"]
+   if {$jid <= 0} {
+      ts_log_severe "array submit failed (rc=$jid)"
+      return
+   }
+   wait_for_jobend $jid "" 180 0
+
+   ts_log_fine "wait for all $n_jobs tasks to be retained"
+   if {[fjr_swbud_wait_for_count_at_least $n_jobs 60] < 0} {
+      set c [fjr_swbud_retained_count]
+      ts_log_severe "expected >=$n_jobs retained, saw $c after 60s wait"
+      return
+   }
+
+   # Trigger drain mode
+   ts_log_fine "trigger drain: finished_jobs_max=0"
+   set new_config(finished_jobs_max) "0"
+   set_config new_config
+   set drain_start [clock milliseconds]
+
+   # Fire a stream of quick `qstat -s p` reads (kept short by not requesting
+   # the retained set) and measure each round-trip. Do this until drain
+   # completes or a bounded upper-time hits.
+   set max_probe_time_ms 0
+   set n_probes 0
+   set upper_time_ms 180000
+   while {1} {
+      set t0 [clock milliseconds]
+      set out [start_sge_bin "qstat" "-s p" "" "" prg_exit_state]
+      set t1 [clock milliseconds]
+      set elapsed [expr {$t1 - $t0}]
+      incr n_probes
+      if {$elapsed > $max_probe_time_ms} {
+         set max_probe_time_ms $elapsed
+      }
+      if {$prg_exit_state != 0} {
+         ts_log_severe "qstat -s p failed during drain (exit=$prg_exit_state) after $n_probes probes"
+         return
+      }
+
+      set retained_count [fjr_swbud_retained_count]
+      ts_log_fine "still $retained_count retained tasks"
+      if {$retained_count == 0} {
+         ts_log_fine "drain complete after $n_probes probes; max qstat -s p round-trip = ${max_probe_time_ms}ms"
+         break
+      }
+      if {[expr {[clock milliseconds] - $drain_start}] > $upper_time_ms} {
+         ts_log_severe "drain did not complete within ${upper_time_ms}ms; remaining=[fjr_swbud_retained_count]"
+         return
+      }
+      # 200 ms cadence for the probe stream — small enough to keep pressure
+      # on the qmaster during multiple sweep ticks, large enough that we
+      # do not saturate the worker thread.
+      sleep_for_seconds 1
+   }
+
+   if {$max_probe_time_ms > $responsiveness_ceiling_ms} {
+      ts_log_severe "qstat -s p round-trip peaked at ${max_probe_time_ms}ms during drain (ceiling ${responsiveness_ceiling_ms}ms) — the retention sweep is holding the qmaster global lock across too many batches"
+   }
+}

@@ -115,6 +115,28 @@ proc fjr_apdel_pending_task_count {jid} {
    return $n
 }
 
+# Poll qstat until the intermediate condition we want to test against holds:
+# >= min_retained finished tasks are retained AND >= min_pending tasks are
+# still pending. Returns 0 when both hit, -1 on timeout. This replaces a
+# fixed sleep and stays stable on slower harnesses where scheduling latency
+# is unpredictable.
+proc fjr_apdel_wait_for_partial {jid min_retained min_pending timeout_seconds} {
+   for {set i 0} {$i < $timeout_seconds} {incr i} {
+      set retained [fjr_apdel_retained_task_count $jid]
+      set pending  [fjr_apdel_pending_task_count $jid]
+      if {$retained >= $min_retained && $pending >= $min_pending} {
+         return 0
+      }
+      # Early bail-out: no more pending means the array finished entirely
+      # before qdel — timing is off for this test.
+      if {$pending == 0 && $retained > 0} {
+         return -1
+      }
+      sleep_for_seconds 1
+   }
+   return -1
+}
+
 # -------- test ----------------------------------------------------------------
 
 proc fjr_apdel_test {} {
@@ -125,23 +147,20 @@ proc fjr_apdel_test {} {
       return
    }
 
-   # Wait long enough that at least 2 tasks have finished (~10s in — task 1
-   # started at t=0, finishes at ~t=4; task 2 finishes at ~t=8; task 3 is
-   # running at t=10). Enough slack that the harness's scheduling latency
-   # doesn't leave us with 0 finished, but not so long that all 5 finish.
-   sleep_for_seconds 10 "let 2-3 tasks finish serialized"
-
+   # Poll until we observe the "partial" state (>=1 retained AND >=1 pending)
+   # rather than sleeping for a fixed duration — a slow harness can miss the
+   # window entirely with a fixed sleep. 25 s is enough for tasks 1+2 to
+   # finish serialized with sleep 4 while at least 3+4+5 remain pending on
+   # a normally-loaded cluster.
+   if {[fjr_apdel_wait_for_partial $jid 1 1 25] < 0} {
+      set retained [fjr_apdel_retained_task_count $jid]
+      set pending  [fjr_apdel_pending_task_count $jid]
+      ts_log_severe "never reached the partial state within 25 s (retained=$retained pending=$pending) — cluster too slow or too fast for this test's timing shape"
+      return
+   }
    set retained_before [fjr_apdel_retained_task_count $jid]
    set pending_before  [fjr_apdel_pending_task_count $jid]
    ts_log_fine "before qdel: retained=$retained_before pending=$pending_before"
-   if {$retained_before < 1} {
-      ts_log_severe "expected >=1 retained task before qdel, saw $retained_before — timing may be off (scheduler slower than assumed)"
-      return
-   }
-   if {$pending_before < 1} {
-      ts_log_severe "expected >=1 pending task before qdel, saw $pending_before — timing may be off (all tasks finished already)"
-      return
-   }
 
    ts_log_fine "qdel the array"
    set out [start_sge_bin "qdel" "$jid" "" "" prg_exit_state]

@@ -295,15 +295,31 @@ proc arco_query_job_log {sqlutil_sp_id job_array {timeout 300}} {
       set task(j_job_number)  $job($task_index,j_job_number)
       set task(j_task_number) $job($task_index,j_task_number)
       set task(j_job_name)    $job($task_index,j_job_name)
+      # Pre-9.2 the two-step commit path (FINISHED_FAILED_EE then, after
+      # ORT_remove_job, DEBITED_EE) fired JL_DELETED on every naturally
+      # finishing job. CS-1239 (shipped in 9.2.0) consolidated the two
+      # steps into one and dropped that JL_DELETED emission -- only
+      # JL_FINISHED fires now. CS-1908 retention preserves this shape:
+      # the sweep-time bury emits no JL_ record. So on >= 9.2.0 do not
+      # expect "deleted"; on older versions we still do.
+      set expect_deleted [expr {![is_version_in_range "9.2.0"]}]
       if { $task_count > 1 } {
          # we have an array task
          if { $task(j_task_number) == "-1" } {
             set events { pending }
          } else {
-            set events { sent delivered finished  deleted }
+            if { $expect_deleted } {
+               set events { sent delivered finished deleted }
+            } else {
+               set events { sent delivered finished }
+            }
          }
       } else {
-         set events { pending sent delivered finished  deleted }
+         if { $expect_deleted } {
+            set events { pending sent delivered finished deleted }
+         } else {
+            set events { pending sent delivered finished }
+         }
       }
 
       set job_str [arco_job_to_string task]

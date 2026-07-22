@@ -1,0 +1,295 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+#****** finished_job_retention/joblog *****************************************
+#  NAME
+#     joblog -- verify JL_DELETED timestamp matches qdel-time (SC11)
+#
+#  FUNCTION
+#     Under retention, the JAT survives from qdel-time until the sweep
+#     prunes it — potentially many seconds later. The joblog record for
+#     the deletion event ("event":"deleted") must carry the qdel-time
+#     (event_time when qdel actually ran), NOT the prune-time. Otherwise
+#     downstream consumers of the joblog (accounting workflows, audit
+#     trails) would see the delete as happening at prune-time — a
+#     silent regression from pre-9.2 behaviour.
+#
+#     A qdel of a running job legitimately produces TWO delete events
+#     (both pre-CS-1908 behavior): one from the qmaster's qdel handler
+#     at qdel-time and one from job_exit when the execd's job_report
+#     arrives a few seconds later. SC11 is about the RETENTION SWEEP
+#     not adding a third one at prune-time — the assertion here is
+#     therefore "every delete event's event_time is close to qdel-time,
+#     not near the prune-time window".
+#
+#     Test procedure:
+#       1. Enable retention (keep_time=15s, sweep_interval=5s) and joblog.
+#       2. Submit a long-running job, wait for it to start.
+#       3. Snapshot t_qdel_before, qdel, snapshot t_qdel_after.
+#       4. Wait for the joblog to flush.
+#       5. Read reporting.jsonl and locate the qdel-time "deleted" event.
+#       6. Assert its event_time falls in [t_qdel_before, t_qdel_after]
+#          (with a small tolerance for microsecond conversion).
+#       7. Poll until qstat -s f shows the JAT has been pruned by the
+#          sweep. On each poll iteration, snapshot every "deleted"
+#          record for this jid and assert none has event_time later
+#          than qdel-time + a tight execd-report window — a delete
+#          record with event_time near prune-time is the regression.
+#********************************************************************************
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range     "9.2.0"
+
+set check_name              "retention_joblog"
+set check_category          "QMASTER VERIFIED"
+set check_description(0)    "CS-1908 SC11: JL_DELETED timestamp = qdel-time (not prune-time)"
+
+set check_needs             "init_core_system"
+
+set check_setup_function   fjr_joblog_setup
+set check_cleanup_function fjr_joblog_cleanup
+
+set check_functions {}
+lappend check_functions "fjr_joblog_test"
+
+# -------- setup / cleanup -----------------------------------------------------
+
+proc fjr_joblog_setup {} {
+   get_current_cluster_config_array ts_config
+   global fjr_joblog_old_config fjr_joblog_reporting_file
+   global CHECK_USER
+
+   if {[ge_has_feature "finished_job_retention"] == 0} {
+      ts_log_config "CS-1908 finished-job retention not supported by this build (qstat -help lacks 'f' state)"
+      return 99
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   get_config fjr_joblog_old_config
+
+   set fjr_joblog_reporting_file "$ts_config(product_root)/$ts_config(cell)/common/reporting.jsonl"
+
+   # keep_time is set generously (60s) so a prune-time record would
+   # comfortably exceed the qdel-time + execd-report window ceiling (10s)
+   # used by the assertion below — otherwise a fast-prune scenario could
+   # produce a prune-time record that still fits under the ceiling and
+   # slip through undetected. sweep_interval short so we don't wait too
+   # long for the actual prune tick after keep_time expires.
+   set new_config(finished_jobs_keep_time) "00:01:00"
+   set new_config(finished_jobs_max)       "100"
+   add_or_replace_array_param new_config fjr_joblog_old_config "qmaster_params"   "FINISHED_JOBS_SWEEP_INTERVAL" "00:00:05" " "
+   add_or_replace_array_param new_config new_config            "reporting_params" "reporting"                    "true"     " "
+   add_or_replace_array_param new_config new_config            "reporting_params" "joblog"                       "true"     " "
+   add_or_replace_array_param new_config new_config            "reporting_params" "flush_time"                   "00:00:02" " "
+   set_config new_config
+   sleep_for_seconds 2 "let mconf settle"
+
+   # Truncate the reporting file so we only see records for this test.
+   file delete -force $fjr_joblog_reporting_file
+   start_remote_prog $ts_config(master_host) $CHECK_USER "touch" $fjr_joblog_reporting_file
+}
+
+proc fjr_joblog_cleanup {} {
+   global fjr_joblog_old_config fjr_joblog_reporting_file
+
+   reset_config fjr_joblog_old_config
+   unset -nocomplain fjr_joblog_old_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   file delete -force $fjr_joblog_reporting_file
+   unset -nocomplain fjr_joblog_reporting_file
+}
+
+# -------- helpers -------------------------------------------------------------
+
+# Return the list of joblog record lines for the given jid.
+proc fjr_joblog_records {jid} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER fjr_joblog_reporting_file
+
+   if {[wait_for_remote_file $ts_config(master_host) $CHECK_USER \
+        $fjr_joblog_reporting_file 30 0] != 0} {
+      return {}
+   }
+   get_file_content $ts_config(master_host) $CHECK_USER $fjr_joblog_reporting_file file_content
+   set records {}
+   for {set i 1} {$i <= $file_content(0)} {incr i} {
+      set line $file_content($i)
+      if {[string match "*\"type\":\"job_log\"*" $line] &&
+          [regexp "\"job_number\":${jid}\\M" $line]} {
+         lappend records $line
+      }
+   }
+   return $records
+}
+
+# Filter records to only those with a given event name.
+proc fjr_joblog_records_of_event {records event_name} {
+   set matches {}
+   foreach line $records {
+      if {[regexp "\"event\":\"$event_name\"" $line]} {
+         lappend matches $line
+      }
+   }
+   return $matches
+}
+
+# Extract event_time (microseconds since epoch) from a record line.
+proc fjr_joblog_event_time_us {line} {
+   if {[regexp {"event_time":([0-9]+)} $line -> val]} {
+      return $val
+   }
+   return ""
+}
+
+# Poll for a record with the given event to appear for the jid, or timeout.
+proc fjr_joblog_wait_for_event {jid event_name timeout_seconds} {
+   for {set i 0} {$i < $timeout_seconds} {incr i} {
+      set recs [fjr_joblog_records_of_event [fjr_joblog_records $jid] $event_name]
+      if {[llength $recs] > 0} {
+         return $recs
+      }
+      sleep_for_seconds 1
+   }
+   return {}
+}
+
+# -------- test ----------------------------------------------------------------
+
+proc fjr_joblog_test {} {
+   ts_log_fine "submit long-running job so we qdel while it is still running"
+   set jid [submit_job "-o /dev/null -j y -b y sleep 300"]
+   if {$jid <= 0} {
+      ts_log_severe "submit_job failed (rc=$jid)"
+      return
+   }
+
+   if {[wait_for_jobstart $jid "" 60 0 0] != 0} {
+      ts_log_severe "job $jid did not start within 60s"
+      return
+   }
+
+   # Snapshot qdel-time in microseconds so we can compare to event_time.
+   set t_before_us [expr {[clock milliseconds] * 1000}]
+   ts_log_fine "qdel'ing job $jid at t=[expr {$t_before_us / 1000000}]s"
+   set out [start_sge_bin "qdel" "$jid" "" "" prg_exit_state]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qdel $jid failed (exit=$prg_exit_state); output:\n$out"
+      return
+   }
+   set t_after_us [expr {[clock milliseconds] * 1000}]
+
+   # Wait for the qdel-time joblog to be flushed (flush_time=2s + slack).
+   ts_log_fine "wait for the 'deleted' joblog record to flush"
+   set deleted [fjr_joblog_wait_for_event $jid "deleted" 15]
+   if {[llength $deleted] == 0} {
+      ts_log_severe "no 'deleted' joblog record for job $jid within 15s"
+      return
+   }
+
+   set line [lindex $deleted 0]
+   set event_time_us [fjr_joblog_event_time_us $line]
+   if {$event_time_us eq ""} {
+      ts_log_severe "'deleted' record missing event_time: $line"
+      return
+   }
+
+   # Tolerance: allow 2 s slack on each side for clock skew + flush lag.
+   set tolerance_us 2000000
+   set lo [expr {$t_before_us - $tolerance_us}]
+   set hi [expr {$t_after_us  + $tolerance_us}]
+   if {$event_time_us < $lo || $event_time_us > $hi} {
+      ts_log_severe "'deleted' event_time=$event_time_us us falls outside qdel window \[$lo, $hi\] us — timestamp is not the qdel-time (regression: it may be prune-time)"
+      return
+   }
+   ts_log_fine "'deleted' event_time=$event_time_us us inside qdel window \[$lo, $hi\] us — OK"
+
+   # SC11 second half: verify the retention sweep does NOT emit a delete
+   # event at prune-time. It is legitimate to see up to two 'deleted'
+   # events during a running-job qdel — one at qdel-time from the qmaster
+   # qdel handler, one a few seconds later from job_exit.cc when the
+   # execd's job_report arrives. Both existed pre-CS-1908 and neither is
+   # a regression. What SC11 forbids is a THIRD 'deleted' event whose
+   # event_time is close to prune-time (>> qdel-time). Assert every
+   # observed 'deleted' record's event_time lies inside a short window
+   # around qdel-time — the retention window (keep_time=15s + sweep=5s
+   # + slack) is much later, so a prune-time record would be caught here.
+   #
+   # dbwriter may consume reporting.jsonl at any moment; sample on every
+   # poll iteration so we see records as they land (and before they get
+   # rotated away).
+   # keep_time=60s → prune fires roughly t_qdel + 60s + sweep_interval.
+   # Ceiling = t_qdel + 15s covers the normal execd-report roundtrip while
+   # leaving a 45s+ gap before any legitimate prune-time record.
+   set execd_report_window_us [expr {15 * 1000000}]
+   set delete_time_ceiling_us [expr {$t_after_us + $execd_report_window_us}]
+
+   ts_log_fine "wait until qstat confirms the JAT was pruned (keep_time+sweep+slack)"
+   set pruned 0
+   set max_seen_event_time_us 0
+   for {set i 0} {$i < 90} {incr i} {
+      set snap_recs [fjr_joblog_records_of_event [fjr_joblog_records $jid] "deleted"]
+      foreach snap_line $snap_recs {
+         set snap_et [fjr_joblog_event_time_us $snap_line]
+         if {$snap_et eq ""} { continue }
+         if {$snap_et > $max_seen_event_time_us} {
+            set max_seen_event_time_us $snap_et
+         }
+         if {$snap_et > $delete_time_ceiling_us} {
+            ts_log_severe "'deleted' joblog record with event_time=$snap_et us exceeds the qdel + execd-report window ceiling=$delete_time_ceiling_us us — the retention sweep is emitting a delete event at prune-time"
+            return
+         }
+      }
+      set out [start_sge_bin "qstat" "-s f -g d"]
+      if {![regexp -line "^\\s*$jid\\s+" $out]} {
+         set pruned 1
+         break
+      }
+      sleep_for_seconds 1
+   }
+   if {!$pruned} {
+      ts_log_severe "JAT for job $jid not pruned within 90s (keep_time=60s + slack)"
+      return
+   }
+   ts_log_fine "JAT pruned as expected; max observed 'deleted' event_time = $max_seen_event_time_us us (ceiling was $delete_time_ceiling_us us)"
+
+   # Final sweep-tick worth of tolerance in case the prune-time record
+   # would be flushed a moment after the JAT vanishes from qstat.
+   sleep_for_seconds 3 "final flush window"
+   set final_recs [fjr_joblog_records_of_event [fjr_joblog_records $jid] "deleted"]
+   foreach line $final_recs {
+      set et [fjr_joblog_event_time_us $line]
+      if {$et ne "" && $et > $delete_time_ceiling_us} {
+         ts_log_severe "post-prune 'deleted' joblog record with event_time=$et us exceeds ceiling=$delete_time_ceiling_us us — retention sweep emitted a prune-time delete event"
+      }
+   }
+}
