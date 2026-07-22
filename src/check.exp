@@ -3806,7 +3806,6 @@ proc delete_tests {path state_to_delete {only_if_not_there 0}} {
    foreach elem $selected_tests {
       set check_highest_level 0
       set check_name ""
-      set check_init_level_procedure "--"
       unset -nocomplain check_version_range
 
       # sourcing the test modules sets the global variables check_name and check_needs
