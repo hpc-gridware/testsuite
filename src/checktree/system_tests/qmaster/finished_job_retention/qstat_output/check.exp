@@ -142,22 +142,17 @@ proc fjr_qstat_out_plain_test {} {
       return
    }
 
-   set out [start_sge_bin "qstat" "-s f"]
-   set line ""
-   foreach l [split $out "\n"] {
-      if {[regexp "^\\s*$jid\\s+" $l]} { set line $l; break }
-   }
-   if {$line eq ""} {
-      ts_log_severe "no qstat -s f row for job $jid"
+   # Parse via the testsuite's plain-qstat parser instead of a positional
+   # token split — if qstat's column layout ever shifts, parser.tcl is
+   # updated centrally and this test tracks it automatically.
+   set raw [start_sge_bin "qstat" "-s f"]
+   parse_qstat raw parsed $jid 0
+   if {![info exists parsed(state)]} {
+      ts_log_severe "job $jid not in parsed qstat -s f output; raw was:\n$raw"
       return
    }
-
-   # The state column is the 5th whitespace-separated token
-   # (jobid prio name user state submit/start slot).
-   set toks [regexp -all -inline {\S+} $line]
-   set state [lindex $toks 4]
-   if {![regexp {f} $state]} {
-      ts_log_severe "expected state to contain 'f' for finished job $jid, got '$state' (line: $line)"
+   if {![regexp {f} $parsed(state)]} {
+      ts_log_severe "expected state to contain 'f' for finished job $jid, got '$parsed(state)'"
    }
 }
 

@@ -1310,6 +1310,46 @@ proc parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1}} {
    upvar $input  in
    upvar $output out
 
+   # CS-1908: strip retention-section banners so parse_fixed_column_lines sees
+   # a clean [column-header | dashes-separator | data*] shape. qstat -s f and
+   # -s a wrap retained finished jobs with a title banner:
+   #
+   #    ###########################################################
+   #     -----   RETAINED FINISHED JOBS   -   RETAINED FINISHED JOBS    -----
+   #    ###########################################################
+   #    job-ID     prior   name       user         state ...
+   #    -----------------------------------------------------------
+   #    <data rows>
+   #
+   # When such a banner appears at the top of the output, parse_fixed_column_lines
+   # would happily interpret the first two banner lines as the header rows it
+   # skips via start_line=2 and then try to parse the section title as a data
+   # row. When the banner appears mid-body (e.g. under -s pf where the
+   # retention section follows the pending section) the column header + dashes
+   # get repeated too and would parse as bogus data rows.
+   #
+   # Drop banner lines unconditionally, and drop repeated column-header /
+   # dashes-separator lines after the first data row has been seen.
+   set _filtered {}
+   set _first_data_seen 0
+   foreach _line [split $in "\n"] {
+      # Empty lines: the retention banner emits a trailing \n so a blank
+      # line appears between banner and column header. Filtering it out
+      # keeps the first two surviving lines as [column header | dashes],
+      # which is what parse_fixed_column_lines' start_line=2 assumes.
+      # Also drops any trailing blank line, harmless.
+      if {[string trim $_line] eq ""} continue
+      if {[regexp {^#+\s*$} $_line]} continue
+      if {[string first "RETAINED FINISHED JOBS" $_line] >= 0} continue
+      if {$_first_data_seen} {
+         if {[regexp -nocase {^\s*job-ID\s+} $_line]} continue
+         if {[regexp {^-{5,}\s*$} $_line]} continue
+      }
+      if {[regexp {^\s*[0-9]+\s+} $_line]} { set _first_data_seen 1 }
+      lappend _filtered $_line
+   }
+   set in [join $_filtered "\n"]
+
    if {[is_version_in_range "9.0.3 9.1.0 9.2.0"]} {
       # beginning with 9.0.3 / 9.1.0 the job id column is 3 characters wider
       if {$ext == 1} {
