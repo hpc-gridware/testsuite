@@ -421,3 +421,40 @@ proc init_object_attr {data_array attribute_array object_name {key ""} {key_is_h
       set data($attr_name) $attr($mkey)
    }
 }
+
+###
+# @brief remove terminal control sequences from a string
+#
+# Interactive shells send ANSI/xterm control sequences together with the output
+# of the commands which we write into them, e.g. the color codes of a colored
+# prompt, bracketed paste mode switches, or the shell integration markers which
+# systemd >= 258 emits from /etc/profile.d/80-systemd-osc-context.sh:
+#
+#    <ESC>]3008;start=...;type=command;cwd=/home/user<ESC>\output of the command
+#
+# As they come without a trailing newline they end up in the same line as the
+# output of the command and break exact comparisons of output which we read
+# from an interactive session (qlogin, qrsh, qsh, ...).
+# Strip them before comparing.
+#
+# @param input the string to clean up
+# @return the input string without terminal control sequences
+##
+proc strip_terminal_control_sequences {input} {
+   set output $input
+
+   # OSC (operating system command): ESC ] ... terminated by BEL or by ST (ESC backslash)
+   regsub -all {\u001b\][^\u0007\u001b]*(\u0007|\u001b\\)?} $output "" output
+
+   # CSI (control sequence introducer): ESC [ ... e.g. colors or bracketed paste mode
+   regsub -all {\u001b\[[0-9;:<=>?]*[!-/]*[@-~]} $output "" output
+
+   # character set selection, e.g. ESC ( B
+   regsub -all {\u001b[()*+][0-9A-Za-z]} $output "" output
+
+   # remaining two character escape sequences and stray control characters
+   regsub -all {\u001b[0-9A-Za-z=><]} $output "" output
+   regsub -all {[\u0007\u001b]} $output "" output
+
+   return $output
+}

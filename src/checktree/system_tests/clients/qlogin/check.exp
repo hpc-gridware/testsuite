@@ -109,8 +109,11 @@ proc qlogin_send_expect {sid command result} {
       }
       -i $sp_id "*\n" {
          foreach line [split $expect_out(buffer) "\n\r"] {
+            # interactive shells send control sequences (colored prompt, systemd
+            # osc-context markers, ...) together with the command output
+            set line [string trim [strip_terminal_control_sequences $line]]
             #ts_log_fine "==>$line<=="
-            if {[string trim $line] == $result} {
+            if {$line == $result} {
                set done 1
                set ret 1
             }

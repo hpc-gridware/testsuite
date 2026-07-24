@@ -8859,7 +8859,7 @@ proc submit_with_method_read_startup_messages {sid {job_id_var ""}} {
       }
       -i $sp_id "*\n" {
          foreach line [split $expect_out(buffer) "\n"] {
-            set line [string trim $line]
+            set line [string trim [strip_terminal_control_sequences $line]]
             if {[string length $line] > 0} {
                ts_log_fine $line
                switch -glob $line {
@@ -8916,7 +8916,9 @@ proc submit_with_method_wait_for_shell_response {sid {num_tries 5}} {
       }
       -i $sp_id "*\n" {
          foreach line [split $expect_out(buffer) "\n\r"] {
-            set line [string trim $line]
+            # interactive shells send control sequences (colored prompt, systemd
+            # osc-context markers, ...) together with the command output
+            set line [string trim [strip_terminal_control_sequences $line]]
             if {[string length $line] > 0} {
                #ts_log_fine "==>$line<=="
                switch $line {
