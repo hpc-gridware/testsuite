@@ -589,17 +589,20 @@ proc exclusive_job_consumables {} {
             ts_log_severe "$pe pe does not enforce excl use"
             set ret 1
          }
+         delete_job $job_id2 1
       } else {
          ts_log_severe "$pe pe wasn't started even one node is still free for excl use"
          set ret 1
       }
       delete_job $job_id1 1
-      delete_job $job_id2 1
 
       if {$ret == 1} {
          break
       }
    }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
 }
 
 proc parallel_host_exclusive_blocked {} {
