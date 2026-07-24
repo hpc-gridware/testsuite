@@ -779,6 +779,52 @@ proc user_config_userlist_set_portlist { array_name user value } {
    return $had_error
 }
 
+#****** config_user/get_gid_range_width() **************************************
+#  NAME
+#     get_gid_range_width() -- width of a per-user/port gid_range block
+#
+#  SYNOPSIS
+#     get_gid_range_width { }
+#
+#  FUNCTION
+#     Returns the number of gids reserved per user/port combination. Each
+#     running job/task on a host consumes one unique supplementary
+#     add_grp_id from this range, so this value is the hard upper bound on
+#     the number of jobs that can run concurrently on a single host.
+#
+#     Sized for modern many-core hosts: a concurrency test running
+#     2 * num_proc jobs on a high-thread-count server (e.g. dual-socket, or
+#     a 128-thread workstation) must still fit. Per-user blocks are laid out
+#     contiguously starting at 12800 and must stay below 65536, which leaves
+#     room for ~26 users at this width.
+#
+#     This is the single source of truth for the block width. It is used
+#     both here (allocation) and in init_cluster.tcl (all.q slot cap, which
+#     must never exceed this width).
+#*******************************************************************************
+proc get_gid_range_width { } {
+   return 2000
+}
+
+#****** config_user/get_gid_range_floor() *************************************
+#  NAME
+#     get_gid_range_floor() -- lowest gid_start of the managed allocation space
+#
+#  SYNOPSIS
+#     get_gid_range_floor { }
+#
+#  FUNCTION
+#     Per-user/port gid_range blocks are laid out contiguously starting at
+#     this value. It is the single source of truth for the allocation floor
+#     and also the boundary that distinguishes a *managed* range (start >=
+#     floor, allocated by user_config_userlist_create_gid_port and subject to
+#     width healing) from a hand-set sentinel below it (e.g. the "1-2" dummy
+#     for the bootstrap placeholder port), which is left untouched.
+#*******************************************************************************
+proc get_gid_range_floor { } {
+   return 12800
+}
+
 #****** config_user/user_config_userlist_create_gid_port() *********************
 #  NAME
 #     user_config_userlist_create_gid_port() -- create gid-range for user/port
@@ -801,34 +847,149 @@ proc user_config_userlist_set_portlist { array_name user value } {
 proc user_config_userlist_create_gid_port { array_name port user } {
    upvar $array_name config
 
+   set gid_width [get_gid_range_width]
+   set gid_floor [get_gid_range_floor]
+
+   # Re-use an already stored range only if it is still valid. A range is kept
+   # unchanged when it is either a hand-set sentinel below the managed floor
+   # (e.g. the "1-2" bootstrap dummy) or a managed block whose width already
+   # matches the current width. A managed block with a stale width (allocated
+   # under an older, smaller width) is NOT re-used: re-vending it in place
+   # would either under-serve concurrency tests or, if simply widened, overlap
+   # its neighbour. It instead falls through to be relocated above the current
+   # maximum, which is overlap-free by construction. A matching-width block is
+   # left where it is because it may belong to another user's currently
+   # installed (possibly running) cluster, whose add_grp_ids must not move.
    if { [ info exists config($port,$user) ] } {
-      puts "user $user ($port) gid_range: $config($port,$user)"
-      return $config($port,$user)
+      set stored $config($port,$user)
+      set parts [split $stored "-"]
+      set s [lindex $parts 0]
+      set e [lindex $parts 1]
+      set keep 0
+      if { [llength $parts] == 2 && [string is integer -strict $s] && [string is integer -strict $e] } {
+         if { $s < $gid_floor } {
+            set keep 1
+         } elseif { [expr {$e - $s + 1}] == $gid_width } {
+            set keep 1
+         }
+      } else {
+         # unparsable stored value -> keep as-is, don't silently rewrite it
+         set keep 1
+      }
+      if { $keep } {
+         puts "user $user ($port) gid_range: $stored"
+         return $stored
+      }
+      puts "user $user ($port) gid_range: $stored has stale width, relocating (expected width $gid_width)"
    }
-   
-   set highest_gid_start 12800
+
+   # Find the highest managed gid_start across all stored ranges so the new (or
+   # relocated) block sits strictly above every existing block. The entry being
+   # relocated still holds its old (low) start here; it never wins the max.
+   set highest_gid_start $gid_floor
    if { [info exist config(userlist)] } {
       set userlist $config(userlist)
       foreach user_loop $userlist {
+         if { ![info exists config($user_loop,portlist)] } { continue }
          set portlist $config($user_loop,portlist)
          foreach port_loop $portlist {
+            if { ![info exists config($port_loop,$user_loop)] } { continue }
             set range $config($port_loop,$user_loop)
-            set start_range [split $range "-"]
-            set start_range [lindex $start_range 0]
-            if { $start_range > $highest_gid_start } {
+            set start_range [lindex [split $range "-"] 0]
+            if { [string is integer -strict $start_range] && $start_range > $highest_gid_start } {
                set highest_gid_start $start_range
             }
          }
       }
    }
 
+   # Block spacing and width are coupled: both derive from the same width so
+   # neighbouring user blocks never overlap (which would make two users share
+   # gids). Spacing == width, end == start + width - 1.
    set gid_start $highest_gid_start
-   incr gid_start 200
+   incr gid_start $gid_width
    set gid_end $gid_start
-   incr gid_end 199
+   incr gid_end [expr {$gid_width - 1}]
+
+   # Guard the 16-bit gid ceiling. Supplementary group ids at/above 65536 wrap
+   # or collide with real system gids, so refuse rather than vend an unsafe
+   # range. Exhaustion means the shared user config has accumulated more
+   # (user,port) blocks than the address space holds at this width.
+   if { $gid_end >= 65536 } {
+      ts_log_severe "gid_range allocation exhausted: next block $gid_start-$gid_end for user $user (port $port) would exceed 65535. Shrink get_gid_range_width or prune unused ports/users from the user configuration."
+      return ""
+   }
+
    set gid_range "$gid_start-$gid_end"
    puts "user $user ($port) gid_range: $gid_range"
    return $gid_range
+}
+
+#****** config_user/user_config_heal_gid_ranges() *****************************
+#  NAME
+#     user_config_heal_gid_ranges() -- re-vend stale-width gid_range blocks
+#
+#  SYNOPSIS
+#     user_config_heal_gid_ranges { array_name }
+#
+#  FUNCTION
+#     Walks every (user,port) in the shared user configuration and re-vends any
+#     managed gid_range whose width no longer matches get_gid_range_width (for
+#     example after the width was increased for many-core hosts). This makes
+#     the configuration self-heal: the caller no longer has to edit a portlist
+#     to pick up a new width.
+#
+#     Healing is delegated to user_config_userlist_create_gid_port, so all the
+#     safety rules live in one place: sentinels below the floor and
+#     correct-width blocks (which may belong to another user's running cluster)
+#     are left untouched, and stale-width blocks are relocated above the
+#     current maximum, never overlapping an existing block.
+#
+#  INPUTS
+#     array_name - ts_user_config
+#
+#  RESULT
+#     number of ranges that were relocated
+#
+#  SEE ALSO
+#     config_user/user_config_userlist_create_gid_port()
+#     config_user/get_gid_range_width()
+#*******************************************************************************
+proc user_config_heal_gid_ranges { array_name } {
+   upvar $array_name config
+
+   if { ![info exists config(userlist)] } { return 0 }
+
+   set width [get_gid_range_width]
+   set floor [get_gid_range_floor]
+   set healed 0
+
+   foreach user $config(userlist) {
+      if { ![info exists config($user,portlist)] } { continue }
+      foreach port $config($user,portlist) {
+         if { ![info exists config($port,$user)] } { continue }
+         set stored $config($port,$user)
+         set parts [split $stored "-"]
+         set s [lindex $parts 0]
+         set e [lindex $parts 1]
+         # only managed blocks (start >= floor) with a stale width are healed
+         if { [llength $parts] != 2 || ![string is integer -strict $s] || ![string is integer -strict $e] } { continue }
+         if { $s < $floor } { continue }
+         if { [expr {$e - $s + 1}] == $width } { continue }
+
+         set new_range [user_config_userlist_create_gid_port config $port $user]
+         if { $new_range != "" && $new_range != $stored } {
+            set config($port,$user) $new_range
+            incr healed
+            ts_log_fine "healed gid_range for user $user (port $port): $stored -> $new_range"
+         }
+      }
+   }
+
+   if { $healed > 0 } {
+      ts_log_fine "healed $healed gid_range(s) to width $width"
+   }
+   return $healed
 }
 
 #****** config_user/user_config_userlist_delete_user() *************************
@@ -1098,6 +1259,16 @@ proc setup_user_config { file { force_params "" } } {
 
       # got config
       if { $do_nomain == 0 } {
+         # Self-heal gid_range widths before verifying: re-vend any stored
+         # per-user/port range whose width no longer matches the current
+         # get_gid_range_width (e.g. after it was raised for many-core hosts).
+         # Persist immediately so the subsequent install reads the healed
+         # values -- verify()'s happy path does not save on its own.
+         if { [user_config_heal_gid_ranges ts_user_config] > 0 } {
+            if { [ save_user_configuration $file ] != 0 } {
+               ts_log_warning "could not save healed gid_ranges to user configuration \"$file\""
+            }
+         }
          if { [verify_user_config ts_user_config 1 err_list $force_params ] != 0 } {
             # configuration problems
             foreach elem $err_list { puts "$elem" } 

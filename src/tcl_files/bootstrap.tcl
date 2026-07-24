@@ -243,12 +243,14 @@ proc bootstrap_create_user_config_file {gridengine_version bootstrap_var basedir
    set ts_user_config($CHECK_USER,portlist) "800"
    set qmaster_port [bootstrap_exec bootstrap "echo" "\$SGE_QMASTER_PORT"]
    lappend ts_user_config($CHECK_USER,portlist) $qmaster_port
-   set output [bootstrap_exec bootstrap "qconf" "-sconf"]
-   parse_simple_record output global_config 1
    set ts_user_config(800) $CHECK_USER
    set ts_user_config(800,$CHECK_USER) "1-2"
    set ts_user_config($qmaster_port) $CHECK_USER
-   set ts_user_config($qmaster_port,$CHECK_USER) $global_config(gid_range)
+   # Vend the qmaster-port gid_range through the normal allocator (current
+   # width, no overlap) instead of importing the running cluster's gid_range,
+   # which may still carry an old, smaller width and would only be re-healed
+   # on the next setup anyway.
+   set ts_user_config($qmaster_port,$CHECK_USER) [user_config_userlist_create_gid_port ts_user_config $qmaster_port $CHECK_USER]
 
    spool_array_to_file "$basedir/testsuite_user.conf" "testsuite user configuration" ts_user_config
 

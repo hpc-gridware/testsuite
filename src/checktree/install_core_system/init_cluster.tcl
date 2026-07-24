@@ -401,11 +401,18 @@ proc setup_queues {} {
          }
 
          set slots [expr $slots_tmp * 10]
-         # We setup a gid_range of size 100 for the cluster,
-         # so we can start a maximum of 100 jobs or tasks per host.
-         # Set a maximum of 100 slots
-         if {$slots > 100} {
-            set slots 100
+         # Cap all.q at 100 slots/host to keep ordinary tests bounded. This is a
+         # deliberate low limit and must never exceed the gid_range width
+         # (get_gid_range_width), which is the real per-host concurrency ceiling
+         # (each running job consumes one supplementary add_grp_id from that
+         # range). Tests that need more concurrency (e.g. scheduler/resource_quota)
+         # set up their own queue rather than raising this cap.
+         set max_all_q_slots 100
+         if {$max_all_q_slots > [get_gid_range_width]} {
+            set max_all_q_slots [get_gid_range_width]
+         }
+         if {$slots > $max_all_q_slots} {
+            set slots $max_all_q_slots
          }
          lappend hosts_by_slots($slots) $hostname
       }

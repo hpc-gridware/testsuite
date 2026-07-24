@@ -107,7 +107,21 @@ proc resource_quota_dynamic_limit {} {
    set job_options "-o /dev/null -j y -q $resource_quota_test_qname $ts_config(product_root)/examples/jobs/sleeper.sh 10000"
 
    set rqs_name "dynamic_rqs"
-   set host_num_proc [node_get_processors $resource_quota_test_host]
+
+   # Read num_proc from the live load report (qstat -F), i.e. the same source the
+   # scheduler resolves the dynamic $num_proc in the RQS rule from. Using the
+   # static ts_host_config value (node_get_processors) is wrong on SMT hosts: it
+   # holds the physical core count (e.g. 64 on a 3990X) while the scheduler sees
+   # the logical CPU count (128), so the limit ($num_proc*2) is twice max_slots
+   # and one extra job slips through. See CS resource_quota SMT drift.
+   set lookup_host [resolve_host $resource_quota_test_host]
+   get_load_values rqs_load {num_proc}
+   if {[info exists rqs_load($lookup_host,num_proc)]} {
+      set host_num_proc $rqs_load($lookup_host,num_proc)
+   } else {
+      set host_num_proc [node_get_processors $resource_quota_test_host]
+      ts_log_fine "num_proc load value not reported for $resource_quota_test_host, falling back to host config value $host_num_proc"
+   }
    set max_slots [expr $host_num_proc * 2]
 
    ts_log_fine "testing dynamic limit on host $resource_quota_test_host with num_proc=$host_num_proc"
@@ -140,8 +154,15 @@ proc resource_quota_dynamic_limit {} {
    trigger_scheduling
    wait_for_jobstart $job_id "leeper" 20
 
+   # Cleanup scales with the job count: this test fills max_slots (2*num_proc)
+   # jobs, and tearing them all down (shepherd exit, cgroup/systemd slice
+   # cleanup, usage files) takes far longer than the 20s that sufficed when
+   # hosts capped out near 100 jobs. On a 128-thread host that is 256 jobs in
+   # "dr" state, on modern dual-socket servers many more. Allow ~2s per job
+   # with a 60s floor; the proc returns as soon as the jobs are gone.
+   set cleanup_timeout [expr {$max_slots * 2 > 60 ? $max_slots * 2 : 60}]
    delete_all_jobs
-   wait_for_end_of_all_jobs 20
+   wait_for_end_of_all_jobs $cleanup_timeout
 
    del_rqs $rqs_name
 }
