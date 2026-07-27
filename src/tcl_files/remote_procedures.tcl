@@ -1828,7 +1828,7 @@ proc open_remote_spawn_process { hostname
             set num_tries $nr_of_tries
             set shell_start_output [get_ts_local_script $hostname "shell_start_output.sh"]
             # try to start the shell_start_output.sh script
-            ts_send $spawn_id "$shell_start_output\n" $hostname
+            ts_send $spawn_id "/bin/sh $shell_start_output\n" $hostname
             set timeout [host_conf_scale_timeout $hostname 2]
             expect {
                -i $spawn_id eof {
@@ -1843,7 +1843,7 @@ proc open_remote_spawn_process { hostname
                   incr num_tries -1
                   if {$num_tries > 0} {
                      # try to restart the shell_start_output.sh script
-                     ts_send $spawn_id "$shell_start_output\n" $hostname
+                     ts_send $spawn_id "/bin/sh $shell_start_output\n" $hostname
                      increase_timeout
                      exp_continue
                   } else {
@@ -1909,7 +1909,7 @@ proc open_remote_spawn_process { hostname
       # try to check login id
       set catch_return [ catch {
          set check_identity [get_ts_local_script $hostname "check_identity.sh"]
-         ts_send $spawn_id "$check_identity\n" $hostname
+         ts_send $spawn_id "/bin/sh $check_identity\n" $hostname
          set num_tries $nr_of_tries
          set timeout [host_conf_scale_timeout $hostname 2]
          expect {
@@ -1924,7 +1924,7 @@ proc open_remote_spawn_process { hostname
             -i $spawn_id timeout {
                incr num_tries -1
                if {$num_tries > 0} {
-                  ts_send $spawn_id "$check_identity\n" $hostname
+                  ts_send $spawn_id "/bin/sh $check_identity\n" $hostname
                   increase_timeout
                   exp_continue
                } else {
@@ -2020,7 +2020,7 @@ proc open_remote_spawn_process { hostname
          # check login id
          set catch_return [catch {
             set check_identity [get_ts_local_script $hostname "check_identity.sh"]
-            ts_send $spawn_id "$check_identity\n" $hostname
+            ts_send $spawn_id "/bin/sh $check_identity\n" $hostname
             set num_tries $nr_of_tries
             set timeout [host_conf_scale_timeout $hostname 2]
             expect {
@@ -2035,7 +2035,7 @@ proc open_remote_spawn_process { hostname
                -i $spawn_id timeout {
                   incr num_tries -1
                   if {$num_tries > 0} {
-                     ts_send $spawn_id "$check_identity\n" $hostname
+                     ts_send $spawn_id "/bin/sh $check_identity\n" $hostname
                      increase_timeout
                      exp_continue
                   } else {
@@ -2106,7 +2106,8 @@ proc open_remote_spawn_process { hostname
    if {$re_use_script == 0} {
       set catch_return [catch {
          set file_check [get_ts_local_script $hostname "file_check.sh"]
-         ts_send $spawn_id "$file_check $script_name\n" $hostname
+         # CS-2455: run helper scripts through /bin/sh instead of exec'ing them, see below
+         ts_send $spawn_id "/bin/sh $file_check $script_name\n" $hostname
          set connect_errors 0
          set num_tries $nr_of_tries
          set timeout [host_conf_scale_timeout $hostname 2]
@@ -2122,7 +2123,7 @@ proc open_remote_spawn_process { hostname
             -i $spawn_id timeout {
                incr num_tries -1
                if {$num_tries > 0} {
-                  ts_send $spawn_id "$file_check $script_name\n" $hostname
+                  ts_send $spawn_id "/bin/sh $file_check $script_name\n" $hostname
                   increase_timeout
                   exp_continue
                } else {
@@ -2162,7 +2163,12 @@ proc open_remote_spawn_process { hostname
    }
    set_spawn_process_command_script $spawn_id $script_name $exec_command $exec_arguments
    set catch_return [catch {
-      ts_send $spawn_id "$script_name\n" $hostname
+      # CS-2455: hand the script to /bin/sh instead of exec'ing it. Exec'ing maps the
+      # freshly written script as program text, which the kernel then protects: Linux
+      # refuses the exec with ETXTBSY while any writer still holds the file open, and
+      # the FreeBSD NFS client SIGKILLs the process if it has to invalidate a vnode
+      # that is mapped as text. Read as a data file, neither can apply.
+      ts_send $spawn_id "/bin/sh $script_name\n" $hostname
       set_spawn_process_in_use $spawn_id
    } catch_error_message]
    if {$catch_return == 1} {
@@ -3185,7 +3191,7 @@ proc check_rlogin_session { spawn_id pid hostname user nr_of_shells {only_check 
       ts_log_fine "Doing identity check. Might be related to forgotten close_spawn_id() call!"
       set catch_return [catch {
          set check_identity [get_ts_local_script $hostname "check_identity.sh"]
-         ts_send $spawn_id "$check_identity\n" $con_data(hostname) 0 0
+         ts_send $spawn_id "/bin/sh $check_identity\n" $con_data(hostname) 0 0
          set num_tries 30
          set timeout [host_conf_scale_timeout $hostname 1]
          expect {
@@ -3201,7 +3207,7 @@ proc check_rlogin_session { spawn_id pid hostname user nr_of_shells {only_check 
                   if {$num_tries < 12} {
                      ts_log_progress
                   }
-                  ts_send $spawn_id "$check_identity\n" $con_data(hostname) 0 0
+                  ts_send $spawn_id "/bin/sh $check_identity\n" $con_data(hostname) 0 0
                   increase_timeout
                   exp_continue
                } else {
@@ -3423,7 +3429,7 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
          # if this is not working, send CTRL-C
          ts_log_finest "real user of connection is \"$con_data(real_user)\""
          set check_identity [get_ts_local_script $con_data(hostname) "check_identity.sh"]
-         ts_send $spawn_id "$check_identity\n" $con_data(hostname)
+         ts_send $spawn_id "/bin/sh $check_identity\n" $con_data(hostname)
          set timeout [host_conf_scale_timeout $con_data(hostname) 2]
          set num_tries 10
          if {$CHECK_USE_HUDSON == 1} {
@@ -3445,7 +3451,7 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
                   ts_log_finest "close_spawn_process: sending CTRL-C"
                   ts_send $spawn_id "\003" $con_data(hostname) ;# CTRL-C
                   ts_send $spawn_id "\n" $con_data(hostname)
-                  ts_send $spawn_id "$check_identity\n" $con_data(hostname)
+                  ts_send $spawn_id "/bin/sh $check_identity\n" $con_data(hostname)
                   increase_timeout
                   exp_continue
                } else {
