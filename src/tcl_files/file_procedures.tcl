@@ -2061,6 +2061,15 @@ proc create_shell_script {scriptfile host exec_command exec_arguments {cd_dir ""
    puts -nonewline $script $script_content
    close $script
 
+   # CS-2453: Tcl's close only flushes into the local page cache - it does not force an
+   # NFS COMMIT. The caller starts this script on a remote host immediately
+   # afterwards, so our dirty pages can reach the NFS server *after* the remote
+   # host already began executing it. The resulting mtime/ctime change makes the
+   # NFS client on the remote host invalidate the running script and SIGKILL it
+   # ("Killed <script>", seen on FreeBSD clients). Force the data out first.
+   # Note: "sync FILE" fsyncs just this file, unlike "sync -f" (whole fs).
+   catch {exec sync $scriptfile}
+
    if {$CHECK_DEBUG_LEVEL != 0} {
       set script [open "$scriptfile" "r"]
       ts_log_frame FINEST "*********** script content start *********"
@@ -2543,7 +2552,8 @@ proc cleanup_spool_dir_for_host {hostname topleveldir subdir} {
 # return 1 if is directory
 proc remote_file_isdirectory {hostname dir} {
   global CHECK_USER
-  start_remote_prog $hostname $CHECK_USER "cd" "$dir" prg_exit_state 60 0 "" "" 1 0 0 1
+  # this is a boolean probe - a failing call means "no", not "test error"
+  start_remote_prog $hostname $CHECK_USER "cd" "$dir" prg_exit_state 60 0 "" "" 1 0 0 0
   if { $prg_exit_state == 0 } {
      return 1
   }
@@ -3114,7 +3124,7 @@ proc wait_for_remote_file {hostname user path {mytimeout 60} {raise_error 1} {to
                "1" { ts_log_severe "Timeout while waiting for remote file $path on host $hostname to appear" $raise_error }
                "2" { ts_log_severe "Invalid arguments for wait_for_file script" $raise_error }
                "3" { ts_log_severe "Expected that path $path is a file, however it is a directory" $raise_error }
-               default { ts_log_severe "wait_for_file.exp script exited which unexpected error code ($prg_exit_state)" }
+               default { ts_log_severe "wait_for_file.exp script exited which unexpected error code ($prg_exit_state)" $raise_error }
             }
          } else {
             switch -exact -- $prg_exit_state {
@@ -3122,7 +3132,7 @@ proc wait_for_remote_file {hostname user path {mytimeout 60} {raise_error 1} {to
                "1" { ts_log_severe "Timeout while waiting for remote file $path on host $hostname to vanish" $raise_error }
                "2" { ts_log_severe "Invalid arguments for wait_for_file script" $raise_error }
                "3" { ts_log_severe "Expected that path $path is a file, however it is a directory" $raise_error }
-               default { ts_log_severe "wait_for_file.exp script exited which unexpected error code ($prg_exit_state)" }
+               default { ts_log_severe "wait_for_file.exp script exited which unexpected error code ($prg_exit_state)" $raise_error }
            }
          }
          if {$prg_exit_state == 0} {
@@ -3256,7 +3266,7 @@ proc wait_for_remote_dir { hostname user path { mytimeout 60 } {raise_error 1} {
                "1" { ts_log_severe "Timeout while waiting for remote directory $path on host $hostname to appear" $raise_error }
                "2" { ts_log_severe "Invalid arguments for wait_for_file script" $raise_error }
                "3" { ts_log_severe "Expected that path $path is a directory, however it is a directory" $raise_error }
-               default { ts_log_severe "wait_for_file.exp script exited which unexpected error code ($prg_exit_state)" }
+               default { ts_log_severe "wait_for_file.exp script exited which unexpected error code ($prg_exit_state)" $raise_error }
             }
          } else {
             switch -exact -- $prg_exit_state {
@@ -3264,7 +3274,7 @@ proc wait_for_remote_dir { hostname user path { mytimeout 60 } {raise_error 1} {
                "1" { ts_log_severe "Timeout while waiting for remote directory $path on host $hostname to vanish" $raise_error }
                "2" { ts_log_severe "Invalid arguments for wait_for_file script" $raise_error }
                "3" { ts_log_severe "Expected that path $path is a directory, however it is a file" $raise_error }
-               default { ts_log_severe "wait_for_file.exp script exited which unexpected error code ($prg_exit_state)" }
+               default { ts_log_severe "wait_for_file.exp script exited which unexpected error code ($prg_exit_state)" $raise_error }
             }
          }
          if {$prg_exit_state == 0} {

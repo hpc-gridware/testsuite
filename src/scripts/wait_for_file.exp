@@ -105,7 +105,7 @@ while {[timestamp] < $timeout} {
       if {$to_go_away == 0 && $mode == "file"} {
          set rc [catch {exec "cat" "$path" ">" "/dev/null"} ]
          if { $rc != 0} {
-            puts "cat failed ($cat_res)"
+            puts "cat failed ($rc)"
             set exits 0
          }
       }

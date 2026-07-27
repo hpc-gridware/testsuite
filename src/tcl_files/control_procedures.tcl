@@ -2186,13 +2186,18 @@ proc resolve_arch {{node "none"} {use_source_arch 0} {source_dir_value ""}} {
       set host [gethostname]
    }
    # try to retrieve architecture
-   set result [start_remote_prog $host $CHECK_USER $arch_script "" prg_exit_state 60 0 "" "" 1 0 0]
+   # the 1st try is best effort - it may legitimately fail (e.g. binaries not yet
+   # installed for that arch), we retry below and fall back to "unknown". Do not
+   # raise an error here, otherwise a flaky/slow host turns every arch lookup -
+   # including purely cosmetic ones like the arch column in the compile report -
+   # into a SEVERE.
+   set result [start_remote_prog $host $CHECK_USER $arch_script "" prg_exit_state 60 0 "" "" 1 0 0 0]
    if {$prg_exit_state != 0} {
       # 2nd try after waiting for availability of arch_script on specified host:
       if {[file exists $arch_script]} {
          ts_log_fine "result of first arch script call on host \"$host\": $result"
          ts_log_fine "file exists on local host, wait for availability on remote host \"$host\" ..."
-         wait_for_remote_file $host $CHECK_USER $arch_script
+         wait_for_remote_file $host $CHECK_USER $arch_script 60 0
          set result [start_remote_prog $host $CHECK_USER $arch_script "" prg_exit_state 60 0 "" "" 1 0 0]
          ts_log_fine "result of second arch script call on host \"$host\": $result"
       }

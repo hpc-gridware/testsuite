@@ -738,7 +738,7 @@ proc start_remote_prog { hostname
         }
         if {!$do_stop} {
            if {[clock seconds] > $final_timeout} {
-             ts_log_severe "timeout after $mytimeout seconds for \"$exec_command $exec_arguments\""
+             ts_log_severe "timeout after $mytimeout seconds for \"$exec_command $exec_arguments\"" $raise_error
            } else {
              exp_continue
            }
