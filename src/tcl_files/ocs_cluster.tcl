@@ -217,6 +217,86 @@ proc cluster_bulk_write_config {dir is_local host change_array} {
 }
 
 ###
+# @brief write one object into a bulk directory
+#
+# Two things have to be done explicitly here, both of which the per-object add_*
+# procedures do internally:
+#
+#   the defaults, because qconf rejects an object missing a required attribute;
+#
+#   the NAME, because the attribute arrays the callers build do not carry it -
+#   add_pe/add_queue/... take it as a separate argument. A bulk request has no
+#   such argument, so without this every object in the directory carries the name
+#   from the defaults ("template") and qconf rejects the lot with
+#   "Keyword (TEMPLATE) not allowed as objectname".
+#
+# @param dir           directory from cluster_bulk_open
+# @param is_local      as returned by cluster_bulk_open
+# @param name          object name, also used as the file name
+# @param name_attr     attribute holding the name: qname, pe_name, group_name,
+#                      name, hostname - one per object type
+# @param defaults_proc set_<obj>_defaults procedure to seed the attributes
+# @param attr_array    name of the array holding the caller's attributes
+# @return nothing
+##
+proc cluster_bulk_write_object {dir is_local name name_attr defaults_proc attr_array} {
+   upvar $attr_array attrs
+   global CHECK_USER
+
+   unset -nocomplain full
+   $defaults_proc full
+   foreach elem [array names attrs] {
+      set full($elem) $attrs($elem)
+   }
+   set full($name_attr) $name
+
+   unset -nocomplain data
+   dump_array_to_file_data full data
+
+   if {$is_local} {
+      save_file "$dir/$name" data
+   } else {
+      write_remote_file [config_get_best_suited_admin_host] $CHECK_USER "$dir/$name" data
+   }
+}
+
+###
+# @brief create several objects of one type that share their attributes
+#
+# For test setups that need N objects differing only in their name. Before 9.2
+# there is no directory request, so the caller has to say how a single object is
+# created - that call differs per object type and cannot be derived here.
+#
+# @param qconf_opt     add option, e.g. "-Aq"
+# @param names         object names
+# @param name_attr     attribute holding the name, e.g. "qname"
+# @param defaults_proc set_<obj>_defaults procedure
+# @param attr_array    name of the array with the attributes shared by all of them
+# @param add_proc      script for the per object fallback, the name is appended
+# @return 1 on success, 0 on failure
+##
+proc cluster_bulk_add_objects {qconf_opt names name_attr defaults_proc attr_array add_proc} {
+   upvar $attr_array attrs
+
+   if {[llength $names] == 0} {
+      return 1
+   }
+
+   if {![cluster_use_bulk]} {
+      foreach name $names {
+         uplevel 1 [concat $add_proc [list $name]]
+      }
+      return 1
+   }
+
+   set dir [cluster_bulk_open is_local]
+   foreach name $names {
+      cluster_bulk_write_object $dir $is_local $name $name_attr $defaults_proc attrs
+   }
+   return [cluster_bulk_commit $dir $qconf_opt [llength $names]]
+}
+
+###
 # @brief write one execution host object into a bulk directory
 #
 # Follows set_exechost(): the values are merged over what the host has now, and
