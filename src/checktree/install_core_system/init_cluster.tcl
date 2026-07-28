@@ -662,10 +662,22 @@ proc setup_execd_conf {} {
    # has testsuite has been started with --no_local_config?
    if {$check_do_not_create_local_config} {
       ts_log_fine "not creating local config - deleting existing ones"
-      foreach host $host_list {
-         ts_log_fine [start_sge_bin "qconf" "-dconf $host" $ts_config(master_host)]
-      }
+      # one request for all hosts - "qconf -dconf" takes a host list. The exit
+      # state is deliberately not checked, as before: a host that has no local
+      # configuration at all is the normal case here
+      ts_log_fine [start_sge_bin "qconf" "-dconf [join $host_list ,]" $ts_config(master_host)]
       return
+   }
+
+   # collect the local configurations and create them with a single request where
+   # the version supports it - a cluster the performance tests are sized for has
+   # one per exec host, so this is one request instead of a few hundred
+   # (CS-2461). "qconf -Aconf" upserts since CS-2311, so the bulk path does not
+   # have to tell an existing configuration from a new one
+   set use_bulk [cluster_use_bulk]
+   if {$use_bulk} {
+      set bulk_dir [cluster_bulk_open bulk_local]
+      set bulk_count 0
    }
 
    foreach host $host_list {
@@ -800,11 +812,18 @@ proc setup_execd_conf {} {
       valgrind_setup_execd_conf tmp_config $host
 
       # now set the new config
-      if {$existing_config} {
+      if {$use_bulk} {
+         cluster_bulk_write_config $bulk_dir $bulk_local $host tmp_config
+         incr bulk_count
+      } elseif {$existing_config} {
          set_config tmp_config $host
       } else {
          set_config tmp_config $host 1
       }
+   }
+
+   if {$use_bulk} {
+      cluster_bulk_commit $bulk_dir "-Aconf" $bulk_count
    }
 }
 
