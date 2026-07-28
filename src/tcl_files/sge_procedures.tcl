@@ -2973,6 +2973,33 @@ proc build_gdi_request_limit {src type obj user host limit} {
 #     change_array(usage_scaling)               "NONE"
 #     change_array(resource_capability_factor)  "0.000000"
 #*******************************
+###
+# @brief fill an array with the default attributes of an execution host object
+#
+# qconf -Ae rejects an object that does not carry every required attribute
+# ("required attribute <name> is missing"), so anyone writing an exechost file
+# has to start from this set and overlay the values they care about.
+#
+# Factored out of add_exechost() so that callers building such files themselves -
+# simhost_add() writing a whole directory for one bulk request - use the same set
+# instead of a copy that silently drifts apart from it.
+#
+# @param[out] change_array name of the array to fill
+##
+proc set_exechost_defaults {change_array} {
+   upvar $change_array default_array
+
+   set default_array(hostname)         "template"
+   set default_array(load_scaling)     "NONE"
+   set default_array(complex_values)   "NONE"
+   set default_array(user_lists)       "NONE"
+   set default_array(xuser_lists)      "NONE"
+   set default_array(projects)         "NONE"
+   set default_array(xprojects)        "NONE"
+   set default_array(usage_scaling)    "NONE"
+   set default_array(report_variables) "NONE"
+}
+
 proc add_exechost {change_array {fast_add 1} {on_host ""} {ignore_error 0}} {
    get_current_cluster_config_array ts_config
 
@@ -2981,16 +3008,7 @@ proc add_exechost {change_array {fast_add 1} {on_host ""} {ignore_error 0}} {
 
    if {$fast_add != 0} {
       # add queue from file!
-      set default_array(hostname)          "template"
-      set default_array(load_scaling)      "NONE"
-      set default_array(complex_values)    "NONE"
-      set default_array(user_lists)        "NONE"
-      set default_array(xuser_lists)       "NONE"
-
-      set default_array(projects)                    "NONE"
-      set default_array(xprojects)                   "NONE"
-      set default_array(usage_scaling)               "NONE"
-      set default_array(report_variables)            "NONE"
+      set_exechost_defaults default_array
 
       foreach elem $values {
          set value $chgar($elem)
