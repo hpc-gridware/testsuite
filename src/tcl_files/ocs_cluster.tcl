@@ -297,6 +297,43 @@ proc cluster_bulk_add_objects {qconf_opt names name_attr defaults_proc attr_arra
 }
 
 ###
+# @brief create several objects of one type, each with its own attributes
+#
+# The counterpart of cluster_bulk_add_objects() for setups where the objects
+# differ - a set of parallel environments varying in their allocation rule, for
+# example. One request still creates all of them, a directory holds one file per
+# object and those may differ freely.
+#
+# @param qconf_opt     add option, e.g. "-Ap"
+# @param name_attr     attribute holding the name, e.g. "pe_name"
+# @param defaults_proc set_<obj>_defaults procedure
+# @param objects       list of {name {attribute value ...}} pairs
+# @param add_proc      script for the per object fallback, name and attribute
+#                      list are appended
+# @return 1 on success, 0 on failure
+##
+proc cluster_bulk_add_objects_each {qconf_opt name_attr defaults_proc objects add_proc} {
+   if {[llength $objects] == 0} {
+      return 1
+   }
+
+   if {![cluster_use_bulk]} {
+      foreach obj $objects {
+         uplevel 1 [concat $add_proc [list [lindex $obj 0] [lindex $obj 1]]]
+      }
+      return 1
+   }
+
+   set dir [cluster_bulk_open is_local]
+   foreach obj $objects {
+      unset -nocomplain attrs
+      array set attrs [lindex $obj 1]
+      cluster_bulk_write_object $dir $is_local [lindex $obj 0] $name_attr $defaults_proc attrs
+   }
+   return [cluster_bulk_commit $dir $qconf_opt [llength $objects]]
+}
+
+###
 # @brief write one execution host object into a bulk directory
 #
 # Follows set_exechost(): the values are merged over what the host has now, and
