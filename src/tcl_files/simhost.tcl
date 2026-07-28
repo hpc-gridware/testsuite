@@ -105,9 +105,10 @@ proc simhost_init {} {
 #
 # ATTENTION
 # If necessary host simulation is switched on by adding SIMULATE_EXECDS to the global config/qmaster_params.
-# If not yet exists a complex variable "load_report_host" is created.
-# It is in the reponsibility of the caller to backup global config and complex before calling simhost_add
-# (e.g. in the setup_function) and to restore them after deleting the simulated hosts again!
+# If not yet exists a complex variable "load_report_host" is created. That one is removed again by
+# simhost_delete() once the last simulated host is gone, so the caller does not have to care about it.
+# It is in the reponsibility of the caller to backup the global config before calling simhost_add
+# (e.g. in the setup_function) and to restore it after deleting the simulated hosts again!
 # If a host group got created this also has to be deleted by the caller!
 #
 # @param[in] num_hosts
@@ -150,11 +151,17 @@ proc simhost_add {num_hosts {host_group ""} {attribute_array ""} {load_report_ho
    }
 
    # need a complex variable "load_report_host"
+   #
+   # Remember whether we created it, so that simhost_delete() can take it away
+   # again once the last simulated host is gone. Leaving it behind breaks later
+   # checks that back up the complex, modify it and restore it - they then find a
+   # complex entry that was not theirs (seen with bugs/issuezilla/1473).
    get_complex complex
    if {![info exists complex(load_report_host)]} {
       ts_log_fine "need to create complex variable load_report_host"
       set cplx(load_report_host) "lrh STRING == YES NO NONE 0"
       set_complex cplx
+      set simhost_cache(created_load_report_host) 1
    }
 
    if {$host_group != ""} {
@@ -310,6 +317,17 @@ proc simhost_delete {hosts} {
          if {$pos >= 0} {
             set simhost_cache(used_hosts) [lreplace $simhost_cache(used_hosts) $pos $pos]
          }
+      }
+
+      # The last simulated host is gone - take the complex variable back out if
+      # simhost_add() had to create it. This has to happen after the hosts have
+      # been deleted, they referenced it in their complex_values.
+      if {[llength $simhost_cache(used_hosts)] == 0 &&
+          [info exists simhost_cache(created_load_report_host)]} {
+         ts_log_fine "removing complex variable load_report_host again"
+         set cplx(load_report_host) ""
+         set_complex cplx
+         unset simhost_cache(created_load_report_host)
       }
    }
 }
