@@ -685,7 +685,7 @@ proc setup_execd_conf {} {
    # one per exec host, so this is one request instead of a few hundred
    # (CS-2461). "qconf -Aconf" upserts since CS-2311, so the bulk path does not
    # have to tell an existing configuration from a new one
-   set use_bulk [cluster_use_bulk]
+   set use_bulk [ge_has_feature "bulk-object-requests" 1]
    if {$use_bulk} {
       set bulk_dir [cluster_bulk_open bulk_local]
       set bulk_count 0

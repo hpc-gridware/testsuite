@@ -19,34 +19,17 @@
 #___INFO__MARK_END_NEW__
 
 ###
-# @brief may this "qconf -d<obj>" option be given a name list?
-#
-# Most of them split a comma separated list in every supported version, but five
-# of them only do so from 9.2 on. Before that they take exactly ONE name and look
-# the whole string up as it stands, so "a,b,c" is denied as a missing object.
-#
-# Verified against the 9.1.4 parser (clients/qconf/ocs_qconf_parse.cc):
-# -dcal, -dckpt and -dp call lSetString() on the single argument, -dq and -dhgrp
-# hand it to cqueue_create()/hgroup_create(). The others use lString2List(),
-# parse_name_list_to_cull() or sge_strtok() and have always taken lists - note
-# that the usage text is no help here, 9.1 already prints "-dq destin_id_list".
-#
-# @param qconf_opt delete option, e.g. "-dq"
-# @return 1 if a list may be sent, 0 if the caller has to loop
-##
-proc cluster_can_delete_list {qconf_opt} {
-   if {[lsearch -exact {-dcal -dckpt -dhgrp -dp -dq} $qconf_opt] < 0} {
-      return 1
-   }
-   return [is_version_in_range "9.2.0"]
-}
-
-###
 # @brief delete a list of objects with a single qconf request
 #
 # Where the version takes a name list ("-dq a,b,c") a cleanup loop over N objects
 # becomes one request instead of N; where it does not, this falls back to one
-# request per object - see cluster_can_delete_list().
+# request per object.
+#
+# Only five options are affected - -dcal, -dckpt, -dhgrp, -dp and -dq - the
+# others have always taken a list. Verified against the 9.1.4 parser
+# (clients/qconf/ocs_qconf_parse.cc): those five call lSetString() on the single
+# argument or hand it to cqueue_create()/hgroup_create(), while the rest use
+# lString2List(), parse_name_list_to_cull() or sge_strtok().
 #
 # The result is taken from the exit status, not from the output, because the
 # message based check of handle_sge_errors() cannot judge a list deletion: for
@@ -68,7 +51,8 @@ proc cluster_delete_object_list {qconf_opt names what {on_host ""} {as_user ""} 
       return 1
    }
 
-   if {![cluster_can_delete_list $qconf_opt]} {
+   if {[lsearch -exact {-dcal -dckpt -dhgrp -dp -dq} $qconf_opt] >= 0 &&
+       ![ge_has_feature "delete-object-lists" 1]} {
       set ret 1
       foreach name $names {
          set output [start_sge_bin "qconf" "$qconf_opt $name" $on_host $as_user]
@@ -104,18 +88,6 @@ proc cluster_delete_object_list_errno {qconf_opt names what on_host as_user rais
       return 0
    }
    return -1
-}
-
-###
-# @brief is bulk object creation available in the version under test?
-#
-# 9.2 lets "qconf -A<obj>" take a directory and create everything in it with a
-# single request (CS-2299).
-#
-# @return 1 if qconf understands a directory argument, 0 otherwise
-##
-proc cluster_use_bulk {} {
-   return [is_version_in_range "9.2.0"]
 }
 
 ###
@@ -282,7 +254,7 @@ proc cluster_bulk_add_objects {qconf_opt names name_attr defaults_proc attr_arra
       return 1
    }
 
-   if {![cluster_use_bulk]} {
+   if {![ge_has_feature "bulk-object-requests" 1]} {
       foreach name $names {
          uplevel 1 [concat $add_proc [list $name]]
       }
@@ -317,7 +289,7 @@ proc cluster_bulk_add_objects_each {qconf_opt name_attr defaults_proc objects ad
       return 1
    }
 
-   if {![cluster_use_bulk]} {
+   if {![ge_has_feature "bulk-object-requests" 1]} {
       foreach obj $objects {
          uplevel 1 [concat $add_proc [list [lindex $obj 0] [lindex $obj 1]]]
       }
@@ -387,7 +359,7 @@ proc cluster_bulk_mod_exechosts {hosts change_array} {
       return 1
    }
 
-   if {![cluster_use_bulk]} {
+   if {![ge_has_feature "bulk-object-requests" 1]} {
       set ret 1
       foreach host $hosts {
          if {[set_exechost chgar $host] != 0} {
@@ -425,7 +397,7 @@ proc cluster_bulk_mod_exechosts_attr {hosts attribute value_array} {
       return 1
    }
 
-   if {![cluster_use_bulk]} {
+   if {![ge_has_feature "bulk-object-requests" 1]} {
       set ret 1
       foreach host $hosts {
          set chgar($attribute) "$values($host)"

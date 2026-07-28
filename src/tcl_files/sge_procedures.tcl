@@ -451,6 +451,31 @@ proc ge_has_feature {feature {quiet 0}} {
                set result 0
             }
          }
+         "bulk-object-requests" {
+            # CS-2299 and friends let "qconf -A<obj>" take a directory and create
+            # every object in it with a single request, instead of one request
+            # per object. The usage line changes from "fname" to "fname|dir".
+            set result 0
+            set output [start_sge_bin "qconf" "-help"]
+            if {[string first "\[-Ap fname|dir\]" $output] >= 0} {
+               set result 1
+            }
+         }
+         "delete-object-lists" {
+            # -dcal, -dckpt, -dhgrp, -dp and -dq take a comma separated name list
+            # only from 9.2 on; before that they take exactly ONE name and look
+            # the whole string up as it stands.
+            #
+            # Ask -dcal, not -dq: 9.1 already prints "-dq destin_id_list" while
+            # its parser hands the argument to cqueue_create() as a single name,
+            # so that usage line is no proof. The other four are honest, and all
+            # five gained the list together.
+            set result 0
+            set output [start_sge_bin "qconf" "-help"]
+            if {[string first "\[-dcal calendar_name_list\]" $output] >= 0} {
+               set result 1
+            }
+         }
          "finished_job_retention" {
             # CS-1908 adds an "f" letter to qstat's -s option, plus the
             # matching "finished jobs" wording in the help usage line.

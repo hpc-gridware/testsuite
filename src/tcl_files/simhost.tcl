@@ -182,7 +182,7 @@ proc simhost_add {num_hosts {host_group ""} {attribute_array ""} {load_report_ho
    # i.e. about a factor of 49. Simulated clusters are built from thousands of
    # hosts, so this is the difference between seconds and minutes of setup per
    # test. Older versions keep the per-object path.
-   set use_bulk [is_version_in_range "9.2.0"]
+   set use_bulk [ge_has_feature "bulk-object-requests" 1]
    set add_host [config_get_best_suited_admin_host]
    if {$use_bulk} {
       # ONE directory for all of them. dump_array_to_named_tmpfile() cannot be
