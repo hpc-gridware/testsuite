@@ -270,7 +270,8 @@ proc mod_calendar {calendar change_array {fast_add 1} {on_host ""} {as_user ""} 
 #     Represents qconf -dcal command in SGE
 #
 #  INPUTS
-#     calendar        - value of calendar we wish to delete;
+#     calendar        - value of calendar we wish to delete; a list of names is
+#                       deleted with a single qconf request
 #     {on_host ""}    - execute qconf on this host, default is master host
 #     {as_user ""}    - execute qconf as this user, default is $CHECK_USER
 #     {raise_error 1} - raise an error condition on error (default), or just
@@ -286,6 +287,10 @@ proc mod_calendar {calendar change_array {fast_add 1} {on_host ""} {as_user ""} 
 #*******************************************************************************
 proc del_calendar {calendar {on_host ""} {as_user ""} {raise_error 1}} {
    ts_log_fine "Delete calendar $calendar ..."
+
+   if {[llength $calendar] > 1} {
+      return [cluster_delete_object_list_errno "-dcal" $calendar "calendar(s)" $on_host $as_user $raise_error]
+   }
 
    get_calendar_messages messages "del" "$calendar" $on_host $as_user
 

@@ -201,6 +201,10 @@ proc del_user {user {on_host ""} {as_user ""} {raise_error 1}} {
 
    ts_log_fine "Delete user $user ..."
 
+   if {[llength $user] > 1} {
+      return [cluster_delete_object_list_errno "-duser" $user "user(s)" $on_host $as_user $raise_error]
+   }
+
    get_user_messages messages "del" "$user" $on_host $as_user
 
    set result [start_sge_bin "qconf" "-duser $user" $on_host $as_user]
@@ -446,7 +450,8 @@ proc add_manager {manager {on_host ""} {as_user ""} {raise_error 1}} {
 #     Calls qconf -dm $manager to add manager
 #
 #  INPUTS
-#     manager         - manager to be deleted by qconf -dm
+#     manager         - manager to be deleted by qconf -dm; a list of names is
+#                       deleted with a single qconf request
 #     {on_host ""}    - execute qconf on this host, default is master host
 #     {as_user ""}    - execute qconf as this user, default is $CHECK_USER
 #     {raise_error 1} - raise an error condition on error (default), or just
@@ -461,7 +466,8 @@ proc add_manager {manager {on_host ""} {as_user ""} {raise_error 1}} {
 #     sge_procedures/get_qconf_list()
 #*******************************************************************************
 proc del_manager {manager {on_host ""} {as_user ""} {raise_error 1}} {
-   return [get_qconf_list "del_manager" "-dm $manager" out $on_host $as_user $raise_error]
+   # get_qconf_list() judges by exit status, so a name list needs no special handling
+   return [get_qconf_list "del_manager" "-dm [join $manager ,]" out $on_host $as_user $raise_error]
 }
 
 

@@ -234,7 +234,8 @@ proc mod_ckpt {ckpt_name change_array {fast_add 1} {on_host ""} {as_user ""} {ra
 #     Represents qconf -dckpt command in SGE
 #
 #  INPUTS
-#     ckpt_name        - name of checkpoint interface to delete
+#     ckpt_name        - name of checkpoint interface to delete; a list of names
+#                        is deleted with a single qconf request
 #     {on_host ""}     - execute qconf on this host (default: qmaster host)
 #     {as_user ""}     - execute qconf as this user (default: CHECK_USER)
 #     {raise_error 1}  - raise error condition in case of errors?
@@ -254,6 +255,10 @@ proc del_ckpt {ckpt_name {on_host ""} {as_user ""} {raise_error 1}} {
    ts_log_fine "Delete checkpoint interface $ckpt_name ..."
 
    unassign_queues_with_ckpt_object $ckpt_name $on_host $as_user $raise_error
+
+   if {[llength $ckpt_name] > 1} {
+      return [cluster_delete_object_list_errno "-dckpt" $ckpt_name "checkpointing interface(s)" $on_host $as_user $raise_error]
+   }
 
    get_ckpt_messages messages "del" "$ckpt_name" $on_host $as_user
 
@@ -367,17 +372,21 @@ proc get_ckpt_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
 proc unassign_queues_with_ckpt_object { ckpt_obj {on_host ""} {as_user ""} {raise_error 1}} {
    get_current_cluster_config_array ts_config
 
+   # one request per step, see assign_queues_with_pe_object(): the attribute value
+   # may carry several names when quoted, the queues come from the remaining
+   # (blank separated) arguments
    ts_log_fine "searching for references in cluster queues ..."
    get_queue_list queue_list $on_host $as_user $raise_error
-   foreach elem $queue_list {
-      ts_log_finer "queue: $elem"
-      start_sge_bin "qconf" "-dattr queue ckpt_list $ckpt_obj $elem" $on_host $as_user
+   if {[llength $queue_list] == 1 && [lindex $queue_list 0] == "no cqueue list defined"} {
+      set queue_list {}
+   }
+   if {[llength $queue_list] > 0} {
+      start_sge_bin "qconf" "-dattr queue ckpt_list \"$ckpt_obj\" $queue_list" $on_host $as_user
    }
    ts_log_fine "searching for references in queue instances ..."
    set queue_list [get_qinstance_list "" $on_host $as_user $raise_error]
-   foreach elem $queue_list {
-      ts_log_finer "queue: $elem"
-      start_sge_bin "qconf" "-dattr queue ckpt_list $ckpt_obj $elem" $on_host $as_user
+   if {[llength $queue_list] > 0} {
+      start_sge_bin "qconf" "-dattr queue ckpt_list \"$ckpt_obj\" $queue_list" $on_host $as_user
    }
 }
 

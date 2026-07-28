@@ -595,7 +595,8 @@ proc del_adminhost_error {result host on_host raise_error} {
 #     Calls qconf -dh host to delete administrative host
 #
 #  INPUTS
-#     host            - administrative host which will be deleted
+#     host            - administrative host which will be deleted; a list of
+#                       hosts is deleted with a single qconf request
 #     {on_host ""}    - execute qconf on this host, default is master host
 #     {as_user ""}    - execute qconf as this user, default is $CHECK_USER
 #     {raise_error 1} - raise an error condition on error (default), or just
@@ -613,13 +614,16 @@ proc del_adminhost {host  {on_host ""} {as_user ""} {raise_error 1}} {
 
    get_current_cluster_config_array ts_config
    set ret 0
-   set result [start_sge_bin "qconf" "-dh $host" $on_host $as_user]
+
+   # the result is taken from the exit status, so a host list needs no special handling
+   set host_list [join $host ,]
+   set result [start_sge_bin "qconf" "-dh $host_list" $on_host $as_user]
 
    # parse output or raise error
    if {$prg_exit_state == 0} {
       set ret  0
    } else {
-      set ret [del_adminhost_error $prg_exit_state $host $on_host $raise_error]
+      set ret [del_adminhost_error $prg_exit_state $host_list $on_host $raise_error]
    }
 
    return $ret

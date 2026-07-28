@@ -164,10 +164,11 @@ proc get_userset {name {output_var result} {on_host ""} {as_user ""} {raise_erro
 #     del_userset { name {on_host ""} {as_user ""} {raise_error 1} }
 #
 #  FUNCTION
-#     Deletes an userset using qconf -du
+#     Deletes an userset using qconf -dul
 #
 #  INPUTS
-#     name                -  Name of the userset
+#     name                -  Name of the userset; a list of names is deleted
+#                            with a single qconf request
 #     {on_host ""}        - execute qconf on this host (default: qmaster host)
 #     {as_user ""}        - execute qconf as this user (default: CHECK_USER)
 #     {raise_error 1}     - raise error condition in case of errors?
@@ -185,6 +186,10 @@ proc del_userset { name {on_host ""} {as_user ""} {raise_error 1} } {
    get_current_cluster_config_array ts_config
 
    ts_log_fine "Delete userset $name ..."
+
+   if {[llength $name] > 1} {
+      return [cluster_delete_object_list_errno "-dul" $name "userset list(s)" $on_host $as_user $raise_error]
+   }
 
    get_userset_messages messages "del" "$name" $on_host $as_user
 

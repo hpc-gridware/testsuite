@@ -184,7 +184,8 @@ proc get_project {project {output_var result} {on_host ""} {as_user ""} {raise_e
 #     Represents qconf -dprj command in SGE
 #
 #  INPUTS
-#     project         - name of the project
+#     project         - name of the project; a list of names is deleted with a
+#                       single qconf request
 #     {on_host ""}     - execute qconf on this host (default: qmaster host)
 #     {as_user ""}     - execute qconf as this user (default: CHECK_USER)
 #     {raise_error 1}  - raise error condition in case of errors?
@@ -207,6 +208,10 @@ proc del_project { project {on_host ""} {as_user ""} {raise_error 1} } {
    }
 
    ts_log_fine "Delete project $project ..."
+
+   if {[llength $project] > 1} {
+      return [cluster_delete_object_list_errno "-dprj" $project "project(s)" $on_host $as_user $raise_error]
+   }
 
    get_project_messages messages "del" "$project" $on_host $as_user
 

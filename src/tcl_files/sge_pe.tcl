@@ -251,7 +251,8 @@ proc mod_pe {pe_name change_array {fast_add 1} {on_host ""} {as_user ""} {raise_
 #     Represents qconf -dp command in SGE
 #
 #  INPUTS
-#     pe_name          - name of parallel environment to delete
+#     pe_name          - name of parallel environment to delete; a list of names
+#                        is deleted with a single qconf request
 #     {on_host ""}     - execute qconf on this host (default: qmaster host)
 #     {as_user ""}     - execute qconf as this user (default: CHECK_USER)
 #     {raise_error 1}  - raise error condition in case of errors?
@@ -271,6 +272,10 @@ proc del_pe {pe_name {on_host ""} {as_user ""} {raise_error 1}} {
    ts_log_fine "Delete parallel environment $pe_name ..."
 
    unassign_queues_with_pe_object $pe_name $on_host $as_user $raise_error
+
+   if {[llength $pe_name] > 1} {
+      return [cluster_delete_object_list_errno "-dp" $pe_name "parallel environment(s)" $on_host $as_user $raise_error]
+   }
 
    get_pe_messages messages "del" "$pe_name" $on_host $as_user
 
@@ -385,20 +390,30 @@ proc get_pe_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
 # The current implemtation using aattr/dattr is destroying the default
 # settings in all.q
 
+## @brief remove pe objects from every queue referencing them
+#
+# @param pe_obj         name of the pe object, or a list of names
+# @param {on_host ""}   execute qconf on this host (default: qmaster host)
+# @param {as_user ""}   execute qconf as this user (default: CHECK_USER)
+# @param {raise_error 1} raise error condition in case of errors?
 proc unassign_queues_with_pe_object { pe_obj {on_host ""} {as_user ""} {raise_error 1}} {
    get_current_cluster_config_array ts_config
 
    ts_log_fine "searching for references in cluster queues ..."
    get_queue_list queue_list $on_host $as_user $raise_error
-   foreach elem $queue_list {
-      ts_log_fine "queue: $elem"
-      start_sge_bin "qconf" "-dattr queue pe_list $pe_obj $elem"
+   if {[llength $queue_list] == 1 && [lindex $queue_list 0] == "no cqueue list defined"} {
+      set queue_list {}
+   }
+   if {[llength $queue_list] > 0} {
+      # one request for everything - see assign_queues_with_pe_object(). A pe that
+      # a queue does not reference is reported and skipped, the others still go
+      # through, which is the same outcome the loop had before
+      start_sge_bin "qconf" "-dattr queue pe_list \"$pe_obj\" $queue_list"
    }
    ts_log_fine "searching for references in queue instances ..."
-   set queue_list [get_qinstance_list "-pe $pe_obj" $on_host $as_user $raise_error]
-   foreach elem $queue_list {
-      ts_log_fine "queue: $elem"
-      set output [start_sge_bin "qconf" "-dattr queue pe_list $pe_obj $elem"]
+   set queue_list [get_qinstance_list "-pe [join $pe_obj ,]" $on_host $as_user $raise_error]
+   if {[llength $queue_list] > 0} {
+      set output [start_sge_bin "qconf" "-dattr queue pe_list \"$pe_obj\" $queue_list"]
       if {$prg_exit_state != 0} {
          ts_log_severe "qconf -dattr failed: $output" $raise_error
       }
@@ -406,6 +421,11 @@ proc unassign_queues_with_pe_object { pe_obj {on_host ""} {as_user ""} {raise_er
 }
 
 
+## @brief reference pe objects from queues
+#
+# @param qname    name of the cluster queue, or a list of names
+# @param hostlist hosts to build queue instance names for, empty for the cluster queue
+# @param pe_obj   name of the pe object, or a list of names
 proc assign_queues_with_pe_object { qname hostlist pe_obj } {
    get_current_cluster_config_array ts_config
 
@@ -414,19 +434,22 @@ proc assign_queues_with_pe_object { qname hostlist pe_obj } {
    if {[llength $hostlist] == 0} {
       set queue_list $qname
    } else {
-      foreach host $hostlist {
-         lappend queue_list "${qname}@${host}"
+      foreach queue $qname {
+         foreach host $hostlist {
+            lappend queue_list "${queue}@${host}"
+         }
       }
    }
 
-   foreach queue $queue_list {
-      ts_log_fine "queue: $queue"
-      set result [start_sge_bin "qconf" "-aattr queue pe_list $pe_obj $queue" ]
-      if { $prg_exit_state != 0 } {
-         # if command fails: output error
-         ts_log_severe "error changing pe_list: $result"
-      }
-
+   # N queues x M pe objects in a single request: a list valued attribute takes
+   # several values when they are quoted, and the object list is taken from the
+   # remaining arguments. Note that those have to be separated by blanks - a
+   # comma separated list is looked up as one queue name and denied
+   ts_log_fine "adding pe object(s) $pe_obj to queue(s) $queue_list"
+   set result [start_sge_bin "qconf" "-aattr queue pe_list \"$pe_obj\" $queue_list"]
+   if { $prg_exit_state != 0 } {
+      # if command fails: output error
+      ts_log_severe "error changing pe_list: $result"
    }
 }
 

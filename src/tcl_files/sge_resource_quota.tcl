@@ -314,7 +314,8 @@ proc mod_rqs {change_array {name ""} {fast_add 1} {on_host ""} {as_user ""} {rai
 #     Deletes the given resource quota sets
 #
 #  INPUTS
-#     rqs_name       - name of the resource quota set
+#     rqs_name       - name of the resource quota set; a list of names is
+#                      deleted with a single qconf request
 #     {on_host ""}    - execute qconf on this host, default is master host
 #     {as_user ""}    - execute qconf as this user, default is $CHECK_USER
 #     {raise_error 1} - raise error condition in case of errors
@@ -325,6 +326,10 @@ proc mod_rqs {change_array {name ""} {fast_add 1} {on_host ""} {as_user ""} {rai
 proc del_rqs {rqs_name {on_host ""} {as_user ""} {raise_error 1}} {
    global CHECK_USER
    get_current_cluster_config_array ts_config
+
+   if {[llength $rqs_name] > 1} {
+      return [cluster_delete_object_list_errno "-drqs" $rqs_name "resource quota set(s)" $on_host $as_user $raise_error]
+   }
 
    set messages(index) "0"
    set messages(0) [translate_macro MSG_SGETEXT_REMOVEDFROMLIST_SSSS $CHECK_USER "*" $rqs_name "*"]

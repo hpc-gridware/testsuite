@@ -164,7 +164,8 @@ proc get_hostgroup {group {output_var result} {on_host ""} {as_user ""} {raise_e
 #     Represents qconf -dhgrp command in SGE
 #
 #  INPUTS
-#     group            - name of the hostgroup
+#     group            - name of the hostgroup; a list of names is deleted with
+#                        a single qconf request
 #     {on_host ""}     - execute qconf on this host (default: qmaster host)
 #     {as_user ""}     - execute qconf as this user (default: CHECK_USER)
 #     {raise_error 1}  - raise error condition in case of errors?
@@ -179,6 +180,10 @@ proc get_hostgroup {group {output_var result} {on_host ""} {as_user ""} {raise_e
 #*******************************************************************************
 proc del_hostgroup {group {on_host ""} {as_user ""} {raise_error 1}} {
    ts_log_fine "Delete hostgroup $group ..."
+
+   if {[llength $group] > 1} {
+      return [cluster_delete_object_list_errno "-dhgrp" $group "host group(s)" $on_host $as_user $raise_error]
+   }
 
    get_hostgroup_messages messages "del" "$group" $on_host $as_user
    set output [start_sge_bin "qconf" "-dhgrp $group" $on_host $as_user]

@@ -1167,7 +1167,8 @@ proc set_queue {qname hostlist change_array {fast_add 1}  {on_host ""} {as_user 
 #     Deletes a queue using qconf -dq
 #
 #  INPUTS
-#     qname -  Name of the queue
+#     qname -  Name of the queue; a list of names is deleted with a single
+#              qconf request, the host list is still cleared per queue
 #     {on_host ""}        - execute qconf on this host (default: qmaster host)
 #     {as_user ""}        - execute qconf as this user (default: CHECK_USER)
 #     {raise_error 1}     - raise error condition in case of errors?
@@ -1188,6 +1189,12 @@ proc del_queue { q_name hostlist {ignore_hostlist 0} {del_cqueue 0} {on_host ""}
 
    if {!$ignore_hostlist} {
       # delete individual queue instances or queue domaines
+      #
+      # One request per host, covering all queues: the obj_id_list of
+      # "qconf -dattr" is taken from the remaining arguments, so the names have to
+      # be separated by blanks. A comma separated list does NOT work here - unlike
+      # for "qconf -d<obj>" - it is looked up as one name and answered with
+      # 'denied: cluster queue "a,b" does not exist'.
       foreach host $hostlist {
          set result [start_sge_bin "qconf" "-dattr queue hostlist $host $q_name"]
          if { $prg_exit_state != 0 } {
@@ -1198,6 +1205,9 @@ proc del_queue { q_name hostlist {ignore_hostlist 0} {del_cqueue 0} {on_host ""}
 
    if {$ignore_hostlist || $del_cqueue} {
       ts_log_fine "Delete queue $q_name ..."
+      if {[llength $q_name] > 1} {
+         return [cluster_delete_object_list_errno "-dq" $q_name "cluster queue(s)" $on_host $as_user $raise_error]
+      }
       get_queue_messages messages "del" "$q_name" $on_host $as_user
       set output [start_sge_bin "qconf" "-dq $q_name" $on_host $as_user]
       return [handle_sge_errors "del_queue" "qconf -dq $q_name" $output messages $raise_error]
