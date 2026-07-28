@@ -369,10 +369,15 @@ proc setup_queues {} {
    }
 
    if {$result == 0} {
-      # for each individual queue set the slots attribute
+      # set the slots attribute of the individual queue instances
+      #
+      # Group the hosts by the value they get: the hostlist of mod_queue() is a
+      # list and every host in it receives the same value, while each call is a
+      # full read, modify and write of the whole cluster queue. So this costs one
+      # request per distinct slot count instead of one per exec host - a single
+      # request on a homogeneous cluster.
+      unset -nocomplain hosts_by_slots
       foreach hostname $ts_config(execd_nodes) {
-         unset new_values
-         set index [lsearch $ts_config(execd_nodes) $hostname]
          set slots_tmp [node_get_processors $hostname]
 
          if {$slots_tmp <= 0} {
@@ -387,12 +392,18 @@ proc setup_queues {} {
          if {$slots > 100} {
             set slots 100
          }
+         lappend hosts_by_slots($slots) $hostname
+      }
+
+      foreach slots [lsort -integer [array names hosts_by_slots]] {
+         unset -nocomplain new_values
          set new_values(slots) $slots
 
-         set result [mod_queue "all.q" $hostname new_values]
+         ts_log_fine "setting slots=$slots for [llength $hosts_by_slots($slots)] host(s)"
+         set result [mod_queue "all.q" $hosts_by_slots($slots) new_values]
          switch -- $result {
             -1 {
-               ts_log_severe "modify queue ${hostname}.q - got timeout"
+               ts_log_severe "modify queue all.q for $hosts_by_slots($slots) - got timeout"
             }
             -100 {
                ts_log_severe "could not modify queue"
