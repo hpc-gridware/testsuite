@@ -105,10 +105,9 @@ proc issue193_setup {} {
    foreach host $test_hosts {
       get_exechost host_config_bkup $host
       set host_config_backup($host) $host_config_bkup(complex_values)
-
-      set host_cfg(complex_values)  "slots=5000"
-      set_exechost host_cfg $host
    }
+   set host_cfg(complex_values) "slots=5000"
+   cluster_bulk_mod_exechosts $test_hosts host_cfg
 
    set rerun_host    [lindex $test_hosts 0]
    set no_rerun_host [lindex $test_hosts 1]
@@ -190,10 +189,7 @@ proc issue193_cleanup {} {
    trigger_scheduling
 
    # restore complex_values
-   foreach host $test_hosts {
-      set host_cfg(complex_values) $host_config_backup($host)
-      set_exechost host_cfg $host
-   }
+   cluster_bulk_mod_exechosts_attr $test_hosts complex_values host_config_backup
 
    reset_schedd_config
    reset_config stored_configuration

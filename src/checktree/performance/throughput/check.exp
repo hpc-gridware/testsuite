@@ -845,11 +845,12 @@ proc throughput_setup_level {} {
       set pe(allocation_rule) "\$fill_up"
       add_pe "perfpe" pe
 
-      # and attach the pe to our test queues
+      # and attach the pe to our test queues - one request for all of them
+      set qnames {}
       for {set i 0} {$i < $nr_queues} {incr i} {
-         set qname "tp_${i}"
-         assign_queues_with_pe_object $qname "" "perfpe"
+         lappend qnames "tp_${i}"
       }
+      assign_queues_with_pe_object $qnames "" "perfpe"
    }
 
    if {$throughput_sharetree} {

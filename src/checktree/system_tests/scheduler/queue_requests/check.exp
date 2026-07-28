@@ -98,21 +98,25 @@ proc scheduler_queue_requests_setup  {} {
    # create some parallel environments for testing the -masterq switch
    # and wildcard pe submission
    set pe(slots) 100
+   set pe_names {}
    for {set i 0} {$i < $pe_count} {incr i} {
+      lappend pe_names "pe_$i"
       add_pe "pe_$i" pe
    }
 
    # create n queues, with sequence number
    set queue_config(load_thresholds) "np_load_avg=10.0"
    set queue_config(slots) 10
+   set queue_names {}
    for {set i 0} {$i < $queue_count} {incr i} {
       set queue_config(seq_no) $i
       set queue_name [scheduler_queue_requests_get_qname $i]
+      lappend queue_names $queue_name
       add_queue $queue_name "@allhosts" queue_config 1
-      for {set j 0} {$j < $pe_count} {incr j} {
-         assign_queues_with_pe_object $queue_name "" "pe_$j"
-      }
    }
+
+   # every pe into every queue with one request instead of queue_count x pe_count
+   assign_queues_with_pe_object $queue_names "" $pe_names
 }
 
 proc scheduler_queue_requests_cleanup  {} {
@@ -126,16 +130,19 @@ proc scheduler_queue_requests_cleanup  {} {
    delete_all_jobs 0
    wait_for_end_of_all_jobs 6
 
-   # delete pes
+   # delete pes - del_pe() removes the references from the queues itself
+   set pe_names {}
    for {set i 0} {$i < $pe_count} {incr i} {
-      unassign_queues_with_pe_object "pe_$i"
-      del_pe "pe_$i"
+      lappend pe_names "pe_$i"
    }
+   del_pe $pe_names
 
    # delete queues
+   set queue_names {}
    for {set i 0} {$i < $queue_count} {incr i} {
-      del_queue [scheduler_queue_requests_get_qname $i] "@allhosts" 0 1
+      lappend queue_names [scheduler_queue_requests_get_qname $i]
    }
+   del_queue $queue_names "@allhosts" 0 1
 
    unset -nocomplain queue_count pe_count queue_request_count sched_conf_backup
 }
