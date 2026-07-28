@@ -1162,9 +1162,9 @@ proc setup_check_messages_allowed {} {
       {{*sharetree* for reading: No such file or directory*}
        {fresh spool directory - there is no sharetree yet}}
       {{adminhost*already exists*}
-       {the installer adds the master host as admin host more than once}}
-      {{submithost*already exists*}
-       {same for the submit hosts}}
+       {inst_qmaster.sh AddHosts() adds the shadow hosts with the same
+        "qconf -ah" it uses for the admin hosts, so a host that is both - the
+        master host here - is added twice}}
    }
 }
 

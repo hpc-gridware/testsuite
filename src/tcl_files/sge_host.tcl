@@ -436,7 +436,8 @@ proc get_exechost_list {output_var {on_host ""} {as_user ""} {raise_error 1}} {
 #     sge_procedures/get_sge_error()
 #     sge_procedures/get_qconf_list()
 #*******************************************************************************
-proc get_adminhost_list {{on_host ""} {as_user ""} {raise_error 1}} {
+proc get_adminhost_list {{output_var result} {on_host ""} {as_user ""} {raise_error 1}} {
+   upvar $output_var out
 
    return [get_qconf_list "get_adminhost_list" "-sh" out $on_host $as_user $raise_error]
 }

@@ -99,15 +99,34 @@ proc install_execd {} {
 
    if {!$check_use_installed_system} {
       set feature_install_options ""
+      # Register only the hosts that are not known yet. The product installer
+      # already adds ADMIN_HOST_LIST and SUBMIT_HOST_LIST from the autoinst
+      # config, and those contain these hosts, so adding them a second time made
+      # the qmaster log "adminhost/submithost ... already exists" as an ERROR on
+      # every install (CS-2465). Both sides are resolved before comparing - the
+      # configuration holds short names while qconf reports what the cluster
+      # resolved them to.
       if {$ts_config(submit_only_hosts) != "none"} {
+         get_submithost_list known_hosts
+         set known_hosts [resolve_host_list $known_hosts 1]
          foreach elem $ts_config(submit_only_hosts) {
+            if {[lsearch -exact $known_hosts [resolve_host $elem 1]] >= 0} {
+               ts_log_fine "$elem is already a submit host"
+               continue
+            }
             ts_log_fine "do a qconf -as $elem ..."
             set result [start_sge_bin "qconf" "-as $elem"]
             ts_log_fine $result
          }
       }
       if {$ts_config(admin_only_hosts) != "none"} {
+         get_adminhost_list known_hosts
+         set known_hosts [resolve_host_list $known_hosts 1]
          foreach elem $ts_config(admin_only_hosts) {
+            if {[lsearch -exact $known_hosts [resolve_host $elem 1]] >= 0} {
+               ts_log_fine "$elem is already an admin host"
+               continue
+            }
             ts_log_fine "do a qconf -ah $elem ..."
             set result [start_sge_bin "qconf" "-ah $elem"]
             ts_log_fine $result
