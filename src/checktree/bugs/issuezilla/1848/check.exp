@@ -91,8 +91,6 @@ proc issue_1848_setup {} {
 
                lappend prj1_id_list $PRJ
 
-               add_project "$PRJ"
-
                incr PRJ_TMP_COUNT
                incr PRJ_COUNT
                ts_log_progress
@@ -103,6 +101,10 @@ proc issue_1848_setup {} {
       }
       incr DIV_COUNT
    }
+
+   # all projects of the tree in one request instead of one per project
+   cluster_bulk_add_objects "-Aprj" $prj1_id_list name set_project_defaults prj_conf \
+                            {add_project}
 
    ts_log_fine " done"
    stree_buffer_commit stree
@@ -119,10 +121,7 @@ proc issue_1848_cleanup {} {
    del_sharetree
 
    ts_log_fine "deleting projects"
-   foreach prj $prj1_id_list {
-      del_project $prj
-      ts_log_progress
-   }
+   del_project $prj1_id_list
    ts_log_fine " done"
 
    reset_config issue_1848_setup_stored_config

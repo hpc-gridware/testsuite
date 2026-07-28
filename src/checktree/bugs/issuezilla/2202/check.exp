@@ -74,9 +74,13 @@ proc issue_2202_setup {} {
 
    # create a number of test queues
    set queue_conf(load_thresholds) "NONE"
+   set queue_names {}
    for {set i 0} {$i < $num_queues} {incr i} {
-      add_queue "test_$i" "@allhosts" queue_conf
+      lappend queue_names "test_$i"
    }
+   set queue_conf(hostlist) "@allhosts"
+   cluster_bulk_add_objects "-Aq" $queue_names qname set_queue_defaults queue_conf \
+                            {issue_2202_add_queue}
 
    # create resource quota set
    set rqs_conf(test,limit) {}
@@ -106,9 +110,11 @@ proc issue_2202_cleanup {} {
    del_rqs "test"
 
    # delete the test queues
+   set queue_names {}
    for {set i 0} {$i < $num_queues} {incr i} {
-      del_queue "test_$i" "" 1 1
+      lappend queue_names "test_$i"
    }
+   del_queue $queue_names "" 1 1
 
    # restore global config
    reset_config backup_config
@@ -142,3 +148,9 @@ proc issue_2202_test {} {
    ts_log_fine "modifying resource quota set took [expr $time_end - $time_start]ms"
 }
 
+## @brief create a single queue - fallback for versions without bulk requests
+# @param queue_name name of the queue
+proc issue_2202_add_queue {queue_name} {
+   set queue_conf(load_thresholds) "NONE"
+   add_queue $queue_name "@allhosts" queue_conf
+}

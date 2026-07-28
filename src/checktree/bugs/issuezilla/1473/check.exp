@@ -69,9 +69,13 @@ proc issue_1473_setup {} {
    set num_queues 20
    ts_log_fine "creating $num_queues queues"
    set queue_conf(slots) 1
+   set queue_names {}
    for {set i 0} {$i < $num_queues} {incr i} {
-      add_queue "iz_1473_$i" "@allhosts" queue_conf 1
+      lappend queue_names "iz_1473_$i"
    }
+   set queue_conf(hostlist) "@allhosts"
+   cluster_bulk_add_objects "-Aq" $queue_names qname set_queue_defaults queue_conf \
+                            {issue_1473_add_queue}
 
    # backup old complex
    if {[info exists complex_backup]} {
@@ -92,9 +96,11 @@ proc issue_1473_cleanup {} {
 
    # delete queues
    ts_log_fine "deleting test queues"
+   set queue_names {}
    for {set i 0} {$i < $num_queues} {incr i} {
-      del_queue "iz_1473_$i" "" 0 1
+      lappend queue_names "iz_1473_$i"
    }
+   del_queue $queue_names "" 0 1
 
    # restore old complex
    ts_log_fine "restoring complex from $complex_backup"
@@ -183,3 +189,9 @@ proc issue_1473_del {} {
    issue_1473_do_qconf "deleting complex entries" $complex_backup
 }
 
+## @brief create a single queue - fallback for versions without bulk requests
+# @param queue_name name of the queue
+proc issue_1473_add_queue {queue_name} {
+   set queue_conf(slots) 1
+   add_queue $queue_name "@allhosts" queue_conf 1
+}

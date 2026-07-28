@@ -216,9 +216,12 @@ proc throughput_setup_sharetree {extended} {
    }
 
    ts_log_fine "adding projects ..."
+   set prj_names {}
    for {set count 0} {$count < $nr_of_projects} {incr count 1} {
-      add_project "project$count"
+      lappend prj_names "project$count"
    }
+   cluster_bulk_add_objects "-Aprj" $prj_names name set_project_defaults prj_conf \
+                            {add_project}
 
    # delete a possibly existing sharetree
    del_sharetree
@@ -267,16 +270,11 @@ proc throughput_cleanup_sharetree {extended} {
    }
 
    ts_log_fine "removing projects ..."
-   set first 1
+   set prj_names {}
    for {set count 0} {$count < $nr_of_projects} {incr count 1} {
-      if {$first} {
-         set prj_names "project$count"
-         set first 0
-      } else {
-         append prj_names ",project$count"
-      }
+      lappend prj_names "project$count"
    }
-   del_project "$prj_names"
+   del_project $prj_names
 }
 
 proc throughput_setup_functional_policy {} {
@@ -468,13 +466,16 @@ proc throughput_setup {} {
    set change_array(load_thresholds) "np_load_avg=100"
 
    # create a certain number of queues
+   set tp_queue_names {}
    for {set i 0} {$i < $nr_queues} {incr i} {
-      set qname "tp_${i}"
-      add_queue $qname $host_list change_array 1
+      lappend tp_queue_names "tp_${i}"
 
       # build queue_list containing a list of all cluster queues
-      lappend queue_list $qname
+      lappend queue_list "tp_${i}"
    }
+   set change_array(hostlist) $host_list
+   cluster_bulk_add_objects "-Aq" $tp_queue_names qname set_queue_defaults change_array \
+                            {throughput_add_queue}
 
    # Create an additional interactive only queue.
    # This verifies IZ 1087 (and is a more realistic scenario)
@@ -503,10 +504,11 @@ proc throughput_cleanup {} {
 
    # remove queues
    ts_log_fine "deleting queues"
+   set tp_queue_names {}
    for {set i 0} {$i < $nr_queues} {incr i} {
-      set qname "tp_${i}"
-      del_queue $qname $host_list 1 1
+      lappend tp_queue_names "tp_${i}"
    }
+   del_queue $tp_queue_names $host_list 1 1
 
    del_queue "interactive" "@allhosts" 1 1
 
@@ -4932,4 +4934,14 @@ proc set_xy_rows_show { xy_rows_name row {start 0}} {
 
    set row [expr $row + $start]
    set xy_rows($row,show) 1
+}
+
+## @brief create a single test queue - fallback for versions without bulk requests
+# @param qname name of the queue
+proc throughput_add_queue {qname} {
+   global default_nr_slots host_list
+
+   set change_array(slots) $default_nr_slots
+   set change_array(load_thresholds) "np_load_avg=100"
+   add_queue $qname $host_list change_array 1
 }

@@ -96,13 +96,15 @@ proc issue_2328_setup {} {
    # Set up 80 queues for 5 hosts - 400 queues
    # We do it here so as not to affect the rest of qsub tests.
    set max_queue_count "80"
+   set queue_names {}
    for {set queue_counter 1} {$queue_counter <= $max_queue_count} {incr queue_counter} {
-      set queue_name "qsub_ts$queue_counter.q"
-      set queue_conf(slots) 10
-      set result [add_queue $queue_name "@allhosts" queue_conf 1]
-      if {$result < 0} {
-         ts_log_severe "add qsub_ts_$queue_counter.q failed:\n$result"
-      }
+      lappend queue_names "qsub_ts$queue_counter.q"
+   }
+   set queue_conf(slots) 10
+   set queue_conf(hostlist) "@allhosts"
+   if {![cluster_bulk_add_objects "-Aq" $queue_names qname set_queue_defaults queue_conf \
+                                  {issue_2328_add_queue}]} {
+      ts_log_severe "creating $max_queue_count queues failed"
    }
    
    # Check that we created $max_queue_count queues....
@@ -115,9 +117,12 @@ proc issue_2328_setup {} {
    }
    
    # Create 5 projects
+   set prj_names {}
    for {set prj_counter 1} {$prj_counter <= 5} {incr prj_counter} {
-      add_project "Project$prj_counter"
+      lappend prj_names "Project$prj_counter"
    }
+   cluster_bulk_add_objects "-Aprj" $prj_names name set_project_defaults prj_conf \
+                            {add_project}
 
    # 4. Add rqs a_new_rqs
    set rqs_name               "perf_rqs"
@@ -140,14 +145,18 @@ proc issue_2328_cleanup {} {
    del_rqs "perf_rqs" 
 
    # Delete all the new queues we created earlier
+   set queue_names {}
    for {set queue_counter 1} {$queue_counter <= $max_queue_count} {incr queue_counter} {
-      del_queue "qsub_ts$queue_counter.q" "" 1 1
+      lappend queue_names "qsub_ts$queue_counter.q"
    }
+   del_queue $queue_names "" 1 1
 
    # Delete the 5 projects
+   set prj_names {}
    for {set prj_counter 1} {$prj_counter <= 5} {incr prj_counter} {
-      del_project "Project$prj_counter"
+      lappend prj_names "Project$prj_counter"
    }
+   del_project $prj_names
 
    # Clear global cluster of F** complexes
    set my_cluster_conf(complex_values) "NONE"
@@ -269,5 +278,15 @@ proc issue_2328 {} {
       ts_log_severe "didn't find dispatching time in scheduler messages file:\n$result"
    } else {
       ts_log_fine "job dispatching took $dispatching_time s"
+   }
+}
+
+## @brief create a single queue - fallback for versions without bulk requests
+# @param queue_name name of the queue
+proc issue_2328_add_queue {queue_name} {
+   set queue_conf(slots) 10
+   set result [add_queue $queue_name "@allhosts" queue_conf 1]
+   if {$result < 0} {
+      ts_log_severe "add $queue_name failed:\n$result"
    }
 }

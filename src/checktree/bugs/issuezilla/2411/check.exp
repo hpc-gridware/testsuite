@@ -82,15 +82,25 @@ proc issue_2411_setup_level {} {
       ts_log_fine "Coverage enabled, setting max_count to $max_count"
    }
 
-   # Add $max_count queues
-   
+   # Add $max_count queues - with one request where the version can do it, this
+   # is up to 8000 objects at runlevel 100
+   set queue_names {}
    set count 1
    while { $count <= $max_count } {
-      set queue_name "queue$count.q"
-      set queue_conf(slots) 10 
-      add_queue $queue_name "@allhosts" queue_conf 1
-      incr count 
+      lappend queue_names "queue$count.q"
+      incr count
    }
+   set queue_conf(slots) 10
+   set queue_conf(hostlist) "@allhosts"
+   cluster_bulk_add_objects "-Aq" $queue_names qname set_queue_defaults queue_conf \
+                            {issue_2411_add_queue}
+}
+
+## @brief create a single queue - fallback for versions without bulk requests
+# @param queue_name name of the queue
+proc issue_2411_add_queue {queue_name} {
+   set queue_conf(slots) 10
+   add_queue $queue_name "@allhosts" queue_conf 1
 }
 
 proc issue_2411_cleanup_level {} {
@@ -98,14 +108,15 @@ proc issue_2411_cleanup_level {} {
    global max_count
    global tcl_total_time
    
-   # Delete now  $max_count queues 
-   
+   # Delete now  $max_count queues - del_queue() sends them as one request where
+   # the version takes a name list
+   set queue_names {}
    set count 1
    while { $count <= $max_count } {
-      set queue_name "queue$count.q"
-      del_queue $queue_name  "" 1 1
-      incr count 
+      lappend queue_names "queue$count.q"
+      incr count
    }
+   del_queue $queue_names "" 1 1
       
    ts_log_fine "The tcl time qhost took to display $max_count hosts was\n$tcl_total_time seconds"
 }
