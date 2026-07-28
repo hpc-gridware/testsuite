@@ -1127,13 +1127,73 @@ proc setup_default_calendars {} {
   }
 }
 
-proc setup_check_message_file_line {line} {
-   if {[string first "|C|" $line] >= 0 || \
-       [string first "|E|" $line] >= 0 || \
-       [string first "|W|" $line] >= 0} {
-      ts_log_fine $line
+## @brief messages a freshly installed cluster legitimately writes at level E
+#
+# A clean install is the one moment where "no errors" is a meaningful invariant:
+# nothing has run yet, no test has touched the configuration. Everything that is
+# not in this list is reported, so that a daemon logging errors during a healthy
+# startup cannot pass unnoticed - which is exactly what happened with CS-2464,
+# nine bogus errors per start that went unnoticed for a year because this check
+# only printed them.
+#
+# Every entry carries the reason it is here. Without that the list turns into a
+# silencer and the check is worthless again.
+#
+# @return list of {pattern reason} pairs, pattern for [string match]
+proc setup_check_messages_allowed {} {
+   return {
+      {{*sched_configuration* for reading: No such file or directory*}
+       {fresh spool directory - the scheduler configuration is written later}}
+      {{*sharetree* for reading: No such file or directory*}
+       {fresh spool directory - there is no sharetree yet}}
+      {{adminhost*already exists*}
+       {the installer adds the master host as admin host more than once}}
+      {{submithost*already exists*}
+       {same for the submit hosts}}
+      {{There are no jobs registered*}
+       {a job query against the still empty cluster}}
+      {{sharetree does not exist*}
+       {the setup asks for the sharetree before creating one}}
    }
-   ts_log_finest $line
+}
+
+## @brief classify one line of a messages file
+#
+# @param line          the line
+# @param problems_var  name of a list collecting the unexpected error lines
+# @return nothing
+proc setup_check_message_file_line {line {problems_var ""}} {
+   if {$problems_var ne ""} {
+      upvar $problems_var problems
+   }
+
+   # timestamp|thread|id|host|<level>|text
+   set fields [split $line "|"]
+   if {[llength $fields] < 6} {
+      ts_log_finest $line
+      return
+   }
+   set level [lindex $fields 4]
+   set text [join [lrange $fields 5 end] "|"]
+
+   if {$level ne "C" && $level ne "E" && $level ne "W"} {
+      ts_log_finest $line
+      return
+   }
+   ts_log_fine $line
+
+   # warnings stay informational for now, they are a much wider and less clear
+   # cut set than the errors
+   if {$level eq "W" || $problems_var eq ""} {
+      return
+   }
+
+   foreach entry [setup_check_messages_allowed] {
+      if {[string match [lindex $entry 0] $text]} {
+         return
+      }
+   }
+   lappend problems $line
 }
 
 proc setup_check_messages_files {} {
@@ -1144,6 +1204,9 @@ proc setup_check_messages_files {} {
       return
    }
 
+   # unexpected errors of all daemons are collected and reported once at the end
+   set problems {}
+
    ts_log_fine "qmaster ..."
    set messages [get_qmaster_messages_file]
    get_file_content $ts_config(master_host) $CHECK_USER $messages
@@ -1151,7 +1214,7 @@ proc setup_check_messages_files {} {
       ts_log_severe "no qmaster messages file:\n$messages"
    }
    for {set i 1} {$i <= $file_array(0)} {incr i} {
-      setup_check_message_file_line $file_array($i)
+      setup_check_message_file_line $file_array($i) problems
    }
 
    # Since execd does not immediately write the messages file after
@@ -1196,8 +1259,15 @@ proc setup_check_messages_files {} {
          ts_log_severe "no execd(host=$execd) messages file:\n$messages"
       }
       for {set i 1} {$i <= $file_array(0)} {incr i} {
-         setup_check_message_file_line $file_array($i)
+         setup_check_message_file_line $file_array($i) problems
       }
+   }
+
+   if {[llength $problems] > 0} {
+      ts_log_severe "[llength $problems] unexpected error(s) in the messages files of a\
+                     freshly installed cluster - either the daemon is broken or the message\
+                     overstates its severity. See setup_check_messages_allowed() (CS-2465):\n\
+                     [join $problems "\n"]"
    }
 }
 
