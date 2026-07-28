@@ -217,14 +217,29 @@ proc cleanup_system {} {
    ts_log_newline
    ts_log_fine "cleaning up system"
 
-   # delete all jobs
-   delete_all_jobs
+   # Ask before deleting, the way this procedure already does further down for the
+   # ckpt and pe objects. On a freshly installed cluster there is neither a job nor
+   # a sharetree, and the unconditional requests made the qmaster log "There are no
+   # jobs registered" and "sharetree does not exist" as ERRORs on every install -
+   # noise that hides the errors that do matter (CS-2465).
 
-   # wait until cluster is empty
-   wait_for_end_of_all_jobs
+   # delete all jobs
+   if {[start_sge_bin "qstat" "-u '*'"] ne ""} {
+      delete_all_jobs
+
+      # wait until cluster is empty
+      wait_for_end_of_all_jobs
+   } else {
+      ts_log_fine "no jobs in the cluster"
+   }
 
    # remove sharetree
-   del_sharetree
+   start_sge_bin "qconf" "-sstree"
+   if {$prg_exit_state == 0} {
+      del_sharetree
+   } else {
+      ts_log_fine "no sharetree defined"
+   }
 
    # remove all checkpoint environments
    ts_log_newline
@@ -1150,10 +1165,6 @@ proc setup_check_messages_allowed {} {
        {the installer adds the master host as admin host more than once}}
       {{submithost*already exists*}
        {same for the submit hosts}}
-      {{There are no jobs registered*}
-       {a job query against the still empty cluster}}
-      {{sharetree does not exist*}
-       {the setup asks for the sharetree before creating one}}
    }
 }
 
