@@ -7156,6 +7156,22 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""} {start_debug_
       set envlist(DISPLAY) "$CHECK_DISPLAY_OUTPUT"
       set envlist(WAYLAND_DISPLAY) "wayland-0"
 
+      # XDG_RUNTIME_DIR belongs with WAYLAND_DISPLAY: "wayland-0" is only a name
+      # relative to that directory, so a tilix started without it fails with
+      # "Gtk-WARNING: cannot open display". The component starter is launched
+      # through a login shell on the target host, which does not inherit the
+      # session environment, so it has to be passed explicitly.
+      #
+      # Without this the debug terminal path does not merely fail to open a
+      # window: the wrapper shell around the component ends in "press enter" plus
+      # read, so it keeps running, keeps the qmaster lock file, and the cluster
+      # stays down until someone clears it by hand.
+      if {[info exists ::env(XDG_RUNTIME_DIR)]} {
+         set envlist(XDG_RUNTIME_DIR) $::env(XDG_RUNTIME_DIR)
+      } else {
+         ts_log_fine "XDG_RUNTIME_DIR is not set - a tilix debug terminal will not open"
+      }
+
       # starter that starts the terminal and shell with the component
       set component_starter "$ts_config(testsuite_root_dir)/scripts/ocs_component_starter.sh"
 
