@@ -563,6 +563,18 @@ proc cluster_delete_all_usersets {} {
    if {[llength $userset_list] == 1 && [lindex $userset_list 0] == "no userset list defined"} {
       return
    }
-   cluster_delete_object_list "-dul" $userset_list "userset list(s)"
+
+   # "manager" and "operator" back the manager/operator lists since CS-2394 and
+   # cannot be deleted - the qmaster denies it and tells the caller to remove the
+   # members instead. They belong to the same category as the builtin complexes
+   # and the global host below: part of the cluster, not of a test's leftovers.
+   set to_delete {}
+   foreach userset_name $userset_list {
+      if {$userset_name eq "manager" || $userset_name eq "operator"} {
+         continue
+      }
+      lappend to_delete $userset_name
+   }
+   cluster_delete_object_list "-dul" $to_delete "userset list(s)"
 }
 
