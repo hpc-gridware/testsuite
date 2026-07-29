@@ -239,12 +239,24 @@ proc qquota_memory_limit {} {
 
    # The regressions to catch are a crash / non-zero exit, or a truncated value
    # such as a bare "4" (what std::stoul made of "4G" before the fix).
+   #
+   # From 9.2 on qquota renders memory values the way the other clients do -
+   # "qstat -F" prints "hl:mem_free=30.133G" - so "4.000G" is expected there.
+   # Earlier versions have to keep printing "4G"; the decimals are deliberately
+   # not accepted for them.
+   if {[is_version_in_range "9.2.0"]} {
+      set expected_pattern {test_memory=4(\.0+)?G}
+      set expected_text "4.000G"
+   } else {
+      set expected_pattern {test_memory=4G}
+      set expected_text "4G"
+   }
    if {$exit_code != 0} {
       ts_log_severe "qquota crashed / non-zero exit on a memory RQS limit (exit=$exit_code) - CS-2348"
-   } elseif {[string match "*test_memory=4G*" $result]} {
-      ts_log_fine "OK: memory limit rendered as 4G"
+   } elseif {[regexp $expected_pattern $result]} {
+      ts_log_fine "OK: memory limit rendered as $expected_text"
    } else {
-      ts_log_severe "qquota did not render the memory limit as 4G; got: $result (CS-2348)"
+      ts_log_severe "qquota did not render the memory limit as $expected_text; got: $result (CS-2348)"
    }
 
    del_rqs $rqs_name
