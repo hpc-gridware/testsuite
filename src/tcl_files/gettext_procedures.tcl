@@ -489,6 +489,20 @@ proc update_macro_messages_list {} {
             }
             ts_log_progress
          }
+
+         # The rules that turn the format macros (SFN, SFQ, PFNMAX, ...) into
+         # printf formats live in THIS file, not in the message headers. Changing
+         # them changes the parse result just as much as a changed header does,
+         # and the loop above cannot see that: adding PFNMAX/PFQMAX for CS-2457
+         # left a dump behind that still carried the raw macro names into the
+         # expected message patterns.
+         if {!$update_required} {
+            set parser_file [file join $ts_config(testsuite_root_dir) tcl_files gettext_procedures.tcl]
+            if {[file isfile $parser_file] && [file mtime $parser_file] > $macro_file_tstamp} {
+               ts_log_fine "$parser_file has been modified"
+               set update_required 1
+            }
+         }
       }
 
       if {$update_required} {
@@ -591,6 +605,14 @@ proc update_macro_messages_list {} {
            set line [replace_string $line " SFNMAX " "\"%-.2047s\""]
            set line [replace_string $line " SFNMAX" "\"%-.2047s\""]
            set line [replace_string $line "SFNMAX " "\"%-.2047s\""]
+           # path formats, see uti/sge_string.h - SFN/SFQ cut at 100 characters
+           # which is right for object names but truncates a path (CS-2457)
+           set line [replace_string $line " PFQMAX " "\"\\\"%-.1023s\\\"\""]
+           set line [replace_string $line " PFQMAX" "\"\\\"%-.1023s\\\"\""]
+           set line [replace_string $line "PFQMAX " "\"\\\"%-.1023s\\\"\""]
+           set line [replace_string $line " PFNMAX " "\"%-.1023s\""]
+           set line [replace_string $line " PFNMAX" "\"%-.1023s\""]
+           set line [replace_string $line "PFNMAX " "\"%-.1023s\""]
            set line [replace_string $line " SFN2 " "\"%-.200s\""]
            set line [replace_string $line " SFN2" "\"%-.200s\""]
            set line [replace_string $line "SFN2 " "\"%-.200s\""]
@@ -1319,8 +1341,32 @@ proc qrsh_output_contains { output expected_output } {
 #     ???/???
 #*******************************************************************************
 global warnings_already_logged
+#****** gettext_procedures/macro_value_has_unexpanded_format() *****************
+#  NAME
+#     macro_value_has_unexpanded_format() -- detect a stale parse result
+#
+#  FUNCTION
+#     The message catalogues write path and string formats as macros (SFN, SFQ,
+#     PFNMAX, ...) which update_macro_messages_list() replaces by their printf
+#     equivalent while parsing. A parsed value that still contains such a NAME
+#     comes from a dump written before that macro was known - the pattern built
+#     from it cannot match anything.
+#
+#     Only the string format macros are tested. They never occur as a word in a
+#     real message text, so a match is unambiguous.
+#
+#  INPUTS
+#     value - the parsed macro value
+#
+#  RESULT
+#     1 if the value still contains a format macro name, 0 otherwise
+#*******************************************************************************
+proc macro_value_has_unexpanded_format {value} {
+   return [regexp {(^|[^A-Za-z0-9_])(SFN|SFN2|SFN4|SFNMAX|SFQ|PFNMAX|PFQMAX|SN_UNLIMITED)([^A-Za-z0-9_]|$)} $value]
+}
+
 proc sge_macro { macro_name {raise_error 1} } {
-   global warnings_already_logged ts_config
+   global warnings_already_logged ts_config macro_reparsed
 
    set value ""
 
@@ -1493,6 +1539,33 @@ proc sge_macro { macro_name {raise_error 1} } {
                file delete $macro_messages_file
             }
             update_macro_messages_list
+         }
+      } elseif {$value != "" && [macro_value_has_unexpanded_format $value] &&
+                ![info exists macro_reparsed($macro_name)]} {
+         # Found, but the value still carries the NAME of a format macro instead
+         # of its printf equivalent - the dump was written before that macro was
+         # known to the replacement rules. "Found but wrong" is not covered by the
+         # not-found repair above, and the resulting pattern silently fails to
+         # match (seen as pattern "*FNMAX *" with PFNMAX, CS-2457).
+         #
+         # Retry once per macro: if a fresh parse still yields a macro name, the
+         # rule for it is missing in update_macro_messages_list() and a second
+         # re-parse would not help either.
+         set macro_reparsed($macro_name) 1
+         set macro_messages_file [get_macro_messages_file_name]
+         ts_log_config "macro \"$macro_name\" still contains an unexpanded format macro:\
+                        \n$value\nre-parsing the source code once"
+         if {$ts_config(source_dir) != "none"} {
+            if {[file isfile $macro_messages_file]} {
+               file delete $macro_messages_file
+            }
+            update_macro_messages_list
+            set value [get_macro_string_from_name $macro_name]
+            if {$value != -1 && [macro_value_has_unexpanded_format $value]} {
+               ts_log_severe "macro \"$macro_name\" still contains an unexpanded format macro\
+                              after re-parsing:\n$value\nadd a replacement rule for it in\
+                              update_macro_messages_list()"
+            }
          }
       }
    }
