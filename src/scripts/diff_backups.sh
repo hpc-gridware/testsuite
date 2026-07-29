@@ -28,6 +28,20 @@ ret=0
 dir1="${1:?First backup directory not specified}"
 dir2="${2:?Second backup directory not specified}"
 
+# Both directories have to exist and the first one has to hold something, else the
+# loop below iterates over nothing, $ret stays 0 and the script reports "identical"
+# although it compared nothing at all (CS-2470).
+for dir in "$dir1" "$dir2"; do
+   if [ ! -d "$dir" ]; then
+      echo "ERROR: \"$dir\" is not a directory - nothing to compare"
+      exit 1
+   fi
+done
+if [ -z "$(find "$dir1" -type f -print -quit)" ]; then
+   echo "ERROR: \"$dir1\" contains no files - nothing to compare"
+   exit 1
+fi
+
 while IFS= read -r file1; do
    rel_path="${file1#$dir1/}"
    file2="$dir2/$rel_path"
