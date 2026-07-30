@@ -207,6 +207,55 @@ proc systemd_get_property {host scope property} {
 }
 
 ###
+# @brief Get all values of a multi-valued systemd unit property.
+#
+# `systemctl show --property=X` prints one "X=value" line per value for
+# list-valued properties such as DeviceAllow. systemd_get_property() returns
+# only the first line and is therefore unsuitable for those properties.
+#
+# @param host The host to query the systemd property from.
+# @param scope The systemd unit to query (e.g., the job scope).
+# @param property The property to retrieve (e.g., `DeviceAllow`).
+# @returns A TCL list with one element per reported value (everything after
+#          the first '='). An empty list if the property is unset, carries an
+#          empty value, or the command failed.
+#
+# @note The order of the returned elements is NOT stable - systemd does not
+#       preserve the order in which list-valued properties were set. Callers
+#       must compare as a set (e.g. with lsearch), never by position.
+# @note systemctl sometimes outputs Unicode or other non-ASCII characters,
+#       so we use `iconv` to convert the output to ASCII.
+proc systemd_get_property_list {host scope property} {
+   set args "show --property $property $scope | iconv -f utf-8 -t ascii//TRANSLIT"
+   ts_log_fine "systemctl $args"
+   set output [start_remote_prog $host "root" "systemctl" $args]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "systemctl $args failed:\n$output"
+      return {}
+   }
+
+   # Pick only the "<property>=<value>" lines - this also skips any marker or
+   # prompt lines start_remote_prog may add.
+   set values {}
+   foreach line [split $output "\n"] {
+      set line [string trim $line]
+      set pos [string first "=" $line]
+      if {$pos < 0} {
+         continue
+      }
+      if {[string range $line 0 [expr {$pos - 1}]] ne $property} {
+         continue
+      }
+      set value [string range $line [expr {$pos + 1}] end]
+      if {$value ne ""} {
+         lappend values $value
+      }
+   }
+
+   return $values
+}
+
+###
 # @brief Get the cgroup version used by systemd on a host.
 #
 # This function checks the cgroup structure on the host to determine whether
