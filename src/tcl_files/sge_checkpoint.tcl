@@ -381,12 +381,21 @@ proc unassign_queues_with_ckpt_object { ckpt_obj {on_host ""} {as_user ""} {rais
       set queue_list {}
    }
    if {[llength $queue_list] > 0} {
-      start_sge_bin "qconf" "-dattr queue ckpt_list \"$ckpt_obj\" $queue_list" $on_host $as_user
+      set output [start_sge_bin "qconf" "-dattr queue ckpt_list \"$ckpt_obj\" $queue_list" $on_host $as_user]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "qconf -dattr failed: $output" $raise_error
+      }
    }
    ts_log_fine "searching for references in queue instances ..."
    set queue_list [get_qinstance_list "" $on_host $as_user $raise_error]
    if {[llength $queue_list] > 0} {
-      start_sge_bin "qconf" "-dattr queue ckpt_list \"$ckpt_obj\" $queue_list" $on_host $as_user
+      # check the exit state - a failure here leaves the reference in place and
+      # only shows up later as "Ckpt ... is still referenced in queue ..." when
+      # the object is deleted, which is a lot harder to trace back
+      set output [start_sge_bin "qconf" "-dattr queue ckpt_list \"$ckpt_obj\" $queue_list" $on_host $as_user]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "qconf -dattr failed: $output" $raise_error
+      }
    }
 }
 

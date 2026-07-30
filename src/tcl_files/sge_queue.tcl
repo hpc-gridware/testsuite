@@ -1237,7 +1237,16 @@ proc get_qinstance_list {{filter ""} {on_host ""} {as_user ""} {raise_error 1}} 
       set result ""
    }
 
-   return $result
+   # Return a proper Tcl list, the way the sibling get_queue_list() does.
+   # qselect prints one queue instance per line, and since CS-2461 callers pass
+   # the result into a single bulk qconf request instead of looping over it.
+   # Handing out the raw output puts those newlines into the generated remote
+   # script, where every instance after the first is run as a command of its
+   # own ("<script>: NN: all.q@host: not found") - the qconf request then only
+   # covers the first queue instance and the rest silently keeps its reference.
+   parse_multiline_list result queue_list
+
+   return $queue_list
 }
 
 # queue for -q request or as subordinate queue
