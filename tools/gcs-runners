@@ -54,6 +54,20 @@ info() { printf '%s\n' "$*" >&2; }
 usage() { sed -n '2,/^set -euo/{/^set -euo/d;s/^# \{0,1\}//;p}' "$0" >&2; exit "${1:-0}"; }
 
 line_root()   { printf '%s/%s' "$CLION_ROOT" "$1"; }
+
+# Directory that holds the line wrapper as it is reachable on PATH.
+#
+# One hop only: the tools themselves are installed as symlinks, so "readlink -f"
+# resolves right through the link farm into the checkout -- and a runner wrapper
+# dropped there is neither on PATH nor something that belongs in git.
+line_bindir() {
+  local lroot="$1" line="$2" p
+  p="$lroot/config/$line"
+  p="$(readlink "$p" 2>/dev/null || printf '%s' "$p")"
+  case "$p" in /*) : ;; *) p="$lroot/config/$p" ;; esac
+  dirname "$p"
+}
+
 runner_root() { printf '%s/runners/r%s' "$(line_root "$1")" "$2"; }
 runner_name() { printf '%s-r%s' "$1" "$2"; }
 
@@ -209,7 +223,7 @@ export CS_PIPELINE CS_HOME CS_MASTER_PORT CS_WRAPPER_ACTIVE CS_TOOL_DIR
 . $canon "\$@"
 EOF
     chmod +x "$wrapper"
-    ln -sfn "$wrapper" "$(dirname "$canon")/$name"
+    ln -sfn "$wrapper" "$(line_bindir "$lroot" "$line")/$name"
     info "  + r$i  port $port/$((port+1))  cluster p$port  -> $rroot"
   done
   info ""
