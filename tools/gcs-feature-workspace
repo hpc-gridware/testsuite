@@ -241,6 +241,20 @@ pick_port() {
        via the testsuite menu (user config) — it vends the gid_range itself"
 }
 
+# Directory that holds the line wrapper as it is reachable on PATH.
+#
+# Only one hop, deliberately: since the tools are installed as symlinks
+# themselves, "readlink -f" resolves right through the link farm into the
+# checkout -- and a feature wrapper dropped there is neither on PATH nor
+# something that belongs in version control.
+line_bindir() {
+  local lroot="$1" line="$2" p
+  p="$lroot/config/$line"
+  p="$(readlink "$p" 2>/dev/null || printf '%s' "$p")"
+  case "$p" in /*) : ;; *) p="$lroot/config/$p" ;; esac
+  dirname "$p"
+}
+
 # Substring-match a port against the " 8100 8102 ... " registration string.
 # Guards explicitly against an empty port: `*" $p "*` with p="" would
 # otherwise match the trailing double space in $regd and look "registered".
@@ -360,10 +374,10 @@ EOF
     info "  + config/$pipe  (wrapper -> $canon)"
   fi
 
-  # Symlink the wrapper into the shared scripts dir (same dir as $canon, already
-  # on PATH) so it can be run as "$pipe" from anywhere, not just via full path.
+  # Symlink the wrapper next to the line wrapper, which is on PATH, so it can be
+  # run as "$pipe" from anywhere and not only via its full path.
   local bindir link
-  bindir="$(dirname "$canon")"
+  bindir="$(line_bindir "$lroot" "$line")"
   link="$bindir/$pipe"
   ln -sf "$dst_script" "$link"
   info "  + $link  (symlink, on PATH)"
@@ -431,10 +445,9 @@ cmd_teardown() {
   branch="$(branch_name "$line" "$feature")"
 
   # Drop the on-PATH wrapper symlink (config/$line-$feature), if ts-init made one.
-  local canon bindir link
-  canon="$(readlink -f "$(line_root "$line")/config/$line" 2>/dev/null || true)"
-  if [ -n "$canon" ]; then
-    bindir="$(dirname "$canon")"
+  local bindir link
+  bindir="$(line_bindir "$(line_root "$line")" "$line")"
+  if [ -n "$bindir" ]; then
     link="$bindir/$line-$feature"
     if [ -L "$link" ] && [ "$(readlink -f "$link")" = "$froot/config/$line-$feature" ]; then
       rm -f "$link" && info "removed $link (wrapper symlink)"
