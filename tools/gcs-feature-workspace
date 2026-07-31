@@ -1,0 +1,518 @@
+#!/usr/bin/env bash
+#
+# gcs-feature-workspace — materialize one shared multi-repo view per feature.
+#
+# For a GCS release line (91x, 92x, ...) this creates ONE directory containing a
+# git worktree for every repo in that line, all on the SAME feature branch
+# (gcs-<line>/<feature>). Everything a cross-repo feature touches then lives in a
+# single tree -> one build, one integration test, no cherry-picking. Teardown
+# removes all worktrees + branches deterministically (hermes kanban gc never
+# reaps worktrees, so teardown must live here).
+#
+# It is NOT a new git feature: just a thin orchestration wrapper around
+# `git worktree add/remove/prune` across N repos with a unified branch name.
+#
+# Usage:
+#   gcs-feature-workspace create   <line> <feature>
+#   gcs-feature-workspace ts-init  <line> <feature> [port] [--force]
+#   gcs-feature-workspace ide-init <line> <feature> [--force]
+#   gcs-feature-workspace teardown <line> <feature> [--force]
+#   gcs-feature-workspace list     [<line>]
+#   gcs-feature-workspace path     <line> <feature>
+#   gcs-feature-workspace repos    <line>
+#
+# Nothing is hardcoded per line: repos are DISCOVERED by scanning
+# ${GCS_CLION_ROOT:-~/Clion}/<line>/* for git repos, base branch is taken
+# per-repo from its current HEAD. Add a 92x line and it works with no edit.
+#
+# Optional override: a `.gcs-line` file in the line root lists repo dir names
+# (one per line, '#' comments allowed) to restrict/order the repo set.
+#
+# ts-init makes a workspace runnable as its OWN testsuite cluster: it creates the
+# non-repo siblings (config/ inst/ pkg/ html/ results/), copies the line's TS
+# config to defaults-<line>-<feature>.sav with every path repointed at the
+# workspace and every port moved to a free port pair, and writes a pipeline
+# script named <line>-<feature> next to it. Ports are NOT invented: the lowest
+# free even port from <user>,portlist in the testsuite user configuration is
+# used, because that file is what vends the per-user/port gid_range. Register
+# more ports there (testsuite menu -> user config) to get more parallel
+# clusters. Idempotent: existing files are kept unless --force is passed.
+#
+# ide-init copies the line's CLion project (.idea/) into the workspace and
+# repoints every absolute <line-root> path inside it (e.g. CMAKE_INSTALL_PREFIX)
+# at the workspace, so a feature build never writes into the line's own inst/.
+# Opening it with the right env (so debug runs of sge_qmaster/sge_execd, which
+# just inherit the parent env via PASS_PARENT_ENVS_2, see the feature's own
+# port/SGE_ROOT) is handled by the pipeline script's own `clion` action
+# (<line>-<feature> clion), not by a separate launcher here. Idempotent like
+# ide-init: existing .idea is left alone unless --force.
+#
+# teardown --force also discards dirty worktrees, unmerged branches AND the
+# whole workspace directory including config/, inst/ and results/.
+
+set -euo pipefail
+
+CLION_ROOT="${GCS_CLION_ROOT:-$HOME/Clion}"
+
+die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
+warn() { printf 'warn:  %s\n' "$*" >&2; }
+info() { printf '%s\n' "$*" >&2; }
+
+usage() {
+  sed -n '2,/^set -euo/{/^set -euo/d;s/^# \{0,1\}//;p}' "$0" >&2
+  exit "${1:-0}"
+}
+
+# --- validation helpers ------------------------------------------------------
+
+valid_name() {
+  # feature / line names: no empty, no slash-navigation, no leading dash
+  case "$1" in
+    ""|-*|*..*) return 1 ;;
+    */*)        [ "$2" = "allow-slash" ] || return 1 ;;
+  esac
+  return 0
+}
+
+line_root() {
+  local line="$1"
+  valid_name "$line" || die "invalid line name: '$line'"
+  printf '%s/%s' "$CLION_ROOT" "$line"
+}
+
+feature_root() {
+  local line="$1" feature="$2"
+  valid_name "$feature" || die "invalid feature name: '$feature'"
+  printf '%s/%s-features/%s' "$CLION_ROOT" "$line" "$feature"
+}
+
+branch_name() {
+  printf 'gcs-%s/%s' "$1" "$2"
+}
+
+# Release version a line name stands for: 90x -> 9.0.x, 91x -> 9.1.x, ...
+# Used for the CLion project name so open windows are tellable apart. Falls
+# back to the raw line name for anything that is not the <major><minor>x form.
+line_version() {
+  case "$1" in
+    [0-9][0-9]x) printf '%s.%s.x' "$(printf '%s' "$1" | cut -c1)" "$(printf '%s' "$1" | cut -c2)" ;;
+    *)           printf '%s' "$1" ;;
+  esac
+}
+
+# Discover repos of a line. Honors an optional .gcs-line manifest.
+# Prints one absolute repo path per line.
+discover_repos() {
+  local line="$1" lroot d name
+  lroot="$(line_root "$line")"
+  [ -d "$lroot" ] || die "line root does not exist: $lroot"
+
+  if [ -f "$lroot/.gcs-line" ]; then
+    while IFS= read -r name; do
+      name="${name%%#*}"; name="${name#"${name%%[![:space:]]*}"}"; name="${name%"${name##*[![:space:]]}"}"
+      [ -n "$name" ] || continue
+      d="$lroot/$name"
+      [ -e "$d/.git" ] || { warn "manifest repo missing or not a git repo: $name"; continue; }
+      printf '%s\n' "$d"
+    done < "$lroot/.gcs-line"
+    return
+  fi
+
+  for d in "$lroot"/*/; do
+    d="${d%/}"
+    [ -e "$d/.git" ] || continue          # only real git repos (skip config/results/...)
+    printf '%s\n' "$d"
+  done
+}
+
+# --- commands ----------------------------------------------------------------
+
+cmd_repos() {
+  local line="${1:?line required}"
+  discover_repos "$line"
+}
+
+cmd_create() {
+  local line="${1:?line required}" feature="${2:?feature required}"
+  local froot branch src target created=0 skipped=0 failed=0
+  froot="$(feature_root "$line" "$feature")"
+  branch="$(branch_name "$line" "$feature")"
+
+  local repos=()
+  while IFS= read -r src; do repos+=("$src"); done < <(discover_repos "$line")
+  [ "${#repos[@]}" -gt 0 ] || die "no git repos found in $(line_root "$line")"
+
+  mkdir -p "$froot"
+  info "feature workspace: $froot"
+  info "branch (per repo): $branch"
+  info "repos: ${#repos[@]}"
+
+  for src in "${repos[@]}"; do
+    target="$froot/$(basename "$src")"
+    if [ -e "$target/.git" ]; then
+      info "  = $(basename "$src")  (worktree exists, skip)"
+      skipped=$((skipped+1)); continue
+    fi
+    # Attach existing feature branch if present (resume), else branch from HEAD.
+    if git -C "$src" show-ref --verify --quiet "refs/heads/$branch"; then
+      if git -C "$src" worktree add "$target" "$branch" >/dev/null 2>&1; then
+        info "  + $(basename "$src")  (attached existing branch)"; created=$((created+1))
+      else
+        warn "  ! $(basename "$src")  (attach failed)"; failed=$((failed+1))
+      fi
+    else
+      if git -C "$src" worktree add "$target" -b "$branch" >/dev/null 2>&1; then
+        info "  + $(basename "$src")  (new branch from $(git -C "$src" rev-parse --abbrev-ref HEAD))"; created=$((created+1))
+      else
+        warn "  ! $(basename "$src")  (worktree add failed)"; failed=$((failed+1))
+      fi
+    fi
+  done
+
+  info "created=$created skipped=$skipped failed=$failed"
+  [ "$failed" -eq 0 ] || die "some worktrees failed; workspace incomplete"
+  printf '%s\n' "$froot"     # stdout = path, for scripting
+}
+
+# --- testsuite scaffolding ---------------------------------------------------
+
+# Print the value of a key in a testsuite .sav config (empty if absent).
+# A .sav holds the previous generation as an "<obj>.old" block *before* the
+# current one, so the LAST occurrence is the authoritative value.
+read_sav_value() {
+  [ -f "$1" ] || return 0
+  awk -v key=":$2:" '
+    $0 == key { if ((getline v) > 0) { sub(/^:/,"",v); sub(/:$/,"",v); last = v } }
+    END { if (last != "") print last }' "$1"
+}
+
+read_commd_port() { read_sav_value "$1" commd_port; }
+
+# The testsuite user configuration is the port registry: a commd_port only
+# works if it is in <user>,portlist there, because that is what vends the
+# per-user/port gid_range block. Ports must be even (execd = commd_port + 1).
+user_config_file() {
+  local cfg="$1" f
+  f="$(read_sav_value "$cfg" user_config_file)"
+  [ -n "$f" ] || f="$(read_sav_value "$cfg" user_config_file,default)"
+  printf '%s\n' "$f"
+}
+
+registered_ports() {
+  local cfg="$1" ucf p
+  ucf="$(user_config_file "$cfg")"
+  [ -n "$ucf" ] && [ -f "$ucf" ] || die "testsuite user config not readable: ${ucf:-<unset>}"
+  # Reverse registration order: the portlist grows by appending, so the newest
+  # entries are the ones added for extra clusters -- hand those out first and
+  # leave the long-established low ports to their existing suites.
+  for p in $(read_sav_value "$ucf" "$USER,portlist" | tr ' ' '\n' | tac); do
+    case "$p" in *[!0-9]*|"") continue ;; esac
+    [ "$p" -ge 1024 ] || continue          # reserved-port entries (700) are not clusters
+    [ $((p % 2)) -eq 0 ] || continue       # odd port would collide with its own execd
+    printf '%s\n' "$p"
+  done
+}
+
+# Every port we must not hand out twice: any line config (including variants
+# like defaults-91x.mpi.sav), other feature workspaces, and anything listening.
+used_ports() {
+  local line="$1" f
+  for f in "$CLION_ROOT"/*/config/defaults-*.sav \
+           "$CLION_ROOT"/*-features/*/config/defaults-*.sav; do
+    [ -f "$f" ] || continue
+    read_commd_port "$f"
+  done
+  ss -ltnH 2>/dev/null | awk '{print $4}' | sed 's/.*://' | grep -E '^[0-9]+$' || true
+}
+
+# Hand out the lowest registered port that nothing else claims. Never invent
+# one: an unregistered port has no gid_range and the testsuite would reject it.
+pick_port() {
+  local line="$1" cfg="$2" p used regd
+  used=" $(used_ports "$line" | sort -un | tr '\n' ' ') "
+  regd="$(registered_ports "$cfg")"
+  [ -n "$regd" ] || die "no usable ports in $USER,portlist of $(user_config_file "$cfg")"
+  for p in $regd; do
+    case "$used" in *" $p "*|*" $((p+1)) "*) continue ;; esac
+    printf '%s\n' "$p"; return 0
+  done
+  die "all registered ports are taken ($(printf '%s' "$regd" | tr '\n' ' '));
+       add another even port to $USER,portlist in $(user_config_file "$cfg")
+       via the testsuite menu (user config) — it vends the gid_range itself"
+}
+
+# Substring-match a port against the " 8100 8102 ... " registration string.
+# Guards explicitly against an empty port: `*" $p "*` with p="" would
+# otherwise match the trailing double space in $regd and look "registered".
+port_registered() {
+  local p="$1" regd="$2"
+  [ -n "$p" ] || return 1
+  case "$regd" in *" $p "*) return 0 ;; *) return 1 ;; esac
+}
+
+cmd_ts_init() {
+  local line="${1:?line required}" feature="${2:?feature required}"; shift 2 || true
+  local port="" force=0 a
+  for a in "$@"; do
+    case "$a" in
+      --force)         force=1 ;;
+      [0-9][0-9][0-9]*) port="$a" ;;
+      *)               die "ts-init: unexpected argument '$a'" ;;
+    esac
+  done
+
+  local froot lroot pipe src_cfg dst_cfg dst_script canon base_port
+  froot="$(feature_root "$line" "$feature")"
+  lroot="$(line_root "$line")"
+  [ -d "$froot" ] || die "no feature workspace: $froot (run 'create' first)"
+
+  pipe="$line-$feature"
+  src_cfg="$lroot/config/defaults-$line.sav"
+  dst_cfg="$froot/config/defaults-$pipe.sav"
+  dst_script="$froot/config/$pipe"
+  [ -f "$src_cfg" ] || die "line TS config not found: $src_cfg"
+
+  canon="$(readlink -f "$lroot/config/$line" 2>/dev/null || true)"
+  [ -n "$canon" ] && [ -x "$canon" ] || die "line pipeline script missing: $lroot/config/$line"
+
+  base_port="$(read_commd_port "$src_cfg")"
+  [ -n "$base_port" ] || die "no commd_port in $src_cfg"
+
+  # Reuse the port already assigned to this workspace so re-runs stay stable --
+  # but only while it is still registered; a de-registered port gets replaced.
+  local given_port="$port" regd
+  regd=" $(registered_ports "$src_cfg" | tr '\n' ' ') "
+  if [ -z "$port" ]; then
+    port="$(read_commd_port "$dst_cfg")"
+    if ! port_registered "$port" "$regd"; then
+      [ -n "$port" ] && warn "recorded port $port is no longer registered, reassigning"
+      port="$(pick_port "$line" "$src_cfg")"
+    fi
+  fi
+
+  # Whatever the source, the port must be registered in the TS user config.
+  port_registered "$port" "$regd" || die "port $port is not in $USER,portlist of $(user_config_file "$src_cfg");
+     register it there (even port) via the testsuite menu, then re-run"
+  case " $(used_ports "$line" | sort -un | tr '\n' ' ') " in
+    *" $port "*)
+      [ "$port" = "$(read_commd_port "$dst_cfg")" ] && [ -z "$given_port" ] \
+        || warn "port $port already in use elsewhere" ;;
+  esac
+
+  mkdir -p "$froot/config" "$froot/inst" "$froot/pkg" "$froot/html" "$froot/results"
+
+  if [ -f "$dst_cfg" ] && [ "$force" -eq 0 ]; then
+    info "  = config/$(basename "$dst_cfg")  (exists, skip; --force to regenerate)"
+  else
+    # Repoint every absolute line path at the workspace and move the port pair.
+    sed -e "s|$lroot|$froot|g" \
+        -e "s|^:p$base_port:\$|:p$port:|" \
+        -e "s|^:$base_port:\$|:$port:|" \
+        "$src_cfg" > "$dst_cfg"
+    info "  + config/$(basename "$dst_cfg")  (from defaults-$line.sav, port $base_port -> $port)"
+  fi
+
+  # Companion checktree configs (defaults-<line>.<project>.sav, e.g. .mpi.sav)
+  # are looked up by inserting the project name before the .sav extension of
+  # whatever main config file is in use -- see get_additional_config_file_path()
+  # in testsuite/src/tcl_files/file_procedures.tcl. They carry no line-specific
+  # paths/ports, so a straight copy under the feature's config file name is enough.
+  local addcfg dst_addcfg proj
+  for addcfg in "$lroot"/config/defaults-"$line".*.sav; do
+    [ -f "$addcfg" ] || continue
+    proj="$(basename "$addcfg")"
+    proj="${proj#defaults-$line.}"
+    proj="${proj%.sav}"
+    dst_addcfg="$froot/config/defaults-$pipe.$proj.sav"
+    if [ -f "$dst_addcfg" ] && [ "$force" -eq 0 ]; then
+      info "  = config/$(basename "$dst_addcfg")  (exists, skip; --force to regenerate)"
+    else
+      cp "$addcfg" "$dst_addcfg"
+      info "  + config/$(basename "$dst_addcfg")  (from $(basename "$addcfg"), copied as-is)"
+    fi
+  done
+
+  if [ -f "$dst_script" ] && [ "$force" -eq 0 ]; then
+    info "  = config/$pipe  (exists, skip; --force to regenerate)"
+  else
+    cat > "$dst_script" <<EOF
+#!/bin/sh
+# Generated by gcs-feature-workspace ts-init — feature pipeline for '$feature'.
+# Thin env wrapper: all logic stays in the shared line script, so fixes there
+# apply here too. Regenerate with: gcs-feature-workspace ts-init $line $feature --force
+CS_PIPELINE=$pipe
+CS_HOME=$froot
+CS_MASTER_PORT=$port
+CS_WRAPPER_ACTIVE=1
+# Where the tools live. Passed in rather than guessed: this wrapper runs under
+# /bin/sh, so the sourced script only sees \$0 -- this file, not the tool
+# directory -- and guessing via PATH fails under an IDE.
+CS_TOOL_DIR=$(dirname "$canon")
+export CS_PIPELINE CS_HOME CS_MASTER_PORT CS_WRAPPER_ACTIVE CS_TOOL_DIR
+# dot-source (not exec) so ". $pipe" also works to load env into the
+# current shell, matching the original script's no-action sourcing use case.
+# CS_WRAPPER_ACTIVE tells the shared script these values are authoritative for
+# this call (not stale exports from a previously sourced wrapper) — the shared
+# script clears it again once consumed, so it never leaks between invocations.
+. $canon "\$@"
+EOF
+    chmod +x "$dst_script"
+    info "  + config/$pipe  (wrapper -> $canon)"
+  fi
+
+  # Symlink the wrapper into the shared scripts dir (same dir as $canon, already
+  # on PATH) so it can be run as "$pipe" from anywhere, not just via full path.
+  local bindir link
+  bindir="$(dirname "$canon")"
+  link="$bindir/$pipe"
+  ln -sf "$dst_script" "$link"
+  info "  + $link  (symlink, on PATH)"
+
+  info ""
+  info "cluster:  $pipe   qmaster $port / execd $((port + 1))   (cluster_name p$port)"
+  info "spool:    /usr/local/testsuite/$port"
+  info "run:      $dst_script build | install | ts | test <cat> | shutdown"
+  printf '%s\n' "$dst_script"
+}
+
+cmd_ide_init() {
+  local line="${1:?line required}" feature="${2:?feature required}"; shift 2 || true
+  local force=0 a
+  for a in "$@"; do
+    case "$a" in
+      --force) force=1 ;;
+      *)       die "ide-init: unexpected argument '$a'" ;;
+    esac
+  done
+
+  local froot lroot src_idea dst_idea pipe dst_script f
+  froot="$(feature_root "$line" "$feature")"
+  lroot="$(line_root "$line")"
+  [ -d "$froot" ] || die "no feature workspace: $froot (run 'create' first)"
+  src_idea="$lroot/.idea"
+  dst_idea="$froot/.idea"
+  [ -d "$src_idea" ] || die "no CLion project to copy: $src_idea"
+
+  if [ -d "$dst_idea" ] && [ "$force" -eq 0 ]; then
+    info "  = .idea  (exists, skip; --force to regenerate)"
+  else
+    rm -rf "$dst_idea"
+    cp -r "$src_idea" "$dst_idea"
+    # Repoint every absolute line-root path (CMAKE_INSTALL_PREFIX and anything
+    # else hardcoded into run/CMake configs) at the feature workspace instead.
+    for f in "$dst_idea"/*.xml; do
+      [ -f "$f" ] || continue
+      sed -i "s|$lroot|$froot|g" "$f"
+    done
+    # Name the project "<version> (<feature>)", e.g. "9.2.x (fixes)", so the
+    # CLion window says which line and which workspace it belongs to. Lines
+    # themselves carry the bare version, e.g. "9.2.x".
+    printf '%s (%s)' "$(line_version "$line")" "$feature" > "$dst_idea/.name"
+    info "  + .idea  (copied from $line, paths repointed, project name '$(line_version "$line") ($feature)')"
+  fi
+
+  pipe="$line-$feature"
+  dst_script="$froot/config/$pipe"
+  info ""
+  if [ -x "$dst_script" ]; then
+    info "open with: $dst_script clion"
+  else
+    info "open with: <pipeline-script> clion  (run ts-init first to create it)"
+  fi
+}
+
+cmd_teardown() {
+  local line="${1:?line required}" feature="${2:?feature required}"; shift 2 || true
+  local force=0
+  for a in "$@"; do [ "$a" = "--force" ] && force=1; done
+
+  local froot branch src target base d removed=0 kept=0
+  froot="$(feature_root "$line" "$feature")"
+  branch="$(branch_name "$line" "$feature")"
+
+  # Drop the on-PATH wrapper symlink (config/$line-$feature), if ts-init made one.
+  local canon bindir link
+  canon="$(readlink -f "$(line_root "$line")/config/$line" 2>/dev/null || true)"
+  if [ -n "$canon" ]; then
+    bindir="$(dirname "$canon")"
+    link="$bindir/$line-$feature"
+    if [ -L "$link" ] && [ "$(readlink -f "$link")" = "$froot/config/$line-$feature" ]; then
+      rm -f "$link" && info "removed $link (wrapper symlink)"
+    fi
+  fi
+
+  # Guard: only ever operate under <line>-features/
+  base="$CLION_ROOT/$line-features"
+  case "$froot/" in "$base/"*) : ;; *) die "refusing teardown outside $base" ;; esac
+  [ -d "$froot" ] || die "no such feature workspace: $froot"
+
+  for d in "$froot"/*/; do
+    [ -d "$d" ] || continue
+    d="${d%/}"
+    src="$(line_root "$line")/$(basename "$d")"
+    if [ ! -e "$src/.git" ]; then warn "  ? $(basename "$d") — no source repo, leaving"; continue; fi
+    if [ "$force" -eq 1 ]; then
+      git -C "$src" worktree remove --force "$d" >/dev/null 2>&1 || warn "  ! remove failed: $(basename "$d")"
+    else
+      if ! git -C "$src" worktree remove "$d" >/dev/null 2>&1; then
+        warn "  ! $(basename "$d") — worktree dirty; use --force to discard"; kept=$((kept+1)); continue
+      fi
+    fi
+    # Delete the feature branch. -d refuses if unmerged; -D only with --force.
+    if [ "$force" -eq 1 ]; then
+      git -C "$src" branch -D "$branch" >/dev/null 2>&1 || true
+    else
+      git -C "$src" branch -d "$branch" >/dev/null 2>&1 \
+        || warn "  ~ $(basename "$d") — branch '$branch' unmerged, kept (use --force to drop)"
+    fi
+    git -C "$src" worktree prune >/dev/null 2>&1 || true
+    removed=$((removed+1))
+  done
+
+  if [ "$kept" -gt 0 ]; then
+    warn "$kept worktree(s) kept (dirty); workspace left: $froot"
+  elif [ "$force" -eq 1 ]; then
+    # --force takes the non-repo siblings too (config/ inst/ pkg/ html/ results/,
+    # i.e. the ts-init scaffolding and any test results).
+    rm -rf "$froot" && info "removed $froot (incl. config/inst/results)"
+  else
+    rmdir "$froot" 2>/dev/null && info "removed empty $froot" \
+      || warn "workspace dir not empty (ts-init scaffolding?), left: $froot — --force removes it"
+  fi
+  info "teardown: removed=$removed kept=$kept"
+}
+
+cmd_list() {
+  local line="${1:-}" base d f
+  if [ -n "$line" ]; then
+    base="$CLION_ROOT/$line-features"
+    [ -d "$base" ] || { info "(no features for line $line)"; return; }
+    for f in "$base"/*/; do [ -d "$f" ] && printf '%s\n' "${f%/}"; done
+    return
+  fi
+  for d in "$CLION_ROOT"/*-features/; do
+    [ -d "$d" ] || continue
+    for f in "$d"*/; do [ -d "$f" ] && printf '%s\n' "${f%/}"; done
+  done
+}
+
+cmd_path() {
+  local line="${1:?line required}" feature="${2:?feature required}"
+  printf '%s\n' "$(feature_root "$line" "$feature")"
+}
+
+# --- dispatch ----------------------------------------------------------------
+
+[ $# -ge 1 ] || usage 1
+sub="$1"; shift || true
+case "$sub" in
+  create)   cmd_create   "$@" ;;
+  ts-init)  cmd_ts_init  "$@" ;;
+  ide-init) cmd_ide_init "$@" ;;
+  teardown) cmd_teardown "$@" ;;
+  list)     cmd_list     "$@" ;;
+  path)     cmd_path     "$@" ;;
+  repos)    cmd_repos    "$@" ;;
+  -h|--help|help) usage 0 ;;
+  *) die "unknown command: '$sub' (try: create|ts-init|ide-init|teardown|list|path|repos|help)" ;;
+esac

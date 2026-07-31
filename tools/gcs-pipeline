@@ -1,0 +1,404 @@
+#!/bin/sh
+
+# arguments
+action=$1
+test_unit=$2
+level=$3
+
+# helpers
+usage() {
+   cat >&2 <<EOF
+usage: $0 <action> [test_unit] [level]
+
+actions:
+   all       run full pipeline: git, build, install, test, shutdown (needs test_unit)
+   git       git pull all source/test repos
+   build     build and package via testsuite
+   install   install cluster via testsuite (wipes and recreates the cell)
+   start     start an already installed cluster (no reinstall, no data loss)
+   shutdown  shut down cluster via testsuite
+   ts        start interactive testsuite
+   test      run all tests in a category    (needs test_unit)
+   check     run a specific test            (needs test_unit, level)
+   dump      dump the test list
+   fullrun   run the COMPLETE testsuite: every category, every test, up to
+             the given runlevel (needs runlevel) -- this is check.exp's own
+             "all <runlevel>" mode, not the category-tag-filtered "test"
+             action. Long-running; meant for nightly/CI, not the dev loop.
+   clion     open this workspace's CLion project (with matching env)
+   reset     mark all tests as not-completed again (moves completed/failed/
+             unsupported result markers back into *.uncompleted, does not
+             delete anything)
+   runners   manage the parallel test clusters of this line; forwards to
+             gcs-runners (init | install [-p] | status | teardown)
+   testrun   full two-phase test run: parallel over N runners, then the
+             failures serially; forwards to gcs-testrun
+   help      show this message
+
+See testsuite/tools/doc/gcs-pipeline.md for the full picture, in particular
+for the parallel test setup.
+EOF
+   exit 2
+}
+
+# "reset the TS" without deleting results: for every host-prefixed result
+# directory under $CS_HOME/results (h047.completed, v01701.failed, ...),
+# move its .res.<level> marker files into the matching *.uncompleted dir
+# instead of rm'ing them, so completed/failed/unsupported test history
+# stays around for inspection but the TS treats every test as not-yet-run.
+reset_results() {
+   results_dir="$CS_HOME/results"
+   [ -d "$results_dir" ] || { printf 'no results dir at %s, nothing to reset\n' "$results_dir" >&2; return 0; }
+   moved=0
+   for d in "$results_dir"/*.completed "$results_dir"/*.failed "$results_dir"/*.unsupported; do
+      [ -d "$d" ] || continue
+      host=$(basename "$d" | sed -E 's/\.(completed|failed|unsupported)$//')
+      target="$results_dir/$host.uncompleted"
+      mkdir -p "$target"
+      for f in "$d"/*; do
+         [ -e "$f" ] || continue
+         mv -f "$f" "$target/" && moved=$((moved + 1))
+      done
+   done
+   printf 'reset: moved %d result marker(s) into *.uncompleted under %s\n' "$moved" "$results_dir"
+}
+
+# Read a key from a testsuite .sav file. A .sav carries the previous generation
+# as an "<obj>.old" block before the current one, so the LAST occurrence wins.
+read_sav_value() {
+   [ -f "$1" ] || return 0
+   awk -v key=":$2:" '
+      $0 == key { if ((getline v) > 0) { sub(/^:/,"",v); sub(/:$/,"",v); last = v } }
+      END { if (last != "") print last }' "$1"
+}
+
+get_branch() {
+   if [ -e "$1" ]; then
+      (cd "$1" && git rev-parse --abbrev-ref HEAD 2>/dev/null) || echo "unknown"
+   else
+      echo "unknown"
+   fi
+}
+
+run_check() {
+   header=$1
+   shift
+   printf '\n\n%s\n\n' "$header"
+   cd "$SGE_TEST/src" || exit 1
+   expect check.exp $args "$@"
+   exit $?
+}
+
+# run the interactive TS inside a tmux session named after CS_PIPELINE, so
+# it shows up in `tmux list-sessions` as e.g. "91x" or "91x-ts-dev" instead
+# of an anonymous numeric session. If we're already inside tmux, just run
+# directly (no nesting). If a session with that name is already running,
+# attach to it instead of starting a second one.
+run_check_tmux() {
+   # "=name" forces an exact match. Without it tmux resolves -t by exact name,
+   # then *prefix*, then fnmatch, then case-insensitively - so `92x ts` would
+   # find and attach to a running "92x-fixes" session, silently dropping the
+   # user into the feature workspace's TS instead of the line's own.
+   session="=$CS_PIPELINE"
+   if [ -n "$TMUX" ]; then
+      run_check "$@"
+   elif tmux has-session -t "$session" 2>/dev/null; then
+      printf 'attaching to existing tmux session %s\n' "$CS_PIPELINE"
+      exec tmux attach-session -t "$session"
+   else
+      printf 'starting tmux session %s\n' "$CS_PIPELINE"
+      exec tmux new-session -s "$CS_PIPELINE" "$0" ts
+   fi
+}
+
+# validate action up-front (short-circuits help / unknown before expensive derivation)
+case $action in
+   help|--help|-h) usage ;;
+   all|git|ts|build|install|start|shutdown|test|check|dump|fullrun|clion|reset|runners|testrun|"") ;;
+   *)
+      printf 'unknown action: %s\n\n' "$action" >&2
+      usage
+      ;;
+esac
+
+# global parameter. Feature-workspace wrappers export CS_PIPELINE/CS_HOME/
+# CS_MASTER_PORT plus CS_WRAPPER_ACTIVE=1 right before dot-sourcing this file —
+# that sentinel means "trust these, they were just set for this call". Without
+# it we always fall back to the line defaults, even if those vars are still
+# exported in the shell from an earlier wrapper source (otherwise sourcing
+# this script directly after ". 91x-ts-dev" would stay stuck in ts-dev).
+CLION_ROOT=${GCS_CLION_ROOT:-$HOME/Clion}
+
+# Directory this script lives in. The helpers it calls (get_pwd.sh, gcs-runners,
+# gcs-testrun) sit next to it, so nothing has to be hard-coded to one user's
+# home.
+#
+# A wrapper that sources this file passes CS_TOOL_DIR in -- it knows the
+# absolute path it is sourcing. Only when invoked directly do we have to work it
+# out, and then $0 is the line link and points here.
+#
+# Do not fall back to PATH: an IDE inherits the desktop session environment, not
+# an interactive shell, so the tool directory is usually not on it. That failure
+# is silent and shows up much later as "cmd '/get_pwd.sh' is not executable".
+if [ -z "${CS_TOOL_DIR:-}" ]; then
+   _d=$(dirname "${BASH_SOURCE:-$0}")
+   [ -x "$_d/get_pwd.sh" ] && CS_TOOL_DIR=$(cd "$_d" && pwd)
+   unset _d
+fi
+if [ -z "${CS_TOOL_DIR:-}" ] || [ ! -x "$CS_TOOL_DIR/get_pwd.sh" ]; then
+   printf 'cannot locate the tool directory (no get_pwd.sh found)\n' >&2
+   printf 'set CS_TOOL_DIR, or regenerate the wrappers: gcs-runners <line> init\n' >&2
+   exit 2
+fi
+
+if [ "$CS_WRAPPER_ACTIVE" = "1" ]; then
+   CS_PIPELINE=${CS_PIPELINE:-92x}
+   CS_HOME=${CS_HOME:-$CLION_ROOT/$CS_PIPELINE}
+   CS_MASTER_PORT=${CS_MASTER_PORT:-8002}
+else
+   # Without a wrapper the invocation name determines the line: 90x, 91x and
+   # 92x are symlinks to this file. BASH_SOURCE so that ". 92x" works too --
+   # when sourcing, $0 stays the shell itself.
+   CS_PIPELINE=$(basename "${BASH_SOURCE:-$0}")
+   CS_HOME=$CLION_ROOT/$CS_PIPELINE
+   # The port comes from the line configuration rather than a table in this
+   # script: it is recorded there anyway, and two sources for the same value
+   # drift apart sooner or later.
+   CS_MASTER_PORT=$(awk -F: '/^:commd_port:$/{getline; v=$2} END{print v}' \
+                    "$CS_HOME/config/defaults-$CS_PIPELINE.sav" 2>/dev/null)
+   if [ ! -f "$CS_HOME/config/defaults-$CS_PIPELINE.sav" ] || [ -z "$CS_MASTER_PORT" ]; then
+      printf 'no line configuration for "%s" (%s)\n' \
+             "$CS_PIPELINE" "$CS_HOME/config/defaults-$CS_PIPELINE.sav" >&2
+      printf 'call this via one of the line links, e.g. 92x, not by its own name\n' >&2
+      exit 2
+   fi
+fi
+export CS_PIPELINE CS_HOME CS_MASTER_PORT
+unset CS_WRAPPER_ACTIVE
+
+# scrub a foreign cluster environment out of what we inherited. A tmux server
+# keeps the environment of the shell that started it in its *global* env, so
+# every session it later spawns (including the one `ts` creates) starts with
+# PATH/LD_LIBRARY_PATH/MANPATH pointing into whatever workspace's inst/ was
+# active back then, plus that cluster's SGE_CELL/SGE_CLUSTER_NAME/ports.
+# Sourcing our own settings.sh further down would repair this — but only when
+# this line actually has an installed cluster. With an empty inst/ that source
+# is skipped and the foreign values survive, so the TS runs our config while
+# every qconf/qstat/qsub resolves to the other line's binaries and port.
+strip_foreign_inst() {
+   _out=""
+   _oifs=$IFS
+   IFS=:
+   for _p in $1; do
+      [ -n "$_p" ] || continue
+      case $_p in
+         "$CS_HOME"/*) ;;              # our own line — keep
+         */inst|*/inst/*) continue ;;  # another workspace's install — drop
+      esac
+      _out="${_out:+$_out:}$_p"
+   done
+   IFS=$_oifs
+   printf '%s' "$_out"
+}
+PATH=$(strip_foreign_inst "$PATH")
+LD_LIBRARY_PATH=$(strip_foreign_inst "$LD_LIBRARY_PATH")
+MANPATH=$(strip_foreign_inst "$MANPATH")
+export PATH LD_LIBRARY_PATH MANPATH
+# these only ever come from some settings.sh; ours is sourced below if it
+# exists, so anything still set here belongs to a foreign cluster
+case $SGE_ROOT in
+   "$CS_HOME"/*) ;;
+   *) unset SGE_CELL SGE_CLUSTER_NAME ;;
+esac
+
+# default values
+SGE_SOURCE="$CS_HOME/clusterscheduler"
+SGE_EXT="$CS_HOME/gcs-extensions"
+SGE_QGPU="$CS_HOME/qgpu"
+SGE_TEST="$CS_HOME/testsuite"
+SGE_EXT_TEST="$CS_HOME/ocs-testsuite"
+SGE_PKG="$CS_HOME/pkg"
+export SGE_ROOT="$CS_HOME/inst"
+SGE_BUILD="/usr/local/testsuite/$CS_MASTER_PORT/build"
+SGE_QMASTER_PORT=$CS_MASTER_PORT
+SGE_EXECD_PORT=$((SGE_QMASTER_PORT + 1))
+# export unconditionally: without this they are only exported when an inherited
+# (i.e. foreign) value happened to be in the environment already
+export SGE_QMASTER_PORT SGE_EXECD_PORT
+SGE_VERSION="unknown"
+SGE_ACT_QMASTER="unknown"
+SGE_PKG_FILES=0
+SGE_DRMAA_JAVA="$CS_HOME/drmaa-java"
+SGE_ARCH=""
+# The display the tests should use is a property of the user, not of this
+# script: the testsuite user configuration carries it in "<user>,envlist" and
+# the testsuite hands it to the tests from there. Read it from the same place
+# instead of pinning one developer's workstation into the tooling. If it is not
+# configured, leave whatever the environment already has.
+_user_conf=$(read_sav_value "$CS_HOME/config/defaults-$CS_PIPELINE.sav" user_config_file)
+_env_list=$(read_sav_value "$_user_conf" "$(id -un),envlist")
+case $_env_list in
+   *DISPLAY=*)
+      DISPLAY=${_env_list#*DISPLAY=}
+      DISPLAY=${DISPLAY%% *}
+      export DISPLAY
+      ;;
+esac
+unset _user_conf _env_list
+CLION_LAUNCHER="${GCS_CLION_LAUNCHER:-$HOME/.local/share/JetBrains/Toolbox/apps/clion/bin/clion}"
+
+# derived values
+if [ -e "$SGE_ROOT/default/common/settings.sh" ]; then
+   . "$SGE_ROOT/default/common/settings.sh"
+fi
+if [ -e "$SGE_ROOT/util/dl.sh" ]; then
+   . "$SGE_ROOT/util/dl.sh"
+fi
+if [ -e "$SGE_SOURCE" ]; then
+   SGE_ARCH=$("$SGE_SOURCE/source/dist/util/arch")
+fi
+SGE_SOURCE_BRANCH=$(get_branch "$SGE_SOURCE")
+SGE_EXT_BRANCH=$(get_branch "$SGE_EXT")
+SGE_EXT_TEST_BRANCH=$(get_branch "$SGE_EXT_TEST")
+SGE_QGPU_BRANCH=$(get_branch "$SGE_QGPU")
+SGE_TEST_BRANCH=$(get_branch "$SGE_TEST")
+if [ -n "$SGE_ARCH" ] && [ -e "$SGE_ROOT/bin/$SGE_ARCH/qstat" ]; then
+   SGE_VERSION=$("$SGE_ROOT/bin/$SGE_ARCH/qstat" -help | head -1)
+fi
+if [ -e "$SGE_ROOT/default/common/act_qmaster" ]; then
+   SGE_ACT_QMASTER=$(head -1 "$SGE_ROOT/default/common/act_qmaster")
+fi
+if [ -e "$SGE_PKG" ]; then
+   SGE_PKG_FILES=$(find "$SGE_PKG" -mindepth 1 -maxdepth 1 | wc -l)
+fi
+CMAKE_BUILD_ID=$(date +%d%m%y-%H%M)
+
+# show values
+echo "SGE_SOURCE       = $SGE_SOURCE ($SGE_SOURCE_BRANCH)"
+echo "SGE_TEST         = $SGE_TEST        ($SGE_TEST_BRANCH)"
+echo "SGE_EXT          = $SGE_EXT   ($SGE_EXT_BRANCH)"
+echo "SGE_EXT_TEST     = $SGE_EXT_TEST    ($SGE_EXT_TEST_BRANCH)"
+echo "SGE_QGPU         = $SGE_QGPU             ($SGE_QGPU_BRANCH)"
+echo "SGE_PKG          = $SGE_PKG              ($SGE_PKG_FILES files)"
+echo "SGE_ROOT         = $SGE_ROOT             ($SGE_VERSION; $SGE_ACT_QMASTER)"
+echo "SGE_BUILD        = $SGE_BUILD"
+echo "SGE_QMASTER_PORT = $SGE_QMASTER_PORT"
+echo "SGE_EXECD_PORT   = $SGE_EXECD_PORT"
+echo "CMAKE_BUILD_ID   = $CMAKE_BUILD_ID"
+
+# global TS parameter
+args=""
+args="$args file $CS_HOME/config/defaults-${CS_PIPELINE}.sav"
+#args="$args compile_clean"
+# How much the testsuite itself produces. FINE is a readable default; FINER and
+# FINEST add the internals of the remote procedures and are what you want when a
+# test fails for reasons that are not in its own output. Beyond ctest's -V, which
+# only decides how much of it is passed through.
+args="$args output_level ${CS_OUTPUT_LEVEL:-FINE}"
+#args="$args coverage lcov"
+#args="$args coverage_dir /root_access/ebablick/coverage/build"
+args="$args disable_washing_machine"
+args="$args install_mode automatic"
+args="$args html_dir $CS_HOME/html"
+args="$args no_local_qmaster_spool"
+args="$args cmake_build_type Debug"
+args="$args cmake_build_id $CMAKE_BUILD_ID"
+args="$args get_pw_command ${GCS_PW_COMMAND:-$CS_TOOL_DIR/get_pwd.sh}"
+
+case $action in
+   all)
+      [ -n "$test_unit" ] || { printf 'all: test_unit is required\n\n' >&2; usage; }
+      printf '\n\nTRIGGER BUILD PIPELINE OCS-MASTER-NIGHTLY\n\n'
+      for step in git build install; do
+         $0 $step || exit $?
+      done
+      $0 test "$test_unit" || exit $?
+      $0 shutdown || exit $?
+      ;;
+
+   git)
+      for d in "$SGE_SOURCE" "$SGE_DRMAA_JAVA" "$SGE_TEST" "$SGE_EXT" "$SGE_EXT_TEST"; do
+         printf '\n\nGIT PULL OF %s\n\n' "$d"
+         cd "$d" || exit 1
+         git pull || exit $?
+      done
+      ;;
+
+   ts)       run_check_tmux "STARTING INTERACTIVE TS" ;;
+   build)    run_check "STARTING BUILD AND PACKAGE CREATION WITH TS" compile ;;
+   install)  run_check "STARTING INSTALLATION OF CLUSTER WITH TS" install ;;
+   # Counterpart to shutdown: starts an existing installation without throwing
+   # the cell away. Needed when a test shuts the qmaster down in an orderly
+   # fashion and fails to bring it back (bugs/jira/3306 for instance) -- an
+   # install would be needlessly destructive there.
+   start)    run_check "STARTING ALREADY INSTALLED CLUSTER" start ;;
+   shutdown) run_check "STARTING SHUTDOWN OF CLUSTER WITH TS" kill ;;
+   dump)     run_check "STARTING DUMP OF TEST LIST" dump_test_list ;;
+
+   clion)
+      printf '\n\nSTARTING CLION FOR %s (%s)\n\n' "$CS_HOME" "$CS_PIPELINE"
+      nohup "$CLION_LAUNCHER" "$CS_HOME" >/dev/null 2>&1 &
+      disown 2>/dev/null || true
+      ;;
+
+   test)
+      [ -n "$test_unit" ] || { printf 'test: test_unit is required\n\n' >&2; usage; }
+      run_check "STARTING ALL TS TESTS OF PRODUCT CATEGORY" category "$test_unit" all 1000
+      ;;
+
+   check)
+      [ -n "$test_unit" ] && [ -n "$level" ] || { printf 'check: test_unit and level are required\n\n' >&2; usage; }
+      # CS_SELF_HEAL=1 enables the same self healing that gcs-ci-cd uses in its
+      # check branch: when a test fails, the cluster is reinstalled fresh
+      # (installer_reinstall_fresh_cluster, check.exp:4157) before the next test
+      # gets that slot. A test that wrecks the qmaster then no longer takes the
+      # whole runner down with it.
+      # Deliberately not the default: interactively, an automatic reinstall
+      # after every failure would be surprising and expensive.
+      if [ "${CS_SELF_HEAL:-0}" = "1" ]; then
+         args="$args re_init_on_tcl_error"
+      fi
+      run_check "STARTING SPECIFIC TEST" check "$test_unit" $level
+      ;;
+
+   fullrun)
+      [ -n "$test_unit" ] || { printf 'fullrun: runlevel is required\n\n' >&2; usage; }
+      run_check "STARTING FULL TS RUN (ALL CATEGORIES, ALL TESTS, LEVEL $test_unit)" all "$test_unit"
+      ;;
+
+   reset)
+      printf '\n\nRESETTING TEST RESULTS TO NOT-COMPLETED (%s)\n\n' "$CS_HOME"
+      reset_results
+      ;;
+
+   # Parallel test clusters. Both actions only forward -- the logic lives in
+   # line-independent tools so that 90x/91x/92x share it instead of maintaining
+   # it three times.
+   #
+   # The scope check is necessary because the feature wrappers (92x-fixes and
+   # relatives) dot-source this script: without it, "92x-fixes runners init"
+   # would create runners underneath the workspace. Runners belong to the line
+   # though -- a workspace is short lived and aimed at a small slice of the
+   # tests, so a runner set per workspace would cost ports, disk and host load
+   # without addressing the bottleneck.
+   runners|testrun)
+      line_root="${GCS_CLION_ROOT:-$HOME/Clion}/$CS_PIPELINE"
+      if [ "$CS_HOME" != "$line_root" ]; then
+         # For a feature wrapper CS_PIPELINE is "<line>-<feature>", so the
+         # derived line_root does not exist at all. Point at the actual line
+         # instead of naming it.
+         printf '%s: only for a release line, not for "%s"\n' "$action" "$CS_PIPELINE" >&2
+         printf '  use the line instead:  %s %s ...\n' "${CS_PIPELINE%%-*}" "$action" >&2
+         exit 2
+      fi
+      tool="$CS_TOOL_DIR/gcs-$action"
+      [ -x "$tool" ] || { printf '%s: helper not found: %s\n' "$action" "$tool" >&2; exit 2; }
+      shift
+      exec "$tool" "$CS_PIPELINE" "$@"
+      ;;
+
+   "")
+      # no action: switch to source directory (useful when sourcing)
+      cd "$SGE_SOURCE"
+      ;;
+esac

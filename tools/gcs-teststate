@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""gcs-teststate -- remember what has run since the last build.
+
+    gcs-teststate <line> summary            what passed, failed, never ran
+    gcs-teststate <line> pending            names of tests still to do
+    gcs-teststate <line> failed             names of tests that failed
+    gcs-teststate <line> reset              forget everything
+    gcs-teststate <line> record <name> <ok|fail> [seconds]
+
+Why this exists next to ctest's own bookkeeping: `--rerun-failed` reads
+LastTestsFailed.log, which holds the failures of the last run that *had*
+failures. A run with failures replaces that list rather than adding to it -- so
+a stray failure somewhere else discards the list one was working through. It is
+a snapshot, not a ledger.
+
+What one actually wants while working through a test run is: which tests have
+never run, which passed, which still fail -- and all of it invalidated the
+moment the binaries change, because a result from the previous build says
+nothing about this one.
+
+The build is identified by the mtime and size of the installed sge_qmaster of
+the line. That is what the runners mirror, so it is the thing that decides what
+the tests are testing. When it changes, the ledger is dropped.
+
+`pending` is meant to be fed straight back:
+
+    gcs-teststate 92x pending > todo.txt
+    ctest --test-dir <build> --tests-from-file todo.txt -j 8
+"""
+
+import os, sys, glob, fcntl, time
+
+CLION_ROOT = os.environ.get("GCS_CLION_ROOT", os.path.expanduser("~/Clion"))
+
+
+def paths(line):
+    root = f"{CLION_ROOT}/{line}"
+    return root, f"{root}/runners/teststate.tsv"
+
+
+def fingerprint(line):
+    """Identify the build. Empty when nothing is installed."""
+    root, _ = paths(line)
+    for p in glob.glob(f"{root}/inst/bin/*/sge_qmaster"):
+        st = os.stat(p)
+        return f"{int(st.st_mtime)}:{st.st_size}"
+    return ""
+
+
+def load(line):
+    """Return (fingerprint, {name: (result, when, seconds)}), dropping a ledger
+    that belongs to an older build."""
+    _, f = paths(line)
+    cur = fingerprint(line)
+    state, stored = {}, ""
+    if os.path.isfile(f):
+        for l in open(f, errors="replace"):
+            p = l.rstrip("\n").split("\t")
+            if p[0] == "#build":
+                stored = p[1]
+            elif len(p) >= 4:
+                state[p[0]] = (p[1], p[2], p[3])
+    if stored != cur:
+        return cur, {}
+    return cur, state
+
+
+def save(line, cur, state):
+    _, f = paths(line)
+    os.makedirs(os.path.dirname(f), exist_ok=True)
+    tmp = f + ".tmp"
+    with open(tmp, "w") as fh:
+        fh.write(f"#build\t{cur}\n")
+        for n, (r, w, s) in sorted(state.items()):
+            fh.write(f"{n}\t{r}\t{w}\t{s}\n")
+    os.replace(tmp, f)
+
+
+def record(line, name, result, seconds):
+    """Append one result. Locked: eight runners record concurrently."""
+    _, f = paths(line)
+    os.makedirs(os.path.dirname(f), exist_ok=True)
+    lock = open(f + ".lock", "w")
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    try:
+        cur, state = load(line)
+        state[name] = (result, time.strftime("%F %T"), str(seconds))
+        save(line, cur, state)
+        write_pending(line, state)
+    finally:
+        fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def registered(line):
+    """Every ctest test name of the current checktree.
+
+    Preferably from the list gcs-testscan writes when it generates the ctest
+    definition -- that is the same moment the set is defined, so the file cannot
+    disagree with what ctest knows. Only when it is missing is the checktree
+    rescanned, which costs a fraction of a second but spawns a process, and this
+    is called once per finished test.
+    """
+    root, _ = paths(line)
+    cached = f"{root}/runners/lists/ctest-names.txt"
+    if os.path.isfile(cached):
+        return [l.strip() for l in open(cached) if l.strip()]
+    import subprocess
+    here = os.path.dirname(os.path.abspath(__file__))
+    out = subprocess.run([f"{here}/gcs-testscan", line, "ctest-names"],
+                         capture_output=True, text=True)
+    return [l for l in out.stdout.split("\n") if l.strip()]
+
+
+def write_pending(line, state):
+    """Keep <line>/runners/pending.txt current.
+
+    So that an IDE run configuration can simply point at it with
+    --tests-from-file and always run what is actually still open, without a
+    preparation step the IDE would have to be taught.
+    """
+    root, _ = paths(line)
+    names = registered(line)
+    never = [n for n in names if n not in state]
+    failed = [n for n in names if state.get(n, ("",))[0] == "fail"]
+    f = f"{root}/runners/pending.txt"
+    tmp = f + ".tmp"
+    with open(tmp, "w") as fh:
+        fh.write("\n".join(never + failed) + ("\n" if never or failed else ""))
+    os.replace(tmp, f)
+
+
+def main():
+    if len(sys.argv) < 3:
+        sys.exit(__doc__)
+    line, cmd = sys.argv[1], sys.argv[2]
+
+    if cmd == "record":
+        record(line, sys.argv[3], sys.argv[4],
+               sys.argv[5] if len(sys.argv) > 5 else "0")
+        return
+
+    if cmd == "reset":
+        _, f = paths(line)
+        if os.path.isfile(f):
+            os.remove(f)
+        print(f"  ledger cleared ({f})")
+        return
+
+    cur, state = load(line)
+    if not cur:
+        sys.exit(f"  no installed binaries under {CLION_ROOT}/{line}/inst")
+
+    all_names = registered(line)
+    passed = [n for n in all_names if state.get(n, ("",))[0] == "ok"]
+    failed = [n for n in all_names if state.get(n, ("",))[0] == "fail"]
+    never = [n for n in all_names if n not in state]
+    # Recorded but no longer registered -- a checkout removed or renamed them.
+    gone = [n for n in state if n not in all_names]
+
+    write_pending(line, state)
+
+    if cmd == "pending":
+        # Everything that has not passed under this build: never run first,
+        # then the failures, so a run works through the unknown before
+        # repeating what is already known to be broken.
+        print("\n".join(never + failed))
+    elif cmd == "failed":
+        print("\n".join(failed))
+    elif cmd == "summary":
+        tot = len(all_names)
+        print(f"  line {line}, build {cur}")
+        print(f"  {'passed':<12} {len(passed):5d}")
+        print(f"  {'failed':<12} {len(failed):5d}")
+        print(f"  {'not yet run':<12} {len(never):5d}")
+        print(f"  {'registered':<12} {tot:5d}")
+        if tot:
+            done = len(passed) + len(failed)
+            print(f"  progress     {100 * done / tot:5.1f}%")
+        if gone:
+            print(f"  {len(gone)} recorded test(s) are no longer registered")
+        if failed:
+            print("\n  failed:")
+            for n in failed:
+                r, w, s = state[n]
+                print(f"    {s:>6}s  {w}  {n}")
+    else:
+        sys.exit(f"unknown command: {cmd}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+#
+# gcs-run-unit -- run one test group on the assigned runner.
+#
+#   gcs-run-unit <line> <path> <level> [<path> <level> ...]
+#
+# The execution unit of the whole setup. It knows no scheduler: which cluster is
+# responsible is taken from the environment, from a different variable depending
+# on the scheduler:
+#
+#   ctest    CTEST_RESOURCE_GROUP_0_TS_CLUSTER = "id:3,slots:1"
+#   GCS      SGE_HGR_ts_cluster                = "3"
+#   manual   TS_SLOT                           = "3"
+#
+# The same unit therefore runs under ctest locally, as an array task in the lab
+# and by hand in an emergency -- the scheduler is interchangeable, the unit is
+# not.
+#
+# Several (path, level) pairs form a *group*: tests that belong together because
+# they depend on each other via check_needs. They have to run one after another
+# on the SAME cluster, because validate_needs (check.exp:3227) looks for the
+# dependency's result file in results/, which is separate per runner.
+#
+# Exit status: 0 only if every unit of the group returned 0.
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+die() { printf 'gcs-run-unit: %s\n' "$*" >&2; exit 2; }
+
+[ $# -ge 3 ] || die "usage: gcs-run-unit [--name <ctest-name>] <line> <path> <level> ..."
+
+# The ctest name of this test, handed in by the generated definition. ctest
+# exposes no variable for it, and without it a result cannot be recorded under
+# the name the rest of the tooling uses.
+ctest_name=""
+if [ "${1:-}" = "--name" ]; then
+  ctest_name="$2"; shift 2
+fi
+
+line="$1"; shift
+[ $(($# % 2)) -eq 0 ] || die "expected path/level pairs, got $# arguments"
+
+# --- determine the slot -------------------------------------------------------
+slot=""
+if [ -n "${CTEST_RESOURCE_GROUP_0_TS_CLUSTER:-}" ]; then
+  # format "id:3,slots:1" -- only the id is of interest here
+  slot="${CTEST_RESOURCE_GROUP_0_TS_CLUSTER#*id:}"
+  slot="${slot%%,*}"
+elif [ -n "${SGE_HGR_ts_cluster:-}" ]; then
+  slot="${SGE_HGR_ts_cluster%% *}"
+elif [ -n "${TS_SLOT:-}" ]; then
+  slot="$TS_SLOT"
+fi
+[ -n "$slot" ] || die "no slot in the environment (CTEST_RESOURCE_GROUP_0_TS_CLUSTER, SGE_HGR_ts_cluster or TS_SLOT)"
+
+# Locate the runner wrapper. Deliberately NOT next to this script: the tools are
+# version controlled, the wrappers are generated per user and must not be. Once
+# the tools moved into the repository, looking beside them stopped working.
+#
+# The authoritative copy is the one gcs-runners writes into the runner
+# directory; the symlink it additionally puts on PATH is only for convenience,
+# so PATH is the fallback rather than the first choice.
+runner="${GCS_CLION_ROOT:-$HOME/Clion}/$line/runners/r$slot/config/$line-r$slot"
+if [ ! -x "$runner" ]; then
+  runner="$(command -v "$line-r$slot" 2>/dev/null || true)"
+fi
+[ -n "$runner" ] && [ -x "$runner" ] \
+  || die "no runner wrapper for slot $slot of line $line  (gcs-runners $line init)"
+
+# --- health check -------------------------------------------------------------
+#
+# Without it a single test poisons the whole slot: bugs/jira/3306 shuts the
+# qmaster down on purpose during setup (shutdown_qmaster, 2s pause against
+# socket reuse, startup_qmaster). When that restart fails the cluster is dead --
+# and because a dead slot fails in ~30s instead of minutes, it attracts a
+# disproportionate share of tests on the next ctest round and fails them all. In
+# one observed run, 6 of the first 30 results were such phantom failures.
+#
+# So check before every group and repair if needed, escalating by depth of
+# intervention: start first (the cell survives), then reinstall.
+
+port="$(awk -F= '/^CS_MASTER_PORT=/{print $2}' "$runner")"
+
+alive() {
+  # Two stages, because they differ by an order of magnitude: port check 28ms,
+  # full qstat query 450ms (335ms of which is sourcing the wrapper alone).
+  # Across 580 groups that is the difference between half a minute and four
+  # minutes. The case that actually hit us (qmaster gone) is already caught by
+  # the first stage.
+  [ -n "$port" ] && ss -ltnH 2>/dev/null | grep -qE ":${port}\b" || return 1
+
+  # Two traps that depend on each other:
+  #
+  # 'set --'  Dot-sourcing without own arguments inherits the caller's
+  #           positional parameters. Without clearing them the wrapper would
+  #           receive the test path as its action, the line script would report
+  #           "unknown action" and end the subshell with exit 2 -- every running
+  #           cluster would count as dead.
+  # 'set +u'  The line script is plain sh and reads action=$1 directly. With the
+  #           'set -u' inherited from here it dies on the empty $1 with "unbound
+  #           variable" -- that is, exactly once the first trap is fixed. One run
+  #           failed on this: 255 tests, 255 failures, each with two futile
+  #           repairs.
+  ( set +u; set --; . "$runner" >/dev/null 2>&1; timeout 45 qstat -f >/dev/null 2>&1 )
+}
+
+ensure_alive() {
+  alive && return 0
+  printf '### slot %s: cluster does not respond -- trying start\n' "$slot"
+  "$runner" start >/dev/null 2>&1
+  alive && { printf '### slot %s: back up (start)\n' "$slot"; return 0; }
+
+  printf '### slot %s: start was not enough -- reinstalling\n' "$slot"
+  "$runner" install >/dev/null 2>&1
+  alive && { printf '### slot %s: back up (install)\n' "$slot"; return 0; }
+
+  printf '### slot %s: NOT REPAIRABLE -- unit will not be run\n' "$slot"
+  return 1
+}
+
+# --- interrupted-run marker ---------------------------------------------------
+#
+# check.exp has no signal handling: no trap for SIGINT or SIGTERM. When ctest is
+# stopped -- by Ctrl-C, by the IDE's stop button, or by a test timeout -- the
+# test process dies on the spot and its cleanup function never runs. The cluster
+# then keeps whatever the test had set up: disabled queues, added complexes, a
+# modified scheduler configuration, an instrumented qmaster, leftover jobs.
+#
+# The health check above does not see this. A cluster left in a strange state
+# answers qstat perfectly well; only a dead qmaster is caught. The next test on
+# that slot would fail for reasons that have nothing to do with it.
+#
+# So: drop a marker before running, remove it after. A marker still present at
+# the next start means the previous run did not get to the end, and the only
+# reliable way back is a fresh install.
+marker=""
+_rdir="${GCS_CLION_ROOT:-$HOME/Clion}/$line/runners/r$slot"
+[ -d "$_rdir" ] && marker="$_rdir/.unit-in-progress"
+
+if [ -n "$marker" ] && [ -f "$marker" ]; then
+  printf '### slot %s: previous run did not finish (%s) -- reinstalling\n' \
+         "$slot" "$(head -1 "$marker" 2>/dev/null)"
+  "$runner" install >/dev/null 2>&1
+  rm -f "$marker"
+fi
+
+ensure_alive || exit 3
+
+# Deliberately no trap: a trap on EXIT would also fire when the shell is killed,
+# and would then remove the very marker that is supposed to record the kill. The
+# marker is cleared on the normal path only, at the end of this script.
+[ -n "$marker" ] && printf '%s  %s\n' "$(date '+%F %T')" "$*" > "$marker"
+
+# --- work through the group ---------------------------------------------------
+group_start=$(date +%s)
+rc=0
+while [ $# -ge 2 ]; do
+  path="$1"; level="$2"; shift 2
+  name="$(basename "$path").$level"
+  start=$(date +%s)
+  # CS_SELF_HEAL makes the testsuite reinstall itself after a failure, so the
+  # next test on this slot finds a clean cluster.
+  if CS_SELF_HEAL=1 "$runner" check "$path" "$level" 2>&1; then
+    printf '### %s ok (%ss, slot %s)\n' "$name" "$(( $(date +%s) - start ))" "$slot"
+  else
+    printf '### %s FAILED (%ss, slot %s)\n' "$name" "$(( $(date +%s) - start ))" "$slot"
+    rc=1
+  fi
+done
+
+# Record the outcome in the ledger that survives across runs and is dropped on a
+# rebuild -- see gcs-teststate. ctest's own LastTestsFailed.log is a snapshot of
+# the last run that had failures, which is not enough to work through a test run
+# over several sessions.
+if [ -n "$ctest_name" ] && [ -x "$SCRIPT_DIR/gcs-teststate" ]; then
+  "$SCRIPT_DIR/gcs-teststate" "$line" record "$ctest_name" \
+      "$([ $rc -eq 0 ] && echo ok || echo fail)" "$(( $(date +%s) - group_start ))" \
+      >/dev/null 2>&1 || true
+fi
+
+# Normal end -- whatever the tests returned, this script got to run its course,
+# so the cluster is in whatever state the tests' own cleanup left it.
+[ -n "$marker" ] && rm -f "$marker"
+exit $rc

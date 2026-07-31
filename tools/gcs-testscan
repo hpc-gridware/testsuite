@@ -1,0 +1,692 @@
+#!/usr/bin/env python3
+"""gcs-testscan -- scan the checktree and build runner lists.
+
+Replaces the detour through `check.exp dump_test_list`, which writes five
+Groovy files of Jenkins Job DSL **into the testsuite git tree** (tracked, not
+ignored -- one run produced 3783 changed lines here).
+
+What is scanned is what the check.exp files declare:
+
+    set check_name           "<name>"
+    set check_category       "... VERIFIED ..."
+    set check_needs          "init_core_system display_test"
+    set check_description(N) "..."        -> level N is supported
+    lappend check_functions  "..."        -> test has any test functions at all
+
+Selection exactly as dump_test_list does it (check.exp:8727ff): absolute path,
+has check_functions, is a leaf (no child tests), has check_category, not
+JENKINS_DISABLED, must be VERIFIED.
+
+Dependencies
+------------
+`validate_needs` (check.exp:3227) checks whether a result file exists in
+$CHECK_RESULT_DIRS(completed|unsupported) for each entry of check_needs. That
+directory is separate **per runner** -- a dependency satisfied on r1 is
+invisible to r2. Hence:
+
+  * Infrastructure tests (init_core_system, display_test, connection_test, ...)
+    are a prerequisite on EVERY runner and run there first.
+  * Anything coupled beyond that forms a group that goes to ONE runner as a
+    whole -- including mutual dependencies (save_config needs load_config and
+    vice versa), which are not a DAG and cannot be resolved topologically.
+
+Distribution is by measured runtime (LPT, longest group first) from
+results/check_durations.txt.
+
+Usage:
+  gcs-testscan <line> list                     # all units as TSV
+  gcs-testscan <line> groups                   # dependency groups
+  gcs-testscan <line> split <N> [--out DIR]    # N runner lists
+  gcs-testscan <line> verify                   # check against dump_test_list
+"""
+
+import os, re, sys, glob, collections
+
+CLION_ROOT = os.environ.get("GCS_CLION_ROOT", os.path.expanduser("~/Clion"))
+
+# Tests that are a prerequisite for others without representing a functional
+# coupling of their own: they have to run once up front on every runner.
+INFRA = {"init_core_system", "connection_test", "display_test"}
+
+# Cost per check.exp invocation (setup + teardown, without the test body).
+#
+# A single measurement on an idle machine gives 25 s, but under eight parallel
+# invocations it is a median of 48 s and a mean of 61 s (494 units of the full
+# run on 2026-07-31, wall clock minus the duration the testsuite reports). The
+# setup opens ssh connections to all hosts; eight of those at once against the
+# same six VMs cost more than one. The test bodies themselves do not get slower
+# -- that was measured separately (8 in parallel: 122 s against 124 s alone).
+#
+# With 25 s the model predicted 2.33 h where it actually took 3.13 h. The median
+# is the more robust value, because a few outliers up to 473 s skew the mean.
+OVERHEAD = int(os.environ.get("GCS_TS_OVERHEAD", "48"))
+
+
+def read_sav(path, key):
+    """Last occurrence wins -- a .sav carries the previous generation before it."""
+    if not os.path.isfile(path):
+        return ""
+    want, last, take = f":{key}:", "", False
+    for line in open(path, errors="replace"):
+        line = line.rstrip("\n")
+        if take:
+            last, take = line.strip(":"), False
+        elif line == want:
+            take = True
+    return last
+
+
+def checktree_roots(line):
+    cfg = f"{CLION_ROOT}/{line}/config/defaults-{line}.sav"
+    roots = [read_sav(cfg, "checktree_root_dir")]
+    extra = read_sav(cfg, "additional_checktree_dirs")
+    if extra and extra != "none":
+        roots += extra.split()
+    return [r for r in roots if r and os.path.isdir(r)]
+
+
+RE = {
+    "name":     re.compile(r'^\s*set\s+check_name\s+"([^"]*)"', re.M),
+    "category": re.compile(r'^\s*set\s+check_category\s+"([^"]*)"', re.M),
+    "needs":    re.compile(r'^\s*set\s+check_needs\s+"([^"]*)"', re.M),
+    "desc":     re.compile(r'^\s*set\s+check_description\((\d+)\)', re.M),
+    "func":     re.compile(r'^\s*(?:lappend|set)\s+check_functions\s+"', re.M),
+    # Both spellings occur: {"9.1.0" "9.2.0"} and "9.0.5 9.2.0"
+    "vr_all":   re.compile(r'^\s*set\s+check_version_range\s+(?:\{([^}]*)\}|"([^"]*)")', re.M),
+    "vr_lvl":   re.compile(r'^\s*set\s+check_version_range\((\d+)\)\s+(?:\{([^}]*)\}|"([^"]*)")', re.M),
+}
+
+
+def _ver(s):
+    """'9.2.0prealpha' -> (9,2,0). Trailing non-digits are ignored."""
+    parts = []
+    for p in s.split(".")[:3]:
+        m = re.match(r"\d+", p)
+        parts.append(int(m.group()) if m else 0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts)
+
+
+def in_range(current, spec):
+    """from inclusive, to exclusive -- as is_version_in_range (version.tcl:369).
+
+    That is why {"9.1.0" "9.2.0"} excludes the 9.2 line.
+    """
+    vs = re.findall(r'"([^"]*)"', spec) or spec.split()
+    if not vs:
+        return True
+    if current < _ver(vs[0]):
+        return False
+    if len(vs) > 1 and vs[1] and current >= _ver(vs[1]):
+        return False
+    return True
+
+
+def parse(path, current):
+    try:
+        txt = open(os.path.join(path, "check.exp"), errors="replace").read()
+    except OSError:
+        return None
+    m = RE["name"].search(txt)
+    if not m:
+        return None
+
+    levels = sorted({int(x) for x in RE["desc"].findall(txt)})
+
+    # Version range: either global for the whole test, or per runlevel as an
+    # array (verify_version_range, check.exp:2964).
+    per_lvl = {int(l): (a or b) for l, a, b in RE["vr_lvl"].findall(txt)}
+    if per_lvl:
+        levels = [l for l in levels if l not in per_lvl or in_range(current, per_lvl[l])]
+    else:
+        g = RE["vr_all"].search(txt)
+        if g and not in_range(current, g.group(1) or g.group(2)):
+            levels = []
+
+    cat = RE["category"].search(txt)
+    needs = RE["needs"].search(txt)
+    return {
+        "path":     path,
+        "name":     m.group(1),
+        "category": cat.group(1) if cat else "",
+        "needs":    needs.group(1).split() if needs else [],
+        "levels":   levels,
+        "has_func": bool(RE["func"].search(txt)),
+    }
+
+
+def current_version(line):
+    """Derive the product version (9,2,0) from gridengine_version ('92')."""
+    v = read_sav(f"{CLION_ROOT}/{line}/config/defaults-{line}.sav", "gridengine_version")
+    if len(v) == 2 and v.isdigit():
+        return (int(v[0]), int(v[1]), 0)
+    return _ver(v) if v else (9, 2, 0)
+
+
+def scan(line):
+    """All leaf tests of the checktrees, selected exactly as dump_test_list does."""
+    current = current_version(line)
+    tests = []
+    for root in checktree_roots(line):
+        for dirpath, dirnames, filenames in os.walk(root):
+            if "check.exp" not in filenames:
+                continue
+            # A leaf is a directory without subdirectories. A node with children
+            # is a container in the checktree, not a test -- verified against all
+            # 455 paths dump_test_list yields: none has a subdirectory.
+            if dirnames:
+                continue
+            t = parse(dirpath, current)
+            if not t:
+                continue
+            # --- selection as in dump_test_list (check.exp:8727ff) ---
+            if not t["has_func"]:
+                continue
+            if not t["category"]:
+                continue
+            if "JENKINS_DISABLED" in t["category"]:
+                continue
+            if "VERIFIED" not in t["category"]:
+                continue
+            if not t["levels"]:
+                continue
+            tests.append(t)
+    return sorted(tests, key=lambda t: t["path"])
+
+
+def rel_key(path):
+    """Line independent key: strip '<root>/<line>/' or
+    '<root>/<line>-features/<name>/' off the path.
+
+    check_durations.txt keys on absolute paths that contain the line. A freshly
+    set up 92x would therefore find no runtime at all -- even though measured
+    values have long existed for the same test under 91x, 90x or gcs0. The same
+    test has the same path *below* the line under every line.
+    """
+    m = re.match(re.escape(CLION_ROOT) + r"/(?:[^/]+-features/[^/]+|[^/]+)/(.*)$", path)
+    return m.group(1) if m else path
+
+
+def durations(line):
+    """path,level -> seconds from check_durations.txt (last run wins)."""
+    out = {}
+    for f in glob.glob(f"{CLION_ROOT}/*/results/check_durations.txt") + \
+             glob.glob(f"{CLION_ROOT}/*-features/*/results/check_durations.txt"):
+        lines = open(f, errors="replace").read().split("\n")
+        for i, l in enumerate(lines):
+            if l.startswith(":") and l.endswith(":") and "," in l:
+                key = l[1:-1]
+                p, _, lv = key.rpartition(",")
+                if not lv.isdigit() or i + 1 >= len(lines):
+                    continue
+                v = lines[i + 1].strip(":")
+                if v.isdigit():
+                    out[(p, int(lv))] = int(v)
+    return out
+
+
+def generic_durations(exact):
+    """Median per (line independent path, level) across all lines."""
+    buckets = collections.defaultdict(list)
+    for (p, lv), v in exact.items():
+        if v > 0:
+            buckets[(rel_key(p), lv)].append(v)
+    return {k: sorted(v)[len(v) // 2] for k, v in buckets.items()}
+
+
+def units(line):
+    """Units = (test, level). Duration from measurement, else the median."""
+    ts = scan(line)
+    dur = durations(line)
+    gen = generic_durations(dur)
+    known = [d for d in dur.values() if d > 0]
+    fallback = sorted(known)[len(known) // 2] if known else 60
+    us = []
+    for t in ts:
+        for lv in t["levels"]:
+            # 1. own measurement, 2. the same location under a different line,
+            # 3. median. Only this way does a fresh testsuite have any data.
+            if (t["path"], lv) in dur:
+                net, src = dur[(t["path"], lv)], "measured"
+            elif (rel_key(t["path"]), lv) in gen:
+                net, src = gen[(rel_key(t["path"]), lv)], "other_line"
+            else:
+                net, src = fallback, "estimated"
+            us.append({**t, "level": lv, "dur": net + OVERHEAD,
+                       "net": net, "src": src, "measured": src != "estimated"})
+    return us, fallback
+
+
+def group(us):
+    """Combine units into groups that have to go to the same runner.
+
+    Edges only arise from NON-infrastructure dependencies. The group is the
+    connected component (undirected), because cycles such as
+    save_config <-> load_config admit no topological order.
+    """
+    # The element of the union is (test, level), NOT the test name. Otherwise
+    # all levels of a test would be forced onto one runner -- for throughput
+    # that would be 48 invocations back to back. Levels stand on their own:
+    # dump_test_list has always produced one Jenkins job per (test, level), so
+    # the CI has long spread them across different clusters.
+    by_name = collections.defaultdict(list)
+    for u in us:
+        by_name[u["name"]].append((u["name"], u["level"]))
+
+    parent = {(u["name"], u["level"]): (u["name"], u["level"]) for u in us}
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    # A real check_needs edge binds ALL units of both tests together:
+    # validate_needs is satisfied by ANY level of the dependency, so at least one
+    # of them must have run on the same runner.
+    for u in us:
+        for n in u["needs"]:
+            if n in INFRA or n not in by_name:
+                continue
+            for other in by_name[n]:
+                union((u["name"], u["level"]), other)
+
+    groups = collections.defaultdict(list)
+    for u in us:
+        groups[find((u["name"], u["level"]))].append(u)
+    # within the group: levels ascending, so the lower ones run first
+    for g in groups.values():
+        g.sort(key=lambda u: (u["name"], u["level"]))
+    return list(groups.values())
+
+
+def split(us, n):
+    """LPT: heaviest group first, onto the emptiest runner at the time."""
+    gs = sorted(group(us), key=lambda g: -sum(u["dur"] for u in g))
+    bins = [[] for _ in range(n)]
+    load = [0] * n
+    for g in gs:
+        i = load.index(min(load))
+        bins[i].extend(g)
+        load[i] += sum(u["dur"] for u in g)
+    return bins, load
+
+
+def write_ctest(line, outdir, us, n):
+    """Generate CTestTestfile.cmake and the resource specification.
+
+    One add_test definition per *group*, not per unit: ctest assigns to free
+    slots dynamically and could therefore put save_config and load_config on
+    different clusters -- and their dependency runs through the runner's own
+    results/ directory, so it would be broken. As a single ctest definition the
+    group stays together and in order.
+
+    RESOURCE_GROUPS is the ctest equivalent of Jenkins' lockableResources:
+    ctest guarantees exclusivity and tells the test through
+    CTEST_RESOURCE_GROUP_0_TS_CLUSTER which slot it was given. COST makes ctest
+    start in descending order of cost under -j, so the LPT ordering comes for
+    free.
+    """
+    os.makedirs(outdir, exist_ok=True)
+    runner = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gcs-run-unit")
+
+    with open(f"{outdir}/ts_cluster.json", "w") as fh:
+        fh.write('{ "version": {"major": 1, "minor": 0},\n  "local": [ { "ts_cluster": [\n')
+        fh.write(",\n".join(f'    {{"id": "{i}", "slots": 1}}' for i in range(1, n + 1)))
+        fh.write("\n  ] } ] }\n")
+
+    def band(lv):
+        return ["short", "medium", "long", "day", "week"][min(lv // 100, 4)]
+
+    with open(f"{outdir}/CTestTestfile.cmake", "w") as fh:
+        fh.write(f"# generated by gcs-testscan for line {line} -- do not edit by hand\n")
+        for g in sorted(group(us), key=lambda g: -sum(u["dur"] for u in g)):
+            first = g[0]
+            # The level belongs in the name: without it the levels of the same
+            # test collide into one definition and ctest would see 452 instead
+            # of 580 tests. Groups carry the name of their first test.
+            tname = rel_key(first["path"]).replace("/", ".") + f".{first['level']}"
+            if len({u["name"] for u in g}) > 1:
+                tname += "+group"
+            args = " ".join(f'"{u["path"]}" "{u["level"]}"' for u in g)
+            cost = sum(u["dur"] for u in g)
+            labels = sorted({w for u in g for w in u["category"].split()} |
+                            {band(u["level"]) for u in g})
+            # --name before the line: it is an option, and gcs-run-unit reads
+            # its options first. ctest exposes no variable carrying the test
+            # name, so without passing it the execution unit cannot record its
+            # result under the name the rest of the tooling uses.
+            fh.write(f'add_test("{tname}" "{runner}" "--name" "{tname}" "{line}" {args})\n')
+            fh.write(f'set_tests_properties("{tname}" PROPERTIES\n')
+            fh.write(f'  RESOURCE_GROUPS "ts_cluster:1"\n')
+            fh.write(f'  COST {cost}\n')
+            fh.write(f'  TIMEOUT {max(900, cost * 3)}\n')
+            fh.write(f'  LABELS "{";".join(labels)}")\n')
+
+    print(f"  ctest definition:   {outdir}/CTestTestfile.cmake")
+    print(f"  resource spec:      {outdir}/ts_cluster.json  ({n} slots)")
+    print(f"  run with:  ctest --test-dir {outdir} -j {n} "
+          f"--resource-spec-file {outdir}/ts_cluster.json")
+
+
+# ---------------------------------------------------------------- CLion configs
+
+# Naming scheme (the axis comes first so the IDE's search narrows on it):
+#
+#   ts dir  ts/system_tests/scheduler   [26]
+#   ts cat  SCHEDULER                   [94]
+#   ts      ts/testsuite/connection_test.0
+#
+# The technical prefixes (testsuite.src.checktree. and
+# ocs-testsuite.checktree_gcs.checktree.) are dropped -- they carry no
+# information and would make every entry start with the same characters, which
+# is exactly what defeats a search box. What is left of them is one character of
+# provenance: "ts" for the classic checktree, "gcs" for ocs-testsuite.
+#
+# Slashes for the path, a dot only before the level, so a path reads as a path.
+# The count in brackets is there because the difference between 26 and 153 tests
+# is the difference between ten minutes and half a day -- worth knowing before
+# clicking.
+
+CONFIG_XML = """\
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="{name}" type="CTestRunConfiguration" \
+factoryName="CTestRun" PROGRAM_PARAMS="{params}" REDIRECT_INPUT="false" \
+ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" \
+WORKING_DIR="file://$CMakeCurrentLocalGenerationDir$" PASS_PARENT_ENVS_2="true" \
+CONFIG_NAME="{profile}" RUN_PATH="$CTestCurrentExecutableName$" \
+EXPLICIT_BUILD_TARGET_NAME="all" TEST_MODE="SUITE_TEST">
+    <method v="2">
+      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      <option name="BeforeTestRunTask" enabled="true" />
+    </method>
+  </configuration>
+</component>
+"""
+
+
+def ctest_name(u):
+    """The name write_ctest() gives this unit."""
+    return rel_key(u["path"]).replace("/", ".") + f".{u['level']}"
+
+
+def pretty(u):
+    """ts/system_tests/clients/qmod/qmod_general.0"""
+    rel = rel_key(u["path"])
+    tree = "gcs" if rel.startswith("ocs-testsuite") else "ts"
+    parts = rel.split("/")
+    cut = parts.index("checktree") + 1 if "checktree" in parts else 0
+    return f"{tree}/" + "/".join(parts[cut:]) + f".{u['level']}"
+
+
+def write_clion_configs(line, outdir, us, jobs, profile, min_label, with_tests):
+    import xml.sax.saxutils as sx
+    os.makedirs(outdir, exist_ok=True)
+    # Remove what a previous run wrote, so a renamed or deleted test does not
+    # leave an entry behind that no longer selects anything.
+    for f in glob.glob(f"{outdir}/gcs_ts_*.xml"):
+        os.remove(f)
+
+    def esc(t):
+        return re.sub(r"([.^$*+?()\[\]{}|\\])", r"\\\1", t)
+
+    def emit(kind, name, params):
+        fn = re.sub(r"[^A-Za-z0-9]+", "_", f"{kind}_{name}").strip("_")
+        with open(f"{outdir}/gcs_ts_{fn}.xml", "w") as fh:
+            fh.write(CONFIG_XML.format(name=sx.quoteattr(name)[1:-1],
+                                       params=sx.quoteattr(params)[1:-1],
+                                       profile=profile))
+
+    # Work on the groups, not the units: a dependency group is ONE ctest test
+    # (four units of the installer group are a single "...inst_sge_upd.0+group"
+    # definition). Counting units would promise four tests where ctest offers
+    # one, and the number in the name is only useful if it is the number that
+    # will actually run.
+    groups = sorted(group(us), key=lambda g: g[0]["path"])
+    regs = []
+    for g in groups:
+        first = g[0]
+        name = ctest_name(first) + ("+group" if len({u["name"] for u in g}) > 1 else "")
+        regs.append((name, first, g))
+
+    # Two configurations that select nothing in particular. "everything" is the
+    # one to be on when re-running a single test from the results tree: an IDE
+    # passes the position of a test there, and a position only means the same
+    # thing to ctest when no name filter has reduced and renumbered the set.
+    emit("a", "all     everything", f"-V -j {jobs}")
+    # --rerun-failed selects by name (LastTestsFailed.log holds names), so it
+    # composes with anything and works out of any results tree.
+    emit("a", "all     rerun failed", f"-V -j {jobs} --rerun-failed")
+    # Kept apart on purpose: the testsuite and the C++ module tests are
+    # different kinds of test -- minutes against milliseconds, a cluster against
+    # a binary. Mixing them in one entry means every run of the quick ones waits
+    # for the slow ones.
+    emit("a", f"ts all  testsuite  [{len(regs)}]",
+         f"-V -j {jobs} -R ^(testsuite|ocs-testsuite)\\.")
+    emit("a", "unit    C++ module tests", "-V -R ^test_")
+    # What has not passed under the current build. The file is kept current by
+    # gcs-teststate on every recorded result, so this needs no preparation step
+    # -- which an IDE could not be taught anyway.
+    emit("a", "ts all  pending (not yet passed)",
+         f"-V -j {jobs} --tests-from-file {CLION_ROOT}/{line}/runners/pending.txt")
+    n = 5
+
+    if with_tests:
+        for name, first, g in regs:
+            label = pretty(first) + ("  (+group)" if name.endswith("+group") else "")
+            emit("t", f"ts      {label}", f"-V -R {esc(name)}")
+            n += 1
+
+    dirs = collections.defaultdict(list)
+    for name, first, g in regs:
+        dirs[pretty(first).rsplit("/", 1)[0]].append(first)
+    for d, members in sorted(dirs.items()):
+        pfx = ctest_name(members[0]).rsplit(".", 2)[0]
+        # The filter is a prefix and therefore covers subdirectories too -- which
+        # is what one wants from "run everything under here". So count the whole
+        # subtree, not just the direct children, or the number in the name would
+        # promise less than the run delivers.
+        c = sum(1 for name, _, _ in regs if name.startswith(pfx + "."))
+        emit("d", f"ts dir  {d}  [{c}]", f"-V -j {jobs} -R ^{esc(pfx)}\\.")
+        n += 1
+
+    labels = collections.Counter()
+    for name, first, g in regs:
+        for l in {w for u in g for w in u["category"].split()}:
+            labels[l] += 1
+    # The all-encompassing ones are noise: they mean "everything" and there is
+    # already a configuration for that.
+    for l in ("VERIFIED", "short", "medium", "long", "day", "week"):
+        labels.pop(l, None)
+    for l, c in sorted(labels.items()):
+        if c >= min_label:
+            emit("c", f"ts cat  {l}  [{c}]", f"-V -j {jobs} -L ^{l}$")
+            n += 1
+
+    print(f"  {n} run configurations in {outdir}")
+    print(f"  (gcs_ts_*.xml -- regenerating replaces them, nothing else is touched)")
+
+
+def write_snapshot(line, outdir, us, n, load):
+    """Lists without provenance are worthless.
+
+    A checkout can add and remove tests -- a list is therefore only ever valid
+    for exactly one source state. The manifest records which one that was, so a
+    run stays traceable and `diff` can later show what has changed since.
+    """
+    import subprocess, datetime
+
+    def rev(d):
+        try:
+            return subprocess.run(["git", "-C", d, "rev-parse", "--short", "HEAD"],
+                                  capture_output=True, text=True, timeout=10
+                                  ).stdout.strip() or "?"
+        except Exception:
+            return "?"
+
+    # The registered names, so tools that only need the vocabulary do not have to
+    # rescan the checktree. Written here because this is the moment the set is
+    # defined.
+    with open(f"{outdir}/ctest-names.txt", "w") as fh:
+        for g in sorted(group(us), key=lambda g: g[0]["path"]):
+            first = g[0]
+            fh.write(rel_key(first["path"]).replace("/", ".") + f".{first['level']}"
+                     + ("+group" if len({u["name"] for u in g}) > 1 else "") + "\n")
+
+    with open(f"{outdir}/units.tsv", "w") as fh:
+        for u in sorted(us, key=lambda u: (u["path"], u["level"])):
+            fh.write(f"{u['path']}\t{u['level']}\t{u['net']}\t{u['src']}\n")
+
+    est = sum(1 for u in us if not u["measured"])
+    with open(f"{outdir}/manifest.txt", "w") as fh:
+        fh.write(f"line          {line}\n")
+        fh.write(f"generated     {datetime.datetime.now().isoformat(timespec='seconds')}\n")
+        for root in checktree_roots(line):
+            repo = root
+            while repo != "/" and not os.path.isdir(f"{repo}/.git"):
+                repo = os.path.dirname(repo)
+            fh.write(f"checktree     {root}  @ {rev(repo)}\n")
+        fh.write(f"runners       {n}\n")
+        fh.write(f"units         {len(us)}  ({est} without a measured duration)\n")
+        fh.write(f"overhead      {OVERHEAD}s per invocation\n")
+        fh.write(f"serial        {sum(load)}s\n")
+        fh.write(f"makespan      {max(load)}s\n")
+
+
+def main():
+    if len(sys.argv) < 3:
+        sys.exit(__doc__)
+    line, cmd = sys.argv[1], sys.argv[2]
+    us, fallback = units(line)
+
+    if cmd == "list":
+        for u in us:
+            print(f"{u['path']}\t{u['level']}\t{u['dur']}\t{u['src']}\t{u['name']}")
+
+    elif cmd == "groups":
+        gs = sorted(group(us), key=lambda g: -sum(u["dur"] for u in g))
+        multi = [g for g in gs if len({u["name"] for u in g}) > 1]
+        print(f"units: {len(us)}   groups: {len(gs)}   "
+              f"of those with more than one test: {len(multi)}")
+        for g in multi:
+            names = sorted({u["name"] for u in g})
+            print(f"  {sum(u['dur'] for u in g):6d}s  {len(g):3d} units  "
+                  f"{', '.join(names)}")
+
+    elif cmd == "split":
+        n = int(sys.argv[3])
+        # Restricting the registered set at generation time, rather than
+        # filtering at ctest invocation time, is what keeps an IDE usable:
+        # ctest renumbers whatever survives -R or -L, while the IDE takes the
+        # index of a test from the full list. Both together find nothing -- or
+        # worse, silently the wrong test. If only the wanted tests are
+        # registered in the first place, there is nothing to renumber.
+        if "--filter" in sys.argv:
+            pat = re.compile(sys.argv[sys.argv.index("--filter") + 1])
+            keep = [u for u in us if pat.search(rel_key(u["path"]).replace("/", "."))]
+            print(f"  filter: {len(keep)} of {len(us)} units")
+            us = keep
+            if not us:
+                sys.exit("  filter matches nothing -- refusing to write an empty set")
+        outdir = None
+        if "--out" in sys.argv:
+            outdir = sys.argv[sys.argv.index("--out") + 1]
+            os.makedirs(outdir, exist_ok=True)
+        bins, load = split(us, n)
+        total = sum(load)
+        for i, (b, l) in enumerate(zip(bins, load), 1):
+            print(f"  r{i}: {len(b):4d} units  {l:6d}s  ({l/3600:.2f} h)")
+            if outdir:
+                with open(f"{outdir}/r{i}.list", "w") as fh:
+                    for u in b:
+                        fh.write(f"{u['path']} {u['level']}\n")
+        print(f"  ---- serial {total}s ({total/3600:.2f} h), "
+              f"makespan {max(load)}s ({max(load)/3600:.2f} h), "
+              f"speedup {total/max(load):.2f}x")
+        src = collections.Counter(u["src"] for u in us)
+        print("  runtime sources: " +
+              ", ".join(f"{k} {v}" for k, v in sorted(src.items())))
+        if src["estimated"] > len(us) // 5:
+            print(f"  WARNING: {src['estimated']} of {len(us)} units have no "
+                  f"runtime data -- the distribution is at best an "
+                  f"equal split by count.\n"
+                  f"           The first run will be noticeably lopsided, but "
+                  f"calibrates afterwards via check_durations.txt.")
+        if outdir:
+            write_snapshot(line, outdir, us, n, load)
+            write_ctest(line, outdir, us, n)
+            print(f"  lists in {outdir}/r*.list, manifest in {outdir}/manifest.txt")
+
+    elif cmd == "ctest-names":
+        # The names ctest registers, one per line -- the vocabulary every other
+        # tool has to speak when it refers to a test.
+        for g in sorted(group(us), key=lambda g: g[0]["path"]):
+            first = g[0]
+            print(rel_key(first["path"]).replace("/", ".") + f".{first['level']}"
+                  + ("+group" if len({u["name"] for u in g}) > 1 else ""))
+
+    elif cmd == "clion-configs":
+        outdir = sys.argv[3]
+        def opt(name, default):
+            return sys.argv[sys.argv.index(name) + 1] if name in sys.argv else default
+        write_clion_configs(line, outdir, us,
+                            jobs=opt("--jobs", "8"),
+                            profile=opt("--profile", "GCS Debug h047"),
+                            min_label=int(opt("--min-label", "10")),
+                            with_tests="--no-tests" not in sys.argv)
+
+    elif cmd == "diff":
+        old = sys.argv[3]
+        if os.path.isdir(old):
+            old = f"{old}/units.tsv"
+        prev = set()
+        if os.path.isfile(old):
+            for l in open(old):
+                f = l.rstrip("\n").split("\t")
+                if len(f) >= 2 and f[1].isdigit():
+                    prev.add((f[0], int(f[1])))
+        now = {(u["path"], u["level"]) for u in us}
+        added, gone = sorted(now - prev), sorted(prev - now)
+        print(f"  before {len(prev)}   now {len(now)}   "
+              f"added {len(added)}   removed {len(gone)}")
+        for label, s in (("+ added", added), ("- removed", gone)):
+            for p, l in s:
+                print(f"  {label}: {p} {l}")
+
+    elif cmd == "verify":
+        src = f"{CLION_ROOT}/{line}/testsuite/src"
+        ref = set()
+        for f in glob.glob(f"{src}/jenkins_generate_*.groovy"):
+            for m in re.finditer(r"check (/\S+) (\d+)", open(f, errors="replace").read()):
+                ref.add((m.group(1), int(m.group(2))))
+        mine = {(u["path"], u["level"]) for u in us}
+        # The groovy files are generated into the testsuite git tree and are
+        # tracked there, so what sits in the working copy may well be the lab's
+        # committed version with its own paths. Comparing against that says
+        # nothing -- flag it instead of reporting a nonsensical difference.
+        foreign = {p for p, _ in ref if not any(p.startswith(r) for r in checktree_roots(line))}
+        if foreign:
+            print(f"  {len(foreign)} of the dumped paths do not belong to this line,")
+            print(f"  e.g. {sorted(foreign)[0]}")
+            print(f"  run '{line} dump' first -- the committed groovy files are stale.")
+            return
+        print(f"  dump_test_list: {len(ref)}   scanner: {len(mine)}")
+        for label, s in (("only in dump", ref - mine), ("only in scanner", mine - ref)):
+            if s:
+                print(f"  {label}: {len(s)}")
+                for p, l in sorted(s)[:10]:
+                    print(f"    {p} {l}")
+        if ref == mine:
+            print("  identical")
+    else:
+        sys.exit(f"unknown command: {cmd}")
+
+
+if __name__ == "__main__":
+    main()

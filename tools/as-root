@@ -1,0 +1,54 @@
+#!/usr/bin/expect --
+# as-root <host> <command...>
+#
+# Runs a command as root on <host>. The password comes from the same source the
+# testsuite uses (get_pwd.sh, backed by the GPG wallet) -- it is never printed
+# and never written to disk.
+#
+# Meant for the few places where a setup genuinely needs root, for example
+# mirroring setuid-root binaries between installations. For everything else the
+# rule stands: do not work as root.
+
+if {$argc < 2} {
+   puts stderr "usage: as-root <host> <command...>"
+   exit 2
+}
+
+set host [lindex $argv 0]
+set cmd  [join [lrange $argv 1 end] " "]
+
+# The password helper sits next to this script. GCS_PW_COMMAND overrides it,
+# so a site that obtains the root password differently only has to point at its
+# own helper -- the contract is "print the password on stdout, nothing else".
+if {[info exists env(GCS_PW_COMMAND)]} {
+   set pwfile $env(GCS_PW_COMMAND)
+} else {
+   set pwfile [file join [file dirname [file normalize [info script]]] get_pwd.sh]
+}
+if {![file executable $pwfile]} {
+   puts stderr "as-root: password helper not executable: $pwfile"
+   exit 3
+}
+if {[catch {set pw [string trim [exec $pwfile]]} err]} {
+   puts stderr "as-root: password not available ($err)"
+   puts stderr "as-root: cold gpg-agent cache? Run '$pwfile' interactively once."
+   exit 3
+}
+
+set timeout -1
+log_user 0
+spawn ssh -o StrictHostKeyChecking=accept-new -o NumberOfPasswordPrompts=1 \
+          root@$host $cmd
+expect {
+   -re "(?i)password:" { send -- "$pw\r"; exp_continue }
+   -re "(?i)permission denied" {
+      puts stderr "as-root: root login refused on $host"
+      exit 4
+   }
+   eof
+}
+log_user 1
+catch wait result
+set rc [lindex $result 3]
+puts -nonewline $expect_out(buffer)
+exit $rc

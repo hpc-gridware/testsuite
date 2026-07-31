@@ -1,0 +1,305 @@
+#!/usr/bin/env bash
+#
+# gcs-runners -- N parallel testsuite clusters on ONE code base of a line.
+#
+# Purpose: cut the wall clock of a testsuite run by having several clusters work
+# on the test list at the same time. The model is testsuite/jenkins/gcs-ci-cd,
+# which runs exactly this in the lab: eight clusters (gcs-ci-cd-0..7) on the code
+# base of cluster 0.
+#
+# Not to be confused with gcs-feature-workspace: that creates ONE workspace per
+# feature with its own worktrees, hence its own code base. Here it is the other
+# way round -- the code base of the line is shared, and only what a cluster
+# strictly needs for itself is separated:
+#
+#   per runner              shared with the line
+#   ------------------      -----------------------------
+#   commd_port              source_dir
+#   cluster_name            testsuite_root_dir / checktree_root_dir
+#   product_root (inst/)    additional_checktree_dirs
+#   results_dir             host/user/fs config, build artifacts
+#
+# Usage:
+#   gcs-runners <line> init    [N]        # directories, .sav, wrapper
+#   gcs-runners <line> install [N] [-p]   # mirror inst/ from the line + install
+#   gcs-runners <line> status
+#   gcs-runners <line> teardown [N] [--force]
+#
+# Ports are NOT invented: only registered, even ports from <user>,portlist of the
+# testsuite user configuration are eligible, because that is what vends the
+# matching gid_range. Ports >= 8100 stay reserved for feature workspaces by
+# convention.
+#
+# Why the .sav is additionally linked into <line>/config/: gcs-feature-workspace
+# determines occupied ports with a glob over <root>/*/config/defaults-*.sav.
+# Without that symlink a later ts-init would see the runner ports as free and
+# hand one of them to a workspace.
+
+set -euo pipefail
+
+CLION_ROOT="${GCS_CLION_ROOT:-$HOME/Clion}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Window from which runner ports are handed out. Lower bound so the runners do
+# not grab the ports historically assigned to the release lines (8000..8008)
+# just because no configuration currently sits on them. Upper bound because
+# everything from 8100 up serves the feature workspaces.
+RUNNER_PORT_MIN="${GCS_RUNNER_PORT_MIN:-8010}"
+RUNNER_PORT_MAX="${GCS_RUNNER_PORT_MAX:-8100}"
+
+die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
+info() { printf '%s\n' "$*" >&2; }
+
+usage() { sed -n '2,/^set -euo/{/^set -euo/d;s/^# \{0,1\}//;p}' "$0" >&2; exit "${1:-0}"; }
+
+line_root()   { printf '%s/%s' "$CLION_ROOT" "$1"; }
+runner_root() { printf '%s/runners/r%s' "$(line_root "$1")" "$2"; }
+runner_name() { printf '%s-r%s' "$1" "$2"; }
+
+# Read the value of a key from a .sav. A .sav carries the previous generation as
+# an "<obj>.old" block BEFORE the current one, so the LAST occurrence is the
+# authoritative value.
+read_sav_value() {
+  [ -f "$1" ] || return 0
+  awk -v key=":$2:" '
+    $0 == key { if ((getline v) > 0) { sub(/^:/,"",v); sub(/:$/,"",v); last = v } }
+    END { if (last != "") print last }' "$1"
+}
+
+# Every port some configuration already claims, plus everything that listens.
+used_ports() {
+  local f
+  for f in "$CLION_ROOT"/*/config/defaults-*.sav \
+           "$CLION_ROOT"/*-features/*/config/defaults-*.sav; do
+    [ -f "$f" ] || continue
+    read_sav_value "$f" commd_port
+  done
+  ss -ltnH 2>/dev/null | awk '{print $4}' | sed 's/.*://' | grep -E '^[0-9]+$' || true
+}
+
+# Registered, even, free ports below the workspace boundary, ascending.
+free_runner_ports() {
+  local line="$1" cfg ucf p used
+  cfg="$(line_root "$line")/config/defaults-$line.sav"
+  [ -f "$cfg" ] || die "line configuration not found: $cfg"
+  ucf="$(read_sav_value "$cfg" user_config_file)"
+  [ -n "$ucf" ] && [ -f "$ucf" ] || die "testsuite user configuration not readable: ${ucf:-<unset>}"
+  used=" $(used_ports | sort -un | tr '\n' ' ') "
+  for p in $(read_sav_value "$ucf" "$USER,portlist" | tr ' ' '\n' | sort -n); do
+    case "$p" in *[!0-9]*|"") continue ;; esac
+    [ "$p" -ge "$RUNNER_PORT_MIN" ] || continue
+    [ "$p" -lt "$RUNNER_PORT_MAX" ] || continue
+    [ $((p % 2)) -eq 0 ] || continue
+    case "$used" in *" $p "*|*" $((p+1)) "*) continue ;; esac
+    printf '%s\n' "$p"
+  done
+}
+
+# Derive the runner .sav from the line configuration: repoint ONLY port, cluster
+# name, product_root and results_dir. source_dir/testsuite_root_dir/
+# checktree_root_dir stay on the line -- that is the whole point of the exercise.
+gen_sav() {
+  local src="$1" dst="$2" port="$3" rroot="$4"
+  python3 - "$src" "$dst" "$port" "$rroot" <<'PY'
+import sys
+src, dst, port, rroot = sys.argv[1:5]
+repl = {
+    "commd_port":   port,
+    "cluster_name": f"p{port}",
+    "product_root": f"{rroot}/inst",
+    "results_dir":  f"{rroot}/results",
+}
+lines = open(src).read().split("\n")
+hits = {k: 0 for k in repl}
+for i, l in enumerate(lines):
+    if l.startswith(":") and l.endswith(":") and l[1:-1] in repl:
+        key = l[1:-1]
+        lines[i+1] = ":" + repl[key] + ":"
+        hits[key] += 1
+missing = [k for k, n in hits.items() if n == 0]
+if missing:
+    sys.exit(f"keys not found: {missing}")
+open(dst, "w").write("\n".join(lines))
+PY
+}
+
+cmd_init() {
+  local line="${1:?line required}" want="${2:-}"
+  local lroot rroot name cfg dst_cfg link wrapper canon i port
+  lroot="$(line_root "$line")"
+  [ -d "$lroot" ] || die "line root missing: $lroot"
+  cfg="$lroot/config/defaults-$line.sav"
+  canon="$(readlink -f "$lroot/config/$line" 2>/dev/null || true)"
+  [ -n "$canon" ] && [ -x "$canon" ] || canon="$SCRIPT_DIR/$line"
+  [ -x "$canon" ] || die "line script not found: $canon"
+
+  # Collect free ports. Important: a runner that already has a port keeps it --
+  # otherwise init would not be repeatable, because used_ports() sees our own
+  # runner configurations (through the symlinks in <line>/config/) and would
+  # report every already assigned port as taken.
+  local ports=() assigned=() need=0
+  while IFS= read -r port; do ports+=("$port"); done < <(free_runner_ports "$line")
+  [ -n "$want" ] || want=$(( ${#ports[@]} + $(find "$lroot/runners" -maxdepth 1 -name 'r*' -type d 2>/dev/null | wc -l) ))
+  for i in $(seq 1 "$want"); do
+    port="$(read_sav_value "$(runner_root "$line" "$i")/config/defaults-$(runner_name "$line" "$i").sav" commd_port)"
+    if [ -n "$port" ]; then assigned+=("$port"); else assigned+=(""); need=$((need+1)); fi
+  done
+  [ "${#ports[@]}" -ge "$need" ] \
+    || die "only ${#ports[@]} free registered ports in [$RUNNER_PORT_MIN,$RUNNER_PORT_MAX), needed: $need
+       register further even ports via the testsuite menu (user config) -- that is what vends the gid_range"
+
+  local next=0
+  for i in $(seq 1 "$want"); do
+    if [ -z "${assigned[$((i-1))]}" ]; then assigned[$((i-1))]="${ports[$next]}"; next=$((next+1)); fi
+  done
+
+  info "line:    $lroot"
+  info "runners: $want   ports: ${assigned[*]}"
+  for i in $(seq 1 "$want"); do
+    port="${assigned[$((i-1))]}"
+    rroot="$(runner_root "$line" "$i")"
+    name="$(runner_name "$line" "$i")"
+    mkdir -p "$rroot/config" "$rroot/inst" "$rroot/html" "$rroot/results" "$rroot/pkg"
+
+    # Mirror the line's repositories in so that the paths derived by the line
+    # script (SGE_SOURCE/SGE_TEST/...) resolve, without copying anything.
+    local d
+    for d in "$lroot"/*/; do
+      d="${d%/}"
+      [ -e "$d/.git" ] || continue
+      ln -sfn "$d" "$rroot/$(basename "$d")"
+    done
+
+    gen_sav "$cfg" "$rroot/config/defaults-$name.sav" "$port" "$rroot"
+
+    # Companion configurations (defaults-<line>.<project>.sav, .mpi.sav for
+    # instance) are located by inserting the project name before the .sav
+    # extension of the main configuration IN USE -- so they have to sit next to
+    # it under the runner's name, otherwise verifying the MPI configuration
+    # aborts the install. They carry no line specific paths or ports, hence a
+    # plain copy.
+    local addcfg proj
+    for addcfg in "$lroot"/config/defaults-"$line".*.sav; do
+      [ -f "$addcfg" ] || continue
+      proj="$(basename "$addcfg")"; proj="${proj#defaults-$line.}"; proj="${proj%.sav}"
+      cp "$addcfg" "$rroot/config/defaults-$name.$proj.sav"
+    done
+
+    # port visibility for gcs-feature-workspace (see the header comment)
+    link="$lroot/config/defaults-$name.sav"
+    ln -sfn "../runners/r$i/config/defaults-$name.sav" "$link"
+
+    wrapper="$rroot/config/$name"
+    cat > "$wrapper" <<EOF
+#!/bin/sh
+# Generated by gcs-runners -- runner $i of line $line.
+# Thin env wrapper; all logic stays in the shared line script.
+# Regenerate with: gcs-runners $line init
+CS_PIPELINE=$name
+CS_HOME=$rroot
+CS_MASTER_PORT=$port
+CS_WRAPPER_ACTIVE=1
+# Where the tools live. Passed in rather than left to be guessed: this wrapper
+# runs under /bin/sh, so the sourced script sees only \$0 -- which is this file,
+# not the tool directory. Guessing via PATH fails under an IDE, which inherits
+# the desktop session environment.
+CS_TOOL_DIR=$(dirname "$canon")
+export CS_PIPELINE CS_HOME CS_MASTER_PORT CS_WRAPPER_ACTIVE CS_TOOL_DIR
+. $canon "\$@"
+EOF
+    chmod +x "$wrapper"
+    ln -sfn "$wrapper" "$(dirname "$canon")/$name"
+    info "  + r$i  port $port/$((port+1))  cluster p$port  -> $rroot"
+  done
+  info ""
+  info "next step: gcs-runners $line install $want"
+}
+
+cmd_status() {
+  local line="${1:?line required}" lroot d i port root state
+  lroot="$(line_root "$line")"
+  [ -d "$lroot/runners" ] || { info "(no runners for $line)"; return; }
+  printf '%-10s %-6s %-9s %-8s %s\n' RUNNER PORT INST CLUSTER PATH
+  for d in "$lroot"/runners/r*/; do
+    d="${d%/}"; i="$(basename "$d" | tr -d 'r')"
+    port="$(read_sav_value "$d/config/defaults-$(runner_name "$line" "$i").sav" commd_port)"
+    root="$(read_sav_value "$d/config/defaults-$(runner_name "$line" "$i").sav" product_root)"
+    [ -d "$root/bin" ] && state=binary || state=empty
+    if ss -ltnH 2>/dev/null | grep -qE ":$port\b"; then
+      printf '%-10s %-6s %-9s %-8s %s\n' "r$i" "$port" "$state" "running" "$d"
+    else
+      printf '%-10s %-6s %-9s %-8s %s\n' "r$i" "$port" "$state" "-" "$d"
+    fi
+  done
+}
+
+cmd_install() {
+  local line="${1:?line required}" want="${2:-}" par="${3:-}"
+  local lroot rroot name i rc=0 pids=()
+  lroot="$(line_root "$line")"
+  [ -d "$lroot/runners" ] || die "no runners -- run 'gcs-runners $line init' first"
+  [ -n "$want" ] || want="$(find "$lroot/runners" -maxdepth 1 -name 'r*' -type d | wc -l)"
+
+  for i in $(seq 1 "$want"); do
+    rroot="$(runner_root "$line" "$i")"
+    [ -d "$rroot" ] || die "runner r$i missing -- run 'init' first"
+    # Mirror the line's binaries; the cell (cluster state) stays out, the
+    # install creates that itself.
+    #
+    # Why as root: inst/utilbin/<arch>/ holds testsuidroot as -r-s--x--x
+    # root:root. An unprivileged user can neither read the file nor set the
+    # setuid bit at the destination, so rsync aborts with code 23. The CI works
+    # around this by running a full build per cluster and letting distinst do
+    # the installation -- that costs N full builds. A root rsync takes seconds
+    # and yields the same result. Ownership is preserved (rsync -a), so only
+    # this single file ends up root:root.
+    info "  r$i: mirroring inst/ from the line (as root, setuid binaries) ..."
+    "$SCRIPT_DIR/as-root" "$(hostname -s)" \
+        "rsync -a --delete --exclude=/default '$lroot/inst/' '$rroot/inst/'" >/dev/null
+  done
+
+  for i in $(seq 1 "$want"); do
+    name="$(runner_name "$line" "$i")"
+    if [ "$par" = "-p" ]; then
+      ( "$name" install >"$(runner_root "$line" "$i")/install.log" 2>&1 ) & pids+=("$!")
+      info "  r$i: install started (PID ${pids[-1]})"
+    else
+      info "  r$i: installing ..."
+      if "$name" install >"$(runner_root "$line" "$i")/install.log" 2>&1; then
+        info "  r$i: ok"
+      else
+        info "  r$i: FAILED (see $(runner_root "$line" "$i")/install.log)"; rc=1
+      fi
+    fi
+  done
+  if [ "$par" = "-p" ]; then
+    for i in "${!pids[@]}"; do wait "${pids[$i]}" || { info "  r$((i+1)): FAILED"; rc=1; }; done
+  fi
+  return $rc
+}
+
+cmd_teardown() {
+  local line="${1:?line required}" want="${2:-}" force="${3:-}"
+  local lroot rroot name i
+  lroot="$(line_root "$line")"
+  [ -d "$lroot/runners" ] || { info "(no runners)"; return; }
+  [ -n "$want" ] || want="$(find "$lroot/runners" -maxdepth 1 -name 'r*' -type d | wc -l)"
+  for i in $(seq 1 "$want"); do
+    rroot="$(runner_root "$line" "$i")"; name="$(runner_name "$line" "$i")"
+    [ -d "$rroot" ] || continue
+    "$name" shutdown >/dev/null 2>&1 || true
+    rm -f "$lroot/config/defaults-$name.sav" "$(dirname "$(readlink -f "$lroot/config/$line")")/$name"
+    [ "$force" = "--force" ] && { rm -rf "$rroot"; info "  - r$i removed (including inst/results)"; } \
+                             || info "  - r$i shut down, directory kept (--force removes it)"
+  done
+}
+
+[ $# -ge 2 ] || usage 1
+line="$1"; sub="$2"; shift 2 || true
+case "$sub" in
+  init)     cmd_init     "$line" "$@" ;;
+  install)  cmd_install  "$line" "$@" ;;
+  status)   cmd_status   "$line" "$@" ;;
+  teardown) cmd_teardown "$line" "$@" ;;
+  -h|--help|help) usage 0 ;;
+  *) die "unknown command: '$sub' (init|install|status|teardown)" ;;
+esac

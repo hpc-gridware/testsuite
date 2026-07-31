@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+#
+# gcs-testrun -- complete test run of one line, in two phases.
+#
+#   gcs-testrun <line> [N] [-- <further ctest arguments>]
+#
+# Phase 1 runs in parallel across N runners, phase 2 reruns the failures of
+# phase 1 serially. The verdict is only final after both.
+#
+# Why two phases
+# --------------
+# The testsuite's wait helpers use absolute timeouts (30 s for a configuration
+# change, 60 s for load values to arrive) and thereby assume implicitly that
+# they have the hosts to themselves. Under eight parallel clusters these are
+# exceeded without any real defect being present.
+#
+# Measured on 2026-07-31 against the 92x line: of 21 failures from the parallel
+# run, 13 passed serially -- twelve of them two to three times faster. The same
+# work, stretched out under load. Only the remaining 8 were real defects.
+#
+# A single-phase parallel run would therefore report 13 failures that are none.
+# A purely serial run would need 18.65 h instead of 3.13 h. The two-phase run
+# does not claim that parallel execution yields the same result -- it checks.
+#
+# The actual fix is CS-2481 (scalable wait timeouts in the testsuite). After
+# that, phase 2 becomes unnecessary or at least short.
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+die() { printf 'gcs-testrun: %s\n' "$*" >&2; exit 2; }
+
+line="${1:?usage: gcs-testrun <line> [N] [-- <ctest-args>]}"; shift
+n=8
+[ $# -gt 0 ] && [[ "${1:-}" =~ ^[0-9]+$ ]] && { n="$1"; shift; }
+[ "${1:-}" = "--" ] && shift
+
+D="$HOME/Clion/$line/runners/lists"
+[ -d "$D" ] || die "no runner lists under $D  (gcs-runners $line init)"
+
+stamp="$(date '+%Y%m%d-%H%M%S')"
+RUN="$D/runs/$stamp"
+mkdir -p "$RUN"
+
+log() { printf '\n=== %s  (%s)\n' "$*" "$(date '+%H:%M:%S')" | tee -a "$RUN/summary.txt"; }
+
+# --- regenerate the test list -------------------------------------------------
+# Always, never from a cache: a checkout can add and remove tests, and a stale
+# list breaks with "path not found in checktree". The scan costs 0.14 s, so
+# there is nothing to save.
+log "phase 0: building the test list"
+"$SCRIPT_DIR/gcs-testscan" "$line" split "$n" --out "$D" 2>&1 | tee -a "$RUN/summary.txt"
+cp -p "$D/manifest.txt" "$D/units.tsv" "$RUN/" 2>/dev/null
+
+# Keep the IDE run configurations in step with the checktree. Only for a project
+# that already has generated ones -- their presence is the opt-in, so nobody who
+# never asked for them finds 700 files appearing in their .idea. A checkout that
+# added or removed tests would otherwise leave entries pointing at nothing, and
+# the whole point of regenerating the list on every run is that it cannot go
+# stale.
+_ide="$HOME/Clion/$line/.idea/runConfigurations"
+if compgen -G "$_ide/gcs_ts_*.xml" > /dev/null 2>&1; then
+  log "phase 0b: refreshing IDE run configurations"
+  "$SCRIPT_DIR/gcs-testscan" "$line" clion-configs "$_ide" --jobs "$n" 2>&1 \
+    | tee -a "$RUN/summary.txt"
+fi
+
+# --- phase 1: parallel --------------------------------------------------------
+log "phase 1: $n runners in parallel"
+t1=$(date +%s)
+ctest --test-dir "$D" -j "$n" --resource-spec-file "$D/ts_cluster.json" \
+      --output-junit "$RUN/parallel.xml" --output-on-failure "$@" \
+      > "$RUN/parallel.log" 2>&1
+rc1=$?
+t1=$(( $(date +%s) - t1 ))
+grep -E "tests passed|tests failed out of" "$RUN/parallel.log" | tee -a "$RUN/summary.txt"
+printf '  duration: %dm%02ds\n' $((t1/60)) $((t1%60)) | tee -a "$RUN/summary.txt"
+
+failed1=$(grep -c . "$D/Testing/Temporary/LastTestsFailed.log" 2>/dev/null || echo 0)
+if [ "$failed1" -eq 0 ]; then
+  log "phase 2 skipped -- no failures"
+  exit 0
+fi
+cp -p "$D/Testing/Temporary/LastTestsFailed.log" "$RUN/failed-parallel.log"
+
+# --- phase 2: serial ----------------------------------------------------------
+# -j 1 disables parallelism between the units. The other clusters keep running
+# but stay idle -- a conflict over a resource that an idle cluster also occupies
+# would therefore persist. For the timing related failures this is about, that
+# is immaterial.
+log "phase 2: rerunning $failed1 failures serially"
+t2=$(date +%s)
+ctest --test-dir "$D" --rerun-failed -j 1 --resource-spec-file "$D/ts_cluster.json" \
+      --output-junit "$RUN/serial.xml" --output-on-failure \
+      > "$RUN/serial.log" 2>&1
+rc2=$?
+t2=$(( $(date +%s) - t2 ))
+printf '  duration: %dm%02ds\n' $((t2/60)) $((t2%60)) | tee -a "$RUN/summary.txt"
+
+# --- verdict ------------------------------------------------------------------
+log "result"
+{
+  echo "real defects (failed serially too):"
+  grep -E '\*\*\*Failed|\*\*\*Timeout' "$RUN/serial.log" \
+    | sed -E 's/.*Test +#[0-9]+: ([^ ]+).*/  \1/' | sort
+  echo
+  echo "artifacts of parallel execution (passed serially) -- see CS-2481:"
+  grep -E 'Passed' "$RUN/serial.log" \
+    | sed -E 's/.*Test +#[0-9]+: ([^ ]+).*/  \1/' | sort
+} | tee -a "$RUN/summary.txt"
+
+real_defects=$(grep -cE '\*\*\*Failed|\*\*\*Timeout' "$RUN/serial.log")
+printf '\n  total: %dm%02ds  |  %d real defects  |  %d artifacts\n' \
+  $(( (t1+t2)/60 )) $(( (t1+t2)%60 )) "$real_defects" "$(( failed1 - real_defects ))" | tee -a "$RUN/summary.txt"
+printf '  output: %s\n' "$RUN" | tee -a "$RUN/summary.txt"
+
+[ "$real_defects" -eq 0 ] && exit 0 || exit 1

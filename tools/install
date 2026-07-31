@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+#
+# install -- put these tools on your PATH.
+#
+#   ./install [target-dir]        default: ~/.local/bin
+#   ./install --uninstall [dir]
+#
+# Creates symlinks, not copies, so an edit in the checkout takes effect right
+# away and `git status` stays meaningful.
+#
+# Why an install step at all: the tools manage release lines, so they cannot be
+# run out of one line's checkout -- with 90x, 91x and 92x each holding a copy of
+# this repository, "which one is 92x?" would have no answer. The symlink makes
+# the choice explicit and visible.
+
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+target="${1:-$HOME/.local/bin}"
+uninstall=0
+for a in "$@"; do
+  case "$a" in
+    --uninstall) uninstall=1 ;;
+  esac
+done
+case "$target" in --*) target="$HOME/.local/bin" ;; esac
+
+tools=(gcs-pipeline gcs-runners gcs-testscan gcs-testrun gcs-run-unit
+       gcs-feature-workspace as-root get_pwd.sh)
+# The release lines are the same script under a different name; it derives the
+# line from how it was called.
+lines=(90x 91x 92x)
+
+if [ "$uninstall" -eq 1 ]; then
+  for t in "${tools[@]}" "${lines[@]}"; do
+    [ -L "$target/$t" ] && rm -f "$target/$t" && printf '  removed %s\n' "$target/$t"
+  done
+  exit 0
+fi
+
+mkdir -p "$target"
+for t in "${tools[@]}"; do
+  [ -f "$here/$t" ] || { printf '  missing: %s\n' "$t" >&2; continue; }
+  ln -sfn "$here/$t" "$target/$t"
+  printf '  %s -> %s\n' "$target/$t" "$here/$t"
+done
+for l in "${lines[@]}"; do
+  ln -sfn "$here/gcs-pipeline" "$target/$l"
+  printf '  %s -> %s\n' "$target/$l" "$here/gcs-pipeline"
+done
+
+
+printf '\n  make sure %s is on your PATH\n' "$target"
+printf '  documentation: %s/doc/\n' "$here"
