@@ -29,10 +29,19 @@ if {![file executable $pwfile]} {
    puts stderr "as-root: password helper not executable: $pwfile"
    exit 3
 }
-if {[catch {set pw [string trim [exec $pwfile]]} err]} {
-   puts stderr "as-root: password not available ($err)"
-   puts stderr "as-root: cold gpg-agent cache? Run '$pwfile' interactively once."
-   exit 3
+# Key first: if root accepts our key, the wallet is never touched -- no gpg
+# call, no password on the wire, and nothing to go stale in an agent cache.
+# The password stays as the fallback for hosts that are not set up yet.
+set pw ""
+if {[catch {exec ssh -o BatchMode=yes -o ConnectTimeout=5 -l root $host true}] == 0} {
+   set have_key 1
+} else {
+   set have_key 0
+   if {[catch {set pw [string trim [exec $pwfile]]} err]} {
+      puts stderr "as-root: no key access to $host and password not available ($err)"
+      puts stderr "as-root: cold gpg-agent cache? Run '$pwfile' interactively once."
+      exit 3
+   }
 }
 
 set timeout -1
@@ -40,7 +49,17 @@ log_user 0
 spawn ssh -o StrictHostKeyChecking=accept-new -o NumberOfPasswordPrompts=1 \
           root@$host $cmd
 expect {
-   -re "(?i)password:" { send -- "$pw\r"; exp_continue }
+   -re "(?i)password:" {
+      if {$have_key} {
+         puts stderr "as-root: key was refused by $host, falling back to the wallet"
+         if {[catch {set pw [string trim [exec $pwfile]]}]} {
+            puts stderr "as-root: no password available either"
+            exit 3
+         }
+         set have_key 0
+      }
+      send -- "$pw\r"; exp_continue
+   }
    -re "(?i)permission denied" {
       puts stderr "as-root: root login refused on $host"
       exit 4
