@@ -794,16 +794,22 @@ proc user_config_userlist_set_portlist { array_name user value } {
 #
 #     Sized for modern many-core hosts: a concurrency test running
 #     2 * num_proc jobs on a high-thread-count server (e.g. dual-socket, or
-#     a 128-thread workstation) must still fit. Per-user blocks are laid out
-#     contiguously starting at 12800 and must stay below 65536, which leaves
-#     room for ~26 users at this width.
+#     a 128-thread workstation) must still fit -- 512 covers a 256-thread
+#     host at that ratio.
+#
+#     The width is a trade against the number of clusters the shared user
+#     configuration can hold: blocks live between the floor (12800) and the
+#     16-bit gid ceiling (65536), so the width divides that space. At 512
+#     there is room for ~103 (user,port) blocks; at the previous 2000 there
+#     were ~26, which a lab with many users and several test installations
+#     each ran out of.
 #
 #     This is the single source of truth for the block width. It is used
 #     both here (allocation) and in init_cluster.tcl (all.q slot cap, which
 #     must never exceed this width).
 #*******************************************************************************
 proc get_gid_range_width { } {
-   return 2000
+   return 512
 }
 
 #****** config_user/get_gid_range_floor() *************************************
@@ -883,33 +889,50 @@ proc user_config_userlist_create_gid_port { array_name port user } {
       puts "user $user ($port) gid_range: $stored has stale width, relocating (expected width $gid_width)"
    }
 
-   # Find the highest managed gid_start across all stored ranges so the new (or
-   # relocated) block sits strictly above every existing block. The entry being
-   # relocated still holds its old (low) start here; it never wins the max.
-   set highest_gid_start $gid_floor
+   # Collect every block that is occupied, so the new one can be placed into the
+   # first gap that holds it. The entry being relocated is skipped: its old
+   # block is exactly the space being given back.
+   #
+   # First fit from the floor, not "above the highest block": with a mixed set
+   # of widths the latter is not merely wasteful but wrong. Reducing the width
+   # would place the next block at highest_start + width, which lands *inside*
+   # the topmost wider block -- two clusters sharing supplementary gids, and
+   # the affected one possibly running. Placing into a verified gap cannot
+   # overlap whatever the widths are, and it reclaims the space that healing
+   # frees, so a width reduction actually gains room instead of stacking ever
+   # higher.
+   set occupied {}
    if { [info exist config(userlist)] } {
-      set userlist $config(userlist)
-      foreach user_loop $userlist {
+      foreach user_loop $config(userlist) {
          if { ![info exists config($user_loop,portlist)] } { continue }
-         set portlist $config($user_loop,portlist)
-         foreach port_loop $portlist {
+         foreach port_loop $config($user_loop,portlist) {
             if { ![info exists config($port_loop,$user_loop)] } { continue }
-            set range $config($port_loop,$user_loop)
-            set start_range [lindex [split $range "-"] 0]
-            if { [string is integer -strict $start_range] && $start_range > $highest_gid_start } {
-               set highest_gid_start $start_range
-            }
+            if { $port_loop == $port && $user_loop == $user } { continue }
+            set parts [split $config($port_loop,$user_loop) "-"]
+            if { [llength $parts] != 2 } { continue }
+            set b_start [lindex $parts 0]
+            set b_end [lindex $parts 1]
+            if { ![string is integer -strict $b_start] || ![string is integer -strict $b_end] } { continue }
+            if { $b_end < $gid_floor } { continue }
+            lappend occupied [list $b_start $b_end]
          }
       }
    }
+   set occupied [lsort -integer -index 0 $occupied]
 
-   # Block spacing and width are coupled: both derive from the same width so
-   # neighbouring user blocks never overlap (which would make two users share
-   # gids). Spacing == width, end == start + width - 1.
-   set gid_start $highest_gid_start
-   incr gid_start $gid_width
-   set gid_end $gid_start
-   incr gid_end [expr {$gid_width - 1}]
+   set gid_start $gid_floor
+   foreach block $occupied {
+      set b_start [lindex $block 0]
+      set b_end [lindex $block 1]
+      # Gap in front of this block big enough? Then we are done looking.
+      if { $gid_start + $gid_width - 1 < $b_start } {
+         break
+      }
+      if { $b_end >= $gid_start } {
+         set gid_start [expr {$b_end + 1}]
+      }
+   }
+   set gid_end [expr {$gid_start + $gid_width - 1}]
 
    # Guard the 16-bit gid ceiling. Supplementary group ids at/above 65536 wrap
    # or collide with real system gids, so refuse rather than vend an unsafe
@@ -934,10 +957,19 @@ proc user_config_userlist_create_gid_port { array_name port user } {
 #
 #  FUNCTION
 #     Walks every (user,port) in the shared user configuration and re-vends any
-#     managed gid_range whose width no longer matches get_gid_range_width (for
-#     example after the width was increased for many-core hosts). This makes
-#     the configuration self-heal: the caller no longer has to edit a portlist
-#     to pick up a new width.
+#     managed gid_range whose width no longer matches get_gid_range_width --
+#     after the width was raised for many-core hosts, or lowered to fit more
+#     clusters into the address space. This makes the configuration self-heal:
+#     the caller no longer has to edit a portlist to pick up a new width.
+#
+#     Because allocation picks the first gap above the floor, a reduction
+#     compacts: each healed block is re-vended into the space the earlier ones
+#     gave back, instead of stacking above the highest block and running into
+#     the gid ceiling.
+#
+#     Every healed cluster needs to be re-installed before it runs jobs again:
+#     its qmaster still carries the old range, which is no longer reserved for
+#     it in the configuration.
 #
 #     Healing is delegated to user_config_userlist_create_gid_port, so all the
 #     safety rules live in one place: sentinels below the floor and
@@ -1261,7 +1293,8 @@ proc setup_user_config { file { force_params "" } } {
       if { $do_nomain == 0 } {
          # Self-heal gid_range widths before verifying: re-vend any stored
          # per-user/port range whose width no longer matches the current
-         # get_gid_range_width (e.g. after it was raised for many-core hosts).
+         # get_gid_range_width (after it was raised for many-core hosts, or
+         # lowered to fit more clusters into the address space).
          # Persist immediately so the subsequent install reads the healed
          # values -- verify()'s happy path does not save on its own.
          if { [user_config_heal_gid_ranges ts_user_config] > 0 } {
