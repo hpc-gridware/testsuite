@@ -1,7 +1,7 @@
 # `gcs-teststate` — remember what has run since the last build
 
 ```
-gcs-teststate <line> summary | pending | failed | reset
+gcs-teststate <line> summary | pending | passed | failed | reset
 gcs-teststate <line> record <name> <ok|fail> [seconds]
 ```
 
@@ -43,6 +43,7 @@ bookkeeping of its own.
 |---|---|
 | `summary` | Counts of passed, failed and not yet run, progress in percent, and the failures with duration and time. Also reports tests that are recorded but no longer registered — a checkout removed or renamed them. |
 | `pending` | Everything that has not passed under this build, never-run ones first, then the failures, so a run works through the unknown before repeating what is already known to be broken. |
+| `passed` | The tests that passed, with duration and time. |
 | `failed` | Only the failures, one name per line. |
 | `reset` | Forget everything. Rarely needed — a rebuild does this by itself. |
 | `record <name> <ok\|fail> [seconds]` | Record one result. Called by `gcs-run-unit`; little reason to call it by hand. |

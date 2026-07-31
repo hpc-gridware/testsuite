@@ -3,6 +3,7 @@
 
     gcs-teststate <line> summary            what passed, failed, never ran
     gcs-teststate <line> pending            names of tests still to do
+    gcs-teststate <line> passed             names of tests that passed
     gcs-teststate <line> failed             names of tests that failed
     gcs-teststate <line> reset              forget everything
     gcs-teststate <line> record <name> <ok|fail> [seconds]
@@ -164,6 +165,12 @@ def main():
         # then the failures, so a run works through the unknown before
         # repeating what is already known to be broken.
         print("\n".join(never + failed))
+    elif cmd == "passed":
+        # With when and how long, because that is what one wants to know about a
+        # test that is done: the names alone are already in the summary count.
+        for n in passed:
+            r, w, sec = state[n]
+            print(f"{sec:>6}s  {w}  {n}")
     elif cmd == "failed":
         print("\n".join(failed))
     elif cmd == "summary":
