@@ -38,7 +38,9 @@
 set -euo pipefail
 
 CLION_ROOT="${GCS_CLION_ROOT:-$HOME/Clion}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Follow symlinks: these tools are put on PATH as links, and they call each
+# other via SCRIPT_DIR -- which has to be the checkout, not the link farm.
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # Window from which runner ports are handed out. Lower bound so the runners do
 # not grab the ports historically assigned to the release lines (8000..8008)
 # just because no configuration currently sits on them. Upper bound because

@@ -26,7 +26,7 @@ done
 case "$target" in --*) target="$HOME/.local/bin" ;; esac
 
 tools=(gcs-pipeline gcs-runners gcs-testscan gcs-testrun gcs-run-unit
-       gcs-feature-workspace as-root get_pwd.sh)
+       gcs-teststate gcs-feature-workspace as-root get_pwd.sh)
 # The release lines are the same script under a different name; it derives the
 # line from how it was called.
 lines=(90x 91x 92x)

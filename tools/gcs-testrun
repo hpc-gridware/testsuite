@@ -27,7 +27,9 @@
 
 set -uo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Follow symlinks: these tools are put on PATH as links, and they call each
+# other via SCRIPT_DIR -- which has to be the checkout, not the link farm.
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 
 die() { printf 'gcs-testrun: %s\n' "$*" >&2; exit 2; }
 
