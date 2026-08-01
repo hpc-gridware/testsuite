@@ -36,11 +36,13 @@ proc is_host_resolvable {hostname} {
 # This performs the same operation as main menu item (21) "install cluster":
 # menu_item_install_cluster with check_use_installed_system == 0, i.e. a
 # genuine fresh install (install_core_system runs kill_running_system and
-# then reinstalls from scratch). installer_reinstall_fresh_cluster is NOT
-# used here: it forces check_use_installed_system 1 (re-use the existing
-# installation) and only falls back to a fresh install if the re-use run
-# fails - on a healthy but config-dirtied cluster the re-use "succeeds",
-# so nothing would actually be reinstalled.
+# then reinstalls from scratch).
+#
+# An earlier implementation of this function re-used the existing installation
+# (check_use_installed_system 1) and only fell back to a fresh install when the
+# re-use run failed. On a healthy but config-dirtied cluster the re-use run
+# "succeeds", so nothing was actually reinstalled - hence the unconditional
+# fresh install here.
 #
 # menu_item_install_cluster runs run_tests -> run_test -> run_test_level,
 # which calls clear_all_check_errors. That unsets the global error
@@ -179,8 +181,10 @@ proc installer_save_config {{backup_dir ""}} {
    installer_set_env_for_upgrade env_array
 
    # default backup destination
+   set shared_reference 0
    if {$backup_dir == ""} {
       set backup_dir [installer_get_backup_dir]
+      set shared_reference 1
    }
    set arguments $backup_dir
 
@@ -189,8 +193,41 @@ proc installer_save_config {{backup_dir ""}} {
       return 0
    }
 
+   # The reference below resources/backups is shared by every cluster that runs
+   # tests from this checkout. Several of them may find it missing at the same
+   # moment and start writing into the same directory - the check above is a
+   # time-of-check-to-time-of-use window, not a lock.
+   #
+   # So build it under a name of our own and move it into place in one step.
+   # The temporary directory is a SIBLING of the target on purpose: same parent
+   # means same filesystem, which is what makes the move atomic. results/ or
+   # /tmp would be an assumption about the mount layout (/tmp is a tmpfs here),
+   # and the move would fail with EXDEV where it does not hold. The pid keeps
+   # two clusters apart while they are still building.
+   if {$shared_reference} {
+      set arguments "[file dirname $backup_dir]/.tmp.[pid].[file tail $backup_dir]"
+   }
+
    # start the backup
    set result [start_remote_prog $hostname $admin_user $backup_script $arguments prg_exit_state 60 0 $working_dir env_array]
+   if {$prg_exit_state == 0 && $shared_reference} {
+      # Loser of the race: someone else was faster, our copy is redundant.
+      # "mv -T" would replace their directory, "mv" without it would nest ours
+      # inside theirs - so ask first and throw ours away.
+      if {[is_remote_path $hostname $admin_user $backup_dir]} {
+         ts_log_fine "another cluster created $backup_dir first, dropping our copy"
+         start_remote_prog $hostname $admin_user "rm" "-rf $arguments"
+      } else {
+         start_remote_prog $hostname $admin_user "mv" "-T $arguments $backup_dir"
+         if {$prg_exit_state != 0} {
+            # Lost the race between the check and the move: also fine, but our
+            # copy has to go.
+            ts_log_fine "could not move $arguments to $backup_dir, dropping our copy"
+            start_remote_prog $hostname $admin_user "rm" "-rf $arguments"
+         }
+      }
+      set prg_exit_state 0
+   }
    if {$prg_exit_state != 0} {
       ts_log_severe "Save config script failed:\n$result"
    }
