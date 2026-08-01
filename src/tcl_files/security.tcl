@@ -49,7 +49,27 @@ proc get_tls_cert_path {hostname component {user ""}} {
 proc get_tls_key_dir {} {
    get_current_cluster_config_array ts_config
 
+   # Port AND cell since 9.1.5 / 9.2.0: the port alone does not identify an
+   # installation, so two clusters using the same port shared this directory
+   # and the second one failed to start. See CS-2487. Earlier versions keep the
+   # keys directly below the port.
+   if {[is_version_in_range "9.1.5"]} {
+      return "/var/lib/ocs/$ts_config(commd_port)/$ts_config(cell)/private"
+   }
    return "/var/lib/ocs/$ts_config(commd_port)/private"
+}
+
+###
+# @brief get the directory holding the TLS private keys of ALL installations on a port
+#
+# Used to clean up before an installation: covers the layout with and without the
+# cell, so keys of an older installation cannot be left behind. See CS-2487.
+#
+# @return path to the per port TLS directory
+proc get_tls_port_dir {} {
+   get_current_cluster_config_array ts_config
+
+   return "/var/lib/ocs/$ts_config(commd_port)"
 }
 
 ###
