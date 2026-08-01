@@ -115,6 +115,7 @@ proc get_dir_names {path} {
 #*******************************************************************************
 proc get_tmp_directory_name {{hostname ""} {type "default"} {dir_ext "tmp"} {not_in_results 0}} {
    global CHECK_MAIN_RESULTS_DIR CHECK_USER last_file_extention
+   get_current_cluster_config_array ts_config
 
    if {$hostname == ""} {
       set local_host [gethostname]
@@ -128,15 +129,21 @@ proc get_tmp_directory_name {{hostname ""} {type "default"} {dir_ext "tmp"} {not
       incr last_file_extention 1
    }
 
+   # Cluster and process, for the same reason as in get_tmp_file_name().
+   set unique [pid]
+   if {[info exists ts_config(commd_port)]} {
+      set unique "$ts_config(commd_port)_[pid]"
+   }
+
    set timestamp_sub_index $last_file_extention
    if {$not_in_results == 0} {
       while {1} {
          set timestamp_appendix "[clock seconds]_$timestamp_sub_index"
          if {![file isdirectory $CHECK_MAIN_RESULTS_DIR ]} {
-           set file_name "/tmp/${CHECK_USER}_${hostname}_${type}_${timestamp_appendix}_${dir_ext}"
+           set file_name "/tmp/${CHECK_USER}_${hostname}_${unique}_${type}_${timestamp_appendix}_${dir_ext}"
            set is_host_local_dir 1
          } else {
-           set file_name "$CHECK_MAIN_RESULTS_DIR/${CHECK_USER}_${hostname}_${type}_${timestamp_appendix}_${dir_ext}"
+           set file_name "$CHECK_MAIN_RESULTS_DIR/${CHECK_USER}_${hostname}_${unique}_${type}_${timestamp_appendix}_${dir_ext}"
            set is_host_local_dir 0
          }
          # break loop when file is not existing (when timestamp has increased)
@@ -150,7 +157,7 @@ proc get_tmp_directory_name {{hostname ""} {type "default"} {dir_ext "tmp"} {not
       set is_host_local_dir 1
       while {1} {
          set timestamp_appendix "[clock seconds]_$timestamp_sub_index"
-         set file_name "/tmp/${CHECK_USER}_${hostname}_${type}_${timestamp_appendix}_${dir_ext}"
+         set file_name "/tmp/${CHECK_USER}_${hostname}_${unique}_${type}_${timestamp_appendix}_${dir_ext}"
          # break loop when file is not existing (when timestamp has increased)
          if {[remote_file_isdirectory $hostname $file_name]} {
             incr timestamp_sub_index 1
@@ -355,6 +362,7 @@ proc analyze_directory_structure {host user path dirs files permissions {ignore 
 #*******************************************************************************
 proc get_tmp_file_name {{hostname ""} {type "default"} {file_ext "tmp"} {not_in_results 0}} {
    global CHECK_MAIN_RESULTS_DIR CHECK_USER last_file_extention
+   get_current_cluster_config_array ts_config
 
    if {$hostname == ""} {
       set local_host [gethostname]
@@ -368,16 +376,32 @@ proc get_tmp_file_name {{hostname ""} {type "default"} {file_ext "tmp"} {not_in_
       incr last_file_extention
    }
 
+   # The name has to identify the cluster AND the process. Several clusters of
+   # the same user run on the same host at the same time (parallel test runs),
+   # and /tmp is shared between all of them: without this, two testsuites that
+   # ask for a name in the same second with the same counter get the same path,
+   # and one silently overwrites the other's file. Seen in practice as
+   # "qconf -Ap ... unknown attribute name s_rt" -- a PE was added from a file
+   # another cluster had just filled with a queue definition.
+   #
+   # The commd_port is the cluster (it is what makes a cluster unique), the pid
+   # is the process. The existing "does the file already exist" loop cannot
+   # cover this: between the check and the write, the other process writes too.
+   set unique [pid]
+   if {[info exists ts_config(commd_port)]} {
+      set unique "$ts_config(commd_port)_[pid]"
+   }
+
    set timestamp_sub_index $last_file_extention
    if {$not_in_results == 0} {
       # local file operations
       while {1} {
          set timestamp_appendix "[clock seconds]_$timestamp_sub_index"
          if {![file isdirectory $CHECK_MAIN_RESULTS_DIR]} {
-           set file_name "/tmp/${CHECK_USER}_${hostname}_${type}_$timestamp_appendix.${file_ext}"
+           set file_name "/tmp/${CHECK_USER}_${hostname}_${unique}_${type}_$timestamp_appendix.${file_ext}"
            set is_host_local_file 1
          } else {
-           set file_name "$CHECK_MAIN_RESULTS_DIR/${CHECK_USER}_${hostname}_${type}_$timestamp_appendix.${file_ext}"
+           set file_name "$CHECK_MAIN_RESULTS_DIR/${CHECK_USER}_${hostname}_${unique}_${type}_$timestamp_appendix.${file_ext}"
            set is_host_local_file 0
          }
          # break loop when file is not existing (when timestamp has increased)
@@ -392,7 +416,7 @@ proc get_tmp_file_name {{hostname ""} {type "default"} {file_ext "tmp"} {not_in_
       set is_host_local_file 1
       while {1} {
          set timestamp_appendix "[clock seconds]_$timestamp_sub_index"
-         set file_name "/tmp/${CHECK_USER}_${hostname}_${type}_$timestamp_appendix.${file_ext}"
+         set file_name "/tmp/${CHECK_USER}_${hostname}_${unique}_${type}_$timestamp_appendix.${file_ext}"
          # break loop when file is not existing (when timestamp has increased)
          if {[is_remote_file $hostname $CHECK_USER $file_name]} {
             incr timestamp_sub_index 1
