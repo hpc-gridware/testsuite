@@ -47,6 +47,30 @@ port check takes 27 ms, the full `qstat` query 481 ms. Across 580 groups that is
 the difference between half a minute and four minutes. The case that actually
 occurred — qmaster gone — is caught by the first stage.
 
+## Following a running test
+
+ctest captures a test's output and holds it until the test ends -- its own
+`Testing/Temporary/LastTest.log.tmp*` sits at the header line until then, and the
+testsuite writes nothing to disk while a test runs either: `results/` gets its
+`.res` file at the end, `html/` stays empty. So under ctest there was no way to
+see what a test was doing.
+
+The output is therefore teed into the runner directory:
+
+| Path | Contents |
+|---|---|
+| `<line>/runners/r<N>/current.log` | the group running right now, first line naming test, slot and start time |
+| `<line>/runners/r<N>/last.log` | the group before it, for a post mortem |
+
+```sh
+gcs-teststate 92x running              # which slot is on which test, and for how long
+tail -f ~/Clion/92x/runners/r1/current.log
+```
+
+`pipefail` is set, so the pipeline still reports the testsuite's exit status
+rather than tee's. A dependency group writes all its members into the same file,
+one after another.
+
 ## Interrupted runs
 
 `check.exp` has no signal handling: no trap for SIGINT or SIGTERM. When ctest is

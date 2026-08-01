@@ -165,9 +165,21 @@ while [ $# -ge 2 ]; do
   path="$1"; level="$2"; shift 2
   name="$(basename "$path").$level"
   start=$(date +%s)
+  # Tee into <runner>/current.log so the output can be followed WHILE the test
+  # runs. Under ctest there is otherwise no way to see it: ctest captures a
+  # test's output and holds it until the test ends -- its own
+  # Testing/Temporary/LastTest.log.tmp* stays at the header line until then.
+  # The previous group's log is kept as last.log for a post mortem.
+  _log=/dev/null
+  if [ -n "$_rdir" ] && [ -d "$_rdir" ]; then
+    [ -f "$_rdir/current.log" ] && mv -f "$_rdir/current.log" "$_rdir/last.log"
+    _log="$_rdir/current.log"
+    printf '### %s  slot %s  started %s\n' "$name" "$slot" "$(date '+%F %T')" > "$_log"
+  fi
   # CS_SELF_HEAL makes the testsuite reinstall itself after a failure, so the
-  # next test on this slot finds a clean cluster.
-  if CS_SELF_HEAL=1 "$runner" check "$path" "$level" 2>&1; then
+  # next test on this slot finds a clean cluster. pipefail is set, so the
+  # pipeline still reports the testsuite's status, not tee's.
+  if CS_SELF_HEAL=1 "$runner" check "$path" "$level" 2>&1 | tee -a "$_log"; then
     printf '### %s ok (%ss, slot %s)\n' "$name" "$(( $(date +%s) - start ))" "$slot"
   else
     printf '### %s FAILED (%ss, slot %s)\n' "$name" "$(( $(date +%s) - start ))" "$slot"
