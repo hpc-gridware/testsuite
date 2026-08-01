@@ -290,6 +290,13 @@ cmd_install() {
   if [ "$par" = "-p" ]; then
     for i in "${!pids[@]}"; do wait "${pids[$i]}" || { info "  r$((i+1)): FAILED"; rc=1; }; done
   fi
+  # A freshly installed cluster is clean by definition, so the marker that
+  # gcs-run-unit leaves behind on an interrupted run is stale now. Without this
+  # every slot would reinstall itself once more on the first test of the next
+  # run -- repairing what was just built.
+  for i in $(seq 1 "$want"); do
+    rm -f "$(runner_root "$line" "$i")/.unit-in-progress"
+  done
   return $rc
 }
 
