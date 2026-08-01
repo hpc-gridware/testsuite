@@ -235,6 +235,16 @@ proc cert_renew_qmaster {} {
 
    set ok 1
 
+   # Every step here kills the qmaster and deletes its certificate, so the execds
+   # have to notice the loss, reconnect and validate a certificate they have not
+   # seen before. Measured on an idle cluster that takes 15 to 51 seconds, and it
+   # is not the load report interval that dominates (15 s here) but the commlib
+   # reconnect. The default of 60 s would leave 9 seconds of headroom, which is
+   # why this test showed up as failed in parallel runs while passing serially -
+   # see CS-2481. ts_scale_timeout stretches this further when the timeout_factor
+   # switch is used.
+   set reconnect_timeout 120
+
    # get paths for certificate and key
    set cert_path [get_tls_cert_path $ts_config(master_host) "qmaster"]
    set key_path [get_tls_key_path $ts_config(master_host) "qmaster"]
@@ -263,7 +273,7 @@ proc cert_renew_qmaster {} {
       }
 
       # wait for execds to reconnect
-      if {$ok && [wait_for_load_from_all_queues] < 0} {
+      if {$ok && [wait_for_load_from_all_queues $reconnect_timeout] < 0} {
          set ok 0
       }
    }
@@ -301,7 +311,7 @@ proc cert_renew_qmaster {} {
       }
 
       # wait for execds to reconnect
-      if {$ok && [wait_for_load_from_all_queues] < 0} {
+      if {$ok && [wait_for_load_from_all_queues $reconnect_timeout] < 0} {
          set ok 0
       }
    }
@@ -326,7 +336,7 @@ proc cert_renew_qmaster {} {
       }
 
       # execds must still be connected
-      if {$ok && [wait_for_load_from_all_queues] < 0} {
+      if {$ok && [wait_for_load_from_all_queues $reconnect_timeout] < 0} {
          set ok 0
       }
    }
@@ -362,7 +372,7 @@ proc cert_renew_qmaster {} {
       }
 
       # wait for execds to reconnect
-      if {$ok && [wait_for_load_from_all_queues] < 0} {
+      if {$ok && [wait_for_load_from_all_queues $reconnect_timeout] < 0} {
          set ok 0
       }
    }

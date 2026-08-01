@@ -2736,6 +2736,7 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
          set change_timeout_value 30
          ts_log_fine "adapted timeout used for change to happen to: $change_timeout_value seconds"
       }
+      set change_timeout_value [ts_scale_timeout $change_timeout_value]
 
       # Make configuration change
       set result [set_config my_config $host 0 1 $do_reset]
@@ -2780,7 +2781,7 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
                set lr_sec [lindex $split_list 2]
                set lr_min [lindex $split_list 1]
                set lr_hrs [lindex $split_list 0]
-               set local_change_timeout_value [expr ($lr_hrs * 3600 + $lr_min * 60 + $lr_sec) * 2]
+               set local_change_timeout_value [ts_scale_timeout [expr ($lr_hrs * 3600 + $lr_min * 60 + $lr_sec) * 2]]
                if {$local_change_timeout_value > $change_timeout_value} {
                   set change_timeout_value $local_change_timeout_value
                   ts_log_fine "$conf_host: Local load report interval is larger than global interval!"
@@ -3291,6 +3292,32 @@ proc master_queue_of { job_id {qlist {}}} {
 }
 
 
+## @brief scale a test level wait timeout
+#
+# Counterpart to host_conf_scale_timeout, which scales the timeouts of the
+# remote procedures (start_remote_prog and friends) by a per host factor. This
+# one scales the timeouts the tests hand to the wait helpers, by one factor for
+# the whole run.
+#
+# Those values assume that the testsuite has the hosts to itself. When several
+# clusters test on the same hosts, the same work takes 1.6 to 2.4 times longer
+# (CS-2481) and a wait dimensioned for the idle case reports a timeout although
+# nothing is wrong. The factor comes from the timeout_factor switch; its default
+# of 1 returns every value unchanged, so a serial run behaves exactly as before.
+#
+# @param seconds the timeout as passed by the test
+# @return the scaled timeout, rounded to whole seconds
+#
+proc ts_scale_timeout {seconds} {
+   global CHECK_TIMEOUT_FACTOR
+
+   if {$CHECK_TIMEOUT_FACTOR <= 1} {
+      return $seconds
+   }
+
+   return [expr {round($seconds * $CHECK_TIMEOUT_FACTOR)}]
+}
+
 #                                                             max. column:     |
 #****** sge_procedures/wait_for_load_from_all_queues() ******
 #
@@ -3329,6 +3356,7 @@ proc wait_for_load_from_all_queues {{seconds 60} {raise_error 1} {test_for_unkno
       # re-connect might take longer
       set seconds [expr $seconds + 60]
    }
+   set seconds [ts_scale_timeout $seconds]
 
    set time [clock seconds]
 
@@ -3417,6 +3445,8 @@ proc wait_for_load_from_all_queues {{seconds 60} {raise_error 1} {test_for_unkno
 #  @param ja_task_id - the array task id to wait for online usage (default: 1)
 #  @return 0 if no online usage was reported within timeout seconds, 1 if online usage was reported
 proc wait_for_online_usage {job_id {mytimeout 60} {usage_name "cpu"} {ja_task_id 1}} {
+   set mytimeout [ts_scale_timeout $mytimeout]
+
    # we can't use the index "usage    1" directly in TCL-arrays because of
    # the spaces, have to use it in a variable
    set usage_attrib [get_qstat_j_attribute "usage" $ja_task_id]
@@ -3521,6 +3551,7 @@ proc get_online_usage {job_id name {ja_task_id 1} {with_fractional 0}} {
 #*******************************************************************************
 proc wait_for_connected_scheduler { {seconds 90} {raise_error 1} } {
    get_current_cluster_config_array ts_config
+   set seconds [ts_scale_timeout $seconds]
    set mytimeout [clock seconds]
    incr mytimeout $seconds
    set error_text ""
@@ -3581,6 +3612,7 @@ proc wait_for_connected_scheduler { {seconds 90} {raise_error 1} } {
 proc wait_for_job_state {jobid state wait_timeout {raise_error 1}} {
    get_current_cluster_config_array ts_config
 
+   set wait_timeout [ts_scale_timeout $wait_timeout]
    set my_timeout [expr [clock seconds] + $wait_timeout]
    ts_log_fine "waiting for job $jobid to become job state ${state} ..."
    while {1} {
@@ -3625,6 +3657,7 @@ proc wait_for_job_state {jobid state wait_timeout {raise_error 1}} {
 proc wait_for_queue_state {queue state wait_timeout} {
    get_current_cluster_config_array ts_config
 
+   set wait_timeout [ts_scale_timeout $wait_timeout]
    ts_log_fine "waiting for queue $queue to get in \"${state}\" state "
    set my_timeout [expr [clock seconds] + $wait_timeout]
    while {1} {
@@ -3808,6 +3841,7 @@ proc shutdown_execd {host_list {soft 0} {timeout 120} {wait_for_unknown_load 1}}
 #*******************************************************************************
 proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
    get_current_cluster_config_array ts_config
+   set seconds [ts_scale_timeout $seconds]
    set time [clock seconds]
 
 
@@ -3927,6 +3961,7 @@ proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
 proc wait_for_end_of_all_jobs {{seconds 60} {raise_error 1} {check_spool_dir 1}} {
    get_current_cluster_config_array ts_config
 
+   set seconds [ts_scale_timeout $seconds]
    set time [clock seconds]
    set opts "-s pr -u '*'"
    ts_log_fine "waiting for end of all jobs (qstat $opts)"
@@ -6208,6 +6243,7 @@ proc get_qacct {job_task_spec {my_variable "qacct_info"} {on_host ""} {as_user "
       incr timeout_value 60
       ts_log_finer "get_qacct(): increasing timeout to $timeout_value because qacct host might not be master host \"$ts_config(master_host)\"!"
    }
+   set timeout_value [ts_scale_timeout $timeout_value]
 
    # we might have a job specification with a pe task id
    if {[string first " " $job_task_spec] >= 0} {
@@ -6655,6 +6691,8 @@ proc get_job_state {jobid {not_all_equal 0} {taskid task_id}} {
 proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
    get_current_cluster_config_array ts_config
 
+   set seconds [ts_scale_timeout $seconds]
+
    if {[is_job_id $jobid] != 1} {
       if {$do_errorcheck == 1} {
          ts_log_severe "got unexpected job id: $jobid"
@@ -6744,6 +6782,7 @@ proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
 #     sge_procedures/wait_for_jobend()
 #*******************************
 proc wait_for_end_of_transfer { jobid seconds } {
+   set seconds [ts_scale_timeout $seconds]
    ts_log_fine "Waiting for job $jobid to finish transfer state"
 
    set result 0
@@ -6842,6 +6881,7 @@ proc wait_for_end_of_transfer { jobid seconds } {
 proc wait_for_jobpending {jobid jobname seconds {or_running 0}} {
   get_current_cluster_config_array ts_config
 
+  set seconds [ts_scale_timeout $seconds]
   ts_log_fine "Waiting for job $jobid ($jobname) to get in pending state"
 
   if {[is_job_id $jobid] != 1} {
@@ -7065,6 +7105,8 @@ proc release_job { jobid } {
 #*******************************
 proc wait_for_jobend {jobid jobname seconds {runcheck 1} {wait_for_end 0} {raise_err 1}} {
    get_current_cluster_config_array ts_config
+
+   set seconds [ts_scale_timeout $seconds]
 
    if {$runcheck == 1} {
       if {[is_job_running $jobid $jobname] != 1} {
@@ -9622,6 +9664,7 @@ proc wait_for_job_end {job_id {timeout 60} {raise_error 1}} {
    set result 0
 
    # we wait until now + timeout
+   set timeout [ts_scale_timeout $timeout]
    set my_timeout [expr [clock seconds] + $timeout]
 
    # if the job is still in qmaster, wait until it leaves qmaster
@@ -11316,6 +11359,8 @@ proc get_submit_date_time {timestamp} {
 proc wait_for_load_values {variables {hosts {}} {timeout 120}} {
    get_current_cluster_config_array ts_config
 
+   set timeout [ts_scale_timeout $timeout]
+
    # optional parameter hosts - if not given: all
    if {[llength $hosts] == 0} {
       set hosts $ts_config(execd_nodes)
@@ -11360,6 +11405,8 @@ proc wait_for_load_values {variables {hosts {}} {timeout 120}} {
 # @param timeout   - the maximum time to wait for the load values to be removed, default is 120 seconds
 proc wait_for_load_values_trashed {variables {hosts {}} {timeout 120}} {
    get_current_cluster_config_array ts_config
+
+   set timeout [ts_scale_timeout $timeout]
 
    # optional parameter hosts - if not given: all
    if {[llength $hosts] == 0} {

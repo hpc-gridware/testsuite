@@ -378,6 +378,9 @@ set CHECK_VALGRIND_STOP_ON_ERROR 0
 global CHECK_VALGRIND_SHUTDOWN_TIMEOUT
 set CHECK_VALGRIND_SHUTDOWN_TIMEOUT 3600
 
+global CHECK_TIMEOUT_FACTOR ;# scales the test level wait timeouts, see ts_scale_timeout
+set CHECK_TIMEOUT_FACTOR 1
+
 global CHECK_PREFERRED_ARCHS ;# preferred architecture for testing
 set CHECK_PREFERRED_ARCHS {}
 
@@ -7907,6 +7910,11 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "valgrind_host <host>  host for valgrind memory testing"
       puts "valgrind_stop_on_error make testsuite stop running tests when valgrind detects an error"
       puts ""
+      puts "timeout_factor <n>    scale the test level wait timeouts by factor <n>, default 1"
+      puts "                      use it when several clusters test on the same hosts: the same"
+      puts "                      work takes longer then, and a wait dimensioned for an idle"
+      puts "                      host set reports a timeout where nothing is wrong"
+      puts ""
       puts "preferred_archs <archs> specify architectures, that shall be used whenever possible"
       puts "                      please use quotes, when specifying multiple architectures, e.g."
       puts "                      preferred_archs sol-amd64, or preferred_archs \"lx-amd64 lx-arm64\""
@@ -8370,6 +8378,20 @@ for {set i 0} {$i < $argc} {incr i} {
          }
       }
 
+      continue
+   }
+
+   if {[string compare [lindex $argv $i] "--timeout_factor"] == 0 || [string compare [lindex $argv $i] "timeout_factor"] == 0} {
+      incr i
+      set help_var [string trim [lindex $argv $i]]
+
+      if {![string is double -strict $help_var] || $help_var < 1} {
+         puts "invalid timeout factor \"$help_var\", must be a number >= 1"
+         testsuite_shutdown 1
+      }
+      set CHECK_TIMEOUT_FACTOR $help_var
+
+      puts " ---> scaling the test level wait timeouts by factor $CHECK_TIMEOUT_FACTOR <---"
       continue
    }
 
