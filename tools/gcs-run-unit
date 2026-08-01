@@ -153,7 +153,10 @@ ensure_alive || exit 3
 # Deliberately no trap: a trap on EXIT would also fire when the shell is killed,
 # and would then remove the very marker that is supposed to record the kill. The
 # marker is cleared on the normal path only, at the end of this script.
-[ -n "$marker" ] && printf '%s  %s\n' "$(date '+%F %T')" "$*" > "$marker"
+# Start time, pid and name, so "gcs-teststate <line> running" can show what a
+# slot is working on and tell a live unit from a marker left behind by a kill.
+[ -n "$marker" ] && printf '%s\t%s\t%s\t%s\n' \
+    "$(date '+%F %T')" "$$" "${ctest_name:-$1}" "$*" > "$marker"
 
 # --- work through the group ---------------------------------------------------
 group_start=$(date +%s)

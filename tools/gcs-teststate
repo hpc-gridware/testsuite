@@ -2,6 +2,7 @@
 """gcs-teststate -- remember what has run since the last build.
 
     gcs-teststate <line> summary            what passed, failed, never ran
+    gcs-teststate <line> running            what the slots are working on right now
     gcs-teststate <line> pending            names of tests still to do
     gcs-teststate <line> passed             names of tests that passed
     gcs-teststate <line> failed             names of tests that failed
@@ -29,7 +30,7 @@ the tests are testing. When it changes, the ledger is dropped.
     ctest --test-dir <build> --tests-from-file todo.txt -j 8
 """
 
-import os, sys, glob, fcntl, time
+import os, re, sys, glob, fcntl, time
 
 CLION_ROOT = os.environ.get("GCS_CLION_ROOT", os.path.expanduser("~/Clion"))
 
@@ -112,6 +113,47 @@ def registered(line):
     return [l for l in out.stdout.split("\n") if l.strip()]
 
 
+def running(line):
+    """What each runner is working on right now.
+
+    gcs-run-unit drops a marker before it starts a group and removes it when the
+    group ends, so the marker is the only place that knows about a test while it
+    is still running -- the ledger learns of it only afterwards. The marker also
+    survives a kill on purpose (that is how an interrupted run is detected), so a
+    marker whose process is gone is reported as stale rather than as running.
+    """
+    root, _ = paths(line)
+    out = []
+    for d in sorted(glob.glob(f"{root}/runners/r*"),
+                    key=lambda p: int(re.sub(r"\D", "", os.path.basename(p)) or 0)):
+        f = f"{d}/.unit-in-progress"
+        if not os.path.isfile(f):
+            continue
+        raw = open(f, errors="replace").read().rstrip("\n")
+        parts = raw.split("\t")
+        if len(parts) >= 3:
+            started, pid, name = parts[0], parts[1], parts[2]
+        else:
+            # Marker from a gcs-run-unit that did not record its pid yet.
+            started, pid = raw[:19], ""
+            # Old marker: the raw argument list. Shorten the paths to the test
+            # names, so it reads like the ctest name it stands for.
+            args = raw[19:].split()
+            names = [os.path.basename(a) for a in args if "/" in a]
+            name = "?" 
+            if names:
+                name = names[0] + ("+group" if len(names) > 1 else "")
+        live = None                      # None = cannot tell, no pid recorded
+        if pid.isdigit():
+            live = os.path.exists(f"/proc/{pid}")
+        try:
+            secs = int(time.time() - time.mktime(time.strptime(started, "%Y-%m-%d %H:%M:%S")))
+        except ValueError:
+            secs = -1
+        out.append((os.path.basename(d), started, secs, name or "?", live))
+    return out
+
+
 def write_pending(line, state):
     """Keep <line>/runners/pending.txt current.
 
@@ -160,6 +202,16 @@ def main():
 
     write_pending(line, state)
 
+    if cmd == "running":
+        rows = running(line)
+        if not rows:
+            print("  no unit in progress")
+        for slot, started, secs, name, live in rows:
+            mark = f"{secs//60:3d}:{secs%60:02d}" if secs >= 0 else "    ?"
+            note = {True: "", False: "(stale marker, no process)  ",
+                    None: "(no pid in marker)  "}[live]
+            print(f"  {slot:<4} {mark}  {note}{name}")
+        return
     if cmd == "pending":
         # Everything that has not passed under this build: never run first,
         # then the failures, so a run works through the unknown before
@@ -183,6 +235,9 @@ def main():
         if tot:
             done = len(passed) + len(failed)
             print(f"  progress     {100 * done / tot:5.1f}%")
+        run = [r for r in running(line) if r[4] is not False]
+        if run:
+            print(f"  {'in progress':<12} {len(run):5d}")
         if gone:
             print(f"  {len(gone)} recorded test(s) are no longer registered")
         if failed:
