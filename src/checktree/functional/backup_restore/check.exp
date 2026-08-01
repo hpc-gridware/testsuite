@@ -325,7 +325,13 @@ proc backup_restore_check_cluster {} {
    # CS-2352: the classic restore copies the spool objects back with "cp -R",
    # which reintroduces the backed-up modes (0755 dirs / 0644 files). Verify the
    # restore re-hardened them to owner-only (0700/0600). No-op for non-classic.
-   installer_check_classic_spool_permissions
+   #
+   # 9.2 only: the hardening was deliberately not backported to 9.1, so a 9.1
+   # cluster still comes back with the modes from the backup and the check would
+   # report a defect that is none there.
+   if {[is_version_in_range "9.2.0"]} {
+      installer_check_classic_spool_permissions
+   }
 }
 
 proc backup_restore_cleanup {} {

@@ -1609,10 +1609,14 @@ proc installer_test_cluster_after_upgrade {} {
       return 1
    }
 
-   # CS-2352: verify the reused classic spool tree was re-hardened by the upgrade
-   set ret [installer_check_classic_spool_permissions]
-   if {$ret != 0} {
-      return $ret
+   # CS-2352: verify the reused classic spool tree was re-hardened by the upgrade.
+   # 9.2 only -- the hardening was deliberately not backported to 9.1, so a 9.1
+   # cluster keeps the modes it had and this would report a defect that is none.
+   if {[is_version_in_range "9.2.0"]} {
+      set ret [installer_check_classic_spool_permissions]
+      if {$ret != 0} {
+         return $ret
+      }
    }
 
    # @todo: here version specific tests could be added
