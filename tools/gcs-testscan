@@ -209,7 +209,19 @@ def rel_key(path):
 
 
 def durations(line):
-    """path,level -> seconds from check_durations.txt (last run wins)."""
+    """path,level -> seconds from check_durations.txt (the LONGEST run wins).
+
+    Not the last one: the file of the line and the file of every runner hold the
+    same test with quite different times -- upgrade_config was found with 518,
+    1365, 1407 and 1536 s -- and which file is read last is an accident of the
+    glob order.
+
+    The longest is the right choice for LPT. Underestimating the longest job is
+    what costs makespan: it gets scheduled late and becomes the tail everyone
+    waits for. Overestimating only moves it forward, and finishing early hurts
+    nobody. Measured: the installer group was planned with 1438 s and took 1875
+    to 2121 s, so it started fourth instead of first.
+    """
     out = {}
     for f in glob.glob(f"{CLION_ROOT}/*/results/check_durations.txt") + \
              glob.glob(f"{CLION_ROOT}/*-features/*/results/check_durations.txt"):
@@ -222,7 +234,8 @@ def durations(line):
                     continue
                 v = lines[i + 1].strip(":")
                 if v.isdigit():
-                    out[(p, int(lv))] = int(v)
+                    k = (p, int(lv))
+                    out[k] = max(out.get(k, 0), int(v))
     return out
 
 
