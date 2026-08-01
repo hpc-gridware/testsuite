@@ -187,7 +187,15 @@ proc munge_tight_pe {} {
       set resolved_host [resolve_host $munge_host 1]
 
       # try to start a task, should succeed
-      start_sge_bin "qrsh" "-inherit $resolved_host id" $munge_host $CHECK_USER prg_exit_state 60 "" "bin" "output_lines" myenv
+      #
+      # "id -un" instead of a bare "id": a tightly integrated task carries an
+      # additional supplementary gid from gid_range, and that gid has no entry
+      # in /etc/group by design. Plain "id" tries to name every group, prints
+      # "cannot find name for group ID <gid>" and - with the uutils coreutils
+      # that current distributions ship - exits 1, which has nothing to do with
+      # whether the task started. GNU id only warns. "id -un" asks for the user
+      # name alone and does not resolve groups at all.
+      start_sge_bin "qrsh" "-inherit $resolved_host id -un" $munge_host $CHECK_USER prg_exit_state 60 "" "bin" "output_lines" myenv
       if {$prg_exit_state != 0} {
          ts_log_severe "qrsh -inherit should have succeeded but failed: $prg_exit_state: $output_lines(1)"
       }
