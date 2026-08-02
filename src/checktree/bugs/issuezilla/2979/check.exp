@@ -125,8 +125,16 @@ proc issue_2979_test {} {
    # SINCE THIS IS NOT A BUG BECAUSE SOFT LIMITS DO NOT END IN A
    # NOTIFY_KILL WE HAVE TO SUBMIT A HARD REALTIME LIMIT
    # -----------------------------------------------------------
-   set job_id [submit_job "-b y -notify -l hostname=$issue_2979_host -l h_rt=30 sleep 3600"]
-   wait_for_jobstart $job_id "sleep" 100
+   # Submitted on hold. The trace file to watch is named after the job id, so
+   # the tail can only be armed once the id exists -- and it has to be armed
+   # before the job writes what we are looking for. The job emits "writing usage
+   # file" 30 seconds (h_rt) after its start, and init_logfile_wait attaches a
+   # "tail -f", which yields the last ten lines plus everything after. Arming
+   # after the job has started is therefore a race, and whoever loses it waits
+   # out the full 60 s window for a line that is already past. The hold removes
+   # the race rather than widening the window, and follows what the other users
+   # of init_logfile_wait do: arm first, trigger second.
+   set job_id [submit_job "-h -b y -notify -l hostname=$issue_2979_host -l h_rt=30 sleep 3600"]
 
    # check which signal is sent to job by inspecting trace file
    # get trace file
@@ -134,10 +142,25 @@ proc issue_2979_test {} {
    set jobs_dir $spool_dir/$issue_2979_host/active_jobs/$job_id.1
    set trace_file $jobs_dir/trace
 
+   # Give the tail something to attach to: while the job is held, neither the
+   # active job directory nor the trace file exists, and init_logfile_wait
+   # starts a plain "tail -f" that reports eof on a missing file. Both are safe
+   # to pre-create -- the execd creates the directory with
+   # sge_mkdir(..., may_not_exist = false) and the shepherd opens an existing
+   # trace with O_APPEND (err_trace.cc), so neither replaces what it finds and
+   # the tail keeps its inode.
+   start_remote_prog $issue_2979_host $CHECK_USER "mkdir" "-p $jobs_dir"
+   start_remote_prog $issue_2979_host $CHECK_USER "touch" $trace_file
+
    ts_log_fine "reading $trace_file ..."
 
    # init_logfile_wait
    init_logfile_wait $issue_2979_host $trace_file
+
+   # the tail is up -- let the job run
+   release_job $job_id
+   wait_for_jobstart $job_id "sleep" 100
+
    # wait  for signal output
    set trace_output [logfile_wait "writing usage file"]
    close_logfile_wait
