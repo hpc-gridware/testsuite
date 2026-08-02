@@ -246,8 +246,17 @@ def durations(line):
     to 2121 s, so it started fourth instead of first.
     """
     out = {}
+    # The runners' own files belong in here. They are where a parallel run
+    # writes its measurements, and without them the model is fed only by the
+    # lines' serial runs -- everything that has only ever run on a runner stays
+    # "estimated" forever. That is not academic: upgrade_config levels 1 and 2
+    # were planned with the 32 s default although 1441 s and 200 s had been
+    # measured on r12, and level 1 was then killed by ctest at the timeout
+    # derived from those 32 s (run of 2026-08-02, phase 1).
     for f in glob.glob(f"{CLION_ROOT}/*/results/check_durations.txt") + \
-             glob.glob(f"{CLION_ROOT}/*-features/*/results/check_durations.txt"):
+             glob.glob(f"{CLION_ROOT}/*/runners/r*/results/check_durations.txt") + \
+             glob.glob(f"{CLION_ROOT}/*-features/*/results/check_durations.txt") + \
+             glob.glob(f"{CLION_ROOT}/*-features/*/runners/r*/results/check_durations.txt"):
         lines = open(f, errors="replace").read().split("\n")
         for i, l in enumerate(lines):
             if l.startswith(":") and l.endswith(":") and "," in l:
