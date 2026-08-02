@@ -11324,16 +11324,33 @@ proc sleep_for_seconds {seconds {message ""}} {
 #
 # This function compares a value with an expected value and checks if the
 # difference is within the allowed deviation in percent.
+#
+# A purely relative tolerance is not sufficient when the expected value comes
+# from the printed output of a client. qacct prints io, mem and iow with three
+# decimals (SHOWJOB_FLOAT_18_3), so the printed value carries a rounding error
+# of up to 0.0005 - independent of how small the value is. The relative
+# tolerance shrinks with the value, the rounding error does not:
+#
+#    io = 0.500   1 % = 0.005     > 0.0005   comparison is possible
+#    io = 0.033   1 % = 0.00033   < 0.0005   comparison can never succeed
+#
+# Below io = 0.05 the check would therefore fail on the rounding alone, with a
+# correctly accounting product. absolute_allowed is the floor that prevents it:
+# half of the last digit the client prints. See CS-2494.
+#
 # @param value - the value to compare
 # @param expected - the expected value
 # @param percent_allowed - the allowed deviation in percent, default is 1%
+# @param absolute_allowed - the deviation always allowed, regardless of the
+#                           value - defaults to the rounding of a value printed
+#                           with three decimals
 # @return 1 if the value is within the allowed deviation, 0 otherwise
-proc compare_usage {value expected {percent_allowed 1}} {
-   set allowed_deviation [expr $expected * $percent_allowed / 100.0]
+proc compare_usage {value expected {percent_allowed 1} {absolute_allowed 0.0005}} {
+   set allowed_deviation [expr max($expected * $percent_allowed / 100.0, $absolute_allowed)]
    set diff [expr abs($value - $expected)]
    if {$expected > 0} {
       set diff_percent [expr $diff / $expected * 100.0]
-      ts_log_fine [format "usage value \"%0.6f\", expected \"%0.6f\", differs by %0.3f percent" $value $expected $diff_percent]
+      ts_log_fine [format "usage value \"%0.6f\", expected \"%0.6f\", differs by %0.3f percent, allowed %0.6f" $value $expected $diff_percent $allowed_deviation]
       if {$diff <= $allowed_deviation} {
          return 1
       } else {
@@ -11343,6 +11360,11 @@ proc compare_usage {value expected {percent_allowed 1}} {
       # expected has value 0 - we may not divide by 0
       if {$value == 0} {
          ts_log_fine "both value and expected are 0 = equal"
+         return 1
+      } elseif {$diff <= $absolute_allowed} {
+         # a value that small is printed as 0.000 by the client - equal as far
+         # as the printed record can tell
+         ts_log_fine [format "value \"%0.6f\", expected 0, within the printing precision of %0.6f" $value $absolute_allowed]
          return 1
       } else {
          ts_log_fine "value $value, expected 0, diff percentage is infinity"
