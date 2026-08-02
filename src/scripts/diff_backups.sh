@@ -70,10 +70,14 @@ while IFS= read -r file1; do
       filter1="grep -Ev ^(binary_path|qmaster_spool_dir|security_mode|spooling_params|#) $file1"
       filter2="grep -Ev ^(binary_path|qmaster_spool_dir|security_mode|spooling_params|#) $file2"
    elif [ "$object_type" = "configurations" ] && [ "$object_name" = "global" ]; then
-      # Users delete_time will differ for different backups, exclude it
-      echo "Excluding 'execd_spool_dir', 'mail_tag' and 'gid_range' from diff of '$object_type' object '$object_name'"
-      filter1="grep -Ev ^(execd_spool_dir|mail_tag|gid_range) $file1"
-      filter2="grep -Ev ^(execd_spool_dir|mail_tag|gid_range) $file2"
+      # auto_user_delete_time is excluded because upgrade_config sets it to 0
+      # itself: the auto users in a reference backup carry an absolute
+      # delete_time that is long past, so the qmaster would clean them up again
+      # between the load and the comparison backup. See
+      # upgrade_config_keep_auto_users.
+      echo "Excluding 'execd_spool_dir', 'mail_tag', 'gid_range' and 'auto_user_delete_time' from diff of '$object_type' object '$object_name'"
+      filter1="grep -Ev ^(execd_spool_dir|mail_tag|gid_range|auto_user_delete_time) $file1"
+      filter2="grep -Ev ^(execd_spool_dir|mail_tag|gid_range|auto_user_delete_time) $file2"
    elif [ "$object_type" = "configurations" ]; then
       # Users delete_time will differ for different backups, exclude it
       echo "Excluding 'execd_spool_dir' from diff of '$object_type' object '$object_name'"
