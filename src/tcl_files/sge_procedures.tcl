@@ -3305,13 +3305,31 @@ proc master_queue_of { job_id {qlist {}}} {
 # nothing is wrong. The factor comes from the timeout_factor switch; its default
 # of 1 returns every value unchanged, so a serial run behaves exactly as before.
 #
+# A timeout is NOT scaled when the caller switched error reporting off. Those
+# calls are observation windows, not waits: the test wants to establish that
+# something does *not* happen and treats the timeout as the expected outcome,
+# e.g. in qsub_hold
+#
+#    set hold_job1 [submit_job "-h -N FIRST ... sleeper.sh 90"]
+#    set hold_job2 [submit_job "-hold_jid FIRST ... sleeper.sh 30"]
+#    ...
+#    if {[wait_for_jobstart $hold_job2 "Sleeper" 60 0] != -1} {
+#       ts_log_severe "job $hold_job2 should not run until yet(2)"
+#    }
+#
+# Stretching that window to 180 s makes it outlive the 90 s job the second one
+# depends on. The job then starts inside the window - correctly - and the test
+# reports a defect that is none. Scaling such a window does not change how
+# patient a test is, it changes what the test asserts.
+#
 # @param seconds the timeout as passed by the test
+# @param raise_error 0 when the caller expects the timeout - then unscaled
 # @return the scaled timeout, rounded to whole seconds
 #
-proc ts_scale_timeout {seconds} {
+proc ts_scale_timeout {seconds {raise_error 1}} {
    global CHECK_TIMEOUT_FACTOR
 
-   if {$CHECK_TIMEOUT_FACTOR <= 1} {
+   if {$CHECK_TIMEOUT_FACTOR <= 1 || !$raise_error} {
       return $seconds
    }
 
@@ -3356,7 +3374,7 @@ proc wait_for_load_from_all_queues {{seconds 60} {raise_error 1} {test_for_unkno
       # re-connect might take longer
       set seconds [expr $seconds + 60]
    }
-   set seconds [ts_scale_timeout $seconds]
+   set seconds [ts_scale_timeout $seconds $raise_error]
 
    set time [clock seconds]
 
@@ -3551,7 +3569,7 @@ proc get_online_usage {job_id name {ja_task_id 1} {with_fractional 0}} {
 #*******************************************************************************
 proc wait_for_connected_scheduler { {seconds 90} {raise_error 1} } {
    get_current_cluster_config_array ts_config
-   set seconds [ts_scale_timeout $seconds]
+   set seconds [ts_scale_timeout $seconds $raise_error]
    set mytimeout [clock seconds]
    incr mytimeout $seconds
    set error_text ""
@@ -3612,7 +3630,7 @@ proc wait_for_connected_scheduler { {seconds 90} {raise_error 1} } {
 proc wait_for_job_state {jobid state wait_timeout {raise_error 1}} {
    get_current_cluster_config_array ts_config
 
-   set wait_timeout [ts_scale_timeout $wait_timeout]
+   set wait_timeout [ts_scale_timeout $wait_timeout $raise_error]
    set my_timeout [expr [clock seconds] + $wait_timeout]
    ts_log_fine "waiting for job $jobid to become job state ${state} ..."
    while {1} {
@@ -3841,7 +3859,7 @@ proc shutdown_execd {host_list {soft 0} {timeout 120} {wait_for_unknown_load 1}}
 #*******************************************************************************
 proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
    get_current_cluster_config_array ts_config
-   set seconds [ts_scale_timeout $seconds]
+   set seconds [ts_scale_timeout $seconds $do_error_check]
    set time [clock seconds]
 
 
@@ -3961,7 +3979,7 @@ proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
 proc wait_for_end_of_all_jobs {{seconds 60} {raise_error 1} {check_spool_dir 1}} {
    get_current_cluster_config_array ts_config
 
-   set seconds [ts_scale_timeout $seconds]
+   set seconds [ts_scale_timeout $seconds $raise_error]
    set time [clock seconds]
    set opts "-s pr -u '*'"
    ts_log_fine "waiting for end of all jobs (qstat $opts)"
@@ -6243,7 +6261,7 @@ proc get_qacct {job_task_spec {my_variable "qacct_info"} {on_host ""} {as_user "
       incr timeout_value 60
       ts_log_finer "get_qacct(): increasing timeout to $timeout_value because qacct host might not be master host \"$ts_config(master_host)\"!"
    }
-   set timeout_value [ts_scale_timeout $timeout_value]
+   set timeout_value [ts_scale_timeout $timeout_value $raise_error]
 
    # we might have a job specification with a pe task id
    if {[string first " " $job_task_spec] >= 0} {
@@ -6691,7 +6709,7 @@ proc get_job_state {jobid {not_all_equal 0} {taskid task_id}} {
 proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
    get_current_cluster_config_array ts_config
 
-   set seconds [ts_scale_timeout $seconds]
+   set seconds [ts_scale_timeout $seconds $do_errorcheck]
 
    if {[is_job_id $jobid] != 1} {
       if {$do_errorcheck == 1} {
@@ -7106,7 +7124,7 @@ proc release_job { jobid } {
 proc wait_for_jobend {jobid jobname seconds {runcheck 1} {wait_for_end 0} {raise_err 1}} {
    get_current_cluster_config_array ts_config
 
-   set seconds [ts_scale_timeout $seconds]
+   set seconds [ts_scale_timeout $seconds $raise_err]
 
    if {$runcheck == 1} {
       if {[is_job_running $jobid $jobname] != 1} {
@@ -9664,7 +9682,7 @@ proc wait_for_job_end {job_id {timeout 60} {raise_error 1}} {
    set result 0
 
    # we wait until now + timeout
-   set timeout [ts_scale_timeout $timeout]
+   set timeout [ts_scale_timeout $timeout $raise_error]
    set my_timeout [expr [clock seconds] + $timeout]
 
    # if the job is still in qmaster, wait until it leaves qmaster
