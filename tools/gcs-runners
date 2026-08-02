@@ -276,7 +276,15 @@ cmd_install() {
   for i in $(seq 1 "$want"); do
     name="$(runner_name "$line" "$i")"
     if [ "$par" = "-p" ]; then
-      ( "$name" install >"$(runner_root "$line" "$i")/install.log" 2>&1 ) & pids+=("$!")
+      # N clusters installing at the same moment is the densest load this setup
+      # produces -- they all do the same thing at the same time. It is also where
+      # the two install races were seen (qconf -Mconf returning a warning as an
+      # error, install_shadowd with "configuration not defined"), both of them
+      # the change_timeout_value path that ts_scale_timeout now scales, and both
+      # fine when repeated on their own. See CS-2481.
+      # The serial branch below stays at factor 1: it has the hosts to itself.
+      ( CS_TIMEOUT_FACTOR="${CS_TIMEOUT_FACTOR:-3}" \
+        "$name" install >"$(runner_root "$line" "$i")/install.log" 2>&1 ) & pids+=("$!")
       info "  r$i: install started (PID ${pids[-1]})"
     else
       info "  r$i: installing ..."
