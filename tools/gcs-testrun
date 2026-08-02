@@ -68,6 +68,24 @@ if compgen -G "$_ide/gcs_ts_*.xml" > /dev/null 2>&1; then
     | tee -a "$RUN/summary.txt"
 fi
 
+# --- clear the ledger ---------------------------------------------------------
+# gcs-teststate keeps its results until the installed binaries change, which is
+# right for working through failures test by test, but wrong in front of a run
+# that repeats everything anyway: the results of the previous run stay in the
+# ledger, and "summary" then reports 100 % progress while this run is on its
+# fifth unit. A change to the testsuite alone does not touch sge_qmaster, so the
+# ledger does not invalidate itself here.
+#
+# Only for a complete run. With ctest arguments the caller has restricted the
+# set -- what is not in it would be dropped to "not yet run" without ever being
+# repeated, and the ledger would claim less knowledge than it has.
+if [ $# -eq 0 ]; then
+  log "phase 0c: clearing the test state ledger"
+  "$SCRIPT_DIR/gcs-teststate" "$line" reset 2>&1 | tee -a "$RUN/summary.txt"
+else
+  log "phase 0c: keeping the ledger -- run restricted by ctest arguments ($*)"
+fi
+
 # --- phase 1: parallel --------------------------------------------------------
 log "phase 1: $n runners in parallel"
 t1=$(date +%s)
