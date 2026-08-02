@@ -23,6 +23,7 @@
 #   gcs-runners <line> init    [N]        # directories, .sav, wrapper
 #   gcs-runners <line> install [N] [-p]   # mirror inst/ from the line + install
 #   gcs-runners <line> status
+#   gcs-runners <line> health [N]         # does every execd still enforce h_rt?
 #   gcs-runners <line> teardown [N] [--force]
 #
 # Ports are NOT invented: only registered, even ports from <user>,portlist of the
@@ -47,6 +48,12 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # everything from 8100 up serves the feature workspaces.
 RUNNER_PORT_MIN="${GCS_RUNNER_PORT_MIN:-8010}"
 RUNNER_PORT_MAX="${GCS_RUNNER_PORT_MAX:-8100}"
+# Probe parameters of "health". Ten seconds is far above the one second at which
+# the execd checks its limits, and short enough to keep the check cheap. The wait
+# has to cover the scheduler interval on top of the limit, otherwise a healthy
+# cluster whose job has not been placed yet looks broken.
+HEALTH_LIMIT="${GCS_HEALTH_LIMIT:-10}"
+HEALTH_WAIT="${GCS_HEALTH_WAIT:-45}"
 
 die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*" >&2; }
@@ -324,13 +331,96 @@ cmd_teardown() {
   done
 }
 
+# Does every execd still process the jobs it is running?
+#
+# An execd can look perfectly healthy -- port open, load reported, jobs accepted,
+# shepherds started -- while it has silently dropped its running jobs from its
+# bookkeeping (CS-2495). Neither "status" nor qstat -f shows it. What it does show
+# up as is a fixed subset of tests failing for reasons that read like product
+# defects: no wallclock usage, no resource limit, no deleted_by in the accounting
+# record. Since ctest pins each test to one cluster, one such execd quietly
+# poisons its whole share of a run.
+#
+# The probe is the cheapest thing that touches exactly that code path: a job with
+# a ten second hard limit. A healthy execd kills it, a stalled one does not. One
+# job per cluster and execd host, all at the same time, so the check costs about
+# a minute regardless of how many runners there are.
+cmd_health() {
+  local line="${1:?line required}" want="${2:-}"
+  local lroot cfg hosts root port arch qsub qstat qdel i h jid rc=0
+  local -a probes=()
+
+  lroot="$(line_root "$line")"
+  [ -d "$lroot/runners" ] || die "no runners -- run 'gcs-runners $line init' first"
+  [ -n "$want" ] || want="$(find "$lroot/runners" -maxdepth 1 -name 'r*' -type d | wc -l)"
+
+  hosts="$(read_sav_value "$lroot/config/defaults-$line.sav" execd_hosts)"
+  [ -n "$hosts" ] || die "no execd_hosts in the line configuration"
+
+  info "  probing $want runners on: $hosts  (h_rt=$HEALTH_LIMIT)"
+  for i in $(seq 1 "$want"); do
+    cfg="$(runner_root "$line" "$i")/config/defaults-$(runner_name "$line" "$i").sav"
+    root="$(read_sav_value "$cfg" product_root)"
+    port="$(read_sav_value "$cfg" commd_port)"
+    [ -d "$root/bin" ] || { info "  r$i: no installation -- skipped"; continue; }
+    arch="$("$root/util/arch" 2>/dev/null)"
+    for h in $hosts; do
+      jid="$(SGE_ROOT="$root" SGE_CELL=default SGE_QMASTER_PORT="$port" \
+             SGE_EXECD_PORT="$((port + 1))" \
+             "$root/bin/$arch/qsub" -b y -l hostname="$h" -l h_rt="$HEALTH_LIMIT" \
+             -o /dev/null -e /dev/null sleep 300 2>/dev/null \
+             | grep -oE '[0-9]+' | head -1)"
+      [ -n "$jid" ] && probes+=("$i $h $jid") || { info "  r$i/$h: qsub failed"; rc=1; }
+    done
+  done
+
+  # Long enough for the scheduler to place the job (interval) and for the limit to
+  # expire on top of it. Shorter and a healthy cluster looks broken.
+  sleep "$HEALTH_WAIT"
+
+  # Quiet unless something is wrong: this runs in front of every complete test
+  # run, and 96 lines of "ok" only bury the one line that matters. GCS_HEALTH_VERBOSE
+  # prints every probe.
+  local ok=0
+  [ -n "${GCS_HEALTH_VERBOSE:-}" ] && printf '%-8s %-16s %-10s %s\n' RUNNER HOST JOB RESULT
+  for p in "${probes[@]}"; do
+    read -r i h jid <<< "$p"
+    cfg="$(runner_root "$line" "$i")/config/defaults-$(runner_name "$line" "$i").sav"
+    root="$(read_sav_value "$cfg" product_root)"
+    port="$(read_sav_value "$cfg" commd_port)"
+    arch="$("$root/util/arch" 2>/dev/null)"
+    local state
+    state="$(SGE_ROOT="$root" SGE_CELL=default SGE_QMASTER_PORT="$port" \
+             SGE_EXECD_PORT="$((port + 1))" \
+             "$root/bin/$arch/qstat" -u '*' 2>/dev/null \
+             | awk -v j="$jid" '$1 == j { print $5 }')"
+    case "$state" in
+      "")         ok=$((ok + 1))
+                  [ -n "${GCS_HEALTH_VERBOSE:-}" ] && printf '%-8s %-16s %-10s %s\n' "r$i" "$h" "$jid" "ok" ;;
+      qw|hqw|Eqw) printf '%-8s %-16s %-10s %s\n' "r$i" "$h" "$jid" "PENDING (never started -- host or queue unusable)"; rc=1 ;;
+      *)          printf '%-8s %-16s %-10s %s\n' "r$i" "$h" "$jid" "STALLED (state $state, h_rt=$HEALTH_LIMIT ignored -- see CS-2495)"; rc=1 ;;
+    esac
+    # A stalled execd will not remove its own job -- and it is a "sleep 300".
+    if [ -n "$state" ]; then
+      SGE_ROOT="$root" SGE_CELL=default SGE_QMASTER_PORT="$port" \
+      SGE_EXECD_PORT="$((port + 1))" \
+      "$root/bin/$arch/qdel" -f "$jid" >/dev/null 2>&1 || true
+    fi
+  done
+
+  [ "$rc" -eq 0 ] && info "  $ok of ${#probes[@]} probes ok -- every cluster enforces its limits" \
+                  || info "  $ok of ${#probes[@]} probes ok -- restart the execd on the hosts listed above (as root: sgeexecd start)"
+  return $rc
+}
+
 [ $# -ge 2 ] || usage 1
 line="$1"; sub="$2"; shift 2 || true
 case "$sub" in
   init)     cmd_init     "$line" "$@" ;;
   install)  cmd_install  "$line" "$@" ;;
   status)   cmd_status   "$line" "$@" ;;
+  health)   cmd_health   "$line" "$@" ;;
   teardown) cmd_teardown "$line" "$@" ;;
   -h|--help|help) usage 0 ;;
-  *) die "unknown command: '$sub' (init|install|status|teardown)" ;;
+  *) die "unknown command: '$sub' (init|install|status|health|teardown)" ;;
 esac

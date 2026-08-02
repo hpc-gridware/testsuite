@@ -86,6 +86,26 @@ else
   log "phase 0c: keeping the ledger -- run restricted by ctest arguments ($*)"
 fi
 
+# --- health of the clusters ---------------------------------------------------
+# A cluster whose execd has stopped processing its running jobs (CS-2495) is
+# invisible in every other check: the port is open, the load arrives, jobs are
+# accepted. What it produces is a fixed set of failures -- ctest pins each test to
+# one cluster -- that read like product defects and cost a day to attribute. A
+# minute of probing in front of a two hour run is the cheapest insurance there is.
+#
+# Aborting rather than warning: the run would otherwise report failures that say
+# nothing about the code under test. GCS_SKIP_HEALTH=1 skips the check for the
+# case where one knowingly runs against a degraded set.
+if [ -z "${GCS_SKIP_HEALTH:-}" ]; then
+  log "phase 0d: probing the clusters"
+  if ! "$SCRIPT_DIR/gcs-runners" "$line" health "$n" 2>&1 | tee -a "$RUN/summary.txt"; then
+    log "aborted -- unhealthy cluster(s), see above  (GCS_SKIP_HEALTH=1 runs anyway)"
+    exit 2
+  fi
+else
+  log "phase 0d: cluster probe skipped (GCS_SKIP_HEALTH)"
+fi
+
 # --- phase 1: parallel --------------------------------------------------------
 log "phase 1: $n runners in parallel"
 t1=$(date +%s)
