@@ -200,7 +200,7 @@ done
 if [ -n "$ctest_name" ] && [ -x "$SCRIPT_DIR/gcs-teststate" ]; then
   "$SCRIPT_DIR/gcs-teststate" "$line" record "$ctest_name" \
       "$([ $rc -eq 0 ] && echo ok || echo fail)" "$(( $(date +%s) - group_start ))" \
-      >/dev/null 2>&1 || true
+      "r$slot" >/dev/null 2>&1 || true
 fi
 
 # Normal end -- whatever the tests returned, this script got to run its course,

@@ -7,7 +7,7 @@
     gcs-teststate <line> passed             names of tests that passed
     gcs-teststate <line> failed             names of tests that failed
     gcs-teststate <line> reset              forget everything
-    gcs-teststate <line> record <name> <ok|fail> [seconds]
+    gcs-teststate <line> record <name> <ok|fail> [seconds] [slot]
 
 Why this exists next to ctest's own bookkeeping: `--rerun-failed` reads
 LastTestsFailed.log, which holds the failures of the last run that *had*
@@ -50,8 +50,12 @@ def fingerprint(line):
 
 
 def load(line):
-    """Return (fingerprint, {name: (result, when, seconds)}), dropping a ledger
-    that belongs to an older build."""
+    """Return (fingerprint, {name: (result, when, seconds, slot)}), dropping a
+    ledger that belongs to an older build.
+
+    The slot column was added later, so a row that does not carry it yields an
+    empty string -- a ledger written before that keeps working instead of being
+    thrown away for a cosmetic reason."""
     _, f = paths(line)
     cur = fingerprint(line)
     state, stored = {}, ""
@@ -61,7 +65,7 @@ def load(line):
             if p[0] == "#build":
                 stored = p[1]
             elif len(p) >= 4:
-                state[p[0]] = (p[1], p[2], p[3])
+                state[p[0]] = (p[1], p[2], p[3], p[4] if len(p) > 4 else "")
     if stored != cur:
         return cur, {}
     return cur, state
@@ -73,20 +77,23 @@ def save(line, cur, state):
     tmp = f + ".tmp"
     with open(tmp, "w") as fh:
         fh.write(f"#build\t{cur}\n")
-        for n, (r, w, s) in sorted(state.items()):
-            fh.write(f"{n}\t{r}\t{w}\t{s}\n")
+        for n, (r, w, s, slot) in sorted(state.items()):
+            fh.write(f"{n}\t{r}\t{w}\t{s}\t{slot}\n")
     os.replace(tmp, f)
 
 
-def record(line, name, result, seconds):
-    """Append one result. Locked: eight runners record concurrently."""
+def record(line, name, result, seconds, slot=""):
+    """Append one result. Locked: eight runners record concurrently.
+
+    The slot is worth keeping: a test that fails on one cluster and passes on
+    the others points at that cluster, not at the test."""
     _, f = paths(line)
     os.makedirs(os.path.dirname(f), exist_ok=True)
     lock = open(f + ".lock", "w")
     fcntl.flock(lock, fcntl.LOCK_EX)
     try:
         cur, state = load(line)
-        state[name] = (result, time.strftime("%F %T"), str(seconds))
+        state[name] = (result, time.strftime("%F %T"), str(seconds), slot)
         save(line, cur, state)
         write_pending(line, state)
     finally:
@@ -179,7 +186,8 @@ def main():
 
     if cmd == "record":
         record(line, sys.argv[3], sys.argv[4],
-               sys.argv[5] if len(sys.argv) > 5 else "0")
+               sys.argv[5] if len(sys.argv) > 5 else "0",
+               sys.argv[6] if len(sys.argv) > 6 else "")
         return
 
     if cmd == "reset":
@@ -221,8 +229,8 @@ def main():
         # With when and how long, because that is what one wants to know about a
         # test that is done: the names alone are already in the summary count.
         for n in passed:
-            r, w, sec = state[n]
-            print(f"{sec:>6}s  {w}  {n}")
+            r, w, sec, slot = state[n]
+            print(f"{sec:>6}s  {w}  {slot or '-':<4} {n}")
     elif cmd == "failed":
         print("\n".join(failed))
     elif cmd == "summary":
@@ -243,8 +251,8 @@ def main():
         if failed:
             print("\n  failed:")
             for n in failed:
-                r, w, s = state[n]
-                print(f"    {s:>6}s  {w}  {n}")
+                r, w, s, slot = state[n]
+                print(f"    {s:>6}s  {w}  {slot or '-':<4} {n}")
     else:
         sys.exit(f"unknown command: {cmd}")
 
