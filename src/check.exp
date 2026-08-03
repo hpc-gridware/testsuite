@@ -5373,10 +5373,37 @@ proc check_if_test_cleaned_up {} {
                lappend errors "local config $host: attribute $attrib should not be set"
             }
          }
+         # Being on the allowed list says the attribute may be there, not that any
+         # value will do. execd_spool_dir is put there by the installation, so its
+         # presence is normal -- but a value belonging to a DIFFERENT cluster is
+         # what happens when a test loads a configuration that was captured
+         # elsewhere (CS-2500): the execds then spool into the other cluster's
+         # directory and overwrite its execd.pid, and the failure surfaces days
+         # later in an unrelated test on that other cluster.
+         #
+         # Checked by the port in the path, and only when the path carries one at
+         # all: a setup that spools somewhere else simply does not match and is
+         # left alone, so this cannot produce a finding where there is none.
+         if {[info exists local_conf(execd_spool_dir)] &&
+             [regexp {/testsuite/(\d+)/} $local_conf(execd_spool_dir) -> spool_port] &&
+             $spool_port ne "$ts_config(commd_port)"} {
+            lappend errors "local config $host: execd_spool_dir $local_conf(execd_spool_dir) belongs to the cluster on port $spool_port, this one runs on $ts_config(commd_port)"
+         }
       } else {
          if {!$check_do_not_create_local_config} {
             lappend errors "local config $host does not exist"
          }
+      }
+   }
+
+   # The global configuration comes with the bulk request anyway, and it carried
+   # the same foreign value in the case this check exists for. Only this one
+   # narrow question is asked of it -- everything else about the global
+   # configuration stays unchecked, see the @todo on CS-984 above.
+   if {$have_bulk && [info exists bulk_conf(global,execd_spool_dir)]} {
+      if {[regexp {/testsuite/(\d+)/} $bulk_conf(global,execd_spool_dir) -> spool_port] &&
+          $spool_port ne "$ts_config(commd_port)"} {
+         lappend errors "global config: execd_spool_dir $bulk_conf(global,execd_spool_dir) belongs to the cluster on port $spool_port, this one runs on $ts_config(commd_port)"
       }
    }
 
