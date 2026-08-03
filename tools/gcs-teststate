@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """gcs-teststate -- remember what has run since the last build.
 
-    gcs-teststate <line> summary            what passed, failed, never ran
+    gcs-teststate <line> summary            what passed, failed, never ran, when it ends
     gcs-teststate <line> running            what the slots are working on right now
     gcs-teststate <line> pending            names of tests still to do
     gcs-teststate <line> passed             names of tests that passed
@@ -161,6 +161,82 @@ def running(line):
     return out
 
 
+def rel_key(path):
+    """Line independent key -- the same function gcs-testscan builds the ctest
+    names from, kept here so units.tsv can be read without importing it."""
+    return re.sub("^" + re.escape(CLION_ROOT) +
+                  r"/(?:[^/]+-features/[^/]+|[^/]+)/", "", path, count=1)
+
+
+def plan(line):
+    """(planned duration per ctest name, number of slots) of the current run.
+
+    Read from units.tsv and manifest.txt, which gcs-testscan writes next to the
+    runner lists in the same moment it splits the run. They therefore describe
+    exactly the schedule the running ctest is working through -- no rescan, and
+    no second duration model that could drift away from the one that did the
+    planning. Both missing means an ETA cannot be given, not that it is zero.
+    """
+    root, _ = paths(line)
+    d = f"{root}/runners/lists"
+    over = int(os.environ.get("GCS_TS_OVERHEAD", "48"))
+    slots = 0
+    if os.path.isfile(f"{d}/manifest.txt"):
+        for l in open(f"{d}/manifest.txt", errors="replace"):
+            k, _, v = l.partition(" ")
+            v = v.strip()
+            if k == "overhead" and v.split("s")[0].isdigit():
+                over = int(v.split("s")[0])
+            elif k == "runners" and v.isdigit():
+                slots = int(v)
+    dur = {}
+    if os.path.isfile(f"{d}/units.tsv"):
+        for l in open(f"{d}/units.tsv", errors="replace"):
+            p = l.rstrip("\n").split("\t")
+            # The net duration is what was measured for the test body; what a
+            # slot is occupied for is that plus one invocation's setup.
+            if len(p) >= 3 and p[2].isdigit():
+                dur[rel_key(p[0]).replace("/", ".") + f".{p[1]}"] = int(p[2]) + over
+    return dur, slots
+
+
+def eta(line, never, dur, slots):
+    """Seconds until the parallel phase is through, None if unknown.
+
+    Two bounds, the larger one wins: the work still open divided by the slots,
+    and the longest single unit still outstanding. Twenty-four slots whose last
+    remaining unit runs 40 minutes need those 40 minutes, not the 100 seconds
+    the division suggests -- that tail is exactly what the LPT split tries to
+    keep short, and ignoring it reports an end that passes while the last runner
+    is still working.
+
+    A unit that is already running counts with what is left of it, taken from
+    the start time in its marker. So a unit that overruns its estimate pushes
+    the end out instead of silently dropping to zero.
+
+    What this does not cover is phase 2 of gcs-testrun: how long the serial
+    rerun takes depends on how many failures phase 1 ends up with, and that is
+    not knowable while phase 1 runs.
+    """
+    known = sorted(dur.values())
+    if not known:
+        return None
+    fallback = known[len(known) // 2]
+    started = {name: secs for _, _, secs, name, live in running(line)
+               if live is not False and secs >= 0}
+    rest = []
+    for n in never:
+        d = dur.get(n, fallback)
+        if n in started:
+            # Never zero: a unit whose process is alive still has its teardown
+            # ahead of it, however far past its estimate it is.
+            d = max(d - started[n], 15)
+        rest.append(d)
+    if not rest:
+        return 0
+    return int(max(sum(rest) / max(slots or len(started) or 1, 1), max(rest)))
+
+
 def write_pending(line, state):
     """Keep <line>/runners/pending.txt current.
 
@@ -246,6 +322,14 @@ def main():
         run = [r for r in running(line) if r[4] is not False]
         if run:
             print(f"  {'in progress':<12} {len(run):5d}")
+        d, slots = plan(line)
+        rem = eta(line, never, d, slots)
+        if rem:
+            guessed = sum(1 for n in never if n not in d)
+            note = f", {guessed} without a planned duration" if guessed else ""
+            print(f"  {'eta':<12} {time.strftime('%H:%M', time.localtime(time.time() + rem)):>5}"
+                  f"  in {rem // 3600}h{rem // 60 % 60:02d}m"
+                  f"  ({slots or len(run)} slots{note}, parallel phase only)")
         if gone:
             print(f"  {len(gone)} recorded test(s) are no longer registered")
         if failed:
