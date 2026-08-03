@@ -96,8 +96,26 @@ set check_root_access_needs "yes"
 # define test's name and run level descriptions
 set check_name            "complex"
 set check_category        "RQS SCHEDULER VERIFIED"
-set check_description(0)  "Test complex attributes and loadsensor"
-set check_description(1)  "Test complex attributes and loadsensor and resource quota sets"
+# The run level encodes two things:
+#
+#     level = group * 2 + rqs
+#
+# rqs 0/1 is what the levels meant before the split: without and with resource
+# quota sets. The group picks which part of the test runs. complex_global_host
+# used to carry 142 of the 183 job probes -- 78 % of a 2841 s unit -- so cutting
+# by check_function alone would have left that one nearly untouched. It is cut in
+# half instead, along the boundary where the probes stop naming the complex by
+# its shorthand "tr" and start naming it "test_restring" in full.
+#
+# Two halves, not more: below roughly 1500 s the next tests (upgrade_config.1 at
+# 1459 s, exclusive_host_usage.0 at 1457 s) set the ceiling, so cutting finer
+# would buy nothing and only add invocations. Measured 2026-08-03.
+set check_description(0)  "Test complex attributes on the global host, shorthand \"tr\" probes"
+set check_description(1)  "... the same with resource quota sets"
+set check_description(2)  "Test complex attributes on the global host, full name \"test_restring\" probes"
+set check_description(3)  "... the same with resource quota sets"
+set check_description(4)  "Test loadsensor, exec host, queue, default request and invalid requests"
+set check_description(5)  "... the same with resource quota sets"
 
 # define test's dependencies
 set check_needs           "init_core_system"
@@ -109,18 +127,43 @@ set check_cleanup_function complex_cleanup
 
 # define test's procedure order
 set check_functions ""
-lappend check_functions "complex_loadsensor_test"
-lappend check_functions "complex_global_host"
-lappend check_functions "complex_host"
-lappend check_functions "complex_queue"
-lappend check_functions "issue_1847"
-lappend check_functions "complex_default_request"
-lappend check_functions "invalid_host_requests"
+lappend check_functions "complex_run_level"
 
 global complex_host
 global complex_old_config
 
 # -------- local test procedures -----------------------------------------------
+
+## @brief 0 without resource quota sets, 1 with -- what the levels meant before
+proc complex_rqs {} {
+   global CHECK_ACT_LEVEL
+   return [expr {$CHECK_ACT_LEVEL % 2}]
+}
+
+## @brief which part of the test this run level runs (0-2)
+proc complex_group {} {
+   global CHECK_ACT_LEVEL
+   return [expr {$CHECK_ACT_LEVEL / 2}]
+}
+
+## @brief run the part this run level stands for
+proc complex_run_level {} {
+   switch [complex_group] {
+      0 { complex_global_host_a }
+      1 { complex_global_host_b }
+      2 {
+         complex_loadsensor_test
+         complex_host
+         complex_queue
+         issue_1847
+         complex_default_request
+         invalid_host_requests
+      }
+      default {
+         ts_log_severe "no group defined for run level [complex_group]"
+      }
+   }
+}
 
 proc complex_setup {} {
    global ts_config CHECK_USER
@@ -225,7 +268,7 @@ proc complex_loadsensor_test {} {
    global ts_config CHECK_USER CHECK_ACT_LEVEL
    global complex_host
 
-   if { $CHECK_ACT_LEVEL == 0 } {
+   if { [complex_rqs] == 0 } {
       # we install a loadsensor delivering the above complex attributes
       # backup host config and make sure, load_sensor gets deleted at restore
       get_config complex_old_config $complex_host
@@ -422,10 +465,14 @@ proc complex_run_job {scenario variable value submittable pending { runnable "0"
    }
 }
 
-proc complex_global_host {} {
-   global ts_config CHECK_ACT_LEVEL
+## @brief put the test attributes on the global host (and the rqs in rqs levels)
+#
+# Shared by both halves of the former complex_global_host: each half is a unit
+# of its own now and has to build and tear down the same ground.
+proc complex_global_host_setup {} {
+   global ts_config
 
-   if { $CHECK_ACT_LEVEL == 0 } {
+   if { [complex_rqs] == 0 } {
       # set all test attributes in global host
       set config(complex_values)    "test_integer=1"
       append config(complex_values) ",td=10.0"
@@ -435,7 +482,7 @@ proc complex_global_host {} {
       append config(complex_values) ",tc=GLobaL"
       append config(complex_values) ",tr=global"
       set_exechost config "global"
-   } elseif { $CHECK_ACT_LEVEL == 1 } {
+   } elseif { [complex_rqs] == 1 } {
       # set all test attributes in global host
       set config(complex_values)    "test_integer=100"
       append config(complex_values) ",td=10.0"
@@ -485,6 +532,37 @@ proc complex_global_host {} {
 
       add_rqs rqs_charray
    }
+}
+
+## @brief remove the test attributes from the global host again
+proc complex_global_host_cleanup {} {
+   global ts_config
+
+#
+   # cleanup
+   set config(complex_values) "NONE"
+   set_exechost config "global"
+
+   if { [complex_rqs] == 1 } {
+      if {[get_rqs_list rqs_names "" "" 0] == 0} {
+         foreach elem $rqs_names {
+            ts_log_fine "Removing resource quota sets $elem ...\n"
+            del_rqs $elem
+         }
+      }
+   }
+}
+
+## @brief probes that name the complex by its shorthand, "tr"
+#
+# 74 of the former 142 probes. complex_run_job submits one job, checks whether
+# it is accepted, pending or runnable, and deletes it again -- none of them
+# touches the complex definition, so the list can be cut anywhere. It is cut
+# where the shorthand probes end and their long-name mirrors begin.
+proc complex_global_host_a {} {
+   global ts_config
+
+   complex_global_host_setup
 
    #               scenario variable       value     submittable pending  runnable
    complex_run_job "global" "ti"           1         1           0
@@ -584,7 +662,15 @@ proc complex_global_host {} {
    complex_run_job "global" "tr"           "\"global\|local\""  1           0
    complex_run_job "global" "tr"           "\"glo*al\|lo\[c\]al\""  1           0
    complex_run_job "global" "tr"           "\"?glo*al?\|lo\[c\]al\""  1      1 1
-#
+   complex_global_host_cleanup
+}
+
+## @brief the same probes naming the complex in full, "test_restring"
+proc complex_global_host_b {} {
+   global ts_config
+
+   complex_global_host_setup
+
    # Now we use the full name of the complex, "test_restring"
 
    complex_run_job "global" "test_restring"           "global"  1           0
@@ -654,8 +740,8 @@ proc complex_global_host {} {
 
    set config(complex_values) "tr=global\*test"
    set_exechost config "global"
-   if { $CHECK_ACT_LEVEL == 1 } {
-      unset rqs_charray
+   if { [complex_rqs] == 1 } {
+      unset -nocomplain rqs_charray  ;# built in complex_global_host_setup, so not in this scope
       set rqs_name              "test_restring"
       set rules                  ""
       lappend rules              "to tr=global\*test"
@@ -675,8 +761,8 @@ proc complex_global_host {} {
 #
    set config(complex_values) "tr=global\?test"
    set_exechost config "global"
-   if { $CHECK_ACT_LEVEL == 1 } {
-      unset rqs_charray
+   if { [complex_rqs] == 1 } {
+      unset -nocomplain rqs_charray  ;# built in complex_global_host_setup, so not in this scope
       set rqs_name              "test_restring"
       set rules                  ""
       lappend rules              "to tr=global\?test"
@@ -693,26 +779,14 @@ proc complex_global_host {} {
    complex_run_job "global" "test_restring"           "global*test"  1           0
    complex_run_job "global" "test_restring"           "global\?test"  1           0
    complex_run_job "global" "test_restring"           "globaltest"  1           1  1
-#
-   # cleanup
-   set config(complex_values) "NONE"
-   set_exechost config "global"
-
-   if { $CHECK_ACT_LEVEL == 1 } {
-      if {[get_rqs_list rqs_names "" "" 0] == 0} {
-         foreach elem $rqs_names {
-            ts_log_fine "Removing resource quota sets $elem ...\n"
-            del_rqs $elem
-         }
-      }
-   }
+   complex_global_host_cleanup
 }
 
 proc complex_host {} {
    global ts_config CHECK_ACT_LEVEL
    global complex_host
 
-   if { $CHECK_ACT_LEVEL == 0 } {
+   if { [complex_rqs] == 0 } {
       # set a consumable in global host, to be overwritten by specific host
       set config(complex_values)    "test_integer=1"
       append config(complex_values) ",ts=global"
@@ -727,7 +801,7 @@ proc complex_host {} {
       append config(complex_values) ",ts=host"
       append config(complex_values) ",th=$ts_config(master_host)"
       set_exechost config $complex_host
-   } elseif { $CHECK_ACT_LEVEL == 1 } {
+   } elseif { [complex_rqs] == 1 } {
       # set a consumable in global host, to be overwritten by specific host
       set config(complex_values)    "test_integer=100"
       append config(complex_values) ",ts=global"
@@ -814,7 +888,7 @@ proc complex_host {} {
    set_exechost config "global"
    set_exechost config $complex_host
 
-   if { $CHECK_ACT_LEVEL == 1 } {
+   if { [complex_rqs] == 1 } {
       if {[get_rqs_list rqs_names "" "" 0] == 0} {
          foreach elem $rqs_names {
             ts_log_fine "Removing resource quota sets $elem ...\n"
@@ -828,7 +902,7 @@ proc complex_queue {} {
    global ts_config CHECK_ACT_LEVEL
    global complex_host
 
-   if { $CHECK_ACT_LEVEL == 0 } {
+   if { [complex_rqs] == 0 } {
       # set a consumable in global host, to be overwritten by specific host
       set config(complex_values)    "test_integer=3"
       append config(complex_values) ",ts=global"
@@ -846,7 +920,7 @@ proc complex_queue {} {
       append config(complex_values) ",tb=1"
       append config(complex_values) ",ts=queue"
       mqattr "complex_values" $config(complex_values) [get_queue_instance "complex" $complex_host]
-   } elseif { $CHECK_ACT_LEVEL == 1 } {
+   } elseif { [complex_rqs] == 1 } {
       # set a consumable in global host, to be overwritten by specific host
       set config(complex_values)    "test_integer=100"
       append config(complex_values) ",ts=global"
@@ -927,7 +1001,7 @@ proc complex_queue {} {
    set_exechost config $complex_host
    mqattr "complex_values" "NONE" [get_queue_instance "complex" $complex_host]
 
-   if { $CHECK_ACT_LEVEL == 1 } {
+   if { [complex_rqs] == 1 } {
       if {[get_rqs_list rqs_names "" "" 0] == 0} {
          foreach elem $rqs_names {
             ts_log_fine "Removing resource quota sets $elem ...\n"
@@ -941,10 +1015,10 @@ proc complex_default_request {} {
    global ts_config CHECK_ACT_LEVEL
    global complex_host
 
-   if {$CHECK_ACT_LEVEL == 0} {
+   if {[complex_rqs] == 0} {
       set config(complex_values)    "ti=0"
       set_exechost config "global"
-   } elseif {$CHECK_ACT_LEVEL == 1} {
+   } elseif {[complex_rqs] == 1} {
       set config(complex_values)    "ti=100"
       set_exechost config "global"
 
@@ -962,7 +1036,7 @@ proc complex_default_request {} {
    complex_run_job "default_request"       "ti"           "0"       1           0
    complex_run_job "default_request"       ""             ""        1           1
 
-   if {$CHECK_ACT_LEVEL == 1} {
+   if {[complex_rqs] == 1} {
       if {[get_rqs_list rqs_names "" "" 0] == 0} {
          foreach elem $rqs_names {
             ts_log_fine "Removing resource quota sets $elem ...\n"
@@ -997,7 +1071,7 @@ proc issue_1847 {} {
    global ts_config CHECK_ACT_LEVEL
    global complex_host
 
-   if {$CHECK_ACT_LEVEL == 0} {
+   if {[complex_rqs] == 0} {
       complex_test_rattr "tt=x"
       complex_test_rattr "ti=x"
       complex_test_rattr "td=x"
