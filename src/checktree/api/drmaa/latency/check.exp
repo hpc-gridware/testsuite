@@ -136,17 +136,35 @@ proc drmaa_latency_get_biggest_host {} {
 #
 #     n 5   min -0.544   median 0.420   mean 0.301   max 1.006
 #
+# It also picks up the start-spread diagnostics:
+#   res(spread)        the observed "start spread" in seconds
+#   res(contaminated)  1 if the binary warned that the jobs did not overlap,
+#                      meaning local_lat measured dispatch rather than event
+#                      latency and no conclusion may be drawn from it
+#
 # @param output   raw stdout of the binary
 # @param res_var  name of an array filled with
 #                 res(wait_lat,n|min|median|mean|max) and the same for
-#                 res(local_lat,...)
+#                 res(local_lat,...), plus res(spread) / res(contaminated)
 # @return 1 if at least local_lat was found, 0 otherwise
 proc drmaa_latency_parse_output {output res_var} {
    upvar $res_var res
 
+   set res(contaminated) 0
+
    set section ""
    foreach line [split $output "\n"] {
       set trimmed [string trim $line]
+
+      # start spread diagnostics - independent of the latency sections
+      if {[regexp {^start spread[^:]*:\s+([0-9.]+)\s*s} $trimmed -> spread]} {
+         set res(spread) $spread
+         continue
+      }
+      if {[string first "*** WARNING: start spread" $trimmed] == 0} {
+         set res(contaminated) 1
+         continue
+      }
 
       if {[string first "wait_lat" $trimmed] == 0} {
          set section "wait_lat"
@@ -193,12 +211,16 @@ proc drmaa_latency_gp_escape {text} {
 }
 
 ##
-# @brief Render one sweep as an HTML table plus a gnuplot chart.
+# @brief Render one sweep as an HTML table plus two gnuplot charts.
 #
 # Both sweeps produce the same per-run figures, only the swept parameter
 # differs, so the rendering is shared. Runs that were rejected inside
 # drmaa_init() (see the EDTIME sweep) are listed in the table but left out
-# of the chart.
+# of the charts.
+#
+# Two charts are drawn per sweep: the drmaa_wait() latency, and the job
+# start spread beneath it. They belong together - see the comment on the
+# spread chart below for why.
 #
 # @param res_var     name of the results array, keyed res(<key>,<section>,<stat>)
 # @param keys        the sweep values, in order, used as table rows / x values
@@ -206,10 +228,17 @@ proc drmaa_latency_gp_escape {text} {
 # @param xlabel      x axis label of the chart
 # @param chart_path  full path of the chart file to write
 # @param chart_title title of the chart
-# @param chart_name  file name of the chart, used in the <img> tag
+# @param chart_name  file name of the chart, used in the <img> tag. The
+#                    start spread chart is written next to it with "_spread"
+#                    appended to the base name.
 # @return HTML fragment
 proc drmaa_latency_render_section {res_var keys key_label xlabel chart_path chart_title chart_name} {
    upvar $res_var res
+   global drmaa_latency_sleep
+
+   set spread_chart_path "[file rootname $chart_path]_spread[file extension $chart_path]"
+   set spread_chart_name "[file rootname $chart_name]_spread[file extension $chart_name]"
+   set spread_title      "job start spread vs. $xlabel"
 
    # --- chart: x = swept value, y = min / avg / max local_lat -------------
    unset -nocomplain plot_data xy_rows
@@ -248,9 +277,77 @@ proc drmaa_latency_render_section {res_var keys key_label xlabel chart_path char
       }
    }
 
+   # --- chart 2: x = swept value, y = job start spread --------------------
+   # Plotted next to the latency because the two explain each other. sge_execd
+   # reaps at most 10 exited jobs per pass of do_ck_to_do()
+   # (sge_reap_children_execd(10, ...) in execd_ck_to_do.cc) and emits at most
+   # one report per pass, so a batch whose jobs all end at the same instant
+   # drains at a fixed rate and the latency grows with the batch size. A batch
+   # that was *started* over a wide enough window never piles up that way,
+   # because the reaper keeps pace with the arrivals. A step in this curve
+   # therefore explains a step in the latency curve above it.
+   #
+   # The job runtime is the point at which the first job ends before the last
+   # one starts; beyond it the batch never overlaps at all and local_lat has
+   # degenerated into a measurement of dispatch time - the binary warns about
+   # that and the table marks the row. It is drawn as a flat reference line,
+   # but only once some run comes within a quarter of it: it is a threshold
+   # marker, and when the spread stays well under a second against a runtime
+   # of tens of seconds the line would do nothing but stretch the y axis up
+   # to the runtime and flatten the curve it is there to annotate.
+   set spread_warn_fraction 0.25
+
+   unset -nocomplain spread_data spread_rows
+   set counter 0
+   set max_spread 0
+   foreach key $keys {
+      if {![info exists res($key,spread)]} {
+         continue
+      }
+      set spread_rows(0,$counter,x) $key
+      set spread_rows(0,$counter,y) $res($key,spread)
+      if {$res($key,spread) > $max_spread} {
+         set max_spread $res($key,spread)
+      }
+      incr counter
+   }
+
+   set show_runtime [expr {$counter > 0 &&
+                           $max_spread >= $spread_warn_fraction * $drmaa_latency_sleep}]
+   if {$show_runtime} {
+      set i 0
+      foreach key $keys {
+         if {![info exists res($key,spread)]} {
+            continue
+         }
+         set spread_rows(1,$i,x) $key
+         set spread_rows(1,$i,y) $drmaa_latency_sleep
+         incr i
+      }
+   }
+
+   set have_spread_chart 0
+   if {$counter > 0} {
+      set spread_rows(0,drawmode) "linespoints" ; set spread_rows(0,title) "start spread" ; set spread_rows(0,show) 1
+      if {$show_runtime} {
+         set spread_rows(1,drawmode) "lines" ; set spread_rows(1,title) "job runtime" ; set spread_rows(1,show) 1
+      }
+
+      set spread_data(xlabel)      [drmaa_latency_gp_escape $xlabel]
+      set spread_data(ylabel)      [drmaa_latency_gp_escape {job start spread (s)}]
+      set spread_data(title)       [drmaa_latency_gp_escape $spread_title]
+      set spread_data(output_file) $spread_chart_path
+
+      if {[catch {create_gnuplot_xy_gif spread_data spread_rows} err]} {
+         ts_log_info "could not create the chart $spread_chart_name (gnuplot missing?): $err"
+      } else {
+         set have_spread_chart 1
+      }
+   }
+
    # --- table -------------------------------------------------------------
    unset -nocomplain table
-   set table(COLS) 9
+   set table(COLS) 10
    set table(1,BGCOLOR) "#3366FF"
    set table(1,FNCOLOR) "#FFFFFF"
    set table(1,1) $key_label
@@ -262,6 +359,7 @@ proc drmaa_latency_render_section {res_var keys key_label xlabel chart_path char
    set table(1,7) "wait avg"
    set table(1,8) "wait max"
    set table(1,9) "wait median"
+   set table(1,10) "start spread"
 
    set row 1
    foreach key $keys {
@@ -272,13 +370,13 @@ proc drmaa_latency_render_section {res_var keys key_label xlabel chart_path char
 
       if {[info exists res($key,rejected)]} {
          set table($row,2) $res($key,rejected)
-         for {set c 3} {$c <= 9} {incr c} {
+         for {set c 3} {$c <= 10} {incr c} {
             set table($row,$c) "-"
          }
          continue
       }
       if {![info exists res($key,local_lat,mean)]} {
-         for {set c 2} {$c <= 9} {incr c} {
+         for {set c 2} {$c <= 10} {incr c} {
             set table($row,$c) "not run"
          }
          continue
@@ -295,12 +393,25 @@ proc drmaa_latency_render_section {res_var keys key_label xlabel chart_path char
             set table($row,$col) "n/a"
          }
       }
+      # start spread, marked when it invalidated the run
+      if {[info exists res($key,spread)]} {
+         set table($row,10) $res($key,spread)
+         if {[info exists res($key,contaminated)] && $res($key,contaminated)} {
+            append table($row,10) " (JOBS DID NOT OVERLAP)"
+            set table($row,10,BGCOLOR) "#FFCCCC"
+         }
+      } else {
+         set table($row,10) "n/a"
+      }
    }
    set table(ROWS) $row
 
    set html [create_html_table table 1]
    if {$have_chart} {
       append html [create_html_text "<img src=\"$chart_name\" alt=\"$chart_title\">" 1]
+   }
+   if {$have_spread_chart} {
+      append html [create_html_text "<img src=\"$spread_chart_name\" alt=\"$spread_title\">" 1]
    }
    return $html
 }
@@ -312,13 +423,13 @@ proc drmaa_latency_render_section {res_var keys key_label xlabel chart_path char
 # whichever sweeps have run - if the second one fails, the first section is
 # still on disk. Uses the same helpers as checktree/performance/throughput.
 proc drmaa_latency_write_report {} {
-   global CHECK_PROTOCOL_DIR
+   global drmaa_latency_report_dir
    global drmaa_latency_host drmaa_latency_sleep
    global drmaa_latency_job_counts drmaa_latency_res_jobs drmaa_latency_note_jobs
    global drmaa_latency_edtime_values drmaa_latency_edtime_jobs
    global drmaa_latency_res_edtime drmaa_latency_note_edtime
 
-   set dir "$CHECK_PROTOCOL_DIR/performance/drmaa/latency"
+   set dir $drmaa_latency_report_dir
    if {[catch {file mkdir $dir} err]} {
       ts_log_severe "cannot create report directory $dir: $err"
       return
@@ -388,8 +499,9 @@ proc drmaa_latency_write_report {} {
 
 proc drmaa_latency_setup {} {
    get_current_cluster_config_array ts_config
-   global CHECK_USER
+   global CHECK_USER CHECK_PROTOCOL_DIR
    global drmaa_latency_host drmaa_latency_queue drmaa_latency_slots
+   global drmaa_latency_report_dir
    global drmaa_latency_slots_backup
    global drmaa_latency_job_counts drmaa_latency_sleep
    global drmaa_latency_timeout drmaa_latency_max_ratio
@@ -407,19 +519,41 @@ proc drmaa_latency_setup {} {
    set drmaa_latency_edtime_values {1 2 4 8 16 32 64 128}
    # number of jobs used for every run of the EDTIME sweep
    set drmaa_latency_edtime_jobs 50
-   # sleep duration of each job. Must comfortably exceed the time needed to
-   # submit the largest batch, otherwise early jobs finish before the last
-   # one is submitted and the runs stop being parallel.
-   set drmaa_latency_sleep 10
+   # Sleep duration of each job. This must exceed the time the cluster needs
+   # to DISPATCH the largest batch, not merely to submit it. If dispatching
+   # 100 jobs takes longer than a job runs, the first jobs finish before the
+   # last ones start, the batch never overlaps, and local_lat degenerates
+   # into a measurement of dispatch time that grows with the job count all
+   # by itself. ~80 ms/job of dispatch has been seen on a small VM, i.e.
+   # ~8 s for 100 jobs, so 20 s leaves a comfortable margin. The binary
+   # reports the observed start spread and warns if this is violated; the
+   # sweep below picks that warning up.
+   set drmaa_latency_sleep 20
    # slots in the test queue - must cover the largest job count
    set drmaa_latency_slots 100
    # name of the test queue
    set drmaa_latency_queue "drmaa_lat.q"
-   # a run of 100 jobs sleeping 10s plus submit/reap overhead
+   # a run of 100 jobs sleeping drmaa_latency_sleep seconds, plus submit,
+   # dispatch and reap overhead
    set drmaa_latency_timeout 600
    # a latency that grows by more than this factor across a sweep is
    # reported as clearly dependent on the swept parameter
    set drmaa_latency_max_ratio 2.0
+
+   # Report directory for this run. Computed once here, not in the report
+   # writer, because the writer is called by BOTH check functions and the
+   # report is assembled incrementally - a second directory would orphan the
+   # section written by the first sweep. Naming follows the convention of
+   # checktree/performance/throughput, minus the fields that carry no meaning
+   # for this check (number of exec hosts, total job count):
+   #    <version>_<features>_<timestamp>
+   # e.g. 9.1.5_gcs-extensions_2026-08-03-14-22
+   set version  [string map {" " "_" "(" "" ")" ""} [get_version_info]]
+   set features [join $ts_config(product_feature) "-"]
+   set stamp    [clock format [clock seconds] -format "%Y-%m-%d-%H-%M"]
+   set drmaa_latency_report_dir \
+      "$CHECK_PROTOCOL_DIR/performance/drmaa/latency/${version}_${features}_${stamp}"
+   ts_log_fine "report directory for this run: $drmaa_latency_report_dir"
 
    # results of the two sweeps, rendered together into one report
    unset -nocomplain drmaa_latency_res_jobs drmaa_latency_res_edtime
@@ -448,12 +582,36 @@ proc drmaa_latency_setup {} {
    # since 9.1.0 the host slot capacity equals the core count; we need more
    setup_host_slots_for_binding $drmaa_latency_host drmaa_latency_slots_backup
 
-   # a queue with enough slots for the largest batch
+   # A queue with enough slots for the largest batch.
+   #
+   # load_thresholds must be NONE: a queue whose thresholds are exceeded is
+   # skipped by the scheduler, which would stall dispatch part way through a
+   # batch. That shows up as start spread and invalidates the measurement
+   # rather than failing outright, so it is disabled explicitly.
    unset -nocomplain q
-   set q(slots)   $drmaa_latency_slots
-   set q(pe_list) "NONE"
+   set q(slots)           $drmaa_latency_slots
+   set q(pe_list)         "NONE"
+   set q(load_thresholds) "NONE"
    if {[add_queue $drmaa_latency_queue $drmaa_latency_host q] < 0} {
       ts_log_config "could not add queue $drmaa_latency_queue on $drmaa_latency_host"
+      return 99
+   }
+
+   # job_load_adjustments has the same effect from the other direction: the
+   # scheduler adds virtual load for every job it dispatches (default
+   # np_load_avg=0.15, decaying over 0:7:30), so dispatching 100 jobs adds
+   # +15 to np_load_avg as the scheduler sees it. That alone can push a host
+   # past a threshold and throttle dispatch to a trickle - exactly the
+   # dispatch spread this check must avoid. Disable both the adjustment and
+   # its decay - with the adjustment off the decay time is moot, but leaving
+   # it at 0:7:30 would let any residual adjustment linger across the runs of
+   # a sweep. The cleanup function puts the scheduler configuration back with
+   # reset_schedd_config, so no backup is taken here.
+   unset -nocomplain sc
+   set sc(job_load_adjustments)       "NONE"
+   set sc(load_adjustment_decay_time) "0:0:00"
+   if {[set_schedd_config sc] < 0} {
+      ts_log_config "could not disable job_load_adjustments in the scheduler configuration"
       return 99
    }
 }
@@ -469,10 +627,15 @@ proc drmaa_latency_cleanup {} {
       catch { del_queue $drmaa_latency_queue $drmaa_latency_host 0 1 }
    }
 
+   # restore the scheduler configuration to the testsuite defaults
+   # (job_load_adjustments and its decay time were disabled in the setup)
+   reset_schedd_config
+
    # restore the host slot capacity changed in the setup
    cleanup_host_slots_for_binding drmaa_latency_slots_backup
 
    unset -nocomplain drmaa_latency_host drmaa_latency_slots_backup
+   unset -nocomplain drmaa_latency_report_dir
 }
 
 # ---------------------------------------------------------------------------
@@ -489,6 +652,7 @@ proc drmaa_latency_sweep {} {
    unset -nocomplain drmaa_latency_res_jobs
    set drmaa_latency_note_jobs ""
    set ok_runs {}
+   set contaminated_runs 0
 
    foreach njobs $drmaa_latency_job_counts {
       set args "$drmaa_latency_sleep $njobs \"-l h=$drmaa_latency_host\""
@@ -514,6 +678,16 @@ proc drmaa_latency_sweep {} {
             }
          }
       }
+      # start-spread diagnostics from the binary
+      foreach key {spread contaminated} {
+         if {[info exists one($key)]} {
+            set drmaa_latency_res_jobs($njobs,$key) $one($key)
+         }
+      }
+      if {[info exists one(contaminated)] && $one(contaminated)} {
+         incr contaminated_runs
+         ts_log_fine "run with njobs = $njobs: jobs did not overlap (start spread $one(spread) s)"
+      }
       lappend ok_runs $njobs
 
       ts_log_fine [format "%3d jobs: local_lat min %.3f avg %.3f max %.3f" \
@@ -522,6 +696,24 @@ proc drmaa_latency_sweep {} {
 
    if {[llength $ok_runs] < 2} {
       ts_log_severe "not enough successful runs ([llength $ok_runs]) to judge the latency"
+      drmaa_latency_write_report
+      return
+   }
+
+   # --- was the measurement valid at all? ---------------------------------
+   #
+   # If the jobs did not overlap, local_lat is a measurement of job dispatch
+   # and grows with the job count for that reason alone. Drawing the
+   # "latency depends on the job count" conclusion from it would be a false
+   # positive, so the conclusion is skipped entirely.
+   if {$contaminated_runs > 0} {
+      set drmaa_latency_note_jobs "MEASUREMENT NOT VALID: in $contaminated_runs of\
+         [llength $ok_runs] runs the jobs did not overlap - the batch took longer to\
+         dispatch than a job runs, so local_lat measured dispatch time rather than\
+         event latency and would grow with the job count regardless. Increase the job\
+         runtime (drmaa_latency_sleep) beyond the start spread reported per run, or\
+         reduce the job counts, and re-run. No conclusion is drawn from this data."
+      ts_log_info $drmaa_latency_note_jobs
       drmaa_latency_write_report
       return
    }
@@ -583,6 +775,7 @@ proc drmaa_latency_edtime_sweep {} {
    unset -nocomplain drmaa_latency_res_edtime
    set drmaa_latency_note_edtime ""
    set ok_runs {}
+   set contaminated_runs 0
 
    set args "$drmaa_latency_sleep $drmaa_latency_edtime_jobs \"-l h=$drmaa_latency_host\""
 
@@ -619,6 +812,16 @@ proc drmaa_latency_edtime_sweep {} {
             }
          }
       }
+      # start-spread diagnostics from the binary
+      foreach key {spread contaminated} {
+         if {[info exists one($key)]} {
+            set drmaa_latency_res_edtime($edtime,$key) $one($key)
+         }
+      }
+      if {[info exists one(contaminated)] && $one(contaminated)} {
+         incr contaminated_runs
+         ts_log_fine "run with edtime = $edtime: jobs did not overlap (start spread $one(spread) s)"
+      }
       lappend ok_runs $edtime
 
       ts_log_fine [format "EDTIME %4d: local_lat min %.3f avg %.3f max %.3f" \
@@ -627,6 +830,18 @@ proc drmaa_latency_edtime_sweep {} {
 
    if {[llength $ok_runs] < 2} {
       ts_log_severe "not enough accepted SGE_JAPI_EDTIME values ([llength $ok_runs]) to judge the latency"
+      drmaa_latency_write_report
+      return
+   }
+
+   # --- was the measurement valid at all? ---------------------------------
+   if {$contaminated_runs > 0} {
+      set drmaa_latency_note_edtime "MEASUREMENT NOT VALID: in $contaminated_runs of\
+         [llength $ok_runs] runs the jobs did not overlap - local_lat measured dispatch\
+         time rather than event latency. Increase the job runtime\
+         (drmaa_latency_sleep) beyond the start spread reported per run and re-run.\
+         No conclusion is drawn from this data."
+      ts_log_info $drmaa_latency_note_edtime
       drmaa_latency_write_report
       return
    }
