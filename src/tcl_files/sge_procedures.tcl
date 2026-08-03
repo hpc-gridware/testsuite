@@ -3829,10 +3829,21 @@ proc shutdown_execd {host_list {soft 0} {timeout 120} {wait_for_unknown_load 1}}
 
    #execd might not be down yet, let's check!
    set error_text ""
+
+   # How long a daemon takes to go away depends on how busy the host is, and
+   # running out of time here is a failure rather than an assertion -- so this
+   # wait scales. Found when complex.3 failed with "Timeout 120 secs: Could not
+   # shutdown execd" under 24 parallel runners (2026-08-03).
+   #
+   # Scaled into its own variable on purpose: $timeout is also handed to
+   # wait_for_unknown_load above, and that one scales the seconds itself. Scaling
+   # it here as well would apply the factor twice.
+   set pid_timeout [ts_scale_timeout $timeout]
+
    foreach host $host_list {
       set counter 0
       set is_ok 0
-      while {$counter < $timeout} {
+      while {$counter < $pid_timeout} {
          incr counter 1
          #Check if execd pid is gone
          if {[is_pid_with_name_existing $host $execd_pid($host) "sge_execd" ] != 0} {
