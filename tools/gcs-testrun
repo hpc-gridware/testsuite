@@ -1,15 +1,40 @@
 #!/usr/bin/env bash
 #
-# gcs-testrun -- complete test run of one line, in two phases.
+# gcs-testrun -- complete test run of one line, in three phases.
 #
 #   gcs-testrun <line> [N] [-- <further ctest arguments>]
 #
-# Phase 1 runs in parallel across N runners, phase 2 reruns its failures with
-# far less parallelism, and phase 3 gives whatever is left one cluster at a
-# time. Only phase 3 decides.
+#   <line>   92x, 91x, ...          N   runners, default 8
 #
-# Why two phases
-# --------------
+# Phase 1 runs in parallel across N runners, phase 2 reruns its failures with
+# -j 4, and phase 3 gives whatever is left one cluster at a time. Only phase 3
+# decides. The summary sorts the failures into three groups accordingly:
+# real defects, artifacts of load (cleared only in phase 3), and artifacts of
+# parallel execution (cleared already in phase 2).
+#
+# Phases 2 and 3 select by test NAME, never by ctest's --rerun-failed. That
+# matters since bundling: a bundle is one ctest entry, so --rerun-failed would
+# repeat all of its tests because one of them failed. The names come from the
+# ledger, which gcs-run-unit fills per test, and they resolve to the entries
+# gcs-testscan writes with the label `single`.
+#
+# Own ctest arguments after `--` restrict the run -- and then the ledger is
+# NOT cleared, because 600 tests that were not selected are not "still to do".
+# What is already red at that moment is written to failed-before.txt and left
+# out of the funnel, so a run of two tests is not blamed for yesterday's
+# failures. Without `--` the ledger is cleared and every failure goes through
+# all three phases.
+#
+#   gcs-testrun 92x 32                       the whole line
+#   gcs-testrun 92x 32 -- -R 'qrsh'          only what matches, ledger kept
+#   gcs-testrun 92x 32 -- -LE single         explicitly without the single entries
+#
+# The run leaves its files under runners/lists/runs/<timestamp>/: summary.txt,
+# the ctest logs of the three phases, manifest.txt and units.tsv (the plan),
+# failed-*.log (what each phase repeated) and loadprofile.txt.
+#
+# Why more than one phase
+# -----------------------
 # The testsuite's wait helpers use absolute timeouts (30 s for a configuration
 # change, 60 s for load values to arrive) and thereby assume implicitly that
 # they have the hosts to themselves. Under eight parallel clusters these are
@@ -34,7 +59,16 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 
 die() { printf 'gcs-testrun: %s\n' "$*" >&2; exit 2; }
 
-line="${1:?usage: gcs-testrun <line> [N] [-- <ctest-args>]}"; shift
+# --help prints the header comment above: it is the documentation, and a second
+# copy of it in a here-document would be the one that goes stale.
+usage() {
+   awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' \
+       "$(readlink -f "${BASH_SOURCE[0]}")"
+   exit 0
+}
+case "${1:-}" in -h|--help|help) usage;; esac
+
+line="${1:?usage: gcs-testrun <line> [N] [-- <ctest-args>]   (--help for details)}"; shift
 n=8
 [ $# -gt 0 ] && [[ "${1:-}" =~ ^[0-9]+$ ]] && { n="$1"; shift; }
 [ "${1:-}" = "--" ] && shift

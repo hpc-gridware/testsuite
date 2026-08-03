@@ -16,12 +16,25 @@
 # and by hand in an emergency -- the scheduler is interchangeable, the unit is
 # not.
 #
-# Several (path, level) pairs form a *group*: tests that belong together because
-# they depend on each other via check_needs. They have to run one after another
-# on the SAME cluster, because validate_needs (check.exp:3227) looks for the
-# dependency's result file in results/, which is separate per runner.
+# Several (path, level) pairs are passed on to check.exp as one invocation, so
+# startup, the enhanced setup and the ssh sessions are paid once for all of
+# them. Two different things arrive that way:
 #
-# Exit status: 0 only if every unit of the group returned 0.
+#   a group    tests that depend on each other via check_needs and therefore
+#              HAVE to run on the same cluster, because validate_needs
+#              (check.exp:3227) looks for the dependency's result file in
+#              results/, which is separate per runner
+#   a bundle   short groups that gcs-testscan merged only to save invocations;
+#              nothing ties them together beyond the cluster they land on
+#
+# Both are one ctest entry, and --name carries its name -- for a bundle that is
+# "<first unit>+group". The entry can only be green or red as a whole, so
+# check.exp prints "### check-result ok|failed <path> <level>" per check and
+# this script records each test in the ledger under the name it would have had
+# on its own. That is what lets gcs-testrun repeat the one test that failed
+# instead of the bundle it travelled in.
+#
+# Exit status: 0 only if every unit returned 0.
 
 set -uo pipefail
 
@@ -31,7 +44,16 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 
 die() { printf 'gcs-run-unit: %s\n' "$*" >&2; exit 2; }
 
-[ $# -ge 3 ] || die "usage: gcs-run-unit [--name <ctest-name>] <line> <path> <level> ..."
+# --help prints the header comment above rather than a second copy of it.
+case "${1:-}" in
+   -h|--help|help)
+      awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' \
+          "$(readlink -f "${BASH_SOURCE[0]}")"
+      exit 0 ;;
+esac
+
+[ $# -ge 3 ] || die "usage: gcs-run-unit [--name <ctest-name>] <line> <path> <level> [<path> <level> ...]
+       further pairs run in the SAME testsuite invocation, in the order given"
 
 # The ctest name of this test, handed in by the generated definition. ctest
 # exposes no variable for it, and without it a result cannot be recorded under

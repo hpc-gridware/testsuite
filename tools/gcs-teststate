@@ -28,6 +28,29 @@ the tests are testing. When it changes, the ledger is dropped.
 
     gcs-teststate 92x pending > todo.txt
     ctest --test-dir <build> --tests-from-file todo.txt -j 8
+
+Tests, not bundles
+------------------
+The vocabulary comes from runners/lists/ctest-names.txt, which gcs-testscan
+writes before it bundles anything -- so it holds the individual tests and never
+a "<name>+group". `failed` therefore answers with tests, which is what lets
+gcs-testrun repeat the one test that failed rather than the bundle it was in.
+
+gcs-run-unit records a bundle under its own name as well, so its measured
+duration is not lost. That name belongs to no registered test and shows up as
+`gone` in the summary -- harmless, and the reason the numbers there can exceed
+the number of registered tests.
+
+The estimate reads the durations from runners/lists/units.tsv, the plan the
+running ctest is working through -- not from this ledger, where the tests of a
+bundle carry 0 because only the invocation was measured. What it cannot see is
+how long the tests inside a running bundle have been going: the elapsed time is
+credited to the bundle's name, so during a run the estimate reads slightly long
+and jumps forward when a bundle lands.
+
+Environment:
+  GCS_TS_OVERHEAD    48   cost of one invocation, seconds, used for the estimate
+  GCS_CLION_ROOT          where the lines live, default ~/Clion
 """
 
 import os, re, sys, glob, fcntl, time

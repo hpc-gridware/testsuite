@@ -33,11 +33,40 @@ invisible to r2. Hence:
 Distribution is by measured runtime (LPT, longest group first) from
 results/check_durations.txt.
 
+Bundling
+--------
+Every invocation of check.exp pays for itself before it runs a test: startup,
+the enhanced setup with the translations, and the ssh sessions to the hosts add
+up to about 25 s. For a unit whose own work is twenty seconds that is more than
+the test. So groups shorter than GCS_BUNDLE_MAX_UNIT are merged into bundles of
+at most GCS_BUNDLE_BUDGET seconds and handed to gcs-run-unit as one invocation,
+which runs them one after another in a single testsuite.
+
+A bundle is one ctest entry named "<first unit>+group", so a failure anywhere
+in it marks the entry. That is why `split` writes each bundled unit a second
+time as its own entry labelled `single`:
+
+  ctest -LE single      what a run works through -- bundles and long units
+  ctest -L  single      the individual entries, for repeating single tests
+
+gcs-testrun uses exactly that split: phase 1 excludes the label, phases 2 and 3
+select by test name and therefore land on the single entries. Nobody repeats a
+bundle because one test in it failed.
+
 Usage:
   gcs-testscan <line> list                     # all units as TSV
   gcs-testscan <line> groups                   # dependency groups
-  gcs-testscan <line> split <N> [--out DIR]    # N runner lists
+  gcs-testscan <line> split <N> [--out DIR]    # N runner lists + ctest file
   gcs-testscan <line> verify                   # check against dump_test_list
+  gcs-testscan <line> diff                     # what changed against the last split
+  gcs-testscan <line> ctest-names              # the registered names, one per line
+  gcs-testscan <line> clion-configs <DIR>      # IDE run configurations
+
+Environment:
+  GCS_BUNDLE_MAX_UNIT   120   longest group that may go into a bundle, seconds
+  GCS_BUNDLE_BUDGET     600   size of a bundle, seconds; 0 switches bundling off
+  GCS_TS_OVERHEAD        48   cost of one invocation, used for the estimate
+  GCS_CLION_ROOT              where the lines live, default ~/Clion
 """
 
 import os, re, sys, glob, collections
