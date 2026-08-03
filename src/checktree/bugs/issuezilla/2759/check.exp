@@ -154,11 +154,16 @@ proc issue_2759_test {} {
       }
 
       # check if the shepherds are still running
-      set starttime [timestamp]
       foreach job_pid $pid_list {
          set didntstart 1
-         # waiting a maximum of 30 seconds
-         while {[expr [timestamp] - $starttime]< 30} {
+         # Waiting a maximum of 30 seconds -- per job, which is why the budget
+         # is taken here and not in front of the loop. Taken in front of it, a
+         # first job that used the full 30 s left nothing for the others: their
+         # while ran zero times and every one of them was reported as still
+         # running without ever having been looked at. That is how one slow
+         # shutdown produced twelve identical errors (run of 2026-08-02).
+         set starttime [timestamp]
+         while {[expr [timestamp] - $starttime] < [ts_scale_timeout 30]} {
             get_ps_info $job_pid $host
             if {$ps_info($job_pid,error) == 0} {
                ts_log_fine "Not OK: waiting for job to die because of sgeexecd stop!"
