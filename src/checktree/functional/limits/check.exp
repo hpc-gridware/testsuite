@@ -153,7 +153,20 @@ proc limits_submit_check {limit} {
    # (per process limit or by systemd), this is not reflected in failed or exit_status.
    # See also CS-1380.
    if {$CHECK_ACT_LEVEL == 0} {
-      get_qacct $job_id
+      # Wait for the accounting record, and check that one arrived. qmaster
+      # writes it after the job has ended, so under load it can still be
+      # missing here. Without the check the first qacct_info() read below
+      # aborted the whole test level with
+      #   can't read "qacct_info(failed)": no such element in array
+      # -- a TCL error that hides the reason instead of naming it (run of
+      # 2026-08-02). Return convention and this call shape are documented at
+      # get_qacct(); its own wait is scaled via ts_scale_timeout.
+      # No second error of our own here: get_qacct has raise_error 1 and has
+      # already reported the specific qacct failure.
+      if {[get_qacct $job_id "qacct_info" "" "" 1 -1 60] != 0} {
+         ts_log_fine "no accounting record for job $job_id, skipping the $limit checks"
+         return
+      }
       switch $limit {
          "h_cpu" -
          "h_rss" -
