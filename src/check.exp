@@ -5329,6 +5329,17 @@ proc check_if_test_cleaned_up {} {
       append allowed_attribs " rsh_command rsh_daemon"
    }
    set errors {}
+
+   # One request for every host instead of one per host. qconf -Sconf exists from
+   # 9.2.0 on; cluster_bulk_get_configs says so by returning 0, and then this
+   # falls back to asking host by host, which is what 9.0 and 9.1 need.
+   #
+   # The global configuration comes along in the same request but is deliberately
+   # not looked at here: that would be a new assertion, and tests that leave a
+   # global setting behind would start failing without anyone having decided that.
+   # See the @todo on CS-984 above, and CS-2500.
+   set have_bulk [cluster_bulk_get_configs bulk_conf]
+
    foreach host $ts_config(execd_nodes) {
       unset -nocomplain local_conf
       if {$check_do_not_create_local_config} {
@@ -5336,8 +5347,23 @@ proc check_if_test_cleaned_up {} {
       } else {
          set report_get_config_error 1
       }
-      set conf_ret [get_config local_conf $host 60 $report_get_config_error]
-      ts_log_fine "get_config for $host returned $conf_ret, attributes [array names local_conf]"
+      if {$have_bulk} {
+         set resolved [resolve_host $host 1]
+         if {[info exists bulk_conf($resolved,)]} {
+            set conf_ret 0
+            foreach key [array names bulk_conf "$resolved,*"] {
+               set attrib [string range $key [expr {[string length $resolved] + 1}] end]
+               if {$attrib ne ""} {
+                  set local_conf($attrib) $bulk_conf($key)
+               }
+            }
+         } else {
+            set conf_ret -1
+         }
+      } else {
+         set conf_ret [get_config local_conf $host 60 $report_get_config_error]
+      }
+      ts_log_fine "config of $host returned $conf_ret, attributes [array names local_conf]"
       if {$conf_ret == 0} {
          if {$check_do_not_create_local_config} {
             lappend errors "local config $host found, but testsuite was started with option lo_local_config"
