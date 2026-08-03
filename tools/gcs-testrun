@@ -109,8 +109,18 @@ fi
 
 # --- phase 1: parallel --------------------------------------------------------
 log "phase 1: $n runners in parallel"
+# What failed before this run started. The ledger survives across runs, so
+# without this the reruns below would pick up failures nobody re-ran. For a
+# complete run phase 0c has just cleared it and this is empty.
+"$SCRIPT_DIR/gcs-teststate" "$line" failed 2>/dev/null | sort > "$RUN/failed-before.txt" || true
+
+# -LE single skips the per-unit definitions gcs-testscan writes alongside the
+# bundles. They exist so that phases 2 and 3 can rerun the one test that failed
+# instead of the whole bundle around it; running them here would run everything
+# twice.
 t1=$(date +%s)
 ctest --test-dir "$D" -j "$n" --resource-spec-file "$D/ts_cluster.json" \
+      -LE single \
       --output-junit "$RUN/parallel.xml" --output-on-failure "$@" \
       > "$RUN/parallel.log" 2>&1
 rc1=$?
@@ -118,12 +128,27 @@ t1=$(( $(date +%s) - t1 ))
 grep -E "tests passed|tests failed out of" "$RUN/parallel.log" | tee -a "$RUN/summary.txt"
 printf '  duration: %dm%02ds\n' $((t1/60)) $((t1%60)) | tee -a "$RUN/summary.txt"
 
-failed1=$(grep -c . "$D/Testing/Temporary/LastTestsFailed.log" 2>/dev/null || echo 0)
+# The tests that failed in this run, by name, one per line. Taken from the
+# ledger rather than from LastTestsFailed.log: with bundling the latter names
+# bundles, and what has to be rerun are the tests inside them. gcs-run-unit
+# records one ledger entry per test even when they ran together.
+failed_names() {
+  "$SCRIPT_DIR/gcs-teststate" "$line" failed 2>/dev/null | sort \
+    | comm -13 "$RUN/failed-before.txt" - 
+}
+
+# A ctest -R expression that matches exactly those names. The dots are escaped:
+# unescaped they are "any character", which would let one name select others.
+names_to_regex() {
+  sed 's/[.+]/\\&/g' | paste -sd'|' - | sed 's/^/^(/; s/$/)$/'
+}
+
+failed1=$(failed_names | grep -c . || echo 0)
 if [ "$failed1" -eq 0 ]; then
   log "phase 2 skipped -- no failures"
   exit 0
 fi
-cp -p "$D/Testing/Temporary/LastTestsFailed.log" "$RUN/failed-parallel.log"
+failed_names > "$RUN/failed-parallel.log"
 
 # --- phase 2: uncontended -----------------------------------------------------
 # What distinguishes this phase from phase 1 is not that it is serial but that
@@ -156,15 +181,16 @@ _p2_jobs="${GCS_PHASE2_JOBS:-4}"
 [ "$_p2_jobs" -gt "$n" ] && _p2_jobs="$n"
 log "phase 2: rerunning $failed1 failures with -j $_p2_jobs"
 t2=$(date +%s)
-ctest --test-dir "$D" --rerun-failed -j "$_p2_jobs" --resource-spec-file "$D/ts_cluster.json" \
+ctest --test-dir "$D" -j "$_p2_jobs" --resource-spec-file "$D/ts_cluster.json" \
+      -R "$(failed_names | names_to_regex)" \
       --output-junit "$RUN/serial.xml" --output-on-failure \
       > "$RUN/serial.log" 2>&1
 rc2=$?
 t2=$(( $(date +%s) - t2 ))
 printf '  duration: %dm%02ds\n' $((t2/60)) $((t2%60)) | tee -a "$RUN/summary.txt"
 
-failed2=$(grep -c . "$D/Testing/Temporary/LastTestsFailed.log" 2>/dev/null || echo 0)
-cp -p "$D/Testing/Temporary/LastTestsFailed.log" "$RUN/failed-phase2.log" 2>/dev/null
+failed2=$(failed_names | grep -c . || echo 0)
+failed_names > "$RUN/failed-phase2.log"
 
 # --- phase 3: one cluster at a time --------------------------------------------
 # Phase 2 is a filter, not a verdict. Two full runs of the same code five hours
@@ -185,7 +211,8 @@ if [ "$failed2" -eq 0 ]; then
 else
   log "phase 3: rerunning $failed2 remaining failures one at a time"
   t3=$(date +%s)
-  ctest --test-dir "$D" --rerun-failed -j 1 --resource-spec-file "$D/ts_cluster.json" \
+  ctest --test-dir "$D" -j 1 --resource-spec-file "$D/ts_cluster.json" \
+        -R "$(failed_names | names_to_regex)" \
         --output-junit "$RUN/single.xml" --output-on-failure \
         > "$RUN/single.log" 2>&1
   rc3=$?
