@@ -1141,6 +1141,14 @@ proc l10n_cache_file {} {
 # A damaged or half written file must never take a test down with it, so the
 # whole read is wrapped: on any error the caches simply stay empty and every
 # translation is asked for again, which is what happens without the option.
+#
+# Read by hand rather than with `source`, and with an explicit -translation lf.
+# The messages come from a pseudo terminal and therefore end their lines with
+# CR LF, while `source` reads with -translation auto and silently folds that
+# into a plain LF. Cached messages then differ from freshly translated ones by
+# exactly one character per line, which is enough to break every test that
+# compares a translated message against command output character by character
+# (jsv_issues_iz3088 did, from the second invocation onwards).
 proc l10n_cache_load {} {
    global l10n_cache l10n_cache_loaded l10n_cache_new
    global l10n_raw_cache l10n_install_cache host_cgroup_version
@@ -1154,7 +1162,13 @@ proc l10n_cache_load {} {
    if {$f eq "" || ![file exists $f]} {
       return
    }
-   if {[catch {uplevel #0 [list source $f]} msg]} {
+   if {[catch {
+      set fh [open $f r]
+      fconfigure $fh -translation lf -encoding utf-8
+      set data [read $fh]
+      close $fh
+      uplevel #0 $data
+   } msg]} {
       ts_log_fine "l10n cache $f unreadable, translating from scratch: $msg"
       array unset l10n_raw_cache
       array unset l10n_install_cache
@@ -1181,6 +1195,9 @@ proc l10n_cache_save {} {
    set tmp "$f.tmp.[pid]"
    if {[catch {
       set fh [open $tmp w]
+      # Same -translation as the reader uses, so a CR in a message is written as
+      # a CR and not as whatever the platform would prefer.
+      fconfigure $fh -translation lf -encoding utf-8
       # [list ...] rather than braces: the messages contain quotes, dollars and
       # newlines, and only a generated Tcl list is guaranteed to read back as
       # what was written.
