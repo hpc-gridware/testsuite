@@ -306,6 +306,12 @@ proc host_get_topology_in_use {hostname} {
 proc host_wait_for_fake_topology {hostname expected_topology {timeout 60}} {
    set hostname [get_short_hostname $hostname]
 
+   # The topology arrives with the execd's load report, so how long it takes
+   # depends on the load of the host, not on the test. Under parallel runners
+   # the fixed 60 s were exceeded without anything being wrong (pe_par, run of
+   # 2026-08-02). See ts_scale_timeout and CS-2481.
+   set timeout [ts_scale_timeout $timeout]
+
    set waited 0
    while {$waited < $timeout} {
       set topo [host_get_topology $hostname]
