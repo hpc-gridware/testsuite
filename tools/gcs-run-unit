@@ -159,12 +159,30 @@ ensure_alive || exit 3
     "$(date '+%F %T')" "$$" "${ctest_name:-$1}" "$*" > "$marker"
 
 # --- work through the group ---------------------------------------------------
+# One invocation for the whole group instead of one per (path, level). Startup,
+# the enhanced setup and the ssh sessions to the hosts are paid once -- measured
+# on 2026-08-03 over seven tests: 356 s as seven invocations against 201 s as
+# one, about 25 s per check that no longer starts its own testsuite.
+#
+# check.exp prints "### check-result ok|failed <path> <level>" for each check, so
+# the outcome of the individual tests survives the bundling: the ledger keeps one
+# entry per test even though ctest sees a single unit.
 group_start=$(date +%s)
 rc=0
+_pairs=("$@")
+_names=()
 while [ $# -ge 2 ]; do
   path="$1"; level="$2"; shift 2
-  name="$(basename "$path").$level"
-  start=$(date +%s)
+  _names+=("$(basename "$path").$level")
+done
+set -- "${_pairs[@]}"
+
+if [ ${#_names[@]} -gt 1 ]; then
+  name="bundle of ${#_names[@]}: ${_names[*]}"
+else
+  name="${_names[0]}"
+fi
+start=$(date +%s)
   # Tee into <runner>/current.log so the output can be followed WHILE the test
   # runs. Under ctest there is otherwise no way to see it: ctest captures a
   # test's output and holds it until the test ends -- its own
@@ -186,24 +204,48 @@ while [ $# -ge 2 ]; do
   # tee's.
   # GCS_L10N_CACHE is passed through rather than set here: a parallel run should
   # not quietly behave differently from the same test started by hand.
+  _args=()
+  for ((_i = 0; _i < ${#_pairs[@]}; _i += 2)); do
+    _args+=(check "${_pairs[$_i]}" "${_pairs[$((_i + 1))]}")
+  done
   if CS_SELF_HEAL=1 CS_TIMEOUT_FACTOR="${CS_TIMEOUT_FACTOR:-3}" \
      GCS_L10N_CACHE="${GCS_L10N_CACHE:-0}" \
-     "$runner" check "$path" "$level" 2>&1 | tee -a "$_log"; then
+     "$runner" "${_args[@]}" 2>&1 | tee -a "$_log"; then
     printf '### %s ok (%ss, slot %s)\n' "$name" "$(( $(date +%s) - start ))" "$slot"
   else
     printf '### %s FAILED (%ss, slot %s)\n' "$name" "$(( $(date +%s) - start ))" "$slot"
     rc=1
   fi
-done
 
 # Record the outcome in the ledger that survives across runs and is dropped on a
 # rebuild -- see gcs-teststate. ctest's own LastTestsFailed.log is a snapshot of
 # the last run that had failures, which is not enough to work through a test run
 # over several sessions.
 if [ -n "$ctest_name" ] && [ -x "$SCRIPT_DIR/gcs-teststate" ]; then
+  _elapsed=$(( $(date +%s) - group_start ))
   "$SCRIPT_DIR/gcs-teststate" "$line" record "$ctest_name" \
-      "$([ $rc -eq 0 ] && echo ok || echo fail)" "$(( $(date +%s) - group_start ))" \
+      "$([ $rc -eq 0 ] && echo ok || echo fail)" "$_elapsed" \
       "r$slot" >/dev/null 2>&1 || true
+
+  # For a bundle the entry above says only that something in it failed. The
+  # per check lines tell which one, so each test also gets its own entry under
+  # the name gcs-testscan would have given it on its own. Whoever works through
+  # the failures then sees tests, not bundles.
+  #
+  # The duration is not split up: what was measured is the invocation, and
+  # inventing a share per test would put numbers into check_durations.txt that
+  # nobody measured. They are recorded with 0 so the scheduler keeps using the
+  # value it already has for them.
+  if [ ${#_names[@]} -gt 1 ] && [ -f "$_log" ]; then
+    while IFS=' ' read -r _res _path _level; do
+      [ -n "$_path" ] || continue
+      _rel="${_path#$HOME/Clion/$line/}"
+      _single="${_rel//\//.}.$_level"
+      [ "$_single" = "$ctest_name" ] && continue
+      "$SCRIPT_DIR/gcs-teststate" "$line" record "$_single" \
+          "$([ "$_res" = ok ] && echo ok || echo fail)" 0 "r$slot" >/dev/null 2>&1 || true
+    done < <(grep '^### check-result ' "$_log" | sed 's/^### check-result //')
+  fi
 fi
 
 # Normal end -- whatever the tests returned, this script got to run its course,

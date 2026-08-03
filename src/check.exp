@@ -7762,6 +7762,10 @@ set do_bootstrap      0
 set do_compile        0
 set do_all            0
 set do_one_test       0
+# Every "check <path> <level>" on the command line appends here. A single
+# check leaves this a one element list and behaves exactly as before; more
+# than one runs them in order, in this one invocation.
+set do_one_test_list  {}
 set do_dump_test_list 0
 set do_category       0
 set do_nomain         0
@@ -8523,6 +8527,7 @@ for {set i 0} {$i < $argc} {incr i} {
       } else {
          #Save then to the new global array
          lappend custom_checktree $do_one_test_name
+         lappend do_one_test_list [list $do_one_test_name $do_one_test_level]
       }
       incr i 2
       continue
@@ -8896,20 +8901,49 @@ if {$do_dump_test_list} {
 }
 
 if {$do_one_test} {
-   # ts_checktree ok
-   if { [string first "/" $do_one_test_name] == 0 || [string first "\\" $do_one_test_name] == 0 } {
-      set CHECK_ACT_PATH "$do_one_test_name"
-   } else {
-      set CHECK_ACT_PATH "$ts_config(checktree_root_dir)/$do_one_test_name"
-   }
-
-   set ONLY_ONE_LEVEL $do_one_test_level
+   # One invocation, one or more checks. Startup, the enhanced setup and the ssh
+   # sessions to the hosts are paid once for the whole list instead of once per
+   # check -- measured on 2026-08-03 over seven tests of object/role: 356 s as
+   # seven invocations against 201 s as one, so about 25 s per check that does
+   # not have to start its own testsuite.
+   #
+   # What is NOT amortised is anything the framework does per test: the cleanup
+   # check ran 42 times either way. Only the frame collapses.
+   #
+   # The checks run in the order given and each one's result is folded into the
+   # exit status, so a failure anywhere still fails the invocation.
+   set at_least_one_failed 0
    set selected_levels ""
-
-   # print_menu_header
    ts_log_fine "run all tests ..."
 
-   set at_least_one_failed [run_tests $CHECK_ACT_PATH "all"]
+   foreach _check $do_one_test_list {
+      set do_one_test_name  [lindex $_check 0]
+      set do_one_test_level [lindex $_check 1]
+
+      # ts_checktree ok
+      if { [string first "/" $do_one_test_name] == 0 || [string first "\\" $do_one_test_name] == 0 } {
+         set CHECK_ACT_PATH "$do_one_test_name"
+      } else {
+         set CHECK_ACT_PATH "$ts_config(checktree_root_dir)/$do_one_test_name"
+      }
+
+      set ONLY_ONE_LEVEL $do_one_test_level
+
+      if {[llength $do_one_test_list] > 1} {
+         ts_log_fine "bundle: $do_one_test_name level $do_one_test_level"
+      }
+
+      set _failed [run_tests $CHECK_ACT_PATH "all"]
+      if {$_failed} {
+         set at_least_one_failed 1
+      }
+
+      # One machine readable line per check, so a caller running a bundle can
+      # tell which of its checks failed. Without it the only signal is the exit
+      # status of the whole invocation, and a bundle would have to be reported
+      # -- and rerun -- as a unit even though the testsuite knows better.
+      puts "### check-result [expr {$_failed ? {failed} : {ok}}] $do_one_test_name $do_one_test_level"
+   }
 
    if {$do_kill} {
       set check_name "command line"

@@ -371,7 +371,21 @@ case $action in
       if [ "${CS_SELF_HEAL:-0}" = "1" ]; then
          args="$args re_init_on_tcl_error"
       fi
-      run_check "STARTING SPECIFIC TEST" check "$test_unit" $level
+      # More than one (test_unit, level) pair may follow: check.exp runs them in
+      # one invocation, which pays startup and the ssh sessions once instead of
+      # once per test -- about 25 s per additional test, measured 2026-08-03.
+      # Everything from the fourth argument on is forwarded unchanged, so
+      # "check a 0 b 0 c 0" becomes one bundled run.
+      # What follows the first pair are further "check <unit> <level>" triples,
+      # keyword and all. Collected into a plain string, not an array: this file
+      # is dot-sourced by the runner wrappers, which run under /bin/sh.
+      shift 3 2>/dev/null || shift $#
+      _more=""
+      while [ $# -ge 3 ] && [ "$1" = "check" ]; do
+         _more="$_more check $2 $3"
+         shift 3
+      done
+      run_check "STARTING SPECIFIC TEST" check "$test_unit" $level $_more
       ;;
 
    fullrun)
