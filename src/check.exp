@@ -229,6 +229,13 @@ set create_csv_file 0
 global fast_setup
 set fast_setup 0
 
+# Keep the translated messages between invocations instead of asking infotext
+# again for every one of them. Off by default: the option changes nothing about
+# what a test does, but it does change where the translations come from, and
+# nobody should get that without asking for it.
+global l10n_cache
+set l10n_cache 0
+
 global do_compile
 global CHECK_TESTSUITE_LOCKFILE
 set CHECK_TESTSUITE_LOCKFILE "testsuite_lockfile"
@@ -7397,7 +7404,7 @@ proc operate_additional_clusters {operation} {
 #*******************************************************************************
 proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {execute_func_return rpc_retval} {ignore_spool_switches 0} {additional_switches ""}} {
    global CHECK_USER CHECK_HTML_DIRECTORY CHECK_COMPILE_TOOL
-   global check_use_installed_system fast_setup be_quiet
+   global check_use_installed_system fast_setup l10n_cache be_quiet
    global check_do_clean_compile check_do_3rdparty_build ts_config ts_log_config
    global CHECK_TESTSUITE_TRASH check_do_not_use_spool_config_entries check_do_not_create_local_config ts_log_levels
    upvar $execute_func_return rpcret
@@ -7447,6 +7454,10 @@ proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {e
    # inherit "fast_setup" command line param
    if {$fast_setup == 1} {
       append args " fast_setup"
+   }
+   # inherit "l10n_cache" command line param
+   if {$l10n_cache == 1} {
+      append args " l10n_cache"
    }
 
    # inherit "logging_level" command line param
@@ -7706,6 +7717,7 @@ set do_only_reset_config 0
 set do_only_diff_macros  0
 set be_quiet          0
 set fast_setup        0
+set l10n_cache        0
 set CHECK_CUR_PROC_NAME "main"
 set check_name "main"
 set CHECK_ACTUAL_TEST_PATH "not in testmode"
@@ -7772,6 +7784,10 @@ for {set i 0} {$i < $argc} {incr i} {
 
    if {([string compare [lindex $argv $i] "--fast_setup"] == 0) || ([string compare [lindex $argv $i] "fast_setup"] == 0) } {
       set fast_setup 1
+      continue
+   }
+   if {([string compare [lindex $argv $i] "--l10n_cache"] == 0) || ([string compare [lindex $argv $i] "l10n_cache"] == 0) } {
+      set l10n_cache 1
       continue
    }
 
@@ -7870,6 +7886,8 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "quiet                 no output on setup"
       puts ""
       puts "fast_setup            suppress configuration checks at startup (setup phase)"
+      puts ""
+      puts "l10n_cache            keep translated messages on disk between invocations"
       puts ""
       puts "no_local_spool        ignore local spool directories from host configuration file"
       puts ""

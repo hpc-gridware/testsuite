@@ -1110,10 +1110,99 @@ proc translate_macro_if_possible {macro {par1 ""} {par2 ""} {par3 ""} {par4 ""} 
 #  SEE ALSO
 #     ???/???
 #*******************************************************************************
+## @brief file that holds the translations of the installed binaries
+#
+# Keyed by size and mtime of the infotext binary that produces them: a rebuild or
+# a re-mirrored inst/ yields a different name, so a stale file is never read.
+# Returns "" when there is nothing to key on, which switches the cache off.
+#
+# The file lives under the cluster's OWN results directory. Sharing one file
+# between the runners of a checkout would save a little more -- the translations
+# are the same everywhere -- but a file that every cluster writes is the exact
+# construction that let load_config carry one cluster's spool paths into another
+# (CS-2500). Per cluster each of them pays the full translation once instead of
+# once per test, which is nearly all of the saving.
+proc l10n_cache_file {} {
+   get_current_cluster_config_array ts_config
+
+   if {![info exists ts_config(results_dir)] || $ts_config(results_dir) eq ""} {
+      return ""
+   }
+   set bin "$ts_config(product_root)/utilbin/[resolve_arch $ts_config(master_host)]/infotext"
+   if {![file exists $bin]} {
+      return ""
+   }
+   return [file join $ts_config(results_dir) \
+           "l10n_cache_[file size $bin]_[file mtime $bin].tcl"]
+}
+
+## @brief read the translations of an earlier invocation, once per process
+#
+# A damaged or half written file must never take a test down with it, so the
+# whole read is wrapped: on any error the caches simply stay empty and every
+# translation is asked for again, which is what happens without the option.
+proc l10n_cache_load {} {
+   global l10n_cache l10n_cache_loaded l10n_cache_new
+   global l10n_raw_cache l10n_install_cache
+
+   set l10n_cache_loaded 1
+   set l10n_cache_new 0
+   if {$l10n_cache != 1} {
+      return
+   }
+   set f [l10n_cache_file]
+   if {$f eq "" || ![file exists $f]} {
+      return
+   }
+   if {[catch {uplevel #0 [list source $f]} msg]} {
+      ts_log_fine "l10n cache $f unreadable, translating from scratch: $msg"
+      array unset l10n_raw_cache
+      array unset l10n_install_cache
+   }
+}
+
+## @brief write the translations out, atomically
+#
+# Written to a sibling temporary name and moved into place, so a reader either
+# sees the previous file or the new one, never half of either. The pid keeps two
+# clusters apart in the case where they do share a results directory after all.
+proc l10n_cache_save {} {
+   global l10n_cache l10n_cache_new l10n_raw_cache l10n_install_cache
+
+   if {$l10n_cache != 1 || $l10n_cache_new <= 0} {
+      return
+   }
+   set f [l10n_cache_file]
+   if {$f eq ""} {
+      return
+   }
+   set tmp "$f.tmp.[pid]"
+   if {[catch {
+      set fh [open $tmp w]
+      # [list ...] rather than braces: the messages contain quotes, dollars and
+      # newlines, and only a generated Tcl list is guaranteed to read back as
+      # what was written.
+      puts $fh [list array set l10n_raw_cache [array get l10n_raw_cache]]
+      puts $fh [list array set l10n_install_cache [array get l10n_install_cache]]
+      close $fh
+      file rename -force $tmp $f
+   } msg]} {
+      ts_log_fine "could not write l10n cache $f: $msg"
+      catch {file delete -force $tmp}
+      return
+   }
+   set l10n_cache_new 0
+}
+
 proc translate {host remove_control_signs is_script no_input_parsing msg_txt {par1 ""} {par2 ""} {par3 ""} {par4 ""} {par5 ""} {par6 ""} {par7 ""}} {
 
    global CHECK_USER l10n_raw_cache l10n_install_cache
+   global l10n_cache_loaded l10n_cache_new
    get_current_cluster_config_array ts_config
+
+   if {![info exists l10n_cache_loaded]} {
+      l10n_cache_load
+   }
 
    set msg_text $msg_txt
    if { $no_input_parsing != 1 } {
@@ -1137,6 +1226,14 @@ proc translate {host remove_control_signs is_script no_input_parsing msg_txt {pa
       } else {
           set back [start_remote_prog $host $CHECK_USER $ts_config(product_root)/utilbin/$arch_string/infotext "-raw -__eoc__ \"$msg_text\""]
           set l10n_raw_cache($msg_text) $back
+          incr l10n_cache_new
+          # Every tenth new entry, not every one: the file is rewritten whole, and
+          # a run that translates a hundred messages should not rewrite it a
+          # hundred times. Entries below the threshold are simply translated again
+          # next time -- the cache is an optimisation, not a source of truth.
+          if {$l10n_cache_new >= 10} {
+            l10n_cache_save
+          }
       }
       ts_log_finest "message\n\"$msg_text\" translated to\n\"$back\""
    } else {
@@ -1157,6 +1254,14 @@ proc translate {host remove_control_signs is_script no_input_parsing msg_txt {pa
          # we have line wrap and variable parameter length
          # PROBLEM: (TODO) we cannot say on which position the infotext will do a line break wrap-around
          set l10n_install_cache($msg_text) $back
+         incr l10n_cache_new
+         # Every tenth new entry, not every one: the file is rewritten whole, and
+         # a run that translates a hundred messages should not rewrite it a
+         # hundred times. Entries below the threshold are simply translated again
+         # next time -- the cache is an optimisation, not a source of truth.
+         if {$l10n_cache_new >= 10} {
+            l10n_cache_save
+         }
       }
       ts_log_finest "message\n\"$msg_text\" translated to\n\"$back\""
    }
