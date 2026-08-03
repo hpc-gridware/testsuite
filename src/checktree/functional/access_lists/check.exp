@@ -54,8 +54,12 @@ set check_category        "SCHEDULER VERIFIED"
 #
 # The price is that the per-check setup runs once per level rather than once:
 # the access queue, disabling all.q everywhere, the four access lists and the
-# project are rebuilt each time. That is roughly 150-200 s per level against
-# ~600 s saved on the critical path, which is the right trade at 24 runners.
+# project are rebuilt each time -- measured at ~155 s per level.
+#
+# That price does not buy wall clock at 24 runners, where the limit is the total
+# work divided by the runners rather than the longest unit. It buys headroom:
+# together with the scope_basic split it moves the point where adding runners
+# stops helping from about 29 to about 37. See the same note there.
 #
 # qalter_prj shares level 0 instead of getting its own: it submits a single job
 # and would otherwise be almost pure setup cost.
@@ -73,15 +77,35 @@ set check_setup_function "access_lists_setup"
 set check_cleanup_function "access_lists_cleanup"
 
 # define test's procedure order
+# One entry, not one per scenario: the run level already says which scenario is
+# meant, so access_lists_run_level dispatches rather than having all six called
+# in every level with five of them returning at once. That keeps the per-function
+# field of the result file meaningful, keeps five no-op "R U N N I N G" lines out
+# of the log, and lets a level without a scenario be an error instead of a
+# silently green run.
 set check_functions ""
-lappend check_functions "access_lists_global_host"
-lappend check_functions "access_lists_exec_host"
-lappend check_functions "access_lists_queue"
-lappend check_functions "access_lists_cluster_config"
-lappend check_functions "access_lists_pe"
-lappend check_functions "access_lists_qalter_prj"
+lappend check_functions "access_lists_run_level"
 
 # -------- local test procedures -----------------------------------------------
+
+## @brief run the scenario this run level stands for
+proc access_lists_run_level {} {
+   global CHECK_ACT_LEVEL
+
+   switch $CHECK_ACT_LEVEL {
+      0 {
+         access_lists_global_host
+         access_lists_qalter_prj
+      }
+      1 { access_lists_exec_host }
+      2 { access_lists_queue }
+      3 { access_lists_cluster_config }
+      4 { access_lists_pe }
+      default {
+         ts_log_severe "no scenario defined for run level $CHECK_ACT_LEVEL"
+      }
+   }
+}
 
 global access_lists_queue
 global access_lists_host
@@ -346,13 +370,6 @@ proc run_user_jobs {id_string jobargs A_ok B_ok {C_ok "-1"}} {
 }
 
 proc access_lists_global_host {} {
-   global CHECK_ACT_LEVEL
-   # All check_functions are called in every run level -- the level is a
-   # parameter, not a selector -- so each scenario has to bow out of the levels
-   # that are not its own. See check_description() above for why they are split.
-   if {$CHECK_ACT_LEVEL != 0} {
-      return
-   }
    global ts_config access_lists_host CHECK_USER
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER   
    global CHECK_SECOND_FOREIGN_SYSTEM_GROUP CHECK_FIRST_FOREIGN_SYSTEM_GROUP
@@ -478,10 +495,6 @@ proc access_lists_global_host {} {
 }
 
 proc access_lists_exec_host {} {
-   global CHECK_ACT_LEVEL
-   if {$CHECK_ACT_LEVEL != 1} {
-      return
-   }
    global ts_config access_lists_host CHECK_USER
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER   
    global CHECK_SECOND_FOREIGN_SYSTEM_GROUP CHECK_FIRST_FOREIGN_SYSTEM_GROUP
@@ -599,10 +612,6 @@ proc access_lists_exec_host {} {
 }
 
 proc access_lists_queue {} {
-   global CHECK_ACT_LEVEL
-   if {$CHECK_ACT_LEVEL != 2} {
-      return
-   }
    global ts_config CHECK_USER
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER   
    global CHECK_SECOND_FOREIGN_SYSTEM_GROUP CHECK_FIRST_FOREIGN_SYSTEM_GROUP
@@ -720,10 +729,6 @@ proc access_lists_queue {} {
 }
 
 proc access_lists_cluster_config {} {
-   global CHECK_ACT_LEVEL
-   if {$CHECK_ACT_LEVEL != 3} {
-      return
-   }
    global ts_config access_lists_queue CHECK_USER
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER   
    global CHECK_SECOND_FOREIGN_SYSTEM_GROUP CHECK_FIRST_FOREIGN_SYSTEM_GROUP
@@ -843,10 +848,6 @@ proc access_lists_cluster_config {} {
 }
 
 proc access_lists_pe {} {
-   global CHECK_ACT_LEVEL
-   if {$CHECK_ACT_LEVEL != 4} {
-      return
-   }
    global ts_config CHECK_USER
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER   
    global CHECK_SECOND_FOREIGN_SYSTEM_GROUP CHECK_FIRST_FOREIGN_SYSTEM_GROUP
@@ -994,12 +995,6 @@ proc access_lists_pe {} {
 #     This is Issue 2737.
 #*******************************************************************************
 proc access_lists_qalter_prj {} {
-   global CHECK_ACT_LEVEL
-   # Rides along in level 0: a single held job plus one qalter, not worth a
-   # level of its own once the setup cost is counted.
-   if {$CHECK_ACT_LEVEL != 0} {
-      return
-   }
    global ts_config
    global CHECK_SECOND_FOREIGN_SYSTEM_USER
 
