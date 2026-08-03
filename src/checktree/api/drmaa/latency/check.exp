@@ -1,0 +1,670 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+# added the called module test binary in 9.1.5 - the test as such would
+# work with any version
+set check_version_range "9.1.5"
+
+# CS-2447: measure how long drmaa_wait() needs to return *after* a job has
+# actually ended, and what that latency depends on.
+#
+# JAPI subscribes sgeE_JOB_FINISH with a flush delay of 0
+# (japi_implementation_thread() in source/libs/japi/japi.cc), so sge_qmaster
+# flushes the event as soon as a worker thread generates it. Two independent
+# expectations follow from that, and this check tests one per check function:
+#
+#   drmaa_latency_sweep         the per-job latency should be roughly
+#                               constant whether the client reaps 10 jobs
+#                               or 100. SGE_JAPI_EDTIME is left unset.
+#   drmaa_latency_edtime_sweep  the latency should be independent of
+#                               SGE_JAPI_EDTIME, which only sets the event
+#                               client's delivery interval. The job count is
+#                               held constant so EDTIME is the only variable.
+#
+# Both write into one report; the second sweep appends its table and chart to
+# the section written by the first.
+#
+# The heavy lifting is done by the test_drmaa_cs2447 binary, which submits
+# all jobs before reaping any of them and reports two latencies per run:
+#
+#   wait_lat  drmaa_wait() return - end_time. Exact about when a job ended,
+#             but end_time is stamped on the execution host while the wait
+#             return is stamped on the submit host, so it carries any clock
+#             skew between them. All jobs here are pinned to a single host
+#             with -l h=<host>, which reduces that to one constant offset.
+#   local_lat drmaa_wait() return - (submitted + sleep). Submit host clock
+#             only, so immune to skew, but it also contains dispatch and
+#             queueing delay.
+#
+# Both are recorded; local_lat is the one the pass/fail logic uses, because
+# it cannot be corrupted by a mis-synchronised cluster.
+#
+# A growing latency is reported with ts_log_info rather than ts_log_severe:
+# it is a finding to look at, not a broken cluster, and the test should not
+# turn a run red while CS-2447 is still under investigation.
+
+set check_name            "drmaa_latency"
+set check_category        "API DRMAA TESTBIN VERIFIED JENKINS_DISABLED"
+set check_description(0)  "measure drmaa_wait() event latency vs. number of jobs and vs. SGE_JAPI_EDTIME"
+
+set check_needs           "init_core_system"
+
+set check_setup_function   "drmaa_latency_setup"
+set check_cleanup_function "drmaa_latency_cleanup"
+
+set check_functions {}
+lappend check_functions "drmaa_latency_sweep"
+lappend check_functions "drmaa_latency_edtime_sweep"
+
+# Note: the tunables of this check (job counts, sleep duration, queue name,
+# ...) are initialised in drmaa_latency_setup, not at file level - variables
+# set at the top level of a check file are not reliably visible once the
+# check procedures run.
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+##
+# @brief Return the execution host with the highest core count.
+#
+# Reads m_core from each exec host's load_values (as reported by sge_execd).
+# Hosts that have not reported load values yet are skipped.
+#
+# @return a two element list {host cores}, or {"" 0} if nothing was usable
+proc drmaa_latency_get_biggest_host {} {
+   get_current_cluster_config_array ts_config
+
+   set best_host ""
+   set best_cores 0
+
+   foreach host $ts_config(execd_nodes) {
+      unset -nocomplain eh lv
+      if {[get_exechost eh $host] != 0} {
+         continue
+      }
+      if {![info exists eh(load_values)] ||
+          [string compare -nocase $eh(load_values) "NONE"] == 0} {
+         continue
+      }
+      parse_name_value_list lv $eh(load_values)
+      if {![info exists lv(m_core)]} {
+         continue
+      }
+      set cores $lv(m_core)
+      ts_log_fine "host $host reports m_core=$cores"
+      if {$cores > $best_cores} {
+         set best_cores $cores
+         set best_host $host
+      }
+   }
+
+   return [list $best_host $best_cores]
+}
+
+##
+# @brief Parse the summary block of test_drmaa_cs2447 output.
+#
+# The binary prints, for each of wait_lat and local_lat, a label line
+# followed by a stats line of the form
+#
+#     n 5   min -0.544   median 0.420   mean 0.301   max 1.006
+#
+# @param output   raw stdout of the binary
+# @param res_var  name of an array filled with
+#                 res(wait_lat,n|min|median|mean|max) and the same for
+#                 res(local_lat,...)
+# @return 1 if at least local_lat was found, 0 otherwise
+proc drmaa_latency_parse_output {output res_var} {
+   upvar $res_var res
+
+   set section ""
+   foreach line [split $output "\n"] {
+      set trimmed [string trim $line]
+
+      if {[string first "wait_lat" $trimmed] == 0} {
+         set section "wait_lat"
+         continue
+      }
+      if {[string first "local_lat" $trimmed] == 0} {
+         set section "local_lat"
+         continue
+      }
+      if {$section eq ""} {
+         continue
+      }
+
+      if {[regexp {^n\s+(\d+)\s+min\s+(-?[0-9.]+)\s+median\s+(-?[0-9.]+)\s+mean\s+(-?[0-9.]+)\s+max\s+(-?[0-9.]+)} \
+            $trimmed -> n min median mean max]} {
+         set res($section,n)      $n
+         set res($section,min)    $min
+         set res($section,median) $median
+         set res($section,mean)   $mean
+         set res($section,max)    $max
+         set section ""
+      }
+   }
+
+   return [expr {[info exists res(local_lat,mean)] ? 1 : 0}]
+}
+
+##
+# @brief Escape a string for a gnuplot label.
+#
+# gnuplot's enhanced text mode - the default for the gif and png terminals -
+# reads "_" as a subscript marker, so "SGE_JAPI_EDTIME" comes out as
+# "SGE(J)API(E)DTIME" with lowered letters. create_gnuplot_xy_gif writes the
+# label into the command file inside double quotes, and gnuplot collapses
+# "\\" to "\" while reading such a string; the enhanced parser then sees
+# "\_" and renders a literal underscore. Each "_" therefore has to become
+# "\\_" here. Verified against gnuplot 6.0: a single backslash is consumed
+# by the string reader and the underscore still subscripts.
+#
+# @param text the label text
+# @return the text with underscores escaped for gnuplot
+proc drmaa_latency_gp_escape {text} {
+   return [string map {_ {\\_}} $text]
+}
+
+##
+# @brief Render one sweep as an HTML table plus a gnuplot chart.
+#
+# Both sweeps produce the same per-run figures, only the swept parameter
+# differs, so the rendering is shared. Runs that were rejected inside
+# drmaa_init() (see the EDTIME sweep) are listed in the table but left out
+# of the chart.
+#
+# @param res_var     name of the results array, keyed res(<key>,<section>,<stat>)
+# @param keys        the sweep values, in order, used as table rows / x values
+# @param key_label   heading of the first table column
+# @param xlabel      x axis label of the chart
+# @param chart_path  full path of the chart file to write
+# @param chart_title title of the chart
+# @param chart_name  file name of the chart, used in the <img> tag
+# @return HTML fragment
+proc drmaa_latency_render_section {res_var keys key_label xlabel chart_path chart_title chart_name} {
+   upvar $res_var res
+
+   # --- chart: x = swept value, y = min / avg / max local_lat -------------
+   unset -nocomplain plot_data xy_rows
+   set counter 0
+   foreach key $keys {
+      if {![info exists res($key,local_lat,mean)]} {
+         continue
+      }
+      set xy_rows(0,$counter,x) $key
+      set xy_rows(0,$counter,y) $res($key,local_lat,min)
+      set xy_rows(1,$counter,x) $key
+      set xy_rows(1,$counter,y) $res($key,local_lat,mean)
+      set xy_rows(2,$counter,x) $key
+      set xy_rows(2,$counter,y) $res($key,local_lat,max)
+      incr counter
+   }
+
+   set have_chart 0
+   if {$counter > 0} {
+      set xy_rows(0,drawmode) "linespoints" ; set xy_rows(0,title) "min" ; set xy_rows(0,show) 1
+      set xy_rows(1,drawmode) "linespoints" ; set xy_rows(1,title) "avg" ; set xy_rows(1,show) 1
+      set xy_rows(2,drawmode) "linespoints" ; set xy_rows(2,title) "max" ; set xy_rows(2,show) 1
+
+      # Underscores must be escaped for gnuplot's enhanced text mode.
+      set plot_data(xlabel)      [drmaa_latency_gp_escape $xlabel]
+      # NB: braces, not quotes - "[s]" in a quoted string would be command
+      # substitution and TCL would try to run a command named "s".
+      set plot_data(ylabel)      [drmaa_latency_gp_escape {drmaa_wait() latency (s)}]
+      set plot_data(title)       [drmaa_latency_gp_escape $chart_title]
+      set plot_data(output_file) $chart_path
+
+      if {[catch {create_gnuplot_xy_gif plot_data xy_rows} err]} {
+         ts_log_info "could not create the chart $chart_name (gnuplot missing?): $err"
+      } else {
+         set have_chart 1
+      }
+   }
+
+   # --- table -------------------------------------------------------------
+   unset -nocomplain table
+   set table(COLS) 9
+   set table(1,BGCOLOR) "#3366FF"
+   set table(1,FNCOLOR) "#FFFFFF"
+   set table(1,1) $key_label
+   set table(1,2) "local min"
+   set table(1,3) "local avg"
+   set table(1,4) "local max"
+   set table(1,5) "local median"
+   set table(1,6) "wait min"
+   set table(1,7) "wait avg"
+   set table(1,8) "wait max"
+   set table(1,9) "wait median"
+
+   set row 1
+   foreach key $keys {
+      incr row
+      set table($row,BGCOLOR) [expr {$row % 2 == 0 ? "#FFFFFF" : "#EEEEEE"}]
+      set table($row,FNCOLOR) "#000000"
+      set table($row,1) $key
+
+      if {[info exists res($key,rejected)]} {
+         set table($row,2) $res($key,rejected)
+         for {set c 3} {$c <= 9} {incr c} {
+            set table($row,$c) "-"
+         }
+         continue
+      }
+      if {![info exists res($key,local_lat,mean)]} {
+         for {set c 2} {$c <= 9} {incr c} {
+            set table($row,$c) "not run"
+         }
+         continue
+      }
+
+      set table($row,2) $res($key,local_lat,min)
+      set table($row,3) $res($key,local_lat,mean)
+      set table($row,4) $res($key,local_lat,max)
+      set table($row,5) $res($key,local_lat,median)
+      foreach {col stat} {6 min 7 mean 8 max 9 median} {
+         if {[info exists res($key,wait_lat,$stat)]} {
+            set table($row,$col) $res($key,wait_lat,$stat)
+         } else {
+            set table($row,$col) "n/a"
+         }
+      }
+   }
+   set table(ROWS) $row
+
+   set html [create_html_table table 1]
+   if {$have_chart} {
+      append html [create_html_text "<img src=\"$chart_name\" alt=\"$chart_title\">" 1]
+   }
+   return $html
+}
+
+##
+# @brief Write the HTML report covering both sweeps.
+#
+# Called at the end of each check function, so the report is complete after
+# whichever sweeps have run - if the second one fails, the first section is
+# still on disk. Uses the same helpers as checktree/performance/throughput.
+proc drmaa_latency_write_report {} {
+   global CHECK_PROTOCOL_DIR
+   global drmaa_latency_host drmaa_latency_sleep
+   global drmaa_latency_job_counts drmaa_latency_res_jobs drmaa_latency_note_jobs
+   global drmaa_latency_edtime_values drmaa_latency_edtime_jobs
+   global drmaa_latency_res_edtime drmaa_latency_note_edtime
+
+   set dir "$CHECK_PROTOCOL_DIR/performance/drmaa/latency"
+   if {[catch {file mkdir $dir} err]} {
+      ts_log_severe "cannot create report directory $dir: $err"
+      return
+   }
+
+   set content ""
+   append content [create_html_text "DRMAA wait() latency" 0 "" "h1"]
+   append content [create_html_text "Generated: [exec date]"]
+   append content [create_html_text "Execution host: $drmaa_latency_host (all jobs pinned with -l h=$drmaa_latency_host)"]
+   append content [create_html_text \
+      "local_lat = drmaa_wait() return - (submitted + sleep), submit host clock only,\
+       so immune to clock skew but including dispatch and queueing delay.\
+       wait_lat = drmaa_wait() return - end_time, exact about when a job ended but\
+       carrying any clock offset between the execution host and the submit host.\
+       All latencies in seconds. The charts plot local_lat."]
+
+   # --- 1. latency vs. number of jobs -------------------------------------
+   append content [create_html_text "1. Latency vs. number of jobs" 0 "" "h2"]
+   append content [create_html_text \
+      "SGE_JAPI_EDTIME is left unset. Each run submits N jobs of /bin/sleep\
+       $drmaa_latency_sleep in parallel and reaps them in completion order.\
+       sgeE_JOB_FINISH is subscribed with a flush delay of 0, so the per-job\
+       latency was expected to stay roughly constant as N grows."]
+   if {[array size drmaa_latency_res_jobs] == 0} {
+      append content [create_html_text "(this sweep did not run)"]
+   } else {
+      if {$drmaa_latency_note_jobs ne ""} {
+         append content [create_html_text $drmaa_latency_note_jobs 0 "#CC0000"]
+      }
+      append content [drmaa_latency_render_section drmaa_latency_res_jobs \
+         $drmaa_latency_job_counts "jobs" "number of jobs" \
+         "$dir/latency_jobs.gif" "drmaa_wait() latency vs. number of jobs" "latency_jobs.gif"]
+   }
+
+   # --- 2. latency vs. SGE_JAPI_EDTIME ------------------------------------
+   append content [create_html_text "2. Latency vs. SGE_JAPI_EDTIME" 0 "" "h2"]
+   append content [create_html_text \
+      "The job count is held at $drmaa_latency_edtime_jobs and only\
+       SGE_JAPI_EDTIME varies. EDTIME sets the event client's delivery\
+       interval; because sgeE_JOB_FINISH is flushed with a delay of 0 the\
+       latency was expected to be independent of it. Values at or below the\
+       event client's own flush delay are rejected inside drmaa_init() with\
+       \"event flush delay may not be greater than event delivery time\" -\
+       that is expected behaviour, not a failure."]
+   if {[array size drmaa_latency_res_edtime] == 0} {
+      append content [create_html_text "(this sweep did not run)"]
+   } else {
+      if {$drmaa_latency_note_edtime ne ""} {
+         append content [create_html_text $drmaa_latency_note_edtime 0 "#CC0000"]
+      }
+      append content [drmaa_latency_render_section drmaa_latency_res_edtime \
+         $drmaa_latency_edtime_values "SGE_JAPI_EDTIME" "SGE_JAPI_EDTIME" \
+         "$dir/latency_edtime.gif" "drmaa_wait() latency vs. SGE_JAPI_EDTIME" "latency_edtime.gif"]
+   }
+
+   if {[catch {generate_html_file "$dir/index.html" \
+         "DRMAA wait() latency" $content} err]} {
+      ts_log_severe "cannot write $dir/index.html: $err"
+      return
+   }
+   ts_log_fine "wrote report to $dir/index.html"
+}
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc drmaa_latency_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global drmaa_latency_host drmaa_latency_queue drmaa_latency_slots
+   global drmaa_latency_slots_backup
+   global drmaa_latency_job_counts drmaa_latency_sleep
+   global drmaa_latency_timeout drmaa_latency_max_ratio
+   global drmaa_latency_edtime_values drmaa_latency_edtime_jobs
+   global drmaa_latency_res_jobs drmaa_latency_note_jobs
+   global drmaa_latency_res_edtime drmaa_latency_note_edtime
+
+   # --- tunables ---------------------------------------------------------
+   # job counts to sweep - 10, 20, ... 100
+   set drmaa_latency_job_counts {10 20 30 40 50 60 70 80 90 100}
+   # SGE_JAPI_EDTIME values to sweep, with the job count held constant.
+   # Low values are rejected inside drmaa_init() with "event flush delay may
+   # not be greater than event delivery time" - that is expected and is
+   # recorded rather than treated as a failure.
+   set drmaa_latency_edtime_values {1 2 4 8 16 32 64 128}
+   # number of jobs used for every run of the EDTIME sweep
+   set drmaa_latency_edtime_jobs 50
+   # sleep duration of each job. Must comfortably exceed the time needed to
+   # submit the largest batch, otherwise early jobs finish before the last
+   # one is submitted and the runs stop being parallel.
+   set drmaa_latency_sleep 10
+   # slots in the test queue - must cover the largest job count
+   set drmaa_latency_slots 100
+   # name of the test queue
+   set drmaa_latency_queue "drmaa_lat.q"
+   # a run of 100 jobs sleeping 10s plus submit/reap overhead
+   set drmaa_latency_timeout 600
+   # a latency that grows by more than this factor across a sweep is
+   # reported as clearly dependent on the swept parameter
+   set drmaa_latency_max_ratio 2.0
+
+   # results of the two sweeps, rendered together into one report
+   unset -nocomplain drmaa_latency_res_jobs drmaa_latency_res_edtime
+   array set drmaa_latency_res_jobs {}
+   array set drmaa_latency_res_edtime {}
+   set drmaa_latency_note_jobs ""
+   set drmaa_latency_note_edtime ""
+
+   # pick the execution host with the most cores
+   set best [drmaa_latency_get_biggest_host]
+   set drmaa_latency_host [lindex $best 0]
+   set cores [lindex $best 1]
+   if {$drmaa_latency_host eq ""} {
+      ts_log_config "no execution host reports m_core - cannot select a host"
+      return 99
+   }
+   ts_log_fine "selected host $drmaa_latency_host with $cores cores"
+
+   # the test binary must be installed
+   set bin_path [get_test_path "test_drmaa_cs2447" $drmaa_latency_host]
+   if {![is_remote_file $drmaa_latency_host $CHECK_USER $bin_path]} {
+      ts_log_config "test binary $bin_path not found on $drmaa_latency_host - build with INSTALL_SGE_TEST=ON"
+      return 99
+   }
+
+   # since 9.1.0 the host slot capacity equals the core count; we need more
+   setup_host_slots_for_binding $drmaa_latency_host drmaa_latency_slots_backup
+
+   # a queue with enough slots for the largest batch
+   unset -nocomplain q
+   set q(slots)   $drmaa_latency_slots
+   set q(pe_list) "NONE"
+   if {[add_queue $drmaa_latency_queue $drmaa_latency_host q] < 0} {
+      ts_log_config "could not add queue $drmaa_latency_queue on $drmaa_latency_host"
+      return 99
+   }
+}
+
+proc drmaa_latency_cleanup {} {
+   global drmaa_latency_host drmaa_latency_queue
+   global drmaa_latency_slots_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   if {[info exists drmaa_latency_host] && $drmaa_latency_host ne ""} {
+      catch { del_queue $drmaa_latency_queue $drmaa_latency_host 0 1 }
+   }
+
+   # restore the host slot capacity changed in the setup
+   cleanup_host_slots_for_binding drmaa_latency_slots_backup
+
+   unset -nocomplain drmaa_latency_host drmaa_latency_slots_backup
+}
+
+# ---------------------------------------------------------------------------
+# the sweep
+# ---------------------------------------------------------------------------
+
+proc drmaa_latency_sweep {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global drmaa_latency_host drmaa_latency_job_counts drmaa_latency_sleep
+   global drmaa_latency_timeout drmaa_latency_max_ratio
+   global drmaa_latency_res_jobs drmaa_latency_note_jobs
+
+   unset -nocomplain drmaa_latency_res_jobs
+   set drmaa_latency_note_jobs ""
+   set ok_runs {}
+
+   foreach njobs $drmaa_latency_job_counts {
+      set args "$drmaa_latency_sleep $njobs \"-l h=$drmaa_latency_host\""
+      ts_log_fine "running test_drmaa_cs2447 $args on $drmaa_latency_host"
+
+      set output [start_test_bin "test_drmaa_cs2447" $args $drmaa_latency_host \
+                     $CHECK_USER prg_exit_state $drmaa_latency_timeout]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "test_drmaa_cs2447 with $njobs jobs failed ($prg_exit_state):\n$output"
+         continue
+      }
+
+      unset -nocomplain one
+      if {![drmaa_latency_parse_output $output one]} {
+         ts_log_severe "could not parse the summary of test_drmaa_cs2447 with $njobs jobs:\n$output"
+         continue
+      }
+
+      foreach section {local_lat wait_lat} {
+         foreach key {n min median mean max} {
+            if {[info exists one($section,$key)]} {
+               set drmaa_latency_res_jobs($njobs,$section,$key) $one($section,$key)
+            }
+         }
+      }
+      lappend ok_runs $njobs
+
+      ts_log_fine [format "%3d jobs: local_lat min %.3f avg %.3f max %.3f" \
+                     $njobs $one(local_lat,min) $one(local_lat,mean) $one(local_lat,max)]
+   }
+
+   if {[llength $ok_runs] < 2} {
+      ts_log_severe "not enough successful runs ([llength $ok_runs]) to judge the latency"
+      drmaa_latency_write_report
+      return
+   }
+
+   # --- does the latency depend on the number of jobs? --------------------
+   #
+   # Expectation: roughly constant. Compare the average latency of the
+   # smallest batch with that of the largest.
+   set first [lindex $ok_runs 0]
+   set last  [lindex $ok_runs end]
+   set lat_first $drmaa_latency_res_jobs($first,local_lat,mean)
+   set lat_last  $drmaa_latency_res_jobs($last,local_lat,mean)
+
+   if {$lat_first <= 0.0} {
+      ts_log_info "average latency at $first jobs is $lat_first s - skipping the ratio check"
+   } else {
+      set ratio [expr {$lat_last / $lat_first}]
+      ts_log_fine [format "average latency %.3f s at %d jobs vs %.3f s at %d jobs (ratio %.2f)" \
+                     $lat_first $first $lat_last $last $ratio]
+
+      if {$ratio > $drmaa_latency_max_ratio} {
+         set drmaa_latency_note_jobs [format "drmaa_wait() latency clearly depends on the number of jobs:\
+                           %.3f s average at %d jobs grows to %.3f s at %d jobs (factor %.2f).\
+                           sgeE_JOB_FINISH is subscribed with a flush delay of 0, so the\
+                           per-job latency was expected to stay roughly constant. See CS-2447." \
+                          $lat_first $first $lat_last $last $ratio]
+         # Reported as info, not severe: this is a finding to investigate,
+         # not a broken cluster, and CS-2447 is still open.
+         ts_log_info $drmaa_latency_note_jobs
+      } else {
+         ts_log_fine [format "latency is roughly constant across job counts (factor %.2f)" $ratio]
+      }
+   }
+
+   drmaa_latency_write_report
+}
+
+##
+# @brief Second sweep: latency against SGE_JAPI_EDTIME, job count held fixed.
+#
+# SGE_JAPI_EDTIME sets the event client's delivery interval. Because
+# sgeE_JOB_FINISH is subscribed with a flush delay of 0, sge_qmaster pushes
+# the event immediately and the latency was expected to be independent of
+# EDTIME. This sweep runs the same command line for every EDTIME value so
+# that the only variable is the environment.
+#
+# Values at or below the event client's own flush delay are rejected inside
+# drmaa_init() with "event flush delay may not be greater than event delivery
+# time". That is expected behaviour, identical across releases, so such runs
+# are recorded as "rejected" rather than reported as failures.
+proc drmaa_latency_edtime_sweep {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global drmaa_latency_host drmaa_latency_sleep
+   global drmaa_latency_timeout drmaa_latency_max_ratio
+   global drmaa_latency_edtime_values drmaa_latency_edtime_jobs
+   global drmaa_latency_res_edtime drmaa_latency_note_edtime
+
+   unset -nocomplain drmaa_latency_res_edtime
+   set drmaa_latency_note_edtime ""
+   set ok_runs {}
+
+   set args "$drmaa_latency_sleep $drmaa_latency_edtime_jobs \"-l h=$drmaa_latency_host\""
+
+   foreach edtime $drmaa_latency_edtime_values {
+      unset -nocomplain myenv
+      set myenv(SGE_JAPI_EDTIME) $edtime
+      ts_log_fine "running test_drmaa_cs2447 $args with SGE_JAPI_EDTIME=$edtime on $drmaa_latency_host"
+
+      set output [start_test_bin "test_drmaa_cs2447" $args $drmaa_latency_host \
+                     $CHECK_USER prg_exit_state $drmaa_latency_timeout myenv]
+
+      if {$prg_exit_state != 0} {
+         # drmaa_init() refuses an EDTIME at or below the event client's own
+         # flush delay - expected, not a failure of the cluster
+         if {[string first "event flush delay may not be greater than event delivery time" $output] >= 0} {
+            set drmaa_latency_res_edtime($edtime,rejected) "rejected in drmaa_init()"
+            ts_log_fine "SGE_JAPI_EDTIME=$edtime rejected in drmaa_init() - expected for low values"
+            continue
+         }
+         ts_log_severe "test_drmaa_cs2447 with SGE_JAPI_EDTIME=$edtime failed ($prg_exit_state):\n$output"
+         continue
+      }
+
+      unset -nocomplain one
+      if {![drmaa_latency_parse_output $output one]} {
+         ts_log_severe "could not parse the summary of test_drmaa_cs2447 with SGE_JAPI_EDTIME=$edtime:\n$output"
+         continue
+      }
+
+      foreach section {local_lat wait_lat} {
+         foreach key {n min median mean max} {
+            if {[info exists one($section,$key)]} {
+               set drmaa_latency_res_edtime($edtime,$section,$key) $one($section,$key)
+            }
+         }
+      }
+      lappend ok_runs $edtime
+
+      ts_log_fine [format "EDTIME %4d: local_lat min %.3f avg %.3f max %.3f" \
+                     $edtime $one(local_lat,min) $one(local_lat,mean) $one(local_lat,max)]
+   }
+
+   if {[llength $ok_runs] < 2} {
+      ts_log_severe "not enough accepted SGE_JAPI_EDTIME values ([llength $ok_runs]) to judge the latency"
+      drmaa_latency_write_report
+      return
+   }
+
+   # --- does the latency depend on EDTIME? --------------------------------
+   #
+   # Expectation: independent. Unlike the job-count sweep there is no natural
+   # ordering of "small" to "large" effect, so compare the smallest and the
+   # largest average observed across all accepted values.
+   set lo_edtime [lindex $ok_runs 0]
+   set hi_edtime [lindex $ok_runs 0]
+   set lo $drmaa_latency_res_edtime($lo_edtime,local_lat,mean)
+   set hi $lo
+   foreach edtime $ok_runs {
+      set m $drmaa_latency_res_edtime($edtime,local_lat,mean)
+      if {$m < $lo} { set lo $m ; set lo_edtime $edtime }
+      if {$m > $hi} { set hi $m ; set hi_edtime $edtime }
+   }
+
+   if {$lo <= 0.0} {
+      ts_log_info "lowest average latency across the EDTIME sweep is $lo s - skipping the ratio check"
+   } else {
+      set ratio [expr {$hi / $lo}]
+      ts_log_fine [format "EDTIME sweep: lowest average %.3f s (EDTIME %d), highest %.3f s (EDTIME %d), ratio %.2f" \
+                     $lo $lo_edtime $hi $hi_edtime $ratio]
+
+      if {$ratio > $drmaa_latency_max_ratio} {
+         set drmaa_latency_note_edtime [format "drmaa_wait() latency clearly depends on SGE_JAPI_EDTIME:\
+                           %.3f s average at EDTIME %d versus %.3f s at EDTIME %d (factor %.2f),\
+                           with the job count held at %d. sgeE_JOB_FINISH is subscribed with a\
+                           flush delay of 0, so the latency was expected to be independent of the\
+                           event delivery interval. See CS-2447." \
+                          $lo $lo_edtime $hi $hi_edtime $ratio $drmaa_latency_edtime_jobs]
+         ts_log_info $drmaa_latency_note_edtime
+      } else {
+         ts_log_fine [format "latency is independent of SGE_JAPI_EDTIME (factor %.2f)" $ratio]
+      }
+   }
+
+   drmaa_latency_write_report
+}
