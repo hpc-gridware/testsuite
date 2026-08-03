@@ -4,8 +4,9 @@
 #
 #   gcs-testrun <line> [N] [-- <further ctest arguments>]
 #
-# Phase 1 runs in parallel across N runners, phase 2 reruns the failures of
-# phase 1 with far less parallelism. The verdict is only final after both.
+# Phase 1 runs in parallel across N runners, phase 2 reruns its failures with
+# far less parallelism, and phase 3 gives whatever is left one cluster at a
+# time. Only phase 3 decides.
 #
 # Why two phases
 # --------------
@@ -162,21 +163,64 @@ rc2=$?
 t2=$(( $(date +%s) - t2 ))
 printf '  duration: %dm%02ds\n' $((t2/60)) $((t2%60)) | tee -a "$RUN/summary.txt"
 
+failed2=$(grep -c . "$D/Testing/Temporary/LastTestsFailed.log" 2>/dev/null || echo 0)
+cp -p "$D/Testing/Temporary/LastTestsFailed.log" "$RUN/failed-phase2.log" 2>/dev/null
+
+# --- phase 3: one cluster at a time --------------------------------------------
+# Phase 2 is a filter, not a verdict. Two full runs of the same code five hours
+# apart classified the same tests differently -- 3 real defects against 8, with
+# only two tests agreed on by both, and one test called a defect by one run and
+# an artifact by the other. Phase 2 took 53 s per failure in one run and 77 s in
+# the other, which says it was itself under load; and a phase that is under load
+# cannot tell load artifacts from defects, which is the whole point of it.
+#
+# So the answer is given here, with nothing else running. This is affordable
+# precisely because it only sees what phase 2 could not clear: eighteen failures
+# went into phase 2 in the run of 2026-08-03, eight came out. Rerunning those
+# eight one at a time costs a fraction of what rerunning all eighteen serially
+# used to cost, and it is the only number anyone should act on.
+if [ "$failed2" -eq 0 ]; then
+  log "phase 3 skipped -- phase 2 cleared everything"
+  t3=0
+else
+  log "phase 3: rerunning $failed2 remaining failures one at a time"
+  t3=$(date +%s)
+  ctest --test-dir "$D" --rerun-failed -j 1 --resource-spec-file "$D/ts_cluster.json" \
+        --output-junit "$RUN/single.xml" --output-on-failure \
+        > "$RUN/single.log" 2>&1
+  rc3=$?
+  t3=$(( $(date +%s) - t3 ))
+  printf '  duration: %dm%02ds\n' $((t3/60)) $((t3%60)) | tee -a "$RUN/summary.txt"
+fi
+
 # --- verdict ------------------------------------------------------------------
 log "result"
 {
-  echo "real defects (failed in phase 2 as well):"
-  grep -E '\*\*\*Failed|\*\*\*Timeout' "$RUN/serial.log" \
-    | sed -E 's/.*Test +#[0-9]+: ([^ ]+).*/  \1/' | sort
+  if [ "$failed2" -eq 0 ]; then
+    echo "real defects: none -- every failure of phase 1 passed in phase 2"
+  else
+    echo "real defects (failed in phase 3, one cluster at a time):"
+    grep -E '\*\*\*Failed|\*\*\*Timeout' "$RUN/single.log" \
+      | sed -E 's/.*Test +#[0-9]+: ([^ ]+).*/  \1/' | sort
+    echo
+    echo "artifacts of load, seen only under a busy cluster (passed in phase 3):"
+    grep -E 'Passed' "$RUN/single.log" \
+      | sed -E 's/.*Test +#[0-9]+: ([^ ]+).*/  \1/' | sort
+  fi
   echo
-  echo "artifacts of parallel execution (passed in phase 2) -- see CS-2481:"
+  echo "artifacts of parallel execution (passed already in phase 2) -- see CS-2481:"
   grep -E 'Passed' "$RUN/serial.log" \
     | sed -E 's/.*Test +#[0-9]+: ([^ ]+).*/  \1/' | sort
 } | tee -a "$RUN/summary.txt"
 
-real_defects=$(grep -cE '\*\*\*Failed|\*\*\*Timeout' "$RUN/serial.log")
-printf '\n  total: %dm%02ds  |  %d real defects  |  %d artifacts\n' \
-  $(( (t1+t2)/60 )) $(( (t1+t2)%60 )) "$real_defects" "$(( failed1 - real_defects ))" | tee -a "$RUN/summary.txt"
+if [ "$failed2" -eq 0 ]; then
+  real_defects=0
+else
+  real_defects=$(grep -cE '\*\*\*Failed|\*\*\*Timeout' "$RUN/single.log")
+fi
+printf '\n  total: %dm%02ds  |  %d real defects  |  %d artifacts (%d cleared in phase 2, %d in phase 3)\n' \
+  $(( (t1+t2+t3)/60 )) $(( (t1+t2+t3)%60 )) "$real_defects" "$(( failed1 - real_defects ))" \
+  "$(( failed1 - failed2 ))" "$(( failed2 - real_defects ))" | tee -a "$RUN/summary.txt"
 printf '  output: %s\n' "$RUN" | tee -a "$RUN/summary.txt"
 
 [ "$real_defects" -eq 0 ] && exit 0 || exit 1
