@@ -229,6 +229,13 @@ set create_csv_file 0
 global fast_setup
 set fast_setup 0
 
+# Keep the translated messages between invocations instead of asking infotext
+# again for every one of them. Off by default: the option changes nothing about
+# what a test does, but it does change where the translations come from, and
+# nobody should get that without asking for it.
+global l10n_cache
+set l10n_cache 0
+
 global do_compile
 global CHECK_TESTSUITE_LOCKFILE
 set CHECK_TESTSUITE_LOCKFILE "testsuite_lockfile"
@@ -5322,6 +5329,17 @@ proc check_if_test_cleaned_up {} {
       append allowed_attribs " rsh_command rsh_daemon"
    }
    set errors {}
+
+   # One request for every host instead of one per host. qconf -Sconf exists from
+   # 9.2.0 on; cluster_bulk_get_configs says so by returning 0, and then this
+   # falls back to asking host by host, which is what 9.0 and 9.1 need.
+   #
+   # The global configuration comes along in the same request but is deliberately
+   # not looked at here: that would be a new assertion, and tests that leave a
+   # global setting behind would start failing without anyone having decided that.
+   # See the @todo on CS-984 above, and CS-2500.
+   set have_bulk [cluster_bulk_get_configs bulk_conf]
+
    foreach host $ts_config(execd_nodes) {
       unset -nocomplain local_conf
       if {$check_do_not_create_local_config} {
@@ -5329,8 +5347,23 @@ proc check_if_test_cleaned_up {} {
       } else {
          set report_get_config_error 1
       }
-      set conf_ret [get_config local_conf $host 60 $report_get_config_error]
-      ts_log_fine "get_config for $host returned $conf_ret, attributes [array names local_conf]"
+      if {$have_bulk} {
+         set resolved [resolve_host $host 1]
+         if {[info exists bulk_conf($resolved,)]} {
+            set conf_ret 0
+            foreach key [array names bulk_conf "$resolved,*"] {
+               set attrib [string range $key [expr {[string length $resolved] + 1}] end]
+               if {$attrib ne ""} {
+                  set local_conf($attrib) $bulk_conf($key)
+               }
+            }
+         } else {
+            set conf_ret -1
+         }
+      } else {
+         set conf_ret [get_config local_conf $host 60 $report_get_config_error]
+      }
+      ts_log_fine "config of $host returned $conf_ret, attributes [array names local_conf]"
       if {$conf_ret == 0} {
          if {$check_do_not_create_local_config} {
             lappend errors "local config $host found, but testsuite was started with option lo_local_config"
@@ -5340,10 +5373,37 @@ proc check_if_test_cleaned_up {} {
                lappend errors "local config $host: attribute $attrib should not be set"
             }
          }
+         # Being on the allowed list says the attribute may be there, not that any
+         # value will do. execd_spool_dir is put there by the installation, so its
+         # presence is normal -- but a value belonging to a DIFFERENT cluster is
+         # what happens when a test loads a configuration that was captured
+         # elsewhere (CS-2500): the execds then spool into the other cluster's
+         # directory and overwrite its execd.pid, and the failure surfaces days
+         # later in an unrelated test on that other cluster.
+         #
+         # Checked by the port in the path, and only when the path carries one at
+         # all: a setup that spools somewhere else simply does not match and is
+         # left alone, so this cannot produce a finding where there is none.
+         if {[info exists local_conf(execd_spool_dir)] &&
+             [regexp {/testsuite/(\d+)/} $local_conf(execd_spool_dir) -> spool_port] &&
+             $spool_port ne "$ts_config(commd_port)"} {
+            lappend errors "local config $host: execd_spool_dir $local_conf(execd_spool_dir) belongs to the cluster on port $spool_port, this one runs on $ts_config(commd_port)"
+         }
       } else {
          if {!$check_do_not_create_local_config} {
             lappend errors "local config $host does not exist"
          }
+      }
+   }
+
+   # The global configuration comes with the bulk request anyway, and it carried
+   # the same foreign value in the case this check exists for. Only this one
+   # narrow question is asked of it -- everything else about the global
+   # configuration stays unchecked, see the @todo on CS-984 above.
+   if {$have_bulk && [info exists bulk_conf(global,execd_spool_dir)]} {
+      if {[regexp {/testsuite/(\d+)/} $bulk_conf(global,execd_spool_dir) -> spool_port] &&
+          $spool_port ne "$ts_config(commd_port)"} {
+         lappend errors "global config: execd_spool_dir $bulk_conf(global,execd_spool_dir) belongs to the cluster on port $spool_port, this one runs on $ts_config(commd_port)"
       }
    }
 
@@ -7397,7 +7457,7 @@ proc operate_additional_clusters {operation} {
 #*******************************************************************************
 proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {execute_func_return rpc_retval} {ignore_spool_switches 0} {additional_switches ""}} {
    global CHECK_USER CHECK_HTML_DIRECTORY CHECK_COMPILE_TOOL
-   global check_use_installed_system fast_setup be_quiet
+   global check_use_installed_system fast_setup l10n_cache be_quiet
    global check_do_clean_compile check_do_3rdparty_build ts_config ts_log_config
    global CHECK_TESTSUITE_TRASH check_do_not_use_spool_config_entries check_do_not_create_local_config ts_log_levels
    upvar $execute_func_return rpcret
@@ -7447,6 +7507,10 @@ proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {e
    # inherit "fast_setup" command line param
    if {$fast_setup == 1} {
       append args " fast_setup"
+   }
+   # inherit "l10n_cache" command line param
+   if {$l10n_cache == 1} {
+      append args " l10n_cache"
    }
 
    # inherit "logging_level" command line param
@@ -7706,6 +7770,7 @@ set do_only_reset_config 0
 set do_only_diff_macros  0
 set be_quiet          0
 set fast_setup        0
+set l10n_cache        0
 set CHECK_CUR_PROC_NAME "main"
 set check_name "main"
 set CHECK_ACTUAL_TEST_PATH "not in testmode"
@@ -7772,6 +7837,10 @@ for {set i 0} {$i < $argc} {incr i} {
 
    if {([string compare [lindex $argv $i] "--fast_setup"] == 0) || ([string compare [lindex $argv $i] "fast_setup"] == 0) } {
       set fast_setup 1
+      continue
+   }
+   if {([string compare [lindex $argv $i] "--l10n_cache"] == 0) || ([string compare [lindex $argv $i] "l10n_cache"] == 0) } {
+      set l10n_cache 1
       continue
    }
 
@@ -7870,6 +7939,8 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "quiet                 no output on setup"
       puts ""
       puts "fast_setup            suppress configuration checks at startup (setup phase)"
+      puts ""
+      puts "l10n_cache            keep translated messages on disk between invocations"
       puts ""
       puts "no_local_spool        ignore local spool directories from host configuration file"
       puts ""

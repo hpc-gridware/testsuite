@@ -184,7 +184,10 @@ while [ $# -ge 2 ]; do
   # point at which a test gives up, so a real hang still ends in a timeout.
   # pipefail is set, so the pipeline still reports the testsuite's status, not
   # tee's.
+  # GCS_L10N_CACHE is passed through rather than set here: a parallel run should
+  # not quietly behave differently from the same test started by hand.
   if CS_SELF_HEAL=1 CS_TIMEOUT_FACTOR="${CS_TIMEOUT_FACTOR:-3}" \
+     GCS_L10N_CACHE="${GCS_L10N_CACHE:-0}" \
      "$runner" check "$path" "$level" 2>&1 | tee -a "$_log"; then
     printf '### %s ok (%ss, slot %s)\n' "$name" "$(( $(date +%s) - start ))" "$slot"
   else

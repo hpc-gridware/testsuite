@@ -96,6 +96,92 @@ proc cluster_delete_object_list_errno {qconf_opt names what on_host as_user rais
 # @param[out] local_var set to 1 if the directory is on the local host
 # @return the directory path
 ##
+###
+# @brief fetch the global and all host configurations with one request
+#
+# The counterpart to the -A options this file already uses for writing: qconf
+# -Sconf writes the global configuration and one file per host into a directory,
+# in a single request. check_if_test_cleaned_up used to ask host by host, which
+# on a six host setup is six remote calls after every test -- measured at about
+# three seconds, of which the call overhead is the larger part.
+#
+# Only from 9.2.0: the -S options do not exist in 9.0 and 9.1, and the testsuite
+# runs against those as well. The caller has to keep its per host path for them,
+# which is why this returns 0 rather than raising an error.
+#
+# @param conf_var name of an array to fill, keyed "<host>,<attribute>". A host
+#                 that answered at all also gets "<host>," set to 1, so a caller
+#                 can tell "no local configuration" from "no attributes in it".
+# @return 1 when the array was filled, 0 when the caller has to fall back
+##
+proc cluster_bulk_get_configs {conf_var} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   upvar $conf_var conf
+   array unset conf
+
+   if {![is_version_in_range "9.2.0"]} {
+      return 0
+   }
+
+   set dir [cluster_bulk_open is_local]
+   set host [config_get_best_suited_admin_host]
+   set output [start_sge_bin "qconf" "-Sconf $dir" $host "" prg_exit_state 60 0]
+   if {$prg_exit_state != 0} {
+      ts_log_fine "qconf -Sconf failed, falling back to one call per host:\n$output"
+      catch {cluster_bulk_delete $host $dir $is_local}
+      return 0
+   }
+
+   # List first, read second. get_file_content raises an error of its own when a
+   # file is missing, so asking for a host that has no local configuration would
+   # turn "nothing to report" into a failure. A host without a file is exactly
+   # what the caller needs to be able to see.
+   # -1 is not optional: the remote call runs through a pty, so ls formats in
+   # columns and the names would arrive tab separated on one line.
+   set listing [start_remote_prog $host $CHECK_USER "ls" "-1 $dir" prg_exit_state 60 0]
+   if {$prg_exit_state != 0} {
+      ts_log_fine "cannot list $dir, falling back to one call per host"
+      catch {cluster_bulk_delete $host $dir $is_local}
+      return 0
+   }
+
+   foreach name [split [string trim $listing] "\n"] {
+      set name [string trim $name]
+      if {$name eq ""} {
+         continue
+      }
+      unset -nocomplain lines
+      get_file_content $host $CHECK_USER "$dir/$name" lines
+      set conf($name,) 1
+      if {![info exists lines(0)]} {
+         continue
+      }
+      for {set i 1} {$i <= $lines(0)} {incr i} {
+         set id [lindex $lines($i) 0]
+         set value [lrange $lines($i) 1 end]
+         if {$id ne "" && $value ne ""} {
+            set conf($name,$id) $value
+         }
+      }
+   }
+
+   catch {cluster_bulk_delete $host $dir $is_local}
+   return 1
+}
+
+###
+# @brief remove a directory made by cluster_bulk_open
+##
+proc cluster_bulk_delete {host dir is_local} {
+   if {$is_local} {
+      delete_directory $dir
+   } else {
+      remote_delete_directory $host $dir
+   }
+}
+
 proc cluster_bulk_open {local_var} {
    upvar $local_var is_local
 
