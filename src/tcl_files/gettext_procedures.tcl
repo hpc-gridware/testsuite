@@ -1143,11 +1143,11 @@ proc l10n_cache_file {} {
 # translation is asked for again, which is what happens without the option.
 proc l10n_cache_load {} {
    global l10n_cache l10n_cache_loaded l10n_cache_new
-   global l10n_raw_cache l10n_install_cache
+   global l10n_raw_cache l10n_install_cache host_cgroup_version
 
    set l10n_cache_loaded 1
    set l10n_cache_new 0
-   if {$l10n_cache != 1} {
+   if {![info exists l10n_cache] || $l10n_cache != 1} {
       return
    }
    set f [l10n_cache_file]
@@ -1158,6 +1158,7 @@ proc l10n_cache_load {} {
       ts_log_fine "l10n cache $f unreadable, translating from scratch: $msg"
       array unset l10n_raw_cache
       array unset l10n_install_cache
+      array unset host_cgroup_version
    }
 }
 
@@ -1168,8 +1169,9 @@ proc l10n_cache_load {} {
 # clusters apart in the case where they do share a results directory after all.
 proc l10n_cache_save {} {
    global l10n_cache l10n_cache_new l10n_raw_cache l10n_install_cache
+   global host_cgroup_version
 
-   if {$l10n_cache != 1 || $l10n_cache_new <= 0} {
+   if {![info exists l10n_cache] || $l10n_cache != 1 || $l10n_cache_new <= 0} {
       return
    }
    set f [l10n_cache_file]
@@ -1184,6 +1186,13 @@ proc l10n_cache_save {} {
       # what was written.
       puts $fh [list array set l10n_raw_cache [array get l10n_raw_cache]]
       puts $fh [list array set l10n_install_cache [array get l10n_install_cache]]
+      # The cgroup version of a host rides along here rather than in a file of
+      # its own. It is not a translation, but it is the same kind of fact: cheap
+      # to reuse, constant for the lifetime of the machine, and determined with
+      # two remote calls per host that would otherwise be repeated after every
+      # single test. Keying it by the infotext binary is conservative -- a
+      # rebuild makes it be determined once more, which costs four calls.
+      puts $fh [list array set host_cgroup_version [array get host_cgroup_version]]
       close $fh
       file rename -force $tmp $f
    } msg]} {

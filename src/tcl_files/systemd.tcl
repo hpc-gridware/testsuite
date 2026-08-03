@@ -265,6 +265,27 @@ proc systemd_get_property_list {host scope property} {
 # @param host The host to check for the cgroup version.
 # @returns 1 if cgroup v1 is used, 2 if cgroup v2 is used, -1 if the version cannot be determined.
 proc systemd_get_cgroup_version {host} {
+   global l10n_cache l10n_cache_loaded l10n_cache_new host_cgroup_version
+
+   # Which cgroup version a host runs is a property of the machine, not of the
+   # test: it cannot change while the testsuite is running. Determining it costs
+   # up to two remote calls, and systemd_check_cleanup_job_slices asks for it once
+   # per host after EVERY test -- eight remote calls per invocation on a six host
+   # setup, for an answer that was already known.
+   #
+   # Only remembered across invocations when the cache was asked for; within one
+   # invocation the answer is reused either way, which costs nothing and cannot
+   # surprise anyone.
+   if {[info exists host_cgroup_version($host)]} {
+      return $host_cgroup_version($host)
+   }
+   if {[info exists l10n_cache] && $l10n_cache == 1 && ![info exists l10n_cache_loaded]} {
+      l10n_cache_load
+      if {[info exists host_cgroup_version($host)]} {
+         return $host_cgroup_version($host)
+      }
+   }
+
    if {[remote_file_isdirectory $host "/sys/fs/cgroup/systemd"]} {
       set version 1
    } elseif {[remote_file_isdirectory $host "/sys/fs/cgroup/system.slice"]} {
@@ -272,6 +293,16 @@ proc systemd_get_cgroup_version {host} {
    } else {
       ts_log_severe "cannot determine cgroup version for host $host: neither /sys/fs/cgroup/systemd nor /sys/fs/cgroup/systemd.slice exists"
       set version -1
+   }
+
+   # -1 means the host could not be classified; that is a finding, not a fact
+   # worth keeping, so it is not remembered.
+   if {$version > 0} {
+      set host_cgroup_version($host) $version
+      if {[info exists l10n_cache] && $l10n_cache == 1} {
+         incr l10n_cache_new
+         l10n_cache_save
+      }
    }
 
    return $version
