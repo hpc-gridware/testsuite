@@ -5,7 +5,7 @@
 #   gcs-testrun <line> [N] [-- <further ctest arguments>]
 #
 # Phase 1 runs in parallel across N runners, phase 2 reruns the failures of
-# phase 1 serially. The verdict is only final after both.
+# phase 1 with far less parallelism. The verdict is only final after both.
 #
 # Why two phases
 # --------------
@@ -124,14 +124,38 @@ if [ "$failed1" -eq 0 ]; then
 fi
 cp -p "$D/Testing/Temporary/LastTestsFailed.log" "$RUN/failed-parallel.log"
 
-# --- phase 2: serial ----------------------------------------------------------
-# -j 1 disables parallelism between the units. The other clusters keep running
-# but stay idle -- a conflict over a resource that an idle cluster also occupies
-# would therefore persist. For the timing related failures this is about, that
-# is immaterial.
-log "phase 2: rerunning $failed1 failures serially"
+# --- phase 2: uncontended -----------------------------------------------------
+# What distinguishes this phase from phase 1 is not that it is serial but that
+# the units stop competing for the same handful of execution hosts. Four at a
+# time is already six to eight times less contention than phase 1, which is the
+# regime the timing related failures need in order to pass -- and it costs a
+# fraction of the wall clock.
+#
+# That matters, because phase 2 is not an epilogue. Measured over the four runs
+# kept under runs/: it took 22 to 50 percent of the total, and its length tracks
+# the number of failures almost linearly, between 2.6 and 6.3 minutes each:
+#
+#   12 runners, 19 failures -> 114m49s      16 runners,  7 failures -> 24m42s
+#   12 runners,  9 failures ->  57m03s      24 runners, 12 failures -> 31m32s
+#
+# More runners in phase 1 means more contention, more artifacts and therefore a
+# longer phase 2 -- going from 16 to 24 runners saved 15 minutes in phase 1 and
+# gave 7 of them back here. Shortening this phase is what keeps that trade
+# worthwhile.
+#
+# The other clusters keep running but stay idle, so a conflict over a resource
+# that an idle cluster also occupies would persist either way -- with one unit
+# at a time as much as with four.
+#
+# GCS_PHASE2_JOBS=1 restores the strictly serial behaviour for a run where the
+# verdict has to be beyond argument.
+_p2_jobs="${GCS_PHASE2_JOBS:-4}"
+# Never more than there are clusters: with fewer runners than that, ctest would
+# be asked for a concurrency the resource specification cannot serve.
+[ "$_p2_jobs" -gt "$n" ] && _p2_jobs="$n"
+log "phase 2: rerunning $failed1 failures with -j $_p2_jobs"
 t2=$(date +%s)
-ctest --test-dir "$D" --rerun-failed -j 1 --resource-spec-file "$D/ts_cluster.json" \
+ctest --test-dir "$D" --rerun-failed -j "$_p2_jobs" --resource-spec-file "$D/ts_cluster.json" \
       --output-junit "$RUN/serial.xml" --output-on-failure \
       > "$RUN/serial.log" 2>&1
 rc2=$?
@@ -141,11 +165,11 @@ printf '  duration: %dm%02ds\n' $((t2/60)) $((t2%60)) | tee -a "$RUN/summary.txt
 # --- verdict ------------------------------------------------------------------
 log "result"
 {
-  echo "real defects (failed serially too):"
+  echo "real defects (failed in phase 2 as well):"
   grep -E '\*\*\*Failed|\*\*\*Timeout' "$RUN/serial.log" \
     | sed -E 's/.*Test +#[0-9]+: ([^ ]+).*/  \1/' | sort
   echo
-  echo "artifacts of parallel execution (passed serially) -- see CS-2481:"
+  echo "artifacts of parallel execution (passed in phase 2) -- see CS-2481:"
   grep -E 'Passed' "$RUN/serial.log" \
     | sed -E 's/.*Test +#[0-9]+: ([^ ]+).*/  \1/' | sort
 } | tee -a "$RUN/summary.txt"
