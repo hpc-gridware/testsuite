@@ -45,7 +45,25 @@ set check_root_access_needs "yes"
 # define test's name and run level descriptions
 set check_name            "access_lists"
 set check_category        "SCHEDULER VERIFIED"
-set check_description(0)  "Test (x)user_lists access for queue/cluster/pe"
+# One scenario per run level. The scheduler treats (test, level) as its own
+# unit and spreads the levels over different runners, so this turns a single
+# 53 minute test into five that run side by side -- the same trick scope_basic
+# already uses. It is safe here because every scenario works on its own object
+# (global host, exec host, queue, cluster config, pe) and restores it before it
+# returns; nothing one of them leaves behind is read by another.
+#
+# The price is that the per-check setup runs once per level rather than once:
+# the access queue, disabling all.q everywhere, the four access lists and the
+# project are rebuilt each time. That is roughly 150-200 s per level against
+# ~600 s saved on the critical path, which is the right trade at 24 runners.
+#
+# qalter_prj shares level 0 instead of getting its own: it submits a single job
+# and would otherwise be almost pure setup cost.
+set check_description(0)  "Test (x)user_lists access for the global host (and qalter/project, iz 2737)"
+set check_description(1)  "Test (x)user_lists access for an exec host"
+set check_description(2)  "Test (x)user_lists access for a queue"
+set check_description(3)  "Test (x)user_lists access for the cluster configuration"
+set check_description(4)  "Test (x)user_lists access for a pe"
 
 # define test's dependencies
 set check_needs           "init_core_system"
@@ -328,6 +346,13 @@ proc run_user_jobs {id_string jobargs A_ok B_ok {C_ok "-1"}} {
 }
 
 proc access_lists_global_host {} {
+   global CHECK_ACT_LEVEL
+   # All check_functions are called in every run level -- the level is a
+   # parameter, not a selector -- so each scenario has to bow out of the levels
+   # that are not its own. See check_description() above for why they are split.
+   if {$CHECK_ACT_LEVEL != 0} {
+      return
+   }
    global ts_config access_lists_host CHECK_USER
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER   
    global CHECK_SECOND_FOREIGN_SYSTEM_GROUP CHECK_FIRST_FOREIGN_SYSTEM_GROUP
@@ -453,6 +478,10 @@ proc access_lists_global_host {} {
 }
 
 proc access_lists_exec_host {} {
+   global CHECK_ACT_LEVEL
+   if {$CHECK_ACT_LEVEL != 1} {
+      return
+   }
    global ts_config access_lists_host CHECK_USER
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER   
    global CHECK_SECOND_FOREIGN_SYSTEM_GROUP CHECK_FIRST_FOREIGN_SYSTEM_GROUP
@@ -570,6 +599,10 @@ proc access_lists_exec_host {} {
 }
 
 proc access_lists_queue {} {
+   global CHECK_ACT_LEVEL
+   if {$CHECK_ACT_LEVEL != 2} {
+      return
+   }
    global ts_config CHECK_USER
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER   
    global CHECK_SECOND_FOREIGN_SYSTEM_GROUP CHECK_FIRST_FOREIGN_SYSTEM_GROUP
@@ -687,6 +720,10 @@ proc access_lists_queue {} {
 }
 
 proc access_lists_cluster_config {} {
+   global CHECK_ACT_LEVEL
+   if {$CHECK_ACT_LEVEL != 3} {
+      return
+   }
    global ts_config access_lists_queue CHECK_USER
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER   
    global CHECK_SECOND_FOREIGN_SYSTEM_GROUP CHECK_FIRST_FOREIGN_SYSTEM_GROUP
@@ -806,6 +843,10 @@ proc access_lists_cluster_config {} {
 }
 
 proc access_lists_pe {} {
+   global CHECK_ACT_LEVEL
+   if {$CHECK_ACT_LEVEL != 4} {
+      return
+   }
    global ts_config CHECK_USER
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER   
    global CHECK_SECOND_FOREIGN_SYSTEM_GROUP CHECK_FIRST_FOREIGN_SYSTEM_GROUP
@@ -953,6 +994,12 @@ proc access_lists_pe {} {
 #     This is Issue 2737.
 #*******************************************************************************
 proc access_lists_qalter_prj {} {
+   global CHECK_ACT_LEVEL
+   # Rides along in level 0: a single held job plus one qalter, not worth a
+   # level of its own once the setup cost is counted.
+   if {$CHECK_ACT_LEVEL != 0} {
+      return
+   }
    global ts_config
    global CHECK_SECOND_FOREIGN_SYSTEM_USER
 
