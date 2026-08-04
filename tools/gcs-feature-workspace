@@ -7,7 +7,8 @@
 # (gcs-<line>/<feature>). Everything a cross-repo feature touches then lives in a
 # single tree -> one build, one integration test, no cherry-picking. Teardown
 # removes all worktrees + branches deterministically (hermes kanban gc never
-# reaps worktrees, so teardown must live here).
+# reaps worktrees, so teardown must live here), plus the cluster tree the
+# workspace owns under /usr/local/testsuite/<port>.
 #
 # It is NOT a new git feature: just a thin orchestration wrapper around
 # `git worktree add/remove/prune` across N repos with a unified branch name.
@@ -47,8 +48,14 @@
 # (<line>-<feature> clion), not by a separate launcher here. Idempotent like
 # ide-init: existing .idea is left alone unless --force.
 #
-# teardown --force also discards dirty worktrees, unmerged branches AND the
-# whole workspace directory including config/, inst/ and results/.
+# teardown removes the workspace's cluster tree (/usr/local/testsuite/<port>:
+# the CMake build directory and the cluster spool) as soon as every worktree
+# came out cleanly -- it is created outside the workspace, so nothing else
+# would ever reap it, and a surviving build/CMakeCache.txt breaks the next
+# workspace that pick_port hands the freed port to. Skipped, with the path
+# named, while the cluster is still listening or another config claims the
+# port. --force additionally discards dirty worktrees, unmerged branches AND
+# the whole workspace directory including config/, inst/ and results/.
 
 set -euo pipefail
 
@@ -264,6 +271,71 @@ port_registered() {
   case "$regd" in *" $p "*) return 0 ;; *) return 1 ;; esac
 }
 
+# Per-port cluster tree: <port>/build is where the pipeline script points CMake
+# (gcs-pipeline: SGE_BUILD), <port>/execd and <port>/testsuite are the spool.
+# It lives OUTSIDE the workspace, which is why teardown has to remove it
+# explicitly -- see remove_cluster_tree() for what happens when it does not.
+cluster_tree() { printf '/usr/local/testsuite/%s\n' "$1"; }
+
+# Is the cluster still up? Same source as used_ports().
+port_listening() {
+  [ -n "$1" ] || return 1
+  ss -ltnH 2>/dev/null | awk '{print $4}' | sed 's/.*://' | grep -qx "$1"
+}
+
+# Does any config OUTSIDE this workspace claim the port? Companion configs of
+# the workspace itself (defaults-<line>-<feature>.<project>.sav) are skipped by
+# path, not by name, so they can never look like a foreign claim.
+port_claimed_outside() {
+  local port="$1" froot="$2" f
+  for f in "$CLION_ROOT"/*/config/defaults-*.sav \
+           "$CLION_ROOT"/*-features/*/config/defaults-*.sav; do
+    [ -f "$f" ] || continue
+    case "$f" in "$froot"/*) continue ;; esac
+    [ "$(read_commd_port "$f")" = "$port" ] && return 0
+  done
+  return 1
+}
+
+# Remove the cluster tree of a torn-down workspace.
+#
+# Without this the tree outlives the workspace, and since pick_port hands a
+# freed port straight to the next feature, that feature inherits <port>/build
+# with a CMakeCache.txt whose CMAKE_HOME_DIRECTORY still names the deleted
+# source tree -- every build then fails with "does not match the source
+# directory" until it is removed by hand.
+remove_cluster_tree() {
+  local port="$1" froot="$2" line="$3" feature="$4" tree
+
+  if [ -z "$port" ]; then
+    warn "no commd_port recorded (no ts-init config?) — cluster tree, if any, left behind"
+    return 0
+  fi
+  case "$port" in
+    *[!0-9]*) warn "recorded commd_port '$port' is not numeric — leaving the cluster tree alone"; return 0 ;;
+  esac
+
+  tree="$(cluster_tree "$port")"
+  [ -d "$tree" ] || return 0
+
+  if port_claimed_outside "$port" "$froot"; then
+    warn "port $port is configured outside this workspace too — leaving $tree"
+    return 0
+  fi
+  if port_listening "$port"; then
+    warn "cluster still running on port $port — leaving $tree"
+    warn "  shut it down ('$line-$feature shutdown') and remove it by hand, or the"
+    warn "  next workspace handed port $port inherits its stale CMake cache"
+    return 0
+  fi
+
+  if rm -rf "$tree"; then
+    info "removed $tree (build + spool of port $port)"
+  else
+    warn "could not remove $tree — remove it by hand"
+  fi
+}
+
 cmd_ts_init() {
   local line="${1:?line required}" feature="${2:?feature required}"; shift 2 || true
   local port="" force=0 a
@@ -440,9 +512,15 @@ cmd_teardown() {
   local force=0
   for a in "$@"; do [ "$a" = "--force" ] && force=1; done
 
-  local froot branch src target base d removed=0 kept=0
+  local froot branch src target base d removed=0 kept=0 port
   froot="$(feature_root "$line" "$feature")"
   branch="$(branch_name "$line" "$feature")"
+
+  # Read the cluster port BEFORE anything is removed: --force deletes config/
+  # below, and that file is the only record of which port this workspace owns.
+  # Deliberately no fallback to the line config -- an empty value there would
+  # aim the cluster-tree removal at the line's own cluster.
+  port="$(read_commd_port "$froot/config/defaults-$line-$feature.sav")"
 
   # Drop the on-PATH wrapper symlink (config/$line-$feature), if ts-init made one.
   local bindir link
@@ -481,6 +559,10 @@ cmd_teardown() {
     git -C "$src" worktree prune >/dev/null 2>&1 || true
     removed=$((removed+1))
   done
+
+  # Only once the teardown actually went through: a half torn-down workspace
+  # keeps its cluster, so it keeps its build and spool too.
+  [ "$kept" -eq 0 ] && remove_cluster_tree "$port" "$froot" "$line" "$feature"
 
   if [ "$kept" -gt 0 ]; then
     warn "$kept worktree(s) kept (dirty); workspace left: $froot"
