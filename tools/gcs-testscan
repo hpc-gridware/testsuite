@@ -90,6 +90,56 @@ INFRA = {"init_core_system", "connection_test", "display_test"}
 # is the more robust value, because a few outliers up to 473 s skew the mean.
 OVERHEAD = int(os.environ.get("GCS_TS_OVERHEAD", "48"))
 
+# Tests that cannot share the host set with the rest of the run.
+#
+# ts_cluster gives every test its own cluster, which is enough for anything whose
+# behaviour is local to that cluster. These are not: they measure or occupy
+# something the whole host set shares, so a second one running anywhere makes both
+# meaningless.
+#
+#   display    every runner uses the same DISPLAY (ebablick,envlist -> h047:10).
+#              An X11 test that grabs it while another is using it fails for a
+#              reason that has nothing to do with the product.
+#
+# A scarce resource is preferable to RUN_SERIAL: it holds apart only what
+# conflicts, and the other 31 runners keep working meanwhile.
+#
+# The cost floor exists because COST is taken from recorded durations, and those
+# come from runs where the test was NOT competing. throughput.9 was costed 170 s
+# and took 1540 s; ctest starts in descending COST order, so it began 58 % into
+# the run and then held phase 1 open alone for 25 minutes. A floor puts it back
+# at the front where its true length belongs.
+# The floor exists so the serialised chain STARTS early -- ctest orders by
+# descending COST, and a chain that begins late cannot finish before the parallel
+# work does. It is not a prediction of the duration.
+#
+# NOT here, deliberately: performance/throughput. It produced five artifacts of
+# the 2026-08-04 run and the reasoning applies to it -- but the family has 48
+# units in phase 1, and once they are kept out of bundles (as a resource holder
+# must be) serialising them is a chain of ~4 h against a run of 1.4 h. It would
+# also still compete with the other 27 clusters, so it would not even buy a quiet
+# host set. Throughput needs a different answer: its own pass at -j 1, or a test
+# that tolerates incomplete accounting records instead of failing on them.
+SHARED_RESOURCES = ("display",)
+EXCLUSIVE = (
+    ("display", re.compile(r"/qrsh_ijs_(x11_|reconnect_x11)"), 600),
+)
+
+
+def exclusive_for(units):
+    """Extra resource tokens and the cost floor for a group of units.
+
+    A bundle needs the resource as soon as ONE of its units does -- the units of
+    a bundle run one after another in the same invocation, so the bundle holds
+    the resource for its whole runtime.
+    """
+    tokens, floor = [], 0
+    for name, rx, fl in EXCLUSIVE:
+        if any(rx.search(u["path"]) for u in units):
+            tokens.append(f"{name}:1")
+            floor = max(floor, fl)
+    return tokens, floor
+
 
 def wait_factor():
     """The factor gcs-run-unit hands to the testsuite as timeout_factor.
@@ -413,8 +463,15 @@ def bundle(groups):
     def dur(g):
         return sum(u["dur"] for u in g)
 
-    small = sorted([g for g in groups if dur(g) <= BUNDLE_MAX_UNIT], key=lambda g: -dur(g))
-    out = [g for g in groups if dur(g) > BUNDLE_MAX_UNIT]
+    # A group that needs a scarce resource never goes into a bundle: the bundle
+    # would hold the resource for its whole runtime, including the unrelated
+    # tests packed next to it, and those would then be serialised for no reason.
+    def locks(g):
+        return bool(exclusive_for(g)[0])
+
+    small = sorted([g for g in groups if dur(g) <= BUNDLE_MAX_UNIT and not locks(g)],
+                   key=lambda g: -dur(g))
+    out = [g for g in groups if dur(g) > BUNDLE_MAX_UNIT or locks(g)]
 
     packed = []
     for g in small:
@@ -470,7 +527,12 @@ def write_ctest(line, outdir, us, n):
     with open(f"{outdir}/ts_cluster.json", "w") as fh:
         fh.write('{ "version": {"major": 1, "minor": 0},\n  "local": [ { "ts_cluster": [\n')
         fh.write(",\n".join(f'    {{"id": "{i}", "slots": 1}}' for i in range(1, n + 1)))
-        fh.write("\n  ] } ] }\n")
+        fh.write('\n  ],\n')
+        # One slot each: these are not per-cluster resources but properties of the
+        # whole host set, so exactly one test may hold them at a time.
+        for extra in SHARED_RESOURCES:
+            fh.write(f'  "{extra}": [ {{"id": "1", "slots": 1}} ],\n')
+        fh.seek(fh.tell() - 2); fh.write("\n  } ] }\n")
 
     def band(lv):
         return ["short", "medium", "long", "day", "week"][min(lv // 100, 4)]
@@ -487,6 +549,9 @@ def write_ctest(line, outdir, us, n):
                 tname += "+group"
             args = " ".join(f'"{u["path"]}" "{u["level"]}"' for u in g)
             cost = sum(u["dur"] for u in g)
+            res_tokens, cost_floor = exclusive_for(g)
+            cost = max(cost, cost_floor)
+            groups = ",".join(["ts_cluster:1"] + res_tokens)
             labels = sorted({w for u in g for w in u["category"].split()} |
                             {band(u["level"]) for u in g})
             # --name before the line: it is an option, and gcs-run-unit reads
@@ -495,7 +560,7 @@ def write_ctest(line, outdir, us, n):
             # result under the name the rest of the tooling uses.
             fh.write(f'add_test("{tname}" "{runner}" "--name" "{tname}" "{line}" {args})\n')
             fh.write(f'set_tests_properties("{tname}" PROPERTIES\n')
-            fh.write(f'  RESOURCE_GROUPS "ts_cluster:1"\n')
+            fh.write(f'  RESOURCE_GROUPS "{groups}"\n')
             fh.write(f'  COST {cost}\n')
             fh.write(f'  TIMEOUT {max(900 * wait_factor(), cost * 3)}\n')
             fh.write(f'  LABELS "{";".join(labels)}")\n')
@@ -512,12 +577,14 @@ def write_ctest(line, outdir, us, n):
             if len(g) > 1:
                 for u in g:
                     sname = ctest_name(u)
-                    scost = u["net"] + OVERHEAD
+                    sres, sfloor = exclusive_for([u])
+                    scost = max(u["net"] + OVERHEAD, sfloor)
+                    sgroups = ",".join(["ts_cluster:1"] + sres)
                     slabels = sorted(set(u["category"].split()) | {band(u["level"]), "single"})
                     fh.write(f'add_test("{sname}" "{runner}" "--name" "{sname}" '
                              f'"{line}" "{u["path"]}" "{u["level"]}")\n')
                     fh.write(f'set_tests_properties("{sname}" PROPERTIES\n')
-                    fh.write(f'  RESOURCE_GROUPS "ts_cluster:1"\n')
+                    fh.write(f'  RESOURCE_GROUPS "{sgroups}"\n')
                     fh.write(f'  COST {scost}\n')
                     fh.write(f'  TIMEOUT {max(900 * wait_factor(), scost * 3)}\n')
                     fh.write(f'  LABELS "{";".join(slabels)}")\n')
