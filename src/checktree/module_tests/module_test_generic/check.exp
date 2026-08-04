@@ -35,6 +35,7 @@
 
 
 # define global variable in this namespace
+
 global check_name
 global check_category
 global check_description
@@ -42,137 +43,249 @@ global check_needs
 global check_functions
 global check_root_access_needs
 
-set check_root_access_needs "no"
+set check_root_access_needs "yes"
 
-# define test's name and run level descriptions
 set check_name            "module_test_generic"
 set check_category        "MODULE TESTBIN VERIFIED COMMLIB"
-set check_description(0)   "run all generic module tests on master host"
-set check_description(100) "run all generic module tests on all architectures"
-set check_description(200) "run all generic module tests on all hosts"
+# start_test_bin runs the binary from the INSTALLED $SGE_ROOT/testbin and fails
+# with "cannot find test binary" if the product is not installed -- so even the
+# tests that need no running cluster need init_core_system. This used to be ""
+# and worked only because gcs-testscan schedules the infra checks first on every
+# runner; with one level per binary the dependency has to be declared.
+set check_needs           "init_core_system"
 
-# define test's dependencies
-set check_needs           ""
+# ---------------------------------------------------------------------------
+# One level per module test binary, so the parallel runner can schedule them
+# independently (gcs-testscan makes one ctest entry per test AND level).
+#
+#    level div 100 -> host scope   0 suited host, 1 per architecture, 2 all hosts
+#    level mod 100 -> index into generic_module_tests
+#
+# The index IS the level, so entries must never be reordered or deleted -- that
+# would silently repoint every level below. To retire a binary, keep its slot
+# and let the run function skip it.
+#
+# Version and feature gating is NOT expressed with check_version_range(N): the
+# level always exists, and the run function skips the binary with ts_log_info
+# when the cluster is too old or lacks the feature. That keeps the index stable
+# across versions, which a conditional lappend would not.
+#
+# Binaries that need a running cluster do NOT belong here -- check_needs is "".
+# They live in module_test_cluster.
+# ---------------------------------------------------------------------------
 
-# setup and cleanup functions
-set check_cleanup_level_function "generic_module_tests_cleanup"
-set check_setup_level_function "generic_module_tests_setup"
+# {binary min_version needs_gcs max_version}
+# check.exp is sourced from inside a proc, so the list has to be declared global
+# HERE, at file scope -- otherwise "set" makes a local and the run function's
+# "global generic_module_tests" finds nothing ("no such variable").
+global generic_module_tests
+set generic_module_tests {}
+lappend generic_module_tests {test_qmaster_timed_event "" 0 ""}
+lappend generic_module_tests {test_commlib_issue "" 0 ""}
+lappend generic_module_tests {test_comm_xml_parse "9.2.0" 0 ""}
+lappend generic_module_tests {test_common_category "" 0 ""}
+lappend generic_module_tests {test_cull_hash "" 0 ""}
+lappend generic_module_tests {test_cull_list "" 0 ""}
+lappend generic_module_tests {test_cull_observe "" 0 ""}
+lappend generic_module_tests {test_cull_pack "" 0 ""}
+lappend generic_module_tests {test_cull_enumeration "" 0 ""}
+lappend generic_module_tests {test_qmaster_calendar "" 0 ""}
+lappend generic_module_tests {test_sgeobj_attr "" 0 ""}
+lappend generic_module_tests {test_sgeobj_object "" 0 ""}
+lappend generic_module_tests {test_sgeobj_fgl "" 0 ""}
+lappend generic_module_tests {test_sgeobj_range "" 0 ""}
+lappend generic_module_tests {test_sgeobj_resource_quota "" 0 ""}
+lappend generic_module_tests {test_sgeobj_schedd_conf "" 0 ""}
+lappend generic_module_tests {test_sgeobj_utility "" 0 ""}
+lappend generic_module_tests {test_sgeobj_ulong "9.2.0" 0 ""}
+lappend generic_module_tests {test_sgeobj_var "9.2.0" 0 ""}
+lappend generic_module_tests {test_sgeobj_hgroup "9.2.0" 0 ""}
+lappend generic_module_tests {test_sgeobj_manop "9.2.0" 0 ""}
+lappend generic_module_tests {test_sgeobj_role "9.2.0" 0 ""}
+lappend generic_module_tests {test_sgeobj_RequestLimits "9.1.0" 1 ""}
+lappend generic_module_tests {test_RequestLimits "" 1 "9.1.0"}
+lappend generic_module_tests {test_sgeobj_Session "" 0 ""}
+lappend generic_module_tests {test_sched_resource_utilization "" 0 ""}
+lappend generic_module_tests {test_sched_load_formula "" 0 ""}
+lappend generic_module_tests {test_procedure_qquota_json "9.2.0" 0 ""}
+lappend generic_module_tests {test_procedure_qquota_plain "9.2.0" 0 ""}
+lappend generic_module_tests {test_procedure_qrstat_json "9.2.0" 0 ""}
+lappend generic_module_tests {test_procedure_qstat_summary "9.2.0" 0 ""}
+lappend generic_module_tests {test_uti_bitfield "" 0 ""}
+lappend generic_module_tests {test_uti_deadlock "" 0 ""}
+lappend generic_module_tests {test_uti_lock_fifo "" 0 ""}
+lappend generic_module_tests {test_uti_lock_multiple "" 0 ""}
+lappend generic_module_tests {test_uti_lock_simple "" 0 ""}
+lappend generic_module_tests {test_uti_err "" 0 ""}
+lappend generic_module_tests {test_uti_sl "" 0 ""}
+lappend generic_module_tests {test_uti_tq "" 0 ""}
+lappend generic_module_tests {test_uti_string "" 0 ""}
+lappend generic_module_tests {test_uti_dstring "" 0 ""}
+lappend generic_module_tests {test_uti_uidgid "" 0 ""}
+lappend generic_module_tests {test_uti_authinfo "9.2.0" 0 ""}
+lappend generic_module_tests {test_uti_parse_num "9.2.0" 0 ""}
+lappend generic_module_tests {test_uti_peopen "9.2.0" 0 ""}
+lappend generic_module_tests {test_uti_threads "" 0 ""}
+lappend generic_module_tests {test_uti_thread_local "" 0 ""}
+lappend generic_module_tests {test_uti_time "" 0 ""}
+lappend generic_module_tests {test_uti_os_fds "" 0 ""}
+lappend generic_module_tests {test_uti_Encoder "9.1.0" 0 ""}
+set check_description(0) "test_qmaster_timed_event (suited host)"
+set check_description(1) "test_commlib_issue (suited host)"
+set check_description(2) "test_comm_xml_parse (suited host)"
+set check_description(3) "test_common_category (suited host)"
+set check_description(4) "test_cull_hash (suited host)"
+set check_description(5) "test_cull_list (suited host)"
+set check_description(6) "test_cull_observe (suited host)"
+set check_description(7) "test_cull_pack (suited host)"
+set check_description(8) "test_cull_enumeration (suited host)"
+set check_description(9) "test_qmaster_calendar (suited host)"
+set check_description(10) "test_sgeobj_attr (suited host)"
+set check_description(11) "test_sgeobj_object (suited host)"
+set check_description(12) "test_sgeobj_fgl (suited host)"
+set check_description(13) "test_sgeobj_range (suited host)"
+set check_description(14) "test_sgeobj_resource_quota (suited host)"
+set check_description(15) "test_sgeobj_schedd_conf (suited host)"
+set check_description(16) "test_sgeobj_utility (suited host)"
+set check_description(17) "test_sgeobj_ulong (suited host)"
+set check_description(18) "test_sgeobj_var (suited host)"
+set check_description(19) "test_sgeobj_hgroup (suited host)"
+set check_description(20) "test_sgeobj_manop (suited host)"
+set check_description(21) "test_sgeobj_role (suited host)"
+set check_description(22) "test_sgeobj_RequestLimits (suited host)"
+set check_description(23) "test_RequestLimits (suited host)"
+set check_description(24) "test_sgeobj_Session (suited host)"
+set check_description(25) "test_sched_resource_utilization (suited host)"
+set check_description(26) "test_sched_load_formula (suited host)"
+set check_description(27) "test_procedure_qquota_json (suited host)"
+set check_description(28) "test_procedure_qquota_plain (suited host)"
+set check_description(29) "test_procedure_qrstat_json (suited host)"
+set check_description(30) "test_procedure_qstat_summary (suited host)"
+set check_description(31) "test_uti_bitfield (suited host)"
+set check_description(32) "test_uti_deadlock (suited host)"
+set check_description(33) "test_uti_lock_fifo (suited host)"
+set check_description(34) "test_uti_lock_multiple (suited host)"
+set check_description(35) "test_uti_lock_simple (suited host)"
+set check_description(36) "test_uti_err (suited host)"
+set check_description(37) "test_uti_sl (suited host)"
+set check_description(38) "test_uti_tq (suited host)"
+set check_description(39) "test_uti_string (suited host)"
+set check_description(40) "test_uti_dstring (suited host)"
+set check_description(41) "test_uti_uidgid (suited host)"
+set check_description(42) "test_uti_authinfo (suited host)"
+set check_description(43) "test_uti_parse_num (suited host)"
+set check_description(44) "test_uti_peopen (suited host)"
+set check_description(45) "test_uti_threads (suited host)"
+set check_description(46) "test_uti_thread_local (suited host)"
+set check_description(47) "test_uti_time (suited host)"
+set check_description(48) "test_uti_os_fds (suited host)"
+set check_description(49) "test_uti_Encoder (suited host)"
 
-# define test's procedure order
+set check_description(100) "test_qmaster_timed_event (one host per architecture)"
+set check_description(101) "test_commlib_issue (one host per architecture)"
+set check_description(102) "test_comm_xml_parse (one host per architecture)"
+set check_description(103) "test_common_category (one host per architecture)"
+set check_description(104) "test_cull_hash (one host per architecture)"
+set check_description(105) "test_cull_list (one host per architecture)"
+set check_description(106) "test_cull_observe (one host per architecture)"
+set check_description(107) "test_cull_pack (one host per architecture)"
+set check_description(108) "test_cull_enumeration (one host per architecture)"
+set check_description(109) "test_qmaster_calendar (one host per architecture)"
+set check_description(110) "test_sgeobj_attr (one host per architecture)"
+set check_description(111) "test_sgeobj_object (one host per architecture)"
+set check_description(112) "test_sgeobj_fgl (one host per architecture)"
+set check_description(113) "test_sgeobj_range (one host per architecture)"
+set check_description(114) "test_sgeobj_resource_quota (one host per architecture)"
+set check_description(115) "test_sgeobj_schedd_conf (one host per architecture)"
+set check_description(116) "test_sgeobj_utility (one host per architecture)"
+set check_description(117) "test_sgeobj_ulong (one host per architecture)"
+set check_description(118) "test_sgeobj_var (one host per architecture)"
+set check_description(119) "test_sgeobj_hgroup (one host per architecture)"
+set check_description(120) "test_sgeobj_manop (one host per architecture)"
+set check_description(121) "test_sgeobj_role (one host per architecture)"
+set check_description(122) "test_sgeobj_RequestLimits (one host per architecture)"
+set check_description(123) "test_RequestLimits (one host per architecture)"
+set check_description(124) "test_sgeobj_Session (one host per architecture)"
+set check_description(125) "test_sched_resource_utilization (one host per architecture)"
+set check_description(126) "test_sched_load_formula (one host per architecture)"
+set check_description(127) "test_procedure_qquota_json (one host per architecture)"
+set check_description(128) "test_procedure_qquota_plain (one host per architecture)"
+set check_description(129) "test_procedure_qrstat_json (one host per architecture)"
+set check_description(130) "test_procedure_qstat_summary (one host per architecture)"
+set check_description(131) "test_uti_bitfield (one host per architecture)"
+set check_description(132) "test_uti_deadlock (one host per architecture)"
+set check_description(133) "test_uti_lock_fifo (one host per architecture)"
+set check_description(134) "test_uti_lock_multiple (one host per architecture)"
+set check_description(135) "test_uti_lock_simple (one host per architecture)"
+set check_description(136) "test_uti_err (one host per architecture)"
+set check_description(137) "test_uti_sl (one host per architecture)"
+set check_description(138) "test_uti_tq (one host per architecture)"
+set check_description(139) "test_uti_string (one host per architecture)"
+set check_description(140) "test_uti_dstring (one host per architecture)"
+set check_description(141) "test_uti_uidgid (one host per architecture)"
+set check_description(142) "test_uti_authinfo (one host per architecture)"
+set check_description(143) "test_uti_parse_num (one host per architecture)"
+set check_description(144) "test_uti_peopen (one host per architecture)"
+set check_description(145) "test_uti_threads (one host per architecture)"
+set check_description(146) "test_uti_thread_local (one host per architecture)"
+set check_description(147) "test_uti_time (one host per architecture)"
+set check_description(148) "test_uti_os_fds (one host per architecture)"
+set check_description(149) "test_uti_Encoder (one host per architecture)"
+
+set check_description(200) "test_qmaster_timed_event (all cluster hosts)"
+set check_description(201) "test_commlib_issue (all cluster hosts)"
+set check_description(202) "test_comm_xml_parse (all cluster hosts)"
+set check_description(203) "test_common_category (all cluster hosts)"
+set check_description(204) "test_cull_hash (all cluster hosts)"
+set check_description(205) "test_cull_list (all cluster hosts)"
+set check_description(206) "test_cull_observe (all cluster hosts)"
+set check_description(207) "test_cull_pack (all cluster hosts)"
+set check_description(208) "test_cull_enumeration (all cluster hosts)"
+set check_description(209) "test_qmaster_calendar (all cluster hosts)"
+set check_description(210) "test_sgeobj_attr (all cluster hosts)"
+set check_description(211) "test_sgeobj_object (all cluster hosts)"
+set check_description(212) "test_sgeobj_fgl (all cluster hosts)"
+set check_description(213) "test_sgeobj_range (all cluster hosts)"
+set check_description(214) "test_sgeobj_resource_quota (all cluster hosts)"
+set check_description(215) "test_sgeobj_schedd_conf (all cluster hosts)"
+set check_description(216) "test_sgeobj_utility (all cluster hosts)"
+set check_description(217) "test_sgeobj_ulong (all cluster hosts)"
+set check_description(218) "test_sgeobj_var (all cluster hosts)"
+set check_description(219) "test_sgeobj_hgroup (all cluster hosts)"
+set check_description(220) "test_sgeobj_manop (all cluster hosts)"
+set check_description(221) "test_sgeobj_role (all cluster hosts)"
+set check_description(222) "test_sgeobj_RequestLimits (all cluster hosts)"
+set check_description(223) "test_RequestLimits (all cluster hosts)"
+set check_description(224) "test_sgeobj_Session (all cluster hosts)"
+set check_description(225) "test_sched_resource_utilization (all cluster hosts)"
+set check_description(226) "test_sched_load_formula (all cluster hosts)"
+set check_description(227) "test_procedure_qquota_json (all cluster hosts)"
+set check_description(228) "test_procedure_qquota_plain (all cluster hosts)"
+set check_description(229) "test_procedure_qrstat_json (all cluster hosts)"
+set check_description(230) "test_procedure_qstat_summary (all cluster hosts)"
+set check_description(231) "test_uti_bitfield (all cluster hosts)"
+set check_description(232) "test_uti_deadlock (all cluster hosts)"
+set check_description(233) "test_uti_lock_fifo (all cluster hosts)"
+set check_description(234) "test_uti_lock_multiple (all cluster hosts)"
+set check_description(235) "test_uti_lock_simple (all cluster hosts)"
+set check_description(236) "test_uti_err (all cluster hosts)"
+set check_description(237) "test_uti_sl (all cluster hosts)"
+set check_description(238) "test_uti_tq (all cluster hosts)"
+set check_description(239) "test_uti_string (all cluster hosts)"
+set check_description(240) "test_uti_dstring (all cluster hosts)"
+set check_description(241) "test_uti_uidgid (all cluster hosts)"
+set check_description(242) "test_uti_authinfo (all cluster hosts)"
+set check_description(243) "test_uti_parse_num (all cluster hosts)"
+set check_description(244) "test_uti_peopen (all cluster hosts)"
+set check_description(245) "test_uti_threads (all cluster hosts)"
+set check_description(246) "test_uti_thread_local (all cluster hosts)"
+set check_description(247) "test_uti_time (all cluster hosts)"
+set check_description(248) "test_uti_os_fds (all cluster hosts)"
+set check_description(249) "test_uti_Encoder (all cluster hosts)"
+
 set check_functions {}
 lappend check_functions "generic_module_tests_run"
 
-global generic_module_tests_test_hosts generic_module_tests
-
-# these are the currently existing and verified module tests
-set generic_module_tests {}
-lappend generic_module_tests "test_qmaster_timed_event"
-lappend generic_module_tests "test_uti_profiling"
-
-lappend generic_module_tests "test_commlib_issue"
-# test_comm_xml_parse was added in 9.2.0; its test binary is not installed on
-# older clusters, so only run it there (avoids a spurious "binary not available"
-# failure).
-if {[is_version_in_range "9.2.0"]} {
-   lappend generic_module_tests "test_comm_xml_parse"
-}
-
-#lappend generic_module_tests "test_common_heartbeat" ;# only used in shadowd_migrate test
-lappend generic_module_tests "test_common_category"
-
-lappend generic_module_tests "test_cull_hash"
-lappend generic_module_tests "test_cull_list"
-lappend generic_module_tests "test_cull_observe"
-lappend generic_module_tests "test_cull_pack"
-lappend generic_module_tests "test_cull_enumeration"
-
-lappend generic_module_tests "test_qmaster_calendar"
-
-lappend generic_module_tests "test_sgeobj_attr"
-lappend generic_module_tests "test_sgeobj_object"
-lappend generic_module_tests "test_sgeobj_eval_expression"
-lappend generic_module_tests "test_sgeobj_fgl"
-lappend generic_module_tests "test_sgeobj_performance"
-lappend generic_module_tests "test_sgeobj_range"
-lappend generic_module_tests "test_sgeobj_resource_quota"
-lappend generic_module_tests "test_sgeobj_schedd_conf"
-lappend generic_module_tests "test_sgeobj_utility"
-# test_sgeobj_ulong / test_sgeobj_var were added in 9.2.0 (security fixes
-# CS-2349 / CS-2350); their binaries do not exist on older clusters.
-if {[is_version_in_range "9.2.0"]} {
-   lappend generic_module_tests "test_sgeobj_ulong"
-   lappend generic_module_tests "test_sgeobj_var"
-}
-if {[ge_has_feature "gcs"]} {
-   if {[is_version_in_range "9.1.0"]} {
-      lappend generic_module_tests "test_sgeobj_RequestLimits"
-   } else {
-      lappend generic_module_tests "test_RequestLimits"
-   }
-}
-lappend generic_module_tests "test_sgeobj_Session"
-
-lappend generic_module_tests "test_sched_eval_performance"
-lappend generic_module_tests "test_sched_resource_utilization"
-lappend generic_module_tests "test_sched_load_formula"
-
-# The procedure (stored-procedure) module tests were all added in 9.2.0; their
-# binaries are not installed on older clusters.
-if {[is_version_in_range "9.2.0"]} {
-   lappend generic_module_tests "test_procedure_qquota_json"
-   lappend generic_module_tests "test_procedure_qquota_plain"
-   lappend generic_module_tests "test_procedure_qrstat_json"
-   lappend generic_module_tests "test_procedure_qstat_summary"
-}
-
-lappend generic_module_tests "test_spool_flatfile"
-
-lappend generic_module_tests "test_uti_bitfield"
-lappend generic_module_tests "test_uti_deadlock"
-lappend generic_module_tests "test_uti_lock_fifo"
-lappend generic_module_tests "test_uti_lock_multiple"
-lappend generic_module_tests "test_uti_lock_simple"
-lappend generic_module_tests "test_uti_err"
-lappend generic_module_tests "test_uti_sl"
-lappend generic_module_tests "test_uti_tq"
-lappend generic_module_tests "test_uti_string"
-lappend generic_module_tests "test_uti_dstring"
-lappend generic_module_tests "test_uti_uidgid"
-# test_uti_authinfo / test_uti_parse_num / test_uti_peopen were added in 9.2.0
-# (security fixes CS-2346 / CS-2348 / CS-2333); not installed on older clusters.
-if {[is_version_in_range "9.2.0"]} {
-   lappend generic_module_tests "test_uti_authinfo"
-   lappend generic_module_tests "test_uti_parse_num"
-   lappend generic_module_tests "test_uti_peopen"
-}
-lappend generic_module_tests "test_uti_threads"
-lappend generic_module_tests "test_uti_thread_local"
-lappend generic_module_tests "test_uti_time"
-lappend generic_module_tests "test_uti_os_fds"
-if {[is_version_in_range "9.1.0"]} {
-   lappend generic_module_tests "test_uti_Encoder"
-}
-
-
-proc generic_module_tests_setup {} {
-   global ts_config
-   global CHECK_ACT_LEVEL
-   global generic_module_tests_test_hosts
-
-   switch -- $CHECK_ACT_LEVEL {
-      0 {
-         set generic_module_tests_test_hosts [host_conf_get_suited_hosts]
-      }
-      100 {
-         set generic_module_tests_test_hosts [host_conf_get_unique_arch_nodes [host_conf_get_cluster_hosts 1]]
-      }
-      200 {
-         set generic_module_tests_test_hosts [host_conf_get_cluster_hosts 1 1]
-      }
-   }
-
-   ts_log_fine "test hosts: $generic_module_tests_test_hosts"
-}
 
 #****** check.60/generic_module_tests_cleanup() ********************************
 #  NAME
@@ -195,57 +308,99 @@ proc generic_module_tests_cleanup {} {
    }
 }
 
-## @brief Run all supported module test binaries on the configured hosts.
+
+## @brief Run the one module test binary this level selects.
 #
-# Iterates over the global generic_module_tests list and starts each binary
-# via start_test_bin on every host in generic_module_tests_test_hosts.
-# Most tests run as CHECK_USER; test_uti_peopen (CS-2333) is run as root
-# and told which non-root user to switch to. Failures are collected and
-# reported via ts_log_severe.
+# level mod 100 picks the binary, level div 100 the host scope. A binary whose
+# version or feature requirement the cluster does not meet is skipped via
+# ts_log_info (a configuration issue, not a failure).
 #
 # @return none; reports failures through ts_log_severe
 proc generic_module_tests_run {} {
-   global ts_config CHECK_USER
-   global generic_module_tests generic_module_tests_test_hosts
+   global ts_config CHECK_USER CHECK_ACT_LEVEL
+   global generic_module_tests
+
+   set index [expr {$CHECK_ACT_LEVEL % 100}]
+   set scope [expr {$CHECK_ACT_LEVEL / 100}]
+
+   if {$index >= [llength $generic_module_tests]} {
+      ts_log_info "level $CHECK_ACT_LEVEL has no module test assigned"
+      return
+   }
+
+   lassign [lindex $generic_module_tests $index] module_test min_version needs_gcs max_version
+
+   # ------------------------------------------------------------------------
+   # ts_log_info, NEVER ts_log_config, in a check function.
+   #
+   # ts_log_config records -3 in check_errno($CHECK_CUR_PROC_NAME), and the
+   # framework turns any -3 into "level unsupported"
+   # (private_check_error_run_test_level, check.exp). check_errno is keyed by
+   # FUNCTION NAME and is not cleared between levels, and every level of this
+   # check runs the same function -- so a single ts_log_config here marks every
+   # FOLLOWING level unsupported too, including the ones that ran and passed.
+   #
+   # Observed 2026-08-04: level 23 skips test_RequestLimits on 9.2 (replaced by
+   # test_sgeobj_RequestLimits). With ts_log_config, levels 24..149 all reported
+   # UNSUPPORTED although their binaries ran and passed.
+   #
+   # The framework only sanctions ts_log_config in a setup function that then
+   # returns 99 (check.exp: "setup_ret == 99 ... this means there was no
+   # ts_log_config"). If a level should report "unsupported" rather than simply
+   # be logged as skipped, add a check_setup_level_function that does both --
+   # do not call ts_log_config from here.
+   # ------------------------------------------------------------------------
+   if {$min_version ne "" && ![is_version_in_range $min_version]} {
+      ts_log_info "$module_test needs version $min_version or newer - skipped"
+      return
+   }
+   if {$max_version ne "" && [is_version_in_range $max_version]} {
+      ts_log_info "$module_test was replaced in $max_version - skipped"
+      return
+   }
+   if {$needs_gcs && ![ge_has_feature "gcs"]} {
+      ts_log_info "$module_test needs the gcs feature set - skipped"
+      return
+   }
+
+   switch -- $scope {
+      0 { set hosts [host_conf_get_suited_hosts] }
+      1 { set hosts [host_conf_get_unique_arch_nodes [host_conf_get_cluster_hosts 1]] }
+      2 { set hosts [host_conf_get_cluster_hosts 1 1] }
+      default { ts_log_info "unknown host scope in level $CHECK_ACT_LEVEL"; return }
+   }
+   ts_log_fine "$module_test on: $hosts"
 
    set error_text ""
-   set config_text ""
-   foreach host $generic_module_tests_test_hosts {
+   foreach host $hosts {
       ts_log_frame
       ts_log_fine "host $host, arch [resolve_arch $host]"
-      foreach module_test $generic_module_tests {
-         ts_log_fine "starting $module_test ..."
 
-         # some tests (especially thread related tests) might take very long, so we set a timeout of 10 minutes
-         set time_in_sec 600
+      # some tests (especially thread related ones) can take very long
+      set time_in_sec 600
 
-         # test_uti_peopen (CS-2333) exercises the root-only user-switch path
-         # of sge_peopen*/; it must run as root and is told which non-root user to
-         # switch to (argv[1]); otherwise it only skips.
-         set test_user $CHECK_USER
-         set test_args ""
-         if {$module_test eq "test_uti_peopen"} {
-            global CHECK_FIRST_FOREIGN_SYSTEM_USER
-            set test_user "root"
-            set test_args $CHECK_FIRST_FOREIGN_SYSTEM_USER
-         }
-         set output [start_test_bin $module_test $test_args $host $test_user ret $time_in_sec]
-         if {$ret == 0} {
-            ts_log_fine "   => $module_test ok"
-            ts_log_fine $output
-         } else {
-            ts_log_fine "   => $module_test failed"
-            append error_text "module test $module_test failed:\n$output\n\n"
-         }
+      # test_uti_peopen (CS-2333) exercises the root-only user-switch path of
+      # sge_peopen*; it must run as root and is told which non-root user to
+      # switch to (argv[1]), otherwise it only skips.
+      set test_user $CHECK_USER
+      set test_args ""
+      if {$module_test eq "test_uti_peopen"} {
+         global CHECK_FIRST_FOREIGN_SYSTEM_USER
+         set test_user "root"
+         set test_args $CHECK_FIRST_FOREIGN_SYSTEM_USER
+      }
+
+      set output [start_test_bin $module_test $test_args $host $test_user ret $time_in_sec]
+      if {$ret == 0} {
+         ts_log_fine "   => $module_test ok"
+         ts_log_fine $output
+      } else {
+         ts_log_fine "   => $module_test failed"
+         append error_text "module test $module_test failed on $host:\n$output\n\n"
       }
    }
 
-   if {$config_text != ""} {
-      ts_log_config $config_text
-   }
-
-   if {$error_text != ""} {
+   if {$error_text ne ""} {
       ts_log_severe $error_text
    }
 }
-
