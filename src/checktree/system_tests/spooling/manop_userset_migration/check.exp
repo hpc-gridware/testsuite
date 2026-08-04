@@ -78,7 +78,7 @@ set    manop_marker_operator "cs2394op"
 
 # define test's name and run level descriptions
 set check_name            "manop_userset_migration"
-set check_category        "COMPATIBILITY SYSTEM SPOOLING VERIFIED"
+set check_category        "COMPATIBILITY SYSTEM SPOOLING RBAC VERIFIED"
 set check_description(0)  "upgrade of a pre-9.2 configuration migrates managers/operators into the reserved manager/operator access lists (CS-2394)"
 
 set check_root_access_needs "yes"
