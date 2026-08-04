@@ -45,8 +45,9 @@
 # work, stretched out under load. Only the remaining 8 were real defects.
 #
 # A single-phase parallel run would therefore report 13 failures that are none.
-# A purely serial run would need 18.65 h instead of 3.13 h. The two-phase run
-# does not claim that parallel execution yields the same result -- it checks.
+# A purely serial run would need 18.65 h instead of 3.13 h. The funnel does not
+# claim that parallel execution yields the same result -- it checks, and only
+# the last phase counts.
 #
 # The actual fix is CS-2481 (scalable wait timeouts in the testsuite). After
 # that, phase 2 becomes unnecessary or at least short.

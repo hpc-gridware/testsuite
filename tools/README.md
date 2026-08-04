@@ -15,7 +15,7 @@ several clusters in parallel.
 | `gcs-feature-workspace` | One directory per feature, one git worktree per repository of the line, all on the same branch. |
 | `gcs-runners` | N testsuite clusters of one line on a single code base. |
 | `gcs-testscan` | Scans the checktree and builds the per-runner test lists. |
-| `gcs-testrun` | Complete two-phase run: parallel first, then the failures serially. |
+| `gcs-testrun` | Complete three-phase run: parallel, then `-j 4`, then one cluster at a time. |
 | `gcs-run-unit` | Runs one test group on the cluster the scheduler assigned. |
 | `as-root` | Runs a command as root on a lab host. |
 | `get_pwd.sh` | Prints the testsuite root password. |
@@ -89,6 +89,8 @@ Under eight parallel clusters they are exceeded without a real defect being
 present: in a measured full run, 13 of 21 failures passed on a serial rerun,
 twelve of them two to three times faster.
 
-`gcs-testrun` therefore runs in two phases and separates real defects from
-artifacts. **CS-2481** tracks the actual fix, a scalable factor for those
-timeouts; once it is in, the second phase becomes short or unnecessary.
+`gcs-testrun` therefore runs in three phases and separates real defects from
+artifacts: phase 1 in parallel, phase 2 repeating its failures with `-j 4`,
+phase 3 giving whatever is left one cluster at a time. Only phase 3 decides.
+**CS-2481** tracks the actual fix, a scalable factor for those timeouts; once it
+is in, the later phases become short or unnecessary.

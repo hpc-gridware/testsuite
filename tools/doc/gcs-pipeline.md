@@ -104,13 +104,14 @@ as signal.
 grep 'set check_category' <test>/check.exp
 ```
 
-### Parallel runs need two phases
+### Parallel runs need more than one phase
 
 The testsuite's wait helpers use absolute timeouts (30 s for a configuration
 change, 60 s for load values) and implicitly assume exclusive use of the hosts.
-Under eight parallel clusters these are exceeded without any real defect: in a
+Under parallel clusters these are exceeded without any real defect: in a
 measured full run, 13 of 21 failures passed on a serial rerun. Use
-[`gcs-testrun`](gcs-testrun.md). See **CS-2481**.
+[`gcs-testrun`](gcs-testrun.md), which funnels failures through three phases and
+only lets phase 3 decide. See **CS-2481**.
 
 ## Examples
 
