@@ -49,8 +49,29 @@ set check_version_range     "9.2.0"
 set check_root_access_needs "yes"
 set check_needs             "init_core_system"
 
+set check_cleanup_function "hgroup_reserved_name_collision_cleanup"
+
 set check_functions ""
 lappend check_functions "hgroup_reserved_name_collision_check"
+
+## @brief Remove the look-alike host groups level 1 loads into the cluster.
+#
+# Level 1 has to LOAD its backup - proving that look-alike names upgrade normally
+# means letting the upgrade happen - so unlike level 0 it is not read-only. The
+# groups it introduces would otherwise stay behind and show up in later checks.
+#
+# @return none
+proc hgroup_reserved_name_collision_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER prg_exit_state
+
+   foreach group {@admin_host @my_admin_hosts @admin_hosts2 @submit_hosts_old} {
+      start_sge_bin "qconf" "-dhgrp $group" $ts_config(master_host) $CHECK_USER prg_exit_state
+      if {$prg_exit_state == 0} {
+         ts_log_fine "removed look-alike host group $group"
+      }
+   }
+}
 
 # The pre-9.2 fixture to build the backup from.
 global hgroup_collision_from_version
