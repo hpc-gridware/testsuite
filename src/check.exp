@@ -4725,6 +4725,19 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
    set end_time [clock seconds]
    set duration [expr $end_time - $start_time - [expr $total_check_duration / 1000.0]]
 
+   # What the check costs OUTSIDE its check functions: setup, cleanup, and the
+   # framework's own per-level work. The value was already being computed on the
+   # line above and then dropped -- CHECK_DURATIONS stores the TOTAL, so the only
+   # way to get this number was to subtract the FUNCTION-DURATION lines by hand.
+   #
+   # It is the number that decides whether splitting a check into more run levels
+   # is worth it, because every extra level pays it again. Measured for
+   # system_tests/clients/qconf on 2026-08-05: 3 s against 242 s of function time,
+   # i.e. splitting that check further is NOT limited by its setup cost.
+   ts_log_fine [format "LEVEL-OVERHEAD %s level %s %.1f s (total %.1f s, functions %.1f s)" \
+                       $check_name $level $duration [expr {$end_time - $start_time}] \
+                       [expr {$total_check_duration / 1000.0}]]
+
    read_check_durations_spoolfile CHECK_DURATIONS
 
    set CHECK_DURATIONS($path,$level) [expr $end_time - $start_time]
