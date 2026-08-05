@@ -4,7 +4,7 @@
 gcs-runners <line> init     [N]
 gcs-runners <line> install  [N] [-p]
 gcs-runners <line> status
-gcs-runners <line> teardown [N] [--force]
+gcs-runners <line> teardown [N] [--force] [-s]
 ```
 
 Cuts the wall clock of a testsuite run by having several clusters work on the
@@ -32,7 +32,7 @@ strictly needs for itself is separated:
 | `init [N]` | Create directories, configuration and wrapper for N runners. Idempotent: a runner that already has a port keeps it. Without `N`, as many as there are free ports. |
 | `install [N] [-p]` | Mirror the line's `inst/` into each runner and install the cluster. `-p` installs all in parallel — about three minutes for eight instead of twenty. |
 | `status` | One line per runner: port, whether binaries are present, whether the cluster is running. |
-| `teardown [N] [--force]` | Shut the runners down and remove their configuration. `--force` also deletes the directories including `inst/` and `results/`. |
+| `teardown [N] [--force] [-s]` | Shut the runners down and remove their configuration. `--force` also deletes the directories including `inst/` and `results/`. Shuts all runners down **in parallel by default** (22 clusters in 60 s, against 20-30 minutes serially); `-s`/`--serial` forces one at a time. Unlike `install`, parallel needs no opt-in here: a shutdown writes no configuration, so the races that make parallel installs delicate (CS-2481) do not apply. |
 
 ## Ports
 

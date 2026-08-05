@@ -24,7 +24,7 @@
 #   gcs-runners <line> install [N] [-p]   # mirror inst/ from the line + install
 #   gcs-runners <line> status
 #   gcs-runners <line> health [N]         # does every execd still enforce h_rt?
-#   gcs-runners <line> teardown [N] [--force]
+#   gcs-runners <line> teardown [N] [--force] [-s]  # parallel by default; -s = serial
 #
 # Ports are NOT invented: only registered, even ports from <user>,portlist of the
 # testsuite user configuration are eligible, because that is what vends the
@@ -315,16 +315,67 @@ cmd_install() {
   return $rc
 }
 
+# Parallel is the DEFAULT here, unlike install where it is opt-in. Why:
+#
+# A teardown is N independent testsuite shutdowns, and each one kills qmaster,
+# execd and shadowd on EVERY execd host and waits for them to be gone -- 45 to
+# 90 s per cluster. Serially that is half an hour for 32 runners, which is
+# absurd for an operation whose whole job is to stop things.
+#
+# Parallel install has documented races (CS-2481: qconf -Mconf reporting a
+# warning as an error, install_shadowd seeing "configuration not defined"), and
+# both come from N clusters WRITING configuration at the same moment. A shutdown
+# writes no configuration. The only shared thing this function touches is the
+# line's config directory, and the per-runner .sav and symlink names are unique,
+# so there is nothing to contend on.
+#
+# The shutdowns still get CS_TIMEOUT_FACTOR=3 like the parallel install: the
+# testsuite's waits are absolute, and N clusters stopping at once is exactly the
+# load those waits do not expect.
+#
+# Measured 2026-08-05: 22 clusters, 60 s in parallel against an estimated 20-30
+# minutes serially. That is why it is the default rather than a flag nobody
+# remembers to pass -- "-s"/"--serial" is there if a shutdown ever needs
+# isolating, and "-p" is still accepted so existing invocations keep working.
+#
+# File removal is deliberately NOT parallel. It runs after every shutdown has
+# been waited for, so a cluster is never removed underneath a shutdown that is
+# still talking to it -- and rm is not what makes this slow.
 cmd_teardown() {
-  local line="${1:?line required}" want="${2:-}" force="${3:-}"
-  local lroot rroot name i
+  local line="${1:?line required}" want="" force="" par="-p"
+  local lroot rroot name i a pids=()
+  shift
+  for a in "$@"; do
+    case "$a" in
+      --force)     force="--force" ;;
+      -s|--serial) par="" ;;
+      -p)          par="-p" ;;   # already the default; accepted so old invocations keep working
+      ''|*[!0-9]*) die "teardown: unexpected argument '$a' (expected N, -s/--serial or --force)" ;;
+      *)           want="$a" ;;
+    esac
+  done
   lroot="$(line_root "$line")"
   [ -d "$lroot/runners" ] || { info "(no runners)"; return; }
   [ -n "$want" ] || want="$(find "$lroot/runners" -maxdepth 1 -name 'r*' -type d | wc -l)"
+
   for i in $(seq 1 "$want"); do
     rroot="$(runner_root "$line" "$i")"; name="$(runner_name "$line" "$i")"
     [ -d "$rroot" ] || continue
-    "$name" shutdown >/dev/null 2>&1 || true
+    if [ "$par" = "-p" ]; then
+      ( CS_TIMEOUT_FACTOR="${CS_TIMEOUT_FACTOR:-3}" \
+        "$name" shutdown >"$rroot/shutdown.log" 2>&1 || true ) & pids+=("$!")
+      info "  r$i: shutdown started (PID ${pids[-1]})"
+    else
+      "$name" shutdown >/dev/null 2>&1 || true
+    fi
+  done
+  if [ "$par" = "-p" ]; then
+    for i in "${!pids[@]}"; do wait "${pids[$i]}" || true; done
+  fi
+
+  for i in $(seq 1 "$want"); do
+    rroot="$(runner_root "$line" "$i")"; name="$(runner_name "$line" "$i")"
+    [ -d "$rroot" ] || continue
     rm -f "$lroot/config/defaults-$name.sav" "$(dirname "$(readlink -f "$lroot/config/$line")")/$name"
     [ "$force" = "--force" ] && { rm -rf "$rroot"; info "  - r$i removed (including inst/results)"; } \
                              || info "  - r$i shut down, directory kept (--force removes it)"
