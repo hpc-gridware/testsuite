@@ -52,6 +52,7 @@ set check_name            "module_test_cluster"
 # tags exact would cost an init_core_system dependency per check.
 #   SPOOLING  test_spool_flatfile
 #   RBAC      test_qmaster_hgroup_reserved (CS-2438 reserved host groups)
+#             test_qmaster_hgroup_cache    (CS-2451 resolved host list cache)
 set check_category        "MODULE TESTBIN SPOOLING RBAC VERIFIED"
 set check_needs           "init_core_system"
 
@@ -92,10 +93,12 @@ set cluster_module_tests {}
 lappend cluster_module_tests {test_sgeobj_eval_expression ""}
 lappend cluster_module_tests {test_spool_flatfile ""}
 lappend cluster_module_tests {test_qmaster_hgroup_reserved "9.2.0"}
+lappend cluster_module_tests {test_qmaster_hgroup_cache "9.2.0"}
 
 set check_description(0) "test_sgeobj_eval_expression (needs SGE_ROOT)"
 set check_description(1) "test_spool_flatfile (needs SGE_ROOT)"
 set check_description(2) "test_qmaster_hgroup_reserved (needs a running qmaster)"
+set check_description(3) "test_qmaster_hgroup_cache (needs a running qmaster)"
 
 set check_functions {}
 lappend check_functions "cluster_module_tests_run"
