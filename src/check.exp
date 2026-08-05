@@ -4626,6 +4626,22 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
             }
             set check_duration [expr [clock clicks -milliseconds] - $check_duration]
             set total_check_duration [expr $total_check_duration + $check_duration]
+
+            # Per check FUNCTION timing, in every run.
+            #
+            # The value was already being measured here, but it only survived
+            # inside "if {$CHECK_USE_HUDSON == 1}" below, as a JUnit attribute.
+            # In an ordinary run it was computed and dropped, so a check like
+            # "qconf" -- one check, ~64 functions, ~25 minutes -- reported a
+            # single number and gave no way to see which functions the time went
+            # to. check_durations.txt is keyed by <check>,<level> and cannot
+            # answer it either.
+            #
+            # The marker is greppable on purpose: "grep FUNCTION-DURATION" over a
+            # run log yields the profile of that check, which is what you need to
+            # pick the smallest run that still covers a change.
+            ts_log_fine [format "FUNCTION-DURATION %s %s %.3f s" $check_name $elem \
+                                [expr {$check_duration / 1000.0}]]
             if {$CHECK_USE_HUDSON == 1} {
                if {[info exists check_errno($elem)]} {
                   foreach lev "SEVERE WARNING CONFIG" {
