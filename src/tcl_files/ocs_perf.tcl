@@ -24,6 +24,92 @@ set gperf_scenario_name "default"
 global gperf_threads_name
 set gperf_threads_name "scheduler"
 
+## @brief Quote one value for CSV output (RFC 4180: wrap in quotes, double any
+#         embedded quote).
+#
+# @param value the value to quote
+#
+# @return the quoted field
+proc perf_csv_field {value} {
+   return "\"[string map {\" \"\"} $value]\""
+}
+
+## @brief Append one measured value to the cross-release result file.
+#
+# The gperf harness in this file answers "where did the time go" for ONE build.
+# This answers the other question: "is this build faster than that one", which
+# needs a scalar that survives being compared across releases.
+#
+# Why gperf cannot do that job: it needs libprofiler on every host and the
+# binaries built with it, and an older release may satisfy neither. A number
+# parsed out of the product's own PROFILE output needs nothing but the product.
+#
+# One row per SAMPLE, deliberately never an aggregate. The consumer can compute
+# min or median itself and still see the spread - and the spread is what decides
+# whether a difference between two releases is real or noise. Aggregating here
+# would throw that away at the only point where it is still known.
+#
+# Rows carry the product version, so the files of several releases concatenate
+# into one comparable table with no further work.
+#
+# @param check    check name, e.g. "sperf_hgroup_resolution"
+# @param scenario scenario label within the check
+# @param metric   what was measured, e.g. "schedd_run_s"
+# @param value    the measured value
+# @param sample   1-based sample number within the scenario
+# @param params   free-form "key=value key=value" describing the configuration -
+#                 host counts and job counts belong here, because a number is
+#                 not comparable across releases without them
+#
+# @return the path written, or "" if it could not be written
+proc perf_record_sample {check scenario metric value {sample 1} {params ""}} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set dir "$ts_config(results_dir)/protocols/sperf"
+   set file "$dir/${check}.csv"
+
+   if {![file isdirectory $dir]} {
+      file mkdir $dir
+   }
+
+   set write_header [expr {![file exists $file]}]
+   if {[catch {set fh [open $file "a"]} err]} {
+      ts_log_fine "perf_record_sample: cannot write $file: $err"
+      return ""
+   }
+   if {$write_header} {
+      puts $fh "version,check,scenario,metric,params,sample,value"
+   }
+
+   # the version is the whole point of the row - without it the file is a pile
+   # of numbers with no releases attached
+   set version [get_version_info]
+
+   # Every text field is quoted, not just the ones that look like they need it:
+   # scenario labels contain commas ("3 rules, small scope"), and an unquoted one
+   # shifts every following column, turning a 7-column row into 8. A file that a
+   # CSV parser misreads is worse than no file, because it still looks fine.
+   #
+   # Built with join rather than one long "..." string on purpose: a backslash
+   # line continuation inside a quoted Tcl string collapses to a SPACE, which
+   # puts that space in front of the field's opening quote. The quote is then no
+   # longer at the field start, so a reader takes it literally and the column
+   # comes out as { "schedd_run_s"} instead of {schedd_run_s} -- still parseable,
+   # still the wrong value, and it would not compare equal across releases.
+   set row {}
+   foreach field [list $version $check $scenario $metric $params] {
+      lappend row [perf_csv_field $field]
+   }
+   lappend row $sample $value
+
+   puts $fh [join $row ","]
+   close $fh
+
+   ts_log_fine "perf_record_sample: $check/$scenario $metric\[$sample\] = $value ($params)"
+   return $file
+}
+
 ## @brief Set scenario name and name of threads to be profiled.
 #
 # This procedure sets the scenario name and the name of the threads to be profiled for the performance test.
