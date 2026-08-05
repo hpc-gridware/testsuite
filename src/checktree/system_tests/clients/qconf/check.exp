@@ -47,6 +47,8 @@ set check_root_access_needs "yes"
 set check_name            "qconf"
 set check_category        "EVENTCLIENT QCONF RQS SHARETREE TESTBIN VERIFIED"
 set check_description(0)  "test all qconf options (test not complete)"
+set check_description(1)  "qconf -help output messages (qconf_brief_exercise)"
+set check_description(2)  "qconf backslash parsing of space/comma separated values"
 
 # define test's dependencies
 set check_needs        "init_core_system"       ;# dependencies of this check (name of other check)
@@ -55,6 +57,7 @@ set check_needs        "init_core_system"       ;# dependencies of this check (n
 global qconf_original_host_groups qconf_original_usersets
 # setup and cleanup functions
 set check_setup_function "qconf_setup"
+set check_setup_level_function "qconf_setup_level"
 set check_cleanup_function "qconf_cleanup"
 
 # define test's procedure order
@@ -134,6 +137,87 @@ lappend check_functions "qconf_Aconf"                   ;# TS case for qconf -Ac
 lappend check_functions "qconf_delete_admin_user"       ;# deleting manager or operator must fail for root and admin user
 
 lappend check_functions "qconf_issue_2960"
+
+# ---------------------------------------------------------------------------
+# Level split -- measured, not guessed (2026-08-05)
+#
+# Profiled with the FUNCTION-DURATION log: this check spends 614 s in its 61
+# functions, and it is wildly lopsided.
+#
+#     qconf_brief_exercise                220 s   36 % of the whole check
+#     the six backslash functions         154 s   25 %
+#     the remaining 54 functions          240 s   median 2.85 s each
+#
+# So it splits three ways, not into the ~10 groups its STRUCTURE would suggest.
+# Splitting the 54 small ones would multiply qconf_setup/qconf_cleanup -- five
+# backup/restore operations, paid once per level -- to save a 2.85 s median.
+#
+# Wall clock for the check drops from ~614 s to ~240 s when the three levels are
+# scheduled on different runners; in a single sequential run nothing changes
+# except that the work is now attributable per level.
+#
+# Both extracted groups were checked for independence before moving them:
+# qconf_brief_exercise reads only ts_config and creates/deletes its own objects;
+# the backslash functions read only framework globals and build their own host
+# groups from files in the test directory. Neither touches the shared state the
+# other functions pass between each other (queue_names, rqs_name_*,
+# qconf_userlist), so no add->delete chain is broken.
+#
+# The backslash functions keep their relative order -- they are ordered among
+# themselves, just independent of everything else.
+#
+# Declared global HERE, at file scope: check.exp is sourced from inside a proc,
+# so a bare "set" would make a local and qconf_setup_level would not find it.
+# ---------------------------------------------------------------------------
+global qconf_functions_all qconf_functions_l0 qconf_functions_l1 qconf_functions_l2
+
+set qconf_functions_all $check_functions
+
+set qconf_functions_l1 {qconf_brief_exercise}
+
+set qconf_functions_l2 {
+   qconf_backslash_default_space_check
+   qconf_backslash_default_comma_check
+   qconf_backslash_custom_space_check
+   qconf_backslash_custom_comma_check
+   qconf_backslash_space_output_check
+   qconf_backslash_comma_output_check
+}
+
+set qconf_functions_l0 {}
+foreach qconf_fn $qconf_functions_all {
+   if {[lsearch -exact $qconf_functions_l1 $qconf_fn] < 0 &&
+       [lsearch -exact $qconf_functions_l2 $qconf_fn] < 0} {
+      lappend qconf_functions_l0 $qconf_fn
+   }
+}
+unset qconf_fn
+
+## @brief Select which check functions this run level executes.
+#
+# The framework runs the WHOLE check_functions list for every level -- there is
+# no per-level list. But run_test_level() declares check_functions global and
+# reads it AFTER calling check_setup_level_function, so this hook can narrow it.
+# That keeps the split to one proc instead of a guard clause in all 61 functions.
+#
+# Always assigned from the immutable lists built at file scope, never mutated in
+# place, so running levels 0,1,2 in one invocation cannot accumulate.
+#
+# @return 0; the framework only treats 99 specially (execute_test_preparation_
+#         procedure), so any other value means "carry on"
+proc qconf_setup_level {} {
+   global check_functions CHECK_ACT_LEVEL
+   global qconf_functions_l0 qconf_functions_l1 qconf_functions_l2
+
+   switch -- $CHECK_ACT_LEVEL {
+      1 {set check_functions $qconf_functions_l1}
+      2 {set check_functions $qconf_functions_l2}
+      default {set check_functions $qconf_functions_l0}
+   }
+
+   ts_log_fine "level $CHECK_ACT_LEVEL runs [llength $check_functions] check functions"
+   return 0
+}
 
 proc qconf_setup {} {
    global ts_config CHECK_USER
