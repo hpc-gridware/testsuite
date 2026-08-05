@@ -47,6 +47,7 @@ set check_root_access_needs "yes"
 set check_name            "qconf_add_remove_queues"
 set check_category        "QCONF VERIFIED"
 set check_description(0)  "test all qconf massive queue add/remove operations"
+set check_description(1)  "the same 1000 queues, but added/removed with bulk requests (9.2+)"
 
 # define test's dependencies
 set check_needs        "init_core_system"       ;# dependencies of this check (name of other check)
@@ -55,11 +56,86 @@ global qconf_original_host_groups qconf_original_usersets
 # setup and cleanup functions
 set check_setup_function "qconf_setup"
 set check_cleanup_function "qconf_cleanup"
+set check_setup_level_function "qconf_arq_setup_level"
 
 # define test's procedure order
 set check_functions     ""
 lappend check_functions "qconf_addqueues"             ;# functions to call (in order)
 lappend check_functions "qconf_removequeues"
+
+# ---------------------------------------------------------------------------
+# Two levels, same 1000 queues, two different interfaces.
+#
+#   level 0   one qconf process per queue -- what this check always did
+#   level 1   one qconf request for all of them (9.2+ bulk object requests)
+#
+# The count stays at 1000 on BOTH levels on purpose: the scale is the point of
+# this check, and shrinking it to make it fast would drop the coverage it exists
+# for. What level 1 adds is coverage of the bulk path itself, which nothing here
+# exercised before although the product has had it since 9.2.
+#
+# Profiled 2026-08-05 (FUNCTION-DURATION): the sequential level costs 1223 s --
+# qconf_addqueues 617 s and qconf_removequeues 607 s, i.e. ~0.6 s per queue per
+# direction, which is process spawn plus one GDI round trip each. For reference,
+# ocs_cluster.tcl measured 250 objects at 3051 ms individually against 62 ms for
+# one directory request.
+#
+# On an older product level 1 is SKIPPED, not failed -- ge_has_feature is the
+# central detection for this, see the run functions below.
+# ---------------------------------------------------------------------------
+global qconf_arq_functions_l0 qconf_arq_functions_l1 qconf_arq_count_l0 qconf_arq_vi_adds
+set qconf_arq_functions_l0 {qconf_addqueues qconf_removequeues}
+set qconf_arq_functions_l1 {qconf_addqueues_bulk qconf_removequeues_bulk}
+
+# How many queues the SEQUENTIAL level uses. The bulk level always uses all of
+# them, because one request for 1000 objects is the case worth covering.
+#
+# 100, not 1000: at ~0.6 s per queue per direction the old count cost 1223 s to
+# demonstrate something 100 queues demonstrate just as well.
+#
+# Note what this does NOT do. qconf_addqueues adds 51 queues from a FILE
+# (qconf -Aq) and then one through an interactive vi session (qconf -aq), then
+# resets - the vi path is sampled once every 52 queues, never half of them. So:
+#
+#   1000 queues -> 981 file, 19 vi
+#    100 queues ->  99 file,  1 vi
+#
+# One vi add is still full coverage of the -aq interface; more of them would only
+# buy repetition of the slowest path in the check -- a vi add drives an
+# interactive editor session and is the dearest single operation here.
+#
+# 20 queues, of which the first qconf_arq_vi_adds use vi. Both interfaces are
+# covered by construction now, so the count can be chosen for cost alone; the
+# thousand-queue scale case lives on level 1, where one request carries it.
+set qconf_arq_count_l0 20
+set qconf_arq_vi_adds 1
+
+## @brief pick the interface this run level exercises
+#
+# run_test_level() reads the global check_functions AFTER calling this hook, so
+# narrowing it here is enough - see the same pattern in the qconf check.
+#
+# @return 0; only 99 is special to the framework
+proc qconf_arq_setup_level {} {
+   global check_functions CHECK_ACT_LEVEL
+   global qconf_arq_functions_l0 qconf_arq_functions_l1
+   global qconf_arq_count_l0 qconf_arq_queues queue_names
+
+   switch -- $CHECK_ACT_LEVEL {
+      1 {
+         set check_functions $qconf_arq_functions_l1
+         set qconf_arq_queues $queue_names
+      }
+      default {
+         set check_functions $qconf_arq_functions_l0
+         set qconf_arq_queues [lrange $queue_names 0 [expr {$qconf_arq_count_l0 - 1}]]
+      }
+   }
+
+   ts_log_fine "level $CHECK_ACT_LEVEL: [llength $qconf_arq_queues] queues,\
+                [llength $check_functions] check functions"
+   return 0
+}
 
 proc qconf_setup {} {
    global ts_config CHECK_USER
@@ -202,32 +278,117 @@ proc qconf_cleanup {} {
 
 proc qconf_addqueues {} {
    global ts_config
-   global queue_names test_host
+   global qconf_arq_queues test_host qconf_arq_vi_adds
 
    set q_param(load_thresholds)       "np_load_avg=7.00"
 
    set test_host [host_conf_get_suited_hosts]
 
-   set count 0
-   foreach queue $queue_names {
-      if { $count > 50 } {
+   #
+   # The first qconf_arq_vi_adds queues go through an interactive vi session
+   # (qconf -aq), the rest through a file (qconf -Aq).
+   #
+   # This used to be "every 52nd queue uses vi", which coupled the interface
+   # coverage to the queue count and hid a cliff: the counter only exceeds its
+   # threshold on the 52nd iteration, so at 51 queues or fewer the vi path was
+   # never exercised at all -- the check just got faster and said nothing. Anyone
+   # reducing the count for speed would have deleted the -aq coverage silently.
+   #
+   # Taking the vi adds first makes the coverage independent of the count, so the
+   # count is now purely a scale knob.
+   #
+   set index 0
+   foreach queue $qconf_arq_queues {
+      if {$index < $qconf_arq_vi_adds} {
          ts_log_fine "adding queue \"$queue\" with vi"
          add_queue $queue $test_host q_param 0
-         set count 0
       } else {
          ts_log_fine "adding queue \"$queue\" with file"
          add_queue $queue $test_host q_param
       }
-      incr count 1
+      incr index 1
+   }
+
+   if {$qconf_arq_vi_adds < 1} {
+      ts_log_severe "no queue was added through the vi interface - the -aq path is not covered"
    }
 }
 
 proc qconf_removequeues {} {
    global ts_config
-   global queue_names test_host
+   global qconf_arq_queues test_host
 
-   foreach queue $queue_names {
+   foreach queue $qconf_arq_queues {
      ts_log_fine "deleting queue \"$queue\""
      del_queue $queue $test_host 0 1
+   }
+}
+
+## @brief Is the bulk object interface available on the product under test?
+#
+# ts_log_info and a plain return, never ts_log_config: ts_log_config records -3
+# in check_errno keyed by FUNCTION NAME, and check_errno is not cleared between
+# levels, so one call from a check function marks every FOLLOWING level of this
+# check unsupported too. The framework only sanctions ts_log_config in a setup
+# function that then returns 99.
+#
+# @param what description used in the skip message
+# @return 1 if the bulk path can be exercised, 0 if the level should be skipped
+proc qconf_arq_bulk_available {what} {
+   if {![ge_has_feature "bulk-object-requests" 1]} {
+      ts_log_info "$what needs bulk object requests (9.2+) - skipped on this version"
+      return 0
+   }
+   return 1
+}
+
+## @brief Add all queues with ONE request instead of one request per queue.
+#
+# "qconf -Aq <directory>" creates or modifies every object in the directory in a
+# single request. Same 1000 queues and the same attributes as qconf_addqueues,
+# so the two levels are comparable; only the interface differs.
+#
+# @return none; failures are reported by the cluster_bulk_* helpers
+proc qconf_addqueues_bulk {} {
+   global ts_config
+   global qconf_arq_queues test_host
+
+   if {![qconf_arq_bulk_available "bulk queue add"]} {
+      return
+   }
+
+   set q_param(load_thresholds) "np_load_avg=7.00"
+   set test_host [host_conf_get_suited_hosts]
+   set q_param(hostlist) $test_host
+
+   set dir [cluster_bulk_open is_local]
+   foreach queue $qconf_arq_queues {
+      cluster_bulk_write_object $dir $is_local $queue qname set_queue_defaults q_param
+   }
+
+   ts_log_fine "committing [llength $qconf_arq_queues] queues with one qconf -Aq request"
+   if {![cluster_bulk_commit $dir "-Aq" [llength $qconf_arq_queues]]} {
+      ts_log_severe "bulk add of [llength $qconf_arq_queues] queues failed"
+   }
+}
+
+## @brief Delete all queues with one request instead of one per queue.
+#
+# cluster_delete_object_list() takes a name list for -dq where the product
+# supports it (ge_has_feature "delete-object-lists") and falls back to a loop
+# otherwise, so it stays correct on an older product even though this level is
+# only reached on 9.2+.
+#
+# @return none; failures are reported by the helper
+proc qconf_removequeues_bulk {} {
+   global qconf_arq_queues
+
+   if {![qconf_arq_bulk_available "bulk queue delete"]} {
+      return
+   }
+
+   ts_log_fine "deleting [llength $qconf_arq_queues] queues with one qconf -dq request"
+   if {![cluster_delete_object_list "-dq" $qconf_arq_queues "queue"]} {
+      ts_log_severe "bulk delete of [llength $qconf_arq_queues] queues failed"
    }
 }
