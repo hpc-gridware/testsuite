@@ -1,0 +1,175 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2438: since 9.2 the host group names "@admin_hosts", "@submit_hosts" and
+# "@exec_hosts" are reserved - they hold the admin and submit host lists of the
+# cluster, and @exec_hosts mirrors the execution host list. A pre-9.2 cluster may
+# own a user-defined host group of that name. It cannot be carried over
+# automatically: every reference to it (queue host lists, nested host groups,
+# resource quota scopes) would keep resolving but now point at the reserved group,
+# and the qmaster adds itself to @admin_hosts on top. load_config.sh therefore
+# refuses such a backup before loading anything. This check verifies that guard.
+#
+# Modelled on manop_reserved_name_collision (CS-2394), which does the same for the
+# reserved access lists.
+#
+# Non-destructive: the guard aborts before IterativeLoad, so nothing is loaded into
+# the running cluster.
+#
+# NOTE: the testsuite runs the INSTALLED scripts
+# ($product_root/util/upgrade_modules/load_config.sh), not the source tree - the
+# CS-2438 guard must be installed for this check to pass.
+
+global check_name check_category check_description check_needs
+global check_root_access_needs check_functions check_version_range
+
+set check_name              "hgroup_reserved_name_collision"
+set check_category          "COMPATIBILITY SYSTEM SPOOLING RBAC VERIFIED"
+set check_description(0)     "load_config.sh refuses a pre-9.2 backup that uses a reserved host group name (CS-2438)"
+set check_description(1)     "a pre-9.2 backup with look-alike host group names upgrades normally (CS-2438)"
+set check_version_range     "9.2.0"
+
+set check_root_access_needs "yes"
+set check_needs             "init_core_system"
+
+set check_functions ""
+lappend check_functions "hgroup_reserved_name_collision_check"
+
+# The pre-9.2 fixture to build the backup from.
+global hgroup_collision_from_version
+set    hgroup_collision_from_version "9.1.0"
+
+## @brief true if $path exists on $host (as $user).
+proc hgroup_collision_remote_exists {host user path} {
+   start_remote_prog $host $user "test" "-e $path" prg_exit_state
+   return [expr {$prg_exit_state == 0}]
+}
+
+## @brief Write a host group file into a backup directory.
+#
+# The format is the one save_config.sh produces and the 9.1.0 fixture uses:
+# a "group_name" line and a "hostlist" line.
+#
+# @param host, user  where to write
+# @param file        full path of the host group file
+# @param name        group name including the leading '@'
+# @return 1 on success, 0 if the file did not appear
+proc hgroup_collision_write_group {host user file name} {
+   set hg(0) 2
+   set hg(1) "group_name $name"
+   set hg(2) "hostlist NONE"
+   write_remote_file $host $user $file hg
+   return [hgroup_collision_remote_exists $host $user $file]
+}
+
+## @brief Run the installed load_config.sh against a backup directory.
+#
+# installer_load_config() cannot be used: it reports any non-zero exit as an
+# error, and for the positive case a non-zero exit is exactly what we want.
+#
+# @return the script output; sets prg_exit_state
+proc hgroup_collision_load {host bckp_dir} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER prg_exit_state
+
+   set backup_script "$ts_config(product_root)/util/upgrade_modules/load_config.sh"
+   set log_file [get_tmp_file_name]
+   set arguments "$bckp_dir $log_file -mode upgrade -log I -on_error cont_if_exist"
+   installer_set_env_for_upgrade env_array
+   return [start_remote_prog $host $CHECK_USER $backup_script $arguments \
+                             prg_exit_state 60 0 $ts_config(product_root) env_array]
+}
+
+## @brief Level 0: a reserved host group name must be refused.
+#         Level 1: look-alike names must NOT be refused.
+#
+# @return none (reports failures via ts_log_severe)
+proc hgroup_reserved_name_collision_check {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ACT_LEVEL hgroup_collision_from_version prg_exit_state
+
+   set host $ts_config(master_host)
+
+   set fixture [installer_get_backup_dir $hgroup_collision_from_version]
+   if {![is_remote_path $host $CHECK_USER $fixture]} {
+      ts_log_severe "backup fixture $hgroup_collision_from_version not found at $fixture"
+      return
+   }
+
+   if {$CHECK_ACT_LEVEL == 0} {
+      # ---- the reserved names, one backup each --------------------------------
+      foreach group {@admin_hosts @submit_hosts @exec_hosts} {
+         set bckp_dir [get_tmp_directory_name $host]
+         copy_directory $fixture $bckp_dir
+
+         if {![hgroup_collision_write_group $host $CHECK_USER "$bckp_dir/hostgroups/$group" $group]} {
+            ts_log_severe "cannot create the colliding host group fixture $group in $bckp_dir"
+            return
+         }
+
+         set result [hgroup_collision_load $host $bckp_dir]
+
+         if {$prg_exit_state == 0} {
+            ts_log_severe "load_config.sh accepted a pre-9.2 backup with a user-defined host group named \"$group\" - the CS-2438 collision guard is missing"
+            return
+         }
+
+         # A non-zero exit is NOT sufficient. Without the guard load_config.sh
+         # loads everything and the failure could come from anywhere later -
+         # "qconf -Ahgrp" on a group the qmaster refuses, for instance, which is
+         # also non-zero and also names the group. Assert on the guard's own
+         # wording, and that nothing was loaded.
+         if {![string match "*user-defined host group*" $result]} {
+            ts_log_severe "load_config.sh failed for \"$group\", but NOT with the CS-2438 collision guard.\nMost likely the guard is not present in the installed load_config.sh.\n$result"
+            return
+         }
+         if {[string match "*qconf -Ahgrp*" $result] || [string match "*qconf -ah*" $result]} {
+            ts_log_severe "the collision guard fired for \"$group\", but only AFTER objects had been loaded - it must abort before IterativeLoad.\n$result"
+            return
+         }
+         ts_log_fine "\"$group\": guard fired before loading anything, as expected"
+
+         start_remote_prog $host $CHECK_USER "rm" "-rf $bckp_dir" prg_exit_state
+      }
+   } else {
+      # ---- look-alikes must upgrade normally ----------------------------------
+      # A cluster may legitimately own these; refusing them would make an admin's
+      # own host group un-upgradable.
+      set bckp_dir [get_tmp_directory_name $host]
+      copy_directory $fixture $bckp_dir
+
+      foreach group {@admin_host @my_admin_hosts @admin_hosts2 @submit_hosts_old} {
+         if {![hgroup_collision_write_group $host $CHECK_USER "$bckp_dir/hostgroups/$group" $group]} {
+            ts_log_severe "cannot create the look-alike host group fixture $group in $bckp_dir"
+            return
+         }
+      }
+
+      set result [hgroup_collision_load $host $bckp_dir]
+
+      if {[string match "*user-defined host group*" $result]} {
+         ts_log_severe "the CS-2438 collision guard fired on look-alike host group names - it must match the reserved names exactly.\n$result"
+         return
+      }
+      ts_log_fine "look-alike host group names were not refused, as expected"
+
+      start_remote_prog $host $CHECK_USER "rm" "-rf $bckp_dir" prg_exit_state
+   }
+}
