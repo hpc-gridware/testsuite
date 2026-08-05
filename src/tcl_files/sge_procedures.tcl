@@ -2517,6 +2517,16 @@ proc set_config {change_array {host global} {do_add 0} {raise_error 1} {do_reset
       return -1
    }
 
+   # CS-2516 / CS-2518: The order of config entries can be changed with qconf -mconf/-Mconf.
+   # When we modify it with qconf -Mconf (fast_add), the content of the passed file is dumped
+   # from a TCL array in arbitrary order. Use qconf -mconf until the issue is fixed in CS.
+   # Replace the {1} by {[is_version_in_range <fix version>]}.
+   if {1} {
+      if {!$do_add && $fast_add} {
+         set fast_add 0
+      }
+   }
+
    upvar $change_array chgar_orig
 
    # @todo why do we copy it?
