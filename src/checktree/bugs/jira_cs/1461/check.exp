@@ -1,0 +1,510 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.5"
+
+# CS-1461: a consumable used as load threshold made the scheduler reject work that
+# should run, and said nothing about why.
+#
+# Both symptoms came from parallel_max_host_slots() in libs/sched/sge_select_queue.cc,
+# which is reached only from the parallel assignment path. A sequential job never
+# evaluates whether a dispatch *would* cause load alarm - it only has to avoid queues
+# that are in alarm already. That is why the two job types disagreed.
+#
+# The slot count a host may still give is ceil((capacity - threshold)/request): the last
+# slot, the one that tips the queue into alarm, is granted, and nothing beyond it. The
+# old code truncated instead, which is one too few unless the division comes out exact.
+#
+#   cs_1461_pe_job_one_slot           One slot, and that slot already tips the queue into
+#                                     alarm - it has to be granted. (7G-2G)/6G = 0.83,
+#                                     truncated to zero slots, so the job stayed pending.
+#   cs_1461_sequential_job            The same request submitted sequentially. This always
+#                                     worked; asserted so the two paths agree.
+#   cs_1461_pe_job_first_slot_alarm   Two slots where the first already tips the queue
+#                                     into alarm - only one slot may be granted, so the
+#                                     job must not run.
+#   cs_1461_pe_job_second_slot_alarm  Two slots where the second tips the queue into
+#                                     alarm - both have to be granted. (12G-3G)/5G = 1.8,
+#                                     truncated to one slot, so the job stayed pending.
+#   cs_1461_pe_job_exact_division     (12G-6G)/2G = 3 exactly: three slots run, four do
+#                                     not. The boundary separates the three candidate
+#                                     formulas - truncation and ceil() both give three,
+#                                     "truncate and add one" would give four.
+#   cs_1461_pe_job_without_request    A job not requesting the consumable at all must be
+#                                     unaffected by the threshold.
+#   cs_1461_ar_verify_message         The same configuration verified with qrsub -w v:
+#                                     the scheduler has to report *why* the threshold
+#                                     could not be evaluated, instead of leaving the
+#                                     user with a bare "no suitable queue".
+#   cs_1461_ar_with_pe                An AR with a PE request, where a *second* consumable
+#                                     is used as load threshold but has no capacity
+#                                     anywhere. The attribute cannot be resolved and the
+#                                     whole host used to be discarded, so the AR failed
+#                                     with "no suitable queue".
+#
+# Note on the setup: parallel_max_host_slots() takes the MAXIMUM of the per-queue slot
+# counts over all queues of a host, so a single other queue instance without the
+# threshold hides the effect completely. The setup therefore disables every other queue
+# instance on the test host - without that, the PE job runs even against unfixed code.
+#
+# On the AR: advance reservations are scheduled with QS_STATE_EMPTY ("imagine qs is
+# empty"), and under that state get_attribute() ignores dynamic load values. In the
+# customer configuration the consumable had a load sensor value but no capacity, so it
+# resolved for jobs and did not resolve for ARs. This check leaves the attribute without
+# any value at all, which reaches the same code with the same result and needs no load
+# sensor. The queue is then in load alarm for ordinary jobs, which does not matter here:
+# the AR queue selection filters on orphaned state, queue/PE/ckpt requests and calendars,
+# never on load alarm.
+
+set check_name            "cs_1461"
+set check_category        "BUG SCHEDULER AR PE CENTRY VERIFIED"
+set check_description(0)  "load threshold on a consumable must not block parallel jobs and ARs"
+
+set check_needs           "init_core_system"
+
+set check_setup_function   "cs_1461_setup"
+set check_cleanup_function "cs_1461_cleanup"
+
+set check_functions {}
+lappend check_functions "cs_1461_pe_job_one_slot"
+lappend check_functions "cs_1461_sequential_job"
+lappend check_functions "cs_1461_pe_job_first_slot_alarm"
+lappend check_functions "cs_1461_pe_job_second_slot_alarm"
+lappend check_functions "cs_1461_pe_job_exact_division"
+lappend check_functions "cs_1461_pe_job_without_request"
+lappend check_functions "cs_1461_ar_with_pe"
+lappend check_functions "cs_1461_ar_verify_message"
+
+# -------- local test procedures: initialization -----------------------------
+
+proc cs_1461_setup {} {
+   get_current_cluster_config_array ts_config
+   global cs_1461_host cs_1461_queue cs_1461_pe cs_1461_ar_id
+   global cs_1461_complex_backup cs_1461_exechost_backup cs_1461_exechost_base
+   global cs_1461_slots_backup cs_1461_disabled_queues
+
+   set cs_1461_queue "cs1461.q"
+   set cs_1461_pe    "cs1461.pe"
+
+   set cs_1461_ar_id 0
+
+   # one execution host is enough, and pinning everything to it keeps the capacity
+   # of the consumable predictable
+   set cs_1461_host [lindex $ts_config(execd_nodes) 0]
+   if {$cs_1461_host == ""} {
+      ts_log_config "no execution host available"
+      return 99
+   }
+
+   # cs1461_mem gets a capacity below, cs1461_nov deliberately never gets one
+   get_complex cs_1461_complex_backup
+   unset -nocomplain complex
+   #                       shortcut type   relop requestable consumable default urgency
+   set complex(cs1461_mem) "cs1461m MEMORY <=    YES         YES        0       0"
+   set complex(cs1461_nov) "cs1461n MEMORY <=    YES         YES        0       0"
+   if {[set_complex complex] < 0} {
+      ts_log_config "cannot add the test complex attributes"
+      return 99
+   }
+
+   if {[get_exechost cs_1461_exechost_backup $cs_1461_host] != 0} {
+      ts_log_config "cannot read the exec host configuration of $cs_1461_host"
+      return 99
+   }
+   # Raise the host slot limit. Since 9.1.0 every exec host carries a slots capacity
+   # matching its core count, which would cap the parallel jobs below before the load
+   # threshold ever came into play - they would then stay pending for the wrong reason
+   # and the check would prove nothing.
+   setup_host_slots_for_binding $cs_1461_host cs_1461_slots_backup
+
+   # read the host back with the raised slot count - this is the baseline that every
+   # check function puts its own capacity on top of, see cs_1461_configure()
+   if {[get_exechost cs_1461_exechost_base $cs_1461_host] != 0} {
+      ts_log_config "cannot read the exec host configuration of $cs_1461_host"
+      return 99
+   }
+
+   unset -nocomplain eh
+   # initial values; every check function reconfigures capacity and threshold to what
+   # its own scenario needs, see cs_1461_configure()
+   add_or_replace_array_param eh cs_1461_exechost_base "complex_values" \
+                              "cs1461_mem" "7G"
+   if {[set_exechost eh $cs_1461_host] < 0} {
+      ts_log_config "cannot set complex_values on host $cs_1461_host"
+      return 99
+   }
+
+   unset -nocomplain pe
+   set pe(slots)             "10"
+   set pe(allocation_rule)   "\$pe_slots"
+   set pe(job_is_first_task) "TRUE"
+   if {[add_pe $cs_1461_pe pe] < 0} {
+      ts_log_config "cannot create pe $cs_1461_pe"
+      return 99
+   }
+
+   unset -nocomplain q
+   set q(slots)           "10"
+   set q(pe_list)         $cs_1461_pe
+   set q(load_thresholds) "cs1461_mem=2G"
+   if {[add_queue $cs_1461_queue $cs_1461_host q] < 0} {
+      ts_log_config "cannot create queue $cs_1461_queue"
+      return 99
+   }
+
+   # make the scheduler record why a job cannot run, so its messages show up in
+   # qstat -j and in the answer list of a verifying qrsub
+   unset -nocomplain sc
+   set sc(schedd_job_info) "true"
+   if {[set_schedd_config sc] < 0} {
+      ts_log_config "cannot enable schedd_job_info"
+      return 99
+   }
+
+   # parallel_max_host_slots() loops over *every* queue of the host and takes the
+   # MAXIMUM of the per-queue slot counts. Any other queue instance on this host has no
+   # threshold on cs1461_mem, offers INT_MAX slots and would therefore mask the cap that
+   # this check is about - the job would run even with the bug present. Disable them.
+   # ARs are not affected by this: they build their own queue list from the -q request.
+   set cs_1461_disabled_queues {}
+   foreach qinstance [get_qinstance_list "-q *@$cs_1461_host"] {
+      if {[string first "$cs_1461_queue@" $qinstance] != 0} {
+         lappend cs_1461_disabled_queues $qinstance
+      }
+   }
+   if {[llength $cs_1461_disabled_queues] > 0} {
+      if {[disable_queue $cs_1461_disabled_queues] < 0} {
+         ts_log_config "cannot disable the other queue instances on host $cs_1461_host"
+         return 99
+      }
+   }
+
+   return 0
+}
+
+proc cs_1461_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global cs_1461_host cs_1461_queue cs_1461_pe cs_1461_ar_id
+   global cs_1461_complex_backup cs_1461_exechost_backup cs_1461_exechost_base
+   global cs_1461_slots_backup cs_1461_disabled_queues
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   delete_all_ars
+
+   if {[info exists cs_1461_disabled_queues] && [llength $cs_1461_disabled_queues] > 0} {
+      enable_queue $cs_1461_disabled_queues
+   }
+
+   # the queue and the pe reference the test complex attributes, so they have to go
+   # before the exec host values and the complex itself are restored
+   del_queue $cs_1461_queue $cs_1461_host 0 1
+   del_pe $cs_1461_pe
+
+   reset_schedd_config
+
+   # the helper restores the slots capacity, the exec host backup additionally removes
+   # the cs1461_mem capacity again - the helper only ever touches the slots value
+   cleanup_host_slots_for_binding cs_1461_slots_backup
+   set_exechost cs_1461_exechost_backup $cs_1461_host
+   reset_complex cs_1461_complex_backup
+
+   unset -nocomplain cs_1461_host cs_1461_queue cs_1461_pe cs_1461_ar_id
+   unset -nocomplain cs_1461_complex_backup cs_1461_exechost_backup
+   unset -nocomplain cs_1461_exechost_base
+   unset -nocomplain cs_1461_disabled_queues
+}
+
+# -------- local test procedures: tests --------------------------------------
+
+##
+# @brief Submit one job and require that the scheduler starts it.
+#
+# @param job_args full argument string for submit_job, without the command
+# @param what     short description used in the failure message
+# @return 1 if the job started, 0 otherwise
+proc cs_1461_expect_job_runs {job_args what} {
+   set job_id [submit_job "$job_args sleep 60"]
+   if {$job_id <= 0} {
+      # submit_job has already logged the reason
+      return 0
+   }
+
+   set ret 1
+   if {[wait_for_jobstart $job_id "" 60 0 0] != 0} {
+      ts_log_severe "$what was not scheduled - a consumable used as load threshold\
+                     must not prevent a dispatch that would only just reach the\
+                     threshold (CS-1461)"
+      set ret 0
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   return $ret
+}
+
+##
+# @brief Submit one job and require that the scheduler leaves it pending.
+#
+# Used for the cases where the load threshold has to stop a dispatch. The capacity is
+# always chosen so that it alone would allow the requested slots - otherwise the job
+# would stay pending for the wrong reason and the check would prove nothing.
+#
+# @param job_args full argument string for submit_job, without the command
+# @param what     short description used in the failure message
+# @return 1 if the job stayed pending, 0 otherwise
+proc cs_1461_expect_job_pending {job_args what} {
+   set job_id [submit_job "$job_args sleep 60"]
+   if {$job_id <= 0} {
+      # submit_job has already logged the reason
+      return 0
+   }
+
+   set ret 1
+   if {[wait_for_jobstart $job_id "" 20 0 0] == 0} {
+      ts_log_severe "$what was scheduled although the load threshold does not leave\
+                     room for it - only the slot that tips the queue into alarm may\
+                     still be granted, not one beyond it (CS-1461)"
+      set ret 0
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   return $ret
+}
+
+##
+# @brief Set the capacity of cs1461_mem and the load thresholds of the test queue.
+#
+# Every check function configures the values it needs, so the functions are independent
+# of each other and of the order they run in.
+#
+# @param capacity   value for cs1461_mem in the exec host complex_values
+# @param thresholds full load_thresholds value for the test queue
+# @return 1 on success, 0 otherwise
+proc cs_1461_configure {capacity thresholds} {
+   global cs_1461_host cs_1461_queue cs_1461_exechost_base
+
+   unset -nocomplain eh
+   add_or_replace_array_param eh cs_1461_exechost_base "complex_values" \
+                              "cs1461_mem" $capacity
+   if {[set_exechost eh $cs_1461_host] < 0} {
+      ts_log_severe "cannot set cs1461_mem=$capacity on host $cs_1461_host"
+      return 0
+   }
+
+   unset -nocomplain q
+   set q(load_thresholds) $thresholds
+   if {[mod_queue $cs_1461_queue $cs_1461_host q] < 0} {
+      ts_log_severe "cannot set the load thresholds $thresholds on $cs_1461_queue"
+      return 0
+   }
+
+   return 1
+}
+
+proc cs_1461_pe_job_one_slot {} {
+   get_current_cluster_config_array ts_config
+   global cs_1461_queue cs_1461_pe
+
+   # capacity 7G, threshold 2G, request 6G -> (7-2)/6 = 0.83, so the single slot is
+   # already the one that tips the queue into alarm and has to be granted
+   if {![cs_1461_configure "7G" "cs1461_mem=2G"]} {
+      return
+   }
+
+   set args "-b y -o /dev/null -e /dev/null -q $cs_1461_queue"
+   append args " -pe $cs_1461_pe 1 -l cs1461_mem=6G"
+
+   cs_1461_expect_job_runs $args "PE job with 1 slot requesting cs1461_mem=6G"
+}
+
+proc cs_1461_sequential_job {} {
+   get_current_cluster_config_array ts_config
+   global cs_1461_queue
+
+   # same configuration and request as the PE job above. This one was always
+   # scheduled; it is asserted so the sequential and the parallel path are shown
+   # to agree - which is the point of the fix.
+   if {![cs_1461_configure "7G" "cs1461_mem=2G"]} {
+      return
+   }
+
+   cs_1461_expect_job_runs \
+      "-b y -o /dev/null -e /dev/null -q $cs_1461_queue -l cs1461_mem=6G" \
+      "sequential job requesting cs1461_mem=6G"
+}
+
+proc cs_1461_pe_job_first_slot_alarm {} {
+   get_current_cluster_config_array ts_config
+   global cs_1461_queue cs_1461_pe
+
+   # capacity 12G, threshold 8G, request 5G per slot -> (12-8)/5 = 0.8, so the first
+   # slot already tips the queue into alarm. Only that one slot may be granted, so a
+   # job asking for two of them must not run. The capacity on its own would allow two
+   # slots (2 x 5G <= 12G), so the load threshold really is the deciding limit here.
+   if {![cs_1461_configure "12G" "cs1461_mem=8G"]} {
+      return
+   }
+
+   set args "-b y -o /dev/null -e /dev/null -q $cs_1461_queue"
+   append args " -pe $cs_1461_pe 2 -l cs1461_mem=5G"
+
+   cs_1461_expect_job_pending $args \
+      "PE job with 2 slots whose first slot already reaches the load threshold"
+}
+
+proc cs_1461_pe_job_second_slot_alarm {} {
+   get_current_cluster_config_array ts_config
+   global cs_1461_queue cs_1461_pe
+
+   # capacity 12G, threshold 3G, request 5G per slot -> (12-3)/5 = 1.8, so the second
+   # slot is the one that tips the queue into alarm and both slots have to be granted.
+   # This is the multi slot form of the reported problem: the old code truncated 1.8 to
+   # one slot and left the job pending.
+   if {![cs_1461_configure "12G" "cs1461_mem=3G"]} {
+      return
+   }
+
+   set args "-b y -o /dev/null -e /dev/null -q $cs_1461_queue"
+   append args " -pe $cs_1461_pe 2 -l cs1461_mem=5G"
+
+   cs_1461_expect_job_runs $args \
+      "PE job with 2 slots whose second slot reaches the load threshold"
+}
+
+proc cs_1461_pe_job_exact_division {} {
+   get_current_cluster_config_array ts_config
+   global cs_1461_queue cs_1461_pe
+
+   # capacity 12G, threshold 6G, request 2G per slot -> (12-6)/2 = 3 exactly. The third
+   # slot tips the queue into alarm, so three slots are granted and a fourth is not.
+   # The boundary is worth asserting because the three candidate formulas disagree here:
+   # truncation and ceil() both yield 3, but "truncate and add one" would yield 4 and
+   # would wrongly start the four slot job. The capacity would allow six slots.
+   if {![cs_1461_configure "12G" "cs1461_mem=6G"]} {
+      return
+   }
+
+   set args "-b y -o /dev/null -e /dev/null -q $cs_1461_queue"
+   if {![cs_1461_expect_job_runs "$args -pe $cs_1461_pe 3 -l cs1461_mem=2G" \
+            "PE job with 3 slots whose last slot reaches the load threshold"]} {
+      return
+   }
+
+   cs_1461_expect_job_pending "$args -pe $cs_1461_pe 4 -l cs1461_mem=2G" \
+      "PE job with 4 slots, one beyond the slot that reaches the load threshold"
+}
+
+proc cs_1461_pe_job_without_request {} {
+   get_current_cluster_config_array ts_config
+   global cs_1461_queue cs_1461_pe
+
+   # A job that does not request the consumable contributes nothing to it, so the
+   # threshold cannot be reached and must not restrict the job. With no request the
+   # scheduler falls back to the default value of cs1461_mem, which is 0, and skips the
+   # threshold entirely.
+   #
+   # The capacity has to stay *above* the threshold here, as in every other scenario of
+   # this check. A capacity at or below the threshold puts the queue into load alarm
+   # straight away, sge_split_queue_load() then drops it before scheduling even starts,
+   # and no job of any shape can run - which would say nothing about the threshold
+   # arithmetic this check is about.
+   if {![cs_1461_configure "12G" "cs1461_mem=6G"]} {
+      return
+   }
+
+   set args "-b y -o /dev/null -e /dev/null -q $cs_1461_queue -pe $cs_1461_pe 2"
+
+   cs_1461_expect_job_runs $args \
+      "PE job with 2 slots that does not request cs1461_mem"
+}
+
+proc cs_1461_ar_verify_message {} {
+   get_current_cluster_config_array ts_config
+   global cs_1461_queue cs_1461_pe
+
+   # cs1461_nov is used as load threshold but has no value anywhere, so the threshold
+   # cannot be evaluated and is skipped. The scheduler has to say why: before the fix
+   # the reason existed only as a DPRINTF and users saw nothing beyond "no suitable
+   # queue", which is what brought three customers to support.
+   #
+   # An AR in verify mode is the only place this message can be observed. For an
+   # ordinary job the queue is in load alarm - sge_load_alarm() reports alarm when the
+   # attribute cannot be resolved - and the queue is dropped before
+   # parallel_max_host_slots() ever runs. AR scheduling ignores load alarm, and with
+   # -w v the scheduler messages are passed back to the client in the answer list.
+   if {![cs_1461_configure "7G" "cs1461_mem=2G,cs1461_nov=2G"]} {
+      return
+   }
+
+   set output [start_sge_bin "qrsub" "-w v -d 3600 -pe $cs_1461_pe 2 -q $cs_1461_queue"]
+
+   # the queue instance name is not matched - it carries the resolved host name
+   set expected [translate_macro MSG_SCHEDD_INFO_CONSUMABLENOVALUE_SS "*" "cs1461_nov"]
+   if {![string match "*$expected*" $output]} {
+      ts_log_severe "verifying qrsub did not report why the load threshold could not be\
+                     evaluated (CS-1461)\nexpected to match:\n$expected\ngot:\n$output"
+   }
+
+   cs_1461_configure "7G" "cs1461_mem=2G"
+}
+
+proc cs_1461_ar_with_pe {} {
+   get_current_cluster_config_array ts_config
+   global cs_1461_host cs_1461_queue cs_1461_pe cs_1461_ar_id
+
+   # add a second consumable as load threshold that has no capacity anywhere, so it
+   # cannot be resolved at queue, host or global level
+   if {![cs_1461_configure "7G" "cs1461_mem=2G,cs1461_nov=2G"]} {
+      return
+   }
+
+   # an unresolvable load threshold used to discard the whole host, so the AR failed
+   # with "no suitable queue" (submit_ar returns -60 for that message)
+   set cs_1461_ar_id [submit_ar "-d 3600 -pe $cs_1461_pe 2 -q $cs_1461_queue" "" "" 0]
+   if {$cs_1461_ar_id < 1} {
+      if {$cs_1461_ar_id == -60} {
+         ts_log_severe "AR with a PE request was rejected with \"no suitable queue\"\
+                        because the consumable cs1461_nov used as load threshold has no\
+                        value - such a threshold has to be skipped, not make the whole\
+                        host unusable (CS-1461)"
+      } else {
+         ts_log_severe "submit_ar failed with $cs_1461_ar_id, expected an AR id"
+      }
+   } else {
+      delete_ar $cs_1461_ar_id
+      set cs_1461_ar_id 0
+   }
+
+   # restore the original load thresholds
+   cs_1461_configure "7G" "cs1461_mem=2G"
+}
