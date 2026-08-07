@@ -54,16 +54,47 @@ set check_cleanup_function "hgroup_reserved_name_collision_cleanup"
 set check_functions ""
 lappend check_functions "hgroup_reserved_name_collision_check"
 
-## @brief Remove the look-alike host groups level 1 loads into the cluster.
+## @brief Hand back a clean cluster after level 1 has loaded a foreign backup.
 #
 # Level 1 has to LOAD its backup - proving that look-alike names upgrade normally
-# means letting the upgrade happen - so unlike level 0 it is not read-only. The
-# groups it introduces would otherwise stay behind and show up in later checks.
+# means letting the upgrade happen - so unlike level 0 it is not read-only.
+#
+# Removing the four look-alike host groups is NOT enough, and that was a real
+# defect: the load brings in the ENTIRE 9.1.0 configuration, including its
+# execution hosts and cluster queues. Those queues get instances on hosts that
+# run no execd here, the instances sit in state "au" forever, and load values
+# never arrive. The check itself passes - the damage lands on whatever runs on
+# that runner NEXT, which dies in the framework's own
+# wait_for_load_from_all_queues() after 60s, before its setup function is even
+# called.
+#
+# Observed 2026-08-07 in a 28 runner full run: this check ran on r22 at 20:57:53,
+# and reserved_hgroup_hostname_matrix failed on r22 at the same second with
+# "timeout waiting for load values" listing queue instances on al10-0-lx-amd64,
+# ce10-0-lx-amd64 and ro8-1-lx-amd64 - hosts of the 9.1.0 fixture. It looked like
+# a defect in that check, and it was not.
+#
+# So do what manop_userset_migration and hgroup_reserved_migration do after
+# loading a foreign configuration: reinstall - but only when something actually
+# reached the cluster.
+#
+# The marker is therefore NOT set when the load script is merely invoked. Level 0
+# invokes it too, on purpose, to prove the guard refuses; there nothing is
+# loaded, and a reinstall would cost every run two minutes for a check that does
+# 8 seconds of work. It IS set wherever level 0 finds evidence to the contrary -
+# the guard not refusing, or "qconf -Ahgrp"/"-ah" in the output - because then
+# the read-only level was not read-only after all.
 #
 # @return none
 proc hgroup_reserved_name_collision_cleanup {} {
    get_current_cluster_config_array ts_config
-   global CHECK_USER prg_exit_state
+   global CHECK_USER prg_exit_state hgroup_collision_did_load
+
+   if {[info exists hgroup_collision_did_load] && $hgroup_collision_did_load} {
+      ts_log_fine "a foreign configuration reached the cluster - reinstalling a fresh cluster"
+      installer_reinstall_fresh_cluster
+      return
+   }
 
    foreach group {@admin_host @my_admin_hosts @admin_hosts2 @submit_hosts_old} {
       start_sge_bin "qconf" "-dhgrp $group" $ts_config(master_host) $CHECK_USER prg_exit_state
@@ -76,6 +107,12 @@ proc hgroup_reserved_name_collision_cleanup {} {
 # The pre-9.2 fixture to build the backup from.
 global hgroup_collision_from_version
 set    hgroup_collision_from_version "9.1.0"
+
+# Set as soon as a level actually loads a backup into the running cluster; read
+# by the cleanup to decide whether a reinstall is owed. Declared at file scope
+# because check.exp is sourced inside a proc.
+global hgroup_collision_did_load
+set    hgroup_collision_did_load 0
 
 ## @brief true if $path exists on $host (as $user).
 proc hgroup_collision_remote_exists {host user path} {
@@ -125,6 +162,7 @@ proc hgroup_collision_load {host bckp_dir} {
 proc hgroup_reserved_name_collision_check {} {
    get_current_cluster_config_array ts_config
    global CHECK_USER CHECK_ACT_LEVEL hgroup_collision_from_version prg_exit_state
+   global hgroup_collision_did_load
 
    set host $ts_config(master_host)
 
@@ -148,6 +186,9 @@ proc hgroup_reserved_name_collision_check {} {
          set result [hgroup_collision_load $host $bckp_dir]
 
          if {$prg_exit_state == 0} {
+            # the guard did not refuse, so the backup WAS loaded - the cleanup
+            # owes a reinstall even though this is the read-only level
+            set hgroup_collision_did_load 1
             ts_log_severe "load_config.sh accepted a pre-9.2 backup with a user-defined host group named \"$group\" - the CS-2438 collision guard is missing"
             return
          }
@@ -162,6 +203,8 @@ proc hgroup_reserved_name_collision_check {} {
             return
          }
          if {[string match "*qconf -Ahgrp*" $result] || [string match "*qconf -ah*" $result]} {
+            # objects reached the cluster before the failure - same debt
+            set hgroup_collision_did_load 1
             ts_log_severe "the collision guard fired for \"$group\", but only AFTER objects had been loaded - it must abort before IterativeLoad.\n$result"
             return
          }
@@ -183,6 +226,12 @@ proc hgroup_reserved_name_collision_check {} {
          }
       }
 
+      # this level loads the whole 9.1.0 configuration ON PURPOSE - proving that
+      # look-alike names upgrade normally means letting the upgrade happen. From
+      # here the cluster carries foreign execution hosts and cluster queues, so
+      # the cleanup owes a reinstall. Set BEFORE the call: a load that dies half
+      # way through leaves exactly the mess this marker exists for.
+      set hgroup_collision_did_load 1
       set result [hgroup_collision_load $host $bckp_dir]
 
       if {[string match "*user-defined host group*" $result]} {
