@@ -345,6 +345,19 @@ fi
 # connect to the display.
 #
 # GCS_VNC=0 turns it off, GCS_VNC=1 turns it on for a non-runner pipeline too.
+# On for the runners: each gets its own display, since CHECK_DISPLAY_OUTPUT is
+# global within a run and one X server shared by 28 clusters would put the X11
+# forwarding checks in contention.
+#
+# This needs check_start_vncserver to wait for the display to become usable
+# (see display.tcl) AND an xstartup that holds the display open with a real X
+# client -- an X server resets when its last client disconnects, and a reset
+# discards every xhost grant. Without both, the display exists and answers a
+# local probe while being unreachable for the execution hosts. Measured
+# 2026-08-07: 7 of 8 concurrent runners failed that way; with both, 8 of 8 pass.
+#
+# GCS_VNC=0 disables, GCS_VNC=1 forces it on for a non-runner pipeline,
+# GCS_VNC_DISPLAY_BASE moves the display range.
 if [ -z "${GCS_VNC:-}" ]; then
    case $CS_PIPELINE in
       *-r[0-9]|*-r[0-9][0-9]) GCS_VNC=1 ;;

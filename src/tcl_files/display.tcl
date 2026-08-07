@@ -95,10 +95,35 @@ proc check_start_vncserver {} {
    } else {
       ts_log_fine "starting VNC server $vnc_display on host $vnc_host"
       start_vncserver $vnc_host $vnc_display
-      if {[check_display] != 0} {
-         ts_log_fine "VNC server $vnc_display on host $vnc_host does not work"
+
+      # WAIT for the display to become usable instead of probing once.
+      #
+      # "vncserver :N" returns as soon as it has forked Xvnc; the display is not
+      # usable yet at that moment, because xstartup still has to run and grant
+      # access (xhost / xauth). A single testsuite run usually wins that race by
+      # accident, which is why probing once appeared to work. It does not
+      # survive concurrency: with 28 runners starting a display each, measured
+      # 2026-08-07, all 28 servers came up and all 28 runs aborted here anyway,
+      # so 85 of 85 test entries failed before the run was stopped.
+      #
+      # Retry rather than sleep a fixed time: the cost of being wrong is the
+      # whole run, and a fixed sleep is either too short under load or wasted on
+      # an idle machine.
+      set vnc_wait_max [expr {[info exists ::CHECK_VNC_WAIT] ? $::CHECK_VNC_WAIT : 60}]
+      set vnc_ok 0
+      for {set vnc_waited 0} {$vnc_waited < $vnc_wait_max} {incr vnc_waited 2} {
+         if {[check_display] == 0} {
+            set vnc_ok 1
+            break
+         }
+         ts_log_fine "display $vnc_host:$vnc_display not usable yet, waited ${vnc_waited}s ..."
+         after 2000
+      }
+      if {!$vnc_ok} {
+         ts_log_fine "VNC server $vnc_display on host $vnc_host does not work (waited ${vnc_wait_max}s)"
          testsuite_shutdown 1
       }
+      ts_log_fine "VNC server $vnc_display on host $vnc_host is usable after ${vnc_waited}s"
    }
 }
 
