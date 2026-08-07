@@ -8796,6 +8796,22 @@ set mail_body "$mail_body check is running on host \"$local_host\" architecture 
 set mail_body "$mail_body product root directory is \"$ts_config(product_root)\"\n-------\n"
 set mail_body "$mail_body SGE CELL is  \"$ts_config(cell)\"\n-------\n"
 
+# check / start vnc server if configured
+#
+# Has to happen BEFORE the action dispatch below. Every action -- check,
+# category, all, fullrun, ... -- ends in its own testsuite_shutdown, so a hook
+# placed after them is only reached by the interactive menu path. It used to sit
+# ~200 lines further down, which meant that "vncserver <host>:<display>" set
+# CHECK_DISPLAY_OUTPUT for a run but never created the display: the X11 checks
+# then failed with "Can't open display", the one symptom the option exists to
+# prevent.
+#
+# Placed here because it needs the configuration and CHECK_USER (loaded above by
+# source_tcl_files) and must precede anything that runs a test.
+if {$CHECK_START_VNCSERVER} {
+   check_start_vncserver
+}
+
 if {$no_action == 1} {
   puts "CHECK_GROUP=$CHECK_GROUP"
   puts "No action flag is set -> exit 1"
@@ -9172,10 +9188,6 @@ proc ctrlc {} {
 
 trap ctrlc { SIGINT }
 
-# check / start vnc server if configured
-if {$CHECK_START_VNCSERVER} {
-   check_start_vncserver
-}
 
 if {$do_nomain == 0} {
   if {$daemon_debug != 0} {

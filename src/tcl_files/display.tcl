@@ -18,8 +18,21 @@
 ###########################################################################
 #___INFO__MARK_END_NEW__
 
+## @brief is CHECK_DISPLAY_OUTPUT a display we can actually open?
+#
+# Opens a real X client (xterm) rather than probing a port, as the test user and
+# as root -- qrsh X11 forwarding needs both.
+#
+# prg_exit_state has to be BOTH declared global and passed to start_remote_prog
+# as its fifth argument (the name of the variable that receives the exit state).
+# Without that this proc read a variable it never bound, i.e. whatever an earlier
+# unrelated remote command had left in the global, and reported that as the
+# verdict of the xterm. A stale 0 made check_start_vncserver believe a server was
+# "already running", skip starting one, and let the run continue against a
+# display that does not exist -- the X11 checks then fail much later with
+# "Can't open display", which is the symptom this proc exists to prevent.
 proc check_display {} {
-     global CHECK_DISPLAY_OUTPUT CHECK_USER
+     global CHECK_DISPLAY_OUTPUT CHECK_USER prg_exit_state
 
      if { [ string compare $CHECK_DISPLAY_OUTPUT "undefined" ] == 0 } {
         puts "no debug x display set"
@@ -35,7 +48,7 @@ proc check_display {} {
      set local_host [gethostname]
      set xterm_path [get_binary_path $local_host "xterm"]
 
-     start_remote_prog $local_host "$CHECK_USER" $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e sleep 1"
+     start_remote_prog $local_host "$CHECK_USER" $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e sleep 1" prg_exit_state
      if { $prg_exit_state != 0 } {
          puts "can't open display $CHECK_DISPLAY_OUTPUT as user $CHECK_USER from host $local_host"
          return -1
@@ -44,7 +57,7 @@ proc check_display {} {
      if { [ have_root_passwd ] != 0 } {
          set_root_passwd
      }
-     start_remote_prog "$local_host" "root" $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e sleep 1"
+     start_remote_prog "$local_host" "root" $xterm_path "-bg darkolivegreen -fg navajowhite -sl 5000 -sb -j -display $CHECK_DISPLAY_OUTPUT -e sleep 1" prg_exit_state
      if { $prg_exit_state != 0 } {
          puts "can't open display $CHECK_DISPLAY_OUTPUT as user root from host $local_host"
          return -1

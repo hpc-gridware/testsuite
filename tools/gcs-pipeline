@@ -318,6 +318,49 @@ if [ -n "${CS_TIMEOUT_FACTOR:-}" ]; then
    args="$args timeout_factor $CS_TIMEOUT_FACTOR"
 fi
 
+# An X display for the checks that need one.
+#
+# "vncserver <host>:<display>" makes check.exp point CHECK_DISPLAY_OUTPUT at that
+# display and start a VNC server there if none answers -- it probes first (as the
+# test user AND as root, which is what qrsh X11 forwarding needs) and only starts
+# one when the probe fails, so it is idempotent.
+#
+# Why this is on for runners: without a display CHECK_DISPLAY_OUTPUT stays
+# "undefined" and nothing says so. The X11 dependent checks then fail deep inside
+# their own logic with messages that never mention X -- measured 2026-08-07, of
+# 13 "real defects" in a 28 runner full run, 8 were nothing but the missing
+# display (qrsh_ijs_x11_cookie_ordering, display_test, advance_reservation,
+# qmod/reschedule, job_environment_basic, pe/allocation_rule and two issuezilla
+# checks) and cost an evening of triage.
+#
+# One display PER RUNNER: CHECK_DISPLAY_OUTPUT is global within a run, so a
+# single X server shared by 28 clusters puts the cookie ordering and X11
+# forwarding checks in contention with each other.
+#
+# Numbering starts at 50 to stay clear of :0 (the real session) and of the low
+# numbers a developer's own vncserver occupies.
+#
+# The server runs on the cluster's master host, which is where vncserver is
+# installed -- the execution hosts do not have it, and do not need it: they only
+# connect to the display.
+#
+# GCS_VNC=0 turns it off, GCS_VNC=1 turns it on for a non-runner pipeline too.
+if [ -z "${GCS_VNC:-}" ]; then
+   case $CS_PIPELINE in
+      *-r[0-9]|*-r[0-9][0-9]) GCS_VNC=1 ;;
+      *)                      GCS_VNC=0 ;;
+   esac
+fi
+if [ "$GCS_VNC" = "1" ]; then
+   _vnc_idx=$(printf '%s\n' "$CS_PIPELINE" | sed -n 's/.*-r\([0-9][0-9]*\)$/\1/p')
+   [ -n "$_vnc_idx" ] || _vnc_idx=0
+   _vnc_display=$(( ${GCS_VNC_DISPLAY_BASE:-50} + _vnc_idx ))
+   _vnc_host=$(read_sav_value "$CS_HOME/config/defaults-${CS_PIPELINE}.sav" master_host)
+   [ -n "$_vnc_host" ] || _vnc_host=$(hostname -s)
+   echo "X DISPLAY         = $_vnc_host:$_vnc_display (vncserver, started if not running)"
+   args="$args vncserver $_vnc_host:$_vnc_display"
+fi
+
 case $action in
    all)
       [ -n "$test_unit" ] || { printf 'all: test_unit is required\n\n' >&2; usage; }
