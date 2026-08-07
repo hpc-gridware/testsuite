@@ -333,23 +333,55 @@ fi
 # advance_reservation, qmod/reschedule, job_environment_basic,
 # pe/allocation_rule and two issuezilla checks) and cost an evening of triage.
 #
-# One SHARED display, not one per runner. The per-runner "vncserver" variant
-# (one server each, :51..:78) is deliberately not used: an X server drops its
-# own local host from the access list within seconds of starting, repeatedly and
-# not only at startup, and once that happens the display cannot be repaired --
-# a local client needs a cookie or host access (both gone) and a remote client
-# is refused outright ("must be on local machine to add or remove hosts").
-# Measured 2026-08-07 across four attempts: 26 of 28 displays lost the grant,
-# and mid-run loss turned a full run into 85 aborts and 2550 "not usable yet"
-# waits. Keeping the server count at one keeps that failure mode out of the run,
-# at the price of putting the X11 checks on a shared display.
+# A POOL of long-lived displays, not one per runner and not one for all.
 #
-# GCS_DISPLAY overrides the display; set it empty to pass none at all.
-GCS_DISPLAY="${GCS_DISPLAY-h047:10}"
+# One per runner does not work: an X server drops its own local host from the
+# access list within seconds, repeatedly, and once gone the display cannot be
+# repaired (a local client needs a cookie or host access - both gone - and a
+# remote client is refused outright). Measured 2026-08-07: 26 of 28 displays lost
+# it, and mid-run loss turned a full run into 85 aborts and 2550 "not usable yet"
+# waits.
+#
+# The pool avoids that not by being smaller but by how gcs-displays builds it:
+# access control is turned OFF rather than nine hosts being granted, so there is
+# no grant left to drop; the displays are started sequentially, so the concurrent
+# "xauth add" that clobbered ~/.Xauthority cannot happen; and they are long-lived,
+# so no run pays the startup race at all. See tools/gcs-displays.
+#
+# Runners are grouped: r1..r4 share the first display, r5..r8 the second, and so
+# on. GCS_RUNNERS_PER_DISPLAY and GCS_DISPLAY_BASE must match what gcs-displays
+# was started with - the arithmetic below is the same in both.
+#
+# Sharing itself is cheap: a 28 runner full run on a SINGLE display passed all
+# 244 entries with zero display errors, including qrsh_ijs_x11_cookie_ordering.
+# The pool is headroom for the X11 forwarding checks, not a fix for a measured
+# contention problem.
+#
+# GCS_DISPLAY overrides the computed display; set it empty to pass none at all.
+_disp_base=${GCS_DISPLAY_BASE:-51}
+_disp_per=${GCS_RUNNERS_PER_DISPLAY:-4}
 case $CS_PIPELINE in
    *-r[0-9]|*-r[0-9][0-9])
+      if [ -z "${GCS_DISPLAY+set}" ]; then
+         _r_idx=$(printf '%s\n' "$CS_PIPELINE" | sed -n 's/.*-r\([0-9][0-9]*\)$/\1/p')
+         [ -n "$_r_idx" ] || _r_idx=1
+         _r_host=$(read_sav_value "$CS_HOME/config/defaults-${CS_PIPELINE}.sav" master_host)
+         [ -n "$_r_host" ] || _r_host=$(hostname -s)
+         GCS_DISPLAY="$_r_host:$(( _disp_base + (_r_idx - 1) / _disp_per ))"
+      fi
+
       if [ -n "$GCS_DISPLAY" ]; then
-         echo "X DISPLAY         = $GCS_DISPLAY (shared, must already be running)"
+         # Fail FAST and loudly. Without this the run starts anyway and every
+         # X11 dependent check fails one by one, which is how a missing display
+         # cost an evening of triage on 2026-08-06: 8 of 13 "real defects" of
+         # that full run were nothing but the display not being there.
+         if xdpyinfo -display "$GCS_DISPLAY" >/dev/null 2>&1; then
+            echo "X DISPLAY         = $GCS_DISPLAY (shared by $_disp_per runners)"
+         else
+            echo "X DISPLAY         = $GCS_DISPLAY -- NOT REACHABLE" >&2
+            echo "  start the pool first:  gcs-displays start" >&2
+            exit 1
+         fi
          args="$args display $GCS_DISPLAY"
       fi
       ;;

@@ -1,0 +1,165 @@
+#!/bin/sh
+#
+# gcs-displays -- a small pool of long-lived X displays for the testsuite runners.
+#
+# WHY THIS EXISTS, and why it does NOT use the testsuite's own "vncserver" option:
+#
+# The testsuite can start a display itself (check.exp "vncserver <host>:<n>",
+# CS-2526). Driving that per runner was measured on 2026-08-07 and does not work
+# at scale, for two independent reasons:
+#
+#   1. An X server drops its own local host from the xhost access list within
+#      seconds of starting - repeatedly, not only at startup. With 28 displays
+#      created at once, 26 of them held only the 8 remote grants afterwards.
+#      Once it is gone the display cannot be repaired: a local client needs a
+#      cookie (or host access, which is what went missing) and a remote client is
+#      refused outright with "must be on local machine to add or remove hosts".
+#      Mid-run this turned a full run into 85 aborts and 2550 "not usable yet"
+#      waits.
+#
+#   2. "vncserver" adds the display cookie with "xauth add" on the shared
+#      ~/.Xauthority. 28 of those at once lose updates, so the owner ends up
+#      without a valid cookie for its own displays.
+#
+# This script avoids both, and the important part is HOW - it is not simply
+# "fewer displays":
+#
+#   * ACCESS CONTROL IS TURNED OFF (xhost +) instead of granting nine hosts.
+#     There is then no grant that can be dropped, which removes failure (1)
+#     structurally rather than papering over it with a watchdog. The reference
+#     point is the developer's own :10, which has run for 11 hours with access
+#     control disabled and never lost anything. Acceptable here because the lab
+#     network is trusted (owner, 2026-08-07); do NOT copy this onto a machine
+#     that is not.
+#
+#   * DISPLAYS ARE STARTED SEQUENTIALLY, which removes failure (2).
+#
+#   * THEY ARE LONG-LIVED. Started once, they outlive individual runs, so no test
+#     run ever pays the startup race again.
+#
+# Runners share a display in groups (default 4), so 32 runners need 8 displays.
+# One display for all 32 works too - a 28 runner full run on a single display
+# passed 244 entries with zero display errors - but a pool leaves headroom for
+# the X11 forwarding checks, which are the ones that care about sharing.
+#
+# gcs-pipeline computes which display a runner uses; keep the two in sync via
+# GCS_DISPLAY_BASE and GCS_RUNNERS_PER_DISPLAY.
+
+set -u
+
+BASE=${GCS_DISPLAY_BASE:-51}
+PER=${GCS_RUNNERS_PER_DISPLAY:-4}
+HOST=$(hostname -s)
+
+usage() {
+   cat >&2 <<EOF
+gcs-displays -- long-lived X displays shared by the testsuite runners
+
+  gcs-displays start [<runners>]   start enough displays for <runners> (default 32)
+  gcs-displays stop  [<runners>]   kill them
+  gcs-displays status [<runners>]  one line per display: running, reachable, access control
+
+Environment:
+  GCS_DISPLAY_BASE          first display number (default 51)
+  GCS_RUNNERS_PER_DISPLAY   how many runners share one display (default 4)
+
+The display a runner uses is  BASE + (index - 1) / PER,  the same arithmetic
+gcs-pipeline does. Runner r1..r4 -> :$BASE, r5..r8 -> :$((BASE + 1)), and so on.
+EOF
+   exit 1
+}
+
+# how many displays are needed for N runners
+displays_for() {
+   echo $(( ($1 + PER - 1) / PER ))
+}
+
+# is the display answering AND usable without a cookie?
+#
+# Both halves matter. A server can answer its owner (who holds the cookie) while
+# being unreachable for root and the test users, which is exactly the state that
+# looks healthy and breaks every X11 check. Probing with an empty XAUTHORITY is
+# what those users experience.
+display_usable() {
+   _d=$1
+   _empty=${TMPDIR:-/tmp}/gcs-displays-empty.xauth
+   : > "$_empty" 2>/dev/null || return 1
+   XAUTHORITY="$_empty" DISPLAY="$HOST:$_d" xdpyinfo >/dev/null 2>&1
+}
+
+display_running() {
+   [ -e "/tmp/.X11-unix/X$1" ] && pgrep -f "Xtightvnc :$1\b" >/dev/null 2>&1
+}
+
+start_one() {
+   _d=$1
+
+   if display_usable "$_d"; then
+      echo "  :$_d already up and usable"
+      return 0
+   fi
+
+   if display_running "$_d"; then
+      # running but not usable - almost always the access control state; fix it
+      # rather than restarting, a restart would take the cookie with it
+      echo "  :$_d running but not usable, re-opening access control"
+   else
+      vncserver ":$_d" >/dev/null 2>&1
+      # the server is not accepting connections the instant vncserver returns
+      _i=0
+      while [ $_i -lt 60 ]; do
+         DISPLAY="$HOST:$_d" xdpyinfo >/dev/null 2>&1 && break
+         _i=$((_i + 1))
+         sleep 0.5
+      done
+   fi
+
+   DISPLAY="$HOST:$_d" xhost + >/dev/null 2>&1
+
+   if display_usable "$_d"; then
+      echo "  :$_d ready"
+      return 0
+   fi
+   echo "  :$_d FAILED - not usable without a cookie" >&2
+   return 1
+}
+
+action=${1:-}
+runners=${2:-32}
+case $action in
+   start)
+      n=$(displays_for "$runners")
+      echo "starting $n display(s) for $runners runners ($PER per display), sequentially:"
+      rc=0
+      i=0
+      while [ $i -lt "$n" ]; do
+         start_one $((BASE + i)) || rc=1
+         i=$((i + 1))
+      done
+      exit $rc
+      ;;
+   stop)
+      n=$(displays_for "$runners")
+      i=0
+      while [ $i -lt "$n" ]; do
+         vncserver -kill ":$((BASE + i))" >/dev/null 2>&1 && echo "  :$((BASE + i)) killed"
+         i=$((i + 1))
+      done
+      ;;
+   status)
+      n=$(displays_for "$runners")
+      printf '%-8s %-10s %-10s %s\n' DISPLAY RUNNING USABLE "ACCESS CONTROL"
+      i=0
+      while [ $i -lt "$n" ]; do
+         d=$((BASE + i))
+         display_running "$d" && r=yes || r=no
+         display_usable  "$d" && u=yes || u=NO
+         ac=$(DISPLAY="$HOST:$d" xhost 2>/dev/null | head -1)
+         printf '%-8s %-10s %-10s %s\n' ":$d" "$r" "$u" "${ac:-<unreachable>}"
+         i=$((i + 1))
+      done
+      ;;
+   *)
+      usage
+      ;;
+esac
