@@ -1,0 +1,336 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2438: a pre-9.2 cluster stores its administrative and submit hosts as two
+# flat lists (AH_LIST/SH_LIST). Since 9.2 they ARE the reserved host groups
+# @admin_hosts and @submit_hosts. Upgrading a real cluster means restoring such a
+# backup, so the flat lists of the old release have to arrive inside the reserved
+# groups - not merely in "qconf -sh"/"-ss" output.
+#
+# That distinction is the point of this check. "-sh"/"-ss" would keep answering
+# correctly even if the migration wrote the old flat lists to some other place,
+# because those commands are exactly what chunk 5 reimplemented on top of the
+# groups. Only reading the GROUP shows where the data actually lives, so every
+# assertion below is made twice: once through the classic client interface and
+# once through "qconf -shgrp".
+#
+# Modelled on manop_userset_migration (CS-2394), which does the same for the
+# reserved manager/operator access lists, and shares its cleanup: the check loads
+# a foreign configuration INTO the running cluster, so it must hand back a fresh
+# one.
+#
+# The host lists of the COPIED backup are rewritten before it is loaded, for one
+# reason: EVIDENCE.
+#
+# The names written in are hosts of this cluster that are provably not in
+# "qconf -sh"/"-ss" at that moment, established by reading the lists first. Their
+# presence in the reserved groups afterwards can therefore only be the result of
+# the migration. Keeping the fixture's own names would have rested on the weaker
+# assumption that the installer happens never to add them - true today, but an
+# assumption about a component this check does not control.
+#
+# The fixture's nine names are foreign hosts that do resolve to real machines on
+# this network, so an unmodified load hands them admin and submit rights until
+# the cleanup reinstalls. That is explicitly fine here (owner, 2026-08-07: the
+# lab is safe, making any host an admin or submit host is not a concern) and is
+# NOT why the lists are rewritten - manop_userset_migration loads the same
+# fixture unmodified for exactly that reason.
+#
+# HOW STRONG the evidence is depends on the cluster, and on this one it is thin:
+# host_conf_get_cluster_hosts() minus the current admin (or submit) host list
+# leaves exactly ONE host here. The check therefore asserts a single name per
+# list, not a set. It still fails when the migration does not happen - proven
+# 2026-08-07 by writing an EMPTY admin_hosts file into the copy, which made both
+# views report "1 of 1 hosts ... NOT members of @admin_hosts" while the load
+# itself completed cleanly - but it would not notice a migration that drops SOME
+# hosts and keeps others. Give the cluster more spare hosts and the same code
+# covers that too; nothing here needs changing.
+
+global check_name check_category check_description check_needs
+global check_root_access_needs check_functions check_version_range
+global check_cleanup_function
+
+set check_name              "hgroup_reserved_migration"
+set check_category          "COMPATIBILITY SYSTEM SPOOLING RBAC VERIFIED"
+set check_description(0)    "upgrading a pre-9.2 configuration migrates admin/submit hosts into the reserved host groups (CS-2438)"
+set check_version_range     "9.2.0"
+
+set check_root_access_needs "yes"
+set check_needs             "init_core_system"
+
+set check_cleanup_function  "hgroup_reserved_migration_cleanup"
+
+set check_functions ""
+lappend check_functions "hgroup_reserved_migration_check"
+
+# The pre-9.2 fixture to upgrade from. 9.1.0 is the newest stored backup that
+# still carries flat admin_hosts/submit_hosts files.
+global hgroup_migration_from_version
+set    hgroup_migration_from_version "9.1.0"
+
+## @brief a fresh cluster, because this check loads a foreign configuration.
+proc hgroup_reserved_migration_cleanup {} {
+   installer_reinstall_fresh_cluster
+}
+
+## @brief true if $path exists on $host (as $user).
+proc hgroup_migration_remote_exists {host user path} {
+   global prg_exit_state
+   start_remote_prog $host $user "test" "-e $path" prg_exit_state
+   return [expr {$prg_exit_state == 0}]
+}
+
+## @brief read a host list file of the backup.
+#
+# @return list of host names, empty if the file is missing
+proc hgroup_migration_read_hosts {host user file} {
+   if {![hgroup_migration_remote_exists $host $user $file]} {
+      return {}
+   }
+
+   get_file_content $host $user $file content
+   set hosts {}
+   for {set i 1} {$i <= $content(0)} {incr i} {
+      set line [string trim $content($i)]
+      if {$line != ""} {
+         lappend hosts [resolve_host $line]
+      }
+   }
+   return $hosts
+}
+
+## @brief cluster hosts that are NOT in the given classic list right now.
+#
+# These are the only names whose later presence proves a migration: a host the
+# installer puts there anyway would prove nothing.
+#
+# @param opt "-sh" or "-ss"
+# @return list of host names, possibly empty
+proc hgroup_migration_free_hosts {opt} {
+   set current [hgroup_migration_client_hosts $opt]
+
+   set free {}
+   foreach h [host_conf_get_cluster_hosts] {
+      set r [resolve_host $h]
+      if {[lsearch -exact $current $r] < 0 && [lsearch -exact $free $r] < 0} {
+         lappend free $r
+      }
+   }
+   return $free
+}
+
+## @brief replace a host list file of the backup copy.
+#
+# @param host, user where to write
+# @param file       full path inside the COPIED backup
+# @param hosts      the names to write, one per line
+proc hgroup_migration_write_hosts {host user file hosts} {
+   set n 0
+   foreach h $hosts {
+      incr n
+      set content($n) $h
+   }
+   set content(0) $n
+   write_remote_file $host $user $file content
+}
+
+## @brief run upgrade_config.sh on the copied backup.
+#
+# Mirrors manop_upgrade_config() of manop_userset_migration - keep in sync.
+#
+# @return 1 on success, 0 on failure
+proc hgroup_migration_upgrade_config {backup_dir} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER prg_exit_state
+
+   set log_file [get_tmp_file_name]
+   set hostname [installer_get_hostname]
+   installer_set_env_for_upgrade env_array
+
+   set upgrade_script "$ts_config(product_root)/util/upgrade_modules/upgrade_config.sh"
+   set arguments "$backup_dir $log_file -log I"
+   set result [start_remote_prog $hostname $CHECK_USER $upgrade_script $arguments \
+                                 prg_exit_state 300 0 $ts_config(product_root) env_array]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "upgrade_config.sh failed, see log file $log_file for details:\n$result"
+      return 0
+   }
+   return 1
+}
+
+## @brief the direct entries of a reserved host group, resolved.
+#
+# Read through "qconf -shgrp", NOT through "-sh"/"-ss": the whole question is
+# whether the data arrived in the GROUP. "-shgrp" wraps long host lists onto
+# continuation lines ending in a backslash, which have to be unwrapped.
+#
+# @param group the group name including the leading '@'
+# @return sorted list of host names
+proc hgroup_migration_group_hosts {group} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER prg_exit_state
+
+   set out [start_sge_bin "qconf" "-shgrp $group" $ts_config(master_host) $CHECK_USER prg_exit_state]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qconf -shgrp $group failed with exit state $prg_exit_state:\n$out"
+      return {}
+   }
+
+   set hosts {}
+   foreach line [split $out "\n"] {
+      set line [string map {"\\" " "} $line]
+      set line [string trim $line]
+      if {[string match "hostlist*" $line]} {
+         set line [string range $line 8 end]
+      } elseif {[string match "group_name*" $line]} {
+         continue
+      }
+      foreach name [split $line] {
+         set name [string trim $name]
+         if {$name != "" && $name != "NONE"} {
+            lappend hosts [resolve_host $name]
+         }
+      }
+   }
+   return [lsort $hosts]
+}
+
+## @brief the classic client view, resolved.
+#
+# @param opt "-sh" or "-ss"
+# @return sorted list of host names
+proc hgroup_migration_client_hosts {opt} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER prg_exit_state
+
+   set out [start_sge_bin "qconf" $opt $ts_config(master_host) $CHECK_USER prg_exit_state]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qconf $opt failed with exit state $prg_exit_state:\n$out"
+      return {}
+   }
+
+   set hosts {}
+   foreach line [split [string trim $out] "\n"] {
+      set line [string trim $line]
+      if {$line != ""} {
+         lappend hosts [resolve_host $line]
+      }
+   }
+   return [lsort $hosts]
+}
+
+## @brief assert that every expected host arrived, in both views.
+#
+# @param expected hosts the backup carried
+# @param group    reserved group name
+# @param opt      classic client option showing the same list
+# @return none (reports failures via ts_log_severe)
+proc hgroup_migration_assert {expected group opt} {
+   set in_group  [hgroup_migration_group_hosts $group]
+   set in_client [hgroup_migration_client_hosts $opt]
+
+   set missing_group {}
+   set missing_client {}
+   foreach h $expected {
+      if {[lsearch -exact $in_group $h] < 0} {
+         lappend missing_group $h
+      }
+      if {[lsearch -exact $in_client $h] < 0} {
+         lappend missing_client $h
+      }
+   }
+
+   if {[llength $missing_group] > 0} {
+      ts_log_severe "after the upgrade [llength $missing_group] of [llength $expected] hosts of the\
+                     pre-9.2 backup are NOT members of $group - the flat list was not migrated into\
+                     the reserved host group.\nmissing: $missing_group\nin group: $in_group"
+   }
+   if {[llength $missing_client] > 0} {
+      ts_log_severe "after the upgrade [llength $missing_client] of [llength $expected] hosts of the\
+                     pre-9.2 backup are not reported by \"qconf $opt\".\nmissing: $missing_client\
+                     \nreported: $in_client"
+   }
+
+   # the two views must agree - they are the same data through two interfaces,
+   # and a difference means one of them is reading somewhere else
+   if {[llength $missing_group] == 0 && [llength $missing_client] == 0} {
+      foreach h $expected {
+         if {[lsearch -exact $in_group $h] >= 0 && [lsearch -exact $in_client $h] < 0} {
+            ts_log_severe "$h is a member of $group but \"qconf $opt\" does not report it"
+         }
+      }
+   }
+}
+
+## @brief upgrade a pre-9.2 configuration and check where the host lists landed.
+proc hgroup_reserved_migration_check {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER hgroup_migration_from_version prg_exit_state
+
+   set host $ts_config(master_host)
+
+   set fixture [installer_get_backup_dir $hgroup_migration_from_version]
+   if {![hgroup_migration_remote_exists $host $CHECK_USER $fixture]} {
+      ts_log_severe "backup fixture $hgroup_migration_from_version not found at $fixture -\
+                     cannot test the host list migration"
+      return
+   }
+
+   # the fixture must really be a pre-9.2 backup, i.e. carry the FLAT lists -
+   # that is what the migration is supposed to convert
+   if {[llength [hgroup_migration_read_hosts $host $CHECK_USER "$fixture/admin_hosts"]] == 0 ||
+       [llength [hgroup_migration_read_hosts $host $CHECK_USER "$fixture/submit_hosts"]] == 0} {
+      ts_log_severe "the fixture $fixture carries no admin_hosts/submit_hosts - it is not a pre-9.2\
+                     backup, and a pass would prove nothing"
+      return
+   }
+
+   set admin_expected  [hgroup_migration_free_hosts "-sh"]
+   set submit_expected [hgroup_migration_free_hosts "-ss"]
+   if {[llength $admin_expected] == 0 || [llength $submit_expected] == 0} {
+      ts_log_config "no cluster host is free of the admin or submit host list - without one the\
+                     migration cannot be told apart from what the installer sets up - skipping test"
+      return
+   }
+
+   # work on a copy: upgrade_config.sh rewrites the backup in place
+   set bckp_dir [get_tmp_directory_name $host]
+   copy_directory $fixture $bckp_dir
+
+   hgroup_migration_write_hosts $host $CHECK_USER "$bckp_dir/admin_hosts"  $admin_expected
+   hgroup_migration_write_hosts $host $CHECK_USER "$bckp_dir/submit_hosts" $submit_expected
+
+   if {![hgroup_migration_upgrade_config $bckp_dir]} {
+      return
+   }
+   installer_load_config $bckp_dir
+
+   hgroup_migration_assert $admin_expected  "@admin_hosts"  "-sh"
+   hgroup_migration_assert $submit_expected "@submit_hosts" "-ss"
+
+   # the reserved groups must still be host GROUPS, not something the migration
+   # replaced - qconf -shgrpl has to list them
+   set out [start_sge_bin "qconf" "-shgrpl" $ts_config(master_host) $CHECK_USER prg_exit_state]
+   foreach group {@admin_hosts @submit_hosts} {
+      if {[string first $group $out] < 0} {
+         ts_log_severe "$group is not listed by qconf -shgrpl after the upgrade:\n$out"
+      }
+   }
+}
