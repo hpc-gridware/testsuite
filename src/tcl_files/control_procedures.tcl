@@ -377,6 +377,44 @@ proc check_correct_testsuite_setup_user { error_text } {
 #  SEE ALSO
 #     ???/???
 #*******************************************************************************
+#****** control_procedures/vi_escape_replacement() ****************************
+#  NAME
+#     vi_escape_replacement() -- quote text for the replacement half of ":%s///"
+#
+#  FUNCTION
+#     In the REPLACEMENT part of an ex substitute four characters are not
+#     literal:
+#
+#        \   introduces an escape or a backreference
+#        &   stands for the whole matched text
+#        ~   stands for the PREVIOUS substitution's replacement text
+#        /   terminates the replacement (the delimiter used here)
+#
+#     A value containing one of them is silently mangled instead of being
+#     written as given. That is what broke the qrsh IJS escape-character
+#     checks: "ijs_escape_char=~" reached vi as a bare "~", which expanded to
+#     whatever the previous substitution had inserted. The configuration never
+#     got the requested value, and the check then sat in
+#     set_config_and_propagate until it timed out, reporting "setup failed
+#     (timeout for config change ...)" on every host -- a message that points
+#     at propagation rather than at the value that was never written.
+#
+#     Only the ":%s///" path needs this. The other branch appends the line in
+#     vi INSERT mode ("A\n..."), where all four characters are literal.
+#
+#     Backslash MUST be replaced first: otherwise the backslashes introduced
+#     for the other three would be escaped a second time.
+#
+#  INPUTS
+#     s - the literal text that is meant to end up in the file
+#
+#  RESULT
+#     the same text, safe to interpolate into ":%s/pattern/<here>/"
+#*******************************************************************************
+proc vi_escape_replacement {s} {
+   return [string map [list "\\" "\\\\" "&" "\\&" "~" "\\~" "/" "\\/"] $s]
+}
+
 proc build_vi_command {change_array {current_array ""} {fixed_attribute_format 1}} {
    upvar $change_array chgar
 
@@ -405,8 +443,7 @@ proc build_vi_command {change_array {current_array ""} {fixed_attribute_format 1
                  lappend vi_commands ":%s/^$elem .*$/#/\n"
               } else {
                  # ... change config entry
-                 set newVal1 [split $newVal {/}]
-                 set newVal [join $newVal1 {\/}]
+                 set newVal [vi_escape_replacement $newVal]
                  lappend vi_commands ":%s/^$elem .*$/$elem  $newVal/\n"
               }
            }
@@ -426,8 +463,7 @@ proc build_vi_command {change_array {current_array ""} {fixed_attribute_format 1
             if {$fixed_attribute_format} {
                # format of qconf on fixed attribute objects, like exechost, pe, ...
                # here the editor contains all lines of the object, we replace the values
-               set newVal1 [split $newVal {/}]
-               set newVal [join $newVal1 {\/}]
+               set newVal [vi_escape_replacement $newVal]
                lappend vi_commands ":%s/^$elem .*$/$elem  $newVal/\n"
             } else {
                # format of qconf on variable attribute objects, the local config
