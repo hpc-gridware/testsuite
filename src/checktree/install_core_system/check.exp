@@ -68,6 +68,11 @@ if {$install_mode == "automatic"} {
 }
 
 lappend check_functions "kill_running_system"
+if {!$check_use_installed_system} {
+   # postgres spooling keeps the cluster state in a database, which has to exist
+   # before inst_qmaster.sh runs - a no-op for the other spooling methods
+   lappend check_functions "install_spool_database"
+}
 if {$install_mode == "automatic" && !$check_use_installed_system} {
    lappend check_functions "create_autoinst_config"
 }

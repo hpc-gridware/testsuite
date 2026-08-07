@@ -323,30 +323,27 @@ proc installer_create_and_compare_backup {{orig_backup_dir ""}} {
    return $prg_exit_state
 }
 
-## @brief look up a field of the postgres-spool ts_db_config entry
+## @brief look up a connection parameter for postgres spooling
 #
 # Helper for the interactive installer's postgres-spooling prompts.
-# Resolves the ts_db_config entry name from ts_config(spool_database)
-# (default spool_<commd_port>, matching the auto-installer path's
-# convention) and returns the requested field's value.
 #
-# @param field  ts_db_config sub-field name (e.g., dbhost, dbport,
-#               dbname, username, password)
-# @return       the field's value, or empty string when the entry or
-#               field is absent (lets the caller decide whether to
-#               treat absence as default-accept or as an error)
+# CS-2522: host and port come from the base database named by
+# ts_config(spool_database), while the database name and the user are this
+# cluster's own spool_<commd_port> and the password is the base entry's -
+# see the service functions in tcl_files/sge_spooling.tcl.
+#
+# @param field  one of dbhost, dbport, dbname, username, password
+# @return       the value, or empty string when it is not configured (lets the
+#               caller decide whether to treat absence as default-accept or as
+#               an error)
 ##
 proc postgres_install_get_field {field} {
-   global ts_config ts_db_config
-
-   set entry $ts_config(spool_database)
-   if {$entry == ""} {
-      set entry "spool_$ts_config(commd_port)"
+   switch -exact $field {
+      "dbname"   { return [spool_database_get_name] }
+      "username" { return [spool_database_get_user] }
+      "password" { return [spool_database_get_password] }
+      default    { return [spool_database_get_base_field $field] }
    }
-   if {[info exists ts_db_config($entry,$field)]} {
-      return $ts_db_config($entry,$field)
-   }
-   return ""
 }
 
 ## @brief perform an interactive upgrade from a backup

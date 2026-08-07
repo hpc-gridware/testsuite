@@ -153,3 +153,148 @@ proc get_spooled_usage_names {object_type object_name list_name} {
       return [spool_classic_usage_names $object_type $object_name $list_name]
    }
 }
+
+# ---------------------------------------------------------------------------
+# CS-2522: per cluster PostgreSQL spooling database
+#
+# ts_config(spool_database) names a *base* database, exactly as
+# arco_config(database) does for the dbwriter accounting database. The database
+# this cluster actually spools into is derived from the base entry and is called
+# spool_<commd_port>, so parallel clusters on one PostgreSQL server never collide.
+# The role carries the same name and reuses the base entry's password.
+#
+# The base entry's user performs the DDL and therefore needs CREATEDB and
+# CREATEROLE (or has to be a superuser). sge_qmaster itself connects as the
+# per cluster role - inst_qmaster.sh requires database and role to exist and
+# only runs "spoolinit init" to create the config and jobs tables.
+# ---------------------------------------------------------------------------
+
+##
+# @brief Name of the ts_db_config entry holding the base database.
+#
+# @return the entry name, or "" when postgres spooling is not configured
+proc spool_database_get_base_entry {} {
+   global ts_config
+
+   if {![info exists ts_config(spool_database)]} {
+      return ""
+   }
+   set entry $ts_config(spool_database)
+   if {$entry == "none"} {
+      return ""
+   }
+   return $entry
+}
+
+##
+# @brief Read one field of the base database entry.
+#
+# @param field ts_db_config sub-field name, e.g. dbhost, dbport, dbname,
+#              username, password
+# @return the field's value, or "" when the entry or the field is absent
+proc spool_database_get_base_field {field} {
+   global ts_db_config
+
+   set entry [spool_database_get_base_entry]
+   if {$entry == "" || ![info exists ts_db_config($entry,$field)]} {
+      return ""
+   }
+   return $ts_db_config($entry,$field)
+}
+
+##
+# @brief Name of this cluster's spooling database.
+#
+# @return spool_<commd_port>
+proc spool_database_get_name {} {
+   global ts_config
+
+   return "spool_$ts_config(commd_port)"
+}
+
+##
+# @brief Name of the role sge_qmaster connects as. Same as the database name.
+#
+# @return spool_<commd_port>
+proc spool_database_get_user {} {
+   return [spool_database_get_name]
+}
+
+##
+# @brief Password of the per cluster role - the base database's password.
+#
+# @return the password, or "" when none is configured
+proc spool_database_get_password {} {
+   return [spool_database_get_base_field "password"]
+}
+
+##
+# @brief Drop and re-create this cluster's spooling database and its role.
+#
+# Called before the sge_qmaster installation. Dropping first makes the step
+# idempotent and gives every run a clean database, which is what the classic and
+# berkeleydb spooling methods get for free by deleting $SGE_ROOT/$SGE_CELL.
+#
+# psql runs on the database host rather than the master host: the database host
+# is guaranteed to have psql installed, while the master host may not even have
+# a postgres client. The password of the base user is passed via PGPASSWORD so
+# it does not show up on the process command line.
+#
+# @return 0 on success, -1 on error
+proc spool_database_init {} {
+   global ts_config CHECK_USER
+
+   if {$ts_config(spooling_method) != "postgres"} {
+      return 0
+   }
+
+   set entry [spool_database_get_base_entry]
+   if {$entry == ""} {
+      ts_log_severe "spooling_method=postgres but ts_config(spool_database) does not name a base database"
+      return -1
+   }
+
+   set base_host [spool_database_get_base_field "dbhost"]
+   if {$base_host == ""} {
+      ts_log_severe "no ts_db_config entry \"$entry\" - cannot create the spooling database"
+      return -1
+   }
+   set base_port [spool_database_get_base_field "dbport"]
+   set base_name [spool_database_get_base_field "dbname"]
+   set base_user [spool_database_get_base_field "username"]
+   set base_pw   [spool_database_get_base_field "password"]
+
+   set db_name [spool_database_get_name]
+   set db_user [spool_database_get_user]
+   # single quotes inside an SQL string literal are escaped by doubling them
+   set db_pw [string map {' ''} [spool_database_get_password]]
+
+   ts_log_fine "creating spooling database $db_name (role $db_user) on $base_host:$base_port"
+
+   # Every statement gets its own -c. psql wraps several statements passed in one
+   # -c into a single transaction, and CREATE/DROP DATABASE cannot run inside a
+   # transaction block. The order matters as well: the database has to go before
+   # the role that owns it, and sessions left behind by a previous run would make
+   # DROP DATABASE fail, so they are terminated first.
+   set statements {}
+   lappend statements "SELECT pg_terminate_backend(pid) FROM pg_stat_activity\
+                       WHERE datname = '$db_name' AND pid <> pg_backend_pid()"
+   lappend statements "DROP DATABASE IF EXISTS $db_name"
+   lappend statements "DROP ROLE IF EXISTS $db_user"
+   lappend statements "CREATE ROLE $db_user LOGIN PASSWORD '$db_pw'"
+   lappend statements "CREATE DATABASE $db_name OWNER $db_user"
+
+   set args "--no-password -h $base_host -p $base_port -d $base_name -U $base_user -v ON_ERROR_STOP=1"
+   foreach statement $statements {
+      append args " -c \"$statement\""
+   }
+
+   set envlist(PGPASSWORD) $base_pw
+   set output [start_remote_prog $base_host $CHECK_USER "psql" $args prg_exit_state 60 0 "" envlist 1 0 0]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "creating the spooling database $db_name failed:\n$output"
+      return -1
+   }
+
+   return 0
+}

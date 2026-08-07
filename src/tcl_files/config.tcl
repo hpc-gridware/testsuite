@@ -4003,15 +4003,24 @@ proc config_testsuite_spooling_method { only_check name config_array } {
 
 #****** config/config_testsuite_spool_database() *******************************
 #  NAME
-#     config_testsuite_spool_database() -- ts_db_config entry name for PG spool
+#     config_testsuite_spool_database() -- ts_db_config entry of the base database
 #
 #  SYNOPSIS
 #     config_testsuite_spool_database { only_check name config_array }
 #
 #  FUNCTION
-#     Names the ts_db_config entry that supplies the PG host/port/dbname/user
-#     used to write the auto-install template and to drive the
-#     spooling-method tests.
+#     Names the ts_db_config entry holding the *base* database, in the same way
+#     arco_config(database) does for the dbwriter accounting database. It can be
+#     the very same database as the one used for arco.
+#
+#     The database this cluster spools into is not this one: it is derived as
+#     spool_<commd_port> and created by install_spool_database() before the
+#     qmaster installation, together with a role of the same name that reuses
+#     the base entry's password. Only host and port are taken from the base
+#     entry at runtime. See the service functions in tcl_files/sge_spooling.tcl.
+#
+#     The base entry's user performs the DROP/CREATE and therefore needs
+#     CREATEDB and CREATEROLE privileges, or has to be a superuser.
 #
 #     When spooling_method=postgres the value is mandatory and MUST resolve
 #     to an existing postgres-typed entry in ts_db_config(databaselist);
@@ -4028,8 +4037,11 @@ proc config_testsuite_spool_database { only_check name config_array } {
    global ts_db_config
    upvar $config_array config
 
-   set help_text { "Name of the ts_db_config entry that holds the PostgreSQL"
-                   "host / port / dbname / user used for postgres spooling."
+   set help_text { "Name of the ts_db_config entry holding the *base* PostgreSQL"
+                   "database - may be the same one you use for arco. The"
+                   "cluster spools into a database of its own, spool_<port>,"
+                   "created automatically before the qmaster installation."
+                   "The base entry's user needs CREATEDB and CREATEROLE."
                    "Mandatory when spooling_method=postgres; choose one of"
                    "the postgres-typed entries from your database"
                    "configuration. Use \"none\" for non-postgres spooling." }

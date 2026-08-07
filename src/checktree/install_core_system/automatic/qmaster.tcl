@@ -196,33 +196,24 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
 
    # PostgreSQL spooling: emit the SPOOLING_PG_* template variables so
    # inst_sge -auto can build the libpq conninfo and (optionally) the
-   # .pgpass file. Connection parameters come from a ts_db_config entry;
-   # the entry name defaults to spool_<commd_port> (parallel to
-   # arco_<commd_port> for the dbwriter accounting database) but can be
-   # overridden via ts_config(spool_database). Missing entry → log and
-   # bail cleanly so the run does not silently fall back to wrong
-   # credentials.
+   # .pgpass file. Host and port come from the base database named by
+   # ts_config(spool_database); the database and the role are this cluster's
+   # own spool_<commd_port>, created by install_spool_database() before the
+   # installation (parallel to arco_<commd_port> for the dbwriter accounting
+   # database). Missing base entry -> log and bail cleanly so the run does not
+   # silently fall back to wrong credentials.
    if {$ts_config(spooling_method) == "postgres"} {
-      global ts_db_config
-
-      set spool_db_entry $ts_config(spool_database)
-      if {$spool_db_entry == ""} {
-         set spool_db_entry "spool_$ts_config(commd_port)"
-      }
-
-      if {![info exists ts_db_config($spool_db_entry,dbhost)]} {
-         ts_log_config "spooling_method=postgres but ts_db_config entry \"$spool_db_entry\" is missing — postgres install cannot proceed"
+      set pg_host [spool_database_get_base_field "dbhost"]
+      if {$pg_host == ""} {
+         ts_log_config "spooling_method=postgres but ts_config(spool_database) does not resolve to a\
+                        ts_db_config entry - postgres install cannot proceed"
          return -1
       }
 
-      set pg_host     $ts_db_config($spool_db_entry,dbhost)
-      set pg_port     $ts_db_config($spool_db_entry,dbport)
-      set pg_dbname   $ts_db_config($spool_db_entry,dbname)
-      set pg_user     $ts_db_config($spool_db_entry,username)
-      set pg_password ""
-      if {[info exists ts_db_config($spool_db_entry,password)]} {
-         set pg_password $ts_db_config($spool_db_entry,password)
-      }
+      set pg_port     [spool_database_get_base_field "dbport"]
+      set pg_dbname   [spool_database_get_name]
+      set pg_user     [spool_database_get_user]
+      set pg_password [spool_database_get_password]
 
       append auto_config_content "SPOOLING_PG_HOST=\"$pg_host\"\n"
       append auto_config_content "SPOOLING_PG_PORT=\"$pg_port\"\n"
