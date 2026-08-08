@@ -414,13 +414,27 @@ cmd_health() {
     root="$(read_sav_value "$cfg" product_root)"
     port="$(read_sav_value "$cfg" commd_port)"
     [ -d "$root/bin" ] || { info "  r$i: no installation -- skipped"; continue; }
-    arch="$("$root/util/arch" 2>/dev/null)"
+    # `|| true` on every probe command, and it is not cosmetic. This script runs
+    # under `set -euo pipefail`, and `var="$(cmd | ...)"` takes the pipeline's
+    # status as the assignment's status -- so a cluster that refuses the submit
+    # kills the whole probe on the spot. The guard on the next line never runs,
+    # nothing is printed, and everything gathered so far is discarded.
+    #
+    # That is exactly what happened on 2026-08-08: r22 answered
+    # `denied: host "h047" is no submit host`, and `health 32` returned a bare
+    # header with status 1 -- indistinguishable from a probe that found nothing.
+    # A health check whose whole purpose is to report broken clusters must not go
+    # silent on the first broken cluster it meets.
+    arch="$("$root/util/arch" 2>/dev/null)" || true
+    if [ -z "$arch" ]; then
+      info "  r$i: cannot determine arch -- skipped"; rc=1; continue
+    fi
     for h in $hosts; do
       jid="$(SGE_ROOT="$root" SGE_CELL=default SGE_QMASTER_PORT="$port" \
              SGE_EXECD_PORT="$((port + 1))" \
              "$root/bin/$arch/qsub" -b y -l hostname="$h" -l h_rt="$HEALTH_LIMIT" \
              -o /dev/null -e /dev/null sleep 300 2>/dev/null \
-             | grep -oE '[0-9]+' | head -1)"
+             | grep -oE '[0-9]+' | head -1)" || true
       [ -n "$jid" ] && probes+=("$i $h $jid") || { info "  r$i/$h: qsub failed"; rc=1; }
     done
   done
@@ -434,17 +448,28 @@ cmd_health() {
   # prints every probe.
   local ok=0
   [ -n "${GCS_HEALTH_VERBOSE:-}" ] && printf '%-8s %-16s %-10s %s\n' RUNNER HOST JOB RESULT
+  # No probe got submitted at all -- say so rather than reporting "0 of 0 ok",
+  # which reads like a clean result.
+  if [ "${#probes[@]}" -eq 0 ]; then
+    info "  no cluster accepted a probe job -- nothing could be checked"
+    return 1
+  fi
+
   for p in "${probes[@]}"; do
     read -r i h jid <<< "$p"
     cfg="$(runner_root "$line" "$i")/config/defaults-$(runner_name "$line" "$i").sav"
     root="$(read_sav_value "$cfg" product_root)"
     port="$(read_sav_value "$cfg" commd_port)"
-    arch="$("$root/util/arch" 2>/dev/null)"
+    # Same reason as above: under `set -euo pipefail` a failing qstat would end
+    # the evaluation here, and the probes already submitted would never be
+    # reported. A cluster that dies between submit and check is a finding, not a
+    # reason to stop looking at the other 31.
+    arch="$("$root/util/arch" 2>/dev/null)" || true
     local state
     state="$(SGE_ROOT="$root" SGE_CELL=default SGE_QMASTER_PORT="$port" \
              SGE_EXECD_PORT="$((port + 1))" \
              "$root/bin/$arch/qstat" -u '*' 2>/dev/null \
-             | awk -v j="$jid" '$1 == j { print $5 }')"
+             | awk -v j="$jid" '$1 == j { print $5 }')" || true
     case "$state" in
       "")         ok=$((ok + 1))
                   [ -n "${GCS_HEALTH_VERBOSE:-}" ] && printf '%-8s %-16s %-10s %s\n' "r$i" "$h" "$jid" "ok" ;;
