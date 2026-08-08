@@ -13,9 +13,37 @@ What is scanned is what the check.exp files declare:
     set check_description(N) "..."        -> level N is supported
     lappend check_functions  "..."        -> test has any test functions at all
 
-Selection exactly as dump_test_list does it (check.exp:8727ff): absolute path,
-has check_functions, is a leaf (no child tests), has check_category, not
-JENKINS_DISABLED, must be VERIFIED.
+Selection as dump_test_list does it (check.exp:8870ff): absolute path, has
+check_functions, has check_category, not JENKINS_DISABLED, must be VERIFIED --
+with ONE deliberate difference, see "Non-leaf checks" below.
+
+Non-leaf checks
+---------------
+dump_test_list drops every node that has children ("skipped ... because it has
+children", check.exp:8893). That rule is wrong, and this scanner used to copy
+it. A directory can hold a check of its own AND contain further checks below it
+-- the framework says so itself where it aggregates the runlevels:
+
+    # add the levels of its children (and a directory can both contain a check
+    # and have subdirectories)                              check.exp:5734
+
+Eleven directories in the 92x checktree are exactly that. Seven of them are
+VERIFIED, enabled and had no ctest entry at all, so a "green full run" never
+touched them -- among them system_tests/clients/qconf with its 61 check
+functions, which is where qconf_de_check lives, the check that found the
+`qconf -de` deadlock of CS-2438. The Jenkins side has the same blind spot,
+because it is generated from the same rule (CS-2520).
+
+The correct predicate is not "is a leaf" but "declares check_functions", and
+that is tested three lines further down anyway: a pure container node has no
+check_functions and drops out on its own. So the leaf test is simply gone.
+
+One of the eleven is a container only by accident: qsub_override_requests has a
+single subdirectory named test_files, a data directory with no check.exp at all.
+read_checktree_nodes (check.exp:3121) descends into every subdirectory except
+tcl_files and makes each one a child, so a folder of input files is enough to
+remove a check from the run. That is also why moving the parent check.exp down
+into a leaf of its own would not have been a general fix.
 
 Dependencies
 ------------
@@ -76,6 +104,24 @@ CLION_ROOT = os.environ.get("GCS_CLION_ROOT", os.path.expanduser("~/Clion"))
 # Tests that are a prerequisite for others without representing a functional
 # coupling of their own: they have to run once up front on every runner.
 INFRA = {"init_core_system", "connection_test", "display_test"}
+
+# Checks that are not scheduled as a unit of their own.
+#
+# init_core_system (install_core_system/) installs the cluster. Every runner
+# already runs it as the pipeline's `install` action before the run starts --
+# that is what puts its result file into the runner's results/ and satisfies the
+# check_needs of everything else. Scheduling it a second time would reinstall a
+# slot's cluster in the middle of the run for no gain.
+#
+# It is listed here because until CS-2520 it was excluded by accident: it has two
+# subdirectories and therefore fell out with the leaf rule. Now that non-leaf
+# checks are scanned, the exclusion has to be stated.
+#
+# connection_test and display_test are deliberately NOT here. They are in INFRA
+# as well, but only so their check_needs edges are ignored when groups are
+# formed; as units they have always run, and they test something (the ssh and
+# X11 reachability of the host set) that nothing else covers.
+NOT_A_UNIT = {"init_core_system"}
 
 # Cost per check.exp invocation (setup + teardown, without the test body).
 #
@@ -267,23 +313,27 @@ def current_version(line):
 
 
 def scan(line):
-    """All leaf tests of the checktrees, selected exactly as dump_test_list does."""
+    """All tests of the checktrees -- see "Non-leaf checks" in the header.
+
+    Deliberately NOT restricted to leaf directories: a directory can carry a
+    check of its own and still have checks below it, and dropping those is what
+    kept seven VERIFIED checks out of every parallel run (CS-2520).
+    """
     current = current_version(line)
     tests = []
     for root in checktree_roots(line):
         for dirpath, dirnames, filenames in os.walk(root):
             if "check.exp" not in filenames:
                 continue
-            # A leaf is a directory without subdirectories. A node with children
-            # is a container in the checktree, not a test -- verified against all
-            # 455 paths dump_test_list yields: none has a subdirectory.
-            if dirnames:
-                continue
             t = parse(dirpath, current)
             if not t:
                 continue
-            # --- selection as in dump_test_list (check.exp:8727ff) ---
+            # --- selection as in dump_test_list (check.exp:8870ff) ---
+            # A container node has no check_functions and drops out here. This
+            # is the test that the removed leaf rule was a bad proxy for.
             if not t["has_func"]:
+                continue
+            if t["name"] in NOT_A_UNIT:
                 continue
             if not t["category"]:
                 continue
@@ -904,6 +954,16 @@ def main():
                 print(f"  {label}: {len(s)}")
                 for p, l in sorted(s)[:10]:
                     print(f"    {p} {l}")
+        # Since CS-2520 the two sets are expected to differ, and in exactly one
+        # direction: dump_test_list drops every check whose directory has
+        # subdirectories, this scanner does not. "only in scanner" listing such
+        # paths is the fix working, not a defect. "only in dump" still is one.
+        extra = sorted({p for p, _ in mine - ref
+                        if any(os.path.isdir(os.path.join(p, d))
+                               for d in os.listdir(p) if d != "tcl_files")})
+        if extra:
+            print(f"  of those {len(extra)} are non-leaf checks that dump_test_list")
+            print(f"  drops on purpose (check.exp:8893) -- expected, see CS-2520")
         if ref == mine:
             print("  identical")
     else:

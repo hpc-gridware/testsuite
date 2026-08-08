@@ -440,6 +440,16 @@ case $action in
       if [ "${CS_SELF_HEAL:-0}" = "1" ]; then
          args="$args re_init_on_tcl_error"
       fi
+      # A check whose directory also contains checks below it would otherwise
+      # run those too (get_tests_from_checktree descends). Interactively that is
+      # the point -- "check <dir> <level>" is how a whole subtree is run. Under a
+      # scheduler it is wrong: gcs-testscan registers every check as its own
+      # entry, so the children already have theirs, and descending would run them
+      # twice and drag in what VERIFIED/JENKINS_DISABLED had excluded (CS-2520).
+      # Set by gcs-run-unit, never by hand.
+      if [ "${CS_NO_DESCEND:-0}" = "1" ]; then
+         args="$args no_descend"
+      fi
       # More than one (test_unit, level) pair may follow: check.exp runs them in
       # one invocation, which pays startup and the ssh sessions once instead of
       # once per test -- about 25 s per additional test, measured 2026-08-03.

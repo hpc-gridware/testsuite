@@ -3136,6 +3136,7 @@ proc read_checktree_nodes {path} {
 
 proc get_tests_from_checktree { { path "root" } } {
    global ts_checktree
+   global CHECK_NO_DESCEND
 
    set selected_dirs {}
 
@@ -3148,6 +3149,15 @@ proc get_tests_from_checktree { { path "root" } } {
    set all_nrs {}
    foreach nr $selected_dirs {
       lappend all_nrs $nr
+
+      # With no_descend the node itself is the whole selection -- see the
+      # comment at "set CHECK_NO_DESCEND 0". Applied here rather than at the
+      # call sites so delete_tests follows the same selection as run_tests:
+      # a run that touches only one check must not move the result markers of
+      # its neighbours out of completed/ on its way in.
+      if {$CHECK_NO_DESCEND} {
+         continue
+      }
 
       set ret_val {}
       lappend_children_from_checktree $nr ret_val
@@ -7795,6 +7805,14 @@ set do_one_test       0
 # check leaves this a one element list and behaves exactly as before; more
 # than one runs them in order, in this one invocation.
 set do_one_test_list  {}
+# "check <dir> <level>" normally runs the check in <dir> AND every check below
+# it (get_tests_from_checktree). Interactively that is what one wants -- it is
+# how a whole subtree is run with one command. A scheduler that has already
+# turned the checktree into one entry per check does not: it hands over exact
+# paths, and every child is an entry of its own, so descending would run those
+# checks a second time -- including the ones deliberately left out of the run
+# because they are JENKINS_DISABLED or not VERIFIED. See CS-2520.
+set CHECK_NO_DESCEND  0
 set do_dump_test_list 0
 set do_category       0
 set do_nomain         0
@@ -7919,6 +7937,10 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "                      when test install_core_system is called or install option is set"
       puts ""
       puts "re_init_on_tcl_error  reinitialize cluster when tcl error occurs"
+      puts ""
+      puts "no_descend            \"check <dir> <level>\" runs only the check in <dir>,"
+      puts "                      not the checks in its subdirectories (for schedulers"
+      puts "                      that hand over one exact path per test)"
       puts ""
       puts "compile               checkout source code and recompile"
       puts ""
@@ -8214,6 +8236,11 @@ for {set i 0} {$i < $argc} {incr i} {
 
    if { ( [string compare [lindex $argv $i] "--re_init_on_tcl_error"] == 0 ) || ([string compare [lindex $argv $i] "re_init_on_tcl_error"] == 0) } {
       set check_reinit_on_tcl_error 1
+      continue
+   }
+
+   if { ( [string compare [lindex $argv $i] "--no_descend"] == 0 ) || ([string compare [lindex $argv $i] "no_descend"] == 0) } {
+      set CHECK_NO_DESCEND 1
       continue
    }
 

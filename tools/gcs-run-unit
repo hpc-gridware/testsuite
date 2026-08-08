@@ -230,7 +230,13 @@ start=$(date +%s)
   for ((_i = 0; _i < ${#_pairs[@]}; _i += 2)); do
     _args+=(check "${_pairs[$_i]}" "${_pairs[$((_i + 1))]}")
   done
-  if CS_SELF_HEAL=1 CS_TIMEOUT_FACTOR="${CS_TIMEOUT_FACTOR:-3}" \
+  # CS_NO_DESCEND=1 keeps a check to its own directory. Nine checks in the 92x
+  # checktree sit in a directory that also holds further checks; since CS-2520
+  # they have ctest entries of their own, and so do their children. Without this
+  # the parent's entry would run the children a second time -- qconf.0 would
+  # drag in qconf_add_remove_queues.0 (1223 s) -- and would also run what the
+  # VERIFIED/JENKINS_DISABLED filter deliberately kept out of the run.
+  if CS_SELF_HEAL=1 CS_NO_DESCEND=1 CS_TIMEOUT_FACTOR="${CS_TIMEOUT_FACTOR:-3}" \
      GCS_L10N_CACHE="${GCS_L10N_CACHE:-0}" \
      "$runner" "${_args[@]}" 2>&1 | tee -a "$_log"; then
     printf '### %s ok (%ss, slot %s)\n' "$name" "$(( $(date +%s) - start ))" "$slot"
