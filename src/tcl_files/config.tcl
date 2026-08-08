@@ -5501,7 +5501,7 @@ proc config_build_ts_config_1_26 {} {
    # consulted when spooling_method=postgres.
    set parameter "spool_database"
    set ts_config($parameter)            "none"
-   set ts_config($parameter,desc)       "Name of the ts_db_config entry for postgres spooling (consulted only when spooling_method=postgres; default spool_<commd_port>)"
+   set ts_config($parameter,desc)       "Name of the ts_db_config entry for postgres spooling (select one of the shown PostgreSQL databases)"
    set ts_config($parameter,default)    "none"
    set ts_config($parameter,setup_func) "config_testsuite_spool_database"
    set ts_config($parameter,onchange)   "stop"
