@@ -76,6 +76,18 @@ line_bindir() {
 }
 
 runner_root() { printf '%s/runners/r%s' "$(line_root "$1")" "$2"; }
+
+# How many runners a line has -- the default for every command that takes an
+# optional count.
+#
+# -mindepth 1 is not cosmetic. find also returns the start directory itself, and
+# its basename "runners" matches 'r*', so the count came out one too high. Every
+# call that relied on the default therefore walked into a non-existent r<N+1>
+# and died there: install had mirrored all N runners and installed none of them
+# by that point, which looked like a successful mirror rather than a failure.
+runner_count() {
+  find "$(line_root "$1")/runners" -mindepth 1 -maxdepth 1 -name 'r*' -type d 2>/dev/null | wc -l
+}
 runner_name() { printf '%s-r%s' "$1" "$2"; }
 
 # Read the value of a key from a .sav. A .sav carries the previous generation as
@@ -224,7 +236,7 @@ cmd_init() {
   # report every already assigned port as taken.
   local ports=() assigned=() need=0
   while IFS= read -r port; do ports+=("$port"); done < <(free_runner_ports "$line")
-  [ -n "$want" ] || want=$(( ${#ports[@]} + $(find "$lroot/runners" -maxdepth 1 -name 'r*' -type d 2>/dev/null | wc -l) ))
+  [ -n "$want" ] || want=$(( ${#ports[@]} + $(runner_count "$line") ))
   for i in $(seq 1 "$want"); do
     port="$(read_sav_value "$(runner_root "$line" "$i")/config/defaults-$(runner_name "$line" "$i").sav" commd_port)"
     if [ -n "$port" ]; then assigned+=("$port"); else assigned+=(""); need=$((need+1)); fi
@@ -323,7 +335,7 @@ cmd_install() {
   local lroot rroot name i rc=0 pids=()
   lroot="$(line_root "$line")"
   [ -d "$lroot/runners" ] || die "no runners -- run 'gcs-runners $line init' first"
-  [ -n "$want" ] || want="$(find "$lroot/runners" -maxdepth 1 -name 'r*' -type d | wc -l)"
+  [ -n "$want" ] || want="$(runner_count "$line")"
 
   for i in $(seq 1 "$want"); do
     rroot="$(runner_root "$line" "$i")"
@@ -424,7 +436,7 @@ cmd_teardown() {
   done
   lroot="$(line_root "$line")"
   [ -d "$lroot/runners" ] || { info "(no runners)"; return; }
-  [ -n "$want" ] || want="$(find "$lroot/runners" -maxdepth 1 -name 'r*' -type d | wc -l)"
+  [ -n "$want" ] || want="$(runner_count "$line")"
 
   for i in $(seq 1 "$want"); do
     rroot="$(runner_root "$line" "$i")"; name="$(runner_name "$line" "$i")"
@@ -471,7 +483,7 @@ cmd_health() {
 
   lroot="$(line_root "$line")"
   [ -d "$lroot/runners" ] || die "no runners -- run 'gcs-runners $line init' first"
-  [ -n "$want" ] || want="$(find "$lroot/runners" -maxdepth 1 -name 'r*' -type d | wc -l)"
+  [ -n "$want" ] || want="$(runner_count "$line")"
 
   hosts="$(read_sav_value "$lroot/config/defaults-$line.sav" execd_hosts)"
   [ -n "$hosts" ] || die "no execd_hosts in the line configuration"
