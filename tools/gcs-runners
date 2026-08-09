@@ -88,6 +88,69 @@ read_sav_value() {
     END { if (last != "") print last }' "$1"
 }
 
+# Processes from an earlier life that still address a runner's ports.
+#
+# Diagnosed on r21 after two days of installs failing for a reason that was
+# nowhere near the symptom. A testsuite check starts
+# "qping -dump <host> <port> qmaster 1" as root (setup_qping_dump,
+# tcl_files/remote_procedures.tcl:161; used by bugs/issuezilla/126 and 2372).
+# Interrupt the check before cleanup_qping_dump_output runs and
+# close_spawn_process never happens: the qping is reparented to init and keeps
+# reconnecting.
+#
+# Reinstalling does NOT clear that. The install recreates the cell including a
+# fresh TLS CA, so the stale client rejects every new certificate, aborts the
+# handshake and retries -- nine connection attempts per forty seconds, for days.
+# Each qmaster start then logs one "commlib error: got select error (Broken
+# pipe)", which setup_check_messages_files reports as an unexpected error in a
+# freshly installed cluster. The install fails, and nothing in the message points
+# at the actual cause.
+#
+# Reported, never killed: it may be a diagnosis somebody is running on purpose,
+# and what to do about it depends on what it is.
+report_foreign_port_users() {
+  local port="$1" tree="$2" snapshot found
+  [ -n "$port" ] && [ -n "$tree" ] || return 0
+
+  # Take the snapshot first and filter afterwards. Filtering in the same
+  # pipeline puts grep's own command line -- which contains the port we search
+  # for -- into the very output we are searching.
+  local mygrp
+  mygrp="$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')"
+  snapshot="$(ps -eo pgid=,pid=,user=,lstart=,args= 2>/dev/null)" || return 0
+
+  # Drop our own process group. Not only the caller: a command substitution
+  # forks a subshell that inherits the caller's command line, so if that command
+  # line mentions the port -- as it does whenever someone passes it -- the check
+  # reports its own subshells and the real finding drowns in them. Excluding
+  # ancestors is not enough, those subshells are children.
+  #
+  # Two conditions, because either alone is too coarse. The port as a standalone
+  # argument is how clients take it -- but a shell that merely mentions the
+  # number matches too. Being started from this line's tree is what a leftover
+  # cluster client has -- but so has every daemon of every runner. Together they
+  # describe what we are after: something out of this installation, addressing
+  # this port.
+  #
+  # The daemons themselves read the port from the environment, so a runner's own
+  # qmaster, execd and shadowd do not match and need no special case. A client
+  # started from a different tree is missed; that is the price for a check that
+  # stays quiet when nothing is wrong.
+  found="$(printf '%s\n' "$snapshot" \
+           | awk -v want="$port" -v want2="$((port + 1))" -v grp="$mygrp" -v tree="$tree" '
+               $1 == grp { next }
+               index($0, tree) == 0 { next }
+               $0 ~ "(^| )(" want "|" want2 ")( |$)" { $1 = ""; sub(/^ +/, ""); print }')" || true
+
+  [ -n "$found" ] || return 0
+
+  info "  !! still addressing port $port/$((port + 1)):"
+  printf '%s\n' "$found" | sed 's/^/       /' >&2
+  info "     Left untouched. An interrupted check can leave a client behind that"
+  info "     survives the install and then rejects its new TLS certificate, which"
+  info "     shows up as an unexpected commlib error and fails the install."
+}
+
 # Every port some configuration already claims, plus everything that listens.
 used_ports() {
   local f
@@ -265,6 +328,11 @@ cmd_install() {
   for i in $(seq 1 "$want"); do
     rroot="$(runner_root "$line" "$i")"
     [ -d "$rroot" ] || die "runner r$i missing -- run 'init' first"
+    # Before touching anything: name what is still talking to this runner's
+    # ports. See report_foreign_port_users() for why an install cannot fix it.
+    report_foreign_port_users \
+        "$(read_sav_value "$rroot/config/defaults-$(runner_name "$line" "$i").sav" commd_port)" \
+        "$rroot"
     # Mirror the line's binaries; the cell (cluster state) stays out, the
     # install creates that itself.
     #
