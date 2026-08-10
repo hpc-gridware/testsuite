@@ -45,7 +45,7 @@ set check_root_access_needs "yes"
 set check_description(0)  "check every qsub option"
 
 set check_name         "qsub_all_other"
-set check_category     "COMPATIBILITY SYSTEM L10N EVENTCLIENT VERIFIED JENKINS_DISABLED"
+set check_category     "COMPATIBILITY SYSTEM L10N EVENTCLIENT VERIFIED"
 set check_needs        "init_core_system"       ;# dependencies of this check (name of other check)
 
 # setup and cleanup functions
@@ -354,8 +354,15 @@ proc check_start_time {} {
    # first clean up output directory:  
    setup_output_directory
 
+   # The lead has to grow with the load, like every wait of the run. What follows
+   # is a submit and a wait for the pending state, and under 32 clusters on one
+   # host set both take longer (CS-2481). With a fixed 120 s the start time can
+   # already have passed by the time we get to the negative check below, and the
+   # job then legitimately runs inside the window in which the test asserts it
+   # must not.
+   set lead [ts_scale_timeout 120]
    set now [clock seconds]
-   set then [expr $now + 120]
+   set then [expr {$now + $lead}]
 
    set start [clock format $then -format "%Y%m%d%H%M.%S"]
 
@@ -377,12 +384,27 @@ proc check_start_time {} {
 
    # calulate time until job should run
    if {$ok} {
-      set wait_time 10
-      ts_log_fine "check_start_time - job should not start the next $wait_time seconds"
-      set now [clock seconds]
-      if {[wait_for_jobstart $result "leeper" $wait_time 0] != -1} {
-         ts_log_severe "check_start_time - job $result should not run until yet"
-         set ok 0
+      # How long we may assert "has not started yet" is whatever is left of the
+      # lead, not a fixed value - the submit and the pending wait above have
+      # already spent part of it.
+      set remaining [expr {$then - [clock seconds] - 15}]
+      if {$remaining < 5} {
+         ts_log_fine "check_start_time - only $remaining s of the lead left, skipping the negative check"
+      } else {
+         set wait_time [expr {$remaining > 10 ? 10 : $remaining}]
+         ts_log_fine "check_start_time - job should not start the next $wait_time seconds"
+         # NOT scaled. This is an observation window, not a timeout: the test
+         # wants the job to stay pending for its whole length. Stretching it by
+         # the timeout factor would push it past the start time and make the job
+         # start inside the very window it must not start in. See
+         # ts_no_timeout_scaling.
+         ts_no_timeout_scaling {
+            set started [wait_for_jobstart $result "leeper" $wait_time 0]
+         }
+         if {$started != -1} {
+            ts_log_severe "check_start_time - job $result should not run until yet"
+            set ok 0
+         }
       }
    }
 
@@ -1036,12 +1058,23 @@ proc check_deadline {} {
       return
    }
 
-   # get command option string 
-   set then [clock scan "1 minute"]
+   # get command option string
+   #
+   # Both the lead and the runtime grow with the load. The test has to catch
+   # dlcontr at 0 at least once before the deadline starts to bite, and its first
+   # sample comes after a submit that takes longer under 32 clusters on one host
+   # set (CS-2481). With a fixed minute that first sample can land after the
+   # deadline, dlcontr is then never seen at 0, and the test reports a defect
+   # that is none. Measured on the runner: dlcontr stays 0 while the deadline is
+   # in the future, then climbs to weight_deadline and stays there - so the job
+   # has to outlive its own deadline by a margin for the maximum to be seen too.
+   set dl_lead [ts_scale_timeout 60]
+   set dl_runtime [expr {$dl_lead * 2}]
+   set then [expr {[clock seconds] + $dl_lead}]
    set deadline [clock format $then -format "%Y%m%d%H%M.%S"]
 
-   # deadline job (2 min) with deadline in 1 minutes
-   set jobargs "-dl $deadline -l h=${test_host} -o $job_output_dir -e $job_output_dir $ts_config(product_root)/examples/jobs/sleeper.sh 120"
+   # deadline job with a deadline at half its runtime
+   set jobargs "-dl $deadline -l h=${test_host} -o $job_output_dir -e $job_output_dir $ts_config(product_root)/examples/jobs/sleeper.sh $dl_runtime"
    # start job
    set job_id [submit_job $jobargs]
    if {$job_id < 0} {
