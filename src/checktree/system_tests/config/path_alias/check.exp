@@ -39,12 +39,21 @@ global check_description
 global check_needs
 global check_functions
 global check_root_access_needs
+global check_version_range
 
 # define test's name and run level descriptions
 set check_name            "path_alias"
 set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
 set check_description(0)  "checking global path alias file"
 set check_description(1)  "checking user path alias file"
+
+# Level 1 needs SGE_TEST_USER_HOME_DIR, which the clients honour from 9.1.5 and
+# 9.2.0 on (CS-707). Without it they read the per user alias file from the real
+# home directory while the test writes it into the runner's own, so the test
+# would fail - and on an older client it could not be made parallel safe at all.
+# Level 0 uses the cluster's own alias file and is unaffected, which is why the
+# range is per runlevel.
+set check_version_range(1) "9.1.5"
 
 # define test's dependencies
 set check_needs           "init_core_system display_test"

@@ -37,13 +37,21 @@ global check_name
 global check_category
 global check_description 
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
+global check_version_range
 
 # define test's name and run level descriptions
 set check_name            "file_parsing"
 set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
 set check_description(0)  "Testing global, home and pwd request def. file, script and command line options"
+
+# The home directory tier of this test needs SGE_TEST_USER_HOME_DIR, which the
+# clients honour from 9.1.5 and 9.2.0 on (CS-707). Without it they read
+# .sge_request from the real home directory while the test writes it into the
+# runner's own. Writing the real one instead is what kept this test out of every
+# parallel run before, so there is nothing to fall back to on an older client.
+set check_version_range   "9.1.5"
 
 # define test's dependencies
 set check_needs           "init_core_system" 
