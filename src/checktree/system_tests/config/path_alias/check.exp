@@ -42,7 +42,7 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "path_alias"
-set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED JENKINS_DISABLED"
+set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
 set check_description(0)  "checking global path alias file"
 set check_description(1)  "checking user path alias file"
 
@@ -65,6 +65,31 @@ global PATH_ALIAS_OUTPUT2
 global path_alias_test
 set path_alias_test 0
 
+# The alias file of the current level, and who owns it.
+#
+# Level 1 tests the per user alias file. It used to write $HOME/.sge_aliases,
+# and that made the test unrunnable in a parallel cluster: the clients resolve
+# that file through getpwnam(user)->pw_dir (sge_path_alias.cc), so every cluster
+# of this operating system user reads the one file. While the test held it, the
+# other 31 runners aliased their paths along with it - a resource token could
+# have kept the writers apart, but not the readers.
+#
+# The clients now take the directory from SGE_TEST_USER_HOME_DIR, which
+# set_users_environment exports per runner, so level 1 writes into this runner's
+# own results directory and reaches nobody else (CS-707).
+#
+# The ownership bookkeeping stays: with the variable unset - an older client, a
+# hand invocation - the test is back on the real home directory, and there it
+# must not delete a file it did not create. Cleanup removes only what setup
+# created and restores only what setup moved aside. Deleting unconditionally is
+# what destroyed the original file once a second run had already restored it.
+global path_alias_file
+global path_alias_file_created
+global path_alias_file_saved
+set path_alias_file ""
+set path_alias_file_created 0
+set path_alias_file_saved 0
+
 # -------- local test procedures -----------------------------------------------
 
 proc path_alias_setup {} {
@@ -83,12 +108,16 @@ proc path_alias_setup_level {} {
    global PATH_ALIAS_OUTPUT1
    global PATH_ALIAS_OUTPUT2
    global path_alias_test
-   global env CHECK_PROTOCOL_DIR
+   global path_alias_file path_alias_file_created path_alias_file_saved
+   global CHECK_PROTOCOL_DIR CHECK_USER_HOME_DIR
 
    switch -- $CHECK_ACT_LEVEL {
       0 { set path_alias_test 1 }
       1 { set path_alias_test 2 }
    }
+
+   set path_alias_file_created 0
+   set path_alias_file_saved   0
 
    set PATH_ALIAS_OUTPUT1 [ file dirname "$CHECK_JOB_OUTPUT_DIR/adir" ]
    set PATH_ALIAS_OUTPUT2 [ file dirname "$CHECK_JOB_OUTPUT_DIR/adir" ]
@@ -107,69 +136,91 @@ proc path_alias_setup_level {} {
       ts_log_severe "could not create directory $PATH_ALIAS_OUTPUT2"
    }
 
-   set do_it 0
    if {$path_alias_test == 1} {
-      set do_it 1
-      set file_name "$ts_config(product_root)/$ts_config(cell)/common/sge_aliases"
+      set path_alias_file "$ts_config(product_root)/$ts_config(cell)/common/sge_aliases"
+   } else {
+      # Not $env(HOME): the clients are told through SGE_TEST_USER_HOME_DIR to
+      # read the per user alias file from this runner's own directory. The real
+      # home directory is shared by every cluster of this operating system user,
+      # so writing there made every other cluster of a parallel run alias its
+      # paths along with us. See the note at the top of this file.
+      set path_alias_file "$CHECK_USER_HOME_DIR/.sge_aliases"
+   }
+   set file_name $path_alias_file
+
+   ts_log_fine "testing alias file $file_name"
+
+   # A .sav that is already there was left by a run that never reached its
+   # cleanup, or belongs to one that is running right now. Both mean the
+   # original file is not where this test would look for it, and carrying on
+   # would delete someone else's file at the end. Stop instead and say so.
+   if {[file exists "${file_name}.sav"]} {
+      ts_log_severe "${file_name}.sav exists before the test started - a previous path_alias run did not clean up, or another one is running concurrently. Restore the file by hand before running this test again."
+      return
    }
 
-   if {$path_alias_test == 2} {
-      set do_it 1
-      set file_name "$env(HOME)/.sge_aliases"
-   }
+   if {[file isfile $file_name]} {
+      ts_log_fine "moving original alias file to ${file_name}.sav"
+      file rename ${file_name} ${file_name}.sav
+      set path_alias_file_saved 1
 
-   if { $do_it == 1 } {
-      ts_log_fine "testing alias file $file_name"
-      if { ([ file isfile "${file_name}.sav" ] != 1) &&
-           ([ file isfile ${file_name}] == 1) } {
-         ts_log_fine "moving original alias file to ${file_name}.sav"
-         file rename ${file_name} ${file_name}.sav
-         foreach elem $ts_config(unique_arch_nodes) {
-            set counter 60
-            while { $counter > 0 } {
-               set result [start_remote_prog $elem $CHECK_USER "cat" $file_name]
-               incr counter -1
-               if {$prg_exit_state != 0} {
-                  break;
-               }
-               after 1000
+      # The rename is visible on the other hosts only once NFS has caught up.
+      foreach elem $ts_config(unique_arch_nodes) {
+         set gone 0
+         for {set i 0} {$i < 60} {incr i} {
+            start_remote_prog $elem $CHECK_USER "cat" $file_name
+            if {$prg_exit_state != 0} {
+               set gone 1
+               break
             }
-            if {$counter <= 0} {
-               ts_log_severe "error moving file ${file_name} on host $elem"
-            }
+            after 1000
+         }
+         # The old loop derived this from its counter and reported an error
+         # whenever the file disappeared in the very last round.
+         if {!$gone} {
+            ts_log_severe "error moving file ${file_name} on host $elem"
+            return
          }
       }
+   }
 
-      set index 0
-      foreach host $ts_config(unique_arch_nodes) {
-         set output [start_remote_prog $host $CHECK_USER "pwd" "" prg_exit_state 60 0 $ts_config(product_root)]
-         set output [string trim $output]
-         if { $output != $ts_config(product_root) } {
-            ts_log_fine "host $host seems to have an automounter prefix! checking ... (got \"$output\"   expected \"$ts_config(product_root)\")"
-            set pos [string first $ts_config(product_root) $output]
-            set prefix [string range $output 0 $pos]
-            ts_log_fine "automounter prefix is \"$prefix\" on host $host"
-            #sge-root can be a symbolic link (the prefix can still be empty)
-            if {$prefix != ""} {
-               set data(src-path,$index)     "$prefix"
-               set data(sub-host,$index)     "*"
-               set data(exec-host,$index)    "*"
-               set data(replacement,$index)  "/"
-               incr index 1
-            }
+   set index 0
+   foreach host $ts_config(unique_arch_nodes) {
+      set output [start_remote_prog $host $CHECK_USER "pwd" "" prg_exit_state 60 0 $ts_config(product_root)]
+      set output [string trim $output]
+      if { $output != $ts_config(product_root) } {
+         ts_log_fine "host $host seems to have an automounter prefix! checking ... (got \"$output\"   expected \"$ts_config(product_root)\")"
+         set pos [string first $ts_config(product_root) $output]
+         set prefix [string range $output 0 $pos]
+         ts_log_fine "automounter prefix is \"$prefix\" on host $host"
+         # This is the one rule of the file that is not confined to this
+         # runner's own paths: it matches "*"/"*" and rewrites every path that
+         # begins with the prefix. At level 1 it therefore reaches every cluster
+         # of this user for as long as the test runs. It stays because a host
+         # set behind an automounter needs it to work at all - the lab has no
+         # prefix, so nothing is written there in practice.
+         #sge-root can be a symbolic link (the prefix can still be empty)
+         if {$prefix != ""} {
+            set data(src-path,$index)     "$prefix"
+            set data(sub-host,$index)     "*"
+            set data(exec-host,$index)    "*"
+            set data(replacement,$index)  "/"
+            incr index 1
          }
       }
-
-      set data(src-path,$index)     "$PATH_ALIAS_OUTPUT1"
-      set data(sub-host,$index)     "*"
-      set data(exec-host,$index)    "*"
-      set data(replacement,$index)  "$PATH_ALIAS_OUTPUT2"
-      incr index 1
-
-      if { [ file isfile ${file_name}  ] != 1 } {
-         create_path_aliasing_file ${file_name} data $index
-      }
    }
+
+   # Everything else is keyed on this runner's own results directory, which no
+   # other runner's path can match.
+   set data(src-path,$index)     "$PATH_ALIAS_OUTPUT1"
+   set data(sub-host,$index)     "*"
+   set data(exec-host,$index)    "*"
+   set data(replacement,$index)  "$PATH_ALIAS_OUTPUT2"
+   incr index 1
+
+   create_path_aliasing_file ${file_name} data $index
+   set path_alias_file_created 1
+
    set cat_output ""
    set old_cat_output ""
    set cat_hostname ""
@@ -219,6 +270,15 @@ proc path_alias_main {} {
    global CHECK_DISPLAY_OUTPUT
    global CHECK_USER
 
+   # The qsh below opens an xterm. Without a display it fails, no output file is
+   # written and the test reports a wrong file count - which says nothing about
+   # path aliasing. check_needs pulls in display_test, so a missing display here
+   # is a configuration problem, not a product defect.
+   if {$CHECK_DISPLAY_OUTPUT == "undefined"} {
+      ts_log_config "no DISPLAY configured - path_alias needs one for its qsh submission"
+      return
+   }
+
    set files1_old [start_remote_prog $ts_config(master_host) $CHECK_USER "ls" "$PATH_ALIAS_OUTPUT1"]
    set files2_old [start_remote_prog $ts_config(master_host) $CHECK_USER "ls" "$PATH_ALIAS_OUTPUT2"]
 
@@ -246,12 +306,7 @@ proc path_alias_main {} {
       create_shell_script $pwd_script $elem "pwd" "$command " "" "" "/bin/sh" 0 1 1 1
 
       #This job needs a DISPLAY
-      if { $CHECK_DISPLAY_OUTPUT != "undefined" } {
-         set args "-v DISPLAY=$CHECK_DISPLAY_OUTPUT"
-      } else {
-         set args ""
-      }
-      set args "$args -cwd -l h=${elem} -- -e $pwd_script"
+      set args "-v DISPLAY=$CHECK_DISPLAY_OUTPUT -cwd -l h=${elem} -- -e $pwd_script"
       ts_log_fine "qsh $args"
       set output [start_remote_prog $elem $CHECK_USER "qsh" $args prg_exit_state 60 0 $PATH_ALIAS_OUTPUT1]
       ts_log_fine $output
@@ -259,19 +314,36 @@ proc path_alias_main {} {
 
    wait_for_end_of_all_jobs 100
 
-   after 10000
+   set nr_hosts [ llength $ts_config(unique_arch_nodes)]
 
-   set files1 [start_remote_prog $ts_config(master_host) $CHECK_USER "ls" "$PATH_ALIAS_OUTPUT1"]
-   set files2 [start_remote_prog $ts_config(master_host) $CHECK_USER "ls" "$PATH_ALIAS_OUTPUT2"]
+   # The job output appears in the directories when NFS has caught up, not when
+   # the job ends. A fixed "after 10000" was enough on a host set the run had to
+   # itself and is not under 32 clusters. Poll for the expected counts instead,
+   # and let ts_scale_timeout stretch the limit the way it stretches every other
+   # wait of the run (CS-2481). Waiting for "at least" leaves the assertions
+   # below intact - too many files is still an error, it is just no longer
+   # decided before the files are there.
+   set want1 [expr {[llength $files1_old] + $nr_hosts}]
+   set want2 [expr {[llength $files2_old] + $nr_hosts * 3}]
+   set deadline [expr {[clock seconds] + [ts_scale_timeout 120]}]
+   while {1} {
+      set files1 [start_remote_prog $ts_config(master_host) $CHECK_USER "ls" "$PATH_ALIAS_OUTPUT1"]
+      set files2 [start_remote_prog $ts_config(master_host) $CHECK_USER "ls" "$PATH_ALIAS_OUTPUT2"]
+      if {[llength $files1] >= $want1 && [llength $files2] >= $want2} {
+         break
+      }
+      if {[clock seconds] >= $deadline} {
+         ts_log_fine "job output did not become visible within the timeout"
+         break
+      }
+      after 2000
+   }
 
    set nr_new_files1 [ expr ([llength $files1] - [llength $files1_old]) ]
    set nr_new_files2 [ expr ([llength $files2] - [llength $files2_old]) ]
 
-
    ts_log_fine "files1: $nr_new_files1"
    ts_log_fine "files2: $nr_new_files2"
-
-   set nr_hosts [ llength $ts_config(unique_arch_nodes)]
    ts_log_fine "nr_hosts: $nr_hosts"
 
    if { $nr_new_files1 != $nr_hosts } {
@@ -294,48 +366,42 @@ proc path_alias_main {} {
 }
 
 proc path_alias_cleanup_level {} {
-   global ts_config
-   global path_alias_test
    global PATH_ALIAS_OUTPUT1
    global PATH_ALIAS_OUTPUT2
-   global env
+   global path_alias_file path_alias_file_created path_alias_file_saved
 
    delete_all_jobs
    wait_for_end_of_all_jobs 60
 
-   ts_log_fine "deleting directory: $PATH_ALIAS_OUTPUT1"
-   catch { file delete $PATH_ALIAS_OUTPUT1 }
-   if { [ file isdirectory  $PATH_ALIAS_OUTPUT1 ] == 1 } {
-      ts_log_severe "could delete directory $PATH_ALIAS_OUTPUT1"
-   }
-   catch { file delete $PATH_ALIAS_OUTPUT2 }
-   ts_log_fine "deleting directory: $PATH_ALIAS_OUTPUT2"
-   if { [ file isdirectory $PATH_ALIAS_OUTPUT2 ] == 1 } {
-      ts_log_severe "could delete directory $PATH_ALIAS_OUTPUT2"
+   foreach dir [list $PATH_ALIAS_OUTPUT1 $PATH_ALIAS_OUTPUT2] {
+      ts_log_fine "deleting directory: $dir"
+      # -force: after a failed run the job output is still in there, and a plain
+      # "file delete" fails on a non empty directory. The test then reported the
+      # leftover instead of the defect that produced it.
+      catch { file delete -force $dir }
+      if { [ file isdirectory $dir ] == 1 } {
+         ts_log_severe "could not delete directory $dir"
+      }
    }
 
-   set do_it 0
-
-   if { $path_alias_test == 1 } {
-      set file_name "$ts_config(product_root)/$ts_config(cell)/common/sge_aliases"
-      set do_it 1
-   }
-   if { $path_alias_test == 2 } {
-      set file_name "$env(HOME)/.sge_aliases"
-      set do_it 1
-   }
-   if { $do_it == 1 } {
-      file delete $file_name
-      ts_log_fine "deleting $file_name"
-      if { [ file isfile "$file_name" ] == 1 } {
-         ts_log_severe "could not delete file $file_name"
+   # Remove only what setup_level created, restore only what it moved aside.
+   # The old code deleted the alias file unconditionally, which took out the
+   # user's own $HOME/.sge_aliases whenever a concurrent run had already put it
+   # back - see CS-707 and the note at the top of this file.
+   if {$path_alias_file_created} {
+      ts_log_fine "deleting $path_alias_file"
+      file delete $path_alias_file
+      set path_alias_file_created 0
+      if { [ file isfile $path_alias_file ] == 1 } {
+         ts_log_severe "could not delete file $path_alias_file"
          return
       }
+   }
 
-      if { [ file isfile "$file_name.sav" ] == 1 } {
-         ts_log_fine "removing original alias file to $file_name"
-         file rename "$file_name.sav" "$file_name"
-      }
+   if {$path_alias_file_saved} {
+      ts_log_fine "restoring original alias file $path_alias_file"
+      file rename -force "${path_alias_file}.sav" $path_alias_file
+      set path_alias_file_saved 0
    }
 }
 

@@ -68,7 +68,6 @@ global file_parsing_job_host
 
 proc file_parsing_setup {} {
   global ts_config
-  global env
   global CHECK_JOB_OUTPUT_DIR
   global file_parsing_cluster_request_file 
   global file_parsing_home_request_file
@@ -76,17 +75,17 @@ proc file_parsing_setup {} {
   global file_parsing_job_script
   global file_parsing_option_file
   global file_parsing_job_host
-  global CHECK_USE_HUDSON
-  global JENKINS_MODE
   global CHECK_USER
+  global CHECK_USER_HOME_DIR
 
-  if {$CHECK_USE_HUDSON == 1 || $JENKINS_MODE == 1} {
-     ts_log_config "Test is not supported in this parallel run due to the usage of \$HOME/.sgerequest file"
-     return 99
-  }
- 
   set file_parsing_cluster_request_file "$ts_config(product_root)/$ts_config(cell)/common/sge_request"
-  set file_parsing_home_request_file    "$env(HOME)/.sge_request"
+  # Not $env(HOME): that directory belongs to the operating system user and is
+  # therefore shared by every cluster this user runs, so the defaults written
+  # here were picked up by every qsub of every other runner. This test used to
+  # exclude itself from parallel runs for exactly that reason. The clients now
+  # take the directory from SGE_TEST_USER_HOME_DIR, which set_users_environment
+  # exports per runner, so the file is this runner's own (CS-707).
+  set file_parsing_home_request_file    "$CHECK_USER_HOME_DIR/.sge_request"
   set file_parsing_local_request_file   "$CHECK_JOB_OUTPUT_DIR/.sge_request"
   set file_parsing_job_script           "$CHECK_JOB_OUTPUT_DIR/request_job.sh"
   set file_parsing_option_file          "$CHECK_JOB_OUTPUT_DIR/option_file"

@@ -2127,6 +2127,7 @@ proc config_results_dir { only_check name config_array } {
    global CHECK_MAIN_RESULTS_DIR
    global CHECK_PROTOCOL_DIR
    global CHECK_JOB_OUTPUT_DIR
+   global CHECK_USER_HOME_DIR
    global CHECK_RESULT_DIRS
    global CHECK_REPORT_FILE
    global fast_setup
@@ -2157,6 +2158,19 @@ proc config_results_dir { only_check name config_array } {
    set CHECK_PROTOCOL_DIR $CHECK_MAIN_RESULTS_DIR/protocols
    set CHECK_JOB_OUTPUT_DIR "$CHECK_MAIN_RESULTS_DIR/testsuite_job_outputs"
 
+   # Where the submit clients look for the user's .sge_request, .sge_aliases and
+   # the other per user defaults, instead of in the home directory of the passwd
+   # entry. That home directory belongs to the operating system user and is
+   # therefore shared by every cluster this user runs: a test writing those files
+   # changed the behaviour of all the other clusters of a parallel run, and the
+   # save/restore around them destroyed the user's own files (CS-707).
+   #
+   # It lives under the results directory because that is what gcs-runners gives
+   # each runner of its own, and it has to be visible on the exec hosts, which the
+   # results directory is. set_users_environment exports it as
+   # SGE_TEST_USER_HOME_DIR into every command the testsuite starts.
+   set CHECK_USER_HOME_DIR "$CHECK_MAIN_RESULTS_DIR/user_home"
+
    set CHECK_RESULT_DIRS(uncompleted) "$CHECK_MAIN_RESULTS_DIR/$local_host.uncompleted"
    set CHECK_RESULT_DIRS(completed)   "$CHECK_MAIN_RESULTS_DIR/$local_host.completed"
    set CHECK_RESULT_DIRS(unsupported) "$CHECK_MAIN_RESULTS_DIR/$local_host.unsupported"
@@ -2179,6 +2193,9 @@ proc config_results_dir { only_check name config_array } {
    }
    if {[file isdirectory "$CHECK_JOB_OUTPUT_DIR"] != 1} {
         file mkdir "$CHECK_JOB_OUTPUT_DIR"
+   }
+   if {[file isdirectory "$CHECK_USER_HOME_DIR"] != 1} {
+        file mkdir "$CHECK_USER_HOME_DIR"
    }
    return $value
 }

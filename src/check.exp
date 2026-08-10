@@ -1650,10 +1650,25 @@ proc set_users_environment { node {variable_name env} { show_variables 0 } } {
    global CHECK_REMOTE_ENVIRONMENT env
    global CHECK_L10N ts_host_config
    global ts_config
+   global CHECK_USER_HOME_DIR
 
    upvar $variable_name environment
 
    set host [node_get_host $node]
+
+   # Give every command the testsuite starts a per runner directory for the
+   # user's .sge_request, .sge_aliases and the other per user defaults. Without
+   # it the clients take them from the home directory of the passwd entry, which
+   # all clusters of this user share - so one test writing them changed how every
+   # other cluster of a parallel run submitted, and its save/restore could
+   # destroy the user's own files. See CS-707 and config_results_dir().
+   #
+   # It goes in before the early return below: the L10N and envlist settings are
+   # optional, this is not. The guard covers the calls that happen before the
+   # results directory has been configured.
+   if {[info exists CHECK_USER_HOME_DIR]} {
+      set environment(SGE_TEST_USER_HOME_DIR) $CHECK_USER_HOME_DIR
+   }
 
    set remote_environment $CHECK_REMOTE_ENVIRONMENT
 

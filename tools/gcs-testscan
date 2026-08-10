@@ -147,6 +147,15 @@ OVERHEAD = int(os.environ.get("GCS_TS_OVERHEAD", "48"))
 #              An X11 test that grabs it while another is using it fails for a
 #              reason that has nothing to do with the product.
 #
+# NOT here, and deliberately so: the user's .sge_request and .sge_aliases, which
+# path_alias and file_parsing write. They looked like the same kind of resource --
+# one file, shared by every cluster of the operating system user -- but a token
+# would only have held the two writers apart. The other 31 runners *read* those
+# files on every submit, so whoever held the token still changed how they
+# behaved. There is no exclusivity that fixes a shared read. CS-707 gave the
+# clients SGE_TEST_USER_HOME_DIR instead, and the testsuite hands each runner a
+# directory of its own, so nothing is shared and nothing needs holding apart.
+#
 # A scarce resource is preferable to RUN_SERIAL: it holds apart only what
 # conflicts, and the other 31 runners keep working meanwhile.
 #
@@ -169,6 +178,8 @@ OVERHEAD = int(os.environ.get("GCS_TS_OVERHEAD", "48"))
 SHARED_RESOURCES = ("display",)
 EXCLUSIVE = (
     ("display", re.compile(r"/qrsh_ijs_(x11_|reconnect_x11)"), 600),
+    # path_alias submits through qsh and therefore needs the display as well.
+    ("display", re.compile(r"/system_tests/config/path_alias$"), 300),
 )
 
 
@@ -182,7 +193,12 @@ def exclusive_for(units):
     tokens, floor = [], 0
     for name, rx, fl in EXCLUSIVE:
         if any(rx.search(u["path"]) for u in units):
-            tokens.append(f"{name}:1")
+            # A resource may be claimed by more than one entry -- display is, for
+            # the x11 tests and for path_alias. ctest reads "display:1,display:1"
+            # as a demand for two of a resource that has one slot, and the test
+            # would never be scheduled.
+            if f"{name}:1" not in tokens:
+                tokens.append(f"{name}:1")
             floor = max(floor, fl)
     return tokens, floor
 
