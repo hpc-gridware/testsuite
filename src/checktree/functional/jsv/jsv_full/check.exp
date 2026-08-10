@@ -39,13 +39,22 @@ global check_description
 global check_needs
 global check_functions
 global check_root_access_needs
+global check_version_range
 
 set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "jsv_full"
-set check_category        "COMPATIBILITY SYSTEM VERIFIED JENKINS_DISABLED"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED"
 set check_description(0)  "jsv full check"
+
+# The home directory tier of this test needs SGE_TEST_USER_HOME_DIR, which the
+# clients honour from 9.1.5 and 9.2.0 on (CS-707). Without it they read
+# .sge_request from the real home directory - a file every cluster of this
+# operating system user shares, and one whose "-jsv" line takes part in every
+# submit of every other runner. That is what kept this test out of the automated
+# run, so there is nothing to fall back to on an older client.
+set check_version_range   "9.1.5"
 
 # define test's dependencies
 set check_needs           "init_core_system"
@@ -64,6 +73,34 @@ proc jsv_full_setup {} {
    global jsv_base_path
    global jsv_job_id
    global jsv_hjob_id
+   global jsv_full_home_file jsv_full_global_file jsv_full_saved_global_file
+   global jsv_full_home_written jsv_full_global_written jsv_full_global_saved
+   global CHECK_USER_HOME_DIR
+
+   # Nothing has been written yet - the cleanup function below removes only what
+   # these say it created, so that an aborted run leaves the cell and the per
+   # user request file as it found them.
+   set jsv_full_home_written 0
+   set jsv_full_global_written 0
+   set jsv_full_global_saved 0
+
+   # The per user request file. NOT $HOME: that directory belongs to the
+   # operating system user and is shared by every cluster this user runs, and a
+   # "-jsv" line in it takes part in every submit of every other runner. The
+   # clients read it from CHECK_USER_HOME_DIR instead, which set_users_environment
+   # exports per runner as SGE_TEST_USER_HOME_DIR (CS-707). The test used to
+   # exclude itself from parallel runs rather than deal with this.
+   set jsv_full_home_file "$CHECK_USER_HOME_DIR/.sge_request"
+   set jsv_full_global_file "$ts_config(product_root)/$ts_config(cell)/common/sge_request"
+   set jsv_full_saved_global_file "${jsv_full_global_file}.jsv_full_senario1"
+
+   # A leftover from a run that was interrupted before its cleanup. It can only
+   # be ours - nothing but this runner's own tests writes there - and leaving it
+   # would add a second "-jsv" line, so the home tier would be counted twice.
+   if {[file exists $jsv_full_home_file]} {
+      ts_log_fine "removing leftover $jsv_full_home_file from an earlier run"
+      file delete $jsv_full_home_file
+   }
 
    # get base path of scripts
    set jsv_base_path $ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_full
@@ -81,27 +118,48 @@ proc jsv_full_cleanup {} {
    global jsv_base_path
    global jsv_job_id
    global jsv_hjob_id
+   global jsv_full_home_file jsv_full_global_file jsv_full_saved_global_file
+   global jsv_full_home_written jsv_full_global_written jsv_full_global_saved
 
    # trigger and wait for job termination
    delete_all_jobs
    wait_for_end_of_all_jobs 60
+
+   # Restore the request files here rather than at the end of the test body:
+   # a test that fails in between used to leave them behind, and the next run
+   # then found a "-jsv" line it had not written.
+   # "written" and "saved" are separate on purpose. Deleting whenever nothing was
+   # saved would throw away a global sge_request that the cluster had all along
+   # and this test never touched, whenever it fails before getting that far.
+   if {$jsv_full_home_written} {
+      file delete $jsv_full_home_file
+      set jsv_full_home_written 0
+   }
+   if {$jsv_full_global_written} {
+      file delete $jsv_full_global_file
+      if {$jsv_full_global_saved} {
+         file copy $jsv_full_saved_global_file $jsv_full_global_file
+         file delete $jsv_full_saved_global_file
+         set jsv_full_global_saved 0
+      }
+      set jsv_full_global_written 0
+   }
 
    # reset configurations
    reset_config jsv_org_global_conf
 
    # unset our test's global variables
    unset -nocomplain jsv_org_global_conf jsv_base_path jsv_job_id jsv_hjob_id
+   unset -nocomplain jsv_full_home_file jsv_full_global_file jsv_full_saved_global_file
+   unset -nocomplain jsv_full_home_written jsv_full_global_written jsv_full_global_saved
 }
 
 proc jsv_full_all_all_correct {} {
    global ts_config
    global CHECK_USER
    global jsv_base_path
-
-   set skip 0
-   set home_copy 0
-   set global_copy 0
-   set home_existed 0
+   global jsv_full_home_file jsv_full_global_file jsv_full_saved_global_file
+   global jsv_full_home_written jsv_full_global_written jsv_full_global_saved
 
    set qstat_a 0
    set qstat_b 0
@@ -109,113 +167,87 @@ proc jsv_full_all_all_correct {} {
    set qstat_d 0
    set qstat_e 0
 
-   # check if there is already a testsuite running with this test
    set host $ts_config(master_host)
-   set home_path [get_home_dir_path $CHECK_USER $host]
-   set home_file $home_path/.sge_request
-   if {[file exists $home_file]} {
-      ts_log_severe "Test was not executed because there either is another TS running the same test or there is a .sge_request file in the home directory of the test user"
-      set skip 1
-   }
 
    # initialisation
-   if {$skip == 0} {
-      # define server side jsv
-      set global_conf(jsv_url) "script:${jsv_base_path}/jsvEcorrect.sh"
-      set_config global_conf
+   # define server side jsv
+   set global_conf(jsv_url) "script:${jsv_base_path}/jsvEcorrect.sh"
+   set_config global_conf
 
-      # Create a new directory and store a .sge_request file containing a -jsv switch
-      set tmp_dir [get_tmp_directory_name]
-      set tmp_file "$tmp_dir/.sge_request"
-      file mkdir $tmp_dir
-      set fd [open $tmp_file "a+"]
-      puts $fd "-jsv ${jsv_base_path}/jsvBcorrect.sh"
-      close $fd
-      wait_for_remote_file $host $CHECK_USER "$tmp_file"
+   # Create a new directory and store a .sge_request file containing a -jsv switch
+   set tmp_dir [get_tmp_directory_name]
+   set tmp_file "$tmp_dir/.sge_request"
+   file mkdir $tmp_dir
+   set fd [open $tmp_file "a+"]
+   puts $fd "-jsv ${jsv_base_path}/jsvBcorrect.sh"
+   close $fd
+   wait_for_remote_file $host $CHECK_USER "$tmp_file"
 
-      # Add a .sge_request file in the home directory and add the -jsv switch
-      set fd [open $home_file "a+"]
-      puts $fd "-jsv ${jsv_base_path}/jsvCcorrect.sh"
-      close $fd
-      wait_for_remote_file $host $CHECK_USER "$home_file"
+   # Add a .sge_request file in the per user directory and add the -jsv switch.
+   # The test used to refuse to run when that file was already there, because on
+   # the real home directory it could not tell a leftover of its own from
+   # another testsuite writing the file it shares - see the setup function.
+   set fd [open $jsv_full_home_file "a+"]
+   puts $fd "-jsv ${jsv_base_path}/jsvCcorrect.sh"
+   close $fd
+   set jsv_full_home_written 1
+   wait_for_remote_file $host $CHECK_USER "$jsv_full_home_file"
 
-      # Create a global sge_reqeust file and add also there the switch for the file
-      set global_file $ts_config(product_root)/$ts_config(cell)/common/sge_request
-      set saved_global_file $ts_config(product_root)/$ts_config(cell)/common/sge_request.jsv_full_senario1
-      set global_copy 0
-      if {[file exists $global_file]} {
-         file copy -force $global_file $saved_global_file
-         set global_copy 1
-      }
-      set fd [open $global_file "a+"]
-      puts $fd "-jsv ${jsv_base_path}/jsvDcorrect.sh"
-      close $fd
-      wait_for_remote_file $host $CHECK_USER "$global_file"
+   # Create a global sge_reqeust file and add also there the switch for the file
+   if {[file exists $jsv_full_global_file]} {
+      file copy -force $jsv_full_global_file $jsv_full_saved_global_file
+      set jsv_full_global_saved 1
    }
+   set fd [open $jsv_full_global_file "a+"]
+   puts $fd "-jsv ${jsv_base_path}/jsvDcorrect.sh"
+   close $fd
+   set jsv_full_global_written 1
+   wait_for_remote_file $host $CHECK_USER "$jsv_full_global_file"
 
    # test itself
-   if {$skip == 0} {
-      set qsub_args "-jsv ${jsv_base_path}/jsvAcorrect.sh"
-      append qsub_args " -ac A=0,B=0,C=0,D=0,E=0 -h"
-      append qsub_args " $ts_config(product_root)/examples/jobs/sleeper.sh 3"
-      set qsub_exit_state 0
-      set qsub_out [start_sge_bin qsub $qsub_args $host $CHECK_USER qsub_exit_state "180" $tmp_dir]
-      set job_id [lindex $qsub_out 2]
+   set qsub_args "-jsv ${jsv_base_path}/jsvAcorrect.sh"
+   append qsub_args " -ac A=0,B=0,C=0,D=0,E=0 -h"
+   append qsub_args " $ts_config(product_root)/examples/jobs/sleeper.sh 3"
+   set qsub_exit_state 0
+   set qsub_out [start_sge_bin qsub $qsub_args $host $CHECK_USER qsub_exit_state "180" $tmp_dir]
+   set job_id [lindex $qsub_out 2]
 
-      # submit jobs and store qstat -j output
-      get_qstat_j_info $job_id
-      set context $qstat_j_info(context)
+   # submit jobs and store qstat -j output
+   get_qstat_j_info $job_id
+   set context $qstat_j_info(context)
 
-      # read the job owner from the job context variables
-      regexp "A=(\[0-9\]*)," $context match qstat_a
-      regexp "B=(\[0-9\]*)," $context match qstat_b
-      regexp "C=(\[0-9\]*)," $context match qstat_c
-      regexp "D=(\[0-9\]*)," $context match qstat_d
-      regexp "E=(\[0-9\]*)" $context match qstat_e
+   # read the job owner from the job context variables
+   regexp "A=(\[0-9\]*)," $context match qstat_a
+   regexp "B=(\[0-9\]*)," $context match qstat_b
+   regexp "C=(\[0-9\]*)," $context match qstat_c
+   regexp "D=(\[0-9\]*)," $context match qstat_d
+   regexp "E=(\[0-9\]*)" $context match qstat_e
+
+   # delete tmp files. The request files are restored by jsv_full_cleanup, so
+   # that a failure below does not leave them behind.
+   file delete $tmp_file
+   file delete $tmp_dir
+
+   set count_a $qstat_a
+   set count_b [expr $qstat_b - $qstat_a]
+   set count_c [expr $qstat_c - $qstat_b]
+   set count_d [expr $qstat_d - $qstat_c]
+   set count_e [expr $qstat_e - $qstat_d]
+
+   if {$count_a != 1} {
+      ts_log_severe "JSV specified at commandline was executed $count_a times"
    }
-
-   # cleanup stuff
-   if {$skip == 0} {
-      # delete tmp files
-      file delete $tmp_file
-      file delete $tmp_dir
-
-      # restore saved home file if it was created above
-      file delete $home_file
-
-      # restore saved global file if it was created above
-      if {$global_copy == 1} {
-         file delete $global_file
-         file copy $saved_global_file $global_file
-         file delete $saved_global_file
-      } else {
-         #remove the global file if we didn't have one
-         file delete $global_file
-      }
+   if {$count_b != 1} {
+      ts_log_severe "JSV specified in .sge_request of cwd was executed $count_b times"
    }
-
-   if {$skip == 0} {
-      set count_a $qstat_a
-      set count_b [expr $qstat_b - $qstat_a]
-      set count_c [expr $qstat_c - $qstat_b]
-      set count_d [expr $qstat_d - $qstat_c]
-      set count_e [expr $qstat_e - $qstat_d]
-
-      if {$count_a != 1} {
-         ts_log_severe "JSV specified at commandline was executed $count_a times"
-      }
-      if {$count_b != 1} {
-         ts_log_severe "JSV specified in .sge_request of cwd was executed $count_b times"
-      }
-      if {$count_c != 1} {
-         ts_log_severe "JSV specified in .sge_request of home directory was executed $count_c times"
-      }
-      if {$count_d != 1} {
-         ts_log_severe "JSV specified in global sge_request file was executed $count_d times"
-      }
-      if {$count_e != 1} {
-         ts_log_severe "JSV specified in global configuration was executed $count_e times"
-      }
+   if {$count_c != 1} {
+      ts_log_severe "JSV specified in .sge_request of the per user directory was executed $count_c times"
+   }
+   if {$count_d != 1} {
+      ts_log_severe "JSV specified in global sge_request file was executed $count_d times"
+   }
+   if {$count_e != 1} {
+      ts_log_severe "JSV specified in global configuration was executed $count_e times"
    }
 }
 
