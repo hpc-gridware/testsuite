@@ -21,7 +21,8 @@
 #
 # Usage:
 #   gcs-runners <line> init    [N]        # directories, .sav, wrapper
-#   gcs-runners <line> install [N] [-p]   # mirror inst/ from the line + install
+#   gcs-runners <line> install [N] [-s]   # mirror inst/ from the line + install
+#                                         # parallel by default; -s = serial
 #   gcs-runners <line> status
 #   gcs-runners <line> health [N]         # does every execd still enforce h_rt?
 #   gcs-runners <line> teardown [N] [--force] [-s]  # parallel by default; -s = serial
@@ -331,7 +332,22 @@ cmd_status() {
 }
 
 cmd_install() {
-  local line="${1:?line required}" want="${2:-}" par="${3:-}"
+  # Parallel by default, like teardown. Serial installs the fleet one cluster
+  # after the other at roughly three minutes each -- 32 runners are an hour and
+  # a half of wall clock for work that has no reason to be sequential.
+  # "-s" keeps the serial path for when it is wanted: it is the quiet one, every
+  # cluster has the hosts to itself, and it avoids the install races of CS-2481
+  # that only show up under the parallel load.
+  local line="${1:?line required}" want="" par="-p"
+  shift || true
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -s|--serial) par="" ;;
+      -p)          par="-p" ;;   # already the default; accepted so old invocations keep working
+      *)           want="$1" ;;
+    esac
+    shift
+  done
   local lroot rroot name i rc=0 pids=()
   lroot="$(line_root "$line")"
   [ -d "$lroot/runners" ] || die "no runners -- run 'gcs-runners $line init' first"
