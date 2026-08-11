@@ -150,12 +150,8 @@ proc install_qmaster {{report_var report}} {
    set CHOOSE_SPOOLING_METHOD [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CHOOSE_SPOOLING_METHOD] "*"]
 
    # berkeley db
-   set DATABASE_LOCAL_SPOOLING     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DATABASE_LOCAL_SPOOLING]]
-   set ENTER_DATABASE_SERVER       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_DATABASE_SERVER] "*"]
    set ENTER_DATABASE_DIRECTORY_LOCAL_SPOOLING    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_DATABASE_DIRECTORY_LOCAL_SPOOLING] "*"]
-   set ENTER_DATABASE_SERVER_DIRECTORY    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_SERVER_DATABASE_DIRECTORY] "*"]
    set DATABASE_DIR_NOT_ON_LOCAL_FS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DATABASE_DIR_NOT_ON_LOCAL_FS] "*"]
-   set STARTUP_RPC_SERVER [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_STARTUP_RPC_SERVER]]
    set DONT_KNOW_HOW_TO_TEST_FOR_LOCAL_FS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DONT_KNOW_HOW_TO_TEST_FOR_LOCAL_FS]]
 
    # postgres spooling — prompts emitted by SetSpoolingOptionsPostgres in
@@ -387,7 +383,9 @@ proc install_qmaster {{report_var report}} {
             continue
          }
 
-         # BDB was installed first, we have a new question
+         # up to 9.1 an existing cell directory with a BDB server startup script
+         # was announced with a "keep or delete" question instead - the whole
+         # branch is gone from the 9.2 installer
          -i $sp_id -- $DETECT_BDB_KEEP_CELL {
             install_send_answer $sp_id $ANSWER_YES "5.2"
             continue
@@ -700,13 +698,8 @@ proc install_qmaster {{report_var report}} {
          }
 
          #
-         # SGE 6.0 Berkeley DB Spooling
+         # Berkeley DB Spooling
          #
-         -i $sp_id $DATABASE_LOCAL_SPOOLING {
-            install_send_answer $sp_id $ANSWER_NO "9"
-            continue
-         }
-
          -i $sp_id $DELETE_DB_SPOOL_DIR {
             install_send_answer $sp_id $ANSWER_YES
             continue
@@ -725,18 +718,13 @@ proc install_qmaster {{report_var report}} {
          }
 
          -i $sp_id $DATABASE_DIR_NOT_ON_LOCAL_FS {
-            set msg "configured database directory not on y local disk\nPlease run \
-               testsuite setup and configure Berkeley DB server and/or directory"
+            set msg "configured database directory not on a local disk\nPlease run \
+               testsuite setup and configure the Berkeley DB spool directory"
             ts_log_warning $msg
             close_spawn_process $id
             test_report report $curr_task_nr $report_id result [get_result_failed]
             test_report report $curr_task_nr $report_id value $msg
             return
-         }
-
-         -i $sp_id $STARTUP_RPC_SERVER {
-            install_send_answer $sp_id ""
-            continue
          }
 
          -i $sp_id $DONT_KNOW_HOW_TO_TEST_FOR_LOCAL_FS {

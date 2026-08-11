@@ -2368,7 +2368,6 @@ proc get_testsuite_java_version {{version "1.4"}} {
 #     - the execd hosts
 #     - the execd nodes (execd hosts with Solaris zones resolved)
 #     - submit only hosts
-#     - a berkeleydb RPC server host
 #
 #     The list is sorted by hostname, hostnames are unique.
 #

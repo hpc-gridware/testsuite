@@ -172,7 +172,6 @@ proc shadowd_migrate_test {} {
       # We need access to spooling data from shadow hosts, by
       # - classic spooling to a shared filesystem (to qmaster spooldir - if it was not shared,
       #   we would have failed earlier.
-      # - bdb spooling with rpc server
       # - bdb spooling to nfsv4
       set spooling_ok 0
       if {$ts_config(spooling_method) == "classic"} {

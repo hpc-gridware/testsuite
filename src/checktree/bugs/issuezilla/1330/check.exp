@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -44,7 +44,6 @@ global check_root_access_needs
 global CHECK_ACTUAL_TEST_PATH
 
 ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/init_cluster
-ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/interactive/bdb_rpc
 ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/automatic/qmaster
 ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/automatic/shadowd
 ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/automatic/execd

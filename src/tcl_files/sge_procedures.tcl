@@ -125,7 +125,6 @@ set module_name "sge_procedures.tcl"
 # get_pid_from_file() -- ???
 # shutdown_qmaster() -- ???
 # shutdown_all_shadowd -- ???
-# shutdown_bdb_rpc -- ???
 # is_pid_with_name_existing -- search for process on remote host
 # shutdown_system_daemon -- kill running sge daemon
 # shutdown_core_system -- shutdown complete cluster
@@ -608,7 +607,6 @@ proc seek_and_destroy_sge_processes {} {
 #  FUNCTION
 #     Does a cleanup on all hosts in the host configuration file:
 #     - shutdown of SGE daemons
-#     - shutdown of Berkeley DB rpc server
 #     - delete CSP certificats of the current cluster
 #     - delete contents of local spooldirectories
 #*******************************************************************************
@@ -629,7 +627,6 @@ proc full_shutdown_and_csp_cleanup {} {
 
    # for each host which is configured in the host config
    # shutdown all sge daemons
-   # shutdown berkeleydb rpc server
    # and cleanup csp certificates (/var/sgeCA/...)
    # cleanup the local spool directories
    # TODO: look for processes started with absolute path being our $SGE_ROOT
@@ -642,7 +639,6 @@ proc full_shutdown_and_csp_cleanup {} {
       }
 
       shutdown_system_daemon $host "execd sched qmaster shadowd"
-      shutdown_bdb_rpc $host
 
       ts_log_fine "cleaning /var/sgeCA/port$ts_config(commd_port) on host $host"
       start_remote_prog $host "root" "rm" "-rf /var/sgeCA/port$ts_config(commd_port)"
@@ -8094,101 +8090,6 @@ proc shutdown_all_shadowd {hostname} {
 }
 
 
-#                                                             max. column:     |
-#****** sge_procedures/shutdown_bdb_rpc() ******
-#
-#  NAME
-#     shutdown_bdb_rpc -- ???
-#
-#  SYNOPSIS
-#     shutdown_bdb_rpc { hostname }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     hostname - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     sge_procedures/shutdown_core_system()
-#     sge_procedures/shutdown_all_shadowd()
-#     sge_procedures/shutdown_bdb_rpc()
-#     sge_procedures/shutdown_system_daemon()
-#     sge_procedures/startup_qmaster()
-#     sge_procedures/startup_execd()
-#     sge_procedures/startup_shadowd()
-#*******************************
-proc shutdown_bdb_rpc { hostname } {
-   global CHECK_ADMIN_USER_SYSTEM
-   global CHECK_USER
-   get_current_cluster_config_array ts_config
-
-   set num_proc 0
-
-   ts_log_fine "shutdown bdb_rpc daemon for system installed at $ts_config(product_root) ..."
-
-   set index_list [ ps_grep "$ts_config(product_root)" "$hostname" ]
-   set new_index ""
-   foreach elem $index_list {
-      if { [ string first "berkeley_db_svc" $ps_info(string,$elem) ] >= 0 } {
-         lappend new_index $elem
-      }
-   }
-   set num_proc [llength $new_index]
-   ts_log_finest "Number of matching processes: $num_proc"
-   foreach elem $new_index {
-      ts_log_finest $ps_info(string,$elem)
-      if { [ is_pid_with_name_existing $hostname $ps_info(pid,$elem) "berkeley_db_svc" ] == 0 } {
-         ts_log_finest "killing process [ set ps_info(pid,$elem) ] ..."
-         if { [ have_root_passwd ] == -1 } {
-            set_root_passwd
-         }
-         if { $CHECK_ADMIN_USER_SYSTEM == 0 } {
-             start_remote_prog "$hostname" "root" "kill" "$ps_info(pid,$elem)"
-         } else {
-             start_remote_prog "$hostname" "$CHECK_USER" "kill" "$ps_info(pid,$elem)"
-         }
-      }
-   }
-
-   foreach elem $new_index {
-      ts_log_finest $ps_info(string,$elem)
-      if { [ is_pid_with_name_existing $hostname $ps_info(pid,$elem) "berkeley_db_svc" ] == 0 } {
-         ts_log_info "could not shutdown berkeley_db_svc at host $elem with term signal"
-         ts_log_finest "Killing process with kill signal [ set ps_info(pid,$elem) ] ..."
-         if { [ have_root_passwd ] == -1 } {
-            set_root_passwd
-         }
-         if { $CHECK_ADMIN_USER_SYSTEM == 0 } {
-             start_remote_prog "$hostname" "root" "kill" "-9 $ps_info(pid,$elem)"
-         } else {
-             start_remote_prog "$hostname" "$CHECK_USER" "kill" "-9 $ps_info(pid,$elem)"
-         }
-      }
-   }
-
-   foreach elem $new_index {
-      ts_log_finest $ps_info(string,$elem)
-      if { [ is_pid_with_name_existing $hostname $ps_info(pid,$elem) "berkeley_db_svc" ] == 0 } {
-         ts_log_severe "could not shutdown berkeley_db_svc at host $elem with kill signal"
-    return -1
-      }
-   }
-
-   return $num_proc
-}
 
 
 #
@@ -10671,7 +10572,6 @@ proc check_shadowd_settings { shadowd_host } {
       # We need access to spooling data from shadow hosts, by
       # - classic spooling to a shared filesystem (to qmaster spooldir - if it was not shared,
       #   we would have failed earlier.
-      # - bdb spooling with rpc server
       # - bdb spooling to nfsv4
       set spooling_ok 0
       if { $ts_config(spooling_method) == "classic" } {

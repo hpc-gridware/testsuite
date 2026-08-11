@@ -402,11 +402,8 @@ proc installer_do_upgrade_from_backup {bckp_dir} {
    set OTHER_SPOOL_DIR              [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_OTHER_SPOOL_DIR] ]
    set ENTER_SPOOL_DIR              [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_SPOOL_DIR] "*"]
    set ENTER_QMASTER_SPOOL_DIR      [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_QMASTER_SPOOL_DIR] "*"]
-   set DATABASE_LOCAL_SPOOLING      [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DATABASE_LOCAL_SPOOLING]]
    set DELETE_DB_SPOOL_DIR          [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DELETE_DB_SPOOL_DIR] ]
-   set ENTER_DATABASE_SERVER        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_DATABASE_SERVER] "*"]
    set ENTER_DATABASE_DIRECTORY_LOCAL_SPOOLING [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_DATABASE_DIRECTORY_LOCAL_SPOOLING] "*"]
-   set ENTER_DATABASE_SERVER_DIRECTORY [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_SERVER_DATABASE_DIRECTORY] "*"]
    set DATABASE_DIR_NOT_ON_LOCAL_FS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DATABASE_DIR_NOT_ON_LOCAL_FS] "*"]
    # postgres-spooling prompts emitted by SetSpoolingOptionsPostgres in
    # source/dist/util/install_modules/inst_qmaster.sh (U7). Connection
@@ -422,12 +419,9 @@ proc installer_do_upgrade_from_backup {bckp_dir} {
    set POSTGRES_PGPASS_SETUP        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_PGPASS_SETUP]]
    set POSTGRES_PGPASS_PATH         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_PGPASS_PATH] "*"]
    set POSTGRES_PASSWORD            [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_POSTGRES_PASSWORD]]
-   set STARTUP_RPC_SERVER           [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_STARTUP_RPC_SERVER]]
    set EXECD_SPOOLING_DIR_NOROOT_NOADMINUSER [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_EXECD_SPOOLING_DIR_NOROOT_NOADMINUSER]]
    set EXECD_SPOOLING_DIR_NOROOT    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_EXECD_SPOOLING_DIR_NOROOT] "*"]
    set EXECD_SPOOLING_DIR_DEFAULT   [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_EXECD_SPOOLING_DIR_DEFAULT] "*"]
-
-   set INSTALL_BDB_AND_CONTINUE     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINT_INSTALL_BDB_AND_CONTINUE]]
 
    # verify permissions
    set VERIFY_FILE_PERMISSIONS1     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_VERIFY_FILE_PERMISSIONS1] ]
@@ -838,19 +832,6 @@ proc installer_do_upgrade_from_backup {bckp_dir} {
          exp_continue
       }
 
-      -i $sp_id -- $DATABASE_LOCAL_SPOOLING {
-         ts_log_fine "\n -->testsuite: sending >$ANSWER_NO<"
-         set input "$ANSWER_NO\n"
-         if {$do_log_output == 1} {
-              puts "press RETURN"
-              set anykey [wait_for_enter 1]
-         }
-         ts_send $sp_id $input
-         append install_output $expect_out(buffer)
-         log_user 1
-         exp_continue
-      }
-
       -i $sp_id -- $DELETE_DB_SPOOL_DIR {
          ts_log_fine "\n -->testsuite: sending >$ANSWER_YES<"
          if {$do_log_output == 1} {
@@ -899,7 +880,7 @@ proc installer_do_upgrade_from_backup {bckp_dir} {
       }
 
       -i $sp_id -- $DATABASE_DIR_NOT_ON_LOCAL_FS {
-          ts_log_config "configured database directory not on local disk\nPlease run testsuite setup and configure Berkeley DB server and/or directory"
+          ts_log_config "configured database directory not on a local disk\nPlease run testsuite setup and configure the Berkeley DB spool directory"
           set return_value 1
       }
 

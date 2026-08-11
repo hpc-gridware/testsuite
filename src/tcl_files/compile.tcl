@@ -101,7 +101,6 @@ proc compile_check_compile_hosts {host_list} {
 #     - execd hosts
 #     - shadowd hosts
 #     - submit only hosts
-#     - berkeley db rpc server host
 #     - additional config configurations
 #
 #  RESULT

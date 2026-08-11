@@ -1510,7 +1510,6 @@ proc sge_macro { macro_name {raise_error 1} } {
    switch -exact $macro_name {
       "DISTINST_LICENSE_AGREEMENT" { set value "Do you agree with that license? (y/n) \[n\] >> " }
       "DISTINST_HIT_RETURN_TO_CONTINUE" { set value "\nHit <RETURN> to continue >>" }
-      "DISTINST_HIT_RETURN_TO_CONTINUE_BDB_RPC" { set value "Hit <RETURN> to continue!" }
       "DISTINST_HOSTNAME_KNOWN_AT_MASTER" { set value "\nThis hostname is known at qmaster as an administrative host.\n\nHit <RETURN> to continue >>" }
       "DISTINST_CHECK_AGAIN" { set value "Check again (y/n) ('n' will abort) \[y\] >> " }
       "DISTINST_AUTO_BOOT_AT_STARTUP" { set value "Do you want to start execd automatically at machine boot?\nNOTE: If you select \"n\" SMF will be not used at all! (y/n) \[y\]" }
@@ -1555,20 +1554,24 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_CELL_NAME_FOR_EXECD_2" { set value "\nPlease enter cell name which you used for the qmaster\ninstallation or press <RETURN> to use default cell >default< >> " }
       "DISTINST_CELL_NAME_EXISTS" { set value "Do you want to select another cell name? (y/n) \[y\] >> " }
       "DISTINST_CELL_NAME_OVERWRITE" { set value "Do you want to overwrite \[y\] or delete \[n\] the directory? (y/n) \[y\] >> " }
+      "DISTINST_DETECT_BDB_KEEP_CELL" {set value "Do you want to keep * or delete * the directory? (y/n) *" }
       "DISTINST_GET_COMM_SETTINGS" { set value "Using a network service like >/etc/service<, >NIS/NIS+<: \[2\]\n\n(default: %s) >> " }
       "DISTINST_CHANGE_PORT_QUESTION" { set value "Do you want to change the port number? (y/n) \[n\] >> " }
       "DISTINST_ADD_DEFAULT_QUEUE" { set value "Do you want to add a default queue for this host (y/n) \[y\] >> " }
       "DISTINST_ALL_QUEUE_HOSTGROUP" { set value "Creating the default <all.q> queue and <allhosts> hostgroup" }
       "DISTINST_ADD_DEFAULT_QUEUE_INSTANCE" { set value "Do you want to add a default queue instance for this host (y/n) \[y\] >> " }
-      "DISTINST_ENTER_DATABASE_SERVER" { set value "*nter the name of your Berkeley DB Spooling Server* >> " }
-      "DISTINST_ENTER_SERVER_DATABASE_DIRECTORY" { set value "*nter the ?atabase ?irectory * >> " }
       "DISTINST_ENTER_DATABASE_DIRECTORY_LOCAL_SPOOLING" { set value "Please enter the ?atabase ?irectory now, even if you want to spool locally,\nit is necessary to enter this ?atabase ?irectory. \n\nDefault: \[%s\] >> " }
-      "DISTINST_DATABASE_DIR_NOT_ON_LOCAL_FS" { set value "The database directory >%s<\nis not on a local filesystem.\nPlease choose a local filesystem or configure the RPC Client/Server mechanism" }
-      "DISTINST_STARTUP_RPC_SERVER" { set value "*is completed, continue with <RETURN>" }
+      "DISTINST_DATABASE_DIR_NOT_ON_LOCAL_FS" {
+         # the advice to configure the RPC client/server mechanism was dropped in 9.2
+         if {$ts_config(gridengine_version) >= 92} {
+            set value "The database directory >%s<\nis not on a local filesystem.\nPlease choose a local filesystem or an NFSv4 filesystem"
+         } else {
+            set value "The database directory >%s<\nis not on a local filesystem.\nPlease choose a local filesystem or configure the RPC Client/Server mechanism"
+         }
+      }
       "DISTINST_DONT_KNOW_HOW_TO_TEST_FOR_LOCAL_FS" { set value "Don't know how to test for local filesystem. Exit." }
       "DISTINST_CURRENT_GRID_ROOT_DIRECTORY" { set value "The * root directory is:\n\n   \\\$SGE_ROOT = %s\n\nIf this directory is not correct (e.g. it may contain an automounter\nprefix) enter the correct path to this directory or hit <RETURN>\nto use default \[%s\] >> " }
       "DISTINST_INSTALL_FAIL" { set value "Uninstallation  failed after %s retries" }
-      "DISTINST_DATABASE_LOCAL_SPOOLING" { set value "Do you want to use a Berkeley DB Spooling Server? (y/n) \[n\] >> " }
       "DISTINST_POSTGRES_HOST" { set value "*PostgreSQL host*>> *" }
       "DISTINST_POSTGRES_PORT" { set value "*PostgreSQL port*>> *" }
       "DISTINST_POSTGRES_DBNAME" { set value "*Database name*>> *" }
@@ -1598,23 +1601,18 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_ADD_SHADOWHOST_ASK" { set value "Do you want to add your shadow host(s) now? (y/n) \[y\] >> " }
       "DISTINST_ADD_SHADOWHOST_FROM_FILE_ASK" { set value "Do you want to use a file which contains the list of hosts (y/n) \[n\] >> " }
       "DISTINST_SHADOW_HEADLINE" { set value "\nShadow Master Host Setup" }
-      "DISTINST_SHADOW_INFO" { set value "\nMake sure, that the host, you wish to configure as a shadow host,\n has read/write permissions to the qmaster spool and SGE_ROOT/<cell>/common \ndirectory! For using a shadow master it is recommended to set up a \nBerkeley DB Spooling Server\n\n Hit <RETURN> to continue >> " }
+      "DISTINST_SHADOW_INFO" {
+         # the recommendation to set up a Berkeley DB spooling server was dropped in 9.2
+         if {$ts_config(gridengine_version) >= 92} {
+            set value "\nMake sure, that the host, you wish to configure as a shadow host,\n has read/write permissions to the qmaster spool and SGE_ROOT/<cell>/common \ndirectory!\n\n Hit <RETURN> to continue >> "
+         } else {
+            set value "\nMake sure, that the host, you wish to configure as a shadow host,\n has read/write permissions to the qmaster spool and SGE_ROOT/<cell>/common \ndirectory! For using a shadow master it is recommended to set up a \nBerkeley DB Spooling Server\n\n Hit <RETURN> to continue >> "
+         }
+      }
       "DISTINST_SHADOW_ROOT" { set value "Please enter your SGE_ROOT directory or use the default\n\[%s\] >> " }
       "DISTINST_SHADOW_CELL" { set value "Please enter your SGE_CELL directory or use the default \[default\] >> " }
       "DISTINST_SHADOWD_INSTALL_COMPLETE" { set value "Shadowhost installation completed!" }
       "DISTINST_WE_CONFIGURE_WITH_X_SETTINGS" { set value "\nWe're configuring the scheduler with >%s< settings!\n Do you agree? (y/n) \[y\] >> " }
-      "DISTINST_RPC_WELCOME" { set value "Hit <RETURN> if this is ok or stop the installation with Ctrl-C >> " }
-      "DISTINST_RPC_INSTALL_AS_ADMIN" { set value "Do you want to install * as admin user >%s< (y/n) \[y\] >> " }
-      "DISTINST_RPC_SGE_ROOT" { set value "If this directory is not correct (e.g. it may contain an automounter\nprefix) enter the correct path to this directory or hit <RETURN>\nto use default \[%s\] >> " }
-      "DISTINST_RPC_HIT_RETURN_TO_CONTINUE" { set value "Hit <RETURN> to continue >> " }
-      "DISTINST_RPC_SGE_CELL" { set value "Enter cell name \[%s\] >> " }
-      "DISTINST_RPC_SERVER" { set value "\nEnter database server name or \nhit <RETURN> to use default \[%s\] >> " }
-      "DISTINST_RPC_DIRECTORY" { set value "\nEnter the database directory\nor hit <RETURN> to use default \[%s\] >> " }
-      "DISTINST_RPC_DIRECTORY_EXISTS" { set value "The spooling directory already exists! Do you want to delete it? (y/n) \[n\] >> " }
-      "DISTINST_RPC_START_SERVER" { set value "Shall the installation script try to start the RPC server? (y/n) \[y\] >>" }
-      "DISTINST_RPC_SERVER_STARTED" { set value "Please remember these values, during Qmaster installation\n you will be asked for! Hit <RETURN> to continue!" }
-      "DISTINST_RPC_INSTALL_RC_SCRIPT" { set value "We can install the startup script that\n* is started at machine boot (y/n) \[y\] >> " }
-      "DISTINST_RPC_SERVER_COMPLETE" { set value "e.g. * * * * * <full path to scripts> <sge-root dir> <sge-cell> <bdb-dir>\n" }
       "DISTINST_CSP_COPY_CMD" { set value "Do you want to use rsh/rcp instead of ssh/scp? (y/n) \[n\] >>" }
       "DISTINST_CSP_COPY_CERTS" { set value "host? (y/n) \[y\] >>" }
       #"DISTINST_CSP_COPY_CERTS" { set value "Should the script try to copy the cert files, for you, to each\n<%s> host? (y/n) \[y\] >>" }
@@ -1630,7 +1628,6 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_DETECT_CHOOSE_NEW_NAME" {set value "NOTE: Choose 'n' to select new SGE_CLUSTER_NAME  (y/n) *" }
       "DISTINST_DETECT_REMOVE_OLD_CLUSTER" {set value "*Stop the installation (WARNING: selecting 'n' *" }
       "DISTINST_SMF_IMPORT_SERVICE" {set value "NOTE: If you select \"n\" SMF will be not used at all" }
-      "DISTINST_DETECT_BDB_KEEP_CELL" {set value "Do you want to keep * or delete * the directory? (y/n) *" }
       "DISTINST_DO_YOU_WANT_TO_CONTINUE" {set value "Do you want to continue (y/n) ('n' will abort) \[y\] >> " }
       "DISTINST_REMOVE_OLD_RC_SCRIPT" {set value "Do you want to remove the startup script \nfor * at this machine? (y/n) \[y\] >> " }
       "DISTINST_UNUSED_PORT"   { set value "*%s*Please enter an unused port number >> " }
@@ -1649,7 +1646,6 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINT_ENTER_CA_ADMIN_EMAIL" { set value "Please enter the email address of the CA administrator >> " }
       "DISTINT_CA_RECREATE" { set value "Do you want to recreate your SGE CA infrastructure (y/n) \[y\] >> " }
       "DISTINT_ENTER_OVERRIDE_PROTECTION" { set value "*override protection 600 (yes/no)? " }
-      "DISTINT_INSTALL_BDB_AND_CONTINUE" { set value "Please, log in to your Berkeley DB spooling host and execute \"inst_sge -db\"\nPlease do not continue, before the Berkeley DB installation with\n\"inst_sge -db\" is completed, continue with <RETURN>" }
       "DISTINST_ENTER_SLICE" { set value "Please enter the slice name (without the trailing .slice) or\nhit <RETURN> to use \[%s\] >> " }
    }
 

@@ -46,7 +46,7 @@ global check_use_installed_system
 set check_root_access_needs  "yes"
 set check_name          "init_core_system"
 set check_category      "COMPATIBILITY SYSTEM L10N VERIFIED INSTALL USE_CLI"
-set check_description(0)   "install a default system (bdb_rpc/master/execution/shadow daemon on local host and start them up)"
+set check_description(0)   "install a default system (master/execution/shadow daemon on local host and start them up)"
 #set check_needs         "connection_test home_dirs check_user_permissions"
 set check_needs         ""
 
@@ -55,13 +55,10 @@ set install_mode        $CHECK_TESTSUITE_INSTALL_MODE ;# sets the install mode. 
 set check_functions     ""                              ;# functions to call (in order)
 
 if {$install_mode == "automatic"} {
-   # in automatic installation, we still do a manual bdb rpc server installation
-   ts_source $CHECK_ACTUAL_TEST_PATH/interactive/bdb_rpc
    ts_source $CHECK_ACTUAL_TEST_PATH/automatic/qmaster
    ts_source $CHECK_ACTUAL_TEST_PATH/automatic/execd
    ts_source $CHECK_ACTUAL_TEST_PATH/automatic/shadowd
 } else {
-   ts_source $CHECK_ACTUAL_TEST_PATH/interactive/bdb_rpc
    ts_source $CHECK_ACTUAL_TEST_PATH/interactive/qmaster
    ts_source $CHECK_ACTUAL_TEST_PATH/interactive/execd
    ts_source $CHECK_ACTUAL_TEST_PATH/interactive/shadowd

@@ -162,7 +162,6 @@ proc get_sge_fmri {host service {check_fmri 1}} {
       "qmaster"  -
       "shadowd"  -
       "execd"    -
-      "bdb"      -
       "dbwriter" {
          set fmri "svc:/application/sge/$service:$ts_config(cluster_name)"
       }
@@ -272,9 +271,6 @@ proc smf_get_process_name { service } {
       }
       "execd" {
 	 return "sge_execd"
-      }
-      "bdb" {
-	 return "berkeley_db_svc"
       }
       "sdm" -
       "dbwriter" {
