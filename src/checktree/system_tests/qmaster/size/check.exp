@@ -39,6 +39,25 @@ global check_root_access_needs
 
 set check_root_access_needs  "yes"
 set check_name         "qmaster-size"
+# JENKINS_DISABLED: see CS-710. Deliberately kept out of the automated runs, and
+# not for a defect of its own - it touches nothing that the runners share, it
+# writes no per user file, and its floods submit with -o /dev/null.
+#
+# It stays out because on the only runlevel that is executed it cannot check its
+# own subject, while being one of the heaviest load generators in the checktree.
+# The memory monitor is downgraded to FINE for level 0 ("in functional test, it
+# is ok for qmaster/schedd to grow"); SEVERE applies to levels 200 and 400, and
+# those are in bands that CHECK_ENABLED_RUNLEVELS does not enable. So a leak in
+# qmaster or schedd could never turn a parallel run red here. What is left that
+# can fail - startup timeouts, "pminiworm didn't start", "qstat failed" - is
+# precisely what a loaded host set produces without any defect being present.
+#
+# Meanwhile it floods the cluster with qsubs and runs miniworms for some 536 s,
+# on hosts that 32 runners share, raising the base load for every neighbour.
+#
+# To bring it in, one of two things has to change: level 0 has to check what the
+# test is named after, or the check needs a quiet host set of its own - the same
+# answer performance/throughput and drmaa_latency need.
 set check_category     "COMPATIBILITY SYSTEM L10N VERIFIED JENKINS_DISABLED"
 set check_description(0)    "check qmaster/schedd for memory leaks - functional test"
 set check_description(200)  "check qmaster/schedd for memory leaks - normal test"
