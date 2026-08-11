@@ -249,6 +249,48 @@ def checktree_roots(line):
     return [r for r in roots if r and os.path.isdir(r)]
 
 
+def enabled_runlevels(line):
+    """The runlevel bands the framework actually executes.
+
+    is_level_enabled (check.exp:3748) accepts a level when it falls into
+    [start, start+99] for one of the starts in CHECK_ENABLED_RUNLEVELS, and
+    enhanced_setup pins that list to "0" -- the short band. The other bands
+    (medium, long, day, week) are commented out beside it.
+
+    A level outside the enabled bands is not skipped quietly. run_tests returns
+    2, the invocation logs "test does not support actual runlevel" and exits
+    *ok* with zero tests run -- after paying a full check.exp startup, ~48 s.
+    Registering such a unit therefore buys no coverage and hides that fact
+    behind a green result. Measured on the 92x checktree: 48 units, about 38
+    minutes of a parallel run.
+
+    Read out of check.exp rather than duplicated here, so that enabling a band
+    there is all it takes for the units to appear.
+
+    Taken from enhanced_setup specifically, not from the last assignment in the
+    file -- file order is not execution order. The variable is assigned in eight
+    places: the file scope default, enhanced_setup, the interactive runlevel
+    menu, and several that clear it temporarily. One of those, the "all
+    <runlevel>" action, rebuilds it as 0..n*100 and thereby widens the bands --
+    but that is the fullrun path. What gcs-run-unit drives is "check <path>
+    <level>", and there the value from enhanced_setup is what holds.
+    """
+    for root in checktree_roots(line):
+        path = os.path.join(os.path.dirname(root), "check.exp")
+        if not os.path.isfile(path):
+            continue
+        txt = open(path, errors="replace").read()
+        body = re.search(r'^proc\s+enhanced_setup\s*\{.*?^\}', txt, re.M | re.S)
+        for where in (body.group(0) if body else "", txt):
+            found = re.findall(r'^\s*set\s+CHECK_ENABLED_RUNLEVELS\s+"([^"]*)"',
+                               where, re.M)
+            # the first non-empty one: the clearing assignments carry ""
+            for value in found:
+                if value.split():
+                    return [int(x) for x in value.split()]
+    return [0]
+
+
 RE = {
     "name":     re.compile(r'^\s*set\s+check_name\s+"([^"]*)"', re.M),
     "category": re.compile(r'^\s*set\s+check_category\s+"([^"]*)"', re.M),
@@ -336,6 +378,7 @@ def scan(line):
     kept seven VERIFIED checks out of every parallel run (CS-2520).
     """
     current = current_version(line)
+    bands = enabled_runlevels(line)
     tests = []
     for root in checktree_roots(line):
         for dirpath, dirnames, filenames in os.walk(root):
@@ -357,6 +400,9 @@ def scan(line):
                 continue
             if "VERIFIED" not in t["category"]:
                 continue
+            # Only levels of an enabled band -- see enabled_runlevels().
+            t["levels"] = [lv for lv in t["levels"]
+                           if any(s <= lv <= s + 99 for s in bands)]
             if not t["levels"]:
                 continue
             tests.append(t)
