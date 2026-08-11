@@ -1240,7 +1240,16 @@ proc ssh_start_remote_prog {hostname command args} {
       spawn "ssh" $hostname $cmd
    } catch_output]
    if {$prg_exit_state == 0} {
-      set timeout [host_conf_scale_timeout $hostname 5]
+      # Both factors, not just the per host one. Five seconds to get an ssh
+      # session up is generous on an idle lab and tight when several runners
+      # open sessions to the same six machines at once - the same contention
+      # that makes a check.exp invocation cost 48 s instead of 25 under eight
+      # parallel runs (gcs-testscan, GCS_TS_OVERHEAD). And the consequence here
+      # is not a failed check but testsuite_shutdown below, which takes the
+      # whole invocation down whatever it was testing. Observed once with three
+      # concurrent runners: the directory this was to create had existed for
+      # days, so nothing but the connection can have timed out. See CS-704.
+      set timeout [ts_scale_timeout [host_conf_scale_timeout $hostname 5]]
       expect {
          eof {
             ts_log_finer "   -> ssh($hostname): eof, $expect_out(buffer)"
@@ -1297,7 +1306,10 @@ proc scp_remote_file {hostname src dest} {
       spawn $start_script $cmd
    } catch_output]
    if {$prg_exit_state == 0} {
-      set timeout [host_conf_scale_timeout $hostname 5]
+      # Both factors - same reasoning as in ssh_start_remote_prog above, and the
+      # same consequence: a timeout here ends the invocation, it does not fail a
+      # check.
+      set timeout [ts_scale_timeout [host_conf_scale_timeout $hostname 5]]
       expect {
          eof {
             ts_log_finer "   -> $cmd: eof, $expect_out(buffer)"
