@@ -6641,12 +6641,16 @@ proc menu {} {
          }
          "13" {
             if {$localtest >= 0} {
+               set num_runs 0
                while {$CHECK_INTERRUPT == 0} {
                   puts "running local test ..."
                   run_test $CHECK_ACT_PATH "all"
                   create_report ${CHECK_REPORT_FILE}.ok "completed"
                   create_report ${CHECK_REPORT_FILE}.unsupported "unsupported"
                   create_report ${CHECK_REPORT_FILE}.failed "failed"
+                  # report the number of runs so far as INFO message (mail)
+                  incr num_runs
+                  ts_log_info "$num_runs repetitions of $CHECK_ACT_PATH done"
                }
                set CHECK_INTERRUPT 0
             }
