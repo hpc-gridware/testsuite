@@ -70,7 +70,7 @@ set check_version_range "9.1.5"
 # turn a run red while CS-2447 is still under investigation.
 
 set check_name            "drmaa_latency"
-set check_category        "API DRMAA TESTBIN VERIFIED JENKINS_DISABLED"
+set check_category        "API DRMAA TESTBIN VERIFIED"
 set check_description(0)  "measure drmaa_wait() event latency vs. number of jobs and vs. SGE_JAPI_EDTIME"
 
 set check_needs           "init_core_system"
@@ -439,6 +439,24 @@ proc drmaa_latency_write_report {} {
    append content [create_html_text "DRMAA wait() latency" 0 "" "h1"]
    append content [create_html_text "Generated: [exec date]"]
    append content [create_html_text "Execution host: $drmaa_latency_host (all jobs pinned with -l h=$drmaa_latency_host)"]
+
+   # Say so when the numbers were taken while other clusters were working the
+   # same hosts. The check runs in the parallel setup because it is built to
+   # tolerate it - the latencies go out as info and colour nothing - but what
+   # it then measures is partly the neighbours, and a reader comparing this
+   # report against one from a quiet cluster has to know that. The timeout
+   # factor is the signal: gcs-run-unit sets it for the parallel runs and
+   # leaves it at 1 everywhere else.
+   global CHECK_TIMEOUT_FACTOR
+   if {[info exists CHECK_TIMEOUT_FACTOR] && $CHECK_TIMEOUT_FACTOR > 1} {
+      append content [create_html_text \
+         "Measured under parallel load: the timeout factor is\
+          $CHECK_TIMEOUT_FACTOR, so this run shared its execution hosts with\
+          the other runners of the line. The absolute latencies below are not\
+          comparable with a run on a quiet cluster - dispatch and queueing\
+          delay of the neighbours are in them. What stays meaningful is the\
+          shape within this report, the growth across a sweep." 0 "#CC0000"]
+   }
    append content [create_html_text \
       "local_lat = drmaa_wait() return - (submitted + sleep), submit host clock only,\
        so immune to clock skew but including dispatch and queueing delay.\
@@ -535,7 +553,17 @@ proc drmaa_latency_setup {} {
    set drmaa_latency_queue "drmaa_lat.q"
    # a run of 100 jobs sleeping drmaa_latency_sleep seconds, plus submit,
    # dispatch and reap overhead
-   set drmaa_latency_timeout 600
+   #
+   # Scaled, because this one decides whether the check goes red. Its header
+   # promises that a growing latency is a finding to look at and not a broken
+   # cluster - the measured values go out through ts_log_info and colour
+   # nothing. That promise only holds as long as the sweep step itself
+   # completes: a step that overruns this timeout is a ts_log_severe, and on a
+   # host set worked by 31 other clusters it overruns for want of machine, not
+   # for want of a working DRMAA (CS-2481). Everything below still fails the
+   # check the way it should - a binary that does not run, a summary that does
+   # not parse, fewer than two usable runs.
+   set drmaa_latency_timeout [ts_scale_timeout 600]
    # a latency that grows by more than this factor across a sweep is
    # reported as clearly dependent on the swept parameter
    set drmaa_latency_max_ratio 2.0
