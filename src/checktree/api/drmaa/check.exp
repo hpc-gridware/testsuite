@@ -46,6 +46,8 @@ set check_root_access_needs "yes"
 set check_name            "drmaa"
 set check_category        "API DRMAA TESTBIN VERIFIED"
 set check_description(0)    "tests available DMRAA lib on one arbitrary host"
+set check_description(1)    "the long running submit/pause/sync scenario, on one arbitrary host"
+set check_description(2)    "the long running session scenarios, on one arbitrary host"
 set check_description(101)  "tests to verify DRMAA 1.0 library on one host"
 set check_description(201)  "tests to verify DRMAA 1.0 library on one host of each architecture available"
 
@@ -260,13 +262,52 @@ if {0} {
 #  SEE ALSO
 #     ???/???
 #*******************************************************************************
+##
+# @brief Is the current runlevel responsible for this group of scenarios?
+#
+# The check used to be one unit of about 1017 s, and 916 s of that sat in
+# drmaa_check_single_threaded_part_03. Measured per scenario on a runner: of
+# 1055 s of scenario time, three scenarios carry 628 s. They are spread over
+# three runlevels of the short band so that they land on different runners -
+# gcs-testscan makes one unit per (test, level) and does not couple levels.
+#
+#   base     everything else, about 400 s
+#   pause    ST_SUBMIT_PAUSE_SUBMIT_SYNC, 345 s - the single longest scenario
+#   session  ST_RECOVERABLE_SESSION (130 s) and the repeated block, which runs
+#            ST_SUBMIT_NO_RUN_WAIT and ST_SUBMIT_SUSPEND_RESUME_WAIT ten times
+#            each (31 s and 153 s) - 314 s together
+#
+# That takes the critical path from 1017 s to about 400 s. Three groups and not
+# twenty, because each level pays its own check.exp startup of some 48 s plus
+# its own setup and cleanup.
+#
+# Levels 101 and 201 keep running everything: they mean "the whole check, on
+# more hosts", and splitting them would change what they cover. They are in
+# bands that CHECK_ENABLED_RUNLEVELS does not enable, so they do not run at all
+# today - see gcs-testscan's enabled_runlevels().
+#
+# @param group one of "base", "pause", "session"
+# @return 1 if the current runlevel runs that group
+proc drmaa_level_runs {group} {
+   global CHECK_ACT_LEVEL
+
+   switch -- $CHECK_ACT_LEVEL {
+      0 { return [expr {$group eq "base"}] }
+      1 { return [expr {$group eq "pause"}] }
+      2 { return [expr {$group eq "session"}] }
+      default { return 1 }
+   }
+}
+
 proc set_hosts_for_runlevel {} {
    global CHECK_ACT_LEVEL ts_config
 
    set hosts_in_runlevel {}
 
    switch -- $CHECK_ACT_LEVEL {
-      0 {
+      0 -
+      1 -
+      2 {
         lappend hosts_in_runlevel [host_conf_get_suited_hosts]
       }
       101 {
@@ -293,6 +334,11 @@ proc drmaa_check_single_threaded_part_01 { } {
    global ts_config CHECK_ACT_LEVEL
    global CHECK_USER drmaa_binary_name level_host_list
 
+   # Only the base runlevel runs this - see drmaa_level_runs().
+   if {![drmaa_level_runs "base"]} {
+      return
+   }
+
    foreach host $level_host_list {
       set myenv(UNSET_VARS) "SGE_ROOT"
       set test_output [start_test_bin "test_drmaa" "-h" $host $CHECK_USER prg_exit_state 60 myenv]
@@ -316,6 +362,11 @@ proc drmaa_check_single_threaded_part_01 { } {
 #*******************************************************************************
 proc drmaa_check_single_threaded_part_02 { } {
    global ts_config CHECK_USER level_host_list
+
+   # Only the base runlevel runs this - see drmaa_level_runs().
+   if {![drmaa_level_runs "base"]} {
+      return
+   }
 
    foreach host $level_host_list {
       # -- tests without an argument
@@ -367,33 +418,40 @@ proc drmaa_check_single_threaded_part_03 { } {
 
    foreach host $level_host_list {
       # -- tests with a <sleeper_job> argument
+      # Which of these the runlevel is responsible for: see drmaa_level_runs().
       set test_scenario {}
-      lappend test_scenario "ST_SUBMIT_WAIT"
-      lappend test_scenario "ST_BULK_SUBMIT_WAIT"
-      lappend test_scenario "ST_BULK_SINGLESUBMIT_WAIT_INDIVIDUAL"
-      lappend test_scenario "ST_SUBMITMIXTURE_SYNC_ALL_DISPOSE"
-      lappend test_scenario "ST_SUBMITMIXTURE_SYNC_ALL_NODISPOSE"
-      lappend test_scenario "ST_SUBMITMIXTURE_SYNC_ALLIDS_DISPOSE"
-      lappend test_scenario "ST_SUBMITMIXTURE_SYNC_ALLIDS_NODISPOSE"
-      lappend test_scenario "ST_SUBMIT_PAUSE_SUBMIT_SYNC"
-      lappend test_scenario "ST_INPUT_FILE_FAILURE"
-      lappend test_scenario "ST_OUTPUT_FILE_FAILURE"
-      lappend test_scenario "ST_ERROR_FILE_FAILURE"
-      if {[is_version_in_range "9.2.0"]} {
-         lappend test_scenario "ST_SUBMIT_SUSPEND_RESUME_WAIT"
+      if {[drmaa_level_runs "base"]} {
+         lappend test_scenario "ST_SUBMIT_WAIT"
+         lappend test_scenario "ST_BULK_SUBMIT_WAIT"
+         lappend test_scenario "ST_BULK_SINGLESUBMIT_WAIT_INDIVIDUAL"
+         lappend test_scenario "ST_SUBMITMIXTURE_SYNC_ALL_DISPOSE"
+         lappend test_scenario "ST_SUBMITMIXTURE_SYNC_ALL_NODISPOSE"
+         lappend test_scenario "ST_SUBMITMIXTURE_SYNC_ALLIDS_DISPOSE"
+         lappend test_scenario "ST_SUBMITMIXTURE_SYNC_ALLIDS_NODISPOSE"
+         lappend test_scenario "ST_INPUT_FILE_FAILURE"
+         lappend test_scenario "ST_OUTPUT_FILE_FAILURE"
+         lappend test_scenario "ST_ERROR_FILE_FAILURE"
+         if {[is_version_in_range "9.2.0"]} {
+            lappend test_scenario "ST_SUBMIT_SUSPEND_RESUME_WAIT"
+         }
+         lappend test_scenario "ST_SUBMIT_POLLING_WAIT_TIMEOUT"
+         lappend test_scenario "ST_SUBMIT_POLLING_WAIT_ZEROTIMEOUT"
+         lappend test_scenario "ST_SUBMIT_POLLING_SYNCHRONIZE_TIMEOUT"
+         lappend test_scenario "ST_SUBMIT_POLLING_SYNCHRONIZE_ZEROTIMEOUT"
+         lappend test_scenario "ST_BULK_SUBMIT_IN_HOLD_SESSION_RELEASE"
+         lappend test_scenario "ST_BULK_SUBMIT_IN_HOLD_SINGLE_RELEASE"
+         lappend test_scenario "ST_BULK_SUBMIT_IN_HOLD_SESSION_DELETE"
+         lappend test_scenario "ST_BULK_SUBMIT_IN_HOLD_SINGLE_DELETE"
+         lappend test_scenario "ST_SUBMIT_IN_HOLD_RELEASE"
+         lappend test_scenario "ST_SUBMIT_IN_HOLD_DELETE"
+         lappend test_scenario "ST_SYNCHRONIZE_NONEXISTANT"
       }
-      lappend test_scenario "ST_SUBMIT_POLLING_WAIT_TIMEOUT"
-      lappend test_scenario "ST_SUBMIT_POLLING_WAIT_ZEROTIMEOUT"
-      lappend test_scenario "ST_SUBMIT_POLLING_SYNCHRONIZE_TIMEOUT"
-      lappend test_scenario "ST_SUBMIT_POLLING_SYNCHRONIZE_ZEROTIMEOUT"
-      lappend test_scenario "ST_BULK_SUBMIT_IN_HOLD_SESSION_RELEASE"
-      lappend test_scenario "ST_BULK_SUBMIT_IN_HOLD_SINGLE_RELEASE"
-      lappend test_scenario "ST_BULK_SUBMIT_IN_HOLD_SESSION_DELETE"
-      lappend test_scenario "ST_BULK_SUBMIT_IN_HOLD_SINGLE_DELETE"
-      lappend test_scenario "ST_SUBMIT_IN_HOLD_RELEASE"
-      lappend test_scenario "ST_SUBMIT_IN_HOLD_DELETE"
-      lappend test_scenario "ST_SYNCHRONIZE_NONEXISTANT"
-      lappend test_scenario "ST_RECOVERABLE_SESSION"
+      if {[drmaa_level_runs "pause"]} {
+         lappend test_scenario "ST_SUBMIT_PAUSE_SUBMIT_SYNC"
+      }
+      if {[drmaa_level_runs "session"]} {
+         lappend test_scenario "ST_RECOVERABLE_SESSION"
+      }
 
       foreach st_test $test_scenario {
          ts_log_fine "starting single threaded test $st_test"
@@ -401,18 +459,20 @@ proc drmaa_check_single_threaded_part_03 { } {
       }
 
       # -- tests with a <sleeper_job> argument repeatedly
-      set test_scenario {}
-      lappend test_scenario "ST_SUBMIT_NO_RUN_WAIT"
+      if {[drmaa_level_runs "session"]} {
+         set test_scenario {}
+         lappend test_scenario "ST_SUBMIT_NO_RUN_WAIT"
 
-      if {[is_version_in_range "9.2.0"]} {
-         lappend test_scenario "ST_SUBMIT_SUSPEND_RESUME_WAIT"
-      }
-      foreach st_test $test_scenario {
-         set n 10
-         ts_log_fine "starting single threaded test $st_test $n times each"
-         for {set i 0} {$i < $n} {incr i} {
-            ts_log_fine "test $i/$n"
-            drmaa_test $host $st_test $ts_config(testsuite_root_dir)/scripts/suspendable_sleeper.sh
+         if {[is_version_in_range "9.2.0"]} {
+            lappend test_scenario "ST_SUBMIT_SUSPEND_RESUME_WAIT"
+         }
+         foreach st_test $test_scenario {
+            set n 10
+            ts_log_fine "starting single threaded test $st_test $n times each"
+            for {set i 0} {$i < $n} {incr i} {
+               ts_log_fine "test $i/$n"
+               drmaa_test $host $st_test $ts_config(testsuite_root_dir)/scripts/suspendable_sleeper.sh
+            }
          }
       }
    }
@@ -427,6 +487,11 @@ proc drmaa_check_single_threaded_part_03 { } {
 #*******************************************************************************
 proc drmaa_check_single_threaded_part_04 { } {
    global ts_config CHECK_USER level_host_list
+
+   # Only the base runlevel runs this - see drmaa_level_runs().
+   if {![drmaa_level_runs "base"]} {
+      return
+   }
 
    foreach host $level_host_list {
       # -- tests with a <exit_arg_job> argument
@@ -474,6 +539,11 @@ proc drmaa_check_single_threaded_part_04 { } {
 proc drmaa_check_multi_threaded { } {
    global ts_config CHECK_USER level_host_list
 
+   # Only the base runlevel runs this - see drmaa_level_runs().
+   if {![drmaa_level_runs "base"]} {
+      return
+   }
+
    foreach host $level_host_list {
       # all MT tests need a sleeper job as argument
       set test_scenario {}
@@ -514,6 +584,11 @@ proc drmaa_check_multi_threaded { } {
 proc drmaa_check_additional_interfaces { } {
    global ts_config CHECK_ACT_LEVEL
    global CHECK_USER drmaa_binary_name level_host_list
+
+   # Only the base runlevel runs this - see drmaa_level_runs().
+   if {![drmaa_level_runs "base"]} {
+      return
+   }
 
    # shutdown qmaster
    shutdown_qmaster
