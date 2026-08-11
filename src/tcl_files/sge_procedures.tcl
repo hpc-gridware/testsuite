@@ -6297,6 +6297,22 @@ proc get_qacct {job_task_spec {my_variable "qacct_info"} {on_host ""} {as_user "
       incr timeout_value 60
       ts_log_finer "get_qacct(): increasing timeout to $timeout_value because qacct host might not be master host \"$ts_config(master_host)\"!"
    }
+
+   # The timeout above is sized for a single accounting record. Callers waiting
+   # for the records of a whole pe job need more: qmaster writes the accounting
+   # file buffered, so with hundreds of pe tasks the records trickle in and the
+   # time needed grows with their number while the window does not.
+   # tight_integration waits for 385 records in 30 s and loses the race on a
+   # busy host - the check then reports a timeout, not the defect it looks for.
+   #
+   # Granting the extra time is close to free: this is a positive wait, it
+   # returns the moment the last record has arrived. A larger window costs
+   # nothing when the records show up and only delays the report when they
+   # never do.
+   if {$expected_amount > 1} {
+      incr timeout_value [expr {$expected_amount / 2}]
+   }
+
    set timeout_value [ts_scale_timeout $timeout_value]
 
    # we might have a job specification with a pe task id
