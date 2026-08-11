@@ -44,7 +44,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "drmaa"
-set check_category        "API DRMAA TESTBIN VERIFIED JENKINS_DISABLED"
+set check_category        "API DRMAA TESTBIN VERIFIED"
 set check_description(0)    "tests available DMRAA lib on one arbitrary host"
 set check_description(101)  "tests to verify DRMAA 1.0 library on one host"
 set check_description(201)  "tests to verify DRMAA 1.0 library on one host of each architecture available"
@@ -94,7 +94,6 @@ proc drmaa_setup {} {
 # undo what we've done in drmaa_setup
 proc drmaa_cleanup  {} {
    global backup_qmaster_params drmaa_config ts_config current_drmaa_mode
-   global CHECK_USER env
 
    # delete all jobs that might be still running
    delete_all_jobs
@@ -106,13 +105,19 @@ proc drmaa_cleanup  {} {
    # undo configuration changes that were made for this test
    reset_config drmaa_config
 
-   # delete suspendable_sleeper.sh output file(s)
-   set output [start_remote_prog $ts_config(master_host) $CHECK_USER "ls" "$env(HOME)/suspendable_sleeper.sh.*"]
-   if {$prg_exit_state == 0} {
-      foreach fl $output {
-         delete_file $fl
-      }
-   }
+   # No output file to remove from the home directory any more.
+   #
+   # This used to glob $HOME/suspendable_sleeper.sh.* and delete every hit. That
+   # directory belongs to the operating system user, not to a cluster, so with
+   # several runners testing at once it deleted the files of the other runs -
+   # measured: a file planted under a foreign job id was gone after one run.
+   # Job ids are per cluster and every runner is installed from the same state,
+   # so the same name is produced by several of them anyway.
+   #
+   # The files came from ST_ERROR_FILE_FAILURE, which names an unwritable error
+   # path but left stdout at its default. test_drmaa now sends that stream to
+   # /dev/null, so nothing lands there and there is nothing to clean up. See
+   # CS-693.
 
    unset -nocomplain drmaa_config current_drmaa_mode host_list
 }
