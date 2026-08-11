@@ -813,10 +813,20 @@ proc qalter_hold {} {
    }
 
    # wait for job to run
-   if {[wait_for_jobstart $hold_job_A "leeper" 200 0] != -1} {
+   #
+   # An observation window, not a timeout: job A has been released but still
+   # depends on B and C, which are only released further down, so it cannot
+   # start while this runs and the window always elapses in full. Scaling it
+   # therefore buys nothing and costs everything - at the runners' factor of 3
+   # these 200 s became 600 s, which was 600 s of the check's 850 s spent
+   # waiting for something that cannot happen. See ts_no_timeout_scaling.
+   ts_no_timeout_scaling {
+      set started [wait_for_jobstart $hold_job_A "leeper" 200 0]
+   }
+   if {$started != -1} {
       ts_log_severe "job $hold_job_A should not start yet"
       delete_all_jobs
-      return 
+      return
    }
 
    # release job B 
