@@ -42,8 +42,10 @@ global check_root_access_needs
 
 # define test's name and run level descriptions
 set check_name            "per_job_consumables"
-set check_category        "AR RQS SCHEDULER VERIFIED JENKINS_DISABLED"
-set check_description(0)  "Test per job consumable functionality"
+set check_category        "AR RQS SCHEDULER VERIFIED"
+set check_description(0)  "Test per job consumable functionality - global complex and master task"
+set check_description(1)  "Test per job consumable functionality - exec host and resource quota set"
+set check_description(2)  "Test per job consumable functionality - cluster queue"
 
 # define test's dependencies
 set check_needs           "init_core_system"
@@ -53,16 +55,72 @@ set check_setup_function per_job_consumables_setup
 set check_cleanup_function per_job_consumables_cleanup
 
 # define test's procedure order
+#
+# One entry, which dispatches on the runlevel - see
+# per_job_consumables_run_level. The work itself is in the six procedures it
+# calls, one per place a consumable can be configured.
 set check_functions {}
-lappend check_functions "per_job_consumables_global"
-lappend check_functions "per_job_consumables_hosts"
-lappend check_functions "per_job_consumables_queues"
-lappend check_functions "per_job_consumables_rqs"
-lappend check_functions "per_job_consumables_master_task"; # job consumable is only configured on master task but
-                                                           # other hosts should also be used as slave tasks.
-lappend check_functions "per_job_consumables_master_task_rqs"
+lappend check_functions "per_job_consumables_run_level"
 
 # -------- local test procedures: initialization------------------------------
+
+##
+# @brief Run the check functions this runlevel is responsible for
+#
+# The six check procedures are independent of each other: each configures the
+# consumable in its own place - the global complex, an exec host, the cluster
+# queue, a resource quota set, the master task - runs the scenarios against it
+# and puts that place back to "none" itself. What they share is the ground
+# per_job_consumables_setup lays, and that is built fresh for every invocation
+# anyway. So they can be spread over runlevels of the short band: gcs-testscan
+# makes one unit per (test, level) and does not couple levels, which puts them
+# on different runners.
+#
+# Measured on a runner, per procedure: global 170 s, hosts 162 s, queues 168 s,
+# rqs 60 s, master_task 9 s, master_task_rqs 9 s - 579 s in series. Grouped by
+# those numbers:
+#
+#   0  global, master_task, master_task_rqs   187 s
+#   1  hosts, rqs                             228 s
+#   2  queues                                 175 s
+#
+# The critical path becomes 228 s instead of 579 s. Three levels and not six,
+# because each pays its own check.exp startup plus setup and cleanup - the queue
+# on three hosts, the PEs, the complex, the scheduler configuration, and 18 s
+# for the framework's configuration check.
+#
+# One dispatching check function rather than six guarded ones, and rather than
+# narrowing check_functions in a level hook. Guards make the framework announce
+# and enter every function only to have most of them return within a
+# millisecond. Narrowing check_functions works, and was measured to work, but
+# only because of an ordering nobody guaranteed: the non-empty check sits at
+# check.exp:4596, the level hook runs at 4614, the loop reads the global at
+# 4622. This way one function is declared and it always runs.
+#
+# The cost is reporting granularity: FUNCTION-DURATION now gives one line per
+# level instead of one per procedure. After the split the level is the unit that
+# gets scheduled, and its duration is recorded in check_durations.txt anyway.
+#
+proc per_job_consumables_run_level {} {
+   global CHECK_ACT_LEVEL
+
+   switch -- $CHECK_ACT_LEVEL {
+      0 {
+         per_job_consumables_global
+         # the consumable is configured on the master task only, the other hosts
+         # are still to be used for slave tasks
+         per_job_consumables_master_task
+         per_job_consumables_master_task_rqs
+      }
+      1 {
+         per_job_consumables_hosts
+         per_job_consumables_rqs
+      }
+      2 {
+         per_job_consumables_queues
+      }
+   }
+}
 
 proc per_job_consumables_setup {} {
    global job_consumables_hosts
@@ -157,8 +215,17 @@ proc per_job_consumables_run_test {scenario max_jobs_running slots_per_job {add_
    }
    wait_for_jobstart $job_id "sleep" 60 1 1
 
+   # The consumable is exhausted, so this job must NOT start. That makes the 15 s
+   # an observation window, not a timeout, and it always elapses in full.
+   # ts_scale_timeout would turn it into 45 s under the runners' factor of 3 and
+   # buy nothing: waiting longer for something that must not happen only costs
+   # time. Measured on a runner - the test has 30 such windows, and scaling them
+   # took it from 579 s to 1474 s, the whole difference. See ts_no_timeout_scaling.
    set job_id [submit_job "$add_job_args $job_args"]
-   if {[wait_for_jobstart $job_id "sleep" 15 0 1] == 0} {
+   ts_no_timeout_scaling {
+      set started [wait_for_jobstart $job_id "sleep" 15 0 1]
+   }
+   if {$started == 0} {
       ts_log_severe "job consumable not enforced for $scenario"
    } else {
       # TODO: check output with qalter -w p (optional)
@@ -206,8 +273,12 @@ proc per_job_consumables_run_test_ar {scenario max_jobs_running slots_per_job {a
    }
 
    # test if consumable limit is enforced for non-ar jobs
+   # An observation window, not a timeout - see per_job_consumables_run_test().
    set job_id [submit_job "$add_job_args $job_args"]
-   if {[wait_for_jobstart $job_id "sleep" 15 0 1] == 0} {
+   ts_no_timeout_scaling {
+      set started [wait_for_jobstart $job_id "sleep" 15 0 1]
+   }
+   if {$started == 0} {
       ts_log_severe "job consumable not enforced for non-ar jobs in $scenario"
    } else {
       # TODO: check output with qalter -w p (optional)
@@ -224,8 +295,12 @@ proc per_job_consumables_run_test_ar {scenario max_jobs_running slots_per_job {a
    set job_id [submit_job "$add_job_args $job_args"]
    wait_for_jobstart $job_id "sleep" 60 1 1
 
+   # An observation window, not a timeout - see per_job_consumables_run_test().
    set job_id [submit_job "$add_job_args $job_args"]
-   if {[wait_for_jobstart $job_id "sleep" 15 0 1] == 0} {
+   ts_no_timeout_scaling {
+      set started [wait_for_jobstart $job_id "sleep" 15 0 1]
+   }
+   if {$started == 0} {
       ts_log_severe "job consumable not enforced inside ar for $scenario"
    } else {
       # TODO: check output with qalter -w p (optional)
