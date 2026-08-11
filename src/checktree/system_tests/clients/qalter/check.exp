@@ -1720,8 +1720,12 @@ proc qalter_a {} {
      return
    }
 
+   # The lead has to grow with the load: what follows is a qalter, a qrls and
+   # the negative check below, and under 32 clusters on one host set those take
+   # longer (CS-2481).
+   set lead [ts_scale_timeout 120]
    set now [clock seconds]
-   set then [expr $now + 120]
+   set then [expr {$now + $lead}]
    set start [clock format $then -format "%Y%m%d%H%M.%S"]
 
    set option "-a $start"
@@ -1741,21 +1745,53 @@ proc qalter_a {} {
    ts_log_fine "qrls output is $qrlsoutput"
 
    # calulate time until job should run
-   set wait_time 100
-   ts_log_fine "qalter $option - job should not start the next $wait_time seconds"
-   if {[wait_for_jobstart $job_id "leeper" $wait_time 0] != -1} {
-      ts_log_severe "qalter $option - job should not run until yet"
-      delete_all_jobs
-      return 
-   } 
+   #
+   # How long we may assert "has not started yet" is what is left of the lead,
+   # not a constant. With a lead of 120 s and a window of 100 s there were 20 s
+   # of slack, and ts_scale_timeout stretched the window - and only the window -
+   # to 300 s under the runners' factor of 3. The job then started inside the
+   # very window in which it must not, and the check reported a defect that was
+   # none: it failed in all three phases of the run of 2026-08-11 while passing
+   # every single check at factor 1.
+   set remaining [expr {$then - [clock seconds] - 15}]
+   if {$remaining < 5} {
+      ts_log_fine "qalter $option - only $remaining s of the lead left, skipping the negative check"
+   } else {
+      set wait_time [expr {$remaining > 100 ? 100 : $remaining}]
+      ts_log_fine "qalter $option - job should not start the next $wait_time seconds"
+      # NOT scaled: an observation window, not a timeout. See ts_no_timeout_scaling.
+      ts_no_timeout_scaling {
+         set started [wait_for_jobstart $job_id "leeper" $wait_time 0]
+      }
+      if {$started != -1} {
+         ts_log_severe "qalter $option - job should not run until yet"
+         delete_all_jobs
+         return
+      }
+   }
 
    # wait for job to start
-   ts_log_fine "qalter $option - ok now the job should start"
-   if {[wait_for_jobstart $job_id "leeper" 60 1 1] == -1} {
+   #
+   # This wait has to bridge whatever is left of the lead and only then allow
+   # for a dispatch: the job may not start before the start time no matter how
+   # idle the cluster is. A constant 60 s worked while the lead was a constant
+   # 120 s; with the lead scaled it ran out before the start time was reached
+   # and the check reported "job doesn't start" for a job that was correctly
+   # still waiting. Only the dispatch allowance is scaled - the rest is wall
+   # clock and must not be multiplied.
+   set to_start [expr {$then - [clock seconds]}]
+   if {$to_start < 0} {
+      set to_start 0
+   }
+   ts_log_fine "qalter $option - ok now the job should start ($to_start s of the lead left)"
+   ts_no_timeout_scaling {
+      set started [wait_for_jobstart $job_id "leeper" [expr {$to_start + [ts_scale_timeout 60]}] 1 1]
+   }
+   if {$started == -1} {
       ts_log_severe "qalter $option - job doesn't start"
       del_job_files $job_id $job_output_dir 2
-      return 
-   } 
+      return
+   }
  
    # wait for end of job
    if {[wait_for_jobend $job_id "leeper" 300 0] == -1} {
