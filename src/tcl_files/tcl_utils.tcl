@@ -303,7 +303,8 @@ proc gname2gid {grp_name {host ""} {user ""}} {
 # This procedure adds or replaces a parameter in a string. The parameter is
 # identified by its name. If the parameter is already present in the string,
 # it is replaced by the new value. If the parameter is not present, it is
-# added to the string. If the new value is empty, the parameter is removed.
+# added to the string. If the new value is empty, the parameter is removed -
+# removing one that is not in there leaves the string untouched.
 #
 # @param input the original string
 # @param name_only the name of the parameter
@@ -325,7 +326,7 @@ proc add_or_replace_param {input name_only name_value {delimiter ","}} {
       } else {
          lset params $idx $name_value
       }
-   } else {
+   } elseif {$name_value != ""} {
       lappend params $name_value
    }
    set output [join $params $delimiter]
@@ -336,6 +337,26 @@ proc add_or_replace_param {input name_only name_value {delimiter ","}} {
    } else {
       return "NONE"
    }
+}
+
+## @brief remove a parameter from a string
+#
+# Counterpart to add_or_replace_param: takes the named parameter out of a
+# delimiter separated parameter string. Removing a parameter that is not in
+# there returns the input unchanged. Removing the last remaining parameter
+# returns "NONE", which is what the config attributes expect as empty value.
+#
+# @param input the original string
+# @param name_only the name of the parameter to remove
+# @param delimiter the delimiter used to separate the parameters
+#
+proc remove_param {input name_only {delimiter ","}} {
+   # add_or_replace_param short circuits an empty/NONE input to the new value,
+   # which is "" here - there is nothing to remove, so keep it "NONE".
+   if {$input == "" || [string toupper $input] == "NONE"} {
+      return "NONE"
+   }
+   return [add_or_replace_param $input $name_only "" $delimiter]
 }
 
 ##

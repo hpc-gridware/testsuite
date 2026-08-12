@@ -104,11 +104,16 @@ proc simhost_init {} {
 # Optionally the hosts can be added into a new host group.
 #
 # ATTENTION
-# If necessary host simulation is switched on by adding SIMULATE_EXECDS to the global config/qmaster_params.
-# If not yet exists a complex variable "load_report_host" is created. That one is removed again by
-# simhost_delete() once the last simulated host is gone, so the caller does not have to care about it.
-# It is in the reponsibility of the caller to backup the global config before calling simhost_add
-# (e.g. in the setup_function) and to restore it after deleting the simulated hosts again!
+# The framework has two side effects on the cluster and rolls both of them back itself,
+# in simhost_delete() once the last simulated host is gone:
+#   - host simulation is switched on by adding SIMULATE_EXECDS to the global config/qmaster_params
+#   - a complex variable "load_report_host" is created
+# Both are only undone if simhost_add() was the one that established them - a SIMULATE_EXECDS
+# or a load_report_host that was already there when we came along stays untouched.
+#
+# The caller still has to restore everything IT changed, and backing up the global config
+# in the setup_function is still recommended: the rollback above needs a matching
+# simhost_delete() to run, which does not happen if the test dies in between.
 # If a host group got created this also has to be deleted by the caller!
 #
 # @param[in] num_hosts
@@ -141,6 +146,11 @@ proc simhost_add {num_hosts {host_group ""} {attribute_array ""} {load_report_ho
    }
 
    # do we have to enable the use of simulated hosts or has it already been done?
+   #
+   # Remember whether we switched it on, so that simhost_delete() can switch it off
+   # again once the last simulated host is gone. Leaving SIMULATE_EXECDS behind means
+   # every later test in the same run gets simulated execds instead of real ones -
+   # they then never see a shepherd and fail in ways that point everywhere but here.
    get_config global_config
    if {[string first "SIMULATE_EXECDS" $global_config(qmaster_params)] < 0} {
       ts_log_fine "need to enable SIMULATE_EXECDS"
@@ -148,6 +158,7 @@ proc simhost_add {num_hosts {host_group ""} {attribute_array ""} {load_report_ho
       set qmaster_params [add_or_replace_param $qmaster_params "SIMULATE_EXECDS" "SIMULATE_EXECDS=TRUE"]
       set gc(qmaster_params) $qmaster_params
       set_config gc
+      set simhost_cache(enabled_simulate_execds) 1
    }
 
    # need a complex variable "load_report_host"
@@ -165,9 +176,9 @@ proc simhost_add {num_hosts {host_group ""} {attribute_array ""} {load_report_ho
    }
 
    if {$host_group != ""} {
-      ts_log_fine "adding $num_hosts hosts"
-   } else {
       ts_log_fine "adding $num_hosts hosts to host group $host_group"
+   } else {
+      ts_log_fine "adding $num_hosts hosts"
    }
    set num_real_hosts [llength $ts_config(execd_nodes)]
    set added_hosts {}
@@ -328,6 +339,18 @@ proc simhost_delete {hosts} {
          set cplx(load_report_host) ""
          set_complex cplx
          unset simhost_cache(created_load_report_host)
+      }
+
+      # Same for SIMULATE_EXECDS: with the last simulated host gone there is nothing
+      # left to simulate, and a leftover flag would silently turn the execds of every
+      # following test into simulated ones.
+      if {[llength $simhost_cache(used_hosts)] == 0 &&
+          [info exists simhost_cache(enabled_simulate_execds)]} {
+         ts_log_fine "disabling SIMULATE_EXECDS again"
+         get_config global_config
+         set gc(qmaster_params) [remove_param $global_config(qmaster_params) "SIMULATE_EXECDS"]
+         set_config gc
+         unset simhost_cache(enabled_simulate_execds)
       }
    }
 }
