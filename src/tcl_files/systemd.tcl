@@ -319,27 +319,19 @@ proc systemd_get_slice_name {} {
 }
 
 ###
-# @brief Check and clean up leftover systemd job slices.
+# @brief Get the cgroup path of the slice which holds the per job slices.
 #
-# This function checks for leftover systemd job slices on the specified host
-# and attempts to clean them up by stopping the slices.
+# The per job slices of tightly integrated parallel jobs are created below this
+# directory, one per job, named `<slice_name>-jobs-<job_id>[.<task_id>].slice`.
 #
-# It uses the `systemctl stop` command to stop any slices that match the
-# pattern `ocs$ts_config(commd_port)-jobs-` (the default used by testsuite).
+# @param host The host to build the path for.
+# @returns the path, or an empty string if the cgroup version cannot be determined.
 #
-# @param host The host to check for leftover systemd job slices.
-#
-proc systemd_check_cleanup_job_slices {host} {
-   get_current_cluster_config_array ts_config
-   global CHECK_USER
-
+proc systemd_get_job_slices_path {host} {
    set cgroup_version [systemd_get_cgroup_version $host]
    if {$cgroup_version < 0} {
-      return 0
+      return ""
    }
-
-   # expect everything to be fine
-   set ret 1
 
    set slice_name [systemd_get_slice_name]
    if {$cgroup_version == 1} {
@@ -350,33 +342,120 @@ proc systemd_check_cleanup_job_slices {host} {
       set slice_path "/sys/fs/cgroup/${slice_name}.slice/${slice_name}-jobs.slice"
    }
 
-   ts_log_fine "checking cleanup of systemd slice $slice_path on host $host"
+   return $slice_path
+}
 
-   set left_slices {}
-   set errors {}
+###
+# @brief Get the per job systemd slices which currently exist on a host.
+#
+# Looks below the jobs slice of this cluster and returns the names of the slices
+# found there. An empty result means that no job slice exists on the host, which
+# is the expected state when no tightly integrated parallel job is running.
+#
+# @param host The host to look at.
+# @returns list of slice names, e.g. `ocs8012-jobs-25.slice`.
+#
+proc systemd_get_job_slices {host} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set slice_path [systemd_get_job_slices_path $host]
+   if {$slice_path == ""} {
+      return {}
+   }
+
+   set slices {}
    if {[remote_file_isdirectory $host $slice_path]} {
       analyze_directory_structure $host $CHECK_USER $slice_path dirs "" ""
-      #ts_log_fine $dirs
 
       set pattern "ocs$ts_config(commd_port)-jobs-"
-      #ts_log_fine "looking for leftover systemd job slices with pattern: $pattern"
       foreach dir $dirs {
          set pos [string first $pattern $dir]
          if {$pos >= 0} {
-            set slice [string range $dir $pos end]
-            ts_log_fine "   -> $slice"
-            lappend left_slices $slice
-            set output [start_remote_prog $host "root" "systemctl" "stop $slice"]
-            if {$prg_exit_state != 0} {
-               lappend errors "$slice: $prg_exit_state: $output"
-            }
-            set ret 0
+            lappend slices [string range $dir $pos end]
          }
       }
    }
 
+   return $slices
+}
+
+###
+# @brief The hosts which can have per job systemd slices.
+#
+# Job slices are created by the execution daemons, so only execd nodes running
+# under systemd control are of interest.
+#
+# @param host_list Hosts to reduce to the ones with systemd, or an empty list for
+#                  all execd nodes of the cluster.
+# @returns list of hosts.
+#
+proc systemd_get_job_slice_hosts {{host_list {}}} {
+   get_current_cluster_config_array ts_config
+
+   if {[llength $host_list] == 0} {
+      set host_list $ts_config(execd_nodes)
+   }
+
+   set hosts {}
+   foreach host $host_list {
+      if {[host_has_systemd $host]} {
+         lappend hosts $host
+      }
+   }
+
+   return $hosts
+}
+
+###
+# @brief Check and clean up leftover systemd job slices.
+#
+# This function checks for leftover systemd job slices on the specified host
+# and attempts to clean them up by stopping the slices.
+#
+# It uses the `systemctl stop` command to stop any slices that match the
+# pattern `ocs$ts_config(commd_port)-jobs-` (the default used by testsuite).
+#
+# This is the final verdict, called once a test has finished: a slice which is
+# still there is a defect. A test which shuts an execd down while a tightly
+# integrated parallel job is running has to call
+# systemd_wait_for_end_of_all_job_slices() in its cleanup first - the slice is
+# removed by the execd, and the execd needs a moment for it.
+#
+# @param host The host to check for leftover systemd job slices.
+#
+proc systemd_check_cleanup_job_slices {host} {
+   set slice_path [systemd_get_job_slices_path $host]
+   if {$slice_path == ""} {
+      return 0
+   }
+
+   # expect everything to be fine
+   set ret 1
+
+   ts_log_fine "checking cleanup of systemd slice $slice_path on host $host"
+
+   set left_slices [systemd_get_job_slices $host]
+   set errors {}
+   set statuses {}
+   foreach slice $left_slices {
+      ts_log_fine "   -> $slice"
+      set output [start_remote_prog $host "root" "systemctl" "status $slice"]
+      ts_log_fine $output
+      lappend statuses $output
+      set output [start_remote_prog $host "root" "systemctl" "stop $slice"]
+      if {$prg_exit_state != 0} {
+         lappend errors "$slice: $prg_exit_state: $output"
+      }
+      set ret 0
+   }
+
    if {[llength $left_slices] > 0} {
       set msg "Found and removed leftover systemd job slices on host $host: [join $left_slices ", "]"
+      append msg "\nStatus of each leftover slice:\n"
+      foreach status $statuses {
+         append msg "$status\n\n"
+      }
       append msg "\nErrors during cleanup:\n"
       append msg [join $errors "\n"]
       ts_log_severe $msg
@@ -385,6 +464,61 @@ proc systemd_check_cleanup_job_slices {host} {
    }
 
    return $ret
+}
+
+###
+# @brief Wait until no per job systemd slice is left on the given hosts.
+#
+# The slice of a tightly integrated parallel job is removed by the execd once the
+# job is finished. When a test shuts an execd down and starts it again, the execd
+# only learns that the job has ended when it reconciles its jobs, which it does
+# periodically - so the slice outlives the job by up to that interval. A test
+# doing this has to wait for the slices to vanish in its cleanup function, before
+# the framework does its final check with systemd_check_cleanup_job_slices().
+#
+# @param host_list Hosts to look at, or an empty list (default) for all execd
+#                  nodes of the cluster.
+# @param timeout   How long to wait in seconds, by default long enough for an
+#                  execd which was started immediately before this call.
+# @returns 1 if all job slices are gone, 0 if some remained (reported as error).
+#
+proc systemd_wait_for_end_of_all_job_slices {{host_list {}} {timeout 90}} {
+   if {![ge_has_feature "systemd"]} {
+      return 1
+   }
+
+   set hosts [systemd_get_job_slice_hosts $host_list]
+   if {[llength $hosts] == 0} {
+      return 1
+   }
+
+   ts_log_fine "waiting for systemd job slices to vanish on [join $hosts ", "], timeout ${timeout}s"
+
+   set start_time [clock seconds]
+   set end_time [expr $start_time + $timeout]
+   while {1} {
+      set left_slices {}
+      foreach host $hosts {
+         foreach slice [systemd_get_job_slices $host] {
+            lappend left_slices "$host: $slice"
+         }
+      }
+
+      set elapsed [expr [clock seconds] - $start_time]
+      if {[llength $left_slices] == 0} {
+         ts_log_fine "all systemd job slices are gone after ${elapsed}s"
+         return 1
+      }
+
+      if {[clock seconds] >= $end_time} {
+         set msg "systemd job slices still exist after ${elapsed}s:\n"
+         append msg [join $left_slices "\n"]
+         ts_log_severe $msg
+         return 0
+      }
+
+      sleep_for_seconds 5 "waiting for systemd job slices to vanish: [join $left_slices ", "]"
+   }
 }
 
 ###

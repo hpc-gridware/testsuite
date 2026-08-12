@@ -203,6 +203,13 @@ proc enforce_limits_cleanup {} {
    delete_all_jobs
    wait_for_end_of_all_jobs 60
 
+   # Several of the check functions above shut execds down while a tightly
+   # integrated job is running and start them again. Such an execd only removes
+   # the job's systemd slice once it has reconciled its jobs, which happens
+   # periodically - wait for that here, before the framework does its own final
+   # check with systemd_check_cleanup_job_slices().
+   systemd_wait_for_end_of_all_job_slices
+
    # unassign tight pe
    unassign_queues_with_pe_object tight
    del_pe tight

@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -277,6 +277,11 @@ proc auto_reschedule_cleanup {} {
 
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   # the test shuts execds down while a tightly integrated job is running and
+   # starts them again - such an execd removes the job's systemd slice only once
+   # it has reconciled its jobs, which happens periodically
+   systemd_wait_for_end_of_all_job_slices
 
    # restore complex_values
    foreach host $ts_config(execd_nodes) {

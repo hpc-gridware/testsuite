@@ -121,6 +121,10 @@ proc issue_3170_cleanup {} {
    ts_log_fine "wait for end of all jobs ..."
    wait_for_end_of_all_jobs
 
+   # the test shuts the execd down while a tightly integrated job is running and
+   # starts it again - such an execd removes the job's systemd slice only once it
+   # has reconciled its jobs, which happens periodically
+   systemd_wait_for_end_of_all_job_slices
 
    ts_log_fine "removing queues ..."
    foreach q $test_3170_config(queue_list) {
