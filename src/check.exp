@@ -5260,6 +5260,17 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       incr nr_errors
    }
 
+   # did a daemon die while this test ran?
+   # Only crashes are looked at, not every error in the messages files: tests
+   # provoke errors and warnings themselves, a crash is never provoked.
+   # This has to run after the cleanup function, like the valgrind check above,
+   # because the cleanup shuts daemons down and starts them again in some
+   # tests. A dead execd does not stop the cluster, so without this the test
+   # that killed it passes and the failure surfaces in a later, innocent one.
+   if {[check_daemon_crashes] > 0} {
+      incr nr_errors
+   }
+
    if {$was_check_abort} {
       ts_log_fine "******************************************************************"
       ts_log_fine "* Testsuite user abort. Setting test state to uncompleted!       *"

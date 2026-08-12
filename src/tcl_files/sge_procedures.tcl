@@ -913,6 +913,191 @@ proc check_execd_messages { hostname { show_mode 0 } } {
    return $return_value
 }
 
+#****** sge_procedures/check_daemon_crashes() **********************************
+#  NAME
+#     check_daemon_crashes() -- report daemons that died from a signal
+#
+#  SYNOPSIS
+#     check_daemon_crashes { }
+#
+#  FUNCTION
+#     Scans the messages file of every execd and of the qmaster for the banner
+#     the TerminationManager writes when a daemon dies from a signal:
+#
+#        |C|*** SIGNAL 6 (SIGABRT: Abort) received ***
+#        |C|Stacktrace:
+#        |C|<frames>
+#
+#     Only |C| entries carrying that banner are reported. |E| and |W| are
+#     ignored on purpose: tests provoke those themselves - tight_integration
+#     even asserts on them - so reporting them would bury the real thing under
+#     false alarms. No test provokes a crash.
+#
+#     Why this is worth a check of its own: a dead execd does NOT stop the
+#     cluster. The remaining execds keep taking work, so the run continues and
+#     the failure surfaces somewhere else entirely - as "didn't accept task",
+#     as a missing accounting record, as a limit that was not enforced. Tests
+#     that do not need the dead host even pass and report a health that no
+#     longer holds for part of the cluster. Checking here names the daemon and
+#     the test it died under.
+#
+#     The whole file is scanned on every call, not only what was appended since
+#     the last one. Nothing reinstalls a cluster whose execd died, so the file
+#     keeps growing over the whole run. Each crash is therefore identified by
+#     host and by the timestamp of its banner and reported once. That survives
+#     a call that never happened because a test aborted, a recreated file and a
+#     reinstall alike - none of which a remembered line number would survive.
+#
+#     Reading is done with grep on the remote host. Transferring six full
+#     messages files per test would be substantial, and only the banner and a
+#     few frames below it are needed.
+#
+#  RESULT
+#     number of crashes reported by this call, 0 while the daemons are intact
+#
+#  SEE ALSO
+#     sge_procedures/check_execd_messages()
+#     sge_procedures/check_qmaster_messages()
+#*******************************************************************************
+proc check_daemon_crashes {} {
+   get_current_cluster_config_array ts_config
+
+   set nr_crashes 0
+
+   foreach host $ts_config(execd_nodes) {
+      incr nr_crashes [check_daemon_crashes_of_host $host "execd" [check_execd_messages $host 2]]
+   }
+   incr nr_crashes [check_daemon_crashes_of_host $ts_config(master_host) "qmaster" [check_qmaster_messages 2]]
+
+   return $nr_crashes
+}
+
+#****** sge_procedures/check_daemon_crashes_of_host() **************************
+#  NAME
+#     check_daemon_crashes_of_host() -- crash check for one messages file
+#
+#  SYNOPSIS
+#     check_daemon_crashes_of_host { host daemon messages_file }
+#
+#  FUNCTION
+#     Helper of check_daemon_crashes(). Reports every crash banner in
+#     messages_file that has not been reported before, and remembers it.
+#
+#  INPUTS
+#     host          - host the daemon runs on
+#     daemon        - "execd" or "qmaster", for the error message
+#     messages_file - path of the messages file on that host
+#
+#  RESULT
+#     number of crashes reported for this file
+#*******************************************************************************
+proc check_daemon_crashes_of_host {host daemon messages_file} {
+   global CHECK_USER
+
+   # an unresolved spool directory yields no usable path - nothing to do
+   if {$messages_file == "" || [string first "unknown" $messages_file] >= 0} {
+      return 0
+   }
+
+   # -a because a partially written last line may hold binary
+   # raise_error 0: grep exits 1 when it finds nothing, which is the normal case
+   set output [start_remote_prog $host $CHECK_USER "grep" \
+                                 "-a -A 6 -F \"|C|*** SIGNAL\" $messages_file" \
+                                 prg_exit_state 60 0 "" "" 0 1 0 0]
+
+   set nr_crashes 0
+   set banner ""
+   set frames ""
+
+   foreach line [split $output "\n"] {
+      if {[string first "|C|*** SIGNAL" $line] >= 0} {
+         # a new banner ends the previous one
+         if {$banner != ""} {
+            incr nr_crashes [check_daemon_crashes_report $host $daemon $messages_file $banner $frames]
+         }
+         set banner [string trim $line]
+         set frames ""
+      } elseif {$banner != "" && [string first "|C|" $line] >= 0} {
+         append frames "   [string trim [lindex [split $line "|"] 5]]\n"
+      }
+   }
+   if {$banner != ""} {
+      incr nr_crashes [check_daemon_crashes_report $host $daemon $messages_file $banner $frames]
+   }
+
+   return $nr_crashes
+}
+
+#****** sge_procedures/check_daemon_crashes_report() ***************************
+#  NAME
+#     check_daemon_crashes_report() -- report one crash unless already known
+#
+#  SYNOPSIS
+#     check_daemon_crashes_report { host daemon messages_file banner frames }
+#
+#  FUNCTION
+#     Helper of check_daemon_crashes_of_host(). The identity of a crash is the
+#     host plus the timestamp of its banner, so the same crash is reported once
+#     however often the file is scanned afterwards.
+#
+#  RESULT
+#     1 if the crash was reported by this call, 0 if it was already known
+#*******************************************************************************
+proc check_daemon_crashes_report {host daemon messages_file banner frames} {
+   global CHECK_USER
+   get_current_cluster_config_array ts_config
+
+   set timestamp [lindex [split $banner "|"] 0]
+   set id "$host $timestamp"
+
+   # Remembered in a file, not in a variable: the parallel full run starts one
+   # check.exp process per test unit, so a variable would be empty again for
+   # every test and a single crash would fail all of them instead of one.
+   set crash_dir "$ts_config(results_dir)/crashes"
+   set reported_file "$crash_dir/reported.txt"
+   if {[catch {file mkdir $crash_dir} mkdir_error] != 0} {
+      ts_log_severe "cannot create $crash_dir: $mkdir_error"
+      return 0
+   }
+   if {[file exists $reported_file]} {
+      set fh [open $reported_file r]
+      set already [split [string trim [read $fh]] "\n"]
+      close $fh
+      if {[lsearch -exact $already $id] >= 0} {
+         return 0
+      }
+   }
+   set fh [open $reported_file a]
+   puts $fh $id
+   close $fh
+
+   set signal [string trim [lindex [split $banner "|"] 5]]
+
+   # Keep the file. Nothing reinstalls the cluster here, but the next run does,
+   # and a reinstall recreates the execd spool - that is how the evidence of the
+   # occurrence of 2026-08-08 was lost (CS-2495). The results directory is on
+   # shared storage, so the remote host can copy into it directly.
+   set saved ""
+   set crash_dir "$ts_config(results_dir)/crashes"
+   set stamp [string map {" " "_" ":" "" "." "" "-" ""} $timestamp]
+   set target "$crash_dir/$host-$stamp.messages"
+   if {[catch {file mkdir $crash_dir} mkdir_error] == 0} {
+      start_remote_prog $host $CHECK_USER "cp" "$messages_file $target" \
+                        prg_exit_state 60 0 "" "" 0 1 0 0
+      if {$prg_exit_state == 0} {
+         set saved "\nmessages file kept as $target"
+      } else {
+         set saved "\ncould not keep the messages file as $target"
+      }
+   } else {
+      set saved "\ncould not create $crash_dir: $mkdir_error"
+   }
+
+   ts_log_severe "$daemon on host \"$host\" died: $signal\nat $timestamp\ntop of the stacktrace:\n$frames\nfull trace in $messages_file on $host$saved\n\nThe cluster keeps running on its remaining daemons, so results of this and\nof later tests on this cluster are not trustworthy."
+
+   return 1
+}
+
 #****** sge_procedures/start_sge_bin() *****************************************
 #  NAME
 #     start_sge_bin() -- start a sge binary
