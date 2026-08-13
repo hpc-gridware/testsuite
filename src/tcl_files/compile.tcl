@@ -2342,8 +2342,13 @@ proc check_packages_directory { path { mode "check_both" } { get_files "no" } } 
    set tar_doc_files [ get_file_names $path "*cs*-doc*.tar.gz" ]
    set zip_doc_files [ get_file_names $path "*cs*-doc*.zip" ]
 
-   set tar_list "$tar_bin_files $tar_common_files $tar_doc_files"
-   set zip_list "$zip_bin_files $zip_common_files $zip_doc_files"
+   # product extensions (arco, drmaaj, ...) come in their own packages,
+   # the corresponding checktrees tell us which packages belong to them
+   set tar_extension_files [checktree_get_package_files $path "tar"]
+   set zip_extension_files [checktree_get_package_files $path "zip"]
+
+   set tar_list "$tar_bin_files $tar_common_files $tar_doc_files $tar_extension_files"
+   set zip_list "$zip_bin_files $zip_common_files $zip_doc_files $zip_extension_files"
 
 
    set nr_tar_bin_files [ llength $tar_bin_files ]
@@ -2352,6 +2357,8 @@ proc check_packages_directory { path { mode "check_both" } { get_files "no" } } 
    set nr_zip_common_files [ llength $zip_common_files ]
    set nr_tar_doc_files [ llength $tar_doc_files ]
    set nr_zip_doc_files [ llength $zip_doc_files ]
+   set nr_tar_extension_files [ llength $tar_extension_files ]
+   set nr_zip_extension_files [ llength $zip_extension_files ]
 
    set tar_complete 0
    set zip_complete 0
@@ -2371,6 +2378,8 @@ proc check_packages_directory { path { mode "check_both" } { get_files "no" } } 
       puts "nr. of common zip files: $nr_zip_common_files"
       puts "nr. of doc tar files: $nr_tar_doc_files"
       puts "nr. of doc zip files: $nr_zip_doc_files"
+      puts "nr. of product extension tar files: $nr_tar_extension_files ($tar_extension_files)"
+      puts "nr. of product extension zip files: $nr_zip_extension_files ($zip_extension_files)"
       if { $tar_complete == 1 } {
          puts "tar files complete"
       } else {
