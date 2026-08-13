@@ -1115,16 +1115,22 @@ proc setup_default_calendars {} {
 #
 # @return list of {pattern reason} pairs, pattern for [string match]
 proc setup_check_messages_allowed {} {
-   return {
-      {{*sched_configuration* for reading: No such file or directory*}
-       {fresh spool directory - the scheduler configuration is written later}}
-      {{*sharetree* for reading: No such file or directory*}
-       {fresh spool directory - there is no sharetree yet}}
-      {{adminhost*already exists*}
-       {inst_qmaster.sh AddHosts() adds the shadow hosts with the same
-        "qconf -ah" it uses for the admin hosts, so a host that is both - the
-        master host here - is added twice}}
+   set allowed_messages {}
+   lappend allowed_messages {{*sched_configuration* for reading: No such file or directory*}
+                             {fresh spool directory - the scheduler configuration is written later}}
+   lappend allowed_messages {{*sharetree* for reading: No such file or directory*}
+                             {fresh spool directory - there is no sharetree yet}}
+   lappend allowed_messages {{adminhost*already exists*}
+                             {inst_qmaster.sh AddHosts() adds the shadow hosts with the same
+                              "qconf -ah" it uses for the admin hosts, so a host that is both - the
+                              master host here - is added twice}}
+   if {[is_version_in_range "" "9.1.5"]} {
+      # several 9.1.x versions had the following issue - skip it if we installed such a version
+      lappend allowed_messages {{*event client not properly initialized (ec_prepare_registration)*}
+                                {fixed in 9.1.5: CS-2464 qmaster logged errors for events that are simply not subscribed}}
    }
+
+   return $allowed_messages
 }
 
 ## @brief classify one line of a messages file
