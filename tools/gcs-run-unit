@@ -236,8 +236,19 @@ start=$(date +%s)
   # the parent's entry would run the children a second time -- qconf.0 would
   # drag in qconf_add_remove_queues.0 (1223 s) -- and would also run what the
   # VERIFIED/JENKINS_DISABLED filter deliberately kept out of the run.
+  # CS-984: runners verify after every check that its cleanup function restored
+  # the cluster, and a check that did not is a failure. Default fail rather than
+  # report, because a leftover is not a cosmetic finding: it is the next check on
+  # this slot that pays for it, and the funnel is what tells a real one from an
+  # artifact -- a cleanup failure goes through phases 2 and 3 like any other, and
+  # only phase 3 decides.
+  #
+  # Set here and not in the runner wrappers so all three phases get it from one
+  # place, and overridable so a run can be put back to "report" without an edit.
+  # A check started by hand stays unverified unless asked, like GCS_L10N_CACHE.
   if CS_SELF_HEAL=1 CS_NO_DESCEND=1 CS_TIMEOUT_FACTOR="${CS_TIMEOUT_FACTOR:-3}" \
      GCS_L10N_CACHE="${GCS_L10N_CACHE:-0}" \
+     GCS_CLEANUP_CHECK="${GCS_CLEANUP_CHECK:-fail}" \
      "$runner" "${_args[@]}" 2>&1 | tee -a "$_log"; then
     printf '### %s ok (%ss, slot %s)\n' "$name" "$(( $(date +%s) - start ))" "$slot"
   else
