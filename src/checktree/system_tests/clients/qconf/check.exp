@@ -1960,6 +1960,18 @@ proc qconf_modify_checkpoint {} {
       ts_log_fine "result is $result21"
    }
 
+   # Remove what the modify above created. Since 9.2 a modify implicitly adds:
+   # "-a/-A and -m/-M no longer fail depending on whether an object already
+   # exists" (release notes; CS-2300 for checkpoints, CS-2299 for calendars,
+   # CS-2302 for roles). So "$CKPT_NAME" is not rejected any more - it is created,
+   # and it used to stay in the cluster after this check (CS-2585).
+   #
+   # Note for whoever revisits this: the expectation above still reads
+   # "result21 == -1", i.e. the pre-9.2 behaviour. It never failed the check
+   # because the else branch only logs, but the negative case no longer tests
+   # what its comment claims.
+   del_ckpt $CKPT_NAME "" "" 0
+
    # Now try to modify using a non-existent checkpoint slow
 # TODO: we have to modify the way how handle_vi_edit works.
 #       at least, handle_vi_edit has to accept multiple error messages.
