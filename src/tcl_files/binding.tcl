@@ -487,6 +487,20 @@ proc cleanup_host_slots_for_binding {{backup_var ""} {unset_backup_var 1}} {
          upvar 0 host_slots_for_binding_backup backup
       } else {
          upvar $backup_var backup
+
+         # A caller that hands us a host or a host list instead of a backup
+         # variable - easy to do, because setup_host_slots_for_binding takes the
+         # HOSTS first and this proc the BACKUP - leaves an upvar to a variable
+         # that does not exist. The loop below then restores nothing and reports
+         # nothing, which is how two checks kept slots=1000 and slots=32 on their
+         # exec hosts until the configuration was compared (CS-2581, CS-2582).
+         if {![info exists backup]} {
+            ts_log_severe "cleanup_host_slots_for_binding: there is no variable\
+                           \"$backup_var\" in the caller. This proc takes the BACKUP\
+                           variable, setup_host_slots_for_binding takes the HOSTS -\
+                           nothing was restored."
+            return
+         }
       }
 
       # we restore the hosts for which we have a backup
