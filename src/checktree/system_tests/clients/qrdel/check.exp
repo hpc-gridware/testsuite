@@ -115,6 +115,12 @@ proc qrdel_cleanup {} {
    del_queue $queue test_host 0 1
    del_pe $pe
    del_user_from_access_list $CHECK_FIRST_FOREIGN_SYSTEM_USER "arusers"
+
+   # Remove the access list itself, not just its members. "qconf -au" creates
+   # the list when it does not exist yet, while "qconf -du" only takes the user
+   # out - so an empty "arusers" userset outlived the check (CS-2587).
+   del_access_list "arusers"
+
    set_exechost host_backup $test_host
    start_sge_bin "qmod" "-c all.q"
 }

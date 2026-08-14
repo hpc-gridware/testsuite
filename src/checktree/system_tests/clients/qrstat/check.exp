@@ -88,6 +88,11 @@ proc qrstat_test_cleanup {} {
    del_user_from_access_list $CHECK_FIRST_FOREIGN_SYSTEM_USER "arusers"
    del_user_from_access_list $CHECK_SECOND_FOREIGN_SYSTEM_USER "arusers"
 
+   # Remove the access list itself, not just its members. "qconf -au" creates
+   # the list when it does not exist yet, while "qconf -du" only takes the user
+   # out - so an empty "arusers" userset outlived the check (CS-2588).
+   del_access_list "arusers"
+
    delete_all_ars
 
    del_queue $qrstat_queue $qrstat_host 0 1
