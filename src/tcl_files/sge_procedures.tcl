@@ -460,6 +460,23 @@ proc ge_has_feature {feature {quiet 0}} {
                set result 1
             }
          }
+         "bulk-object-export" {
+            # CS-984: "qconf -S<obj> name|dir" is the counterpart of -A<obj> and
+            # writes every object of a kind into a directory with one request.
+            # Together with "-fmt json" that makes a whole cluster configuration
+            # readable in a handful of calls.
+            #
+            # Ask the usage line rather than the version: both arrived with 9.2,
+            # but a build where one of them landed on a different schedule then
+            # answers for itself. -Sq is asked because it is the plainest of the
+            # directory-taking options; the singletons (-Ssconf, -Sstree) say
+            # "fname" and would not prove anything about directory mode.
+            set result 0
+            set output [start_sge_bin "qconf" "-help"]
+            if {[string first "\[-Sq name|dir\]" $output] >= 0} {
+               set result 1
+            }
+         }
          "delete-object-lists" {
             # -dcal, -dckpt, -dhgrp, -dp and -dq take a comma separated name list
             # only from 9.2 on; before that they take exactly ONE name and look

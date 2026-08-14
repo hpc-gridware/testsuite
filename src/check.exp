@@ -83,6 +83,24 @@
 #
 #     Both types of setup/cleanup functions can be combined in a single check.
 #
+#     check_cleanup_expected_changes
+#        CS-984, optional. Differences the cleanup verification must not report
+#        for THIS check, one {<kind> <object> <attribute>} triple per entry,
+#        matched with string match. An empty attribute means the object's
+#        existence only, so a check may declare that it leaves an object behind
+#        without also excusing every attribute in it.
+#
+#        set check_cleanup_expected_changes {
+#           {queue           myqueue *}
+#           {conf            global  execd_params}
+#           {hgroup          @mine   {}}
+#        }
+#
+#        Use it for a check that changes the cluster ON PURPOSE. It is not the
+#        place to silence a cleanup bug - fix the cleanup function instead.
+#        Complexes, roles, the scheduler configuration and the share tree accept
+#        no entry at all.
+#
 #  EXAMPLE
 #     1. per check setup/cleanup
 #     # define test's name and run level descriptions
@@ -319,6 +337,25 @@ set check_do_not_use_spool_config_entries 0
 # whether to create local configurations (qconf -aconf <hostname>) for every exec host or not
 global check_do_not_create_local_config
 set check_do_not_create_local_config 0
+
+# CS-984: verify after every test that its cleanup function restored the cluster.
+# "off" (default), "report" (log findings) or "fail" (findings fail the test).
+global check_cleanup_verification
+set check_cleanup_verification "off"
+
+# CS-984: is the snapshot taken before the current test's setup usable?
+global check_cleanup_baseline_valid
+set check_cleanup_baseline_valid 0
+
+# CS-984: per test cleanup verification exceptions, set by a check that changes
+# the cluster on purpose. Reset for every check, like check_needs.
+global check_cleanup_expected_changes
+set check_cleanup_expected_changes {}
+
+# CS-984: what each test left behind, collected over the whole run and printed
+# with the final counters. Keyed by check name.
+global check_cleanup_findings
+array set check_cleanup_findings {}
 
 # from compile_clean option
 global check_do_clean_compile
@@ -4058,6 +4095,7 @@ proc build_checks_to_do_list {list path state} {
 #                    and "all".
 #*******************************
 proc run_tests {path state_to_run} {
+   global check_cleanup_verification check_cleanup_findings
    global check_errstr CHECK_RESULT_DIRS
    global CHECK_MAILS_SENT CHECK_ENABLE_MAIL CHECK_MAX_ERROR_MAILS
    global CHECK_ACT_PATH check_use_installed_system
@@ -4225,6 +4263,24 @@ proc run_tests {path state_to_run} {
    ts_log_info "Number of failed tests        : [llength $check_error_name]" 0 "" 1 1 0
    ts_log_info "Number of unsupported tests   : [llength $check_warning_name]" 0 "" 1 1 0
    ts_log_info "Number of dependencies errors : [llength $check_missing_dep]" 0 "" 1 1 0
+
+   # CS-984: the inventory that report mode exists for. A run hands over the
+   # work list directly instead of it having to be greppped back out of some
+   # hundred log entries afterwards.
+   if {$check_cleanup_verification != "off"} {
+      set dirty_tests [lsort [array names check_cleanup_findings]]
+      ts_log_info "Number of tests not cleaning up: [llength $dirty_tests]" 0 "" 1 1 0
+      if {[llength $dirty_tests] > 0} {
+         set summary "tests that did not clean up after themselves:\n"
+         foreach dirty_test $dirty_tests {
+            append summary "\n$dirty_test\n"
+            foreach finding $check_cleanup_findings($dirty_test) {
+               append summary "   $finding\n"
+            }
+         }
+         ts_log_info $summary 0 "" 1 1 0
+      }
+   }
 
    set mail_body "Testsuite run on host $local_host complete"
 
@@ -4973,6 +5029,7 @@ proc execute_test_preparation_procedure {func_name type {warning_counter ""}} {
 #*******************************
 proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } } {
    global ts_config
+   global check_cleanup_verification check_cleanup_baseline check_cleanup_baseline_valid
    global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT check_needs CHECK_RESULT_DIRS
    global check_name check_description CHECK_ACTUAL_TEST_PATH CHECK_ACT_LEVEL
    global check_errstr check_description check_functions check_errno
@@ -5124,6 +5181,21 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       set_current_cluster_config_nr 0
    }
 
+   # CS-984: the baseline for the cleanup verification. It has to be taken here,
+   # before the setup function runs, because everything the setup creates is the
+   # test's own and has to be gone again after its cleanup.
+   #
+   # The cluster config is 0 at this point, which is what the line above makes
+   # sure of - the snapshot describes the main cluster and nothing else.
+   if {$check_cleanup_verification != "off"} {
+      unset -nocomplain check_cleanup_baseline
+      set check_cleanup_baseline_valid [cluster_snapshot_take check_cleanup_baseline baseline_ms]
+      if {$check_cleanup_baseline_valid} {
+         ts_log_fine "cleanup check: baseline for $check_name taken in ${baseline_ms} ms"
+      } else {
+         ts_log_fine "cleanup check: no baseline for $check_name, nothing to compare against"
+      }
+   }
 
    # start a setup function for this check - should it exist
    set CHECK_ACT_LEVEL 0
@@ -5292,7 +5364,10 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       incr nr_errors
    }
 
-   if {![check_if_test_cleaned_up]} {
+   # CS-984: a test that already failed gets its leftovers reported but never a
+   # second failure on top - a failed test almost always leaves debris, and the
+   # extra red mark adds noise without adding information.
+   if {![check_if_test_cleaned_up [expr {$nr_errors > 0}]]} {
       incr nr_errors
    }
 
@@ -5368,15 +5443,21 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    }
 }
 
-proc check_if_test_cleaned_up {} {
+proc check_if_test_cleaned_up {{test_failed 0}} {
    global ts_config
    global check_name
    global check_do_not_create_local_config
    global CHECK_INTERACTIVE_TRANSPORT
+   global check_cleanup_verification check_cleanup_baseline check_cleanup_baseline_valid
+   global check_cleanup_findings
 
    if {![is_qmaster_alive $ts_config(master_host) [get_qmaster_spool_dir]]} {
       # test must have failed and will trigger a re-install anyway
       # or in case of init_core_system it might not have been done due to clock issues
+      #
+      # CS-984: whatever the baseline says, it describes a cluster that is no
+      # longer there. Keeping it would read as "the test deleted everything".
+      set check_cleanup_baseline_valid 0
       return 0
    }
 
@@ -5498,6 +5579,62 @@ proc check_if_test_cleaned_up {} {
       }
    }
 
+   # CS-984: the counterpart of the baseline taken before the setup function.
+   if {$check_cleanup_verification != "off"} {
+      if {[get_current_cluster_config_nr] != 0} {
+         # A test that switched the cluster config and did not switch back would
+         # have us snapshot the wrong cluster. check.exp notices this too, but
+         # only when the NEXT test starts, which blames the innocent one.
+         ts_log_fine "cleanup check: $check_name left cluster config [get_current_cluster_config_nr] active, switching back to 0"
+         set_current_cluster_config_nr 0
+      }
+
+      # Leftover jobs and advance reservations need no baseline - no test may
+      # leave either behind, whatever the cluster looked like before.
+      set findings [cleanup_check_jobs_and_ars]
+
+      if {![cluster_snapshot_take cleanup_after_snapshot after_ms]} {
+         ts_log_fine "cleanup check: no snapshot after $check_name, nothing to compare"
+      } elseif {!$check_cleanup_baseline_valid} {
+         ts_log_fine "cleanup check: no usable baseline for $check_name, nothing to compare"
+      } else {
+         ts_log_fine "cleanup check: snapshot after $check_name taken in ${after_ms} ms,\
+                      [llength [array names cleanup_after_snapshot *,*,]] object(s)"
+         set findings [concat $findings \
+                              [cleanup_check_compare check_cleanup_baseline cleanup_after_snapshot excepted]]
+         if {$excepted > 0} {
+            ts_log_fine "cleanup check: $excepted difference(s) covered by an exception"
+         }
+      }
+
+      if {[llength $findings] > 0} {
+         # Keep them for the summary at the end of the run. A test can be run
+         # again in a later pass, so the same finding must not pile up.
+         foreach finding $findings {
+            if {![info exists check_cleanup_findings($check_name)] ||
+                [lsearch -exact $check_cleanup_findings($check_name) $finding] < 0} {
+               lappend check_cleanup_findings($check_name) $finding
+            }
+         }
+
+         set report "$check_name did not clean up after itself,\
+                     [llength $findings] finding(s):\n  [join $findings "\n  "]"
+         if {$check_cleanup_verification == "fail" && !$test_failed} {
+            ts_log_severe $report
+            set ret 0
+         } else {
+            # "report" mode, and every mode once the test has failed anyway:
+            # visible in the log, but INFO is not stored as an error, so the
+            # test result stays what the test itself earned.
+            ts_log_info "cleanup check: $report"
+         }
+      }
+
+      unset -nocomplain cleanup_after_snapshot
+      unset -nocomplain check_cleanup_baseline
+      set check_cleanup_baseline_valid 0
+   }
+
    ts_log_fine "verifying the configuration after the $check_name check took [expr [clock seconds] - $start] seconds"
 
    return $ret
@@ -5507,6 +5644,7 @@ proc clean_up_globals {} {
   global check_name check_description
   global check_needs check_functions check_category
   global check_version_range
+  global check_cleanup_expected_changes
 
   unset -nocomplain check_category
   unset -nocomplain check_description
@@ -5515,6 +5653,7 @@ proc clean_up_globals {} {
   set check_name        ""          ;# name of current check module
   set check_needs       ""          ;# dependencies of this check (name of other check)
   set check_functions   ""          ;# functions to call (in order)
+  set check_cleanup_expected_changes {}  ;# CS-984 cleanup verification exceptions
 }
 
 proc show_test {path full} {
@@ -7326,6 +7465,7 @@ proc source_tcl_files {} {
    ts_source $libdir/coverage_lcov
    ts_source $libdir/coverage_tcov
    ts_source $libdir/valgrind
+   ts_source $libdir/ocs_cleanup_check
    ts_source $libdir/ocs_cluster
    ts_source $libdir/ocs_host
    ts_source $libdir/ocs_installer
@@ -7436,7 +7576,7 @@ proc build_java_env_list {{host ""} {arch "" }} {
 }
 
 proc load_additional_packages {} {
-   global CHECK_HAVE_TDOM
+   global CHECK_HAVE_TDOM CHECK_HAVE_JSON
 
    # try to load tdom package that allows XML parsing
    set ret [catch {package require tdom} output]
@@ -7529,6 +7669,7 @@ proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {e
    global check_use_installed_system fast_setup l10n_cache be_quiet
    global check_do_clean_compile check_do_3rdparty_build ts_config ts_log_config
    global CHECK_TESTSUITE_TRASH check_do_not_use_spool_config_entries check_do_not_create_local_config ts_log_levels
+   global check_cleanup_verification
    upvar $execute_func_return rpcret
 
    if {[info exists rpcret]} {
@@ -7610,6 +7751,11 @@ proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {e
       if {$check_do_not_create_local_config == 1} {
          append args " no_local_config"
       }
+   }
+
+   # inherit "cleanup_check" command line param
+   if {$check_cleanup_verification != "off"} {
+      append args " cleanup_check $check_cleanup_verification"
    }
 
    # inherit additional command line param
@@ -8033,6 +8179,13 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "no_local_config       do not create / re-set local host configurations"
       puts ""
+      puts "cleanup_check <mode>  verify after every test that its cleanup function restored"
+      puts "                      the cluster, mode = "
+      puts "                      off (default)"
+      puts "                      report (log what a test left behind)"
+      puts "                      fail (leftovers fail the test)"
+      puts "                      needs a 9.2 or newer product"
+      puts ""
       puts "interactive <type>    use <type> as transport for interactive jobs, type = "
       puts "                      rtools (use rsh/rlogin/telnet, default for < 6.2)"
       puts "                      ssh (use ssh as transport)"
@@ -8183,6 +8336,23 @@ for {set i 0} {$i < $argc} {incr i} {
 
    if {[string compare [lindex $argv $i] "--no_local_config"] == 0 || [string compare [lindex $argv $i] "no_local_config"] == 0} {
       set check_do_not_create_local_config 1
+      continue
+   }
+
+   if {[string compare [lindex $argv $i] "--cleanup_check"] == 0 || [string compare [lindex $argv $i] "cleanup_check"] == 0} {
+      incr i
+      set cleanup_check_args [lindex $argv $i]
+      switch -exact $cleanup_check_args {
+         "off" -
+         "report" -
+         "fail" {
+            set check_cleanup_verification $cleanup_check_args
+         }
+         default {
+            puts "invalid argument to option cleanup_check, must be \"off\", \"report\", or \"fail\""
+            testsuite_shutdown 1
+         }
+      }
       continue
    }
 
