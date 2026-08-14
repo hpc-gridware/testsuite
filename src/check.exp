@@ -5187,7 +5187,8 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    #
    # The cluster config is 0 at this point, which is what the line above makes
    # sure of - the snapshot describes the main cluster and nothing else.
-   if {$check_cleanup_verification != "off"} {
+   if {$check_cleanup_verification != "off" &&
+       !([info exists check_category] && [lsearch -exact $check_category "INSTALL"] >= 0)} {
       unset -nocomplain check_cleanup_baseline
       set check_cleanup_baseline_valid [cluster_snapshot_take check_cleanup_baseline baseline_ms]
       if {$check_cleanup_baseline_valid} {
@@ -5580,7 +5581,14 @@ proc check_if_test_cleaned_up {{test_failed 0}} {
    }
 
    # CS-984: the counterpart of the baseline taken before the setup function.
-   if {$check_cleanup_verification != "off"} {
+   #
+   # Not for a check whose job IS to change the cluster: install_core_system and
+   # its relatives replace the cluster wholesale, so asking whether they restored
+   # the previous one is meaningless, and on a re-install - where a baseline was
+   # taken from the cluster being replaced - every object would come back as a
+   # difference. "92x install" runs these through run_tests like any other check.
+   if {$check_cleanup_verification != "off" &&
+       !([info exists check_category] && [lsearch -exact $check_category "INSTALL"] >= 0)} {
       if {[get_current_cluster_config_nr] != 0} {
          # A test that switched the cluster config and did not switch back would
          # have us snapshot the wrong cluster. check.exp notices this too, but
