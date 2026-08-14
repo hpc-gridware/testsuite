@@ -139,19 +139,34 @@ proc cleanup_check_exceptions {} {
 # @return the list of rules, in the format of cleanup_check_exceptions
 ##
 proc cleanup_check_cluster_exceptions {} {
-   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
+   return {}
+}
 
-   set rules {}
-   foreach variable {CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER} {
-      if {[info exists $variable]} {
-         set name [set $variable]
-         if {$name ne ""} {
-            # empty attribute pattern: may exist or not, nothing more
-            lappend rules [list user $name {}]
-         }
-      }
+###
+# @brief is this user object one the qmaster created on its own?
+#
+# The qmaster adds a user object when a job arrives from an account it does not
+# know yet and deletes it again when auto_user_delete_time expires, so such an
+# object appearing or vanishing is not a check's doing.
+#
+# Told apart by delete_time, not by name: an auto user carries the timestamp at
+# which the qmaster will drop it, a user somebody added on purpose has 0. The
+# name list this used to be missed every account that was not one of the three
+# configured testsuite users - the throughput check submits as "root" as well
+# (CS-2589).
+#
+# @param snap_var name of the snapshot array to look in
+# @param object   user name
+# @return 1 if the object carries a non-zero delete_time
+##
+proc cleanup_check_is_auto_user {snap_var object} {
+   upvar $snap_var snap
+
+   if {![info exists snap(user,$object,delete_time)]} {
+      return 0
    }
-   return $rules
+   return [expr {[string trim $snap(user,$object,delete_time)] ne "" &&
+                 [string trim $snap(user,$object,delete_time)] ne "0"}]
 }
 
 ###
@@ -290,6 +305,10 @@ proc cleanup_check_compare {before_var after_var {excepted_var ""}} {
 
       foreach object [lsort $after_objects] {
          if {[lsearch -exact $before_objects $object] < 0} {
+            if {$kind eq "user" && [cleanup_check_is_auto_user after $object]} {
+               incr excepted
+               continue
+            }
             if {[cleanup_check_is_excepted $kind $object ""]} {
                incr excepted
             } else {
@@ -299,6 +318,10 @@ proc cleanup_check_compare {before_var after_var {excepted_var ""}} {
       }
       foreach object [lsort $before_objects] {
          if {[lsearch -exact $after_objects $object] < 0} {
+            if {$kind eq "user" && [cleanup_check_is_auto_user before $object]} {
+               incr excepted
+               continue
+            }
             if {[cleanup_check_is_excepted $kind $object ""]} {
                incr excepted
             } else {
