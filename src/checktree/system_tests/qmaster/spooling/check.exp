@@ -64,6 +64,7 @@ lappend check_functions "qmaster_spooling_issue2442"
 
 proc qmaster_spooling_setup {} {
    global qmaster_spooling_dateformat
+   global qmaster_spooling_hgroup_backup
 
    # skip the test for valgrind master
    global CHECK_VALGRIND
@@ -80,11 +81,43 @@ proc qmaster_spooling_setup {} {
 
    # beginning with 9.1.0 we need to setup host slots for binding
    setup_host_slots_for_binding
+
+   # Remember the reserved host groups - 9.2 and newer only.
+   #
+   # "@admin_hosts" and "@submit_hosts" came with the reserved-object migration
+   # and do not exist in 9.0 and 9.1, where the admin and submit host lists are
+   # kept as their own object types. The version check is deliberate: without it
+   # this would rest on get_hostgroup quietly finding nothing, which reads like
+   # an accident rather than a decision. The cleanup verification that reports
+   # the damage is 9.2-only for the same reason.
+   #
+   # Why it is needed at all: qmaster_spooling_issue2442 writes a broken file
+   # into EVERY object directory of the qmaster spool and restarts, to check that
+   # each unreadable object is reported. The qmaster comes back with
+   # "@admin_hosts" holding the master host alone and "@submit_hosts" empty - and
+   # those two groups ARE the admin and submit host lists. An empty
+   # @submit_hosts means no host may submit a job any more, so every later check
+   # on this cluster fails with "is no submit host" and nothing points here
+   # (CS-2594).
+   unset -nocomplain qmaster_spooling_hgroup_backup
+   if {[is_version_in_range "9.2.0"]} {
+      foreach qmaster_spooling_hgroup {@admin_hosts @submit_hosts} {
+         unset -nocomplain qmaster_spooling_hg
+         if {[get_hostgroup $qmaster_spooling_hgroup qmaster_spooling_hg "" "" 0] == 0 &&
+             [info exists qmaster_spooling_hg(hostlist)]} {
+            set qmaster_spooling_hgroup_backup($qmaster_spooling_hgroup) $qmaster_spooling_hg(hostlist)
+         } else {
+            ts_log_severe "cannot read the reserved host group $qmaster_spooling_hgroup -\
+                           it will not be restored after this check"
+         }
+      }
+   }
 }
 
 proc qmaster_spooling_cleanup {} {
    global ts_config
    global qmaster_spooling_dateformat
+   global qmaster_spooling_hgroup_backup
 
    if {[get_rqs_list rqs_names "" "" 0] == 0} {
       foreach elem $rqs_names {
@@ -93,11 +126,34 @@ proc qmaster_spooling_cleanup {} {
       }
    }
 
-   delete_all_ars
+   # Jobs first, then the reservations they might sit in - the order every other
+   # check that works with ARs uses (qrdel, scheduler_advance_reservation). This
+   # check submits no jobs today, so nothing changes for it right now; the point
+   # is that the next job assertion added here does not silently run into a
+   # reservation that is still occupied.
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # And look at the result. delete_all_ars returns 1 or 0 and the value used to
+   # be thrown away, so a reservation that could not be removed stayed in the
+   # cluster without a word - which is how one survived the check (CS-2594).
+   if {![delete_all_ars]} {
+      ts_log_severe "could not delete the advance reservations of this check"
+   }
 
    cleanup_host_slots_for_binding
 
-   unset -nocomplain qmaster_spooling_dateformat
+   # Put the reserved host groups back - see the setup for why they need it, and
+   # why there is nothing to put back before 9.2: the array stays empty there.
+   if {[info exists qmaster_spooling_hgroup_backup]} {
+      foreach qmaster_spooling_hgroup [array names qmaster_spooling_hgroup_backup] {
+         unset -nocomplain qmaster_spooling_hg
+         set qmaster_spooling_hg(hostlist) $qmaster_spooling_hgroup_backup($qmaster_spooling_hgroup)
+         mod_hostgroup $qmaster_spooling_hgroup qmaster_spooling_hg
+      }
+   }
+
+   unset -nocomplain qmaster_spooling_dateformat qmaster_spooling_hgroup_backup
 }
 
 proc cmp_config {conf_a conf_b fields check} {
