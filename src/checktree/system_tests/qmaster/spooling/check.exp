@@ -119,6 +119,24 @@ proc qmaster_spooling_cleanup {} {
    global qmaster_spooling_dateformat
    global qmaster_spooling_hgroup_backup
 
+   # The reserved host groups go back FIRST, before anything is deleted.
+   #
+   # qmaster_spooling_issue2442 leaves the cluster with an empty "@submit_hosts",
+   # and that group IS the submit host list. Every client that submits or deletes
+   # is refused with 'denied: host "..." is no submit host' until it is filled in
+   # again - qdel and qrdel included. Cleaning up first and repairing afterwards
+   # therefore silently cleans up nothing (CS-2594).
+   #
+   # See the setup for why there is nothing to put back before 9.2: the array
+   # stays empty there.
+   if {[info exists qmaster_spooling_hgroup_backup]} {
+      foreach qmaster_spooling_hgroup [array names qmaster_spooling_hgroup_backup] {
+         unset -nocomplain qmaster_spooling_hg
+         set qmaster_spooling_hg(hostlist) $qmaster_spooling_hgroup_backup($qmaster_spooling_hgroup)
+         mod_hostgroup $qmaster_spooling_hgroup qmaster_spooling_hg
+      }
+   }
+
    if {[get_rqs_list rqs_names "" "" 0] == 0} {
       foreach elem $rqs_names {
          ts_log_fine "Removing resource quota sets $elem ...\n"
@@ -142,16 +160,6 @@ proc qmaster_spooling_cleanup {} {
    }
 
    cleanup_host_slots_for_binding
-
-   # Put the reserved host groups back - see the setup for why they need it, and
-   # why there is nothing to put back before 9.2: the array stays empty there.
-   if {[info exists qmaster_spooling_hgroup_backup]} {
-      foreach qmaster_spooling_hgroup [array names qmaster_spooling_hgroup_backup] {
-         unset -nocomplain qmaster_spooling_hg
-         set qmaster_spooling_hg(hostlist) $qmaster_spooling_hgroup_backup($qmaster_spooling_hgroup)
-         mod_hostgroup $qmaster_spooling_hgroup qmaster_spooling_hg
-      }
-   }
 
    unset -nocomplain qmaster_spooling_dateformat qmaster_spooling_hgroup_backup
 }
