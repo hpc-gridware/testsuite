@@ -162,9 +162,11 @@ proc consumable_resources_setup {} {
    set host_b [lindex $consumable_resources_test_hosts 1]
    get_config consumable_host_config_setup $host_a
 
-   # backup
+   # backup - one variable per host. Both used to go into host_backup1, which
+   # made the first backup a copy of the second and left host_backup2 empty, so
+   # host_b was never restored again (CS-2574).
    get_exechost host_backup1 $host_a
-   get_exechost host_backup1 $host_b
+   get_exechost host_backup2 $host_b
 
    # adapt slots on host level
    set host_config(complex_values) "slots=1000"
@@ -212,7 +214,7 @@ proc consumable_resources_cleanup {} {
    set host_a [lindex $consumable_resources_test_hosts 0]
    set host_b [lindex $consumable_resources_test_hosts 1]
    set_exechost host_backup1 $host_a
-   set_exechost host_backup2 $host_a
+   set_exechost host_backup2 $host_b
 
    set queue_list {}
    foreach host $ts_config(execd_nodes) {
