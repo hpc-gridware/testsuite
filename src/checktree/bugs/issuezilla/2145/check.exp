@@ -62,16 +62,48 @@ lappend check_functions "issue_2145_test"
 proc issue_2145_setup {} {
    global ts_config
    global complex_backup
+   global issue_2145_qinstance
+   global issue_2145_global_host_touched
 
    # backup complex
    get_complex complex_backup
+
+   # nothing modified yet - the test function fills these in once it has touched
+   # the queue instance and the global host, and the cleanup uses them to know
+   # what to put back. Restoring unconditionally would be wrong: writing "NONE"
+   # to a global host that carried complex_values before the test would wipe
+   # them, and the check would report itself as the test that broke the cluster.
+   unset -nocomplain issue_2145_qinstance issue_2145_global_host_touched
 }
 
 proc issue_2145_cleanup {} {
    global ts_config
    global complex_backup
+   global issue_2145_qinstance
+   global issue_2145_global_host_touched
 
-   # reset complex configuration
+   # Take the host specific complex_values entry off the queue again.
+   #
+   # It cannot be undone by writing "NONE": since 9.2 a modification implies an
+   # add (CS-2300), so "qconf -rattr queue" on a QUEUE INSTANCE always creates
+   # the host override - with "NONE" it just becomes an empty one. The cluster
+   # queue then keeps an entry for this host that was not there before the test
+   # (CS-2595). "qconf -purge" is the operation that removes it.
+   #
+   # This sits in the cleanup and no longer at the end of the test function, so
+   # a severe in the middle of the test does not leave the override behind.
+   if {[info exists issue_2145_qinstance]} {
+      purge_queue $issue_2145_qinstance "complex_values"
+      unset issue_2145_qinstance
+   }
+
+   # the global host takes a plain list, so "NONE" really empties it there
+   if {[info exists issue_2145_global_host_touched]} {
+      mhattr "complex_values" "NONE" "global"
+      unset issue_2145_global_host_touched
+   }
+
+   # reset complex configuration - last, while nothing references it any more
    reset_complex complex_backup
    unset complex_backup
 }
@@ -79,6 +111,8 @@ proc issue_2145_cleanup {} {
 
 proc issue_2145_test {} {
    global ts_config
+   global issue_2145_qinstance
+   global issue_2145_global_host_touched
 
    set exechost_name [host_conf_get_suited_hosts]
    set qinstance_name [get_queue_instance all.q $exechost_name]
@@ -88,6 +122,7 @@ proc issue_2145_test {} {
    set_complex test_complex
 
    # add a value test=5 to the global host
+   set issue_2145_global_host_touched 1
    set ret [mhattr "complex_values" "test=5" "global"]
 
    # check if queue is returned
@@ -97,6 +132,9 @@ proc issue_2145_test {} {
    }   
 
    # add a value test=1 to all.q@$exechost_name
+   # from here on the queue instance carries a host override the cleanup has to
+   # remove again
+   set issue_2145_qinstance $qinstance_name
    set ret [mqattr "complex_values" "test=1" $qinstance_name]
 
    # check if queue is returned
@@ -105,10 +143,5 @@ proc issue_2145_test {} {
       ts_log_severe "qselect returned queue although there was one expected after modifying qinstance"
    }   
 
-   # add a value test=1 to all.q@$exechost_name 
-   set ret [mqattr "complex_values" "NONE" $qinstance_name]
-
-   # reset complex_values of global host 
-   set ret [mhattr "complex_values" "NONE" "global" 100]
 }
 
