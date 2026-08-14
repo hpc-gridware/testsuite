@@ -62,6 +62,8 @@ proc installer_reinstall_fresh_cluster {} {
    global check_root_access_needs check_need_running_system
    global check_use_installed_system
    global CHECK_ACT_PATH
+   global CHECK_NO_DESCEND
+   global check_cleanup_baseline check_cleanup_baseline_valid
 
    # snapshot the state of the running upgrade_config check
    if {[info exists check_errno]}  { set saved_errno  [array get check_errno] }
@@ -86,7 +88,52 @@ proc installer_reinstall_fresh_cluster {} {
    # Force a fresh install (not re-use of the existing installation) so the
    # running cluster is killed and reinstalled with a clean configuration.
    set check_use_installed_system 0
+
+   # no_descend says which tests the USER asked to run. It must not decide which
+   # checks the framework needs in order to repair its own cluster.
+   #
+   # menu_item_install_cluster runs "run_tests root", and with the flag set that
+   # selects the root node ALONE - which carries no test of its own, so the
+   # reinstall installed nothing, reported nothing and returned success. Every
+   # caller was affected: the three spooling migration checks whose cleanup IS
+   # this proc, and the reinstall after a failed check. gcs-run-unit passes
+   # no_descend for every unit, so on the runners it never worked, while
+   # interactively - where the flag is unset - it always did. That is why the
+   # cluster of a migration check kept a foreign 9.1 configuration, execd_spool_dir
+   # included (CS-2500 is what that costs).
+   set saved_no_descend $CHECK_NO_DESCEND
+   set CHECK_NO_DESCEND 0
+
+   # CS-984: the cleanup verification globals belong in the snapshot above for
+   # the same reason the check_* ones do - the nested run_test overwrites them.
+   # An INSTALL check takes no baseline of its own, so without this it would
+   # inherit the CALLER's, compare a freshly installed cluster against the state
+   # from before the caller ran, and report the reinstall's own work as the
+   # caller having failed to clean up. And its final unset would take the
+   # caller's baseline with it, so the caller could no longer be checked either.
+   if {[info exists check_cleanup_baseline]} {
+      set saved_cleanup_baseline [array get check_cleanup_baseline]
+   }
+   set saved_cleanup_baseline_valid $check_cleanup_baseline_valid
+   set check_cleanup_baseline_valid 0
+
+   # A reinstall that installs nothing must not pass as one. This is the same
+   # selection run_tests does, so if it comes back empty the run below would do
+   # nothing at all - and silence is exactly how the defect above stayed hidden.
+   set install_checks [get_tests_from_checktree "root"]
+   if {[llength $install_checks] == 0} {
+      ts_log_severe "reinstall found no check to run - the cluster is NOT reinstalled"
+   }
+
    menu_item_install_cluster
+
+   set CHECK_NO_DESCEND $saved_no_descend
+
+   unset -nocomplain check_cleanup_baseline
+   if {[info exists saved_cleanup_baseline]} {
+      array set check_cleanup_baseline $saved_cleanup_baseline
+   }
+   set check_cleanup_baseline_valid $saved_cleanup_baseline_valid
 
    # restore the snapshot so the outer run_test evaluates upgrade_config
    if {[info exists saved_errno]} {
