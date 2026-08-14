@@ -2615,12 +2615,30 @@ proc get_config {change_array {host global} {atimeout 60} {raise_error 1}} {
      return -1
   }
 
-  # split each line as listelement
+  # Split each line into the attribute name and the REST OF THE LINE AS TEXT.
+  #
+  # This used to be "lindex"/"lrange", which parse the line as a Tcl list. The
+  # value then came back as a list, and the string representation of a list
+  # braces any element that contains Tcl special characters. mail_tag is the one
+  # default configuration value that has them:
+  #
+  #    [p8010][GCS][9.2.0]   ->   {[p8010][GCS][9.2.0]}
+  #
+  # Nobody writes the array back unchanged, but plenty of checks read the
+  # configuration, change one attribute and write all of it - and then the braces
+  # were stored in the cluster. The damage survived until the cluster was
+  # reinstalled, which is why it stayed invisible for so long: the corrupted value
+  # was already there when the next check looked, so nothing ever differed.
+  #
+  # The value is written back out as plain text anyway, so there is nothing to
+  # gain from treating it as a list here.
   set help [split $result "\n"]
   foreach elem $help {
-     set id [lindex $elem 0]
-     set value [lrange $elem 1 end]
-     if { [string compare $value ""] != 0 } {
+     if {![regexp {^\s*(\S+)\s+(.*)$} $elem -> id value]} {
+        continue
+     }
+     set value [string trim $value]
+     if {$value ne ""} {
        set chgar($id) $value
      }
   }
