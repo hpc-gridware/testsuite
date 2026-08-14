@@ -80,6 +80,7 @@ proc qmake_setup_level {} {
    global ts_config
    global CHECK_ACT_LEVEL
    global qmake_options pe_options qmake_host
+   global qmake_pe_referencing_queues
 
    # choose a test host
    set qmake_host [host_conf_get_suited_hosts]
@@ -104,6 +105,23 @@ proc qmake_setup_level {} {
          set pe(allocation_rule)    "\$round_robin"
          set pe(control_slaves)     TRUE
          set pe(job_is_first_task)  FALSE
+         # Remember which cluster queues already reference "make". The cleanup
+         # calls unassign_queues_with_pe_object, and that strips the PE from
+         # EVERY cluster queue, not just ours - all.q carries "make" from the
+         # installation (as a dangling reference: the installer puts it in the
+         # pe_list without creating the PE), so the check used to leave all.q
+         # short of an entry it had before (CS-2586).
+         set qmake_pe_referencing_queues {}
+         get_queue_list qmake_all_queues
+         foreach qmake_q $qmake_all_queues {
+            unset -nocomplain qmake_q_conf
+            if {[get_queue $qmake_q qmake_q_conf "" "" 0] == 0 &&
+                [info exists qmake_q_conf(pe_list)] &&
+                [lsearch -exact $qmake_q_conf(pe_list) "make"] >= 0} {
+               lappend qmake_pe_referencing_queues $qmake_q
+            }
+         }
+
          add_pe "make" pe
 
          # assign pe with queue
@@ -127,6 +145,7 @@ proc qmake_cleanup {} {
 proc qmake_cleanup_level {} {
    global ts_config
    global CHECK_ACT_LEVEL
+   global qmake_pe_referencing_queues
 
    delete_all_jobs
    wait_for_end_of_all_jobs
@@ -137,6 +156,16 @@ proc qmake_cleanup_level {} {
 
       # delete pe
       del_pe make
+
+      # Give the reference back to the queues that had it before. qmake.q is
+      # left out - qmake_cleanup deletes it. Adding a PE that no longer exists
+      # to a pe_list is accepted, which is exactly the state the installation
+      # leaves behind.
+      foreach qmake_q $qmake_pe_referencing_queues {
+         if {$qmake_q ne "qmake.q"} {
+            start_sge_bin "qconf" "-aattr queue pe_list make $qmake_q"
+         }
+      }
    }
 }
 
