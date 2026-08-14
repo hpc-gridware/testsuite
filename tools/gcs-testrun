@@ -29,6 +29,8 @@
 #   gcs-testrun 92x 32 -- -R 'qrsh'          only what matches, ledger kept
 #   gcs-testrun 92x 32 -- -LE single         explicitly without the single entries
 #
+#   GCS_PHASE1_ONLY=1 gcs-testrun 92x 32     phase 1 only, no judging
+#
 # The run leaves its files under runners/lists/runs/<timestamp>/: summary.txt,
 # the ctest logs of the three phases, manifest.txt and units.tsv (the plan),
 # failed-*.log (what each phase repeated) and loadprofile.txt.
@@ -184,6 +186,19 @@ if [ "$failed1" -eq 0 ]; then
   exit 0
 fi
 failed_names > "$RUN/failed-parallel.log"
+
+# GCS_PHASE1_ONLY=1 stops here. Nothing is judged then: the three way split into
+# real defects, artifacts of load and artifacts of parallel execution is exactly
+# what phases 2 and 3 produce, so what is left is a list of candidates rather
+# than verdicts. Useful when the point of the run is an inventory - which checks
+# came back dirty at all - and the judging can wait.
+if [ -n "${GCS_PHASE1_ONLY:-}" ]; then
+  log "phases 2 and 3 skipped (GCS_PHASE1_ONLY)"
+  printf '  %s failure(s) in phase 1, none judged -- see failed-parallel.log\n' \
+         "$failed1" | tee -a "$RUN/summary.txt"
+  printf '  output: %s\n' "$RUN" | tee -a "$RUN/summary.txt"
+  exit 0
+fi
 
 # --- phase 2: uncontended -----------------------------------------------------
 # What distinguishes this phase from phase 1 is not that it is serial but that
