@@ -168,12 +168,23 @@ proc delete_all_ars {} {
    set output [start_sge_bin "qrdel" "-f -u '*' "]
 
    if {$prg_exit_state == 0} {
-      set ret 1
-   } else {
-      set ret 0
+      return 1
    }
 
-   return $ret
+   # "Delete all" on a cluster that has none did exactly what it was asked to do.
+   # qrdel exits 1 in that case, and calling that a failure would make every
+   # caller that looks at the result report a problem on a clean cluster.
+   set nothing_to_do [translate_macro MSG_SGETEXT_THEREARENOXFORUSERS_SS "advance_reservation" "*"]
+   if {[string match "*$nothing_to_do*" $output]} {
+      return 1
+   }
+
+   # Say what qrdel said. The caller only gets 1 or 0, so without this the
+   # reservation that could not be removed is the whole story a check has to work
+   # with - and the reason is gone. That is how the denied qrdel in
+   # qmaster_spooling stayed invisible (CS-2594).
+   ts_log_fine "qrdel -f -u '*' failed with exit state $prg_exit_state:\n$output"
+   return 0
 }
 
 #****** sge_ar.62/delete_ar() **************************************************
