@@ -36,6 +36,7 @@
 global check_name check_description check_needs check_functions
 global check_category
 global check_root_access_needs
+global check_cleanup_function
 
 set check_category            "DRMAA TESTBIN VERIFIED"
 set check_name                "issue_1529"
@@ -44,10 +45,21 @@ set check_needs               "init_core_system"      ;# dependencies of this ch
 set check_root_access_needs   "no"
 
 # setup and cleanup functions
+set check_cleanup_function    issue_1529_cleanup
 
 # define test's procedure order
 set check_functions           ""
 lappend check_functions       "issue_1529_run"   ;# functions to call (in order)
+
+proc issue_1529_cleanup {} {
+   # test_drmaa_no_bin submits the job and exits - it calls neither drmaa_wait
+   # nor drmaa_control, on purpose: the test asks whether a "-b n" submission is
+   # accepted at all, not what the job does afterwards. So sleeper.sh outlives
+   # the check and has to be removed here (CS-2597). Nothing else needs
+   # restoring, the test changes no configuration.
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
 
 proc issue_1529_run  {} {
    global ts_config
