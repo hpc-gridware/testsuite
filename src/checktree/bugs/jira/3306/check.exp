@@ -58,9 +58,13 @@ proc ge_3306_setup {} {
    # we add a consumable - backup the complex definition
    get_complex ge_3306_complex_backup
 
-   # we modify the global and an exec host - do a backup
-   get_exechost ge_3306_global_host_backup
-   get_exechost ge_3306_host_backup
+   # we modify the global and an exec host - do a backup.
+   # The host argument is not optional here: get_exechost defaults to "global",
+   # so without it both backups describe the global pseudo host and the exec
+   # host's own configuration is never saved - and therefore never restored
+   # (CS-2573).
+   get_exechost ge_3306_global_host_backup "global"
+   get_exechost ge_3306_host_backup $ge_3306_host
 
    # create test consumable
    set test_complex(C1) "C1 INT <= YES YES 0 0"
@@ -114,11 +118,14 @@ proc ge_3306_cleanup {} {
    del_queue "ge_3306" "" 1 1
    del_pe "ge_3306"
 
-   # restore the host backup
-   set_exechost ge_3306_global_host_backup
-   set_exechost ge_3306_host_backup
+   # restore the host backup - again with the host, for the same reason as in
+   # the setup function
+   set_exechost ge_3306_global_host_backup "global"
+   set_exechost ge_3306_host_backup $ge_3306_host
 
-   # reset the complex
+   # reset the complex. This has to come AFTER the exec host was restored: qconf
+   # refuses to remove a complex that is still booked somewhere
+   # (MSG_CENTRYREFINHOST), so a leftover booking would keep C1 alive here.
    reset_complex ge_3306_complex_backup
 
    cleanup_host_slots_for_binding
