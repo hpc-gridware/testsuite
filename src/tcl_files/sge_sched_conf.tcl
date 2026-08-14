@@ -89,6 +89,12 @@ proc reset_schedd_config {} {
 
    set default_array(algorithm)                       "default"
    set default_array(schedule_interval)               "0:0:10"
+   # Not decoration: whatever is missing here keeps the value the test left, and
+   # queue_sort_method was missing. per_job_consumables sets it to seqno, calls
+   # this proc and looked correct, while the cluster kept sorting by seqno for
+   # every check that followed (CS-2576). "load" is the product default -
+   # sge_schedd_conf.cc sets QSM_LOAD, inst_schedd_default.conf writes "load".
+   set default_array(queue_sort_method)               "load"
    set default_array(maxujobs)                        "0"
    set default_array(job_load_adjustments)            "np_load_avg=0.15"
    set default_array(load_adjustment_decay_time)      "0:7:30"
