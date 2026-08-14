@@ -142,6 +142,7 @@ proc scheduler_advance_reservation_cleanup {} {
    global global_consumable host_consumable
    global host_complex queue_complex
    global scheduler_advance_reservation_complex_backup
+   global host_config_backup
 
    delete_all_jobs
    wait_for_end_of_all_jobs
@@ -150,7 +151,16 @@ proc scheduler_advance_reservation_cleanup {} {
    # remove global complex
    set config(complex_values) "none"
    set_exechost config "global"
-   set_exechost config [lindex $test_hosts 0]
+
+   # Put the exec hosts back. The setup raises slots to 5000 on EVERY exec host
+   # and saves the previous complex_values in host_config_backup - which nothing
+   # ever read again, so five of the six hosts kept slots=5000 after the check
+   # (CS-2583). Only the first test host used to be reset here, and to "none"
+   # rather than to what it had.
+   #
+   # One request for all of them, and it has to come after the "none" above:
+   # that one only concerns the global host, which is not an exec host.
+   cluster_bulk_mod_exechosts_attr $ts_config(execd_nodes) complex_values host_config_backup
 
    # remove queues
    del_queue $queue_name $test_host 0 1
