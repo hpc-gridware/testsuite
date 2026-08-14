@@ -1,0 +1,296 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+# variables shared between this file and its check functions - check.exp is
+# sourced from inside a proc, so these have to be declared global here
+global simhosts_cleanup_config_backup
+global simhosts_cleanup_complex_backup
+global simhosts_cleanup_added_hosts
+global simhosts_cleanup_num_hosts
+
+set check_root_access_needs "no"
+set check_version_range "9.0.0"
+
+# define test's name and run level descriptions
+set check_name            "simhosts_cleanup"
+set check_category        "QMASTER SIMHOST VERIFIED"
+set check_description(0)  "the simhost framework rolls back the cluster state it established"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function simhosts_cleanup_setup
+set check_cleanup_function simhosts_cleanup_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "simhosts_cleanup_own_state"
+lappend check_functions "simhosts_cleanup_foreign_state"
+
+# two hosts are enough - this check never runs a job, it only looks at the
+# cluster configuration before and after
+set simhosts_cleanup_num_hosts 2
+set simhosts_cleanup_added_hosts {}
+
+# -------- local test procedures: initialization------------------------------
+
+# @brief is SIMULATE_EXECDS currently switched on in the global config?
+proc simhosts_cleanup_has_simulate_execds {} {
+   get_config config
+   return [expr {[string first "SIMULATE_EXECDS" $config(qmaster_params)] >= 0}]
+}
+
+# @brief does the load_report_host complex variable currently exist?
+proc simhosts_cleanup_has_complex {} {
+   get_complex complex
+   return [info exists complex(load_report_host)]
+}
+
+# @brief the current global qmaster_params, as the cluster reports it
+proc simhosts_cleanup_get_qmaster_params {} {
+   get_config config
+   return $config(qmaster_params)
+}
+
+# @brief the empty marker of a config value, in one spelling
+#
+# A freshly installed cluster spells an empty qmaster_params "none", while writing
+# it back through the testsuite yields "NONE". The two mean the same thing - every
+# consumer in the testsuite tests them with [string toupper] (add_or_replace_param,
+# sge_json.tcl), so comparing the raw strings would report a difference where the
+# configuration is in fact unchanged.
+proc simhosts_cleanup_normalize_params {params} {
+   if {$params == "" || [string toupper $params] == "NONE"} {
+      return "NONE"
+   }
+   return $params
+}
+
+proc simhosts_cleanup_setup {} {
+   get_current_cluster_config_array ts_config
+   global simhost_cache
+   global simhosts_cleanup_config_backup simhosts_cleanup_complex_backup
+   global simhosts_cleanup_added_hosts simhosts_cleanup_num_hosts
+
+   set simhosts_cleanup_added_hosts {}
+
+   # This check is about what happens when the LAST simulated host goes away, so it
+   # can only run when there is none to begin with. simhost_cache lives for the whole
+   # testsuite run: a check before us that added hosts without deleting them keeps the
+   # refcount above zero, and the rollback we want to observe would never trigger.
+   if {[info exists simhost_cache(used_hosts)] && [llength $simhost_cache(used_hosts)] > 0} {
+      ts_log_config "cannot check the simhost cleanup: [llength $simhost_cache(used_hosts)] simulated\
+                     host(s) are still in use - an earlier check added them without deleting them"
+      return 99
+   }
+
+   # initialize the use of simulated hosts
+   if {![simhost_init]} {
+      # ts_log_config has been done in simhost_init
+      return 99
+   }
+
+   set num_hosts_free [llength $simhost_cache(free_hosts)]
+   if {$num_hosts_free < $simhosts_cleanup_num_hosts} {
+      ts_log_config "cannot check the simhost cleanup: need $simhosts_cleanup_num_hosts simulated\
+                     hosts but only $num_hosts_free are available"
+      return 99
+   }
+
+   # Both side effects have to be absent, otherwise simhost_add will correctly not
+   # claim ownership of them and there is nothing for us to see being rolled back.
+   # A leftover SIMULATE_EXECDS here is worth looking at: it usually means an earlier
+   # check enabled simulation and never restored the global config.
+   if {[simhosts_cleanup_has_simulate_execds]} {
+      ts_log_config "cannot check the simhost cleanup: SIMULATE_EXECDS is already set in\
+                     qmaster_params ([simhosts_cleanup_get_qmaster_params]) - either the cluster is\
+                     configured that way or an earlier check leaked it"
+      return 99
+   }
+   if {[simhosts_cleanup_has_complex]} {
+      ts_log_config "cannot check the simhost cleanup: the load_report_host complex variable\
+                     already exists - either the cluster is configured that way or an earlier\
+                     check leaked it"
+      return 99
+   }
+
+   # From here on we modify the cluster, so take the backups the framework docstring
+   # asks every simhost caller for. The rollback under test only runs on a matching
+   # simhost_delete - if a check function dies before that, this is what repairs it.
+   get_config simhosts_cleanup_config_backup
+   get_complex simhosts_cleanup_complex_backup
+}
+
+proc simhosts_cleanup_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global simhosts_cleanup_config_backup simhosts_cleanup_complex_backup
+   global simhosts_cleanup_added_hosts
+
+   # hosts a failed check function left behind
+   if {[llength $simhosts_cleanup_added_hosts] > 0} {
+      simhost_delete $simhosts_cleanup_added_hosts
+      set simhosts_cleanup_added_hosts {}
+   }
+
+   if {[info exists simhosts_cleanup_config_backup]} {
+      reset_config simhosts_cleanup_config_backup
+   }
+   if {[info exists simhosts_cleanup_complex_backup]} {
+      reset_complex simhosts_cleanup_complex_backup
+   }
+
+   unset -nocomplain simhosts_cleanup_config_backup simhosts_cleanup_complex_backup
+}
+
+# -------- local test procedures: tests ---------------------------------------
+
+##
+# @brief the framework takes back what it established itself
+#
+# simhost_add() switches SIMULATE_EXECDS on and creates the load_report_host complex
+# when they are not there yet. Deleting the last simulated host has to leave the
+# cluster exactly as it was found - a leftover SIMULATE_EXECDS turns the execds of
+# every following check into simulated ones, which then fail for reasons that point
+# everywhere but at the simhost framework.
+##
+proc simhosts_cleanup_own_state {} {
+   get_current_cluster_config_array ts_config
+   global simhost_cache
+   global simhosts_cleanup_added_hosts simhosts_cleanup_num_hosts
+
+   set params_before [simhosts_cleanup_get_qmaster_params]
+
+   set hosts [simhost_add $simhosts_cleanup_num_hosts]
+   if {[llength $hosts] != $simhosts_cleanup_num_hosts} {
+      ts_log_severe "simhost_add did not add $simhosts_cleanup_num_hosts simulated hosts\
+                     but returned \"$hosts\""
+      return
+   }
+   set simhosts_cleanup_added_hosts $hosts
+
+   # the add path: both side effects in place and attributed to the framework
+   if {![simhosts_cleanup_has_simulate_execds]} {
+      ts_log_severe "simhost_add did not enable SIMULATE_EXECDS:\
+                     qmaster_params is \"[simhosts_cleanup_get_qmaster_params]\""
+   }
+   if {![info exists simhost_cache(enabled_simulate_execds)]} {
+      ts_log_severe "simhost_add enabled SIMULATE_EXECDS but did not remember that it was the\
+                     one enabling it - simhost_delete will not switch it off again"
+   }
+   if {![simhosts_cleanup_has_complex]} {
+      ts_log_severe "simhost_add did not create the load_report_host complex variable"
+   }
+   if {![info exists simhost_cache(created_load_report_host)]} {
+      ts_log_severe "simhost_add created the load_report_host complex variable but did not\
+                     remember that it was the one creating it"
+   }
+
+   simhost_delete $hosts
+   set simhosts_cleanup_added_hosts {}
+
+   # the delete path: the last host is gone, so everything has to be back
+   if {[simhosts_cleanup_has_simulate_execds]} {
+      ts_log_severe "simhost_delete of the last simulated host left SIMULATE_EXECDS behind:\
+                     qmaster_params is \"[simhosts_cleanup_get_qmaster_params]\""
+   }
+   set params_after [simhosts_cleanup_get_qmaster_params]
+   if {[simhosts_cleanup_normalize_params $params_after] !=
+       [simhosts_cleanup_normalize_params $params_before]} {
+      ts_log_severe "qmaster_params did not survive the simhost add/delete cycle unchanged:\
+                     before \"$params_before\", after \"$params_after\""
+   }
+   if {[simhosts_cleanup_has_complex]} {
+      ts_log_severe "simhost_delete of the last simulated host left the load_report_host\
+                     complex variable behind"
+   }
+
+   # both ownership flags have to be gone, otherwise the next add/delete cycle in the
+   # same testsuite run rolls back state it never established
+   if {[info exists simhost_cache(enabled_simulate_execds)]} {
+      ts_log_severe "simhost_delete of the last simulated host left the SIMULATE_EXECDS\
+                     ownership flag set"
+   }
+   if {[info exists simhost_cache(created_load_report_host)]} {
+      ts_log_severe "simhost_delete of the last simulated host left the load_report_host\
+                     ownership flag set"
+   }
+}
+
+##
+# @brief the framework keeps its hands off state it found
+#
+# The rollback is ownership based on purpose: a SIMULATE_EXECDS that a test or an
+# admin set deliberately must not be switched off underneath them just because the
+# simhost framework happened to run in between.
+##
+proc simhosts_cleanup_foreign_state {} {
+   get_current_cluster_config_array ts_config
+   global simhost_cache
+   global simhosts_cleanup_added_hosts simhosts_cleanup_num_hosts
+
+   # establish both side effects ourselves, before the framework sees the cluster
+   get_config live_config
+   set gc(qmaster_params) [add_or_replace_param $live_config(qmaster_params) \
+                                                "SIMULATE_EXECDS" "SIMULATE_EXECDS=TRUE"]
+   set_config gc
+   set cplx(load_report_host) "lrh STRING == YES NO NONE 0"
+   set_complex cplx
+
+   set hosts [simhost_add $simhosts_cleanup_num_hosts]
+   if {[llength $hosts] != $simhosts_cleanup_num_hosts} {
+      ts_log_severe "simhost_add did not add $simhosts_cleanup_num_hosts simulated hosts\
+                     but returned \"$hosts\""
+      return
+   }
+   set simhosts_cleanup_added_hosts $hosts
+
+   if {[info exists simhost_cache(enabled_simulate_execds)]} {
+      ts_log_severe "simhost_add claimed ownership of a SIMULATE_EXECDS that was already set"
+   }
+   if {[info exists simhost_cache(created_load_report_host)]} {
+      ts_log_severe "simhost_add claimed ownership of a load_report_host complex variable\
+                     that already existed"
+   }
+
+   simhost_delete $hosts
+   set simhosts_cleanup_added_hosts {}
+
+   if {![simhosts_cleanup_has_simulate_execds]} {
+      ts_log_severe "simhost_delete switched off a SIMULATE_EXECDS that it did not switch on:\
+                     qmaster_params is \"[simhosts_cleanup_get_qmaster_params]\""
+   }
+   if {![simhosts_cleanup_has_complex]} {
+      ts_log_severe "simhost_delete removed a load_report_host complex variable that it did\
+                     not create"
+   }
+
+   # the check cleanup function restores the config and the complex
+}

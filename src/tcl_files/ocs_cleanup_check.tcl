@@ -1,0 +1,438 @@
+# expect script
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# ocs_cleanup_check.tcl
+#
+# CS-984: compare two cluster snapshots (cluster_snapshot_take, ocs_cluster.tcl)
+# and say what a test left behind.
+#
+# The comparison needs no idea of what a default configuration looks like. The
+# snapshot taken before the test's setup function IS the definition, and every
+# difference after the cleanup function is something the test did not undo. That
+# is what makes this stricter than the attribute whitelist it replaces: the
+# whitelist tolerated an attribute by name and never looked at its value, which
+# is how a foreign execd_spool_dir survived unnoticed (CS-2500).
+
+###
+# @brief the object kinds that are compared
+#
+# Every kind the snapshot covers. The common ones came first and went quiet, so
+# the remaining five - checkpoint environments, calendars, roles, the scheduler
+# configuration and the share tree - joined them.
+#
+# @return a list of kind names as used in the snapshot array
+##
+proc cleanup_check_kinds {} {
+   return {
+      conf exechost queue pe complex rqs project hgroup userset user
+      ckpt calendar role sconf stree
+   }
+}
+
+###
+# @brief the kinds that exist exactly once in a cluster
+#
+# They have no name of their own - the snapshot files them under the kind name -
+# so a finding about them reads better without the "kind \"object\"" shape.
+#
+# @return a list of {kind label} pairs
+##
+proc cleanup_check_singletons {} {
+   return {
+      {sconf "the scheduler configuration"}
+      {stree "the share tree"}
+   }
+}
+
+###
+# @brief name one object for a finding message
+#
+# @param kind   object kind
+# @param object object name
+# @return "the share tree" for a singleton, otherwise {kind "object"}
+##
+proc cleanup_check_where {kind object} {
+   foreach entry [cleanup_check_singletons] {
+      lassign $entry singleton_kind label
+      if {$kind eq $singleton_kind} {
+         return $label
+      }
+   }
+   return "$kind \"$object\""
+}
+
+###
+# @brief attributes whose value is a list whose ORDER carries no meaning
+#
+# qconf writes these as a json array, and the order in it is the qmaster's
+# internal one: adding a host to a host group and removing it again leaves the
+# remaining names permuted. Comparing them as written would report a difference
+# where the configuration is identical.
+#
+# This is a table and not a rule on the value because ::json::json2dict is lossy
+# on types - it returns the array ["a","b"] and the plain string "a b" as the
+# very same Tcl value. Sorting anything that merely looks like a list would
+# quietly reorder the words inside a command line.
+#
+# @return the list of attribute names
+##
+proc cleanup_check_unordered_attributes {} {
+   return {
+      hostlist entries type login_shells qtype pe_list ckpt_list
+      user_lists xuser_lists projects xprojects owner_list
+      administrator_mail load_sensor report_variables subordinate_list
+      complex_values load_scaling usage_scaling
+   }
+}
+
+###
+# @brief exceptions that hold for every test and every cluster
+#
+# One entry per rule, {<kind> <object pattern> <attribute pattern>}, matched with
+# string match. An EMPTY attribute pattern matches the object's existence only,
+# so a rule can say "this object may come and go" without also excusing every
+# attribute inside it.
+#
+# Kept deliberately short. An entry here hides a difference from everybody
+# forever, so the bar is "the cluster does this on its own", never "a test we
+# have not fixed yet does this" - that is what the per test list is for.
+#
+# @return the list of rules
+##
+proc cleanup_check_exceptions {} {
+   return {
+      {user * delete_time}
+   }
+}
+
+###
+# @brief exceptions derived from this cluster's configuration
+#
+# The qmaster creates a user object on its own when a job arrives from a user it
+# does not know yet, and deletes it again when auto_user_delete_time expires. So
+# user objects for the accounts the testsuite submits jobs as appear and vanish
+# without any test having done anything wrong, and their delete_time moves while
+# they exist. Both were seen in the very first run of the comparison, on tests
+# that only manipulate host groups.
+#
+# This cannot be a static table: the account names come from the testsuite's user
+# configuration. Any OTHER user object is a test's doing and stays reportable.
+#
+# @return the list of rules, in the format of cleanup_check_exceptions
+##
+proc cleanup_check_cluster_exceptions {} {
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
+
+   set rules {}
+   foreach variable {CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER} {
+      if {[info exists $variable]} {
+         set name [set $variable]
+         if {$name ne ""} {
+            # empty attribute pattern: may exist or not, nothing more
+            lappend rules [list user $name {}]
+         }
+      }
+   }
+   return $rules
+}
+
+###
+# @brief kinds that accept no exception at all
+#
+# Complexes, the scheduler configuration, roles and the share tree tolerate no
+# deviation across an upgrade, and the same rule holds here. If one of them ever
+# produces noise that is a product question, not an entry to be filed.
+#
+# @return the list of kind names
+##
+proc cleanup_check_strict_kinds {} {
+   return {complex sconf stree role}
+}
+
+###
+# @brief may this difference be ignored?
+#
+# @param kind      object kind as used in the snapshot array
+# @param object    object name
+# @param attribute attribute name, or "" when the difference is the object's
+#                  existence rather than one of its attributes
+# @return 1 when a rule covers it
+##
+proc cleanup_check_is_excepted {kind object attribute} {
+   global check_cleanup_expected_changes
+
+   if {[lsearch -exact [cleanup_check_strict_kinds] $kind] >= 0} {
+      return 0
+   }
+
+   set rules [concat [cleanup_check_exceptions] [cleanup_check_cluster_exceptions]]
+   if {[info exists check_cleanup_expected_changes]} {
+      set rules [concat $rules $check_cleanup_expected_changes]
+   }
+
+   foreach rule $rules {
+      lassign $rule rule_kind rule_object rule_attribute
+      if {$kind eq $rule_kind &&
+          [string match $rule_object $object] &&
+          [string match $rule_attribute $attribute]} {
+         return 1
+      }
+   }
+   return 0
+}
+
+###
+# @brief is this value a list of {name value} objects?
+#
+# qconf writes per host overrides and every name/value collection this way:
+#   "slots": [ {"name": "default", "value": 10}, {"name": "h047", "value": 100} ]
+# The list order is not stable, so such a value has to be compared as a map.
+#
+# @param value the parsed json value
+# @return 1 if every element is an object with exactly the keys name and value
+##
+proc cleanup_check_is_name_value_list {value} {
+   if {[llength $value] == 0} {
+      return 0
+   }
+   foreach entry $value {
+      if {[catch {dict size $entry}]} {
+         return 0
+      }
+      if {[lsort [dict keys $entry]] ne {name value}} {
+         return 0
+      }
+   }
+   return 1
+}
+
+###
+# @brief bring one attribute value into a comparable form
+#
+# @param attribute the attribute name, used to look up the unordered-list table
+# @param value     the parsed json value
+# @return a canonical string; two canonical strings are equal exactly when the
+#         two configurations are equal
+##
+proc cleanup_check_canon {attribute value} {
+   # An empty value covers the json "" and [] alike - json2dict maps both to the
+   # empty Tcl string. For a configuration attribute they mean the same thing,
+   # which is also the answer to the old NONE / none / empty question: in json
+   # there is only one spelling of "nothing set".
+   if {$value eq ""} {
+      return ""
+   }
+
+   if {[cleanup_check_is_name_value_list $value]} {
+      set pairs {}
+      foreach entry $value {
+         lappend pairs [list [dict get $entry name] \
+                             [cleanup_check_canon $attribute [dict get $entry value]]]
+      }
+      return [lsort -index 0 $pairs]
+   }
+
+   if {[lsearch -exact [cleanup_check_unordered_attributes] $attribute] >= 0} {
+      return [lsort $value]
+   }
+
+   return $value
+}
+
+###
+# @brief compare two cluster snapshots
+#
+# @param before_var    name of the snapshot array taken before the test's setup
+# @param after_var     name of the snapshot array taken after the test's cleanup
+# @param excepted_var  optional name of a variable that receives the number of
+#                      differences an exception covered
+# @return a list of finding descriptions, empty when the test cleaned up
+##
+proc cleanup_check_compare {before_var after_var {excepted_var ""}} {
+   upvar $before_var before
+   upvar $after_var after
+   if {$excepted_var ne ""} {
+      upvar $excepted_var excepted
+   }
+   set excepted 0
+
+   set findings {}
+
+   foreach kind [cleanup_check_kinds] {
+      # "<kind>,<object>," marks an object that exists, whatever attributes it
+      # has - that is what tells "object gone" from "object without attributes".
+      set before_objects {}
+      foreach key [array names before "$kind,*,"] {
+         lappend before_objects [cleanup_check_object_of $kind $key]
+      }
+      set after_objects {}
+      foreach key [array names after "$kind,*,"] {
+         lappend after_objects [cleanup_check_object_of $kind $key]
+      }
+
+      foreach object [lsort $after_objects] {
+         if {[lsearch -exact $before_objects $object] < 0} {
+            if {[cleanup_check_is_excepted $kind $object ""]} {
+               incr excepted
+            } else {
+               lappend findings "[cleanup_check_where $kind $object] was created and not removed again"
+            }
+         }
+      }
+      foreach object [lsort $before_objects] {
+         if {[lsearch -exact $after_objects $object] < 0} {
+            if {[cleanup_check_is_excepted $kind $object ""]} {
+               incr excepted
+            } else {
+               lappend findings "[cleanup_check_where $kind $object] was removed and not restored"
+            }
+            continue
+         }
+
+         # attributes of an object that exists on both sides
+         set attributes {}
+         foreach key [array names before "$kind,$object,*"] {
+            set attribute [cleanup_check_attribute_of $kind $object $key]
+            if {$attribute ne ""} {
+               lappend attributes $attribute
+            }
+         }
+         foreach key [array names after "$kind,$object,*"] {
+            set attribute [cleanup_check_attribute_of $kind $object $key]
+            if {$attribute ne "" && [lsearch -exact $attributes $attribute] < 0} {
+               lappend attributes $attribute
+            }
+         }
+
+         foreach attribute [lsort $attributes] {
+            if {[cleanup_check_is_excepted $kind $object $attribute]} {
+               incr excepted
+               continue
+            }
+            set had [info exists before($kind,$object,$attribute)]
+            set has [info exists after($kind,$object,$attribute)]
+            if {$had && !$has} {
+               lappend findings "[cleanup_check_where $kind $object]: attribute $attribute was removed\
+                                 (was \"$before($kind,$object,$attribute)\")"
+               continue
+            }
+            if {!$had && $has} {
+               lappend findings "[cleanup_check_where $kind $object]: attribute $attribute was added\
+                                 (now \"$after($kind,$object,$attribute)\")"
+               continue
+            }
+            set was [cleanup_check_canon $attribute $before($kind,$object,$attribute)]
+            set now [cleanup_check_canon $attribute $after($kind,$object,$attribute)]
+            if {$was ne $now} {
+               lappend findings "[cleanup_check_where $kind $object]: attribute $attribute changed\
+                                 from \"$was\" to \"$now\""
+            }
+         }
+      }
+   }
+
+   return $findings
+}
+
+###
+# @brief the ids in a qstat / qrstat listing
+#
+# Both print a header line, a line of dashes and then one line per entry that
+# starts with the numeric id. Anything else is not an entry.
+#
+# @param output the command output
+# @return the list of ids
+##
+proc cleanup_check_listed_ids {output} {
+   set ids {}
+   foreach line [split $output "\n"] {
+      set first [lindex [split [string trim $line]] 0]
+      if {[string is integer -strict $first]} {
+         lappend ids $first
+      }
+   }
+   return $ids
+}
+
+###
+# @brief are there jobs or advance reservations left in the cluster?
+#
+# Not a comparison against the baseline, an absolute assertion: no test may leave
+# a job or an advance reservation behind, so there is nothing a snapshot could
+# usefully say here and nothing to make an exception for. A leftover job is also
+# the cleanup failure with the longest reach - it keeps slots occupied and makes
+# the NEXT test wait for resources that will never come free.
+#
+# Neither has a -S export, so they are asked for directly. The plain qstat view
+# is the right notion of "still there": a job kept by finished_job_retention has
+# already run and is not occupying anything.
+#
+# @return a list of finding descriptions, empty when the cluster is clear
+##
+proc cleanup_check_jobs_and_ars {} {
+   global prg_exit_state
+
+   set findings {}
+
+   set output [start_sge_bin "qstat" "-u \"*\"" "" "" prg_exit_state 60]
+   if {$prg_exit_state != 0} {
+      ts_log_fine "cleanup check: qstat failed, cannot look for leftover jobs:\n$output"
+   } else {
+      set jobs [cleanup_check_listed_ids $output]
+      if {[llength $jobs] > 0} {
+         lappend findings "[llength $jobs] job(s) left in the cluster:\
+                           [join $jobs ", "]"
+      }
+   }
+
+   set output [start_sge_bin "qrstat" "-u \"*\"" "" "" prg_exit_state 60]
+   if {$prg_exit_state != 0} {
+      ts_log_fine "cleanup check: qrstat failed, cannot look for leftover advance reservations:\n$output"
+   } else {
+      set ars [cleanup_check_listed_ids $output]
+      if {[llength $ars] > 0} {
+         lappend findings "[llength $ars] advance reservation(s) left in the cluster:\
+                           [join $ars ", "]"
+      }
+   }
+
+   return $findings
+}
+
+###
+# @brief the object name out of a "<kind>,<object>," snapshot key
+#
+# Done by position, not by splitting on commas: object names may contain them.
+##
+proc cleanup_check_object_of {kind key} {
+   set start [expr {[string length $kind] + 1}]
+   return [string range $key $start end-1]
+}
+
+###
+# @brief the attribute name out of a "<kind>,<object>,<attribute>" snapshot key
+#
+# @return the attribute name, or "" for the "<kind>,<object>," existence marker
+##
+proc cleanup_check_attribute_of {kind object key} {
+   set start [expr {[string length $kind] + [string length $object] + 2}]
+   return [string range $key $start end]
+}

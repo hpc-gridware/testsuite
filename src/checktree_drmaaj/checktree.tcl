@@ -44,6 +44,7 @@ set ts_checktree($drmaaj_checktree_nr,compile_clean_hooks_0)  "drmaaj_compile_cl
 set ts_checktree($drmaaj_checktree_nr,install_binary_hooks_0) "drmaaj_install_binaries"
 
 set ts_checktree($drmaaj_checktree_nr,get_dist_files_hook)    "drmaaj_get_distribution_files"
+set ts_checktree($drmaaj_checktree_nr,get_package_files_hook) "drmaaj_get_package_files"
 set ts_checktree($drmaaj_checktree_nr,mk_dist_options)        "-drmaaj"
 
 #set ts_checktree($drmaaj_checktree_nr,shutdown_hooks_0)       ""
@@ -237,5 +238,18 @@ proc drmaaj_test_run_level_check {is_starting was_error} {
 # @return list of file names
 proc drmaaj_get_distribution_files {} {
    return "lib/drmaa.jar"
+}
+
+##
+# @brief get the drmaaj product packages
+#
+# Returns the names of the DRMAA-Java packages found in the package directory,
+# e.g. "gcs-9.1.5-drmaaj.tar.gz".
+#
+# @param path directory containing the product packages
+# @param type package type, either "tar" or "zip"
+# @return list of package file names
+proc drmaaj_get_package_files {path type} {
+   return [checktree_find_package_files $path $type "drmaaj"]
 }
 

@@ -527,6 +527,76 @@ proc checktree_get_dist_files {} {
    return $dist_files
 }
 
+##
+# @brief get the product packages of all checktrees
+#
+# Product extensions like ARCo or DRMAA-Java are delivered in their own product
+# packages which are not contained in the core product packages. A checktree of
+# such an extension can register a get_package_files_hook which returns the names
+# of the extension packages found in the package directory.
+#
+# File names are relative to the package directory.
+#
+# @param path directory containing the product packages
+# @param type package type, either "tar" or "zip"
+# @return list of package file names
+proc checktree_get_package_files {path type} {
+   global ts_checktree
+
+   set package_files {}
+
+   # packages may already be checked during configuration setup,
+   # before the checktree has been built
+   if {![info exists ts_checktree(next_free)]} {
+      return $package_files
+   }
+
+   for {set i 0} {$i < $ts_checktree(next_free)} {incr i 1} {
+      if {[info exists ts_checktree($i,get_package_files_hook)]} {
+         set get_package_files_hook $ts_checktree($i,get_package_files_hook)
+         if {[info procs $get_package_files_hook] != $get_package_files_hook} {
+            ts_log_fine "Can not execute get_package_files_hook of checktree $ts_checktree($i,dir_name), proc not found"
+         } else {
+            foreach file [$get_package_files_hook $path $type] {
+               if {[lsearch -exact $package_files $file] < 0} {
+                  lappend package_files $file
+               }
+            }
+         }
+      }
+   }
+
+   return $package_files
+}
+
+##
+# @brief find the product packages of a single product extension
+#
+# Searches the package directory for the packages of one product extension,
+# e.g. "gcs-9.1.5-arco.tar.gz" for the extension named "arco".
+# Meant to be called from the get_package_files_hook of a checktree.
+#
+# @param path directory containing the product packages
+# @param type package type, either "tar" or "zip"
+# @param name name of the product extension, e.g. "arco" or "drmaaj"
+# @return list of package file names
+proc checktree_find_package_files {path type name} {
+   switch -- $type {
+      "tar" {
+         set extension "tar.gz"
+      }
+      "zip" {
+         set extension "zip"
+      }
+      default {
+         ts_log_severe "unknown package type \"$type\""
+         return {}
+      }
+   }
+
+   return [get_file_names $path "*cs*-$name.$extension"]
+}
+
 proc checktree_get_check_levels_by_path {path} {
    global ts_checktree
 

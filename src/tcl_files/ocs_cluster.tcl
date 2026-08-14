@@ -172,6 +172,264 @@ proc cluster_bulk_get_configs {conf_var} {
 }
 
 ###
+# @brief the object kinds a cluster snapshot covers
+#
+# One entry per kind: {<qconf export option> <directory or file name> <singleton>}.
+#
+# "singleton" marks the two kinds that exist exactly once and therefore take a
+# FILE name instead of a directory - qconf rejects a directory for them with
+# "a directory argument is not allowed for this object".
+#
+# Admin hosts, submit hosts, managers and operators need no entry of their own:
+# since the reserved-object migration they live in the "@admin_hosts" /
+# "@submit_hosts" host groups and the "manager" / "operator" usersets, so -Shgrp
+# and -Su already carry them.
+#
+# @return the list of kind descriptions
+##
+proc cluster_snapshot_kinds {} {
+   return {
+      {-Sconf  conf     0}
+      {-Se     exechost 0}
+      {-Sq     queue    0}
+      {-Sp     pe       0}
+      {-Sce    complex  0}
+      {-Srqs   rqs      0}
+      {-Sprj   project  0}
+      {-Shgrp  hgroup   0}
+      {-Sckpt  ckpt     0}
+      {-Scal   calendar 0}
+      {-Su     userset  0}
+      {-Suser  user     0}
+      {-Srole  role     0}
+      {-Ssconf sconf    1}
+      {-Sstree stree    1}
+   }
+}
+
+###
+# @brief take a snapshot of every configuration object in the cluster
+#
+# Exports all object kinds with "qconf -fmt json -S<obj>" and reads the result
+# back into one array. This is the raw material for the cleanup verification of
+# CS-984: the same snapshot taken before a test's setup and after its cleanup
+# says what the test left behind, without anyone having to describe what a
+# default looks like.
+#
+# Only the main cluster configuration (number 0) is looked at. check.exp makes
+# sure that is the current one before a test starts.
+#
+# @param snap_var   name of an array to fill, keyed "<kind>,<object>,<attribute>".
+#                   An object that exists also gets "<kind>,<object>," set to 1,
+#                   so "object without attributes" stays distinguishable from
+#                   "object absent".
+# @param timing_var optional name of a variable that receives the duration in ms
+# @return 1 when the array was filled, 0 when the caller has to treat the
+#         baseline as lost. Never raises - a snapshot that cannot be taken is a
+#         missing measurement, never a test failure.
+##
+proc cluster_snapshot_take {snap_var {timing_var ""}} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_HAVE_JSON
+
+   upvar $snap_var snap
+   array unset snap
+   if {$timing_var ne ""} {
+      upvar $timing_var timing
+      set timing 0
+   }
+
+   if {![info exists CHECK_HAVE_JSON] || !$CHECK_HAVE_JSON} {
+      ts_log_fine "no json package - cannot take a cluster snapshot"
+      return 0
+   }
+   if {![ge_has_feature "bulk-object-export"]} {
+      ts_log_fine "product has no bulk object export - cannot take a cluster snapshot"
+      return 0
+   }
+
+   set start [clock milliseconds]
+   set host [config_get_best_suited_admin_host]
+   set dir [cluster_bulk_open is_local]
+   set ok 1
+   set objects 0
+
+   # One remote call for all fifteen exports, not one per kind. Measured on a six
+   # host cluster: fifteen start_sge_bin calls cost 5.4 s, of which about 96 % is
+   # the spawn round trip - the qconf work inside them is some 12 ms each. The
+   # exports are therefore chained into a single script line, with a marker after
+   # each one that carries its exit code, since the script's own exit code only
+   # tells us about the last command.
+   set arch [resolve_arch $host]
+   set binary "$ts_config(product_root)/bin/$arch/qconf"
+   set commands {}
+   foreach kind [cluster_snapshot_kinds] {
+      lassign $kind opt name is_singleton
+      if {$is_singleton} {
+         set target "$dir/$name.json"
+      } else {
+         # The trailing slash is not cosmetic. Directory mode is chosen when the
+         # argument IS a directory or ENDS IN a slash; without it qconf would
+         # take the still missing path for an object name and export a single
+         # object into a file of that name.
+         set target "$dir/$name/"
+      }
+      lappend commands "$binary -fmt json $opt $target"
+      lappend commands "echo SNAPSHOT_RC $name \$?"
+   }
+
+   # The command list goes into the ARGUMENTS of /bin/sh, never into the command
+   # itself: open_remote_spawn_process names its generated script after
+   # [file tail $exec_command], so a compound command would put semicolons and
+   # spaces into a file name and the file check that follows would time out.
+   #
+   # Single quotes, not double: the outer shell runs the generated script, and
+   # inside double quotes it would expand every "$?" itself before the inner
+   # shell ever sees it.
+   #
+   # raise_error off: a snapshot that cannot be taken is a missing measurement.
+   # It must never turn into a warning against the test that happened to run.
+   set output [start_remote_prog $host $CHECK_USER "/bin/sh" "-c '[join $commands "; "]'" \
+                                 prg_exit_state 120 0 "" "" 1 1 0 0]
+
+   array set rc {}
+   foreach line [split $output "\n"] {
+      if {[regexp {SNAPSHOT_RC ([a-z]+) ([0-9]+)} $line -> rc_name rc_value]} {
+         set rc($rc_name) $rc_value
+      }
+   }
+
+   foreach kind [cluster_snapshot_kinds] {
+      lassign $kind opt name is_singleton
+
+      if {![info exists rc($name)]} {
+         ts_log_fine "no result for $opt in the snapshot output, snapshot incomplete:\n$output"
+         set ok 0
+         break
+      }
+      if {$rc($name) != 0} {
+         # A cluster without a share tree answers -Sstree with exit code 1 and
+         # writes nothing. That is "no such object", not a failure, and it must
+         # not cost the whole snapshot - otherwise every cluster without a share
+         # tree would lose its baseline after every test. A qmaster that is
+         # really gone shows up in the thirteen directory kinds anyway.
+         if {$is_singleton} {
+            ts_log_finer "no $name object in this cluster"
+            continue
+         }
+         ts_log_fine "qconf $opt failed (exit $rc($name)), snapshot incomplete:\n$output"
+         set ok 0
+         break
+      }
+
+      incr objects [cluster_snapshot_read $host $is_local $dir $name $is_singleton snap]
+   }
+
+   # "<dir>: N object(s) exported, M failed" - one summary line per kind. A
+   # partial export has to count as a failure: a snapshot that quietly lost an
+   # object would later read as "the test deleted it".
+   if {$ok} {
+      foreach line [split $output "\n"] {
+         if {[regexp {([0-9]+) object\(s\) exported, ([0-9]+) failed} $line -> exported failed] &&
+             $failed != 0} {
+            ts_log_fine "export reported $failed failure(s), snapshot incomplete:\n$output"
+            set ok 0
+            break
+         }
+      }
+   }
+
+   catch {cluster_bulk_delete $host $dir $is_local}
+
+   set elapsed [expr {[clock milliseconds] - $start}]
+   if {$timing_var ne ""} {
+      set timing $elapsed
+   }
+   if {!$ok} {
+      array unset snap
+      return 0
+   }
+   ts_log_fine "cluster snapshot: $objects object(s) in ${elapsed} ms"
+   return 1
+}
+
+###
+# @brief read the exported files of one object kind into the snapshot array
+#
+# Helper of cluster_snapshot_take, not meant to be called on its own.
+#
+# When the export ran on the local host the files are read with plain Tcl I/O -
+# a snapshot has around a hundred files, and one remote call per file would cost
+# more than the export itself. Only a remote admin host takes the slow path, and
+# says so, so the cost stays visible.
+#
+# @return the number of objects read
+##
+proc cluster_snapshot_read {host is_local dir name is_singleton snap_var} {
+   global CHECK_USER
+
+   upvar $snap_var snap
+
+   set files {}
+   if {$is_singleton} {
+      set files [list "$dir/$name.json"]
+   } elseif {$is_local} {
+      set files [glob -nocomplain -directory "$dir/$name" *]
+   } else {
+      # List first, read second: asking for a file that is not there would turn
+      # "no objects of this kind" into an error.
+      set listing [start_remote_prog $host $CHECK_USER "ls" "-1 $dir/$name" prg_exit_state 60 0]
+      if {$prg_exit_state != 0} {
+         return 0
+      }
+      foreach entry [split [string trim $listing] "\n"] {
+         set entry [string trim $entry]
+         if {$entry ne ""} {
+            lappend files "$dir/$name/$entry"
+         }
+      }
+   }
+
+   set count 0
+   foreach file $files {
+      set text ""
+      if {$is_local} {
+         if {![file exists $file]} {
+            continue
+         }
+         set fh [open $file r]
+         set text [read $fh]
+         close $fh
+      } else {
+         unset -nocomplain lines
+         get_file_content $host $CHECK_USER $file lines
+         if {![info exists lines(0)]} {
+            continue
+         }
+         for {set i 1} {$i <= $lines(0)} {incr i} {
+            append text $lines($i) "\n"
+         }
+      }
+
+      if {[catch {set object [::json::json2dict $text]} err]} {
+         ts_log_fine "cannot parse $file as json, snapshot incomplete: $err"
+         continue
+      }
+      # The envelope members carry the schema URL and the object type, not
+      # configuration - they would show up as a difference on every version bump.
+      set object [dict remove $object "\$schema" "\$id"]
+
+      set object_name [file rootname [file tail $file]]
+      set snap($name,$object_name,) 1
+      dict for {attribute value} $object {
+         set snap($name,$object_name,$attribute) $value
+      }
+      incr count
+   }
+   return $count
+}
+
+###
 # @brief remove a directory made by cluster_bulk_open
 ##
 proc cluster_bulk_delete {host dir is_local} {

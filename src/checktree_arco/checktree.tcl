@@ -61,6 +61,7 @@ set ts_checktree($arco_checktree_nr,compile_clean_hooks_0)  "arco_compile_clean"
 set ts_checktree($arco_checktree_nr,install_binary_hooks_0) "arco_install_binaries"
 
 set ts_checktree($arco_checktree_nr,get_dist_files_hook)    "arco_get_distribution_files"
+set ts_checktree($arco_checktree_nr,get_package_files_hook) "arco_get_package_files"
 set ts_checktree($arco_checktree_nr,mk_dist_options)        "-arco"
 
 set ts_checktree($arco_checktree_nr,shutdown_hooks_0)       "shutdown_dbwriter"
@@ -1167,5 +1168,18 @@ proc arco_get_distribution_files {} {
    }
 
    return $dist_files
+}
+
+##
+# @brief get the arco product packages
+#
+# Returns the names of the arco (dbwriter) packages found in the package
+# directory, e.g. "gcs-9.1.5-arco.tar.gz".
+#
+# @param path directory containing the product packages
+# @param type package type, either "tar" or "zip"
+# @return list of package file names
+proc arco_get_package_files {path type} {
+   return [checktree_find_package_files $path $type "arco"]
 }
 

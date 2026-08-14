@@ -309,6 +309,22 @@ args="$args get_pw_command ${GCS_PW_COMMAND:-$CS_TOOL_DIR/get_pwd.sh}"
 # changes where the translations come from, and someone running a single check by
 # hand should get exactly what they got yesterday.
 [ "${GCS_L10N_CACHE:-0}" = "1" ] && args="$args l10n_cache"
+# CS-984: verify after every test that its cleanup restored the cluster.
+# fail (default) / report (log the leftovers only) / off.
+#
+# On by default, and failing rather than reporting: a check that leaves the
+# cluster dirty is not a cosmetic finding, it is the next check on this cluster
+# that pays for it. Interactively that costs nothing beyond the check itself -
+# the automatic reinstall after a failure hangs on CS_SELF_HEAL, which only the
+# runners set.
+#
+# Needs a 9.2 or newer product - the check reads the cluster with "qconf -S<obj>".
+# On 9.0 and 9.1 the capability probe (ge_has_feature "bulk-object-export") comes
+# back empty and the check does nothing, so this stays harmless for older lines
+# that share this script.
+#
+#   GCS_CLEANUP_CHECK=off 92x check <path> <level>     to switch it off again
+args="$args cleanup_check ${GCS_CLEANUP_CHECK:-fail}"
 # Scale the wait timeouts inside the tests. The values they pass assume the
 # testsuite has the hosts to itself; with several runners on one host set the
 # same work takes 1.6 to 2.4 times longer and the waits report timeouts where
