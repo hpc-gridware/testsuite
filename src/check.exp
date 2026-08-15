@@ -339,9 +339,18 @@ global check_do_not_create_local_config
 set check_do_not_create_local_config 0
 
 # CS-984: verify after every test that its cleanup function restored the cluster.
-# "off" (default), "report" (log findings) or "fail" (findings fail the test).
+# "fail" (default, findings fail the test), "report" (log them only) or "off".
+#
+# It started out "off" while the checktree was still full of tests that do not
+# clean up. That is no longer the case - the two inventory runs of 2026-08-14 and
+# 2026-08-15 took it from 32 checks with findings down to none - so the check is
+# on by default now. A leftover is not a cosmetic finding: it is the next test on
+# this cluster that pays for it.
+#
+# There is nothing to switch off on 9.0 and 9.1: they have no -S bulk exports, so
+# no snapshot is taken there whatever this says.
 global check_cleanup_verification
-set check_cleanup_verification "off"
+set check_cleanup_verification "fail"
 
 # CS-984: is the snapshot taken before the current test's setup usable?
 global check_cleanup_baseline_valid
@@ -7786,9 +7795,13 @@ proc operate_add_cluster {filename operation {atimeout 120} {execute_func ""} {e
    }
 
    # inherit "cleanup_check" command line param
-   if {$check_cleanup_verification != "off"} {
-      append args " cleanup_check $check_cleanup_verification"
-   }
+   #
+   # Passed unconditionally. It used to be sent only when it was not "off", which
+   # was harmless while "off" WAS the default - the child then arrived at the same
+   # value by itself. With "fail" as the default that reasoning inverts: a run
+   # explicitly switched off would hand the child nothing and the child would
+   # switch itself back on.
+   append args " cleanup_check $check_cleanup_verification"
 
    # inherit additional command line param
    if {$additional_switches != ""} {
@@ -8213,9 +8226,9 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "cleanup_check <mode>  verify after every test that its cleanup function restored"
       puts "                      the cluster, mode = "
-      puts "                      off (default)"
+      puts "                      fail (default, leftovers fail the test)"
       puts "                      report (log what a test left behind)"
-      puts "                      fail (leftovers fail the test)"
+      puts "                      off"
       puts "                      needs a 9.2 or newer product"
       puts ""
       puts "interactive <type>    use <type> as transport for interactive jobs, type = "
