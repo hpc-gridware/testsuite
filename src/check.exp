@@ -346,6 +346,12 @@ set check_cleanup_verification "off"
 # CS-984: is the snapshot taken before the current test's setup usable?
 global check_cleanup_baseline_valid
 set check_cleanup_baseline_valid 0
+# ids of the jobs and advance reservations the cluster held before the test - the
+# expected content is "none", they exist so that a test is not charged for what it
+# inherited from the one before it
+global check_cleanup_baseline_jobs check_cleanup_baseline_ars
+set check_cleanup_baseline_jobs {}
+set check_cleanup_baseline_ars {}
 
 # CS-984: per test cleanup verification exceptions, set by a check that changes
 # the cluster on purpose. Reset for every check, like check_needs.
@@ -5030,6 +5036,7 @@ proc execute_test_preparation_procedure {func_name type {warning_counter ""}} {
 proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } } {
    global ts_config
    global check_cleanup_verification check_cleanup_baseline check_cleanup_baseline_valid
+   global check_cleanup_baseline_jobs check_cleanup_baseline_ars
    global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT check_needs CHECK_RESULT_DIRS
    global check_name check_description CHECK_ACTUAL_TEST_PATH CHECK_ACT_LEVEL
    global check_errstr check_description check_functions check_errno
@@ -5195,6 +5202,17 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
          ts_log_fine "cleanup check: baseline for $check_name taken in ${baseline_ms} ms"
       } else {
          ts_log_fine "cleanup check: no baseline for $check_name, nothing to compare against"
+      }
+
+      # Jobs and reservations are asserted absolutely, so this is not a baseline
+      # to compare against - it is the list of what this test is NOT answerable
+      # for. On a clean cluster, which is what it should always be, both are empty
+      # and the assertion behaves exactly as if they had never been read.
+      cleanup_check_read_jobs_and_ars check_cleanup_baseline_jobs check_cleanup_baseline_ars
+      if {[llength $check_cleanup_baseline_jobs] > 0 || [llength $check_cleanup_baseline_ars] > 0} {
+         ts_log_fine "cleanup check: $check_name starts on a cluster that already holds\
+                      [llength $check_cleanup_baseline_jobs] job(s) and\
+                      [llength $check_cleanup_baseline_ars] advance reservation(s)"
       }
    }
 
@@ -5450,6 +5468,7 @@ proc check_if_test_cleaned_up {{test_failed 0}} {
    global check_do_not_create_local_config
    global CHECK_INTERACTIVE_TRANSPORT
    global check_cleanup_verification check_cleanup_baseline check_cleanup_baseline_valid
+   global check_cleanup_baseline_jobs check_cleanup_baseline_ars
    global check_cleanup_findings
 
    if {![is_qmaster_alive $ts_config(master_host) [get_qmaster_spool_dir]]} {
@@ -5598,8 +5617,11 @@ proc check_if_test_cleaned_up {{test_failed 0}} {
       }
 
       # Leftover jobs and advance reservations need no baseline - no test may
-      # leave either behind, whatever the cluster looked like before.
-      set findings [cleanup_check_jobs_and_ars]
+      # leave either behind, whatever the cluster looked like before. The two
+      # lists say only which ones were already there, so that this test is not
+      # charged for the leftovers of the one before it.
+      set findings [cleanup_check_jobs_and_ars $check_cleanup_baseline_jobs \
+                                               $check_cleanup_baseline_ars]
 
       if {![cluster_snapshot_take cleanup_after_snapshot after_ms]} {
          ts_log_fine "cleanup check: no snapshot after $check_name, nothing to compare"
@@ -5641,6 +5663,8 @@ proc check_if_test_cleaned_up {{test_failed 0}} {
       unset -nocomplain cleanup_after_snapshot
       unset -nocomplain check_cleanup_baseline
       set check_cleanup_baseline_valid 0
+      set check_cleanup_baseline_jobs {}
+      set check_cleanup_baseline_ars {}
    }
 
    ts_log_fine "verifying the configuration after the $check_name check took [expr [clock seconds] - $start] seconds"

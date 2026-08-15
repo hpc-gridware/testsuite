@@ -396,44 +396,94 @@ proc cleanup_check_listed_ids {output} {
 }
 
 ###
-# @brief are there jobs or advance reservations left in the cluster?
+# @brief which jobs and advance reservations does the cluster hold right now?
 #
-# Not a comparison against the baseline, an absolute assertion: no test may leave
-# a job or an advance reservation behind, so there is nothing a snapshot could
-# usefully say here and nothing to make an exception for. A leftover job is also
-# the cleanup failure with the longest reach - it keeps slots occupied and makes
-# the NEXT test wait for resources that will never come free.
+# Neither has a -S export, so they are asked for directly. The plain qstat view is
+# the right notion of "there": a job kept by finished_job_retention has already
+# run and is not occupying anything.
 #
-# Neither has a -S export, so they are asked for directly. The plain qstat view
-# is the right notion of "still there": a job kept by finished_job_retention has
-# already run and is not occupying anything.
-#
-# @return a list of finding descriptions, empty when the cluster is clear
+# @param jobs_var name of the variable that receives the job ids
+# @param ars_var  name of the variable that receives the advance reservation ids
+# @return 1 when both lists could be read, 0 when a client failed
 ##
-proc cleanup_check_jobs_and_ars {} {
+proc cleanup_check_read_jobs_and_ars {jobs_var ars_var} {
    global prg_exit_state
+   upvar $jobs_var jobs
+   upvar $ars_var ars
 
-   set findings {}
+   set jobs {}
+   set ars {}
+   set ret 1
 
    set output [start_sge_bin "qstat" "-u \"*\"" "" "" prg_exit_state 60]
    if {$prg_exit_state != 0} {
-      ts_log_fine "cleanup check: qstat failed, cannot look for leftover jobs:\n$output"
+      ts_log_fine "cleanup check: qstat failed, cannot look for jobs:\n$output"
+      set ret 0
    } else {
       set jobs [cleanup_check_listed_ids $output]
-      if {[llength $jobs] > 0} {
-         lappend findings "[llength $jobs] job(s) left in the cluster:\
-                           [join $jobs ", "]"
-      }
    }
 
    set output [start_sge_bin "qrstat" "-u \"*\"" "" "" prg_exit_state 60]
    if {$prg_exit_state != 0} {
-      ts_log_fine "cleanup check: qrstat failed, cannot look for leftover advance reservations:\n$output"
+      ts_log_fine "cleanup check: qrstat failed, cannot look for advance reservations:\n$output"
+      set ret 0
    } else {
       set ars [cleanup_check_listed_ids $output]
-      if {[llength $ars] > 0} {
-         lappend findings "[llength $ars] advance reservation(s) left in the cluster:\
-                           [join $ars ", "]"
+   }
+
+   return $ret
+}
+
+###
+# @brief are there jobs or advance reservations left in the cluster?
+#
+# An absolute assertion, not a snapshot comparison: no test may leave a job or an
+# advance reservation behind, whatever the cluster looked like before. A leftover
+# job is also the cleanup failure with the longest reach - it keeps slots occupied
+# and makes the NEXT test wait for resources that will never come free.
+#
+# The expected baseline is therefore always "none", which is why there is nothing
+# to compare and no exception to make. The ids present before the test are passed
+# in for one purpose only: NOT to charge this test for what it inherited. A test
+# that starts on a cluster somebody else left dirty would otherwise report the
+# foreign leftover as its own - that is how an unsupported check, which ran
+# nothing at all, came to report the reservation of the check before it. Those ids
+# are reported separately, against the run rather than against this test.
+#
+# @param before_jobs ids of the jobs present before the test, empty when unknown
+# @param before_ars  ids of the reservations present before the test
+# @return a list of finding descriptions, empty when the cluster is clear
+##
+proc cleanup_check_jobs_and_ars {{before_jobs {}} {before_ars {}}} {
+   global check_name
+
+   set findings {}
+
+   cleanup_check_read_jobs_and_ars jobs ars
+
+   foreach {kind after before} [list "job" $jobs $before_jobs \
+                                     "advance reservation" $ars $before_ars] {
+      set own {}
+      set inherited {}
+      foreach id $after {
+         if {[lsearch -exact $before $id] >= 0} {
+            lappend inherited $id
+         } else {
+            lappend own $id
+         }
+      }
+      if {[llength $own] > 0} {
+         lappend findings "[llength $own] ${kind}(s) left in the cluster:\
+                           [join $own ", "]"
+      }
+      if {[llength $inherited] > 0} {
+         # Not a finding: the check found them the way it found the cluster. Said
+         # out loud all the same, because a cluster that arrives dirty means the
+         # check BEFORE this one left something behind and its own report of that
+         # is the one to go by.
+         ts_log_fine "cleanup check: [llength $inherited] ${kind}(s) were already there\
+                      when $check_name started and are not charged to it:\
+                      [join $inherited ", "]"
       }
    }
 
