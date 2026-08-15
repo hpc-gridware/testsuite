@@ -128,11 +128,13 @@ while IFS= read -r file1; do
       echo "Excluding 'execd_spool_dir' from diff of '$object_type' object '$object_name'"
       filter1="grep -v ^execd_spool_dir $file1"
       filter2="grep -v ^execd_spool_dir $file2"
-   elif [ "$object_type" = "hostgroups" ] && [ "$object_name" = "@allhosts" ]; then
-      # Users delete_time will differ for different backups, exclude it
-      echo "Excluding 'hostlist' from diff of '$object_type' object '$object_name'"
-      filter1="grep -v ^hostlist $file1"
-      filter2="grep -v ^hostlist $file2"
+   # There used to be a branch here that dropped 'hostlist' from '@allhosts'
+   # entirely. The comment on it was copied from the users branch and said
+   # nothing about host groups, so what it was meant to cover was never on
+   # record - and the effect was that the membership of the one group holding
+   # every host went unchecked. @exec_hosts showed what the trouble really was:
+   # member order. normalize_lists takes care of that for every host group, so
+   # the exclusion is gone and @allhosts is compared like the rest.
    elif [ "$object_type" = "cqueues" ]; then
       # Users delete_time will differ for different backups, exclude it
       echo "Excluding 'tmpdir' and 'slots' from diff of '$object_type' object '$object_name'"
