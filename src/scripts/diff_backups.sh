@@ -24,6 +24,51 @@
 
 ret=0
 
+# A host list is a set, not a sequence. The qmaster hands its members back in
+# whatever order it happens to hold them, so two backups of the very same cluster
+# routinely differ in nothing but that order:
+#
+#   < hostlist h047 v04706 v04702 v04708 v04709 v04707
+#   > hostlist h047 v04707 v04706 v04708 v04702 v04709
+#
+# The diff below already sorts LINES, which does not help here - the whole host
+# list is one line. Sorting its members turns the line back into the set it
+# stands for, so a real membership change is still a difference while a reshuffle
+# is not (CS-2598).
+#
+# Only 'hostlist' is normalised. Other attributes that read like sets are left
+# alone on purpose: widening this would start hiding differences nobody has
+# looked at yet.
+#
+# Plain POSIX awk, no asort() - that is a gawk extension and these scripts run on
+# every test host.
+normalize_lists() {
+   awk '
+      $1 == "hostlist" && NF > 2 {
+         n = NF - 1
+         for (i = 1; i <= n; i++) {
+            a[i] = $(i + 1)
+         }
+         for (i = 2; i <= n; i++) {
+            v = a[i]
+            j = i - 1
+            while (j >= 1 && a[j] > v) {
+               a[j + 1] = a[j]
+               j--
+            }
+            a[j + 1] = v
+         }
+         line = $1
+         for (i = 1; i <= n; i++) {
+            line = line " " a[i]
+         }
+         print line
+         next
+      }
+      { print }
+   '
+}
+
 # Usage: diff_backups.sh <backup_dir1> <backup_dir2>
 dir1="${1:?First backup directory not specified}"
 dir2="${2:?Second backup directory not specified}"
@@ -100,7 +145,7 @@ while IFS= read -r file1; do
 
    # Compare the files after applying the filter and exit on first difference
    if [[ -f "$file2" ]]; then
-      diff -b <($filter1|sort) <($filter2|sort)
+      diff -b <($filter1|normalize_lists|sort) <($filter2|normalize_lists|sort)
       if [ $? -eq 0 ]; then
          echo "$rel_path: OK"
       else
