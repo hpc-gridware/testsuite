@@ -1,0 +1,251 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# Define the global variables to give them back
+global check_name check_description check_needs check_functions
+global check_category
+global check_root_access_needs check_need_running_system
+global check_version_range
+
+set check_root_access_needs   "no"
+
+# communication_params and the test binary this check drives arrive with 9.1.5
+set check_version_range       "9.1.5"
+
+set check_name                "bootstrap_parsing"
+set check_category            "BOOTSTRAP VERIFIED"
+set check_description(0)      "the bootstrap file is parsed as expected"
+set check_needs               "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function      "bootstrap_parsing_setup"
+set check_cleanup_function    "bootstrap_parsing_cleanup"
+
+# define test's procedure order
+set check_functions           {}
+lappend check_functions       "bootstrap_parsing_communication_params"
+
+##
+# @brief Prepare a place where generated bootstrap files can be read from.
+#
+# The bootstrap file cannot be handed to the test binary as a path. Its location is
+# derived as $SGE_ROOT/$SGE_CELL/common/bootstrap and both directories have to exist,
+# so the check builds a directory that looks like an installation and points the
+# binary at it. Only the bootstrap file inside it is ever read.
+#
+# The bootstrap file of the running cluster serves as the template. Working from it
+# rather than from a file written here keeps the cases about the attribute under test
+# instead of about whatever else a hand-written file happens to get wrong.
+proc bootstrap_parsing_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global bootstrap_parsing_host bootstrap_parsing_root
+   global bootstrap_parsing_template bootstrap_parsing_case
+
+   set bootstrap_parsing_host $ts_config(master_host)
+
+   # the binary is installed with the cluster, an installation without it cannot
+   # run this check
+   set test_bin [get_test_path "test_uti_bootstrap" $bootstrap_parsing_host]
+   if {![is_remote_file $bootstrap_parsing_host $CHECK_USER $test_bin]} {
+      ts_log_config "test requires the test binary $test_bin"
+      return 99
+   }
+
+   # read the bootstrap file of the running cluster - it is the template every case
+   # starts from
+   set template_file "$ts_config(product_root)/$ts_config(cell)/common/bootstrap"
+   # get_file_content reports a failure itself, this only stops the check from
+   # carrying on with an empty template
+   get_file_content $bootstrap_parsing_host $CHECK_USER $template_file file_array
+   if {$file_array(0) <= 0} {
+      ts_log_fine "no content in the bootstrap file $template_file"
+      return 99
+   }
+
+   set bootstrap_parsing_template {}
+   for {set i 1} {$i <= $file_array(0)} {incr i} {
+      lappend bootstrap_parsing_template $file_array($i)
+   }
+
+   # the directory lands below the testsuite results directory, which every host
+   # reaches, so a file is written once here and read there
+   set bootstrap_parsing_root [get_tmp_directory_name $bootstrap_parsing_host]
+   set bootstrap_parsing_case 0
+
+   return 0
+}
+
+proc bootstrap_parsing_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global bootstrap_parsing_host bootstrap_parsing_root
+   global bootstrap_parsing_template bootstrap_parsing_case
+
+   # the temporary directory is not removed here, the testsuite cleans up the
+   # temporary files and directories it handed out
+
+   unset -nocomplain bootstrap_parsing_host bootstrap_parsing_root
+   unset -nocomplain bootstrap_parsing_template
+   unset -nocomplain bootstrap_parsing_case
+}
+
+##
+# @brief Write a bootstrap file built from the template and read it back.
+#
+# The template lines are copied over, except that a line naming one of the attributes
+# in a_replace is replaced by the value given there, and an attribute named there but
+# absent from the template is appended. An empty value drops the attribute, which is
+# how a case for a missing attribute is built.
+#
+# @param a_replace  name of an array, attribute name to whole replacement line
+# @param a_out      name of an array which receives the parsed key/value pairs
+# @param a_exit     name of a variable which receives the exit status
+# @return the output of the run, stdout and stderr together
+proc bootstrap_parsing_run {a_replace a_out a_exit} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global bootstrap_parsing_host bootstrap_parsing_root
+   global bootstrap_parsing_template bootstrap_parsing_case
+
+   upvar $a_replace replace
+   upvar $a_out parsed
+   upvar $a_exit exit_state
+
+   # build the file: keep every line, swap the ones we were asked to swap
+   set seen {}
+   set content(0) 0
+   foreach line $bootstrap_parsing_template {
+      set attribute [lindex [split [string trim $line]] 0]
+      if {[info exists replace($attribute)]} {
+         lappend seen $attribute
+         if {$replace($attribute) == ""} {
+            continue
+         }
+         set line $replace($attribute)
+      }
+      incr content(0)
+      set content($content(0)) $line
+   }
+   foreach attribute [array names replace] {
+      if {[lsearch -exact $seen $attribute] < 0 && $replace($attribute) != ""} {
+         incr content(0)
+         set content($content(0)) $replace($attribute)
+      }
+   }
+
+   # Every case becomes a cell of its own below one SGE_ROOT. That gives each case a
+   # path nothing has written before - re-using one would leave the wait below with
+   # nothing to wait for and the other host could still be served the previous
+   # content - and it puts a cell name other than the usual "default" through the
+   # path construction on the way.
+   incr bootstrap_parsing_case
+   set cell "case_$bootstrap_parsing_case"
+   set bootstrap_file "$bootstrap_parsing_root/$cell/common/bootstrap"
+   file mkdir "$bootstrap_parsing_root/$cell/common"
+   save_file $bootstrap_file content
+
+   # written here, read on the other host - wait until it is actually visible there
+   if {[wait_for_remote_file $bootstrap_parsing_host $CHECK_USER $bootstrap_file] != 0} {
+      ts_log_severe "the generated bootstrap file did not appear on\
+                     $bootstrap_parsing_host"
+      set exit_state -1
+      return ""
+   }
+
+   set envlist(SGE_ROOT) $bootstrap_parsing_root
+   set envlist(SGE_CELL) $cell
+   set output [start_test_bin "test_uti_bootstrap" "" $bootstrap_parsing_host \
+                              $CHECK_USER exit_state 60 envlist]
+
+   # The binary writes one key=value line per attribute it parsed. Log output arrives
+   # on the same channel and may itself contain an equals sign - the warning about an
+   # unknown parameter quotes the parameter, for one - so only a line that is nothing
+   # but an attribute name, an equals sign and a value is taken as a value.
+   array unset parsed
+   foreach line [split $output "\n"] {
+      if {[regexp {^([a-z_]+)=(.*)$} [string trim $line] match key value]} {
+         set parsed($key) $value
+      }
+   }
+
+   return $output
+}
+
+##
+# @brief communication_params is parsed, and a wrong entry is reported.
+#
+# Both parameters relax a check on incoming connections, so the case that matters most
+# is the one where an administrator believes a parameter is in effect and it is not.
+# A misspelled entry has to be reported rather than passed over, which is what the
+# negative case below asserts.
+proc bootstrap_parsing_communication_params {} {
+   get_current_cluster_config_array ts_config
+
+   # both parameters set
+   set replace(communication_params) \
+      "communication_params address_from_hostname=ip-%d-%d-%d-%d,trust_client_hostname=true"
+   set output [bootstrap_parsing_run replace parsed exit_state]
+   if {$exit_state != 0} {
+      ts_log_severe "reading a bootstrap file with communication_params failed:\n$output"
+   } elseif {$parsed(address_from_hostname) != "ip-%d-%d-%d-%d"} {
+      ts_log_severe "address_from_hostname is\
+                     \"$parsed(address_from_hostname)\", expected\
+                     \"ip-%d-%d-%d-%d\":\n$output"
+   } elseif {$parsed(trust_client_hostname) != "true"} {
+      ts_log_severe "trust_client_hostname is \"$parsed(trust_client_hostname)\",\
+                     expected \"true\":\n$output"
+   }
+   array unset replace
+   array unset parsed
+
+   # no communication_params at all - the defaults apply and nothing is reported
+   set replace(communication_params) ""
+   set output [bootstrap_parsing_run replace parsed exit_state]
+   if {$exit_state != 0} {
+      ts_log_severe "reading a bootstrap file without communication_params failed:\n$output"
+   } elseif {$parsed(address_from_hostname) != ""} {
+      ts_log_severe "address_from_hostname is \"$parsed(address_from_hostname)\"\
+                     without communication_params, expected it to be unset:\n$output"
+   } elseif {$parsed(trust_client_hostname) != "false"} {
+      ts_log_severe "trust_client_hostname is \"$parsed(trust_client_hostname)\"\
+                     without communication_params, expected \"false\":\n$output"
+   } elseif {[string first "unknown parameter" $output] >= 0} {
+      ts_log_severe "a bootstrap file without communication_params was reported\
+                     as having an unknown parameter:\n$output"
+   }
+   array unset replace
+   array unset parsed
+
+   # a misspelled parameter is reported and leaves the default in place
+   set replace(communication_params) \
+      "communication_params trust_clientname=true"
+   set output [bootstrap_parsing_run replace parsed exit_state]
+   if {$exit_state != 0} {
+      ts_log_severe "a bootstrap file with an unknown communication_params entry\
+                     must still be usable:\n$output"
+   } elseif {[string first "unknown parameter" $output] < 0} {
+      ts_log_severe "an unknown communication_params entry was not reported:\n$output"
+   } elseif {$parsed(trust_client_hostname) != "false"} {
+      ts_log_severe "trust_client_hostname is \"$parsed(trust_client_hostname)\"\
+                     after a misspelled entry, expected the default \"false\":\n$output"
+   }
+   array unset replace
+   array unset parsed
+}
