@@ -41,6 +41,7 @@ set check_cleanup_function    "bootstrap_parsing_cleanup"
 # define test's procedure order
 set check_functions           {}
 lappend check_functions       "bootstrap_parsing_communication_params"
+lappend check_functions       "bootstrap_parsing_address_format"
 
 ##
 # @brief Prepare a place where generated bootstrap files can be read from.
@@ -248,4 +249,53 @@ proc bootstrap_parsing_communication_params {} {
    }
    array unset replace
    array unset parsed
+}
+
+##
+# @brief Only a format which can yield an IPv4 address is accepted.
+#
+# The format is handed to snprintf when a host name is built from an address, so what
+# is let through here decides what that call is given. Four placeholders and nothing
+# else: a format with any other count cannot fill an address, and any other conversion
+# would be one nobody accounted for.
+#
+# A refused format leaves the attribute unset, which means host names keep being
+# resolved the usual way rather than through a format that half works.
+proc bootstrap_parsing_address_format {} {
+   get_current_cluster_config_array ts_config
+
+   # formats which have to be accepted - the separator is not fixed
+   foreach format {"ip-%d-%d-%d-%d" "node%d_%d_%d_%d.local" "%d.%d.%d.%d"} {
+      set replace(communication_params) "communication_params address_from_hostname=$format"
+      set output [bootstrap_parsing_run replace parsed exit_state]
+      if {$exit_state != 0} {
+         ts_log_severe "reading a bootstrap file with address_from_hostname=$format\
+                        failed:\n$output"
+      } elseif {$parsed(address_from_hostname) != $format} {
+         ts_log_severe "address_from_hostname is \"$parsed(address_from_hostname)\",\
+                        expected \"$format\":\n$output"
+      }
+      array unset replace
+      array unset parsed
+   }
+
+   # formats which have to be refused: too few and too many placeholders, a conversion
+   # which is not a placeholder, and one smuggled in behind four good ones
+   foreach format {"ip-%d-%d-%d" "ip-%d-%d-%d-%d-%d" "ip-%d-%d-%d-%s"
+                   "ip-%d-%d-%d-%d%n" "nodigits"} {
+      set replace(communication_params) "communication_params address_from_hostname=$format"
+      set output [bootstrap_parsing_run replace parsed exit_state]
+      if {$exit_state != 0} {
+         ts_log_severe "a bootstrap file with an unusable address_from_hostname must\
+                        still be usable:\n$output"
+      } elseif {$parsed(address_from_hostname) != ""} {
+         ts_log_severe "address_from_hostname is \"$parsed(address_from_hostname)\"\
+                        after the unusable format \"$format\", expected it to be\
+                        unset:\n$output"
+      } elseif {[string first "does not hold four" $output] < 0} {
+         ts_log_severe "the unusable format \"$format\" was not reported:\n$output"
+      }
+      array unset replace
+      array unset parsed
+   }
 }
