@@ -1,0 +1,241 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# Define the global variables to give them back
+global check_name check_description check_needs check_functions
+global check_category
+global check_root_access_needs check_need_running_system
+
+set check_root_access_needs   "yes"
+
+set check_name                "nat_submit_client"
+set check_category            "COMMLIB RESOLVING VERIFIED"
+set check_description(0)      "NAT'ed submit client with unresolvable host name is rejected"
+set check_needs               "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function      "nat_submit_client_setup"
+set check_cleanup_function    "nat_submit_client_cleanup"
+
+# define test's procedure order
+set check_functions           {}
+lappend check_functions       "nat_submit_client_unresolvable"
+
+##
+# @brief Prepare a container host that can stand in for a Kubernetes pod.
+#
+# A pod that submits jobs differs from a regular submit client in two ways: its
+# host name does not resolve for the qmaster, and its traffic is source-NAT'ed
+# so the address the qmaster sees belongs to the node rather than to the pod.
+#
+# A Docker container on the default bridge reproduces both. The container is
+# given a pod-style host name that exists nowhere in DNS, and its egress to any
+# other host is masqueraded to the container host's address. The container host
+# must therefore not be the qmaster host, otherwise the traffic may never be
+# masqueraded and only half of the situation would be reproduced.
+#
+# Everything this setup needs is site configuration rather than product
+# behaviour, so a missing piece bails out with ts_log_config instead of failing
+# the check.
+proc nat_submit_client_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ACTUAL_TEST_PATH
+   global nat_submit_client_host nat_submit_client_image
+   global nat_submit_client_hostname
+   global nat_submit_client_settings nat_submit_client_master_ip
+
+   # the pod name is fixed - it only has to be unresolvable for the qmaster and
+   # different from whatever the NAT'ed source address resolves to
+   set nat_submit_client_hostname "ip-10-244-7-73"
+   set nat_submit_client_image "ocs-testsuite/nat-submit-client:latest"
+
+   # a docker host which is not a submit host of this cluster - a container on a
+   # submit host would inherit that host's standing once its traffic is NAT'ed
+   # to the host address, and a submission could then succeed for a reason this
+   # test does not intend to exercise
+   set nat_submit_client_host [docker_get_host 1]
+   if {$nat_submit_client_host == ""} {
+      ts_log_config "test requires a docker host which is not a submit host"
+      return 99
+   }
+
+   # a hard-killed earlier run can leave the container behind, and "docker run
+   # --name" would then fail before ever reaching qsub
+   start_remote_prog $nat_submit_client_host "root" "docker" \
+                     "rm -f $nat_submit_client_hostname" \
+                     prg_exit_state 60 0 "" "" 0 0 0 0
+
+   # the container mounts SGE_ROOT, so it has to be visible on the container host
+   start_remote_prog $nat_submit_client_host "root" "test" \
+                     "-d $ts_config(product_root)" prg_exit_state 60 0 "" "" 0 0 0 0
+   if {$prg_exit_state != 0} {
+      ts_log_config "SGE_ROOT $ts_config(product_root) is not visible on host\
+                     $nat_submit_client_host"
+      return 99
+   }
+
+   # The container sources settings.sh, which sets SGE_ROOT, the cell, both port
+   # numbers and a PATH built from the architecture it determines at run time -
+   # inside the container, which is the only place that answer is meaningful.
+   set nat_submit_client_settings \
+      "$ts_config(product_root)/$ts_config(cell)/common/settings.sh"
+   start_remote_prog $nat_submit_client_host "root" "test" \
+                     "-r $nat_submit_client_settings" prg_exit_state 60 0 "" "" 0 0 0 0
+   if {$prg_exit_state != 0} {
+      ts_log_config "cannot read $nat_submit_client_settings on host\
+                     $nat_submit_client_host"
+      return 99
+   }
+
+   # The container has its own resolver and never sees the container host's
+   # /etc/hosts, so a cluster whose host names live there is invisible to it.
+   # The qmaster name has to be injected into the container explicitly - that
+   # the client can find the qmaster is a precondition of this check, not part
+   # of what it examines.
+   set nat_submit_client_master_ip ""
+   set output [start_remote_prog $nat_submit_client_host "root" "getent" \
+                                 "ahostsv4 $ts_config(master_host)" \
+                                 prg_exit_state 60 0 "" "" 0 0 0 0]
+   if {$prg_exit_state == 0} {
+      regexp {(\d+\.\d+\.\d+\.\d+)} $output match nat_submit_client_master_ip
+   }
+   if {$nat_submit_client_master_ip == ""} {
+      ts_log_config "cannot resolve the qmaster host $ts_config(master_host) on\
+                     host $nat_submit_client_host"
+      return 99
+   }
+
+   # The image is built here rather than taken from a registry: it needs
+   # binutils for util/arch, and an account carrying the testsuite user's ids so
+   # the client submits as that user. Both are baked in by the Dockerfile next
+   # to this check.
+   set dockerfile "$CHECK_ACTUAL_TEST_PATH/Dockerfile"
+   start_remote_prog $nat_submit_client_host "root" "test" "-r $dockerfile" \
+                     prg_exit_state 60 0 "" "" 0 0 0 0
+   if {$prg_exit_state != 0} {
+      ts_log_config "cannot read $dockerfile on host $nat_submit_client_host"
+      return 99
+   }
+
+   set uid [get_uid $CHECK_USER $ts_config(master_host)]
+   set gid [get_gid $CHECK_USER $ts_config(master_host)]
+   if {$uid < 0 || $gid < 0} {
+      ts_log_config "cannot determine uid and gid of user $CHECK_USER on\
+                     $ts_config(master_host)"
+      return 99
+   }
+
+   set build_args "build -t $nat_submit_client_image"
+   append build_args " --build-arg TS_USER=$CHECK_USER"
+   append build_args " --build-arg TS_UID=$uid"
+   append build_args " --build-arg TS_GID=$gid"
+   append build_args " -f $dockerfile $CHECK_ACTUAL_TEST_PATH"
+
+   ts_log_fine "building image $nat_submit_client_image on $nat_submit_client_host"
+   set output [start_remote_prog $nat_submit_client_host "root" "docker" $build_args \
+                                 prg_exit_state 600 0 "" "" 0 0 0 0]
+   if {$prg_exit_state != 0} {
+      ts_log_config "cannot build image $nat_submit_client_image on host\
+                     $nat_submit_client_host:\n$output"
+      return 99
+   }
+
+   return 0
+}
+
+proc nat_submit_client_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global nat_submit_client_host nat_submit_client_image
+   global nat_submit_client_hostname
+   global nat_submit_client_settings nat_submit_client_master_ip
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # the container is started with --rm and should be gone already, remove a
+   # leftover from an interrupted run so the next one starts from a clean state
+   if {[info exists nat_submit_client_host] && $nat_submit_client_host != ""} {
+      start_remote_prog $nat_submit_client_host "root" "docker" \
+                        "rm -f $nat_submit_client_hostname" \
+                        prg_exit_state 60 0 "" "" 0 0 0 0
+   }
+
+   unset -nocomplain nat_submit_client_host nat_submit_client_image
+   unset -nocomplain nat_submit_client_hostname nat_submit_client_settings
+   unset -nocomplain nat_submit_client_master_ip
+}
+
+##
+# @brief Submit from the container and expect the commlib to reject it.
+#
+# The qmaster cannot resolve the pod-style host name the client announces, so
+# the connection is denied before any authorisation happens and qsub reports
+# the resolver failure. This is the first of the two barriers a pod hits; the
+# second one, the mismatch between the announced name and the reverse
+# resolution of the NAT'ed source address, needs the name to be resolvable for
+# the qmaster and is not covered here.
+#
+# The client runs as the testsuite user, which the image carries with the same
+# ids as in the cluster. The submission never gets far enough for that identity
+# to be examined, but it keeps this check on the same footing as the phases
+# that will follow once the submission is meant to succeed.
+proc nat_submit_client_unresolvable {} {
+   get_current_cluster_config_array ts_config
+   global nat_submit_client_host nat_submit_client_image
+   global nat_submit_client_hostname
+   global nat_submit_client_settings nat_submit_client_master_ip
+
+   set root $ts_config(product_root)
+
+   set args "run --rm --name $nat_submit_client_hostname"
+   append args " --hostname $nat_submit_client_hostname"
+   # SGE_ROOT usually lives on a shared file system, which cannot carry the
+   # labels a host with SELinux in enforcing mode expects on a bind mount. The
+   # mount would be denied there, and the submission would fail for a reason
+   # that has nothing to do with what this check is looking at.
+   append args " --security-opt label=disable"
+   append args " -v $root:$root:ro"
+   append args " --add-host $ts_config(master_host):$nat_submit_client_master_ip"
+   append args " $nat_submit_client_image"
+   # single quotes keep the shell of the container host from splitting this into
+   # separate docker arguments
+   append args " sh -c '. $nat_submit_client_settings;"
+   append args " exec qsub -b y -o /dev/null -e /dev/null /bin/sleep 1'"
+
+   ts_log_fine "submitting from container $nat_submit_client_hostname on host\
+                $nat_submit_client_host"
+   # the submission is expected to fail, so no error is raised on a non-zero exit
+   set output [start_remote_prog $nat_submit_client_host "root" "docker" $args \
+                                 prg_exit_state 120 0 "" "" 0 0 0 0]
+
+   if {$prg_exit_state == 0} {
+      ts_log_severe "submission from container $nat_submit_client_hostname was accepted,\
+                     expected the commlib to reject the unresolvable host name:\n$output"
+      return
+   }
+
+   if {[string first "HOST_NOT_RESOLVABLE" $output] < 0} {
+      ts_log_severe "submission from container $nat_submit_client_hostname failed as\
+                     expected, but not because the host name is unresolvable:\n$output"
+      return
+   }
+
+   ts_log_fine "container submission was rejected with HOST_NOT_RESOLVABLE as expected"
+}
