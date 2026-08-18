@@ -27,7 +27,7 @@ set check_root_access_needs   "yes"
 
 set check_name                "nat_submit_client"
 set check_category            "COMMLIB RESOLVING VERIFIED"
-set check_description(0)      "NAT'ed submit client with unresolvable host name is rejected"
+set check_description(0)      "a NAT'ed submit client gets one barrier further per setting"
 set check_needs               "init_core_system"
 
 # setup and cleanup functions
@@ -35,8 +35,25 @@ set check_setup_function      "nat_submit_client_setup"
 set check_cleanup_function    "nat_submit_client_cleanup"
 
 # define test's procedure order
+#
+# The functions build on one another. Each adds one setting to the cluster and the
+# submission gets one barrier further, which is what makes the settings worth having:
+# the error changes, and the one that is gone is the one the setting removed.
+#
+#   1. nothing configured           - the name cannot be resolved
+#   2. address_from_hostname        - the name resolves, the address it came from does
+#                                     not match where the connection comes from
+#   3. trust_client_hostname        - CS-2611, then the host is not a submit host
+#   4. ALLOW_ANY_SUBMITHOSTS        - CS-2608, then the submission succeeds
+#
+# The first one asserts how a cluster behaves without any of these settings, which no
+# version has ever done differently, so the check carries no version range and runs
+# everywhere. From the second one on the settings have to exist, and each function
+# says so for itself - an older cluster would ignore the setting, leave the barrier
+# where it was, and fail for a reason that has nothing to do with what is tested.
 set check_functions           {}
 lappend check_functions       "nat_submit_client_unresolvable"
+lappend check_functions       "nat_submit_client_address_from_hostname"
 
 ##
 # @brief Prepare a container host that can stand in for a Kubernetes pod.
@@ -60,6 +77,14 @@ proc nat_submit_client_setup {} {
    global nat_submit_client_host nat_submit_client_image
    global nat_submit_client_hostname
    global nat_submit_client_settings nat_submit_client_master_ip
+   global nat_submit_client_bootstrap_backup
+
+   # The whole bootstrap file is kept, not just the attribute this check writes.
+   # An installation from 9.1.5 on brings communication_params along, so dropping the
+   # attribute in the cleanup would hand the next check a file which differs from the
+   # one this check found. Putting the content back leaves it as it was either way.
+   bootstrap_file_read bootstrap
+   set nat_submit_client_bootstrap_backup [array get bootstrap]
 
    # the pod name is fixed - it only has to be unresolvable for the qmaster and
    # different from whatever the NAT'ed source address resolves to
@@ -165,9 +190,24 @@ proc nat_submit_client_cleanup {} {
    global nat_submit_client_host nat_submit_client_image
    global nat_submit_client_hostname
    global nat_submit_client_settings nat_submit_client_master_ip
+   global nat_submit_client_bootstrap_changed nat_submit_client_bootstrap_backup
 
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   # the bootstrap file was changed for the later functions - put the content back as
+   # the setup found it and let the cluster come up with it, otherwise every check
+   # after this one runs against a configuration this one left behind
+   if {[info exists nat_submit_client_bootstrap_changed] &&
+       $nat_submit_client_bootstrap_changed} {
+      array set bootstrap $nat_submit_client_bootstrap_backup
+      # remove_additional, so an attribute this check added and the backup does not
+      # know about goes away instead of staying behind
+      bootstrap_file_write bootstrap 1
+      shutdown_and_restart_qmaster
+      wait_for_load_from_all_queues 120
+      set nat_submit_client_bootstrap_changed 0
+   }
 
    # the container is started with --rm and should be gone already, remove a
    # leftover from an interrupted run so the next one starts from a clean state
@@ -180,27 +220,70 @@ proc nat_submit_client_cleanup {} {
    unset -nocomplain nat_submit_client_host nat_submit_client_image
    unset -nocomplain nat_submit_client_hostname nat_submit_client_settings
    unset -nocomplain nat_submit_client_master_ip
+   unset -nocomplain nat_submit_client_bootstrap_changed
+   unset -nocomplain nat_submit_client_bootstrap_backup
 }
 
 ##
-# @brief Submit from the container and expect the commlib to reject it.
+# @brief How many lines the qmaster messages file holds right now.
 #
-# The qmaster cannot resolve the pod-style host name the client announces, so
-# the connection is denied before any authorisation happens and qsub reports
-# the resolver failure. This is the first of the two barriers a pod hits; the
-# second one, the mismatch between the announced name and the reverse
-# resolution of the NAT'ed source address, needs the name to be resolvable for
-# the qmaster and is not covered here.
+# The submission is expected to be refused, and the reason is only in the messages
+# file. Every function notes the length before it submits and reads what came after,
+# so a message from an earlier function cannot be mistaken for a fresh one.
+proc nat_submit_client_messages_mark {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   get_file_content $ts_config(master_host) $CHECK_USER [check_qmaster_messages 2] file_array
+   return $file_array(0)
+}
+
+##
+# @brief The lines the qmaster wrote after a mark.
 #
-# The client runs as the testsuite user, which the image carries with the same
-# ids as in the cluster. The submission never gets far enough for that identity
-# to be examined, but it keeps this check on the same footing as the phases
-# that will follow once the submission is meant to succeed.
-proc nat_submit_client_unresolvable {} {
+# The qmaster writes the message while the client is already gone, so the lines are
+# waited for rather than read once.
+proc nat_submit_client_messages_since {mark} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set messages_file [check_qmaster_messages 2]
+   set new_lines ""
+
+   for {set attempt 0} {$attempt < 10} {incr attempt} {
+      set new_lines ""
+      get_file_content $ts_config(master_host) $CHECK_USER $messages_file file_array
+      for {set i [expr {$mark + 1}]} {$i <= $file_array(0)} {incr i} {
+         append new_lines "$file_array($i)\n"
+      }
+      if {$new_lines != ""} {
+         break
+      }
+      sleep_for_seconds 2
+   }
+
+   return $new_lines
+}
+
+##
+# @brief Submit from the container with nothing configured.
+#
+# The qmaster cannot resolve the pod-style host name the client announces, so the
+# connection is refused before any authorisation happens. Two messages say so: the
+# name could not be resolved, and what the client announced does not match what the
+# qmaster made of it, which at this point is "(HOST_NOT_RESOLVABLE)".
+#
+# The client runs as the testsuite user, which the image carries with the same ids as
+# in the cluster. The submission never gets far enough for that identity to be
+# examined, but it keeps this function on the same footing as the later ones, where
+# the submission is meant to succeed.
+proc nat_submit_client_submit {a_exit} {
    get_current_cluster_config_array ts_config
    global nat_submit_client_host nat_submit_client_image
    global nat_submit_client_hostname
    global nat_submit_client_settings nat_submit_client_master_ip
+
+   upvar $a_exit exit_state
 
    set root $ts_config(product_root)
 
@@ -221,21 +304,94 @@ proc nat_submit_client_unresolvable {} {
 
    ts_log_fine "submitting from container $nat_submit_client_hostname on host\
                 $nat_submit_client_host"
-   # the submission is expected to fail, so no error is raised on a non-zero exit
-   set output [start_remote_prog $nat_submit_client_host "root" "docker" $args \
-                                 prg_exit_state 120 0 "" "" 0 0 0 0]
+   # a refused submission is the expected outcome here, so no error is raised on a
+   # non-zero exit
+   return [start_remote_prog $nat_submit_client_host "root" "docker" $args \
+                             exit_state 120 0 "" "" 0 0 0 0]
+}
 
-   if {$prg_exit_state == 0} {
-      ts_log_severe "submission from container $nat_submit_client_hostname was accepted,\
-                     expected the commlib to reject the unresolvable host name:\n$output"
+proc nat_submit_client_unresolvable {} {
+   get_current_cluster_config_array ts_config
+   global nat_submit_client_hostname
+
+   set mark [nat_submit_client_messages_mark]
+   set output [nat_submit_client_submit exit_state]
+
+   if {$exit_state == 0} {
+      ts_log_severe "the submission from container $nat_submit_client_hostname was\
+                     accepted although its host name resolves nowhere:\n$output"
       return
    }
 
-   if {[string first "HOST_NOT_RESOLVABLE" $output] < 0} {
-      ts_log_severe "submission from container $nat_submit_client_hostname failed as\
-                     expected, but not because the host name is unresolvable:\n$output"
+   set messages [nat_submit_client_messages_since $mark]
+   if {[string first "can\'t resolve rdata hostname" $messages] < 0} {
+      ts_log_severe "the qmaster did not report that it cannot resolve\
+                     $nat_submit_client_hostname:\n$messages"
+   } elseif {[string first "HOST_NOT_RESOLVABLE" $messages] < 0} {
+      ts_log_severe "the qmaster did not report the mismatch between the announced\
+                     name and what it resolved:\n$messages"
+   } else {
+      ts_log_fine "the submission was refused because the name cannot be resolved"
+   }
+}
+
+##
+# @brief Submit again with address_from_hostname configured.
+#
+# The format takes the address out of the name, so the qmaster no longer has to look
+# the name up and the first barrier is gone. The connection is still refused: the
+# container's traffic is NAT'ed onto the address of its host, so the address the
+# qmaster sees is not the one the name carries.
+#
+# What is asserted is the change. The message about an unresolvable name has to be
+# gone - that is what the setting bought - and a different one has to have taken its
+# place. A function that only asked for "still refused" would pass even if the
+# setting did nothing at all.
+proc nat_submit_client_address_from_hostname {} {
+   get_current_cluster_config_array ts_config
+   global nat_submit_client_hostname nat_submit_client_bootstrap_changed
+
+   if {![is_version_in_range "9.1.5"]} {
+      ts_log_info "skipping, communication_params arrive with 9.1.5"
       return
    }
 
-   ts_log_fine "container submission was rejected with HOST_NOT_RESOLVABLE as expected"
+   # the format matches the name the container announces
+   bootstrap_file_read bootstrap
+   set bootstrap(communication_params) "address_from_hostname=ip-%d-%d-%d-%d"
+   if {![bootstrap_file_write bootstrap]} {
+      ts_log_severe "could not write the bootstrap file"
+      return
+   }
+   set nat_submit_client_bootstrap_changed 1
+
+   # the setting is read at startup, and the cluster has to come back with it
+   shutdown_and_restart_qmaster
+   if {[wait_for_load_from_all_queues 120] != 0} {
+      ts_log_severe "the execution hosts did not report load again after the qmaster\
+                     was restarted with communication_params set"
+      return
+   }
+
+   set mark [nat_submit_client_messages_mark]
+   set output [nat_submit_client_submit exit_state]
+
+   if {$exit_state == 0} {
+      ts_log_severe "the submission from container $nat_submit_client_hostname was\
+                     accepted, but its address is still not the one the connection\
+                     comes from:\n$output"
+      return
+   }
+
+   set messages [nat_submit_client_messages_since $mark]
+   if {[string first "can\'t resolve rdata hostname" $messages] >= 0} {
+      ts_log_severe "the qmaster still cannot resolve $nat_submit_client_hostname\
+                     although address_from_hostname is set:\n$messages"
+   } elseif {[string first "HOST_NOT_RESOLVABLE" $messages] >= 0} {
+      ts_log_severe "the qmaster still reports the name as unresolvable although\
+                     address_from_hostname is set:\n$messages"
+   } else {
+      ts_log_fine "the name resolves now, the submission is refused for another\
+                   reason:\n$messages"
+   }
 }
