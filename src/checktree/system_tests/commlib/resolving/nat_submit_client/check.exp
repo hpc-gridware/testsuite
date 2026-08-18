@@ -43,8 +43,9 @@ set check_cleanup_function    "nat_submit_client_cleanup"
 #   1. nothing configured           - the name cannot be resolved
 #   2. address_from_hostname        - the name resolves, the address it came from does
 #                                     not match where the connection comes from
-#   3. trust_client_hostname        - CS-2611, then the host is not a submit host
-#   4. ALLOW_ANY_SUBMITHOSTS        - CS-2608, then the submission succeeds
+#   3. trust_client_hostname        - the connection is accepted, the host is not a
+#                                     submit host
+#   4. ALLOW_ANY_SUBMITHOSTS        - still to come, then the submission succeeds
 #
 # The first one asserts how a cluster behaves without any of these settings, which no
 # version has ever done differently, so the check carries no version range and runs
@@ -54,6 +55,7 @@ set check_cleanup_function    "nat_submit_client_cleanup"
 set check_functions           {}
 lappend check_functions       "nat_submit_client_unresolvable"
 lappend check_functions       "nat_submit_client_address_from_hostname"
+lappend check_functions       "nat_submit_client_trust_client_hostname"
 
 ##
 # @brief Prepare a container host that can stand in for a Kubernetes pod.
@@ -344,9 +346,18 @@ proc nat_submit_client_unresolvable {} {
 # qmaster sees is not the one the name carries.
 #
 # What is asserted is the change. The message about an unresolvable name has to be
-# gone - that is what the setting bought - and a different one has to have taken its
-# place. A function that only asked for "still refused" would pass even if the
-# setting did nothing at all.
+# gone - that is what the setting bought - and the named one has to have taken its
+# place:
+#
+#   commlib error: local host name error (IP based host name resolving "laptop-joga"
+#   (192.168.125.1) doesn't match client host name from connect message
+#   "ip-10-244-7-73")
+#
+# The name in the message is the one the NAT'ed address resolves to, so it belongs to
+# the site rather than to this check and cannot be asserted. What can be asserted is
+# the name the container announced: the qmaster got that far only because the format
+# gave the name an address. A function that only asked for "still refused" would pass
+# even if the setting did nothing at all.
 proc nat_submit_client_address_from_hostname {} {
    get_current_cluster_config_array ts_config
    global nat_submit_client_hostname nat_submit_client_bootstrap_changed
@@ -390,8 +401,75 @@ proc nat_submit_client_address_from_hostname {} {
    } elseif {[string first "HOST_NOT_RESOLVABLE" $messages] >= 0} {
       ts_log_severe "the qmaster still reports the name as unresolvable although\
                      address_from_hostname is set:\n$messages"
+   } elseif {[string first "doesn't match client host name from connect message\
+              \"$nat_submit_client_hostname\"" $messages] < 0} {
+      ts_log_severe "the qmaster did not refuse the connection from container\
+                     $nat_submit_client_hostname because the address it comes from\
+                     resolves to another host:\n$messages"
    } else {
-      ts_log_fine "the name resolves now, the submission is refused for another\
-                   reason:\n$messages"
+      ts_log_fine "the name resolves now, the connection is refused because the\
+                   address it comes from belongs to another host"
+   }
+}
+
+##
+# @brief Submit again with trust_client_hostname added.
+#
+# The name resolves by now, but the address it carries is not the address the
+# connection arrives from: the container's traffic is translated onto the address of
+# its host. The two can never agree for such a client, which is what this setting is
+# for - the announced name is taken and not held against where the connection came
+# from.
+#
+# What is left is the submit host check, and that is what the submission has to fail
+# on now. Asserting the new reason matters as much as asserting the old one is gone: a
+# submission that still fails on the address would look the same from the outside.
+proc nat_submit_client_trust_client_hostname {} {
+   get_current_cluster_config_array ts_config
+   global nat_submit_client_hostname nat_submit_client_bootstrap_changed
+
+   if {![is_version_in_range "9.1.5"]} {
+      ts_log_info "skipping, trust_client_hostname arrives with 9.1.5"
+      return
+   }
+
+   # both settings - the name has to resolve before there is anything to trust
+   bootstrap_file_read bootstrap
+   set bootstrap(communication_params) \
+      "address_from_hostname=ip-%d-%d-%d-%d,trust_client_hostname=true"
+   if {![bootstrap_file_write bootstrap]} {
+      ts_log_severe "could not write the bootstrap file"
+      return
+   }
+   set nat_submit_client_bootstrap_changed 1
+
+   shutdown_and_restart_qmaster
+   if {[wait_for_load_from_all_queues 120] != 0} {
+      ts_log_severe "the execution hosts did not report load again after the qmaster\
+                     was restarted with trust_client_hostname set"
+      return
+   }
+
+   set mark [nat_submit_client_messages_mark]
+   set output [nat_submit_client_submit exit_state]
+
+   if {$exit_state == 0} {
+      ts_log_severe "the submission from container $nat_submit_client_hostname was\
+                     accepted although its host is not a submit host:\n$output"
+      return
+   }
+
+   set messages [nat_submit_client_messages_since $mark]
+   if {[string first "doesn't match client host name from connect message" $messages] >= 0} {
+      ts_log_severe "the qmaster still holds the announced name against the address\
+                     the connection comes from although trust_client_hostname is\
+                     set:\n$messages"
+   } elseif {[string first "is no submit host" $output] < 0} {
+      ts_log_severe "the connection is accepted now, so the submission has to be\
+                     refused for not coming from a submit host, but it was refused\
+                     for another reason:\n$output\n$messages"
+   } else {
+      ts_log_fine "the connection is accepted, the submission is refused because the\
+                   host is no submit host"
    }
 }
