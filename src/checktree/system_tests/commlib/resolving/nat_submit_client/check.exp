@@ -45,7 +45,7 @@ set check_cleanup_function    "nat_submit_client_cleanup"
 #                                     not match where the connection comes from
 #   3. trust_client_hostname        - the connection is accepted, the host is not a
 #                                     submit host
-#   4. ALLOW_ANY_SUBMITHOSTS        - still to come, then the submission succeeds
+#   4. ALLOW_ANY_SUBMITHOSTS        - the submission succeeds and the job runs
 #
 # The first one asserts how a cluster behaves without any of these settings, which no
 # version has ever done differently, so the check carries no version range and runs
@@ -56,6 +56,7 @@ set check_functions           {}
 lappend check_functions       "nat_submit_client_unresolvable"
 lappend check_functions       "nat_submit_client_address_from_hostname"
 lappend check_functions       "nat_submit_client_trust_client_hostname"
+lappend check_functions       "nat_submit_client_allow_any_submithosts"
 
 ##
 # @brief Prepare a container host that can stand in for a Kubernetes pod.
@@ -79,7 +80,11 @@ proc nat_submit_client_setup {} {
    global nat_submit_client_host nat_submit_client_image
    global nat_submit_client_hostname
    global nat_submit_client_settings nat_submit_client_master_ip
-   global nat_submit_client_bootstrap_backup
+   global nat_submit_client_bootstrap_backup nat_submit_client_config_backup
+
+   # the last function adds a qmaster_param - the whole global configuration is kept so
+   # the cleanup can put it back with reset_config
+   get_config nat_submit_client_config_backup
 
    # The whole bootstrap file is kept, not just the attribute this check writes.
    # An installation from 9.1.5 on brings communication_params along, so dropping the
@@ -193,9 +198,16 @@ proc nat_submit_client_cleanup {} {
    global nat_submit_client_hostname
    global nat_submit_client_settings nat_submit_client_master_ip
    global nat_submit_client_bootstrap_changed nat_submit_client_bootstrap_backup
+   global nat_submit_client_config_backup
 
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   # the configuration is read per request, so putting it back is enough, nothing has
+   # to be restarted for it
+   if {[info exists nat_submit_client_config_backup]} {
+      reset_config nat_submit_client_config_backup
+   }
 
    # the bootstrap file was changed for the later functions - put the content back as
    # the setup found it and let the cluster come up with it, otherwise every check
@@ -224,6 +236,7 @@ proc nat_submit_client_cleanup {} {
    unset -nocomplain nat_submit_client_master_ip
    unset -nocomplain nat_submit_client_bootstrap_changed
    unset -nocomplain nat_submit_client_bootstrap_backup
+   unset -nocomplain nat_submit_client_config_backup
 }
 
 ##
@@ -268,18 +281,13 @@ proc nat_submit_client_messages_since {mark} {
 }
 
 ##
-# @brief Submit from the container with nothing configured.
-#
-# The qmaster cannot resolve the pod-style host name the client announces, so the
-# connection is refused before any authorisation happens. Two messages say so: the
-# name could not be resolved, and what the client announced does not match what the
-# qmaster made of it, which at this point is "(HOST_NOT_RESOLVABLE)".
+# @brief Run one client command in the container.
 #
 # The client runs as the testsuite user, which the image carries with the same ids as
-# in the cluster. The submission never gets far enough for that identity to be
-# examined, but it keeps this function on the same footing as the later ones, where
-# the submission is meant to succeed.
-proc nat_submit_client_submit {a_exit} {
+# in the cluster. In the first functions the request never gets far enough for that
+# identity to be examined, but it keeps them on the same footing as the later ones,
+# where the request is meant to succeed.
+proc nat_submit_client_run {a_exit command} {
    get_current_cluster_config_array ts_config
    global nat_submit_client_host nat_submit_client_image
    global nat_submit_client_hostname
@@ -301,17 +309,35 @@ proc nat_submit_client_submit {a_exit} {
    append args " $nat_submit_client_image"
    # single quotes keep the shell of the container host from splitting this into
    # separate docker arguments
-   append args " sh -c '. $nat_submit_client_settings;"
-   append args " exec qsub -b y -o /dev/null -e /dev/null /bin/sleep 1'"
+   append args " sh -c '. $nat_submit_client_settings; exec $command'"
 
-   ts_log_fine "submitting from container $nat_submit_client_hostname on host\
+   ts_log_fine "running \"$command\" in container $nat_submit_client_hostname on host\
                 $nat_submit_client_host"
-   # a refused submission is the expected outcome here, so no error is raised on a
-   # non-zero exit
+   # a refused request is the expected outcome in most of these functions, so no error
+   # is raised on a non-zero exit
    return [start_remote_prog $nat_submit_client_host "root" "docker" $args \
                              exit_state 120 0 "" "" 0 0 0 0]
 }
 
+##
+# @brief Submit a job from the container.
+#
+# The same submission in every function, so that what changes between them is the
+# cluster configuration and nothing else.
+proc nat_submit_client_submit {a_exit} {
+   upvar $a_exit exit_state
+
+   return [nat_submit_client_run exit_state \
+                                 "qsub -b y -o /dev/null -e /dev/null /bin/sleep 1"]
+}
+
+##
+# @brief Submit from the container with nothing configured.
+#
+# The qmaster cannot resolve the pod-style host name the client announces, so the
+# connection is refused before any authorisation happens. Two messages say so: the
+# name could not be resolved, and what the client announced does not match what the
+# qmaster made of it, which at this point is "(HOST_NOT_RESOLVABLE)".
 proc nat_submit_client_unresolvable {} {
    get_current_cluster_config_array ts_config
    global nat_submit_client_hostname
@@ -472,4 +498,67 @@ proc nat_submit_client_trust_client_hostname {} {
       ts_log_fine "the connection is accepted, the submission is refused because the\
                    host is no submit host"
    }
+}
+
+##
+# @brief Submit again with ALLOW_ANY_SUBMITHOSTS set.
+#
+# The connection is accepted by now and the submission is refused only because the
+# container's host is no submit host. It cannot become one: the host name is made up
+# for this one container, and a cluster which takes jobs from pods would have to add
+# a submit host per pod and remove it again afterwards.
+#
+# The qmaster_param drops that last barrier and the host counts as a submit host, so
+# two things are asked of it. The job goes into the cluster and runs - a submission
+# which is accepted but whose job never runs would leave the customer no better off -
+# and the container can still read cluster state, which is what a client needs to
+# follow the job it just submitted.
+proc nat_submit_client_allow_any_submithosts {} {
+   get_current_cluster_config_array ts_config
+   global nat_submit_client_hostname
+
+   if {![is_version_in_range "9.1.5"]} {
+      ts_log_info "skipping, ALLOW_ANY_SUBMITHOSTS arrives with 9.1.5"
+      return
+   }
+
+   # the cluster may carry other qmaster_params - this one is added to them, and the
+   # cleanup puts the whole configuration back
+   get_config old_config
+   add_to_config_attribute old_config new_config "qmaster_params" \
+                           "ALLOW_ANY_SUBMITHOSTS=TRUE"
+   if {[set_config new_config] < 0} {
+      ts_log_severe "could not set qmaster_params \"$new_config(qmaster_params)\""
+      return
+   }
+
+   # the configuration is read per request, so nothing is restarted here - which is
+   # the point of doing this in a qmaster_param rather than in the bootstrap file
+   set output [nat_submit_client_submit exit_state]
+
+   if {$exit_state != 0} {
+      ts_log_severe "the submission from container $nat_submit_client_hostname was\
+                     still refused although ALLOW_ANY_SUBMITHOSTS is set:\n$output"
+      return
+   }
+
+   if {![regexp {Your job (\d+)} $output match job_id]} {
+      ts_log_severe "the submission from container $nat_submit_client_hostname\
+                     reported no job id:\n$output"
+      return
+   }
+
+   ts_log_fine "container $nat_submit_client_hostname submitted job $job_id"
+
+   # Reading is a different permission check from submitting, and before this
+   # parameter both asked for a submit host. "qstat -f" rather than "qstat -j $job_id":
+   # the job sleeps a second and may well be gone by now, and a client which asks for a
+   # job that no longer exists gets an error which says nothing about permissions.
+   set output [nat_submit_client_run exit_state "qstat -f"]
+   if {$exit_state != 0} {
+      ts_log_severe "container $nat_submit_client_hostname submitted job $job_id but\
+                     cannot read cluster state:\n$output"
+   }
+
+   wait_for_jobend $job_id "" 120 0
 }
