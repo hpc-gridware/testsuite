@@ -39,9 +39,21 @@ set check_setup_function      "bootstrap_parsing_setup"
 set check_cleanup_function    "bootstrap_parsing_cleanup"
 
 # define test's procedure order
+#
+# One function per attribute, each with a case which has to be accepted and one which
+# has to be refused or fall back to a default. The attributes which are only stored as
+# they are read share one function - they have nothing to tell apart, and a message
+# names the attribute it failed on.
 set check_functions           {}
 lappend check_functions       "bootstrap_parsing_communication_params"
 lappend check_functions       "bootstrap_parsing_address_format"
+lappend check_functions       "bootstrap_parsing_admin_user"
+lappend check_functions       "bootstrap_parsing_default_domain"
+lappend check_functions       "bootstrap_parsing_ignore_fqdn"
+lappend check_functions       "bootstrap_parsing_stored_attributes"
+lappend check_functions       "bootstrap_parsing_security_mode"
+lappend check_functions       "bootstrap_parsing_security_params"
+lappend check_functions       "bootstrap_parsing_thread_counts"
 
 ##
 # @brief Prepare a place where generated bootstrap files can be read from.
@@ -187,6 +199,264 @@ proc bootstrap_parsing_run {a_replace a_out a_exit} {
    }
 
    return $output
+}
+
+##
+# @brief Run one case which has to be accepted and check the values it printed.
+#
+# @param a_replace  attribute name to whole replacement line, as for the run above
+# @param a_expect   printed key to the value it has to have
+# @param what       what the case is about, for the messages
+proc bootstrap_parsing_expect {a_replace a_expect what} {
+   upvar $a_replace replace
+   upvar $a_expect expect
+
+   set output [bootstrap_parsing_run replace parsed exit_state]
+   if {$exit_state != 0} {
+      ts_log_severe "reading a bootstrap file with $what failed:\n$output"
+      return
+   }
+
+   foreach key [array names expect] {
+      if {![info exists parsed($key)]} {
+         ts_log_severe "the test binary printed no $key with $what:\n$output"
+      } elseif {$parsed($key) != $expect($key)} {
+         ts_log_severe "$key is \"$parsed($key)\" with $what, expected\
+                        \"$expect($key)\":\n$output"
+      }
+   }
+}
+
+##
+# @brief Drop a required attribute and expect the file to be refused for it.
+#
+# The refusal has to name the attribute. A file missing one attribute is easy to get
+# wrong in another way as well, and an assertion on the exit status alone would not
+# notice the difference.
+#
+# @param attribute  the attribute to leave out
+proc bootstrap_parsing_expect_required {attribute} {
+   set replace($attribute) ""
+
+   set output [bootstrap_parsing_run replace parsed exit_state]
+   if {$exit_state == 0} {
+      ts_log_severe "a bootstrap file without the required attribute $attribute was\
+                     read successfully:\n$output"
+   } elseif {[string first "cannot read attribute <$attribute>" $output] < 0} {
+      ts_log_severe "a bootstrap file without $attribute was refused, but not for\
+                     that reason:\n$output"
+   }
+}
+
+##
+# @brief admin_user is taken as it is written.
+proc bootstrap_parsing_admin_user {} {
+   set replace(admin_user) "admin_user sgetest"
+   set expect(admin_user) "sgetest"
+   bootstrap_parsing_expect replace expect "admin_user sgetest"
+   array unset replace
+   array unset expect
+
+   # "none" means the daemons run as root, and it reaches the caller as the string it
+   # is rather than as an empty value
+   set replace(admin_user) "admin_user none"
+   set expect(admin_user) "none"
+   bootstrap_parsing_expect replace expect "admin_user none"
+   array unset replace
+   array unset expect
+
+   bootstrap_parsing_expect_required "admin_user"
+}
+
+##
+# @brief default_domain is a name, and "none" means there is none.
+#
+# The attribute is read into two values: the domain itself, and whether one is set at
+# all. The second is what the resolving code asks, so a case which only looked at the
+# string would miss the answer that matters.
+proc bootstrap_parsing_default_domain {} {
+   set replace(default_domain) "default_domain example.com"
+   set expect(default_domain) "example.com"
+   set expect(has_default_domain) "true"
+   bootstrap_parsing_expect replace expect "default_domain example.com"
+   array unset replace
+   array unset expect
+
+   set replace(default_domain) "default_domain none"
+   set expect(default_domain) "none"
+   set expect(has_default_domain) "false"
+   bootstrap_parsing_expect replace expect "default_domain none"
+   array unset replace
+   array unset expect
+
+   # the spelling of "none" is not significant
+   set replace(default_domain) "default_domain NONE"
+   set expect(has_default_domain) "false"
+   bootstrap_parsing_expect replace expect "default_domain NONE"
+   array unset replace
+   array unset expect
+
+   bootstrap_parsing_expect_required "default_domain"
+}
+
+##
+# @brief ignore_fqdn is a boolean, written as a word or as a number.
+proc bootstrap_parsing_ignore_fqdn {} {
+   foreach {value expected} {true true false false 1 true 0 false TRUE true} {
+      set replace(ignore_fqdn) "ignore_fqdn $value"
+      set expect(ignore_fqdn) $expected
+      bootstrap_parsing_expect replace expect "ignore_fqdn $value"
+      array unset replace
+      array unset expect
+   }
+
+   bootstrap_parsing_expect_required "ignore_fqdn"
+}
+
+##
+# @brief The attributes which are handed on as they are read.
+#
+# Nothing is derived from them here, so what is asserted is that the value arrives
+# whole and lands under the right name - the file is read by position into an array,
+# and a mistake there shows up as one attribute carrying another's value.
+#
+# spooling_params is the one with something to say: a postgres connection string
+# carries spaces between its key=value pairs, and a reader tokenizing on whitespace
+# would keep the first pair and drop the rest.
+proc bootstrap_parsing_stored_attributes {} {
+   set values(spooling_method) "berkeleydb"
+   set values(spooling_lib) "libspoolb"
+   set values(spooling_params) "host=dbhost port=5432 dbname=sge user=sgeadmin"
+   set values(binary_path) "/opt/testsuite/bin"
+   set values(qmaster_spool_dir) "/opt/testsuite/spool/qmaster"
+
+   foreach attribute [array names values] {
+      set replace($attribute) "$attribute $values($attribute)"
+      set expect($attribute) $values($attribute)
+      bootstrap_parsing_expect replace expect "$attribute $values($attribute)"
+      array unset replace
+      array unset expect
+
+      bootstrap_parsing_expect_required $attribute
+   }
+}
+
+##
+# @brief security_mode names the modes which are switched on.
+#
+# The value is a list, and what comes back is the set of modes which were recognised,
+# in the order the product numbers them rather than in the order they were written.
+#
+# The case which matters is the one nobody wants to be wrong about: a mode which is
+# not recognised must not switch anything on. An administrator who misspells a mode
+# is told nothing today, so the file reads as if it had asked for no mode at all -
+# that is what the last case pins down.
+proc bootstrap_parsing_security_mode {} {
+   set replace(security_mode) "security_mode none"
+   set expect(security_modes) "NONE"
+   bootstrap_parsing_expect replace expect "security_mode none"
+   array unset replace
+   array unset expect
+
+   set replace(security_mode) "security_mode munge"
+   set expect(security_modes) "munge"
+   bootstrap_parsing_expect replace expect "security_mode munge"
+   array unset replace
+   array unset expect
+
+   # written the other way round, and it comes back in the product's own order
+   set replace(security_mode) "security_mode munge,tls"
+   set expect(security_modes) "tls,munge"
+   bootstrap_parsing_expect replace expect "security_mode munge,tls"
+   array unset replace
+   array unset expect
+
+   set replace(security_mode) "security_mode mnuge"
+   set expect(security_modes) "NONE"
+   bootstrap_parsing_expect replace expect "a misspelled security_mode"
+   array unset replace
+   array unset expect
+
+   bootstrap_parsing_expect_required "security_mode"
+}
+
+##
+# @brief security_params carries the certificate times, within bounds.
+#
+# Both values are held between a minimum and a maximum instead of being refused, so a
+# value outside the range is not an error but a different value, and a case has to
+# assert which one it became.
+proc bootstrap_parsing_security_params {} {
+   set replace(security_params) \
+      "security_params certificate_lifetime=3600,certificate_start_offset=-60"
+   set expect(certificate_lifetime) "3600"
+   set expect(certificate_start_offset) "-60"
+   bootstrap_parsing_expect replace expect "certificate times inside the range"
+   array unset replace
+   array unset expect
+
+   # below the minimum lifetime and below the earliest start offset
+   set replace(security_params) \
+      "security_params certificate_lifetime=60,certificate_start_offset=-9999"
+   set expect(certificate_lifetime) "120"
+   set expect(certificate_start_offset) "-300"
+   bootstrap_parsing_expect replace expect "certificate times below the range"
+   array unset replace
+   array unset expect
+
+   # an offset into the future is not allowed, the latest one is the moment itself
+   set replace(security_params) "security_params certificate_start_offset=3600"
+   set expect(certificate_start_offset) "0"
+   bootstrap_parsing_expect replace expect "a certificate start offset in the future"
+   array unset replace
+   array unset expect
+
+   # security_params is optional, and an entry nobody knows leaves the defaults alone
+   foreach {line what} {"" "no security_params"
+                        "security_params certificate_lifespan=3600"
+                        "an unknown security_params entry"} {
+      set replace(security_params) $line
+      set expect(certificate_lifetime) "31536000"
+      set expect(certificate_start_offset) "-10"
+      bootstrap_parsing_expect replace expect $what
+      array unset replace
+      array unset expect
+   }
+}
+
+##
+# @brief The thread counts fall back to a default and are held below a maximum.
+#
+# None of them is required and none of them is refused: a count which cannot be used
+# becomes the default, and one above the maximum becomes the maximum. The maximum is
+# not a matter of taste - the locking of the thread pools breaks down above it - so
+# the case for a count over it is the one worth having.
+proc bootstrap_parsing_thread_counts {} {
+   foreach attribute {listener_threads worker_threads reader_threads} {
+      foreach {value expected what} {8   8  "set to 8"
+                                     100 32 "above the maximum"
+                                     0   4  "set to zero"
+                                     ""  4  "absent"} {
+         if {$value == ""} {
+            set replace($attribute) ""
+         } else {
+            set replace($attribute) "$attribute $value"
+         }
+         set expect($attribute) $expected
+         bootstrap_parsing_expect replace expect "$attribute $what"
+         array unset replace
+         array unset expect
+      }
+   }
+
+   # the scheduler is the one thread there can only be one of
+   foreach {value expected} {1 1 5 1} {
+      set replace(scheduler_threads) "scheduler_threads $value"
+      set expect(scheduler_threads) $expected
+      bootstrap_parsing_expect replace expect "scheduler_threads $value"
+      array unset replace
+      array unset expect
+   }
 }
 
 ##
