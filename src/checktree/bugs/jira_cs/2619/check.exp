@@ -1,0 +1,292 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2619: sge_bootstrap(5) documents scheduler_threads as "allowed: 0-1,
+# default set by installation: 1, off: 0", but writing 0 does not switch the
+# scheduler off - the qmaster starts it anyway.
+#
+# ocs::Bootstrap::set_scheduler_thread_count() goes through the shared
+# set_thread_count() helper with a default of 1. That helper is written for the
+# thread pools, where 0 means "no value given, take the default"; for the
+# scheduler 0 is a value in its own range, so the first branch turns the
+# explicit 0 into 1 and sge_thread_scheduler.cc never sees it.
+#
+# Running a qmaster without a scheduler is a supported setup, so the check
+# covers all three inputs the attribute can have: 0 (off), 1 (on) and absent
+# (off as well - an absent entry parses to 0).
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+
+# we restart the qmaster
+set check_root_access_needs "yes"
+
+set check_name           "issue_2619"
+set check_category       "BUG QMASTER SCHEDULER VERIFIED"
+set check_description(0) "scheduler_threads 0 switches the scheduler off (CS-2619)"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_2619_setup
+set check_cleanup_function issue_2619_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2619_scheduler_off"
+lappend check_functions "issue_2619_scheduler_on"
+lappend check_functions "issue_2619_scheduler_absent"
+
+###
+# @brief skip the broken versions, and remember the bootstrap file
+#
+# The versions this check can run in are not one range: it passes before the
+# regression and after the fix, and fails in between, so check_version_range
+# cannot express it.
+#
+# The regression was introduced by fd5a5e559 (CS-1805, 2026-02-20), which
+# replaced the dedicated setter by the shared helper, and is in every release
+# from 9.1.0 on. 9.1.0beta1, the whole 9.0 line and 8.x still map 0 to 0 and
+# behave as documented. The fix is scheduled for 9.1.5.
+#
+# is_version_in_range takes the lower bound inclusive and the upper bound
+# exclusive, so 9.1.0 - 9.1.5 is exactly the window in which the bug exists.
+##
+proc issue_2619_setup {} {
+   get_current_cluster_config_array ts_config
+   global issue_2619_backup
+
+   if {[is_version_in_range "9.1.0" "9.1.5"]} {
+      ts_log_config "scheduler_threads 0 is broken in 9.1.0 - 9.1.4 (CS-2619) - skipping test"
+      return 99
+   }
+
+   array unset issue_2619_backup
+
+   if {![bootstrap_file_read issue_2619_backup]} {
+      ts_log_config "cannot read the bootstrap file - skipping test"
+      return 99
+   }
+}
+
+proc issue_2619_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global issue_2619_backup
+
+   # restore the bootstrap file and start a qmaster which matches it again
+   bootstrap_file_write issue_2619_backup 1
+   shutdown_and_restart_qmaster
+
+   array unset issue_2619_backup
+}
+
+###
+# @brief is a scheduler thread running?
+#
+# Asks the qmaster twice, because the two answers can disagree and each on its
+# own would be easy to misread:
+#
+# - "qconf -stl" lists the scheduler pool only while the thread runs
+#   (get_active_thread_list() in sge_thread_utility.cc adds the row under
+#   "if (sge_scheduler_is_running())").
+# - "qconf -sss" shows the host the scheduler registered at as an event client.
+#   It writes "no scheduling host defined" to stderr and exits non-zero when
+#   there is none, so it is called with raise_error 0.
+#
+# @param stl_var   receives the raw "qconf -stl" output, for the error message
+# @param sss_var   receives the raw "qconf -sss" output, for the error message
+# @return 1 if a scheduler thread is running, 0 if not, -1 if the two disagree
+##
+proc issue_2619_scheduler_is_running {stl_var sss_var} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   upvar $stl_var stl_output
+   upvar $sss_var sss_output
+
+   # qconf -stl: a "scheduler" row exists only while the thread runs
+   set stl_output [start_sge_bin "qconf" "-stl" $ts_config(master_host) $CHECK_USER]
+   set in_thread_list 0
+   foreach line [split $stl_output "\n"] {
+      if {[lindex $line 0] == "scheduler"} {
+         set in_thread_list 1
+         break
+      }
+   }
+
+   # qconf -sss: the scheduling host, or nothing at all
+   set sss_output ""
+   set has_scheduling_host 0
+   if {[get_scheduler_status sss_result "" "" 0] == 0} {
+      foreach line $sss_result {
+         if {[string trim $line] != ""} {
+            set has_scheduling_host 1
+            break
+         }
+      }
+      set sss_output [join $sss_result "\n"]
+   }
+
+   if {$in_thread_list != $has_scheduling_host} {
+      return -1
+   }
+
+   return $in_thread_list
+}
+
+###
+# @brief set scheduler_threads and check whether a scheduler runs afterwards
+#
+# @param value    value for scheduler_threads, or "" to remove the attribute
+# @param expected 1 if a scheduler is expected to run, 0 if not
+# @return 1 if the qmaster came up as expected, 0 if not (already reported)
+##
+proc issue_2619_check_scheduler_threads {value expected} {
+   get_current_cluster_config_array ts_config
+
+   if {$value == ""} {
+      set what "no scheduler_threads attribute"
+   } else {
+      set what "scheduler_threads $value"
+   }
+
+   # bootstrap_file_write removes an entry whose value is the empty string,
+   # which is exactly what is needed for the "attribute absent" case
+   set bs(scheduler_threads) $value
+   if {![bootstrap_file_write bs]} {
+      ts_log_severe "cannot write the bootstrap file to set $what"
+      return 0
+   }
+
+   # the bootstrap file is only read at qmaster startup
+   shutdown_and_restart_qmaster
+
+   # The scheduler registers as an event client asynchronously once the qmaster
+   # is up, so asking right away could find no scheduler while it is still on
+   # its way - which is what the "off" case asserts, and would pass for the
+   # wrong reason. Waiting for the execds to report to the restarted qmaster
+   # costs at least one load report interval, by which time a scheduler thread
+   # would long have registered.
+   wait_for_load_from_all_queues 60
+
+   set running [issue_2619_scheduler_is_running stl_output sss_output]
+   if {$running == -1} {
+      ts_log_severe "with $what the qmaster does not agree with itself about the scheduler:\
+                     \nqconf -stl:\n$stl_output\nqconf -sss:\n$sss_output"
+      return 0
+   }
+
+   if {$running != $expected} {
+      if {$expected} {
+         set msg "with $what the qmaster should run a scheduler thread, but does not"
+      } else {
+         set msg "with $what the qmaster should not run a scheduler thread, but does"
+      }
+      ts_log_severe "$msg\nqconf -stl:\n$stl_output\nqconf -sss:\n$sss_output"
+      return 0
+   }
+
+   return 1
+}
+
+###
+# @brief start the scheduler again and let it schedule something
+#
+# Switching the scheduler off is only useful if it can be switched on again, so
+# the two cases which expect no scheduler also walk the way back. The bootstrap
+# file is consulted for the first start only - Master_Scheduler.use_bootstrap in
+# sge_thread_scheduler.cc is cleared afterwards - so "qconf -at scheduler" has to
+# start the thread whatever the file said.
+#
+# Running a job is the part that matters: a registered scheduler which does not
+# dispatch would pass a check on qconf -stl and -sss alone.
+##
+proc issue_2619_start_scheduler_and_schedule {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set output [start_sge_bin "qconf" "-at scheduler" $ts_config(master_host) $CHECK_USER]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qconf -at scheduler failed:\n$output"
+      return
+   }
+
+   # the thread starts and registers as an event client asynchronously, and the
+   # two views can disagree while it is on its way - wait for both to agree
+   set timeout 60
+   set end_time [expr [clock seconds] + $timeout]
+   while {1} {
+      set running [issue_2619_scheduler_is_running stl_output sss_output]
+      if {$running == 1} {
+         break
+      }
+      if {[clock seconds] >= $end_time} {
+         ts_log_severe "no scheduler thread ${timeout}s after qconf -at scheduler:\
+                        \nqconf -stl:\n$stl_output\nqconf -sss:\n$sss_output"
+         return
+      }
+      sleep_for_seconds 5 "waiting for the scheduler thread to come up"
+   }
+
+   # a job has to be dispatched now
+   set output [start_sge_bin "qrsh" "hostname"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "no job could be scheduled after starting the scheduler with\
+                     qconf -at scheduler - qrsh hostname failed:\n$output"
+   }
+}
+
+###
+# @brief scheduler_threads 0 has to switch the scheduler off
+#
+# This is the check_function which fails without the fix: the explicit 0 is
+# turned into the default 1 before anyone can see it.
+##
+proc issue_2619_scheduler_off {} {
+   if {[issue_2619_check_scheduler_threads 0 0]} {
+      issue_2619_start_scheduler_and_schedule
+   }
+}
+
+###
+# @brief scheduler_threads 1 has to start a scheduler
+##
+proc issue_2619_scheduler_on {} {
+   issue_2619_check_scheduler_threads 1 1
+}
+
+###
+# @brief an absent scheduler_threads means no scheduler, like an explicit 0
+#
+# The attribute is optional and an absent entry parses to 0, so it switches the
+# scheduler off just as a written 0 does. That is deliberate and unchanged since
+# the attribute exists; it does not surface in practice, because the installation
+# writes "scheduler_threads 1" and the upgrade adds it to an older bootstrap file.
+#
+# The case is here to hold that behaviour still: the fix for CS-2619 is in the
+# setter, and it would be easy to "fix" the absent case along with it.
+##
+proc issue_2619_scheduler_absent {} {
+   if {[issue_2619_check_scheduler_threads "" 0]} {
+      issue_2619_start_scheduler_and_schedule
+   }
+}
