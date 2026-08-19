@@ -55,12 +55,25 @@ set check_cleanup_function accounting_cleanup
 # define test's procedure order
 set check_functions {}
 lappend check_functions "issue_113_test"
+lappend check_functions "accounting_pe_job_test"
+lappend check_functions "accounting_pe_job_summary_test"
+
+# the parallel environments and the queue the parallel test jobs run in, and the
+# number of slots they request. With job_is_first_task TRUE the master task
+# counts as the job's first task, so a job gets ACCOUNTING_PE_SLOTS - 1 pe tasks
+global ACCOUNTING_PE_NAME ACCOUNTING_PE_SUMMARY_NAME ACCOUNTING_QUEUE_NAME
+global ACCOUNTING_PE_SLOTS
+set ACCOUNTING_PE_NAME         "accounting.pe"
+set ACCOUNTING_PE_SUMMARY_NAME "accounting_summary.pe"
+set ACCOUNTING_QUEUE_NAME      "accounting.q"
+set ACCOUNTING_PE_SLOTS        3
 
 # -------- local test procedures: initialization------------------------------
 
 proc accounting_setup {} {
    global ts_config
    global accounting_backup
+   global ACCOUNTING_PE_NAME ACCOUNTING_PE_SUMMARY_NAME ACCOUNTING_QUEUE_NAME
 
    # we want to modify the global config - make a backup
    get_config accounting_backup
@@ -82,11 +95,43 @@ proc accounting_setup {} {
          return -1
       }
    }
+
+   # Two parallel environments and a queue for the parallel test jobs. Both are
+   # tightly integrated, they differ only in accounting_summary: it decides
+   # whether the qmaster writes one accounting record per pe task or a single
+   # one for the whole job, which is what the parallel tests look at.
+   set pe(slots)              100
+   set pe(user_lists)         "none"
+   set pe(xuser_lists)        "none"
+   set pe(start_proc_args)    "none"
+   set pe(stop_proc_args)     "none"
+   set pe(allocation_rule)    "\$round_robin"
+   set pe(control_slaves)     "TRUE"
+   set pe(job_is_first_task)  "TRUE"
+
+   set pe(accounting_summary) "FALSE"
+   if {[add_pe $ACCOUNTING_PE_NAME pe] < 0} {
+      ts_log_severe "can not create PE $ACCOUNTING_PE_NAME"
+      return -1
+   }
+   set pe(accounting_summary) "TRUE"
+   if {[add_pe $ACCOUNTING_PE_SUMMARY_NAME pe] < 0} {
+      ts_log_severe "can not create PE $ACCOUNTING_PE_SUMMARY_NAME"
+      return -1
+   }
+
+   set queue_conf(slots)   10
+   set queue_conf(pe_list) "$ACCOUNTING_PE_NAME $ACCOUNTING_PE_SUMMARY_NAME"
+   if {[add_queue $ACCOUNTING_QUEUE_NAME "@allhosts" queue_conf] < 0} {
+      ts_log_severe "can not create queue $ACCOUNTING_QUEUE_NAME"
+      return -1
+   }
 }
 
 proc accounting_cleanup {} {
    global ts_config
    global accounting_backup
+   global ACCOUNTING_PE_NAME ACCOUNTING_PE_SUMMARY_NAME ACCOUNTING_QUEUE_NAME
 
    # shutdown dbwriter
    ts_log_fine "shutdowning dbwriter"
@@ -96,6 +141,12 @@ proc accounting_cleanup {} {
 
    delete_all_jobs
    wait_for_end_of_all_jobs
+
+   # remove the queue before the parallel environments - a PE which is still
+   # referenced by a queue's pe_list can not be deleted
+   del_queue $ACCOUNTING_QUEUE_NAME "" 0 1
+   del_pe $ACCOUNTING_PE_NAME
+   del_pe $ACCOUNTING_PE_SUMMARY_NAME
 
    # restore config
    reset_config accounting_backup
@@ -286,4 +337,197 @@ proc issue_113_test {} {
       # return OK test successful
       return 0
    }
+}
+
+# -------- local test procedures: parallel jobs -------------------------------
+
+##
+# @brief Run one SQL query, retrying until the dbwriter has caught up.
+#
+# The dbwriter reads the reporting file with a delay, so a query for a job which
+# has just finished comes back empty for a while. The query is repeated until
+# it delivers a row whose first column has the awaited value.
+#
+# @param sp_id     spawn id of the sqlutil session
+# @param sql       the query - it has to select the awaited value as first column
+# @param expected  the value the first column has to reach
+# @param a_result  name of an array the last query result is stored in
+# @return 0 when the value was reached, else -1
+##
+proc accounting_wait_for_value {sp_id sql expected a_result} {
+   upvar $a_result result_array
+
+   set attempts 20
+   while {$attempts > 0} {
+      set column_names {}
+      array unset result_array
+      array set result_array {}
+      set rows [sqlutil_query $sp_id "$sql" result_array column_names]
+      if {$rows < 0} {
+         ts_log_severe "can not execute query $sql"
+         return -1
+      }
+      if {$rows > 0 && [info exists result_array(0,0)] && $result_array(0,0) == $expected} {
+         return 0
+      }
+      incr attempts -1
+      ts_log_progress
+      sleep_for_seconds 5
+   }
+
+   set got "<no row>"
+   if {[info exists result_array(0,0)]} {
+      set got $result_array(0,0)
+   }
+   ts_log_severe "the dbwriter did not store the expected data within 100 seconds:\
+                  query $sql delivered $got, expected $expected"
+   return -1
+}
+
+##
+# @brief Submit one tightly integrated job and compare qacct against the database.
+#
+# The sequential test above covers one job with one accounting record. A tightly
+# integrated job has more than one - the qmaster writes either one record per pe
+# task or, with accounting_summary, a single one for the whole job - and every
+# record has to arrive in sge_job_usage with the pe task it belongs to. The
+# per-record usage values are compared as their sum over all records of the job,
+# which is the shape qacct reports them in when it sums the tasks up.
+#
+# @param pe_name  the parallel environment to submit into
+# @param summary  1 if that PE has accounting_summary TRUE, else 0
+# @return 0 if the job's accounting arrived complete and correct, else -1
+##
+proc accounting_pe_job {pe_name summary} {
+   global ts_config
+   global ACCOUNTING_QUEUE_NAME ACCOUNTING_PE_SLOTS
+
+   # with accounting_summary the qmaster writes one record for the whole job,
+   # without it one per task - the master task plus ACCOUNTING_PE_SLOTS - 1 pe
+   # tasks, because job_is_first_task is TRUE
+   if {$summary} {
+      set expected_records 1
+      set expected_pe_task_records 0
+   } else {
+      set expected_records $ACCOUNTING_PE_SLOTS
+      set expected_pe_task_records [expr {$ACCOUNTING_PE_SLOTS - 1}]
+   }
+
+   set pe_job  "$ts_config(testsuite_root_dir)/scripts/pe_job.sh"
+   set pe_task "$ts_config(testsuite_root_dir)/scripts/pe_task.sh"
+   set args "-N acctpe -pe $pe_name $ACCOUNTING_PE_SLOTS -q $ACCOUNTING_QUEUE_NAME"
+   append args " -o /dev/null -j y $pe_job $pe_task 1 10"
+
+   ts_log_fine "submitting a job into PE $pe_name requesting $ACCOUNTING_PE_SLOTS slots"
+   set job_id [submit_job $args]
+   if {$job_id <= 0} {
+      ts_log_severe "can not submit a job into PE $pe_name"
+      return -1
+   }
+
+   if {[wait_for_jobend $job_id "acctpe" 120 0] != 0} {
+      ts_log_severe "job $job_id did not run through"
+      return -1
+   }
+
+   # qacct has to report exactly the records the PE's accounting_summary asks
+   # for - get_qacct waits for them to appear in the accounting file
+   if {[get_qacct $job_id qacct_info $ts_config(master_host) "" 1 $expected_records 60] != 0} {
+      return -1
+   }
+   set num_records [llength $qacct_info(exit_status)]
+   if {$num_records != $expected_records} {
+      ts_log_severe "job $job_id in PE $pe_name: qacct reports $num_records accounting\
+                     record(s), expected $expected_records"
+      return -1
+   }
+
+   set id [sqlutil_create]
+   if {$id == "-1"} {
+      ts_log_severe "can not create sqlutil"
+      return -1
+   }
+   set sp_id [lindex $id 1]
+   if {[sqlutil_connect $sp_id] != 0} {
+      ts_log_severe "can not connect to the database"
+      close_spawn_process $id
+      return -1
+   }
+
+   set ret 0
+   set from_where "FROM sge_job, sge_job_usage\
+                   WHERE j_id = ju_parent AND j_job_number = $job_id"
+
+   # every accounting record of the job has to have arrived
+   array set result_array {}
+   if {[accounting_wait_for_value $sp_id "SELECT COUNT(*) $from_where"\
+           $expected_records result_array] != 0} {
+      set ret -1
+   } else {
+      ts_log_fine "job $job_id in PE $pe_name: $expected_records accounting record(s)\
+                   stored by the dbwriter"
+
+      # and the records of the pe tasks have to carry their pe task id - the
+      # master task's record is the one with j_pe_taskid NONE
+      set column_names {}
+      array unset result_array
+      array set result_array {}
+      set sql "SELECT COUNT(*) $from_where AND j_pe_taskid != 'NONE'"
+      if {[sqlutil_query $sp_id "$sql" result_array column_names] < 0} {
+         ts_log_severe "can not execute query $sql"
+         set ret -1
+      } elseif {$result_array(0,0) != $expected_pe_task_records} {
+         ts_log_severe "job $job_id in PE $pe_name: $result_array(0,0) accounting\
+                        record(s) belong to a pe task, expected\
+                        $expected_pe_task_records"
+         set ret -1
+      }
+   }
+
+   # the usage of all records together has to match what qacct sums up
+   if {$ret == 0} {
+      set column_names {}
+      array unset result_array
+      array set result_array {}
+      set sql "SELECT SUM(ju_cpu), SUM(ju_mem), SUM(ju_ru_utime), SUM(ju_ru_stime)\
+               $from_where"
+      if {[sqlutil_query $sp_id "$sql" result_array column_names] < 0} {
+         ts_log_severe "can not execute query $sql"
+         set ret -1
+      } else {
+         set column 0
+         foreach attribute {cpu mem ru_utime ru_stime} {
+            set from_db $result_array(0,$column)
+            set from_qacct $qacct_info($attribute)
+            if {[is_nearly_equal $from_qacct $from_db]} {
+               ts_log_severe "job $job_id in PE $pe_name: $attribute is $from_db in the\
+                              database but $from_qacct in qacct"
+               set ret -1
+            } else {
+               ts_log_fine "job $job_id in PE $pe_name: $attribute $from_db matches qacct\
+                            ($from_qacct)"
+            }
+            incr column
+         }
+      }
+   }
+
+   close_spawn_process $id
+   return $ret
+}
+
+##
+# @brief A tightly integrated job writing one accounting record per task.
+##
+proc accounting_pe_job_test {} {
+   global ACCOUNTING_PE_NAME
+   return [accounting_pe_job $ACCOUNTING_PE_NAME 0]
+}
+
+##
+# @brief A tightly integrated job writing a single accounting record.
+##
+proc accounting_pe_job_summary_test {} {
+   global ACCOUNTING_PE_SUMMARY_NAME
+   return [accounting_pe_job $ACCOUNTING_PE_SUMMARY_NAME 1]
 }
