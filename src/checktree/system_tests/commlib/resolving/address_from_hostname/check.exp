@@ -1,0 +1,227 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# Define the global variables to give them back
+global check_name check_description check_needs check_functions
+global check_category
+global check_root_access_needs check_need_running_system
+global check_version_range
+
+set check_root_access_needs   "no"
+
+# the conversion and the environment variable driving it arrive with 9.1.5
+set check_version_range       "9.1.5"
+
+set check_name                "address_from_hostname"
+set check_category            "COMMLIB RESOLVING VERIFIED"
+set check_description(0)      "an address is taken from a host name and put back into one"
+set check_needs               "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function      "address_from_hostname_setup"
+set check_cleanup_function    "address_from_hostname_cleanup"
+
+# define test's procedure order
+set check_functions           {}
+lappend check_functions       "address_from_hostname_forward"
+lappend check_functions       "address_from_hostname_reverse"
+lappend check_functions       "address_from_hostname_regular_name"
+lappend check_functions       "address_from_hostname_refused_formats"
+
+##
+# @brief Pick a host to run the resolving clients on.
+#
+# The clients are driven through SGE_ADDRESS_FROM_HOSTNAME rather than through the
+# bootstrap file. gethostbyname and gethostbyaddr do not read a bootstrap file, and
+# teaching them to would make them fail where they are most wanted - in an
+# installation which is broken. The environment variable reaches the same setting in
+# the communication library and leaves the clients as they are.
+proc address_from_hostname_setup {} {
+   get_current_cluster_config_array ts_config
+   global address_from_hostname_host address_from_hostname_format
+   global address_from_hostname_name address_from_hostname_address
+
+   set address_from_hostname_host $ts_config(master_host)
+
+   # a name which resolves nowhere, of the shape a container image gives a pod
+   set address_from_hostname_format "ip-%d-%d-%d-%d"
+   set address_from_hostname_name "ip-10-244-7-73"
+   set address_from_hostname_address "10.244.7.73"
+
+   return 0
+}
+
+proc address_from_hostname_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global address_from_hostname_host address_from_hostname_format
+   global address_from_hostname_name address_from_hostname_address
+
+   unset -nocomplain address_from_hostname_host address_from_hostname_format
+   unset -nocomplain address_from_hostname_name address_from_hostname_address
+}
+
+##
+# @brief Run one of the resolving clients with a format in the environment.
+#
+# start_sge_utilbin does not pass an environment on, so start_sge_bin is called the
+# way it calls it, with the environment added.
+#
+# @param bin     name of the client, gethostbyname or gethostbyaddr
+# @param args    arguments for the client
+# @param format  format for SGE_ADDRESS_FROM_HOSTNAME, empty to leave it unset
+# @param a_exit  name of a variable which receives the exit status
+# @return the output of the run
+proc address_from_hostname_run {bin args format a_exit} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER address_from_hostname_host
+
+   upvar $a_exit exit_state
+
+   # the array is handed on by name, so it has to exist even when nothing is put in it
+   array set envlist {}
+   if {$format != ""} {
+      set envlist(SGE_ADDRESS_FROM_HOSTNAME) $format
+   }
+
+   return [start_sge_bin $bin $args $address_from_hostname_host $CHECK_USER \
+                         exit_state 60 "" "utilbin" output_lines envlist]
+}
+
+##
+# @brief A name carrying an address is accepted without being looked up.
+proc address_from_hostname_forward {} {
+   get_current_cluster_config_array ts_config
+   global address_from_hostname_format address_from_hostname_name
+   global address_from_hostname_address
+
+   # without a format the name resolves nowhere, which is the situation the format
+   # exists for - if this ever succeeds the name was chosen badly and the check below
+   # would prove nothing
+   set output [address_from_hostname_run "gethostbyname" \
+                  "-name $address_from_hostname_name" "" exit_state]
+   if {$exit_state == 0} {
+      ts_log_severe "the name $address_from_hostname_name resolves in this cluster,\
+                     so it cannot show what the format does:\n$output"
+      return
+   }
+
+   # with the format the name is accepted and carries its own address
+   set output [address_from_hostname_run "gethostbyname" $address_from_hostname_name \
+                  $address_from_hostname_format exit_state]
+   if {$exit_state != 0} {
+      ts_log_severe "gethostbyname did not accept $address_from_hostname_name with the\
+                     format $address_from_hostname_format:\n$output"
+   } elseif {[string first $address_from_hostname_name $output] < 0} {
+      ts_log_severe "gethostbyname did not report the name\
+                     $address_from_hostname_name:\n$output"
+   } elseif {[string first $address_from_hostname_address $output] < 0} {
+      ts_log_severe "gethostbyname did not report the address\
+                     $address_from_hostname_address taken from the name:\n$output"
+   }
+
+}
+
+##
+# @brief An address is put back into the name it came from.
+#
+# Both directions have to agree. A client resolved one way and then the other has to
+# come out as the same host, otherwise a connection would be refused for looking like
+# it came from somewhere else.
+proc address_from_hostname_reverse {} {
+   get_current_cluster_config_array ts_config
+   global address_from_hostname_format address_from_hostname_name
+   global address_from_hostname_address
+
+   set output [address_from_hostname_run "gethostbyaddr" $address_from_hostname_address \
+                  $address_from_hostname_format exit_state]
+   if {$exit_state != 0} {
+      ts_log_severe "gethostbyaddr did not accept $address_from_hostname_address with\
+                     the format $address_from_hostname_format:\n$output"
+   } elseif {[string first $address_from_hostname_name $output] < 0} {
+      ts_log_severe "gethostbyaddr built a name other than\
+                     $address_from_hostname_name from\
+                     $address_from_hostname_address:\n$output"
+   }
+}
+
+##
+# @brief A host name which does not fit the format is resolved as it was.
+#
+# The format reaches only the names it was written for. Everything else has to go to
+# the name service as before, otherwise setting it would cut off every ordinary host
+# in the cluster.
+#
+# The check is a comparison rather than an "it did not fail": the same name is
+# resolved with the format and without it, and both answers have to be the same one.
+# A run that merely succeeds could still be answering with something derived from the
+# format, and that would look exactly like a pass.
+proc address_from_hostname_regular_name {} {
+   get_current_cluster_config_array ts_config
+   global address_from_hostname_format
+
+   set host $ts_config(master_host)
+
+   set plain [address_from_hostname_run "gethostbyname" "-name $host" "" plain_exit]
+   if {$plain_exit != 0} {
+      ts_log_severe "resolving $host without a format failed, so there is nothing to\
+                     compare against:\n$plain"
+      return
+   }
+
+   set formatted [address_from_hostname_run "gethostbyname" "-name $host" \
+                     $address_from_hostname_format formatted_exit]
+   if {$formatted_exit != 0} {
+      ts_log_severe "resolving $host failed while the format\
+                     $address_from_hostname_format was set, it does not fit that\
+                     format and has to be resolved as usual:\n$formatted"
+      return
+   }
+
+   if {[string trim $plain] != [string trim $formatted]} {
+      ts_log_severe "resolving $host answered differently with the format\
+                     $address_from_hostname_format set.\nwithout the format:\
+                     [string trim $plain]\nwith the format: [string trim $formatted]"
+      return
+   }
+
+   ts_log_fine "resolving $host is unchanged by the format\
+                $address_from_hostname_format"
+}
+
+##
+# @brief A format which cannot yield an address is refused.
+#
+# The format is handed to snprintf when a name is built, so a conversion nobody
+# accounted for would decide what that call reads. A refused format leaves resolving
+# as it was rather than half applying the format.
+proc address_from_hostname_refused_formats {} {
+   get_current_cluster_config_array ts_config
+   global address_from_hostname_name
+
+   foreach format {"ip-%d-%d-%d" "ip-%d-%d-%d-%s" "ip-%d-%d-%d-%d%n" "%n%n%n%n"} {
+      set output [address_from_hostname_run "gethostbyname" \
+                     "-name $address_from_hostname_name" $format exit_state]
+      if {$exit_state == 0} {
+         ts_log_severe "the format \"$format\" cannot yield an address and has to be\
+                        refused, but $address_from_hostname_name was accepted\
+                        with it:\n$output"
+      }
+   }
+}

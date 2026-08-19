@@ -1,0 +1,564 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# Define the global variables to give them back
+global check_name check_description check_needs check_functions
+global check_category
+global check_root_access_needs check_need_running_system
+
+set check_root_access_needs   "yes"
+
+set check_name                "nat_submit_client"
+set check_category            "COMMLIB RESOLVING VERIFIED"
+set check_description(0)      "a NAT'ed submit client gets one barrier further per setting"
+set check_needs               "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function      "nat_submit_client_setup"
+set check_cleanup_function    "nat_submit_client_cleanup"
+
+# define test's procedure order
+#
+# The functions build on one another. Each adds one setting to the cluster and the
+# submission gets one barrier further, which is what makes the settings worth having:
+# the error changes, and the one that is gone is the one the setting removed.
+#
+#   1. nothing configured           - the name cannot be resolved
+#   2. address_from_hostname        - the name resolves, the address it came from does
+#                                     not match where the connection comes from
+#   3. trust_client_hostname        - the connection is accepted, the host is not a
+#                                     submit host
+#   4. ALLOW_ANY_SUBMITHOSTS        - the submission succeeds and the job runs
+#
+# The first one asserts how a cluster behaves without any of these settings, which no
+# version has ever done differently, so the check carries no version range and runs
+# everywhere. From the second one on the settings have to exist, and each function
+# says so for itself - an older cluster would ignore the setting, leave the barrier
+# where it was, and fail for a reason that has nothing to do with what is tested.
+set check_functions           {}
+lappend check_functions       "nat_submit_client_unresolvable"
+lappend check_functions       "nat_submit_client_address_from_hostname"
+lappend check_functions       "nat_submit_client_trust_client_hostname"
+lappend check_functions       "nat_submit_client_allow_any_submithosts"
+
+##
+# @brief Prepare a container host that can stand in for a Kubernetes pod.
+#
+# A pod that submits jobs differs from a regular submit client in two ways: its
+# host name does not resolve for the qmaster, and its traffic is source-NAT'ed
+# so the address the qmaster sees belongs to the node rather than to the pod.
+#
+# A Docker container on the default bridge reproduces both. The container is
+# given a pod-style host name that exists nowhere in DNS, and its egress to any
+# other host is masqueraded to the container host's address. The container host
+# must therefore not be the qmaster host, otherwise the traffic may never be
+# masqueraded and only half of the situation would be reproduced.
+#
+# Everything this setup needs is site configuration rather than product
+# behaviour, so a missing piece bails out with ts_log_config instead of failing
+# the check.
+proc nat_submit_client_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ACTUAL_TEST_PATH
+   global nat_submit_client_host nat_submit_client_image
+   global nat_submit_client_hostname
+   global nat_submit_client_settings nat_submit_client_master_ip
+   global nat_submit_client_bootstrap_backup nat_submit_client_config_backup
+
+   # the last function adds a qmaster_param - the whole global configuration is kept so
+   # the cleanup can put it back with reset_config
+   get_config nat_submit_client_config_backup
+
+   # The whole bootstrap file is kept, not just the attribute this check writes.
+   # An installation from 9.1.5 on brings communication_params along, so dropping the
+   # attribute in the cleanup would hand the next check a file which differs from the
+   # one this check found. Putting the content back leaves it as it was either way.
+   bootstrap_file_read bootstrap
+   set nat_submit_client_bootstrap_backup [array get bootstrap]
+
+   # the pod name is fixed - it only has to be unresolvable for the qmaster and
+   # different from whatever the NAT'ed source address resolves to
+   set nat_submit_client_hostname "ip-10-244-7-73"
+   set nat_submit_client_image "ocs-testsuite/nat-submit-client:latest"
+
+   # a docker host which is not a submit host of this cluster - a container on a
+   # submit host would inherit that host's standing once its traffic is NAT'ed
+   # to the host address, and a submission could then succeed for a reason this
+   # test does not intend to exercise
+   set nat_submit_client_host [docker_get_host 1]
+   if {$nat_submit_client_host == ""} {
+      ts_log_config "test requires a docker host which is not a submit host"
+      return 99
+   }
+
+   # a hard-killed earlier run can leave the container behind, and "docker run
+   # --name" would then fail before ever reaching qsub
+   start_remote_prog $nat_submit_client_host "root" "docker" \
+                     "rm -f $nat_submit_client_hostname" \
+                     prg_exit_state 60 0 "" "" 0 0 0 0
+
+   # the container mounts SGE_ROOT, so it has to be visible on the container host
+   start_remote_prog $nat_submit_client_host "root" "test" \
+                     "-d $ts_config(product_root)" prg_exit_state 60 0 "" "" 0 0 0 0
+   if {$prg_exit_state != 0} {
+      ts_log_config "SGE_ROOT $ts_config(product_root) is not visible on host\
+                     $nat_submit_client_host"
+      return 99
+   }
+
+   # The container sources settings.sh, which sets SGE_ROOT, the cell, both port
+   # numbers and a PATH built from the architecture it determines at run time -
+   # inside the container, which is the only place that answer is meaningful.
+   set nat_submit_client_settings \
+      "$ts_config(product_root)/$ts_config(cell)/common/settings.sh"
+   start_remote_prog $nat_submit_client_host "root" "test" \
+                     "-r $nat_submit_client_settings" prg_exit_state 60 0 "" "" 0 0 0 0
+   if {$prg_exit_state != 0} {
+      ts_log_config "cannot read $nat_submit_client_settings on host\
+                     $nat_submit_client_host"
+      return 99
+   }
+
+   # The container has its own resolver and never sees the container host's
+   # /etc/hosts, so a cluster whose host names live there is invisible to it.
+   # The qmaster name has to be injected into the container explicitly - that
+   # the client can find the qmaster is a precondition of this check, not part
+   # of what it examines.
+   set nat_submit_client_master_ip ""
+   set output [start_remote_prog $nat_submit_client_host "root" "getent" \
+                                 "ahostsv4 $ts_config(master_host)" \
+                                 prg_exit_state 60 0 "" "" 0 0 0 0]
+   if {$prg_exit_state == 0} {
+      regexp {(\d+\.\d+\.\d+\.\d+)} $output match nat_submit_client_master_ip
+   }
+   if {$nat_submit_client_master_ip == ""} {
+      ts_log_config "cannot resolve the qmaster host $ts_config(master_host) on\
+                     host $nat_submit_client_host"
+      return 99
+   }
+
+   # The image is built here rather than taken from a registry: it needs
+   # binutils for util/arch, and an account carrying the testsuite user's ids so
+   # the client submits as that user. Both are baked in by the Dockerfile next
+   # to this check.
+   set dockerfile "$CHECK_ACTUAL_TEST_PATH/Dockerfile"
+   start_remote_prog $nat_submit_client_host "root" "test" "-r $dockerfile" \
+                     prg_exit_state 60 0 "" "" 0 0 0 0
+   if {$prg_exit_state != 0} {
+      ts_log_config "cannot read $dockerfile on host $nat_submit_client_host"
+      return 99
+   }
+
+   set uid [get_uid $CHECK_USER $ts_config(master_host)]
+   set gid [get_gid $CHECK_USER $ts_config(master_host)]
+   if {$uid < 0 || $gid < 0} {
+      ts_log_config "cannot determine uid and gid of user $CHECK_USER on\
+                     $ts_config(master_host)"
+      return 99
+   }
+
+   set build_args "build -t $nat_submit_client_image"
+   append build_args " --build-arg TS_USER=$CHECK_USER"
+   append build_args " --build-arg TS_UID=$uid"
+   append build_args " --build-arg TS_GID=$gid"
+   append build_args " -f $dockerfile $CHECK_ACTUAL_TEST_PATH"
+
+   ts_log_fine "building image $nat_submit_client_image on $nat_submit_client_host"
+   set output [start_remote_prog $nat_submit_client_host "root" "docker" $build_args \
+                                 prg_exit_state 600 0 "" "" 0 0 0 0]
+   if {$prg_exit_state != 0} {
+      ts_log_config "cannot build image $nat_submit_client_image on host\
+                     $nat_submit_client_host:\n$output"
+      return 99
+   }
+
+   return 0
+}
+
+proc nat_submit_client_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global nat_submit_client_host nat_submit_client_image
+   global nat_submit_client_hostname
+   global nat_submit_client_settings nat_submit_client_master_ip
+   global nat_submit_client_bootstrap_changed nat_submit_client_bootstrap_backup
+   global nat_submit_client_config_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # the configuration is read per request, so putting it back is enough, nothing has
+   # to be restarted for it
+   if {[info exists nat_submit_client_config_backup]} {
+      reset_config nat_submit_client_config_backup
+   }
+
+   # the bootstrap file was changed for the later functions - put the content back as
+   # the setup found it and let the cluster come up with it, otherwise every check
+   # after this one runs against a configuration this one left behind
+   if {[info exists nat_submit_client_bootstrap_changed] &&
+       $nat_submit_client_bootstrap_changed} {
+      array set bootstrap $nat_submit_client_bootstrap_backup
+      # remove_additional, so an attribute this check added and the backup does not
+      # know about goes away instead of staying behind
+      bootstrap_file_write bootstrap 1
+      shutdown_and_restart_qmaster
+      wait_for_load_from_all_queues 120
+      set nat_submit_client_bootstrap_changed 0
+   }
+
+   # the container is started with --rm and should be gone already, remove a
+   # leftover from an interrupted run so the next one starts from a clean state
+   if {[info exists nat_submit_client_host] && $nat_submit_client_host != ""} {
+      start_remote_prog $nat_submit_client_host "root" "docker" \
+                        "rm -f $nat_submit_client_hostname" \
+                        prg_exit_state 60 0 "" "" 0 0 0 0
+   }
+
+   unset -nocomplain nat_submit_client_host nat_submit_client_image
+   unset -nocomplain nat_submit_client_hostname nat_submit_client_settings
+   unset -nocomplain nat_submit_client_master_ip
+   unset -nocomplain nat_submit_client_bootstrap_changed
+   unset -nocomplain nat_submit_client_bootstrap_backup
+   unset -nocomplain nat_submit_client_config_backup
+}
+
+##
+# @brief How many lines the qmaster messages file holds right now.
+#
+# The submission is expected to be refused, and the reason is only in the messages
+# file. Every function notes the length before it submits and reads what came after,
+# so a message from an earlier function cannot be mistaken for a fresh one.
+proc nat_submit_client_messages_mark {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   get_file_content $ts_config(master_host) $CHECK_USER [check_qmaster_messages 2] file_array
+   return $file_array(0)
+}
+
+##
+# @brief The lines the qmaster wrote after a mark.
+#
+# The qmaster writes the message while the client is already gone, so the lines are
+# waited for rather than read once.
+proc nat_submit_client_messages_since {mark} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set messages_file [check_qmaster_messages 2]
+   set new_lines ""
+
+   for {set attempt 0} {$attempt < 10} {incr attempt} {
+      set new_lines ""
+      get_file_content $ts_config(master_host) $CHECK_USER $messages_file file_array
+      for {set i [expr {$mark + 1}]} {$i <= $file_array(0)} {incr i} {
+         append new_lines "$file_array($i)\n"
+      }
+      if {$new_lines != ""} {
+         break
+      }
+      sleep_for_seconds 2
+   }
+
+   return $new_lines
+}
+
+##
+# @brief Run one client command in the container.
+#
+# The client runs as the testsuite user, which the image carries with the same ids as
+# in the cluster. In the first functions the request never gets far enough for that
+# identity to be examined, but it keeps them on the same footing as the later ones,
+# where the request is meant to succeed.
+proc nat_submit_client_run {a_exit command} {
+   get_current_cluster_config_array ts_config
+   global nat_submit_client_host nat_submit_client_image
+   global nat_submit_client_hostname
+   global nat_submit_client_settings nat_submit_client_master_ip
+
+   upvar $a_exit exit_state
+
+   set root $ts_config(product_root)
+
+   set args "run --rm --name $nat_submit_client_hostname"
+   append args " --hostname $nat_submit_client_hostname"
+   # SGE_ROOT usually lives on a shared file system, which cannot carry the
+   # labels a host with SELinux in enforcing mode expects on a bind mount. The
+   # mount would be denied there, and the submission would fail for a reason
+   # that has nothing to do with what this check is looking at.
+   append args " --security-opt label=disable"
+   append args " -v $root:$root:ro"
+   append args " --add-host $ts_config(master_host):$nat_submit_client_master_ip"
+   append args " $nat_submit_client_image"
+   # single quotes keep the shell of the container host from splitting this into
+   # separate docker arguments
+   append args " sh -c '. $nat_submit_client_settings; exec $command'"
+
+   ts_log_fine "running \"$command\" in container $nat_submit_client_hostname on host\
+                $nat_submit_client_host"
+   # a refused request is the expected outcome in most of these functions, so no error
+   # is raised on a non-zero exit
+   return [start_remote_prog $nat_submit_client_host "root" "docker" $args \
+                             exit_state 120 0 "" "" 0 0 0 0]
+}
+
+##
+# @brief Submit a job from the container.
+#
+# The same submission in every function, so that what changes between them is the
+# cluster configuration and nothing else.
+proc nat_submit_client_submit {a_exit} {
+   upvar $a_exit exit_state
+
+   return [nat_submit_client_run exit_state \
+                                 "qsub -b y -o /dev/null -e /dev/null /bin/sleep 1"]
+}
+
+##
+# @brief Submit from the container with nothing configured.
+#
+# The qmaster cannot resolve the pod-style host name the client announces, so the
+# connection is refused before any authorisation happens. Two messages say so: the
+# name could not be resolved, and what the client announced does not match what the
+# qmaster made of it, which at this point is "(HOST_NOT_RESOLVABLE)".
+proc nat_submit_client_unresolvable {} {
+   get_current_cluster_config_array ts_config
+   global nat_submit_client_hostname
+
+   set mark [nat_submit_client_messages_mark]
+   set output [nat_submit_client_submit exit_state]
+
+   if {$exit_state == 0} {
+      ts_log_severe "the submission from container $nat_submit_client_hostname was\
+                     accepted although its host name resolves nowhere:\n$output"
+      return
+   }
+
+   set messages [nat_submit_client_messages_since $mark]
+   if {[string first "can\'t resolve rdata hostname" $messages] < 0} {
+      ts_log_severe "the qmaster did not report that it cannot resolve\
+                     $nat_submit_client_hostname:\n$messages"
+   } elseif {[string first "HOST_NOT_RESOLVABLE" $messages] < 0} {
+      ts_log_severe "the qmaster did not report the mismatch between the announced\
+                     name and what it resolved:\n$messages"
+   } else {
+      ts_log_fine "the submission was refused because the name cannot be resolved"
+   }
+}
+
+##
+# @brief Submit again with address_from_hostname configured.
+#
+# The format takes the address out of the name, so the qmaster no longer has to look
+# the name up and the first barrier is gone. The connection is still refused: the
+# container's traffic is NAT'ed onto the address of its host, so the address the
+# qmaster sees is not the one the name carries.
+#
+# What is asserted is the change. The message about an unresolvable name has to be
+# gone - that is what the setting bought - and the named one has to have taken its
+# place:
+#
+#   commlib error: local host name error (IP based host name resolving "laptop-joga"
+#   (192.168.125.1) doesn't match client host name from connect message
+#   "ip-10-244-7-73")
+#
+# The name in the message is the one the NAT'ed address resolves to, so it belongs to
+# the site rather than to this check and cannot be asserted. What can be asserted is
+# the name the container announced: the qmaster got that far only because the format
+# gave the name an address. A function that only asked for "still refused" would pass
+# even if the setting did nothing at all.
+proc nat_submit_client_address_from_hostname {} {
+   get_current_cluster_config_array ts_config
+   global nat_submit_client_hostname nat_submit_client_bootstrap_changed
+
+   if {![is_version_in_range "9.1.5"]} {
+      ts_log_info "skipping, communication_params arrive with 9.1.5"
+      return
+   }
+
+   # the format matches the name the container announces
+   bootstrap_file_read bootstrap
+   set bootstrap(communication_params) "address_from_hostname=ip-%d-%d-%d-%d"
+   if {![bootstrap_file_write bootstrap]} {
+      ts_log_severe "could not write the bootstrap file"
+      return
+   }
+   set nat_submit_client_bootstrap_changed 1
+
+   # the setting is read at startup, and the cluster has to come back with it
+   shutdown_and_restart_qmaster
+   if {[wait_for_load_from_all_queues 120] != 0} {
+      ts_log_severe "the execution hosts did not report load again after the qmaster\
+                     was restarted with communication_params set"
+      return
+   }
+
+   set mark [nat_submit_client_messages_mark]
+   set output [nat_submit_client_submit exit_state]
+
+   if {$exit_state == 0} {
+      ts_log_severe "the submission from container $nat_submit_client_hostname was\
+                     accepted, but its address is still not the one the connection\
+                     comes from:\n$output"
+      return
+   }
+
+   set messages [nat_submit_client_messages_since $mark]
+   if {[string first "can\'t resolve rdata hostname" $messages] >= 0} {
+      ts_log_severe "the qmaster still cannot resolve $nat_submit_client_hostname\
+                     although address_from_hostname is set:\n$messages"
+   } elseif {[string first "HOST_NOT_RESOLVABLE" $messages] >= 0} {
+      ts_log_severe "the qmaster still reports the name as unresolvable although\
+                     address_from_hostname is set:\n$messages"
+   } elseif {[string first "doesn't match client host name from connect message\
+              \"$nat_submit_client_hostname\"" $messages] < 0} {
+      ts_log_severe "the qmaster did not refuse the connection from container\
+                     $nat_submit_client_hostname because the address it comes from\
+                     resolves to another host:\n$messages"
+   } else {
+      ts_log_fine "the name resolves now, the connection is refused because the\
+                   address it comes from belongs to another host"
+   }
+}
+
+##
+# @brief Submit again with trust_client_hostname added.
+#
+# The name resolves by now, but the address it carries is not the address the
+# connection arrives from: the container's traffic is translated onto the address of
+# its host. The two can never agree for such a client, which is what this setting is
+# for - the announced name is taken and not held against where the connection came
+# from.
+#
+# What is left is the submit host check, and that is what the submission has to fail
+# on now. Asserting the new reason matters as much as asserting the old one is gone: a
+# submission that still fails on the address would look the same from the outside.
+proc nat_submit_client_trust_client_hostname {} {
+   get_current_cluster_config_array ts_config
+   global nat_submit_client_hostname nat_submit_client_bootstrap_changed
+
+   if {![is_version_in_range "9.1.5"]} {
+      ts_log_info "skipping, trust_client_hostname arrives with 9.1.5"
+      return
+   }
+
+   # both settings - the name has to resolve before there is anything to trust
+   bootstrap_file_read bootstrap
+   set bootstrap(communication_params) \
+      "address_from_hostname=ip-%d-%d-%d-%d,trust_client_hostname=true"
+   if {![bootstrap_file_write bootstrap]} {
+      ts_log_severe "could not write the bootstrap file"
+      return
+   }
+   set nat_submit_client_bootstrap_changed 1
+
+   shutdown_and_restart_qmaster
+   if {[wait_for_load_from_all_queues 120] != 0} {
+      ts_log_severe "the execution hosts did not report load again after the qmaster\
+                     was restarted with trust_client_hostname set"
+      return
+   }
+
+   set mark [nat_submit_client_messages_mark]
+   set output [nat_submit_client_submit exit_state]
+
+   if {$exit_state == 0} {
+      ts_log_severe "the submission from container $nat_submit_client_hostname was\
+                     accepted although its host is not a submit host:\n$output"
+      return
+   }
+
+   set messages [nat_submit_client_messages_since $mark]
+   if {[string first "doesn't match client host name from connect message" $messages] >= 0} {
+      ts_log_severe "the qmaster still holds the announced name against the address\
+                     the connection comes from although trust_client_hostname is\
+                     set:\n$messages"
+   } elseif {[string first "is no submit host" $output] < 0} {
+      ts_log_severe "the connection is accepted now, so the submission has to be\
+                     refused for not coming from a submit host, but it was refused\
+                     for another reason:\n$output\n$messages"
+   } else {
+      ts_log_fine "the connection is accepted, the submission is refused because the\
+                   host is no submit host"
+   }
+}
+
+##
+# @brief Submit again with ALLOW_ANY_SUBMITHOSTS set.
+#
+# The connection is accepted by now and the submission is refused only because the
+# container's host is no submit host. It cannot become one: the host name is made up
+# for this one container, and a cluster which takes jobs from pods would have to add
+# a submit host per pod and remove it again afterwards.
+#
+# The qmaster_param drops that last barrier and the host counts as a submit host, so
+# two things are asked of it. The job goes into the cluster and runs - a submission
+# which is accepted but whose job never runs would leave the customer no better off -
+# and the container can still read cluster state, which is what a client needs to
+# follow the job it just submitted.
+proc nat_submit_client_allow_any_submithosts {} {
+   get_current_cluster_config_array ts_config
+   global nat_submit_client_hostname
+
+   if {![is_version_in_range "9.1.5"]} {
+      ts_log_info "skipping, ALLOW_ANY_SUBMITHOSTS arrives with 9.1.5"
+      return
+   }
+
+   # the cluster may carry other qmaster_params - this one is added to them, and the
+   # cleanup puts the whole configuration back
+   get_config old_config
+   add_to_config_attribute old_config new_config "qmaster_params" \
+                           "ALLOW_ANY_SUBMITHOSTS=TRUE"
+   if {[set_config new_config] < 0} {
+      ts_log_severe "could not set qmaster_params \"$new_config(qmaster_params)\""
+      return
+   }
+
+   # the configuration is read per request, so nothing is restarted here - which is
+   # the point of doing this in a qmaster_param rather than in the bootstrap file
+   set output [nat_submit_client_submit exit_state]
+
+   if {$exit_state != 0} {
+      ts_log_severe "the submission from container $nat_submit_client_hostname was\
+                     still refused although ALLOW_ANY_SUBMITHOSTS is set:\n$output"
+      return
+   }
+
+   if {![regexp {Your job (\d+)} $output match job_id]} {
+      ts_log_severe "the submission from container $nat_submit_client_hostname\
+                     reported no job id:\n$output"
+      return
+   }
+
+   ts_log_fine "container $nat_submit_client_hostname submitted job $job_id"
+
+   # Reading is a different permission check from submitting, and before this
+   # parameter both asked for a submit host. "qstat -f" rather than "qstat -j $job_id":
+   # the job sleeps a second and may well be gone by now, and a client which asks for a
+   # job that no longer exists gets an error which says nothing about permissions.
+   set output [nat_submit_client_run exit_state "qstat -f"]
+   if {$exit_state != 0} {
+      ts_log_severe "container $nat_submit_client_hostname submitted job $job_id but\
+                     cannot read cluster state:\n$output"
+   }
+
+   wait_for_jobend $job_id "" 120 0
+}
