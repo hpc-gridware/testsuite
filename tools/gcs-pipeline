@@ -324,7 +324,15 @@ args="$args get_pw_command ${GCS_PW_COMMAND:-$CS_TOOL_DIR/get_pwd.sh}"
 # that share this script.
 #
 #   GCS_CLEANUP_CHECK=off 92x check <path> <level>     to switch it off again
-args="$args cleanup_check ${GCS_CLEANUP_CHECK:-fail}"
+#
+# Only pass it to a testsuite that knows the parameter. The check itself is
+# harmless on 9.0/9.1 -- the capability probe comes back empty there -- but the
+# 9.1 testsuite predates CS-984 and rejects the unknown parameter outright
+# ("unexpected command line parameter"), which killed every 91x invocation of
+# this script before the build even started.
+if grep -q cleanup_check "$SGE_TEST/src/check.exp" 2>/dev/null; then
+   args="$args cleanup_check ${GCS_CLEANUP_CHECK:-fail}"
+fi
 # Scale the wait timeouts inside the tests. The values they pass assume the
 # testsuite has the hosts to itself; with several runners on one host set the
 # same work takes 1.6 to 2.4 times longer and the waits report timeouts where

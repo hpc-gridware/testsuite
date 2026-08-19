@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -140,6 +140,7 @@ lappend generic_module_tests {test_uti_thread_local "" 0 ""}
 lappend generic_module_tests {test_uti_time "" 0 ""}
 lappend generic_module_tests {test_uti_os_fds "" 0 ""}
 lappend generic_module_tests {test_uti_Encoder "9.1.0" 0 ""}
+lappend generic_module_tests {test_qmaster_rusage "9.1.5" 0 ""}
 set check_description(0) "test_qmaster_timed_event"
 set check_description(1) "test_commlib_issue"
 set check_description(2) "test_comm_xml_parse"
@@ -190,6 +191,7 @@ set check_description(46) "test_uti_thread_local"
 set check_description(47) "test_uti_time"
 set check_description(48) "test_uti_os_fds"
 set check_description(49) "test_uti_Encoder"
+set check_description(50) "test_qmaster_rusage"
 
 set check_functions {}
 lappend check_functions "generic_module_tests_run"
