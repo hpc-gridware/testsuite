@@ -1562,12 +1562,12 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_ADD_DEFAULT_QUEUE_INSTANCE" { set value "Do you want to add a default queue instance for this host (y/n) \[y\] >> " }
       "DISTINST_ENTER_DATABASE_DIRECTORY_LOCAL_SPOOLING" { set value "Please enter the ?atabase ?irectory now, even if you want to spool locally,\nit is necessary to enter this ?atabase ?irectory. \n\nDefault: \[%s\] >> " }
       "DISTINST_DATABASE_DIR_NOT_ON_LOCAL_FS" {
-         # the advice to configure the RPC client/server mechanism was dropped in 9.2
-         if {$ts_config(gridengine_version) >= 92} {
-            set value "The database directory >%s<\nis not on a local filesystem.\nPlease choose a local filesystem or an NFSv4 filesystem"
-         } else {
-            set value "The database directory >%s<\nis not on a local filesystem.\nPlease choose a local filesystem or configure the RPC Client/Server mechanism"
-         }
+         # Two scripts say this, and they say it differently: inst_berkeley.sh writes the
+         # directory as >%s< on one line, inst_qmaster.sh indents it on a line of its own.
+         # The advice that follows differs by version as well - up to 9.1 it names the RPC
+         # client/server mechanism, from 9.2 on an NFSv4 filesystem. Matching what all of
+         # them have in common covers every installer this testsuite drives.
+         set value "The database directory*%s*is not on a local filesystem*"
       }
       "DISTINST_DONT_KNOW_HOW_TO_TEST_FOR_LOCAL_FS" { set value "Don't know how to test for local filesystem. Exit." }
       "DISTINST_CURRENT_GRID_ROOT_DIRECTORY" { set value "The * root directory is:\n\n   \\\$SGE_ROOT = %s\n\nIf this directory is not correct (e.g. it may contain an automounter\nprefix) enter the correct path to this directory or hit <RETURN>\nto use default \[%s\] >> " }

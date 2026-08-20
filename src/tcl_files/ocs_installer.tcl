@@ -905,22 +905,18 @@ proc installer_do_upgrade_from_backup {bckp_dir} {
       }
 
       -i $sp_id -- $ENTER_DATABASE_DIRECTORY_LOCAL_SPOOLING {
-         set spooldir $ts_config(bdb_dir)
-         if { $spooldir == "" } {
-            ts_log_fine "\n -->testsuite: sending >RETURN<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "\n"
-         } else {
-            ts_log_fine "\n -->testsuite: sending >$spooldir<"
-            if {$do_log_output == 1} {
-               puts "press RETURN"
-               set anykey [wait_for_enter 1]
-            }
-            ts_send $sp_id "$spooldir\n"
+         # get_bdb_spooldir rather than ts_config(bdb_dir): the configured value may be
+         # "none", which means the master host's local spool directory rather than a
+         # directory of that name. Sending it as it is types "none" into the installer,
+         # which refuses it as not being on a local filesystem and asks again forever.
+         # This is what the core installation does as well.
+         set spooldir [get_bdb_spooldir $ts_config(master_host) 0]
+         ts_log_fine "\n -->testsuite: sending >$spooldir<"
+         if {$do_log_output == 1} {
+            puts "press RETURN"
+            set anykey [wait_for_enter 1]
          }
+         ts_send $sp_id "$spooldir\n"
          append install_output $expect_out(buffer)
          log_user 1
          exp_continue
