@@ -205,6 +205,27 @@ user_config_file() {
   printf '%s\n' "$f"
 }
 
+# Window the workspaces draw from. Without one this function walked the whole
+# portlist and, because of the "tac" below, started at its very end -- which is
+# where ports registered for something else land, since the list only ever grows
+# by appending. A workspace would therefore have taken the newest runner port of
+# a line before that line had a chance to init on it, and with nothing but the
+# reverse order to stop it, the release-line ports 8000..8008 were reachable too.
+#
+# The map is what the ports actually are, not a preference:
+#
+#   8000..8008   release lines
+#   8010..8072   92x runners        (see line_port_window in gcs-runners)
+#   8100..8199   feature workspaces (this window)
+#   8200..8262   91x runners        (see line_port_window in gcs-runners)
+#
+# GCS_WORKSPACE_PORT_MIN/MAX override for a one-off. Running out of ports here
+# is meant to end in the die() of pick_port -- register another even port in
+# this window via the testsuite menu, never widen the window to borrow one that
+# belongs to a line.
+WORKSPACE_PORT_MIN="${GCS_WORKSPACE_PORT_MIN:-8100}"
+WORKSPACE_PORT_MAX="${GCS_WORKSPACE_PORT_MAX:-8200}"
+
 registered_ports() {
   local cfg="$1" ucf p
   ucf="$(user_config_file "$cfg")"
@@ -214,7 +235,8 @@ registered_ports() {
   # leave the long-established low ports to their existing suites.
   for p in $(read_sav_value "$ucf" "$USER,portlist" | tr ' ' '\n' | tac); do
     case "$p" in *[!0-9]*|"") continue ;; esac
-    [ "$p" -ge 1024 ] || continue          # reserved-port entries (700) are not clusters
+    [ "$p" -ge "$WORKSPACE_PORT_MIN" ] || continue
+    [ "$p" -lt "$WORKSPACE_PORT_MAX" ] || continue
     [ $((p % 2)) -eq 0 ] || continue       # odd port would collide with its own execd
     printf '%s\n' "$p"
   done
@@ -243,8 +265,8 @@ pick_port() {
     case "$used" in *" $p "*|*" $((p+1)) "*) continue ;; esac
     printf '%s\n' "$p"; return 0
   done
-  die "all registered ports are taken ($(printf '%s' "$regd" | tr '\n' ' '));
-       add another even port to $USER,portlist in $(user_config_file "$cfg")
+  die "all registered ports in [$WORKSPACE_PORT_MIN,$WORKSPACE_PORT_MAX) are taken ($(printf '%s' "$regd" | tr '\n' ' '));
+       add another even port in that window to $USER,portlist in $(user_config_file "$cfg")
        via the testsuite menu (user config) — it vends the gid_range itself"
 }
 
