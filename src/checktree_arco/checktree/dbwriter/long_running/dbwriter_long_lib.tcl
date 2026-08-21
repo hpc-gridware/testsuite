@@ -494,31 +494,24 @@ proc db::today_start {} {
 }
 
 ##
-# @brief The SQL expression for the latest ju_end_time the dbwriter's daily
-# derived rule is guaranteed to have seen, on the configured engine.
+# @brief Engine-portable SQL expression that truncates a timestamp column to
+# a "YYYY-MM-DD" string.
 #
-# The daily <derive> rule for day D fires at midnight of D+1 + ~11 min and
-# SUMs the hourly h_jobs_finished buckets that exist at that moment. The
-# hourly bucket for the last hour of D, hour [D 23:00, D+1 00:00), also
-# fires at midnight of D+1 + ~11 min - the two rules race. Under a heavy
-# ingest load, the daily rule frequently runs before the last-hour hourly
-# bucket has been written, so d_jobs_finished for day D systematically
-# omits that hour.
+# Used by the Phase F daily-derived consistency check to group hourly buckets
+# by their day in a way that matches the day buckets of d_jobs_finished
+# across all three engines: postgres, oracle and mysql all produce the same
+# YYYY-MM-DD literal so the Tcl side can match them with plain string
+# comparison.
 #
-# Phase F therefore restricts the raw COUNT(*) it compares against
-# SUM(d_jobs_finished) to records whose ju_end_time predates the at-risk
-# hour by at least one hour. The second-to-last hour's hourly rule fires
-# at midnight - 1 h + 11 min, well before the daily rule, so its records
-# are reliably accounted for.
-#
-# @return the SQL expression for "today's day-bucket start, minus one hour"
-proc db::daily_rule_cutoff {} {
+# @param field the name of the timestamp column to truncate
+# @return the SQL expression yielding the day string on the configured engine
+proc db::day_str {field} {
    switch -- [get_database_type] {
       postgresql -
-      postgres   {return "(DATE_TRUNC('day', LOCALTIMESTAMP) - INTERVAL '1 hour')"}
-      oracle     {return "(TRUNC(SYSDATE) - 1/24)"}
-      mysql      {return "DATE_SUB(CURDATE(), INTERVAL 1 HOUR)"}
-      default    {return "(DATE_TRUNC('day', LOCALTIMESTAMP) - INTERVAL '1 hour')"}
+      postgres   {return "TO_CHAR(DATE_TRUNC('day', $field), 'YYYY-MM-DD')"}
+      oracle     {return "TO_CHAR(TRUNC($field), 'YYYY-MM-DD')"}
+      mysql      {return "DATE_FORMAT($field, '%Y-%m-%d')"}
+      default    {return "TO_CHAR(DATE_TRUNC('day', $field), 'YYYY-MM-DD')"}
    }
 }
 
@@ -529,9 +522,6 @@ proc db::daily_rule_cutoff {} {
 # configured database engine. The recognised placeholders are:
 #   - __NOW__               current timestamp (db::now)
 #   - __TODAY_START__       start of today's day-bucket (db::today_start)
-#   - __DAILY_RULE_CUTOFF__ start of today's day-bucket minus one hour
-#                           (db::daily_rule_cutoff) - see there for the
-#                           midnight-race rationale
 # This proc is the single extension point for further MySQL / PostgreSQL /
 # Oracle differences as later phases need them.
 #
@@ -539,9 +529,8 @@ proc db::daily_rule_cutoff {} {
 # @return the adapted SQL string
 proc db::adapt {sql} {
    return [string map [list \
-      __NOW__               [db::now] \
-      __TODAY_START__       [db::today_start] \
-      __DAILY_RULE_CUTOFF__ [db::daily_rule_cutoff]] $sql]
+      __NOW__         [db::now] \
+      __TODAY_START__ [db::today_start]] $sql]
 }
 
 ##

@@ -114,6 +114,7 @@ proc dbwriter_long_running_setup {} {
    global dbwriter_long_test_hosts
    global dbwriter_long_online_usage_vars
    global dbwriter_long_report_variables
+   global arco_config DBWRITER_LOG_FNAME CHECK_USER
    get_current_cluster_config_array ts_config
 
    # online_usage usage variables enabled for the test - used both when
@@ -175,6 +176,12 @@ proc dbwriter_long_running_setup {} {
       return -1
    }
 
+   # start tailing the dbwriter log file before starting the dbwriter so
+   # dbwriter_long_wait_and_check can consume every line while waiting.
+   # delete_touch=1 truncates any log from a previous run so warnings and
+   # errors reported below can only come from this test's dbwriter.
+   init_logfile_wait $arco_config(dbwriter_host) $DBWRITER_LOG_FNAME 1
+
    # start the dbwriter
    if {[get_dbwriter_status 0] != 0} {
       if {[startup_dbwriter] != 0} {
@@ -227,6 +234,13 @@ proc dbwriter_long_running_cleanup {} {
       shutdown_dbwriter
    }
 
+   # close the dbwriter.log tail started in setup
+   if {[info exists ::file_procedure_logfile_wait_sp_id]
+       && [llength $::file_procedure_logfile_wait_sp_id] >= 2} {
+      close_logfile_wait
+      unset -nocomplain ::file_procedure_logfile_wait_sp_id
+   }
+
    # restore the original dbwriter calculation file
    dbwriter_xml::restore
 
@@ -254,6 +268,116 @@ proc dbwriter_long_running_cleanup {} {
    unset -nocomplain ::dbwriter_long_test_hosts
 
    return 0
+}
+
+# -------- wait helper ----------------------------------------------------------
+
+##
+# @brief Wait for a total number of seconds while consuming dbwriter.log.
+#
+# Drop-in replacement for sleep_for_seconds inside the long-running test.
+# While waiting, it reads every line the dbwriter writes to its log via the
+# tail -f spawn started by init_logfile_wait in dbwriter_long_running_setup
+# and stores every SEVERE (|E|) and WARNING (|W|) line. Captured lines are
+# flushed via ts_log_severe once per hour and once more at the end of the
+# wait, so multi-day waits still surface problems in useful chunks instead
+# of only reporting them at the very end. Progress is logged via
+# ts_log_progress on every 5s expect timeout so the test does not look
+# hung.
+#
+# If the tail spawn is not open (e.g. setup did not run) the proc falls
+# back to a plain sleep_for_seconds so callers do not have to special-case
+# that path.
+#
+# @param total_seconds total wait time in seconds
+# @return 0
+proc dbwriter_long_wait_and_check {total_seconds} {
+   global file_procedure_logfile_wait_sp_id
+
+   if {![info exists file_procedure_logfile_wait_sp_id]
+       || [llength $file_procedure_logfile_wait_sp_id] < 2} {
+      sleep_for_seconds $total_seconds
+      return 0
+   }
+
+   set sp_id [lindex $file_procedure_logfile_wait_sp_id 1]
+   set now [clock seconds]
+   set deadline [expr {$now + $total_seconds}]
+   set next_flush [expr {$now + 3600}]
+   set problems [list]
+
+   ts_log_fine "dbwriter long test: waiting ${total_seconds}s while tailing\
+                dbwriter.log"
+
+   set timeout 5
+   log_user 0
+   expect {
+      -i $sp_id full_buffer {
+         ts_log_severe "dbwriter long test: expect buffer overflow while\
+                        tailing dbwriter.log - CHECK_EXPECT_MATCH_MAX_BUFFER\
+                        may need to be raised"
+      }
+      -i $sp_id eof {
+         ts_log_severe "dbwriter long test: unexpected eof on dbwriter.log tail"
+      }
+      -i $sp_id "_exit_status_" {
+         ts_log_severe "dbwriter long test: dbwriter.log tail exited"
+      }
+      -i $sp_id timeout {
+         set now [clock seconds]
+         if {$now < $deadline} {
+            ts_log_progress
+            if {$now >= $next_flush} {
+               dbwriter_long_flush_log_problems problems
+               set next_flush [expr {$now + 3600}]
+            }
+            exp_continue
+         }
+      }
+      -i $sp_id -- "?*\n" {
+         # ?* is greedy so multiple lines can arrive in one match - split
+         foreach raw_line [split [string trimright $expect_out(buffer) "\r\n"] "\n"] {
+            set line [string trimright $raw_line "\r"]
+            if {$line eq ""} {
+               continue
+            }
+            if {[string first "|E|" $line] >= 0
+                || [string first "|W|" $line] >= 0} {
+               lappend problems $line
+            }
+         }
+         set now [clock seconds]
+         if {$now < $deadline} {
+            if {$now >= $next_flush} {
+               dbwriter_long_flush_log_problems problems
+               set next_flush [expr {$now + 3600}]
+            }
+            exp_continue
+         }
+      }
+   }
+   log_user 1
+
+   dbwriter_long_flush_log_problems problems
+   return 0
+}
+
+##
+# @brief Report and drop any dbwriter.log SEVERE/WARNING lines buffered by
+# dbwriter_long_wait_and_check.
+#
+# Called hourly and at end of wait so batches of problems are logged as one
+# ts_log_severe rather than one per line.
+#
+# @param problems_var name of a list variable in the caller's scope
+proc dbwriter_long_flush_log_problems {problems_var} {
+   upvar $problems_var problems
+   if {[llength $problems] == 0} {
+      return
+   }
+   ts_log_severe "dbwriter long test: [llength $problems] SEVERE/WARNING\
+                  line(s) in dbwriter.log while waiting:\n[join $problems "\n"]"
+   set problems [list]
 }
 
 # -------- scaffolding self-test ------------------------------------------------
@@ -440,7 +564,7 @@ proc dbwriter_long_phase_c_assert_jobs {} {
       }
       ts_log_fine "dbwriter long test: waiting for accounting import\
                    ($n_usage/$expected)"
-      sleep_for_seconds 15
+      dbwriter_long_wait_and_check 15
    }
 
    set rc 0
@@ -632,7 +756,7 @@ proc dbwriter_long_phase_d_wait_for_host_values {timeout} {
       }
       ts_log_fine "dbwriter long test: waiting for sge_host_values rows\
                    (missing: $missing)"
-      sleep_for_seconds 15
+      dbwriter_long_wait_and_check 15
    }
 }
 
@@ -779,7 +903,7 @@ proc dbwriter_long_phase_e_wait_for_hour_close {{timeout 5400}} {
                 [clock format $next_boundary -format {%Y-%m-%d %H:%M:%S}],\
                 +${safety}s for the dbwriter 11-minute settle window and the\
                 derived-value compute pass)"
-   sleep_for_seconds $wait_secs
+   dbwriter_long_wait_and_check $wait_secs
    return 0
 }
 
@@ -810,7 +934,7 @@ proc dbwriter_long_wait_for_value_row {table prefix variable timeout} {
          return -1
       }
       ts_log_fine "dbwriter long test: waiting for $table.$variable"
-      sleep_for_seconds 15
+      dbwriter_long_wait_and_check 15
    }
 }
 
@@ -1143,7 +1267,7 @@ proc dbwriter_long_phase_f_wait_for_midnight {from_epoch n} {
                 +${safety}s for the dbwriter's 11-minute settle window, the\
                 daily derived-value compute pass and the ingest backlog to\
                 drain)"
-   sleep_for_seconds $wait_secs
+   dbwriter_long_wait_and_check $wait_secs
    return 0
 }
 
@@ -1226,102 +1350,242 @@ proc dbwriter_long_phase_f_assert_no_partial_today {} {
 }
 
 ##
-# @brief Assert SUM(d_jobs_finished) matches the raw sge_job_usage count.
+# @brief Collect per-day d_jobs_finished and SUM(h_jobs_finished) for one
+# value-table scope.
 #
-# Parallel of dbwriter_long_phase_e_assert_jobs_finished_consistency, but on
-# the daily aggregation. d_jobs_finished is the SUM of h_jobs_finished over a
-# day, so the equality SUM(d_jobs_finished) == COUNT(*) raw must still hold.
-# Runs per user (workload::users), per host (single sum) and per project
+# Shared helper of dbwriter_long_phase_f_assert_jobs_finished_consistency.
+# Runs three queries against the given value table:
+#   - per-day SUM(d_jobs_finished) (one row per parent and closed day),
+#   - per-day SUM(h_jobs_finished) (24 hourly buckets per parent and closed day),
+#   - per-scope tolerance (see below).
+# The day-key is produced via db::day_str so postgres, oracle and mysql all
+# return the same YYYY-MM-DD literal and the two row sets can be matched in
+# Tcl by plain string equality.
+#
+# Both sides are summed per day. A scope without a parent filter - the per-host
+# aggregate - holds one row per (host, day), so taking a single row would
+# compare one host's daily total against the hourly total of all hosts.
+#
+# The tolerance is SUM over parents of that parent's largest single-hour
+# bucket: the daily rule runs per object, so every parent can independently
+# lose its last hourly bucket to the midnight race. For a single-parent scope
+# this is just MAX(h_jobs_finished).
+#
+# Only closed days are considered (<prefix>_time_start < __TODAY_START__).
+#
+# @param table       the value table (sge_user_values, sge_host_values, ...)
+# @param prefix      the column prefix used in that table (uv, hv, pv, ...)
+# @param where_extra extra WHERE-clause prefix joining the parent record (must
+#                    end with "AND" when non-empty, may be empty for the
+#                    per-host aggregate)
+# @param from_extra  extra FROM-clause segment with the parent table (may be
+#                    empty for the per-host aggregate). Joined to $table with
+#                    a leading ", ".
+# @param a_daily     name of an array set to day_str -> SUM(d_jobs_finished)
+# @param a_hourly    name of an array set to day_str -> SUM(h_jobs_finished)
+# @param tol_var     name of a variable set to the per-day tolerance
+# @return 0 on success, -1 if any of the queries fails
+proc dbwriter_long_phase_f_collect_daily_vs_hourly \
+        {table prefix where_extra from_extra a_daily a_hourly tol_var} {
+   upvar $a_daily  daily
+   upvar $a_hourly hourly
+   upvar $tol_var  tol
+
+   set day_expr [db::day_str "${prefix}_time_start"]
+   set from "$table"
+   if {$from_extra ne ""} {
+      append from ", $from_extra"
+   }
+
+   # where_extra ends with "AND" - keep it apart from the condition it precedes
+   set where_prefix ""
+   if {$where_extra ne ""} {
+      set where_prefix "$where_extra "
+   }
+
+   # per-day SUM(d_jobs_finished) over all parents of the scope
+   set sql_d "SELECT $day_expr AS day, SUM(${prefix}_dvalue) AS s\
+              FROM $from\
+              WHERE ${where_prefix}${prefix}_variable = 'd_jobs_finished'\
+              AND ${prefix}_time_start < __TODAY_START__\
+              GROUP BY $day_expr\
+              ORDER BY day"
+   array set r {}
+   set cols {}
+   set n [db::query $sql_d r cols]
+   if {$n < 0} {
+      return -1
+   }
+   array unset daily
+   for {set i 0} {$i < $n} {incr i} {
+      set daily($r($i,0)) [expr {round($r($i,1))}]
+   }
+   array unset r
+
+   # per-day SUM(h_jobs_finished) over all parents of the scope
+   set sql_h "SELECT $day_expr AS day, SUM(${prefix}_dvalue) AS s\
+              FROM $from\
+              WHERE ${where_prefix}${prefix}_variable = 'h_jobs_finished'\
+              AND ${prefix}_time_start < __TODAY_START__\
+              GROUP BY $day_expr\
+              ORDER BY day"
+   set cols {}
+   set n [db::query $sql_h r cols]
+   if {$n < 0} {
+      return -1
+   }
+   array unset hourly
+   for {set i 0} {$i < $n} {incr i} {
+      set hourly($r($i,0)) [expr {round($r($i,1))}]
+   }
+   array unset r
+
+   # MAX(h_jobs_finished) is a parent's largest single-hour bucket - the daily
+   # rule runs per object and can lose at most one such bucket per midnight
+   # race, so the sum over the parents of the scope is the natural tolerance
+   # for the per-day comparison
+   set tol [dbwriter_long_scalar \
+      "SELECT COALESCE(SUM(m), 0) FROM\
+       (SELECT MAX(${prefix}_dvalue) AS m\
+        FROM $from\
+        WHERE ${where_prefix}${prefix}_variable = 'h_jobs_finished'\
+        AND ${prefix}_time_start < __TODAY_START__\
+        GROUP BY ${prefix}_parent) t"]
+   if {$tol < 0} {
+      return -1
+   }
+   return 0
+}
+
+##
+# @brief Compare per-day d_jobs_finished against SUM(h_jobs_finished).
+#
+# For each day present in either result set:
+#   - daily SUMs strictly more than the hourly buckets contain => severe
+#     (the auto-derive over-counts, which would be a real bug);
+#   - daily SUMs short by more than one hourly bucket per parent => severe
+#     (the gap can not be explained by a single midnight race);
+#   - daily SUMs short by at most one hourly bucket per parent => fine
+#     (expected midnight race, see the parent proc's docstring for the
+#     rationale).
+#
+# @param label      free-text scope label for the log messages
+# @param a_daily    name of the array day_str -> d_jobs_finished
+# @param a_hourly   name of the array day_str -> SUM(h_jobs_finished)
+# @param tol        tolerance for "daily is shorter than hourly"
+# @return 0 if every day is consistent, else -1
+proc dbwriter_long_phase_f_compare_daily_vs_hourly {label a_daily a_hourly tol} {
+   upvar $a_daily  daily
+   upvar $a_hourly hourly
+
+   set days [lsort -unique [concat [array names daily] [array names hourly]]]
+   set rc 0
+   foreach day $days {
+      set d [expr {[info exists daily($day)]  ? $daily($day)  : 0}]
+      set h [expr {[info exists hourly($day)] ? $hourly($day) : 0}]
+      set diff [expr {$h - $d}]
+      if {$diff < 0} {
+         ts_log_severe "dbwriter long test: $label day $day d_jobs_finished\
+                        ($d) exceeds SUM(h_jobs_finished) ($h) - daily SUM\
+                        is not bounded by the hourly buckets"
+         set rc -1
+      } elseif {$diff > $tol} {
+         ts_log_severe "dbwriter long test: $label day $day d_jobs_finished\
+                        ($d) is short of SUM(h_jobs_finished) ($h) by $diff,\
+                        more than one hourly bucket per parent ($tol) - not\
+                        accounted for by the midnight race"
+         set rc -1
+      } else {
+         ts_log_fine "dbwriter long test: $label day $day d_jobs_finished=$d,\
+                      SUM(h_jobs_finished)=$h (diff=$diff <= tol=$tol)"
+      }
+   }
+   return $rc
+}
+
+##
+# @brief Assert d_jobs_finished is the SUM of h_jobs_finished per day, per
+# scope, within the tolerance of one midnight race.
+#
+# Validates the auto-derive contract directly: the daily rule for d_jobs_finished
+# is configured as <auto function="SUM" variable="h_jobs_finished"/>, so for
+# every closed day d_jobs_finished[D] must equal SUM(h_jobs_finished[hour in
+# D]).
+#
+# The dbwriter has a known midnight race: at midnight + ~11 min both the
+# hourly rule for the just-closed day's last hour and the daily SUM rule fire,
+# and under heavy ingest load the daily rule frequently runs before the last
+# hourly bucket is written - so d_jobs_finished[D] is systematically short
+# by at most one hourly bucket. The auto-derive never revisits a closed day
+# (StoredRecordManager.calculateDerivedValues starts at the last d_jobs_finished
+# end-time), so the shortfall is permanent and can affect any closed day
+# whose midnight ran while ingest was lagging. The check therefore allows
+# every closed day to be short by up to MAX(h_jobs_finished) for that scope,
+# which is the largest amount one missed bucket could account for.
+#
+# Comparing to raw COUNT(*) of sge_job_usage would conflate two unrelated
+# issues - daily-vs-hourly correctness and hourly-vs-raw correctness. The
+# hourly-vs-raw side is covered by Phase E
+# (dbwriter_long_phase_e_assert_jobs_finished_consistency).
+#
+# Runs per user (workload::users), once across all hosts and once per project
 # (workload::get_project_name), with the same j_pe_taskid='NONE' and
-# ju_exit_status != -1 filter the dbwriter.xml rule uses.
+# ju_exit_status != -1 filter as the dbwriter.xml rule.
 #
 # @return 0 if every scope is consistent, else -1
 proc dbwriter_long_phase_f_assert_jobs_finished_consistency {} {
    set rc 0
 
-   # The dbwriter computes d_jobs_finished at midnight + ~11 min for the just-
-   # closed day. Records from the still-open current day are not covered, and
-   # records ending in the very last hour of the closed day systematically
-   # race the daily rule (the last hour's hourly bucket and the daily SUM
-   # both fire at midnight + 11 min - under heavy ingest load the daily rule
-   # frequently SUMs before the last hourly bucket has been written). The raw
-   # COUNT(*) is therefore restricted to __DAILY_RULE_CUTOFF__ (= today_start
-   # - 1 hour) so it counts only records whose hourly bucket fired strictly
-   # before the daily rule. See db::daily_rule_cutoff for the rationale.
-
    # ---- per user --------------------------------------------------------------
    foreach user [workload::users] {
-      set raw [dbwriter_long_scalar \
-         "SELECT COUNT(*) FROM sge_job, sge_job_usage\
-          WHERE j_id = ju_parent AND j_owner = '$user'\
-          AND j_pe_taskid = 'NONE' AND ju_exit_status != -1\
-          AND ju_end_time < __DAILY_RULE_CUTOFF__"]
-      set der [dbwriter_long_scalar \
-         "SELECT COALESCE(SUM(uv_dvalue), 0)\
-          FROM sge_user_values, sge_user\
-          WHERE uv_parent = u_id AND u_user = '$user'\
-          AND uv_variable = 'd_jobs_finished'"]
-      if {$raw < 0 || $der < 0} {
+      array unset d_daily
+      array unset h_daily
+      set tol 0
+      if {[dbwriter_long_phase_f_collect_daily_vs_hourly \
+              sge_user_values uv \
+              "uv_parent = u_id AND u_user = '$user' AND" \
+              sge_user \
+              d_daily h_daily tol] != 0} {
          set rc -1
          continue
       }
-      if {$raw != $der} {
-         ts_log_severe "dbwriter long test: d_jobs_finished mismatch for user\
-                        $user: raw count=$raw, SUM(d_jobs_finished)=$der"
+      if {[dbwriter_long_phase_f_compare_daily_vs_hourly \
+              "user $user" d_daily h_daily $tol] != 0} {
          set rc -1
-      } else {
-         ts_log_fine "dbwriter long test: d_jobs_finished consistent for user\
-                      $user ($raw)"
       }
    }
 
    # ---- per host: all workload + background jobs go through dbwriter_long.q
    #      and all.q on the test cluster's exec hosts, so the totals over
-   #      sge_host_values equal the totals over sge_job_usage
-   set raw [dbwriter_long_scalar \
-      "SELECT COUNT(*) FROM sge_job, sge_job_usage\
-       WHERE j_id = ju_parent\
-       AND j_pe_taskid = 'NONE' AND ju_exit_status != -1\
-       AND ju_end_time < __DAILY_RULE_CUTOFF__"]
-   set der [dbwriter_long_scalar \
-      "SELECT COALESCE(SUM(hv_dvalue), 0)\
-       FROM sge_host_values\
-       WHERE hv_variable = 'd_jobs_finished'"]
-   if {$raw < 0 || $der < 0} {
+   #      sge_host_values cover every record without a parent-record filter
+   array unset d_daily
+   array unset h_daily
+   set tol 0
+   if {[dbwriter_long_phase_f_collect_daily_vs_hourly \
+           sge_host_values hv "" "" \
+           d_daily h_daily tol] != 0} {
       set rc -1
-   } elseif {$raw != $der} {
-      ts_log_severe "dbwriter long test: d_jobs_finished mismatch over hosts:\
-                     raw count=$raw, SUM(d_jobs_finished)=$der"
+   } elseif {[dbwriter_long_phase_f_compare_daily_vs_hourly \
+                 "all hosts" d_daily h_daily $tol] != 0} {
       set rc -1
-   } else {
-      ts_log_fine "dbwriter long test: d_jobs_finished consistent over hosts\
-                   ($raw)"
    }
 
-   # ---- per project: only the first-generation workload jobs (first-hour,
-   #      long-running and the first generation of every pminiworm chain) run
-   #      under the test project; pminiworm respawns do not carry the project
-   #      forward, so this check compares two filtered totals
+   # ---- per project: only the first-generation workload jobs run under the
+   #      test project; pminiworm respawns do not carry the project forward,
+   #      so this scope checks a strict subset of the per-host totals
    set project [workload::get_project_name]
-   set raw [dbwriter_long_scalar \
-      "SELECT COUNT(*) FROM sge_job, sge_job_usage\
-       WHERE j_id = ju_parent AND j_project = '$project'\
-       AND j_pe_taskid = 'NONE' AND ju_exit_status != -1\
-       AND ju_end_time < __DAILY_RULE_CUTOFF__"]
-   set der [dbwriter_long_scalar \
-      "SELECT COALESCE(SUM(pv_dvalue), 0)\
-       FROM sge_project_values, sge_project\
-       WHERE pv_parent = p_id AND p_project = '$project'\
-       AND pv_variable = 'd_jobs_finished'"]
-   if {$raw < 0 || $der < 0} {
+   array unset d_daily
+   array unset h_daily
+   set tol 0
+   if {[dbwriter_long_phase_f_collect_daily_vs_hourly \
+           sge_project_values pv \
+           "pv_parent = p_id AND p_project = '$project' AND" \
+           sge_project \
+           d_daily h_daily tol] != 0} {
       set rc -1
-   } elseif {$raw != $der} {
-      ts_log_severe "dbwriter long test: d_jobs_finished mismatch for project\
-                     $project: raw count=$raw, SUM(d_jobs_finished)=$der"
+   } elseif {[dbwriter_long_phase_f_compare_daily_vs_hourly \
+                 "project $project" d_daily h_daily $tol] != 0} {
       set rc -1
-   } else {
-      ts_log_fine "dbwriter long test: d_jobs_finished consistent for project\
-                   $project ($raw)"
    }
 
    return $rc
@@ -1351,7 +1615,10 @@ proc dbwriter_long_phase_f_assert_jobs_finished_consistency {} {
 #   - ju_wallclock is at most the elapsed time from the job's actual start
 #     (= ju_start_time of the first intermediate) to ju_end_time of the
 #     intermediate being checked, plus a small drift. ju_wallclock is the
-#     execd's wallclock snapshot, which cannot exceed real elapsed time;
+#     execd's wallclock snapshot, which cannot exceed real elapsed time.
+#     For PE jobs with accounting_summary = TRUE the per-slot wallclock
+#     snapshots are summed (sge_reporting(5)), so the upper bound is scaled
+#     by the number of pe slots;
 #   - ju_end_time of the k-th intermediate is around the k-th midnight
 #     (qmaster writes intermediate accounting records in the
 #     INTERMEDIATE_ACCT_WINDOW = 10 minute window after the boundary);
@@ -1473,12 +1740,16 @@ proc dbwriter_long_phase_f_assert_intermediate_for_job {jd n_midnights ref_epoch
             # ju_end_time is the accounting-period boundary (~midnight) but
             # the execd snapshot is taken when the qmaster writes the record,
             # which is up to INTERMEDIATE_ACCT_WINDOW = 10 min later - so wc
-            # can legitimately exceed (ju_end_time - job_start) by that much
-            if {$wc > $elapsed + 900} {
+            # can legitimately exceed (ju_end_time - job_start) by that much.
+            # For accounting_summary = TRUE the per-slot snapshots are summed
+            # (sge_reporting(5)), so the bound scales with pe slots.
+            set wc_factor [expr {$summary ? $slots : 1}]
+            set wc_limit  [expr {$wc_factor * ($elapsed + 900)}]
+            if {$wc > $wc_limit} {
                ts_log_severe "dbwriter long test: $kind (jid $jid) pe-task\
                               $key intermediate $k ju_wallclock $wc exceeds\
-                              elapsed time since job start (${elapsed}s) by\
-                              more than the 10 min intermediate write window"
+                              bound ${wc_limit}s (elapsed ${elapsed}s *\
+                              wc_factor $wc_factor + 10 min write window)"
                set rc -1
             }
             if {$wc < 0} {
@@ -1622,10 +1893,17 @@ proc dbwriter_long_phase_f_compare {kind jid field db_val qa_val tol_abs tol_rel
 #
 # Final assertion of Phase F. Every long-running job has finished, so qacct
 # can report its totals. The dbwriter has ingested every accounting record
-# (intermediate + final) into sge_job_usage. For each job:
-#   - SUM-rule fields  (cpu, mem):                    SUM(ju_*)   vs qacct
-#   - MAX-rule fields  (wallclock, ru_wallclock,
-#                       maxvmem):                     MAX(ju_*)   vs qacct
+# (intermediate + final) into sge_job_usage, whereas the accounting file that
+# qacct reads holds only the final record of each stream. The DB rows must
+# therefore be collapsed along the interval dimension before they can be
+# compared, per (array task, pe task) stream:
+#   - wallclock:      SUM per stream (per-interval delta), then MAX across
+#                     streams, matching parse_qacct's rule_max for the field
+#   - ru_wallclock:   MAX per stream (cumulative in every row), then MAX
+#   - cpu, mem:       SUM per stream, then SUM across streams
+#   - maxvmem:        MAX per stream, then MAX across streams
+# Only wallclock changes shape from the naive flat aggregate; the other four
+# come out numerically identical either way.
 # Tolerances: ±60 s for the wallclock fields, ±5 % for cpu / mem / maxvmem.
 #
 # qacct is invoked on the product-root fileserver if one is configured (the
@@ -1655,14 +1933,28 @@ proc dbwriter_long_phase_f_assert_qacct_match {} {
       }
 
       # DB aggregates: every sge_job_usage row of the job (intermediate +
-      # final) is included so the comparison shape mirrors qacct's sum_up=1
-      set sql "SELECT COALESCE(MAX(ju_wallclock),0)    AS db_wc,\
-                      COALESCE(MAX(ju_ru_wallclock),0) AS db_ru_wc,\
-                      COALESCE(SUM(ju_cpu),0)          AS db_cpu,\
-                      COALESCE(SUM(ju_mem),0)          AS db_mem,\
-                      COALESCE(MAX(ju_maxvmem),0)      AS db_maxvmem\
-               FROM sge_job, sge_job_usage\
-               WHERE j_id = ju_parent AND j_job_number = $jid"
+      # final) is included so the comparison shape mirrors qacct's sum_up=1.
+      #
+      # The rows span two dimensions: one stream per (array task, pe task) and
+      # within each stream one row per accounting interval. The inner query
+      # collapses the interval dimension per stream, the outer one collapses
+      # the stream dimension the same way parse_qacct does for qacct output.
+      # ju_wallclock is a per-interval delta, so a stream's total is the SUM of
+      # its rows; ju_ru_wallclock is cumulative in every row, so MAX is right.
+      set sql "SELECT COALESCE(MAX(t.task_wc),0)      AS db_wc,\
+                      COALESCE(SUM(t.task_wc),0)      AS db_wc_all,\
+                      COALESCE(MAX(t.task_ru_wc),0)   AS db_ru_wc,\
+                      COALESCE(SUM(t.task_cpu),0)     AS db_cpu,\
+                      COALESCE(SUM(t.task_mem),0)     AS db_mem,\
+                      COALESCE(MAX(t.task_maxvmem),0) AS db_maxvmem\
+               FROM (SELECT SUM(ju_wallclock)    AS task_wc,\
+                            MAX(ju_ru_wallclock) AS task_ru_wc,\
+                            SUM(ju_cpu)          AS task_cpu,\
+                            SUM(ju_mem)          AS task_mem,\
+                            MAX(ju_maxvmem)      AS task_maxvmem\
+                     FROM sge_job, sge_job_usage\
+                     WHERE j_id = ju_parent AND j_job_number = $jid\
+                     GROUP BY j_task_number, j_pe_taskid) t"
       array set r {}
       set cols {}
       set n [db::query $sql r cols]
@@ -1674,11 +1966,19 @@ proc dbwriter_long_phase_f_assert_qacct_match {} {
          continue
       }
       set db_wc      $r(0,0)
-      set db_ru_wc   $r(0,1)
-      set db_cpu     $r(0,2)
-      set db_mem     $r(0,3)
-      set db_maxvmem $r(0,4)
+      set db_wc_all  $r(0,1)
+      set db_ru_wc   $r(0,2)
+      set db_cpu     $r(0,3)
+      set db_mem     $r(0,4)
+      set db_maxvmem $r(0,5)
       array unset r
+
+      # db_wc is the per-stream total; db_wc_all adds the streams together.
+      # For a job with one stream the two are equal. Logging both makes a
+      # wallclock mismatch self-diagnosing: if db_wc_all matches qacct while
+      # db_wc does not, the streams were split differently than expected.
+      ts_log_fine "dbwriter long test: $kind (jid $jid) wallclock aggregates:\
+                   per-stream max $db_wc, all streams $db_wc_all"
 
       foreach {field db_val qa_field tol_abs trel} [list \
          wallclock    $db_wc      wallclock    $tol_wc 0       \
@@ -1727,9 +2027,11 @@ proc dbwriter_long_phase_f_assert_qacct_match {} {
 #          ju_end_time near the corresponding midnight (within the
 #          INTERMEDIATE_ACCT_WINDOW = 10 min) and the (start, end) windows
 #          forming a contiguous chain from the job's actual start;
-#        - SUM(d_jobs_finished) per user / host / project equals
-#          COUNT(*) from sge_job_usage restricted to closed days (matching
-#          the dbwriter rule's filter).
+#        - per user / host / project, for every closed day D the value of
+#          d_jobs_finished[D] matches SUM(h_jobs_finished[hour in D]) within
+#          one hourly bucket per parent (the gap that the midnight race between
+#          the daily SUM rule and the last-hour hourly rule can leave behind
+#          - see dbwriter_long_phase_f_assert_jobs_finished_consistency).
 #
 #   3. After every long-running job has finished naturally (no qdel, no
 #      timeout-based termination): the DB aggregates of every job match the
