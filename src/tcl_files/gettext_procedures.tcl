@@ -1571,6 +1571,11 @@ proc sge_macro { macro_name {raise_error 1} } {
       }
       "DISTINST_DONT_KNOW_HOW_TO_TEST_FOR_LOCAL_FS" { set value "Don't know how to test for local filesystem. Exit." }
       "DISTINST_CURRENT_GRID_ROOT_DIRECTORY" { set value "The * root directory is:\n\n   \\\$SGE_ROOT = %s\n\nIf this directory is not correct (e.g. it may contain an automounter\nprefix) enter the correct path to this directory or hit <RETURN>\nto use default \[%s\] >> " }
+      # The other branch of ProcessSGERoot(): the installer prints this one when
+      # SGE_ROOT is empty in its environment. The installation drivers only
+      # answer the prompt above, so this one is matched to report the cause
+      # instead of running into a timeout.
+      "DISTINST_GRID_ROOT_DIRECTORY_NOT_SET" { set value "The * root directory is not set!*" }
       "DISTINST_INSTALL_FAIL" { set value "Uninstallation  failed after %s retries" }
       "DISTINST_POSTGRES_HOST" { set value "*PostgreSQL host*>> *" }
       "DISTINST_POSTGRES_PORT" { set value "*PostgreSQL port*>> *" }

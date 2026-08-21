@@ -105,6 +105,7 @@ proc install_shadowd {} {
       set IF_NOT_OK_STOP_INSTALLATION  [translate $shadow_host 0 1 0 [sge_macro DISTINST_IF_NOT_OK_STOP_INSTALLATION] ]
       set MESSAGES_LOGGING             [translate $shadow_host 0 1 0 [sge_macro DISTINST_MESSAGES_LOGGING] ]
       set CURRENT_GRID_ROOT_DIRECTORY  [translate $shadow_host 0 1 0 [sge_macro DISTINST_CURRENT_GRID_ROOT_DIRECTORY] "*" "*" ]
+      set GRID_ROOT_DIRECTORY_NOT_SET  [translate $shadow_host 0 1 0 [sge_macro DISTINST_GRID_ROOT_DIRECTORY_NOT_SET]]
       set CHECK_ADMINUSER_ACCOUNT      [translate $shadow_host 0 1 0 [sge_macro DISTINST_CHECK_ADMINUSER_ACCOUNT] "*" "*" "*" "*" ]
       set CHECK_ADMINUSER_ACCOUNT_ANSWER      [translate $shadow_host 0 1 0 [sge_macro DISTINST_CHECK_ADMINUSER_ACCOUNT_ANSWER] ]
       set SHADOW_INFO                  [translate $shadow_host 0 1 0 [sge_macro DISTINST_SHADOW_INFO] ]
@@ -251,6 +252,14 @@ proc install_shadowd {} {
 
             -i $sp_id $CURRENT_GRID_ROOT_DIRECTORY {
                install_send_answer $sp_id ""
+               continue
+            }
+
+            # the installer asks for the path instead of confirming it - it
+            # does that when SGE_ROOT is empty in its environment
+            -i $sp_id $GRID_ROOT_DIRECTORY_NOT_SET {
+               ts_log_fine "SGE_ROOT is not set, answering with $ts_config(product_root)"
+               install_send_answer $sp_id $ts_config(product_root)
                continue
             }
 

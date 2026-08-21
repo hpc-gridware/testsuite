@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -135,6 +135,7 @@ proc issue_1451_uninstall_execd {} {
    set ANSWER_YES                   [translate $check_execd 0 1 0 [sge_macro DISTINST_ANSWER_YES] ]
    set ANSWER_NO                    [translate $check_execd 0 1 0 [sge_macro DISTINST_ANSWER_NO] ]
    set CURRENT_GRID_ROOT_DIRECTORY  [translate $check_execd 0 1 0 [sge_macro DISTINST_CURRENT_GRID_ROOT_DIRECTORY] "*" "*" ]
+   set GRID_ROOT_DIRECTORY_NOT_SET  [translate $check_execd 0 1 0 [sge_macro DISTINST_GRID_ROOT_DIRECTORY_NOT_SET]]
    set EXECD_UNINST_NO_ADMIN        [translate $check_execd 0 1 0 [sge_macro DISTINST_EXECD_UNINST_NO_ADMIN] ]
    set EXECD_UNINST_ERROR_CASE      [translate $check_execd 0 1 0 [sge_macro DISTINST_EXECD_UNINST_ERROR_CASE] ]
    set CHECK_AGAIN                  [translate $check_execd 0 1 0 [sge_macro DISTINST_CHECK_AGAIN] ]
@@ -192,6 +193,14 @@ proc issue_1451_uninstall_execd {} {
                  set anykey [wait_for_enter 1]
             }
             ts_send $sp_id "\n"
+            continue
+         }
+
+         # the installer asks for the path instead of confirming it - it does
+         # that when SGE_ROOT is empty in its environment
+         -i $sp_id $GRID_ROOT_DIRECTORY_NOT_SET {
+            ts_log_fine "SGE_ROOT is not set, answering with $ts_config(product_root)"
+            ts_send $sp_id "$ts_config(product_root)\n"
             continue
          }
 

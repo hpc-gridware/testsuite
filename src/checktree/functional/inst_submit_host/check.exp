@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2024,2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -54,6 +54,7 @@ proc inst_submit_host_setup {} {
 
    set HIT_RETURN_TO_CONTINUE [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_HIT_RETURN_TO_CONTINUE]]
    set CURRENT_GRID_ROOT_DIRECTORY [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CURRENT_GRID_ROOT_DIRECTORY] "*" "*"]
+   set GRID_ROOT_DIRECTORY_NOT_SET  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_GRID_ROOT_DIRECTORY_NOT_SET]]
    set CELL_NAME_FOR_EXECD [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CELL_NAME_FOR_EXECD] "*"]
    set ENTER_HOSTS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_HOSTS]]
    set FILE_FOR_HOSTLIST [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_FILE_FOR_HOSTLIST]]
@@ -92,6 +93,14 @@ proc inst_submit_host_setup {} {
          -i $sp_id $CURRENT_GRID_ROOT_DIRECTORY {
             ts_log_fine "\n --> testsuite: sending >RETURN<(2)"
             ts_send $sp_id "\n"
+            continue
+         }
+
+         # the installer asks for the path instead of confirming it - it does
+         # that when SGE_ROOT is empty in its environment
+         -i $sp_id $GRID_ROOT_DIRECTORY_NOT_SET {
+            ts_log_fine "\n --> testsuite: SGE_ROOT is not set, sending $ts_config(product_root)"
+            ts_send $sp_id "$ts_config(product_root)\n"
             continue
          }
          -i $sp_id $CELL_NAME_FOR_EXECD {

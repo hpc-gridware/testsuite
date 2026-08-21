@@ -110,6 +110,7 @@ proc arco_dbwriter_install_manual {} {
    set ANSWER_YES                   [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ANSWER_YES] ]
    set HIT_RETURN_TO_CONTINUE       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_HIT_RETURN_TO_CONTINUE] ]
    set CURRENT_GRID_ROOT_DIRECTORY  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CURRENT_GRID_ROOT_DIRECTORY] "*" "*" ]
+   set GRID_ROOT_DIRECTORY_NOT_SET  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_GRID_ROOT_DIRECTORY_NOT_SET]]
    set CELL_NAME_FOR_QMASTER        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CELL_NAME_FOR_QMASTER] "*"]
    set DETECT_CHOOSE_NEW_NAME       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DETECT_CHOOSE_NEW_NAME] ]
    set DETECT_REMOVE_OLD_CLUSTER    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DETECT_REMOVE_OLD_CLUSTER] ]
@@ -167,6 +168,14 @@ proc arco_dbwriter_install_manual {} {
              continue
           }
           -i $sp_id $CURRENT_GRID_ROOT_DIRECTORY {
+             send_to_spawn_id $sp_id $ts_config(product_root)
+             continue
+          }
+
+          # the installer asks for the path instead of confirming it - it does
+          # that when SGE_ROOT is empty in its environment
+          -i $sp_id $GRID_ROOT_DIRECTORY_NOT_SET {
+             ts_log_fine "SGE_ROOT is not set, answering with $ts_config(product_root)"
              send_to_spawn_id $sp_id $ts_config(product_root)
              continue
           }

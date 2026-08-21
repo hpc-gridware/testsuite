@@ -91,6 +91,7 @@ proc install_qmaster {{report_var report}} {
    set LICENSE_AGREEMENT            [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_LICENSE_AGREEMENT] ]
    set HIT_RETURN_TO_CONTINUE       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_HIT_RETURN_TO_CONTINUE] ]
    set CURRENT_GRID_ROOT_DIRECTORY  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CURRENT_GRID_ROOT_DIRECTORY] "*" "*" ]
+   set GRID_ROOT_DIRECTORY_NOT_SET  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_GRID_ROOT_DIRECTORY_NOT_SET]]
    set CELL_NAME_FOR_QMASTER        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CELL_NAME_FOR_QMASTER] "*"]
    set GET_COMM_SETTINGS            [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_GET_COMM_SETTINGS] "*"]
    set CHANGE_PORT_QUESTION         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CHANGE_PORT_QUESTION] ]
@@ -906,6 +907,19 @@ proc install_qmaster {{report_var report}} {
 
          -i $sp_id $CURRENT_GRID_ROOT_DIRECTORY {
             install_send_answer $sp_id "" "19"
+            continue
+         }
+
+         # The installer asks for the path instead of confirming it, which it
+         # does when SGE_ROOT is empty in its environment - it is started with
+         # source_settings_file 0, and a spawn going through ssh does not inherit
+         # the testsuite's own environment either. The prompt offers a default it
+         # derived from its working directory; the answer is sent explicitly so
+         # the installation uses the configured product_root rather than whatever
+         # that guess amounts to.
+         -i $sp_id $GRID_ROOT_DIRECTORY_NOT_SET {
+            ts_log_fine "SGE_ROOT is not set, answering with $ts_config(product_root)"
+            install_send_answer $sp_id $ts_config(product_root)
             continue
          }
 

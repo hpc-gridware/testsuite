@@ -64,6 +64,7 @@ proc installer_reinstall_fresh_cluster {} {
    global CHECK_ACT_PATH
    global CHECK_NO_DESCEND
    global check_cleanup_baseline check_cleanup_baseline_valid
+   global check_reinit_on_tcl_error
 
    # snapshot the state of the running upgrade_config check
    if {[info exists check_errno]}  { set saved_errno  [array get check_errno] }
@@ -125,8 +126,19 @@ proc installer_reinstall_fresh_cluster {} {
       ts_log_severe "reinstall found no check to run - the cluster is NOT reinstalled"
    }
 
+   # This proc IS the recovery from a failed check: run_tests calls it when a
+   # check fails and check_reinit_on_tcl_error is set. The reinstall runs its
+   # INSTALL checks through run_tests as well, so with the flag still set a
+   # failing installation would ask for another reinstall, which fails the same
+   # way, and so on - the run ends in a recursion hundreds of frames deep with
+   # the original error buried under it. A reinstall which cannot install has to
+   # report once and give up.
+   set saved_reinit_on_tcl_error $check_reinit_on_tcl_error
+   set check_reinit_on_tcl_error 0
+
    menu_item_install_cluster
 
+   set check_reinit_on_tcl_error $saved_reinit_on_tcl_error
    set CHECK_NO_DESCEND $saved_no_descend
 
    unset -nocomplain check_cleanup_baseline
@@ -429,6 +441,7 @@ proc installer_do_upgrade_from_backup {bckp_dir} {
    set INSTALL_AS_ADMIN_USER        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_INSTALL_AS_ADMIN_USER] "$CHECK_USER" ]
    set UNIQUE_CLUSTER_NAME          [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_UNIQUE_CLUSTER_NAME] ]
    set CURRENT_GRID_ROOT_DIRECTORY  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CURRENT_GRID_ROOT_DIRECTORY] "*" "*" ]
+   set GRID_ROOT_DIRECTORY_NOT_SET  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_GRID_ROOT_DIRECTORY_NOT_SET]]
    set CELL_NAME_FOR_QMASTER        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CELL_NAME_FOR_QMASTER] "*"]
    set ENTER_SCHEDULER_SETUP        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_SCHEDLUER_SETUP] ]
    set ENTER_A_RANGE                [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_A_RANGE] ]
@@ -676,6 +689,17 @@ proc installer_do_upgrade_from_backup {bckp_dir} {
             set anykey [wait_for_enter 1]
          }
          ts_send $sp_id "\n"
+         append install_output $expect_out(buffer)
+         log_user 1
+         exp_continue
+      }
+
+      # the installer asks for the path instead of confirming it - it does that
+      # when SGE_ROOT is empty in its environment. Its default comes from the
+      # working directory, so the answer is sent explicitly
+      -i $sp_id -- $GRID_ROOT_DIRECTORY_NOT_SET {
+         ts_log_fine "\n -->testsuite: SGE_ROOT is not set, sending $ts_config(product_root)"
+         ts_send $sp_id "$ts_config(product_root)\n"
          append install_output $expect_out(buffer)
          log_user 1
          exp_continue
