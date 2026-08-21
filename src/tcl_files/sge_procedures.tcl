@@ -396,6 +396,21 @@ proc ge_has_feature {feature {quiet 0}} {
                set result 0
             }
          }
+         "thread-sanitizer" {
+            # CS-2642: sanitizer checks are meaningless against binaries that
+            # were not built with -DENABLE_TSAN=ON (CS-2639). Without the TSAN
+            # runtime the check would find an empty log and report a pass while
+            # having measured nothing, so the setup of such a check asks here
+            # and declares itself unsupported instead.
+            set arch [resolve_arch $ts_config(master_host)]
+            set binary "$ts_config(product_root)/bin/$arch/sge_qmaster"
+            set output [start_remote_prog $ts_config(master_host) $CHECK_USER "nm" "-D $binary | grep __tsan"]
+            if {$prg_exit_state == 0} {
+               set result 1
+            } else {
+               set result 0
+            }
+         }
          "scope" {
             set output [start_sge_bin "qsub" "-help"]
             if {[string first "-scope" $output] >= 0} {
