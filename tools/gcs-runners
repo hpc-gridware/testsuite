@@ -43,12 +43,30 @@ CLION_ROOT="${GCS_CLION_ROOT:-$HOME/Clion}"
 # Follow symlinks: these tools are put on PATH as links, and they call each
 # other via SCRIPT_DIR -- which has to be the checkout, not the link farm.
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-# Window from which runner ports are handed out. Lower bound so the runners do
-# not grab the ports historically assigned to the release lines (8000..8008)
-# just because no configuration currently sits on them. Upper bound because
-# everything from 8100 up serves the feature workspaces.
-RUNNER_PORT_MIN="${GCS_RUNNER_PORT_MIN:-8010}"
-RUNNER_PORT_MAX="${GCS_RUNNER_PORT_MAX:-8100}"
+# Window from which runner ports are handed out -- one per line, because the
+# runners of two lines must never compete for the same ports. Lower bound of the
+# default window so the runners do not grab the ports historically assigned to
+# the release lines (8000..8008) just because no configuration currently sits on
+# them; upper bound because everything from 8100 up serves the feature
+# workspaces.
+#
+# The map is what the ports actually are, not a preference:
+#
+#   8000..8008   release lines
+#   8010..8072   92x runners      (default window [8010,8100))
+#   8100..8199   feature workspaces
+#   8200..8262   91x runners      (window [8200,8300))
+#
+# GCS_RUNNER_PORT_MIN/MAX still override, so a one-off run can use a window that
+# is not mapped here. Keep this in sync with <user>,portlist of the testsuite
+# user configuration -- a window without registered ports yields nothing, since
+# it is the portlist that vends the matching gid_range.
+line_port_window() {
+  case "$1" in
+    91x) printf '%s %s' "${GCS_RUNNER_PORT_MIN:-8200}" "${GCS_RUNNER_PORT_MAX:-8300}" ;;
+    *)   printf '%s %s' "${GCS_RUNNER_PORT_MIN:-8010}" "${GCS_RUNNER_PORT_MAX:-8100}" ;;
+  esac
+}
 # Probe parameters of "health". Ten seconds is far above the one second at which
 # the execd checks its limits, and short enough to keep the check cheap. The wait
 # has to cover the scheduler interval on top of the limit, otherwise a healthy
@@ -177,7 +195,8 @@ used_ports() {
 
 # Registered, even, free ports below the workspace boundary, ascending.
 free_runner_ports() {
-  local line="$1" cfg ucf p used
+  local line="$1" cfg ucf p used pmin pmax
+  read -r pmin pmax <<<"$(line_port_window "$line")"
   cfg="$(line_root "$line")/config/defaults-$line.sav"
   [ -f "$cfg" ] || die "line configuration not found: $cfg"
   ucf="$(read_sav_value "$cfg" user_config_file)"
@@ -185,8 +204,8 @@ free_runner_ports() {
   used=" $(used_ports | sort -un | tr '\n' ' ') "
   for p in $(read_sav_value "$ucf" "$USER,portlist" | tr ' ' '\n' | sort -n); do
     case "$p" in *[!0-9]*|"") continue ;; esac
-    [ "$p" -ge "$RUNNER_PORT_MIN" ] || continue
-    [ "$p" -lt "$RUNNER_PORT_MAX" ] || continue
+    [ "$p" -ge "$pmin" ] || continue
+    [ "$p" -lt "$pmax" ] || continue
     [ $((p % 2)) -eq 0 ] || continue
     case "$used" in *" $p "*|*" $((p+1)) "*) continue ;; esac
     printf '%s\n' "$p"
@@ -243,7 +262,7 @@ cmd_init() {
     if [ -n "$port" ]; then assigned+=("$port"); else assigned+=(""); need=$((need+1)); fi
   done
   [ "${#ports[@]}" -ge "$need" ] \
-    || die "only ${#ports[@]} free registered ports in [$RUNNER_PORT_MIN,$RUNNER_PORT_MAX), needed: $need
+    || die "only ${#ports[@]} free registered ports in [$(line_port_window "$line" | tr ' ' ',')), needed: $need
        register further even ports via the testsuite menu (user config) -- that is what vends the gid_range"
 
   local next=0
