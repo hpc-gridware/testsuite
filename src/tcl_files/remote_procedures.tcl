@@ -1552,9 +1552,26 @@ proc open_remote_spawn_process { hostname
    set env_string ""
    if {$envlist != ""} {
       upvar $envlist users_env
-      foreach var [array names users_env] {
-         append env_string "$var=$users_env($var)"
-      }
+   }
+
+   # CS-2643: a binary built with the thread sanitizer exits 66 - the sanitizer's
+   # default - as soon as anything is reported, and this tree has races that fire
+   # in EVERY client on commlib thread startup. Every exit code checked by the
+   # testsuite and by the product's own shell scripts is then wrong. The one that
+   # breaks first is CheckRunningQmaster() in sgemaster: it decides that the
+   # qmaster is up by "qping ... ; [ $? -eq 0 ]", never sees a 0, and an
+   # installation can therefore not complete at all - waiting longer does not
+   # help, the answer is 66 every single time.
+   #
+   # exitcode=0 makes the sanitizer report and continue instead. Findings are
+   # still written to the log, which is what a sanitizer run is judged on.
+   # Harmless on an ordinary build: an uninstrumented binary ignores the variable.
+   if {![info exists users_env(TSAN_OPTIONS)]} {
+      set users_env(TSAN_OPTIONS) "exitcode=0"
+   }
+
+   foreach var [array names users_env] {
+      append env_string "$var=$users_env($var)"
    }
 
    # for code coverage testing, we might need a special environment

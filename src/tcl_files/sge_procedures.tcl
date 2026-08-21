@@ -7466,6 +7466,7 @@ proc wait_for_jobend {jobid jobname seconds {runcheck 1} {wait_for_end 0} {raise
 proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""} {start_debug_terminal 0}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
+   global CHECK_TIMEOUT_FACTOR
    global CHECK_ADMIN_USER_SYSTEM
    global CHECK_DEBUG_LEVEL CHECK_SGE_DEBUG_LEVEL
    global ocs_debug_display master_debug CHECK_DISPLAY_OUTPUT CHECK_SGE_DEBUG_LEVEL ocs_debug_terminal_application
@@ -7473,6 +7474,15 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""} {start_debug_
 
    if {$env_list != ""} {
       upvar $env_list envlist
+   }
+
+   # The wait for the qmaster to answer sits in the product's sgemaster script
+   # (CheckRunningQmaster) as a fixed 60 seconds, out of reach of the testsuite
+   # timeout factor. A qmaster that is legitimately slow to come up - a sanitizer
+   # build above all - is reported as "didn't start!" while it is coming up.
+   # SGE_QMASTER_STARTUP_TIMEOUT raises it; scale it with the run's own factor.
+   if {$CHECK_TIMEOUT_FACTOR > 1 && ![info exists envlist(SGE_QMASTER_STARTUP_TIMEOUT)]} {
+      set envlist(SGE_QMASTER_STARTUP_TIMEOUT) [ts_scale_timeout 60]
    }
 
    set start_host $ts_config(master_host)
