@@ -60,6 +60,7 @@ set check_setup_level_function tight_integration_setup_level
 # define test's procedure order
 set check_functions ""
 lappend check_functions "tight_integration_function"
+lappend check_functions "tight_integration_wallclock";# wallclock is elapsed time, not slot seconds
 lappend check_functions "tight_integration_iz_578";# env vars NSLOTS and NHOSTS
 lappend check_functions "tight_integration_master_killed"
 lappend check_functions "tight_integration_slave_killed"
@@ -529,6 +530,88 @@ proc tight_integration_function {} {
 
    wait_for_jobend $jobid tightf 60 0 1
    tight_integration_acct $jobid $TIGHT_INTEGRATION_FUNCTIONAL_SLOTS
+}
+
+# The pe tasks of a tightly integrated job run concurrently, so the wallclock of
+# the job is the time it ran - not the sum over its slots. An accounting record
+# carries two values which therefore have to agree: ru_wallclock, which is taken
+# unmodified from the task's usage, and wallclock, which for a parallel
+# environment with accounting_summary TRUE is aggregated over the pe tasks. If
+# that aggregation adds up the pe tasks' elapsed times, wallclock comes out at
+# roughly slots times ru_wallclock while cpu, mem and maxvmem - real consumables
+# which do add up - stay correct.
+#
+# Run level 2 has accounting_summary TRUE and is the case this looks at. Levels 0
+# and 1 have it FALSE and write one record per task; each of those has to satisfy
+# the same relation, which makes them the control.
+proc tight_integration_wallclock {} {
+   global ts_config
+   global TIGHT_INTEGRATION_FUNCTIONAL_SLOTS TIGHT_INTEGRATION_FUNCTIONAL_DURATION
+   global submit_command tight_masterq tight_master_node
+   ts_log_fine "tight_integration: wallclock vs ru_wallclock in the accounting records"
+
+   set id [submit_with_method $submit_command \
+      "-pe tight $TIGHT_INTEGRATION_FUNCTIONAL_SLOTS -masterq $tight_masterq -cwd -N tightwc" \
+      "$ts_config(testsuite_root_dir)/scripts/pe_job.sh" \
+      "$ts_config(testsuite_root_dir)/scripts/pe_task.sh 1 $TIGHT_INTEGRATION_FUNCTIONAL_DURATION" \
+      $tight_master_node]
+
+   set started 0
+   set finished 0
+   set jobid 0
+   set job_finished 0
+   while {$job_finished == 0} {
+      set job_state [tight_integration_monitor $id $tight_master_node started finished jobid info]
+      set job_finished [tight_integration_job_finished $job_state]
+   }
+   close_spawn_process $id
+
+   wait_for_jobend $jobid tightwc 60 0 1
+
+   # sum_up_tasks 0: keep the records apart instead of aggregating them, the
+   # comparison is between two attributes of the same record
+   if {[get_qacct $jobid qacct_info $ts_config(master_host) "" 1 -1 0 0] != 0} {
+      return
+   }
+   foreach attr {wallclock ru_wallclock} {
+      if {![info exists qacct_info($attr)]} {
+         ts_log_severe "job $jobid: accounting records have no $attr"
+         return
+      }
+   }
+   set wallclocks $qacct_info(wallclock)
+   set ru_wallclocks $qacct_info(ru_wallclock)
+   if {[llength $wallclocks] != [llength $ru_wallclocks]} {
+      ts_log_severe "job $jobid: got [llength $wallclocks] wallclock but\
+                     [llength $ru_wallclocks] ru_wallclock values"
+      return
+   }
+
+   # ru_wallclock is whole seconds while wallclock has sub-second resolution, so
+   # the two differ by less than a second - anything beyond that is a real gap
+   set tolerance 2
+   set record 0
+   foreach wallclock $wallclocks ru_wallclock $ru_wallclocks {
+      incr record
+      if {$ru_wallclock <= 0} {
+         ts_log_severe "job $jobid: accounting record $record has ru_wallclock\
+                        $ru_wallclock - cannot compare it against wallclock\
+                        $wallclock"
+         continue
+      }
+      set diff [expr {$wallclock - $ru_wallclock}]
+      if {$diff > $tolerance || $diff < -$tolerance} {
+         ts_log_severe "job $jobid: accounting record $record has wallclock\
+                        $wallclock but ru_wallclock $ru_wallclock (difference\
+                        $diff, [format %.2f [expr {double($wallclock) / $ru_wallclock}]]\
+                        times) - wallclock is elapsed time and must not be summed\
+                        over the [expr {$TIGHT_INTEGRATION_FUNCTIONAL_SLOTS + 1}]\
+                        tasks of the job"
+      } else {
+         ts_log_fine "job $jobid: accounting record $record wallclock $wallclock,\
+                      ru_wallclock $ru_wallclock"
+      }
+   }
 }
 
 # check if qmaster is killed on reschedule
