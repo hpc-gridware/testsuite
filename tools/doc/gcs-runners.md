@@ -2,8 +2,9 @@
 
 ```
 gcs-runners <line> init     [N]
-gcs-runners <line> install  [N] [-p]
+gcs-runners <line> install  [N] [-s]
 gcs-runners <line> status
+gcs-runners <line> health   [N]
 gcs-runners <line> teardown [N] [--force] [-s]
 ```
 
@@ -30,9 +31,33 @@ strictly needs for itself is separated:
 | Command | Meaning |
 |---|---|
 | `init [N]` | Create directories, configuration and wrapper for N runners. Idempotent: a runner that already has a port keeps it. Without `N`, as many as there are free ports. |
-| `install [N] [-p]` | Mirror the line's `inst/` into each runner and install the cluster. `-p` installs all in parallel — about three minutes for eight instead of twenty. |
+| `install [N] [-s]` | Mirror the line's `inst/` into each runner and install the cluster. Installs **in parallel by default** — about five minutes for 32 runners, against roughly eighty serially; `-s`/`--serial` forces one at a time. The mirroring goes through a root `rsync`, because `inst/utilbin/<arch>/testsuidroot` is `-r-s--x--x root:root` and an unprivileged rsync dies with code 23. A hand-written loop over `<line>-rN install` skips the mirroring altogether and leaves the runners on their old binaries while reporting success. |
 | `status` | One line per runner: port, whether binaries are present, whether the cluster is running. |
-| `teardown [N] [--force] [-s]` | Shut the runners down and remove their configuration. `--force` also deletes the directories including `inst/` and `results/`. Shuts all runners down **in parallel by default** (22 clusters in 60 s, against 20-30 minutes serially); `-s`/`--serial` forces one at a time. Unlike `install`, parallel needs no opt-in here: a shutdown writes no configuration, so the races that make parallel installs delicate (CS-2481) do not apply. |
+| `health [N]` | Does every execd still enforce `h_rt`? Sends one job with a ten second hard limit to every execd of every cluster, all at the same time, so the check costs about a minute regardless of how many runners there are. See below for why `status` cannot answer this. |
+| `teardown [N] [--force] [-s]` | Shut the runners down and remove their configuration. `--force` also deletes the directories including `inst/` and `results/`. Shuts all runners down **in parallel by default** (22 clusters in 60 s, against 20-30 minutes serially); `-s`/`--serial` forces one at a time. A shutdown writes no configuration, so the races that make parallel installs delicate (CS-2481) do not apply to it at all. |
+
+## `status` and `health` answer different questions
+
+`status` reports what can be seen from the outside: port, binaries, whether the
+cluster is running. That is not enough to trust a runner with a share of a test
+run.
+
+An execd can look perfectly healthy — port open, load reported, jobs accepted,
+shepherds started — while it has silently dropped its running jobs from its
+bookkeeping (CS-2495). Neither `status` nor `qstat -f` shows it. What it does show
+up as is a fixed subset of tests failing for reasons that read like product
+defects: no wallclock usage, no resource limit, no `deleted_by` in the accounting
+record. Since `gcs-run-unit` pins each test to one cluster, a single such execd
+quietly poisons its whole share of a run — and the failures look like a
+regression in whatever was just built.
+
+`health` probes exactly that code path with the cheapest thing that touches it: a
+job with a ten second hard limit. A healthy execd kills it, a stalled one does
+not.
+
+After every `install`, check both — and additionally compare the timestamps under
+`runners/rN/inst/bin/<arch>/` against the line's, because a success message is not
+proof that the new binaries arrived.
 
 ## Ports
 
