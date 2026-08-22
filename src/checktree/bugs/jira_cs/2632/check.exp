@@ -1,0 +1,374 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.5"
+
+# CS-2632: a job which ends with a non-zero exit status had exit_status 0 written to
+# its accounting record whenever it ran under a parallel environment with
+# control_slaves TRUE. failed is 0 in that case - correctly, the job did run and
+# complete - so the accounting record of a failed job was indistinguishable from that
+# of a successful one, for qacct and for every consumer of the accounting data.
+#
+# control_slaves TRUE is what a tightly integrated parallel job needs, so this is the
+# standard setup rather than an unusual one. The same job under a PE with
+# control_slaves FALSE, or without a PE, recorded the status correctly.
+#
+# Two shapes are checked, because they do not behave the same way:
+#
+#   cs_2632_exit_status_no_task  A job requesting a single slot. With job_is_first_task
+#                                TRUE the master task is the job's only task, so no pe
+#                                task is ever started - control_slaves is on but
+#                                nothing uses it. This is the shape the issue was
+#                                reported with, and the one which loses the status.
+#   cs_2632_exit_status          A job requesting four slots, whose master task starts
+#                                three pe tasks and ends with a different exit code
+#                                than they do.
+#
+# Using two different non-zero exit codes in the second case means a record carrying
+# the wrong one is as visible as a record carrying zero.
+#
+# The run levels differ in the accounting_summary of the parallel environment, which
+# decides how many accounting records a parallel job produces:
+#
+#   0  accounting_summary FALSE  one record per pe task plus the master task's, so the
+#                                four slot job writes four records and every one of
+#                                them has to carry the status of the task it belongs to
+#   1  accounting_summary TRUE   a single record for the whole job, which has to carry
+#                                the master task's status
+#
+# The single slot job writes one record either way - it has no pe task to summarize -
+# so it is the same test in both run levels, and it is the one that reproduces the
+# issue.
+
+set check_name            "cs_2632"
+set check_category        "BUG PE ACCOUNTING VERIFIED"
+set check_description(0)  "exit status of a job in a PE with control_slaves reaches accounting"
+set check_description(1)  "the same with accounting_summary TRUE"
+
+set check_needs           "init_core_system"
+
+set check_setup_function       "cs_2632_setup"
+set check_cleanup_function     "cs_2632_cleanup"
+set check_setup_level_function "cs_2632_setup_level"
+
+set check_functions {}
+lappend check_functions "cs_2632_exit_status_no_task"
+lappend check_functions "cs_2632_exit_status"
+
+# the exit codes the master task and the pe tasks of the test job end with. Two
+# different non-zero values, neither of them the 0 the defect produces
+global CS_2632_JOB_EXIT_CODE CS_2632_TASK_EXIT_CODE
+set CS_2632_JOB_EXIT_CODE  6
+set CS_2632_TASK_EXIT_CODE 5
+
+# slots the test job requests. With job_is_first_task TRUE the master task counts as
+# the job's first task, so the job runs one master task and CS_2632_SLOTS - 1 pe tasks
+global CS_2632_SLOTS
+set CS_2632_SLOTS 4
+
+# -------- local test procedures: initialization -----------------------------
+
+proc cs_2632_setup {} {
+   get_current_cluster_config_array ts_config
+   global cs_2632_queue cs_2632_pe CS_2632_SLOTS
+
+   set cs_2632_queue "cs2632.q"
+   set cs_2632_pe    "cs2632.pe"
+
+   unset -nocomplain pe
+   set pe(slots)              "999"
+   set pe(allocation_rule)    "\$round_robin"
+   set pe(control_slaves)     "TRUE"
+   set pe(job_is_first_task)  "TRUE"
+   # the run level decides this one, see cs_2632_setup_level
+   set pe(accounting_summary) "FALSE"
+   set pe(user_lists)         "NONE"
+   set pe(xuser_lists)        "NONE"
+   set pe(start_proc_args)    "NONE"
+   set pe(stop_proc_args)     "NONE"
+   if {[add_pe $cs_2632_pe pe] < 0} {
+      ts_log_config "cannot create pe $cs_2632_pe"
+      return 99
+   }
+
+   unset -nocomplain q
+   set q(slots)   $CS_2632_SLOTS
+   set q(pe_list) $cs_2632_pe
+   if {[add_queue $cs_2632_queue "@allhosts" q] < 0} {
+      ts_log_config "cannot create queue $cs_2632_queue"
+      return 99
+   }
+
+   return 0
+}
+
+##
+# @brief Put the parallel environment into the shape this run level asks for.
+#
+# Only accounting_summary differs between the run levels. The check functions read
+# cs_2632_accounting_summary to know how many accounting records the parallel job
+# writes and which task each of them belongs to.
+##
+proc cs_2632_setup_level {} {
+   global CHECK_ACT_LEVEL
+   global cs_2632_pe cs_2632_accounting_summary
+
+   switch -- $CHECK_ACT_LEVEL {
+      0 { set cs_2632_accounting_summary 0 }
+      1 { set cs_2632_accounting_summary 1 }
+   }
+
+   unset -nocomplain pe
+   if {$cs_2632_accounting_summary} {
+      set pe(accounting_summary) "TRUE"
+   } else {
+      set pe(accounting_summary) "FALSE"
+   }
+   if {[mod_pe $cs_2632_pe pe] < 0} {
+      ts_log_config "cannot set accounting_summary $pe(accounting_summary) on pe\
+                     $cs_2632_pe"
+      return 99
+   }
+
+   return 0
+}
+
+proc cs_2632_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global cs_2632_queue cs_2632_pe
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # the queue references the pe in its pe_list, so it has to go first
+   del_queue $cs_2632_queue "" 0 1
+   del_pe $cs_2632_pe
+
+   unset -nocomplain cs_2632_queue cs_2632_pe cs_2632_accounting_summary
+}
+
+# -------- test functions ----------------------------------------------------
+
+##
+# @brief One slot, so the master task never starts a pe task.
+#
+# This is the shape the issue was reported with: a PE with control_slaves TRUE, a job
+# requesting a single slot, and a job script which does nothing but end with a non-zero
+# exit code. With job_is_first_task TRUE the master task is the job's only task, so
+# pe_job.sh finds no slot left to start a pe task on and exits right away - the
+# tightly integrated machinery is switched on but never used.
+#
+# The job writes a single accounting record, the master task's, and it has to carry the
+# exit status the script ended with.
+#
+# @return 0 if the record carries the job's exit status, else -1
+##
+proc cs_2632_exit_status_no_task {} {
+   get_current_cluster_config_array ts_config
+   global cs_2632_queue cs_2632_pe CS_2632_JOB_EXIT_CODE
+
+   set pe_job  "$ts_config(testsuite_root_dir)/scripts/pe_job.sh"
+   set pe_task "$ts_config(testsuite_root_dir)/scripts/pe_task.sh"
+
+   set args "-N cs2632n -q $cs_2632_queue -pe $cs_2632_pe 1"
+   append args " -o /dev/null -j y"
+   append args " $pe_job $pe_task 1 10 0 $CS_2632_JOB_EXIT_CODE 0"
+
+   ts_log_fine "submitting a job into pe $cs_2632_pe requesting a single slot,\
+                so no pe task is started - the master task exits\
+                $CS_2632_JOB_EXIT_CODE"
+   set job_id [submit_job $args]
+   if {$job_id <= 0} {
+      ts_log_severe "cannot submit the test job"
+      return -1
+   }
+
+   if {[wait_for_jobend $job_id "cs2632n" 120 0] != 0} {
+      ts_log_severe "job $job_id did not run through"
+      return -1
+   }
+
+   if {[get_qacct $job_id qacct_info $ts_config(master_host) "" 1 1 60 0] != 0} {
+      return -1
+   }
+   set exit_stati $qacct_info(exit_status)
+   if {[llength $exit_stati] != 1} {
+      ts_log_severe "job $job_id: qacct reports [llength $exit_stati] accounting\
+                     record(s), expected 1"
+      return -1
+   }
+
+   set ret 0
+   set failed [lindex $qacct_info(failed) 0]
+   if {$failed != 0} {
+      ts_log_severe "job $job_id: the accounting record has failed $failed, expected 0\
+                     - the job ran to its end"
+      set ret -1
+   }
+   set exit_status [lindex $exit_stati 0]
+   if {$exit_status != $CS_2632_JOB_EXIT_CODE} {
+      ts_log_severe "job $job_id: the accounting record has exit_status $exit_status,\
+                     the job ended with $CS_2632_JOB_EXIT_CODE"
+      set ret -1
+   }
+
+   if {$ret == 0} {
+      ts_log_fine "job $job_id: the accounting record carries exit_status\
+                   $CS_2632_JOB_EXIT_CODE"
+   }
+
+   return $ret
+}
+
+##
+# @brief One tightly integrated job, and every accounting record it produces.
+#
+# The job runs pe_job.sh as master task, which starts one pe_task.sh per granted slot
+# except its own and waits for them. Master task and pe tasks are told to end with
+# different non-zero exit codes, so the accounting records have to carry two distinct
+# values - a record with the other job's code is as much a failure as a record with 0.
+#
+# With accounting_summary FALSE there is one record per pe task plus the master task's,
+# and they arrive in the order the tasks ended: the pe tasks finish first and the master
+# task, which waits for them, produces the last record. With accounting_summary TRUE the
+# job writes a single record which stands for the whole job, so it has to carry the
+# master task's status - the pe tasks' exit codes do not appear anywhere.
+#
+# @return 0 if every record carries the exit status of the task it belongs to, else -1
+##
+proc cs_2632_exit_status {} {
+   get_current_cluster_config_array ts_config
+   global cs_2632_queue cs_2632_pe cs_2632_accounting_summary
+   global CS_2632_JOB_EXIT_CODE CS_2632_TASK_EXIT_CODE CS_2632_SLOTS
+
+   set pe_job  "$ts_config(testsuite_root_dir)/scripts/pe_job.sh"
+   set pe_task "$ts_config(testsuite_root_dir)/scripts/pe_task.sh"
+
+   # pe_job.sh <task script> <instances> <duration> <sleep after> <exit code> <task exit code>
+   set args "-N cs2632 -q $cs_2632_queue -pe $cs_2632_pe $CS_2632_SLOTS"
+   append args " -o /dev/null -j y"
+   append args " $pe_job $pe_task 1 10 0 $CS_2632_JOB_EXIT_CODE $CS_2632_TASK_EXIT_CODE"
+
+   ts_log_fine "submitting a job into pe $cs_2632_pe requesting $CS_2632_SLOTS slots,\
+                master task exits $CS_2632_JOB_EXIT_CODE, pe tasks exit\
+                $CS_2632_TASK_EXIT_CODE"
+   set job_id [submit_job $args]
+   if {$job_id <= 0} {
+      ts_log_severe "cannot submit the test job"
+      return -1
+   }
+
+   if {[wait_for_jobend $job_id "cs2632" 120 0] != 0} {
+      ts_log_severe "job $job_id did not run through"
+      return -1
+   }
+
+   # one record per pe task plus the master task's, or a single one for the whole job -
+   # sum_up_tasks 0 keeps them apart, the expected amount lets get_qacct wait until all
+   # of them are in the file
+   if {$cs_2632_accounting_summary} {
+      set expected_records 1
+   } else {
+      set expected_records $CS_2632_SLOTS
+   }
+   if {[get_qacct $job_id qacct_info $ts_config(master_host) "" 1 $expected_records 60 0] != 0} {
+      return -1
+   }
+   set exit_stati $qacct_info(exit_status)
+   set faileds    $qacct_info(failed)
+   if {[llength $exit_stati] != $expected_records} {
+      ts_log_severe "job $job_id: qacct reports [llength $exit_stati] accounting\
+                     record(s), expected $expected_records"
+      return -1
+   }
+
+   set ret 0
+
+   # the job ran and completed - whether its exit status was zero or not is none of
+   # failed's business, and a non-zero failed here would mean the check is looking at
+   # a job which did not get that far
+   set record 0
+   foreach failed $faileds {
+      incr record
+      if {$failed != 0} {
+         ts_log_severe "job $job_id: accounting record $record has failed $failed,\
+                        expected 0 - the job ran to its end"
+         set ret -1
+      }
+   }
+
+   # The master task waits for its pe tasks, so its record is the last one. With
+   # accounting_summary there is only that one, and the loop below has nothing to walk.
+   set task_stati [lrange $exit_stati 0 end-1]
+   set job_status [lindex $exit_stati end]
+
+   set record 0
+   foreach exit_status $task_stati {
+      incr record
+      if {$exit_status != $CS_2632_TASK_EXIT_CODE} {
+         ts_log_severe "job $job_id: the accounting record of pe task $record has\
+                        exit_status $exit_status, the task ended with\
+                        $CS_2632_TASK_EXIT_CODE (all records: $exit_stati)"
+         set ret -1
+      }
+   }
+
+   if {$job_status != $CS_2632_JOB_EXIT_CODE} {
+      ts_log_severe "job $job_id: the accounting record of the master task has\
+                     exit_status $job_status, the job ended with\
+                     $CS_2632_JOB_EXIT_CODE (all records: $exit_stati)"
+      set ret -1
+   }
+
+   # and the master task's record identified by its pe_taskid instead of by its
+   # position, so a changed order cannot make the assertion above pass by accident
+   if {[get_qacct "$job_id NONE" master_info $ts_config(master_host) "" 1 1 60 0] != 0} {
+      return -1
+   }
+   set master_status [lindex $master_info(exit_status) 0]
+   if {$master_status != $CS_2632_JOB_EXIT_CODE} {
+      ts_log_severe "job $job_id: the accounting record with pe_taskid NONE has\
+                     exit_status $master_status, the job ended with\
+                     $CS_2632_JOB_EXIT_CODE"
+      set ret -1
+   }
+
+   if {$ret == 0} {
+      if {[llength $task_stati] > 0} {
+         ts_log_fine "job $job_id: [llength $task_stati] pe task record(s) with\
+                      exit_status $CS_2632_TASK_EXIT_CODE and the master task's record\
+                      with exit_status $CS_2632_JOB_EXIT_CODE"
+      } else {
+         ts_log_fine "job $job_id: the summary record carries the master task's\
+                      exit_status $CS_2632_JOB_EXIT_CODE"
+      }
+   }
+
+   return $ret
+}

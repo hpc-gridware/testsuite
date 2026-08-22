@@ -9,6 +9,13 @@ export LANG
 trap "echo pe task received SIGUSR1" USR1
 trap "echo pe task received SIGUSR2" USR2
 
+# exit code this task shall use - optional, a caller which does not pass one
+# gets the exit code 0 this script always had
+exit_code=$3
+if [ "$exit_code" = "" ]; then
+   exit_code=0
+fi
+
 unset SGE_DEBUG_LEVEL
 printf "petask %3d with pid %8d started on host %s\n" $1 $$ $HOSTNAME
 printf "NSLOTS %3d NHOSTS %3d NQUEUES %3d\n" $NSLOTS $NHOSTS $NQUEUES
@@ -21,4 +28,4 @@ while [ $now -lt $time_end ]; do
 done
 
 printf "petask %3d with pid %8d finished on host %s\n" $1 $$ $HOSTNAME
-exit 0
+exit $exit_code

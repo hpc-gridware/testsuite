@@ -8,6 +8,17 @@ script=$1
 instances=$2
 duration=$3
 sleep_after=$4
+# exit code of this master task and the one the pe tasks shall use - both
+# optional, a job which does not pass them behaves as it always did
+exit_code=$5
+task_exit_code=$6
+
+if [ "$exit_code" = "" ]; then
+   exit_code=0
+fi
+if [ "$task_exit_code" = "" ]; then
+   task_exit_code=0
+fi
 
 trap "echo master task received SIGUSR1" USR1
 trap "echo master task received SIGUSR2" USR2
@@ -71,7 +82,7 @@ HOSTSLOTS=`cat $PE_HOSTFILE | prepare_host_slots`
 # start a sleeper process on each granted processor
 task=0
 for host in $HOSTSLOTS; do
-   $SGE_ROOT/bin/$ARC/qrsh -inherit -noshell -nostdin -cwd $host $script $task $duration &
+   $SGE_ROOT/bin/$ARC/qrsh -inherit -noshell -nostdin -cwd $host $script $task $duration $task_exit_code &
    task=`expr $task + 1`
 done
 echo "master task submitted all sub tasks"
@@ -99,4 +110,4 @@ if [ "$sleep_after" != "" ]; then
    echo "sleeping $sleep_after seconds finished"
 fi
 echo "master task exiting"
-exit 0
+exit $exit_code
