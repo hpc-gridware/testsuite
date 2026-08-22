@@ -34,6 +34,7 @@
 
 proc install_qmaster {} {
    global ts_config
+   global CHECK_TIMEOUT_FACTOR
    global CHECK_USER
    global CORE_INSTALLED
    global check_use_installed_system CHECK_ADMIN_USER_SYSTEM
@@ -86,6 +87,18 @@ proc install_qmaster {} {
 
    set my_timeout 500
    set exit_val 0
+
+   # The wait for the qmaster to answer lives in the product's sgemaster script
+   # (CheckRunningQmaster), not here, so the testsuite timeout factor does not
+   # reach it - it is a fixed 60 seconds. A qmaster that is legitimately slow to
+   # come up, a sanitizer build above all, is then reported as "sge_qmaster
+   # didn't start!" while it is in fact coming up, and the whole installation
+   # aborts on a qmaster that is running. SGE_QMASTER_STARTUP_TIMEOUT raises it;
+   # scale it with the same factor this run was started with.
+   if {$CHECK_TIMEOUT_FACTOR > 1} {
+      set env_list(SGE_QMASTER_STARTUP_TIMEOUT) [ts_scale_timeout 60]
+      ts_log_fine "scaling the qmaster startup wait to $env_list(SGE_QMASTER_STARTUP_TIMEOUT) seconds"
+   }
 
    switch_spooling
 
