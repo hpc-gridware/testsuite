@@ -64,6 +64,8 @@ if {$install_mode == "automatic"} {
    ts_source $CHECK_ACTUAL_TEST_PATH/interactive/shadowd
 }
 
+# WARNING: If making changes here please also update issue_1330 test !!!
+# ========
 lappend check_functions "kill_running_system"
 if {!$check_use_installed_system} {
    # postgres spooling keeps the cluster state in a database, which has to exist
@@ -150,13 +152,4 @@ proc read_install_list {} {
       gets $myfile CORE_INSTALLED
       close $myfile
    }
-}
-
-##
-# @brief Clear caches that shall be re-built after qmaster installation
-#
-# E.g., the feature cache is cleared to make sure that features get correctly detected
-# after qmaster installation = after $SGE_ROOT/$SGE_CELL/common/... files have been created.
-proc clear_caches {} {
-   clear_feature_cache
 }

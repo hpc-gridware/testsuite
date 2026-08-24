@@ -111,6 +111,16 @@ proc kill_running_system {} {
 }
 
 
+##
+# @brief Clear caches that shall be re-built after qmaster installation
+#
+# E.g., the feature cache is cleared to make sure that features get correctly detected
+# after qmaster installation = after $SGE_ROOT/$SGE_CELL/common/... files have been created.
+proc clear_caches {} {
+   clear_feature_cache
+}
+
+
 # generating all testsuite cluster user keys and certificates
 proc make_user_cert {} {
    global check_use_installed_system

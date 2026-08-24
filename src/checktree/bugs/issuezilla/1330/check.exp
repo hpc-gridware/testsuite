@@ -41,6 +41,7 @@ global check_description
 global check_needs
 global check_functions
 global check_root_access_needs
+global check_use_installed_system
 global CHECK_ACTUAL_TEST_PATH
 
 ts_source $CHECK_ACTUAL_TEST_PATH/../../../install_core_system/init_cluster
@@ -62,9 +63,17 @@ set check_needs           "init_core_system"
 set check_setup_function issue_1330_setup
 
 # define test's procedure order
+# WARNING: If making changes here please also update install_core_system test !!!
+# ========
 set check_functions "kill_running_system"
+if {!$check_use_installed_system} {
+   # postgres spooling keeps the cluster state in a database, which has to exist
+   # before inst_qmaster.sh runs - a no-op for the other spooling methods
+   lappend check_functions "install_spool_database"
+}
 lappend check_functions "create_autoinst_config"
 lappend check_functions "install_qmaster"
+lappend check_functions "clear_caches"
 lappend check_functions "install_wait_for_settings_file"
 lappend check_functions "make_user_cert"
 lappend check_functions "install_shadowd"
@@ -73,6 +82,7 @@ lappend check_functions "install_execd"
 # do standard testsuite setup
 # WARNING: If making changes here please also update install_core_system test !!!
 # ========
+lappend check_functions "setup_ids"
 lappend check_functions "cleanup_system"
 lappend check_functions "setup_queues"
 lappend check_functions "setup_testcheckpointobject"
