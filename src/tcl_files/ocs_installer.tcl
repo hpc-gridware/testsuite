@@ -26,6 +26,37 @@ proc is_host_resolvable {hostname} {
    }
 }
 
+## @brief set the file permissions of the distribution on its file server
+#
+# The installer asks the user to run util/setfileperm.sh by hand whenever it cannot
+# change file permissions itself, which is the case when the distribution is on an
+# NFS filesystem that maps user root to nobody. Do what it asks for: look up the file
+# server of the product root in the filesystem configuration and run setfileperm.sh
+# there, where root does have the necessary privileges.
+#
+# Returns 1 if the permissions have been set, 0 if no file server is configured for
+# the product root or if setfileperm.sh failed.
+#
+proc installer_set_file_permissions_on_fileserver {} {
+   get_current_cluster_config_array ts_config
+
+   set fileserver [fs_config_get_server_for_path $ts_config(product_root) 0]
+   if {$fileserver == ""} {
+      ts_log_info "no file server is configured for $ts_config(product_root), the file permissions of the distribution are left as they are"
+      return 0
+   }
+
+   ts_log_fine "starting setfileperm.sh on file server $fileserver"
+   set output [start_remote_prog $fileserver "root" "$ts_config(product_root)/util/setfileperm.sh" "-auto $ts_config(product_root)" prg_exit_state 120 0 $ts_config(product_root)]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "setfileperm.sh on host $fileserver failed:\n$output"
+      return 0
+   }
+
+   ts_log_fine "done"
+   return 1
+}
+
 ## @brief reinstall the cluster from scratch as the final test step
 #
 # The upgrade_config test loads old-version configuration into the
@@ -442,6 +473,7 @@ proc installer_do_upgrade_from_backup {bckp_dir} {
    set UNIQUE_CLUSTER_NAME          [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_UNIQUE_CLUSTER_NAME] ]
    set CURRENT_GRID_ROOT_DIRECTORY  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CURRENT_GRID_ROOT_DIRECTORY] "*" "*" ]
    set GRID_ROOT_DIRECTORY_NOT_SET  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_GRID_ROOT_DIRECTORY_NOT_SET]]
+   set CANT_CREATE_TMP_FILE         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CANT_CREATE_TMP_FILE]]
    set CELL_NAME_FOR_QMASTER        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CELL_NAME_FOR_QMASTER] "*"]
    set ENTER_SCHEDULER_SETUP        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_SCHEDLUER_SETUP] ]
    set ENTER_A_RANGE                [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_A_RANGE] ]
@@ -515,6 +547,7 @@ proc installer_do_upgrade_from_backup {bckp_dir} {
    set USE_EXISTING_SPOOLING        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINCT_UPGRADE_USE_EXISTING_SPOOLING] "*"]
    set PKGADD_QUESTION              [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_PKGADD_QUESTION] ]
    set PKGADD_QUESTION_SINCE_U3     [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_PKGADD_QUESTION_SINCE_U3] ]
+   set SET_FILE_PERM_ON_FILESERVER  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_SET_FILE_PERM_ON_FILESERVER]]
 
 
    set id [open_remote_spawn_process "$ts_config(master_host)" $install_user "./inst_sge" "-upd" 0 "$ts_config(product_root)"]
@@ -568,6 +601,15 @@ proc installer_do_upgrade_from_backup {bckp_dir} {
       }
       -i $sp_id -- "xit." {
          ts_log_severe "installation failed"
+         set return_value 1
+      }
+
+      # The installer could not create a temporary file in the SGE_ROOT directory. It asks
+      # for the directory again after that, which the driver would answer, and the write
+      # test would fail again - an endless loop. So the installation is given up here.
+      # Matched before HIT_RETURN_TO_CONTINUE, which would otherwise swallow the message.
+      -i $sp_id -- $CANT_CREATE_TMP_FILE {
+         ts_log_severe "installer cannot create a temporary file in $ts_config(product_root)\nthe user it runs the write test as has no write permission there (e.g. NFS with root_squash)"
          set return_value 1
       }
 
@@ -630,6 +672,17 @@ proc installer_do_upgrade_from_backup {bckp_dir} {
             set anykey [wait_for_enter 1]
          }
          ts_send $sp_id "$ANSWER_NO\n"
+         append install_output $expect_out(buffer)
+         log_user 1
+         exp_continue
+      }
+
+      # user root cannot change file permissions in the distribution, so the installer
+      # asks to run util/setfileperm.sh elsewhere and to confirm once that is done
+      -i $sp_id -- $SET_FILE_PERM_ON_FILESERVER {
+         installer_set_file_permissions_on_fileserver
+         ts_log_fine "\n -->testsuite: sending >RETURN<"
+         ts_send $sp_id "\n"
          append install_output $expect_out(buffer)
          log_user 1
          exp_continue

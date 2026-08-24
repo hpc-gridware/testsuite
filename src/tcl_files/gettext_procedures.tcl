@@ -1518,6 +1518,13 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_VERIFY_FILE_PERMISSIONS1" { set value "\nWe may now verify and set the file permissions of your *\ndistribution.\n\nThis may be useful since due to unpacking and copying of your distribution\nyour files may be unaccessible to other users.\n\nWe will set the permissions of directories and binaries to\n\n   755 - that means executable are accessible for the world\n\nand for ordinary files to\n\n   644 - that means readable for the world\n\nDo you want to verify and set your file permissions (y/n) \[y\] >> " }
       "DISTINST_VERIFY_FILE_PERMISSIONS2" { set value "\nDid you install this version with >pkgadd< or did you already\nverify and set the file permissions of your distribution *" }
       "DISTINST_WILL_NOT_VERIFY_FILE_PERMISSIONS" { set value "We will not verify your file permissions. Hit <RETURN> to continue >>" }
+      "DISTINST_SET_FILE_PERM_ON_FILESERVER" {
+         # SetPermissions() prints this when user root cannot change file permissions in
+         # SGE_ROOT, e.g. because it is on an NFS filesystem which maps root to nobody.
+         # The installer asks the user to run util/setfileperm.sh on the file server and
+         # to confirm with <RETURN> once that is done.
+         set value "Please hit <RETURN> to continue once you set your file permissions >> "
+      }
       "DISTINST_DO_NOT_VERIFY_FILE_PERMISSIONS" { set value "We do not verify file permissions. Hit <RETURN> to continue >> " }
       "DISTINST_MASTER_INSTALLATION_COMPLETE" { set value "\nYour * qmaster installation is now completed" }
       "DISTINST_ENTER_A_RANGE" { set value "Please enter a range *>> " }
@@ -1571,11 +1578,21 @@ proc sge_macro { macro_name {raise_error 1} } {
       }
       "DISTINST_DONT_KNOW_HOW_TO_TEST_FOR_LOCAL_FS" { set value "Don't know how to test for local filesystem. Exit." }
       "DISTINST_CURRENT_GRID_ROOT_DIRECTORY" { set value "The * root directory is:\n\n   \\\$SGE_ROOT = %s\n\nIf this directory is not correct (e.g. it may contain an automounter\nprefix) enter the correct path to this directory or hit <RETURN>\nto use default \[%s\] >> " }
-      # The other branch of ProcessSGERoot(): the installer prints this one when
-      # SGE_ROOT is empty in its environment. The installation drivers only
-      # answer the prompt above, so this one is matched to report the cause
-      # instead of running into a timeout.
-      "DISTINST_GRID_ROOT_DIRECTORY_NOT_SET" { set value "The * root directory is not set!*" }
+      "DISTINST_GRID_ROOT_DIRECTORY_NOT_SET" {
+         # The other branch of ProcessSGERoot(): the installer prints this one when
+         # SGE_ROOT is empty in its environment. The installation drivers only
+         # answer the prompt above, so this one is matched to report the cause
+         # instead of running into a timeout.
+         set value "The * root directory is not set!*"
+      }
+      "DISTINST_CANT_CREATE_TMP_FILE" {
+         # ProcessSGERoot() prints this when it cannot create its test file in SGE_ROOT,
+         # e.g. because SGE_ROOT is on an NFS filesystem which root may not write to.
+         # Interactively the installer then unsets SGE_ROOT and asks for the directory
+         # again, so the installation drivers match this to abort instead of answering
+         # the same two prompts forever.
+         set value "Can't create a temporary file in the SGE_ROOT directory"
+      }
       "DISTINST_INSTALL_FAIL" { set value "Uninstallation  failed after %s retries" }
       "DISTINST_POSTGRES_HOST" { set value "*PostgreSQL host*>> *" }
       "DISTINST_POSTGRES_PORT" { set value "*PostgreSQL port*>> *" }

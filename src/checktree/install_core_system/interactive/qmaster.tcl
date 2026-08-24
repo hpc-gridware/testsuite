@@ -92,6 +92,7 @@ proc install_qmaster {{report_var report}} {
    set HIT_RETURN_TO_CONTINUE       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_HIT_RETURN_TO_CONTINUE] ]
    set CURRENT_GRID_ROOT_DIRECTORY  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CURRENT_GRID_ROOT_DIRECTORY] "*" "*" ]
    set GRID_ROOT_DIRECTORY_NOT_SET  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_GRID_ROOT_DIRECTORY_NOT_SET]]
+   set CANT_CREATE_TMP_FILE         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CANT_CREATE_TMP_FILE]]
    set CELL_NAME_FOR_QMASTER        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CELL_NAME_FOR_QMASTER] "*"]
    set GET_COMM_SETTINGS            [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_GET_COMM_SETTINGS] "*"]
    set CHANGE_PORT_QUESTION         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CHANGE_PORT_QUESTION] ]
@@ -99,6 +100,7 @@ proc install_qmaster {{report_var report}} {
    set VERIFY_FILE_PERMISSIONS2      [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_VERIFY_FILE_PERMISSIONS2] ]
    set WILL_NOT_VERIFY_FILE_PERMISSIONS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_WILL_NOT_VERIFY_FILE_PERMISSIONS] ]
    set DO_NOT_VERIFY_FILE_PERMISSIONS [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DO_NOT_VERIFY_FILE_PERMISSIONS] ]
+   set SET_FILE_PERM_ON_FILESERVER  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_SET_FILE_PERM_ON_FILESERVER]]
    set NOT_COMPILED_IN_SECURE_MODE  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_NOT_COMPILED_IN_SECURE_MODE] ]
    set ENTER_HOSTS                  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_HOSTS] ]
    set MASTER_INSTALLATION_COMPLETE [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_MASTER_INSTALLATION_COMPLETE] ]
@@ -292,6 +294,19 @@ proc install_qmaster {{report_var report}} {
             return
          }
 
+         # The installer could not create a temporary file in the SGE_ROOT directory. It
+         # asks for the directory again after that, which this check would answer, and the
+         # write test would fail again - an endless loop. So the installation is given up
+         # here. Matched before HIT_RETURN_TO_CONTINUE, which would swallow the message.
+         -i $sp_id $CANT_CREATE_TMP_FILE {
+            set msg "installer cannot create a temporary file in $ts_config(product_root)\nthe user it runs the write test as has no write permission there (e.g. NFS with root_squash)"
+            ts_log_severe $msg
+            close_spawn_process $id
+            test_report report $curr_task_nr $report_id result [get_result_failed]
+            test_report report $curr_task_nr $report_id value $msg
+            return
+         }
+
          -i $sp_id $ADMIN_USER_ACCOUNT {
             set real_admin_user $expect_out(0,string)
             set real_help [split $real_admin_user "="]
@@ -445,6 +460,14 @@ proc install_qmaster {{report_var report}} {
             } else {
                install_send_answer $sp_id $ANSWER_YES "verify_file 2"
             }
+            continue
+         }
+
+         # user root cannot change file permissions in the distribution, so the installer
+         # asks to run util/setfileperm.sh elsewhere and to confirm once that is done
+         -i $sp_id $SET_FILE_PERM_ON_FILESERVER {
+            installer_set_file_permissions_on_fileserver
+            install_send_answer $sp_id "" "set file permissions"
             continue
          }
 
