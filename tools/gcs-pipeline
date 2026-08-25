@@ -301,8 +301,20 @@ args="$args disable_washing_machine"
 args="$args install_mode automatic"
 args="$args html_dir $CS_HOME/html"
 args="$args no_local_qmaster_spool"
-args="$args cmake_build_type Debug"
+# Debug is what the development loop wants: -O0 keeps the binaries readable in a
+# debugger and the build fast. It also means the local build cannot see the
+# warnings gcc only raises after inlining (-Wstringop-truncation and friends), so
+# the nightly is the first to hit them. Set CS_BUILD_TYPE=Release to close that
+# gap without changing what everyone else gets by default.
+args="$args cmake_build_type ${CS_BUILD_TYPE:-Debug}"
 args="$args cmake_build_id $CMAKE_BUILD_ID"
+# The 3rdparty tools are only built when the build directory had to be created
+# (compile.tcl:1328), but their install path carries CMAKE_BUILD_TYPE -- so a
+# switch between Debug and Release finds an empty or stale tree and fails on a
+# missing hwloc.h. Forcing the rebuild is what CS_CLEAN_3RDPARTY=1 is for.
+if [ "${CS_CLEAN_3RDPARTY:-0}" = "1" ]; then
+   args="$args compile_clean_3rdparty"
+fi
 args="$args get_pw_command ${GCS_PW_COMMAND:-$CS_TOOL_DIR/get_pwd.sh}"
 # Keep the message translations between invocations. Off unless asked for: it is
 # a measurable saving (15 s of a 46 s invocation, measured 2026-08-03) but it
