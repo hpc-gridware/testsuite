@@ -1124,6 +1124,8 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
       set host_array($spawn_id,host) $host
       set host_array($spawn_id,task_nr) [report_create_task report $task_name $host]
       set host_array($spawn_id,open_spawn) $open_spawn
+      # Every host gets its own idle budget below; start the clock when it starts.
+      set host_array($spawn_id,last_output) [clock seconds]
       lappend spawn_list $spawn_id
       report_task_add_message report $host_array($spawn_id,task_nr) "in $dir started $cmd $args"
 
@@ -1140,7 +1142,18 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
    set done 0
    set status_time [clock seconds]
    set status_updated 0
-   set timeout 600
+   # Expect allows one timeout per expect command, so this is only a polling tick.
+   # The real decision is made in the timeout branch, where every host is measured
+   # against its own budget - 600 s scaled by its remote_timeout_factor. Without
+   # that, a slow or emulated build host could not be given more headroom through
+   # the configuration at all (CS-2666).
+   #
+   # Note what is being measured: this is an idle timeout, not a limit on the build
+   # duration. What matters is a host's longest silent interval, and that is the
+   # tail of the build - once "make -j N" is down to its last job, cmake prints
+   # "Building CXX object ..." and then says nothing until that one file is done.
+   set compile_timeout_tick 60
+   set timeout $compile_timeout_tick
    expect_user {
       -i $spawn_list full_buffer {
          set spawn_id $expect_out(spawn_id)
@@ -1150,7 +1163,24 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
          incr error_count
       }
       -i $spawn_list timeout {
-         ts_log_severe "timeout on host $host while building, step $task_name"
+         # Expect sets no expect_out(spawn_id) on a timeout, so the stalled host
+         # cannot be read from there - and $host still holds whatever the repaint
+         # loop left behind. Measure every open connection against its own budget
+         # instead, and name the ones that actually went quiet (CS-2665).
+         set now [clock seconds]
+         set stalled {}
+         foreach sp $spawn_list {
+            set sp_host $host_array($sp,host)
+            set budget [host_conf_scale_timeout $sp_host 600]
+            if {$now - $host_array($sp,last_output) > $budget} {
+               lappend stalled "$sp_host (${budget}s)"
+            }
+         }
+         if {[llength $stalled] == 0} {
+            # nobody is over budget yet - this was just the polling tick
+            exp_continue
+         }
+         ts_log_severe "timeout while building, step $task_name - no output from: [join $stalled {, }]"
          set do_stop 1
          incr error_count
       }
@@ -1174,6 +1204,7 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
       -i $spawn_list "*\n" {
          set spawn_id $expect_out(spawn_id)
          set host $host_array($spawn_id,host)
+         set host_array($spawn_id,last_output) [clock seconds]
          #ts_log_fine "got data from host $host while building, step $task_name"
          set lines [split [string trim $expect_out(0,string)] "\n"]
          foreach line $lines {
@@ -1244,8 +1275,10 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
             # show
             clear_screen
             ts_log_frame INFO "================================================================================"
-            foreach host $compile_hosts {
-               ts_log_info "task \'$task_name\' on \'$host\':  \'$options($host,cmd) $options($host,args)\'" 0 "" 1 0 0
+            # own loop variable: $host is read by the other branches of this
+            # expect, and this block runs last before exp_continue (CS-2665)
+            foreach repaint_host $compile_hosts {
+               ts_log_info "task \'$task_name\' on \'$repaint_host\':  \'$options($repaint_host,cmd) $options($repaint_host,args)\'" 0 "" 1 0 0
             }
             ts_log_info "$status_output" 0 "" 1 0 0
             ts_log_frame INFO "================================================================================"
