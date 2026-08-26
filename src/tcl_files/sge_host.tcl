@@ -341,6 +341,7 @@ proc set_exechost_error {result old_values tmpfile  raise_error} {
    add_message_to_container messages -2 [translate_macro MSG_QUEUE_MODCMPLXDENYDUETOAR_SS "*" "*"]
    add_message_to_container messages -3 [translate_macro MSG_CPLX_ATTRIBISNEG_S "*"]
    add_message_to_container messages -4 [translate_macro MSG_RSMAP_INCONSISTENTAMOUNT_SSUU "*" "*" "*" "*"]
+   add_message_to_container messages -5 [translate_macro MSG_RSMAP_TOO_MANY_IMPLICIT_IDS_SUU "*" "*" "*"]
 
    set ret 0
    # now evaluate return code and raise errors
