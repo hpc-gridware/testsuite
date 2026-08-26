@@ -486,6 +486,148 @@ proc reporting_wait_for_queue_state {state {timeout 10} {qi_error 0} {only_qstat
    }
 }
 
+##
+# @brief Read the wall clock of the master host
+#
+# sge_qmaster evaluates a calendar with its own localtime, so a calendar window that is built
+# from the testsuite host's clock is off as soon as the two hosts disagree - be it a few seconds
+# of drift or a different timezone. The wall clock is returned as a "naive" timestamp (the
+# master host's local date and time parsed as if it were UTC), so that adding seconds to it and
+# formatting it back stays in the master host's frame of reference. Returns 0 if the master host
+# did not answer.
+proc reporting_get_master_wallclock {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set output [start_remote_prog $ts_config(master_host) $CHECK_USER "date" "+%d.%m.%Y-%H:%M:%S"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "cannot read the clock of master host $ts_config(master_host):\n$output"
+      return 0
+   }
+
+   set stamp [string trim $output]
+   if {[catch {clock scan $stamp -format "%d.%m.%Y-%H:%M:%S" -gmt 1} wallclock]} {
+      ts_log_severe "cannot parse the clock of master host $ts_config(master_host): \"$stamp\""
+      return 0
+   }
+
+   return $wallclock
+}
+
+##
+# @brief Dump what a calendar switch that did not happen needs to be judged
+#
+# Shows the calendar qmaster actually stored, the queue instance the calendar should have acted
+# on, and the clock of the master host the window was built from. Finally it keeps waiting for
+# the switch: whether it arrives late or not at all tells apart a timed event that was delivered
+# too late from one that was never armed.
+#
+# state - the queue state the calendar should have produced, "D" or "C"
+proc reporting_dump_calendar_state {state} {
+   get_current_cluster_config_array ts_config
+   global reporting_test_host CHECK_USER
+
+   ts_log_fine "calendar \"reporting\":\n[start_sge_bin "qconf" "-scal reporting"]"
+   set queue_instance [get_queue_instance "reporting" $reporting_test_host]
+   ts_log_fine "queue $queue_instance:\n[start_sge_bin "qconf" "-sq $queue_instance"]"
+   # the format string must not contain a blank - start_remote_prog splits the arguments
+   ts_log_fine "clock of master host $ts_config(master_host):\
+                [string trim [start_remote_prog $ts_config(master_host) $CHECK_USER "date" "+%d.%m.%Y-%H:%M:%S-%Z"]]"
+
+   # the qmaster messages file usually holds the reason why the timed event did not fire
+   set messages_file "[get_qmaster_spool_dir]/messages"
+   ts_log_fine "last 50 lines of $messages_file:\n[start_remote_prog $ts_config(master_host) $CHECK_USER "tail" "-50 $messages_file"]"
+
+   # poll here instead of calling wait_for_queue_state - that one reports a timeout with
+   # ts_log_severe and the check has already been marked as failed
+   set late 300
+   ts_log_fine "waiting another $late seconds to see if the switch to \"$state\" arrives late"
+   set end_time [expr {[clock seconds] + $late}]
+   set switched 0
+   while {[clock seconds] < $end_time} {
+      if {[string first $state [get_queue_state $queue_instance]] >= 0} {
+         set switched 1
+         break
+      }
+      sleep_for_seconds 5
+   }
+   if {$switched} {
+      ts_log_info "the calendar switched the queue to \"$state\" late - the timed event was\
+                   delivered, but not when the calendar window opens"
+   } else {
+      ts_log_info "the calendar never switched the queue to \"$state\" - it looks like no timed\
+                   event was armed for the calendar window at all"
+   }
+}
+
+##
+# @brief Let a calendar switch the reporting queue into a state and wait for the switch
+#
+# Attaches a calendar to the reporting queue whose window opens two minutes from now, checks that
+# the queue is still in the default state, and waits for the window to switch it.
+#
+# action - the calendar action to configure, "off" or "suspended"
+# state  - the queue state the action is expected to produce, "D" or "C"
+#
+# Returns the state that was reached, or -1 if the switch did not happen in time.
+proc reporting_calendar_switch_test {action state} {
+   get_current_cluster_config_array ts_config
+   global reporting_test_host
+
+   # how long before the window opens, and how long it stays open
+   set lead 120
+   set duration 600
+
+   set now [reporting_get_master_wallclock]
+   if {$now == 0} {
+      return -1
+   }
+
+   # A window whose first active day is still ahead never gets a timer: for such a year entry
+   # calender_state_changes() reports no next state change at all, so the queue would sit in its
+   # default state until something else triggers a recalculation. Let the date roll over and
+   # build the window after midnight instead.
+   set time1 [expr {$now + $lead}]
+   if {[clock format $time1 -format "%d.%m.%Y" -gmt 1] != [clock format $now -format "%d.%m.%Y" -gmt 1]} {
+      set to_midnight [expr {86400 - ($now % 86400) + 15}]
+      ts_log_info "the calendar window would open on the next day, which qmaster does not arm a\
+                   timer for - waiting $to_midnight seconds for the date to change"
+      sleep_for_seconds $to_midnight
+      set now [reporting_get_master_wallclock]
+      if {$now == 0} {
+         return -1
+      }
+      set time1 [expr {$now + $lead}]
+   }
+   set time2 [expr {$time1 + $duration}]
+
+   set cal(calendar_name) "reporting"
+   set cal(year) "[clock format $time1 -format "%d.%m.%Y" -gmt 1]"
+   append cal(year) "=[clock format $time1 -format "%H:%M" -gmt 1]"
+   append cal(year) "-[clock format $time2 -format "%H:%M" -gmt 1]"
+   append cal(year) "=$action"
+   ts_log_fine "calendar window is \"$cal(year)\""
+   if {[mod_calendar "reporting" cal] < 0} {
+      # mod_calendar already logged the error - waiting for a switch that was never configured
+      # would only add a timeout on top of it
+      return -1
+   }
+
+   # test queue default state (the window is not open yet)
+   replace_attr "queue" "calendar" "reporting" "reporting"
+   reporting_wait_for_queue_state ""
+
+   # The window opens at the full minute, so at most $lead seconds after the clock was read
+   # above - derive the timeout from that instead of hard coding it, and add a margin for the
+   # calls in between.
+   set qstate [wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] $state [expr {$lead + 120}]]
+   if {$qstate == -1} {
+      reporting_dump_calendar_state $state
+   }
+
+   return $qstate
+}
+
 proc reporting_queue_state_test {} {
    get_current_cluster_config_array ts_config
    global reporting_old_config CHECK_USER
@@ -624,19 +766,8 @@ proc reporting_queue_state_test {} {
    # after adding the calendar "always disabled"
    replace_attr "queue" "calendar" "always_disabled" "reporting"
    reporting_wait_for_queue_state "D"
-   # test queue default state (after adding the calendar disabling in one minute)
-   set time1 [expr [timestamp] + 120]
-   set time2 [expr $time1 + 600];# test will probably fail when running over midnight
-   set cal(calendar_name) "reporting"
-   set cal(year) "[clock format $time1 -format "%d.%m.%Y"]"
-   append cal(year) "=[clock format $time1 -format "%H:%M"]"
-   append cal(year) "-[clock format $time2 -format "%H:%M"]"
-   append cal(year) "=off"
-   mod_calendar "reporting" cal
-   replace_attr "queue" "calendar" "reporting" "reporting"
-   reporting_wait_for_queue_state ""
    # test queue calender disabled state (when calendar time reached)
-   set qstate [wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "D" 180]
+   set qstate [reporting_calendar_switch_test "off" "D"]
    if {$qstate == "D"} {
       reporting_wait_for_queue_state "D"
    }
@@ -653,19 +784,8 @@ proc reporting_queue_state_test {} {
    # after adding the calendar "always suspended"
    replace_attr "queue" "calendar" "always_suspend" "reporting"
    reporting_wait_for_queue_state "C"
-   # test queue default state (after adding the calendar suspending in one minute)
-   set time1 [expr [timestamp] + 120]
-   set time2 [expr $time1 + 600];# test will probably fail when running over midnight
-   set cal(calendar_name) "reporting"
-   set cal(year) "[clock format $time1 -format "%d.%m.%Y"]"
-   append cal(year) "=[clock format $time1 -format "%H:%M"]"
-   append cal(year) "-[clock format $time2 -format "%H:%M"]"
-   append cal(year) "=suspended"
-   mod_calendar "reporting" cal
-   replace_attr "queue" "calendar" "reporting" "reporting"
-   reporting_wait_for_queue_state ""
    # test queue calender suspended state (when calendar time reached)
-   set qstate [wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "C" 180]
+   set qstate [reporting_calendar_switch_test "suspended" "C"]
    if {$qstate == "C"} {
       reporting_wait_for_queue_state "C"
    }
