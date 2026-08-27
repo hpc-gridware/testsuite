@@ -215,16 +215,26 @@ user_config_file() {
 # The map is what the ports actually are, not a preference:
 #
 #   8000..8008   release lines
-#   8010..8072   92x runners        (see line_port_window in gcs-runners)
-#   8100..8199   feature workspaces (this window)
-#   8200..8262   91x runners        (see line_port_window in gcs-runners)
+#   8010..8098   feature workspaces (this window)
+#   8100..8198   runners            (see line_port_window in gcs-runners)
+#
+# Swapped on 2026-08-27: the runner fleet grew to 48 and only 45 ports fit below
+# 8100, so it took the window above 8100 and the workspaces moved down into what
+# it vacated -- they are few, and 32 registered ports here are ample. The 91x
+# runner ports (8200..8262) went with that line's fleet; 8200 up is free.
+#
+# The two workspaces created before the swap keep their ports 8106/8108 and are
+# therefore ABOVE this window. Nothing breaks: this window governs which port a
+# NEW workspace is handed, while used_ports() in gcs-runners reads every
+# workspace .sav and keeps those two out of the fleet either way. Their trees
+# under /usr/local/testsuite/<port> move only when the workspace is rebuilt.
 #
 # GCS_WORKSPACE_PORT_MIN/MAX override for a one-off. Running out of ports here
 # is meant to end in the die() of pick_port -- register another even port in
 # this window via the testsuite menu, never widen the window to borrow one that
 # belongs to a line.
-WORKSPACE_PORT_MIN="${GCS_WORKSPACE_PORT_MIN:-8100}"
-WORKSPACE_PORT_MAX="${GCS_WORKSPACE_PORT_MAX:-8200}"
+WORKSPACE_PORT_MIN="${GCS_WORKSPACE_PORT_MIN:-8010}"
+WORKSPACE_PORT_MAX="${GCS_WORKSPACE_PORT_MAX:-8100}"
 
 registered_ports() {
   local cfg="$1" ucf p

@@ -43,29 +43,29 @@ CLION_ROOT="${GCS_CLION_ROOT:-$HOME/Clion}"
 # Follow symlinks: these tools are put on PATH as links, and they call each
 # other via SCRIPT_DIR -- which has to be the checkout, not the link farm.
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-# Window from which runner ports are handed out -- one per line, because the
-# runners of two lines must never compete for the same ports. Lower bound of the
-# default window so the runners do not grab the ports historically assigned to
-# the release lines (8000..8008) just because no configuration currently sits on
-# them; upper bound because everything from 8100 up serves the feature
-# workspaces.
+# Window from which runner ports are handed out. One window for every line: the
+# runners of two lines must never compete for the same ports, and since the
+# 2026-08-27 remap only one line keeps a fleet, so one window is all it takes.
 #
 # The map is what the ports actually are, not a preference:
 #
 #   8000..8008   release lines
-#   8010..8072   92x runners      (default window [8010,8100))
-#   8100..8199   feature workspaces
-#   8200..8262   91x runners      (window [8200,8300))
+#   8010..8098   feature workspaces  (window [8010,8100), see gcs-feature-workspace)
+#   8100..8198   runners             (window [8100,8200))
+#
+# Remapped on 2026-08-27: the runner fleet needed 48 ports and only 45 fit below
+# 8100, so runners and workspaces swapped windows -- the workspaces are few and
+# fit in what the fleet vacated. The 91x runner ports (8200..8262) went away with
+# that line's fleet; everything from 8200 up is free. Two workspaces still sit on
+# 8106/8108 from before the swap. They stay registered and used_ports() keeps
+# them out of the fleet, which is why the window holds 50 ports but vends 48.
 #
 # GCS_RUNNER_PORT_MIN/MAX still override, so a one-off run can use a window that
 # is not mapped here. Keep this in sync with <user>,portlist of the testsuite
 # user configuration -- a window without registered ports yields nothing, since
 # it is the portlist that vends the matching gid_range.
 line_port_window() {
-  case "$1" in
-    91x) printf '%s %s' "${GCS_RUNNER_PORT_MIN:-8200}" "${GCS_RUNNER_PORT_MAX:-8300}" ;;
-    *)   printf '%s %s' "${GCS_RUNNER_PORT_MIN:-8010}" "${GCS_RUNNER_PORT_MAX:-8100}" ;;
-  esac
+  printf '%s %s' "${GCS_RUNNER_PORT_MIN:-8100}" "${GCS_RUNNER_PORT_MAX:-8200}"
 }
 # Probe parameters of "health". Ten seconds is far above the one second at which
 # the execd checks its limits, and short enough to keep the check cheap. The wait
@@ -104,8 +104,12 @@ runner_root() { printf '%s/runners/r%s' "$(line_root "$1")" "$2"; }
 # call that relied on the default therefore walked into a non-existent r<N+1>
 # and died there: install had mirrored all N runners and installed none of them
 # by that point, which looked like a successful mirror rather than a failure.
+# The trailing slash is not decoration either: since the storage move runners/ is
+# a symlink to /scratch/runners/<line>, and find is handed the link itself as its
+# start directory -- without the slash it refuses to descend and the count is 0,
+# which silently sizes every fleet operation to nothing.
 runner_count() {
-  find "$(line_root "$1")/runners" -mindepth 1 -maxdepth 1 -name 'r*' -type d 2>/dev/null | wc -l
+  find "$(line_root "$1")/runners/" -mindepth 1 -maxdepth 1 -name 'r*' -type d 2>/dev/null | wc -l
 }
 runner_name() { printf '%s-r%s' "$1" "$2"; }
 
