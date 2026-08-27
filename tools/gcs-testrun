@@ -4,7 +4,7 @@
 #
 #   gcs-testrun <line> [N] [-- <further ctest arguments>]
 #
-#   <line>   92x, 91x, ...          N   runners, default 8
+#   <line>   92x, 91x, ...          N   runners, default 32
 #
 # Phase 1 runs in parallel across N runners, phase 2 reruns its failures with
 # -j 4, and phase 3 gives whatever is left one cluster at a time. Only phase 3
@@ -72,7 +72,7 @@ usage() {
 case "${1:-}" in -h|--help|help) usage;; esac
 
 line="${1:?usage: gcs-testrun <line> [N] [-- <ctest-args>]   (--help for details)}"; shift
-n=8
+n=32
 [ $# -gt 0 ] && [[ "${1:-}" =~ ^[0-9]+$ ]] && { n="$1"; shift; }
 [ "${1:-}" = "--" ] && shift
 
