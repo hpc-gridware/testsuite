@@ -142,6 +142,7 @@ lappend generic_module_tests {test_uti_os_fds "" 0 ""}
 lappend generic_module_tests {test_uti_Encoder "9.1.0" 0 ""}
 lappend generic_module_tests {test_qmaster_rusage "9.1.5" 0 ""}
 lappend generic_module_tests {test_sgeobj_rsmap "9.1.6" 0 ""}
+lappend generic_module_tests {test_cull_no_transfer "9.2.0" 0 ""}
 set check_description(0) "test_qmaster_timed_event"
 set check_description(1) "test_commlib_issue"
 set check_description(2) "test_comm_xml_parse"
@@ -194,6 +195,7 @@ set check_description(48) "test_uti_os_fds"
 set check_description(49) "test_uti_Encoder"
 set check_description(50) "test_qmaster_rusage"
 set check_description(51) "test_sgeobj_rsmap"
+set check_description(52) "test_cull_no_transfer"
 
 set check_functions {}
 lappend check_functions "generic_module_tests_run"

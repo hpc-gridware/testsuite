@@ -35,6 +35,9 @@
 #       set check_version_range {"" "10.0.0"}
 #    Or combinations of both:
 #       set check_version_range {"9.0.0" "10.0.0"}
+#    When the start version is different for different branches, multiple versions can be specified.
+#    Please note that both start and end version then need to be specified as list:
+#       set check_version_range {"9.0.14 9.1.6" ""}
 #    It can also be set per run level, e.g. from the qacct test
 #       set check_description(0)  "test qacct functionality (old colon separated format)"
 #       set check_description(1)  "test qacct functionality (JSON format)"

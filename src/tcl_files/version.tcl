@@ -359,9 +359,15 @@ proc get_version_info {{version_information_array_name ""} {do_cleanup 0}} {
 # and (optionally) lower than the to_version.
 # @example if the current version is 9.0.0 then
 #          "is_version_in_range 8.0.0" will return 1
-# @see also test_version_in_range()
 #
-# @param[in] from_version
+# Both versions may name one version per release branch, which is what a change that
+# was merged into several branches needs:
+# @example "is_version_in_range "9.0.14 9.1.6"" is true for 9.0.14 and later on
+#          V90_BRANCH, for 9.1.6 and later on V91_BRANCH, and for everything from
+#          9.2.0 on, but not for 9.0.13 and not for 9.1.5
+# @see also version_select_for_branch(), test_version_in_range()
+#
+# @param[in] from_version one version, or one version per release branch
 # @param[in] optional to_version, if not given (value "") then
 #            the range is open to the right.
 # @return 1 if the version is in the given range, else 0
@@ -384,6 +390,10 @@ proc is_version_in_range {from_version {to_version ""}} {
 #          is_version_in_range_list {"8.0.0" "10.0.0"}
 #          will all return 1
 #
+# Each of the two elements may name one version per release branch, e.g.
+#          is_version_in_range_list {"9.0.14 9.1.6" ""}
+# for a change which went into 9.0.14 and into 9.1.6, see version_select_for_branch().
+#
 # @param[in] the version range as list
 # @return 1 if the version is in the given range, else 0
 ##
@@ -400,13 +410,86 @@ proc is_version_in_range_list {range_list} {
 
 
 ###
+# @brief pick the entry of a per branch version list which applies to a version
+#
+# A version list may name one version per release branch, e.g. "9.0.14 9.1.6" for a
+# change which went into 9.0.14 on V90_BRANCH and into 9.1.6 on V91_BRANCH. This
+# function returns the entry which has to be compared against the given version:
+#   - the entry of the same release branch (same major and minor release), if there
+#     is one,
+#   - else the newest entry of an older branch - a later branch inherits what an
+#     earlier one got, so "9.0.14 9.1.6" also covers 9.2.0,
+#   - else, when every entry belongs to a later branch, the oldest entry, so that
+#     the comparison puts the version outside of the range.
+#
+# A single version, an empty string, and anything which does not look like a list of
+# versions (e.g. the old "GE 6.2u5") are returned unchanged.
+#
+# @param[in] version_list one or more versions, e.g. "9.0.14 9.1.6"
+# @param[in] version_info_array_name name of an array as filled by parse_version_info
+# @return the version to compare against
+# @see also test_version_in_range()
+##
+proc version_select_for_branch {version_list version_info_array_name} {
+   upvar $version_info_array_name current
+
+   # nothing to select from
+   if {[llength $version_list] < 2} {
+      return $version_list
+   }
+
+   # only a list of plain versions is treated as a per branch list - a single version
+   # string may well contain a blank, e.g. "GE 6.2u5"
+   foreach version $version_list {
+      if {![regexp {^[0-9]+\.[0-9]} $version]} {
+         return $version_list
+      }
+   }
+
+   set current_branch [expr {$current(major_release) * 1000 + $current(minor_release)}]
+
+   set selected ""
+   set selected_branch -1
+   set oldest ""
+   set oldest_branch -1
+
+   foreach version $version_list {
+      parse_version_info $version entry
+      set branch [expr {$entry(major_release) * 1000 + $entry(minor_release)}]
+
+      if {$oldest_branch < 0 || $branch < $oldest_branch} {
+         set oldest_branch $branch
+         set oldest $version
+      }
+
+      # the newest entry which is not newer than the branch we are asked about
+      if {$branch <= $current_branch && $branch > $selected_branch} {
+         set selected_branch $branch
+         set selected $version
+      }
+   }
+
+   if {$selected ne ""} {
+      return $selected
+   }
+   return $oldest
+}
+
+###
 # @brief check if a given version is between a start version (inclusive)
 #        and an end version (exclusive)
+#
+# from_version and to_version may each name one version per release branch,
+# see version_select_for_branch().
 ##
 proc check_version_in_range {current_version from_version to_version} {
    set ret 1
 
    parse_version_info $current_version current
+
+   # a per branch version list is reduced to the entry which applies here
+   set from_version [version_select_for_branch $from_version current]
+   set to_version [version_select_for_branch $to_version current]
 
    if {$from_version != ""} {
       parse_version_info $from_version from
@@ -453,6 +536,53 @@ proc test_version_in_range {} {
    lappend scenarios {"9.0.1" "" "8.7.0" 0}
    lappend scenarios {"9.0.1" "9.0.0" "9.5.0" 1}
    lappend scenarios {"9.0.0" "" "9.0.0" 0}
+
+   # a version list names one version per release branch, for a change which was
+   # merged into more than one branch - here into 9.0.14 and into 9.1.6
+   lappend scenarios {"9.0.13" "9.0.14 9.1.6" "" 0}
+   lappend scenarios {"9.0.14" "9.0.14 9.1.6" "" 1}
+   lappend scenarios {"9.0.20" "9.0.14 9.1.6" "" 1}
+   lappend scenarios {"9.1.5" "9.0.14 9.1.6" "" 0}
+   lappend scenarios {"9.1.6" "9.0.14 9.1.6" "" 1}
+   # a branch which is newer than every entry of the list inherits the change
+   lappend scenarios {"9.2.0" "9.0.14 9.1.6" "" 1}
+   # a branch which is older than every entry of the list does not have it
+   lappend scenarios {"8.9.9" "9.0.14 9.1.6" "" 0}
+   # the order of the entries does not matter
+   lappend scenarios {"9.1.5" "9.1.6 9.0.14" "" 0}
+   lappend scenarios {"9.0.14" "9.1.6 9.0.14" "" 1}
+
+   # the same for the end of the range, which is exclusive
+   lappend scenarios {"9.0.19" "" "9.0.20 9.1.10" 1}
+   lappend scenarios {"9.0.20" "" "9.0.20 9.1.10" 0}
+   lappend scenarios {"9.1.9" "" "9.0.20 9.1.10" 1}
+   lappend scenarios {"9.1.10" "" "9.0.20 9.1.10" 0}
+   lappend scenarios {"9.2.0" "" "9.0.20 9.1.10" 0}
+   lappend scenarios {"8.9.9" "" "9.0.20 9.1.10" 1}
+
+   # a version list on both sides
+   lappend scenarios {"9.0.13" "9.0.14 9.1.6" "9.0.20 9.1.10" 0}
+   lappend scenarios {"9.0.14" "9.0.14 9.1.6" "9.0.20 9.1.10" 1}
+   lappend scenarios {"9.0.20" "9.0.14 9.1.6" "9.0.20 9.1.10" 0}
+   lappend scenarios {"9.1.5" "9.0.14 9.1.6" "9.0.20 9.1.10" 0}
+   lappend scenarios {"9.1.6" "9.0.14 9.1.6" "9.0.20 9.1.10" 1}
+   lappend scenarios {"9.1.10" "9.0.14 9.1.6" "9.0.20 9.1.10" 0}
+
+   # a version list with a prealpha version of the branch it names
+   lappend scenarios {"GE 9.1.6prealpha" "9.0.14 9.1.6" "" 1}
+
+   # the shepherd/wrapper check: fixed in 9.0.12 and in 9.1.1
+   lappend scenarios {"9.0.11" "9.0.12 9.1.1" "" 0}
+   lappend scenarios {"9.0.12" "9.0.12 9.1.1" "" 1}
+   lappend scenarios {"9.1.0" "9.0.12 9.1.1" "" 0}
+   lappend scenarios {"9.1.1" "9.0.12 9.1.1" "" 1}
+
+   # a list may name as many branches as needed
+   lappend scenarios {"9.0.11" "9.0.12 9.1.1 9.2.3" "" 0}
+   lappend scenarios {"9.1.0" "9.0.12 9.1.1 9.2.3" "" 0}
+   lappend scenarios {"9.2.2" "9.0.12 9.1.1 9.2.3" "" 0}
+   lappend scenarios {"9.2.3" "9.0.12 9.1.1 9.2.3" "" 1}
+   lappend scenarios {"9.3.0" "9.0.12 9.1.1 9.2.3" "" 1}
 
    foreach scenario $scenarios {
       set current [lindex $scenario 0]
