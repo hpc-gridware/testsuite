@@ -37,8 +37,8 @@
 #   * THEY ARE LONG-LIVED. Started once, they outlive individual runs, so no test
 #     run ever pays the startup race again.
 #
-# Runners share a display in groups (default 4), so 32 runners need 8 displays.
-# One display for all 32 works too - a 28 runner full run on a single display
+# Runners share a display in groups (default 6), so 48 runners need 8 displays.
+# One display for the whole fleet works too - a 28 runner full run on one display
 # passed 244 entries with zero display errors - but a pool leaves headroom for
 # the X11 forwarding checks, which are the ones that care about sharing.
 #
@@ -48,7 +48,7 @@
 set -u
 
 BASE=${GCS_DISPLAY_BASE:-51}
-PER=${GCS_RUNNERS_PER_DISPLAY:-4}
+PER=${GCS_RUNNERS_PER_DISPLAY:-6}
 HOST=$(hostname -s)
 
 usage() {
@@ -61,10 +61,11 @@ gcs-displays -- long-lived X displays shared by the testsuite runners
 
 Environment:
   GCS_DISPLAY_BASE          first display number (default 51)
-  GCS_RUNNERS_PER_DISPLAY   how many runners share one display (default 4)
+  GCS_RUNNERS_PER_DISPLAY   how many runners share one display (default 6)
 
 The display a runner uses is  BASE + (index - 1) / PER,  the same arithmetic
-gcs-pipeline does. Runner r1..r4 -> :$BASE, r5..r8 -> :$((BASE + 1)), and so on.
+gcs-pipeline does. With the default PER, runner r1..r6 -> :$BASE, r7..r12 ->
+:$((BASE + 1)), and so on.
 EOF
    exit 1
 }

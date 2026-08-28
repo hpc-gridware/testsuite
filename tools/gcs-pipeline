@@ -384,9 +384,14 @@ fi
 # "xauth add" that clobbered ~/.Xauthority cannot happen; and they are long-lived,
 # so no run pays the startup race at all. See tools/gcs-displays.
 #
-# Runners are grouped: r1..r4 share the first display, r5..r8 the second, and so
+# Runners are grouped: r1..r6 share the first display, r7..r12 the second, and so
 # on. GCS_RUNNERS_PER_DISPLAY and GCS_DISPLAY_BASE must match what gcs-displays
 # was started with - the arithmetic below is the same in both.
+#
+# The ratio went from 4 to 6 on 2026-08-27, when the fleet grew from 32 to 48:
+# both numbers land on the same 8 displays, and 8 is where the pool has run
+# reliably. Growing the POOL instead is the move that has caused trouble before
+# (see the header of gcs-displays), so the ratio is what absorbs a bigger fleet.
 #
 # Sharing itself is cheap: a 28 runner full run on a SINGLE display passed all
 # 244 entries with zero display errors, including qrsh_ijs_x11_cookie_ordering.
@@ -395,7 +400,7 @@ fi
 #
 # GCS_DISPLAY overrides the computed display; set it empty to pass none at all.
 _disp_base=${GCS_DISPLAY_BASE:-51}
-_disp_per=${GCS_RUNNERS_PER_DISPLAY:-4}
+_disp_per=${GCS_RUNNERS_PER_DISPLAY:-6}
 case $CS_PIPELINE in
    *-r[0-9]|*-r[0-9][0-9])
       if [ -z "${GCS_DISPLAY+set}" ]; then
