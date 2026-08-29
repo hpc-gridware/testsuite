@@ -875,6 +875,14 @@ proc dbwriter_long_running_phase_d {} {
 # (getDerivedValues uses a delay of 10 minutes). So a closed hour [H, H+1) is
 # computed by the dbwriter at roughly H+1:11.
 #
+# That is the steady state only. nextTimestamp is the hour of the last raw
+# record the dbwriter has imported, not the wall clock, and the thread sleeps
+# the full 71 minutes without waking early - so where the passes land inside
+# the hour depends on when the dbwriter was started, and an import backlog can
+# delay a pass by a whole cycle. The wait below is therefore not the only
+# safeguard: dbwriter_long_phase_e_assert_rows_exist budgets a full cycle for
+# the first rule it polls.
+#
 # Phase C ran the first-hour workload inside one clock hour and Phase C's
 # advance reservation may have spilled into the following hour, so Phase E
 # waits until the next hour boundary after entry plus the dbwriter's 11-minute
@@ -960,16 +968,45 @@ proc dbwriter_long_phase_e_assert_rows_exist {} {
       return -1
    }
 
-   set per_variable_timeout 600
+   # One derived-value pass computes every hourly rule, so only the first rule
+   # has to wait for that pass to happen - the others are already stored once
+   # it has. The first rule therefore gets a budget of one full dbwriter cycle
+   # (71 minutes, see dbwriter_long_phase_e_wait_for_hour_close) plus a margin:
+   # the thread sleeps a fixed 71 minutes from the last bucket end and does not
+   # wake up earlier, so where its passes land inside the hour depends on when
+   # the dbwriter was started, and an import backlog can push a pass a full
+   # cycle further out. Budgeting less than a cycle turns that offset into a
+   # failure per rule. Every following rule only needs a short poll, which keeps
+   # the run time bounded when a rule really did not fire.
+   set first_timeout        4800
+   set per_variable_timeout 300
+   # the entry wait already covered the pass for the hour that just closed, so
+   # anything beyond a short grace period means the dbwriter needed an extra
+   # pass to store the values - not a reason to fail the check, but it must not
+   # pass unnoticed either
+   set late_threshold 900
    set rc 0
+   set timeout $first_timeout
+   set first 1
    foreach rule $rules {
       lassign $rule object variable table prefix
+      set t_start [clock seconds]
       if {[dbwriter_long_wait_for_value_row \
-              $table $prefix $variable $per_variable_timeout] != 0} {
+              $table $prefix $variable $timeout] != 0} {
          ts_log_severe "dbwriter long test: hourly rule (object=$object,\
                         variable=$variable) did not produce any row in $table"
          set rc -1
+      } elseif {$first} {
+         set waited [expr {[clock seconds] - $t_start}]
+         if {$waited > $late_threshold} {
+            ts_log_info "dbwriter long test: the hourly derived values only\
+                         appeared ${waited}s after the entry wait returned -\
+                         the derived-value pass for the closed hour stored\
+                         nothing and the values were written by a later pass"
+         }
       }
+      set first 0
+      set timeout $per_variable_timeout
    }
    return $rc
 }
@@ -992,10 +1029,13 @@ proc dbwriter_long_phase_e_assert_no_duplicates {} {
       sge_queue_values     qv
       sge_statistic_values sv
    } {
+      # The escape character is a slash and not a backslash: MySQL processes
+      # backslash escapes inside string literals, so ESCAPE '\' ends up as an
+      # unterminated literal there, while PostgreSQL takes it as written.
       set sql "SELECT ${prefix}_parent, ${prefix}_variable,\
                       ${prefix}_time_start, COUNT(*)\
                FROM $table\
-               WHERE ${prefix}_variable LIKE 'h\\_%' ESCAPE '\\'\
+               WHERE ${prefix}_variable LIKE 'h/_%' ESCAPE '/'\
                GROUP BY ${prefix}_parent, ${prefix}_variable,\
                         ${prefix}_time_start\
                HAVING COUNT(*) > 1"
@@ -1208,9 +1248,9 @@ proc dbwriter_long_running_phase_e {} {
 ##
 # @brief Parse a database timestamp string to clock seconds.
 #
-# Accepts the "YYYY-MM-DD HH:MM:SS[.fffff]" format the sqlutil bridge returns
-# for timestamp columns across Postgres, Oracle and MySQL. The fractional
-# seconds are dropped - second precision is enough for every Phase F check.
+# Accepts the "YYYY-MM-DD HH:MM:SS[.fffff]" format that db::ts_str produces on
+# Postgres, Oracle and MySQL. The fractional seconds are dropped - the format
+# has none, and second precision is enough for every Phase F check anyway.
 #
 # @param ts the timestamp string as read from the DB
 # @return clock seconds, or -1 if the string does not match the expected shape
@@ -1328,7 +1368,8 @@ proc dbwriter_long_phase_f_assert_no_partial_today {} {
       sge_queue_values     qv
       sge_statistic_values sv
    } {
-      set where "${prefix}_variable LIKE 'd\\_%' ESCAPE '\\'\
+      # see dbwriter_long_phase_e_assert_no_duplicates for the escape character
+      set where "${prefix}_variable LIKE 'd/_%' ESCAPE '/'\
                  AND ${prefix}_time_start >= __TODAY_START__"
       set n [db::count $table $where]
       if {$n < 0} {
@@ -1404,12 +1445,14 @@ proc dbwriter_long_phase_f_collect_daily_vs_hourly \
    }
 
    # per-day SUM(d_jobs_finished) over all parents of the scope
-   set sql_d "SELECT $day_expr AS day, SUM(${prefix}_dvalue) AS s\
+   # the alias is day_str and not day: day is a keyword in all three dialects
+   # and only a non-reserved one by convention, not by guarantee
+   set sql_d "SELECT $day_expr AS day_str, SUM(${prefix}_dvalue) AS s\
               FROM $from\
               WHERE ${where_prefix}${prefix}_variable = 'd_jobs_finished'\
               AND ${prefix}_time_start < __TODAY_START__\
               GROUP BY $day_expr\
-              ORDER BY day"
+              ORDER BY day_str"
    array set r {}
    set cols {}
    set n [db::query $sql_d r cols]
@@ -1423,12 +1466,12 @@ proc dbwriter_long_phase_f_collect_daily_vs_hourly \
    array unset r
 
    # per-day SUM(h_jobs_finished) over all parents of the scope
-   set sql_h "SELECT $day_expr AS day, SUM(${prefix}_dvalue) AS s\
+   set sql_h "SELECT $day_expr AS day_str, SUM(${prefix}_dvalue) AS s\
               FROM $from\
               WHERE ${where_prefix}${prefix}_variable = 'h_jobs_finished'\
               AND ${prefix}_time_start < __TODAY_START__\
               GROUP BY $day_expr\
-              ORDER BY day"
+              ORDER BY day_str"
    set cols {}
    set n [db::query $sql_h r cols]
    if {$n < 0} {
@@ -1652,8 +1695,13 @@ proc dbwriter_long_phase_f_assert_intermediate_for_job {jd n_midnights ref_epoch
    # the boundary; give it a generous extra to absorb ingest lag
    set midnight_tol 900
 
-   set sql "SELECT j_task_number, j_pe_taskid, ju_curr_time, ju_wallclock,\
-                   ju_start_time, ju_end_time\
+   # the three timestamps are rendered by the database, not by the JDBC driver,
+   # so every engine returns the format dbwriter_long_phase_f_parse_ts expects.
+   # ORDER BY still uses the column itself, which sorts chronologically no
+   # matter how the value is rendered.
+   set sql "SELECT j_task_number, j_pe_taskid,\
+                   [db::ts_str ju_curr_time], ju_wallclock,\
+                   [db::ts_str ju_start_time], [db::ts_str ju_end_time]\
             FROM sge_job, sge_job_usage\
             WHERE j_id = ju_parent AND j_job_number = $jid\
             AND ju_exit_status = -1\
@@ -1850,8 +1898,12 @@ proc dbwriter_long_phase_f_qacct_host {} {
 # @param field    qacct field name (cpu, wallclock, ...)
 # @param db_val   database aggregate value
 # @param qa_val   qacct aggregate value
-# @param tol_abs  absolute tolerance (used when tol_rel is 0)
-# @param tol_rel  relative tolerance (0..1); 0 means use tol_abs
+# A value is accepted when it is within either tolerance. The absolute one
+# covers the rounding of the qacct output, which dominates for small values,
+# the relative one covers the aggregation differences of large ones.
+#
+# @param tol_abs  absolute tolerance; 0 disables it
+# @param tol_rel  relative tolerance (0..1); 0 disables it
 # @return 0 if within tolerance, else -1 (error logged via ts_log_severe)
 proc dbwriter_long_phase_f_compare {kind jid field db_val qa_val tol_abs tol_rel} {
    if {![string is double -strict $db_val] || \
@@ -1861,24 +1913,24 @@ proc dbwriter_long_phase_f_compare {kind jid field db_val qa_val tol_abs tol_rel
       return -1
    }
    set diff [expr {abs($db_val - $qa_val)}]
-   set ok 1
-   if {$tol_rel > 0} {
+   set ok 0
+   if {$diff <= $tol_abs} {
+      set ok 1
+   }
+   if {!$ok && $tol_rel > 0} {
       set base [expr {abs($qa_val) > abs($db_val) ? abs($qa_val) : abs($db_val)}]
-      if {$base > 0 && $diff > $base * $tol_rel} {
-         set ok 0
-      }
-   } else {
-      if {$diff > $tol_abs} {
-         set ok 0
+      if {$base > 0 && $diff <= $base * $tol_rel} {
+         set ok 1
       }
    }
    if {!$ok} {
       set msg "dbwriter long test: qacct mismatch $kind/$field (jid $jid):\
                db=$db_val qacct=$qa_val diff=$diff"
+      if {$tol_abs > 0} {
+         append msg " tol_abs=$tol_abs"
+      }
       if {$tol_rel > 0} {
          append msg " tol_rel=$tol_rel"
-      } else {
-         append msg " tol_abs=$tol_abs"
       }
       ts_log_severe $msg
       return -1
@@ -1904,7 +1956,8 @@ proc dbwriter_long_phase_f_compare {kind jid field db_val qa_val tol_abs tol_rel
 #   - maxvmem:        MAX per stream, then MAX across streams
 # Only wallclock changes shape from the naive flat aggregate; the other four
 # come out numerically identical either way.
-# Tolerances: ±60 s for the wallclock fields, ±5 % for cpu / mem / maxvmem.
+# Tolerances: ±60 s for the wallclock fields, ±5 % for cpu / mem / maxvmem,
+# plus a rounding floor for cpu and mem.
 #
 # qacct is invoked on the product-root fileserver if one is configured (the
 # accounting file lives there and no NFS hop is needed); otherwise on the
@@ -1916,6 +1969,12 @@ proc dbwriter_long_phase_f_assert_qacct_match {} {
    set rc 0
    set tol_rel 0.05
    set tol_wc  60
+   # qacct prints cpu and mem with three decimal places. A job which used almost
+   # no memory therefore reports e.g. 0.004 where the database aggregate is
+   # 0.0046 - a difference which is far outside the relative tolerance although
+   # both values are the same number. Half of the last printed digit is 0.0005,
+   # the next full digit is used as the floor below which no difference counts.
+   set tol_round 0.001
 
    foreach kind [workload::get_long_running_kinds] {
       set jd [workload::get_long_running_job $kind]
@@ -1983,9 +2042,9 @@ proc dbwriter_long_phase_f_assert_qacct_match {} {
       foreach {field db_val qa_field tol_abs trel} [list \
          wallclock    $db_wc      wallclock    $tol_wc 0       \
          ru_wallclock $db_ru_wc   ru_wallclock $tol_wc 0       \
-         cpu          $db_cpu     cpu          0       $tol_rel \
-         mem          $db_mem     mem          0       $tol_rel \
-         maxvmem      $db_maxvmem maxvmem      0       $tol_rel \
+         cpu          $db_cpu     cpu          $tol_round $tol_rel \
+         mem          $db_mem     mem          $tol_round $tol_rel \
+         maxvmem      $db_maxvmem maxvmem      0          $tol_rel \
       ] {
          if {![info exists qacct_info($qa_field)]} {
             ts_log_severe "dbwriter long test: qacct has no '$qa_field' for\

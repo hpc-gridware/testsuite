@@ -516,6 +516,29 @@ proc db::day_str {field} {
 }
 
 ##
+# @brief Engine-portable SQL expression that renders a timestamp column as a
+# "YYYY-MM-DD HH:MM:SS" string.
+#
+# Timestamp columns must not be selected raw. The sqlutil bridge reads every
+# column with ResultSet.getString, so the format of a raw timestamp is the one
+# the JDBC driver happens to produce - and the Oracle columns are of type DATE,
+# for which that format has changed between driver versions. Formatting in SQL
+# makes all three engines return the same string, which the Tcl side parses
+# with a single expression.
+#
+# @param field the name of the timestamp column to render
+# @return the SQL expression yielding the timestamp string on the configured engine
+proc db::ts_str {field} {
+   switch -- [get_database_type] {
+      postgresql -
+      postgres   {return "TO_CHAR($field, 'YYYY-MM-DD HH24:MI:SS')"}
+      oracle     {return "TO_CHAR($field, 'YYYY-MM-DD HH24:MI:SS')"}
+      mysql      {return "DATE_FORMAT($field, '%Y-%m-%d %H:%i:%s')"}
+      default    {return "TO_CHAR($field, 'YYYY-MM-DD HH24:MI:SS')"}
+   }
+}
+
+##
 # @brief Apply engine-specific SQL substitutions.
 #
 # Translates engine-neutral placeholders in sql to the dialect of the
