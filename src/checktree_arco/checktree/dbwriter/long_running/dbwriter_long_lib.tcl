@@ -94,34 +94,32 @@ proc dbwriter_long::wait {real_seconds {reason ""}} {
 }
 
 ##
-# @brief Shorten all deletion rules to 1-2 days.
+# @brief Shorten the two deletion rules Phase G asserts on.
 #
-# Rewrites the deletion rules in the active dbwriter.xml so that all retention
-# periods are 1 or 2 days. With the default rules (7 days / 1 month / 1-2
-# years) a multi-day test run would never reach the retention boundary. The
-# raw-value scopes are shortened to 1 day and the derived-value scopes to
-# 2 days, so a run of three or more days observes both the "not yet deleted"
-# and the "deleted" state.
+# With the default rules (7 days / 1 month / 1-2 years) a multi-day test run
+# would never reach a retention boundary, so two of them are shortened until
+# the run does cross them:
+#   - the raw host_values sub_scope rule to 1 day,
+#   - the online_usage rule to 2 days.
+#
+# Everything else is deliberately left at its shipped retention. Two reasons:
+# the untouched catch-all rule of sge_host_values (2 years) is what lets
+# Phase G prove that a sub_scope-targeted rule deletes only the variables it
+# names - the derived h_* / d_* rows of the very same table have to survive;
+# and shortening the job scope would delete the accounting rows that the
+# Phase E and Phase F assertions compare against, so the test would tear down
+# its own evidence.
 #
 # dbwriter_xml::backup must have been called first; the original file is put
-# back by dbwriter_xml::restore on teardown.
+# back by dbwriter_xml::restore, which Phase G runs as its last assertion and
+# the cleanup repeats.
 #
 # @return 0 if all rules were written, else -1 (error reported via ts_log_severe)
 proc dbwriter_long::register_short_retention_rules {} {
    # {scope time_range time_amount {sub_scope ...}}
-   # raw-value scopes -> 1 day, derived-value scopes -> 2 days
    set rules {
-      {host_values      day 1 {np_load_avg cpu mem_free virtual_free}}
-      {host_values      day 2 {}}
-      {queue_values     day 1 {slots state}}
-      {queue_values     day 2 {}}
-      {job              day 2 {}}
-      {job_log          day 1 {}}
-      {online_usage     day 1 {}}
-      {statistic_values day 1 {lines_per_second}}
-      {statistic_values day 1 {row_count}}
-      {statistic_values day 2 {}}
-      {ar_values        day 1 {}}
+      {host_values  day 1 {np_load_avg cpu mem_free virtual_free}}
+      {online_usage day 2 {}}
    }
 
    foreach rule $rules {
@@ -535,6 +533,28 @@ proc db::ts_str {field} {
       oracle     {return "TO_CHAR($field, 'YYYY-MM-DD HH24:MI:SS')"}
       mysql      {return "DATE_FORMAT($field, '%Y-%m-%d %H:%i:%s')"}
       default    {return "TO_CHAR($field, 'YYYY-MM-DD HH24:MI:SS')"}
+   }
+}
+
+##
+# @brief Engine-portable SQL expression for a point in time in the past.
+#
+# The deletion rules keep a rolling window: the dbwriter deletes everything
+# whose time_end is older than the timestamp of the last imported row minus the
+# configured retention (RecordManager.getDeleteTimeEnd). The Phase G assertions
+# express their cutoffs relative to the current time in the same way, so the
+# comparison happens inside the database and no clock skew between the testsuite
+# host and the database server can shift it.
+#
+# @param seconds how far back the returned timestamp lies
+# @return the SQL expression for "now minus seconds" on the configured engine
+proc db::ago {seconds} {
+   switch -- [get_database_type] {
+      postgresql -
+      postgres   {return "(LOCALTIMESTAMP - INTERVAL '$seconds seconds')"}
+      oracle     {return "(SYSDATE - $seconds / 86400)"}
+      mysql      {return "(NOW() - INTERVAL $seconds SECOND)"}
+      default    {return "(LOCALTIMESTAMP - INTERVAL '$seconds seconds')"}
    }
 }
 
