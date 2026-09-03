@@ -101,6 +101,47 @@ import os, re, sys, glob, collections
 
 CLION_ROOT = os.environ.get("GCS_CLION_ROOT", os.path.expanduser("~/Clion"))
 
+_SEG_CACHE = {}
+
+
+def segment(sub, tree):
+    """Ask gcs-segment where <sub> belongs for <tree> in this lab segment.
+
+    gcs-segment -- the sibling tool gcs-pipeline, gcs-runners and gcs-teststate
+    ask as well -- is the single source of truth for the A/B distinction, so this
+    stays correct on both sides. Falls back to the in-tree location, which is
+    exactly segment A's answer: a missing helper degrades to what A has always
+    done rather than to nothing. Cached, the answer cannot change while this
+    process lives.
+    """
+    key = (sub, tree)
+    if key in _SEG_CACHE:
+        return _SEG_CACHE[key]
+    d = tree if sub == "map" else f"{tree}/{sub}"
+    import subprocess
+    here = os.path.dirname(os.path.realpath(__file__))
+    try:
+        out = subprocess.run([f"{here}/gcs-segment", sub, tree],
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             universal_newlines=True, timeout=5)
+        if out.stdout.strip():
+            d = out.stdout.strip()
+    except Exception:
+        pass
+    _SEG_CACHE[key] = d
+    return d
+
+
+def measure_roots():
+    """The roots under which measurements are looked for.
+
+    One on segment A. Two on B, because the fleet and the lines' own results sit
+    on the /scratch export while the trees stay in the home -- and a tree part
+    way through the move has files under both. Duplicates cost nothing here: the
+    longest run wins regardless of which file it came from.
+    """
+    return list(dict.fromkeys([CLION_ROOT, segment("map", CLION_ROOT)]))
+
 # Tests that are a prerequisite for others without representing a functional
 # coupling of their own: they have to run once up front on every runner.
 INFRA = {"init_core_system", "connection_test", "display_test"}
@@ -409,6 +450,32 @@ def scan(line):
     return sorted(tests, key=lambda t: t["path"])
 
 
+def root_spellings():
+    """Every spelling of CLION_ROOT a stored path can carry.
+
+    Three of them, and they are not interchangeable as strings. The paths in
+    check_durations.txt come from the testsuite, which is configured from the
+    .sav files and therefore says /home/<user>/... . CLION_ROOT is built from
+    $HOME instead, and on the server that expands to /export/home/<user>/... .
+    And on segment B the same tree is reachable a third time under /scratch.
+
+    Matching one spelling against another never succeeds, which is not a
+    cosmetic failure: rel_key() then fell through to the full path, every line
+    kept keys of its own, and the cross-line sharing this exists for was lost
+    without any sign of it.
+    """
+    out = [CLION_ROOT]
+    if CLION_ROOT.startswith("/export/home/"):
+        out.append("/home" + CLION_ROOT[len("/export/home"):])
+    elif CLION_ROOT.startswith("/home/"):
+        out.append("/export/home" + CLION_ROOT[len("/home"):])
+    out += [segment("map", r) for r in list(out)]
+    return list(dict.fromkeys(out))
+
+
+_REL_RE = None
+
+
 def rel_key(path):
     """Line independent key: strip '<root>/<line>/' or
     '<root>/<line>-features/<name>/' off the path.
@@ -418,8 +485,15 @@ def rel_key(path):
     values have long existed for the same test under 91x, 90x or gcs0. The same
     test has the same path *below* the line under every line.
     """
-    m = re.match(re.escape(CLION_ROOT) + r"/(?:[^/]+-features/[^/]+|[^/]+)/(.*)$", path)
-    return m.group(1) if m else path
+    global _REL_RE
+    if _REL_RE is None:
+        _REL_RE = [re.compile(re.escape(r) + r"/(?:[^/]+-features/[^/]+|[^/]+)/(.*)$")
+                   for r in root_spellings()]
+    for rx in _REL_RE:
+        m = rx.match(path)
+        if m:
+            return m.group(1)
+    return path
 
 
 def durations(line):
@@ -444,10 +518,13 @@ def durations(line):
     # were planned with the 32 s default although 1441 s and 200 s had been
     # measured on r12, and level 1 was then killed by ctest at the timeout
     # derived from those 32 s (run of 2026-08-02, phase 1).
-    for f in glob.glob(f"{CLION_ROOT}/*/results/check_durations.txt") + \
-             glob.glob(f"{CLION_ROOT}/*/runners/r*/results/check_durations.txt") + \
-             glob.glob(f"{CLION_ROOT}/*-features/*/results/check_durations.txt") + \
-             glob.glob(f"{CLION_ROOT}/*-features/*/runners/r*/results/check_durations.txt"):
+    files = []
+    for _r in measure_roots():
+        files += glob.glob(f"{_r}/*/results/check_durations.txt")
+        files += glob.glob(f"{_r}/*/runners/r*/results/check_durations.txt")
+        files += glob.glob(f"{_r}/*-features/*/results/check_durations.txt")
+        files += glob.glob(f"{_r}/*-features/*/runners/r*/results/check_durations.txt")
+    for f in files:
         lines = open(f, errors="replace").read().split("\n")
         for i, l in enumerate(lines):
             if l.startswith(":") and l.endswith(":") and "," in l:
@@ -634,7 +711,7 @@ def write_ctest(line, outdir, us, n):
     free.
     """
     os.makedirs(outdir, exist_ok=True)
-    runner = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gcs-run-unit")
+    runner = os.path.join(os.path.dirname(os.path.realpath(__file__)), "gcs-run-unit")
 
     with open(f"{outdir}/ts_cluster.json", "w") as fh:
         fh.write('{ "version": {"major": 1, "minor": 0},\n  "local": [ { "ts_cluster": [\n')
@@ -808,7 +885,8 @@ def write_clion_configs(line, outdir, us, jobs, profile, min_label, with_tests):
     # gcs-teststate on every recorded result, so this needs no preparation step
     # -- which an IDE could not be taught anyway.
     emit("a", "ts all  pending (not yet passed)",
-         f"-V -j {jobs} --tests-from-file {CLION_ROOT}/{line}/runners/pending.txt")
+         f"-V -j {jobs} --tests-from-file "
+         f"{segment('runners', f'{CLION_ROOT}/{line}')}/pending.txt")
     n = 5
 
     if with_tests:

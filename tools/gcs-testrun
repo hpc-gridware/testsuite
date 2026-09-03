@@ -76,8 +76,18 @@ n=32
 [ $# -gt 0 ] && [[ "${1:-}" =~ ^[0-9]+$ ]] && { n="$1"; shift; }
 [ "${1:-}" = "--" ] && shift
 
-D="$HOME/Clion/$line/runners/lists"
-[ -d "$D" ] || die "no runner lists under $D  (gcs-runners $line init)"
+# The lists live with the fleet, and where that is depends on the segment -- on
+# B it is the /scratch export, on A the tree. gcs-segment decides; if it cannot
+# be asked the answer is A's, which is what this line used to say outright.
+_fleet="$("$SCRIPT_DIR/gcs-segment" runners "$HOME/Clion/$line" 2>/dev/null)" || _fleet=""
+[ -n "$_fleet" ] || _fleet="$HOME/Clion/$line/runners"
+D="$_fleet/lists"
+# Gefragt ist, ob es eine Flotte gibt -- nicht, ob dieses Verzeichnis schon
+# existiert. Es wird zwei Zeilen weiter unten ohnehin angelegt, die alte
+# Bedingung war also nur eine Huerde fuer den ersten Lauf einer neuen Flotte.
+ls -d "$_fleet"/r[0-9]* >/dev/null 2>&1 \
+  || die "no runners under $_fleet  (gcs-runners $line init)"
+mkdir -p "$D"
 
 stamp="$(date '+%Y%m%d-%H%M%S')"
 RUN="$D/runs/$stamp"

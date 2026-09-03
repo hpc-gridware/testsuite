@@ -36,10 +36,23 @@
 # determines occupied ports with a glob over <root>/*/config/defaults-*.sav.
 # Without that symlink a later ts-init would see the runner ports as free and
 # hand one of them to a workspace.
+#
+# Where the fleet is stored is a segment question, not a constant -- see
+# runners_dir(). On A it is <line>/runners as it always was, on B it is on the
+# /scratch export. Nothing else in this script cares which of the two it is.
 
 set -euo pipefail
 
 CLION_ROOT="${GCS_CLION_ROOT:-$HOME/Clion}"
+
+# Everything derived from this lands in symlinks, generated wrappers and .sav
+# files that OTHER hosts read: the cluster hosts mount the home as /home/<user>
+# and have no /export/home at all, which is what $HOME expands to on the server.
+# A path written in the server's spelling is a dangling link everywhere else --
+# that is how <line>-<feature> on PATH came to resolve only on server-00.
+# /home is the spelling that holds on every host, and it is what the .sav files
+# have always carried; fold onto it once, here, rather than at each use.
+case "$CLION_ROOT" in /export/home/*) CLION_ROOT="/home${CLION_ROOT#/export/home}" ;; esac
 # Follow symlinks: these tools are put on PATH as links, and they call each
 # other via SCRIPT_DIR -- which has to be the checkout, not the link farm.
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -81,6 +94,34 @@ usage() { sed -n '2,/^set -euo/{/^set -euo/d;s/^# \{0,1\}//;p}' "$0" >&2; exit "
 
 line_root()   { printf '%s/%s' "$CLION_ROOT" "$1"; }
 
+# Where the runner fleet of a line is stored.
+#
+# Not <line-root>/runners unconditionally any more: on segment B the fleet
+# belongs on the /scratch export, for the same reason inst/ does. install mirrors
+# the line's inst/ into every runner as root -- utilbin/<arch>/testsuidroot is
+# setuid root and cannot be copied otherwise -- and /scratch/ebablick/Clion is
+# the export that carries no_root_squash. Under root_squash that write is refused
+# and the mirror fails.
+#
+# gcs-segment answers the A/B question for every tool here, and it is asked the
+# same way gcs-pipeline asks it for inst: with the in-tree location as the
+# fallback, which is precisely segment A's own answer. A missing or broken helper
+# therefore degrades to what A has always done rather than to nothing.
+#
+# Memoised because runner_root() is called once per runner per operation, and a
+# 48 runner fleet would otherwise fork the helper a few hundred times for an
+# answer that cannot change within one invocation.
+_rdir_line=""
+_rdir_val=""
+runners_dir() {
+  if [ "$1" != "$_rdir_line" ]; then
+    _rdir_val="$("$SCRIPT_DIR/gcs-segment" runners "$(line_root "$1")" 2>/dev/null)"       || _rdir_val="$(line_root "$1")/runners"
+    [ -n "$_rdir_val" ] || _rdir_val="$(line_root "$1")/runners"
+    _rdir_line="$1"
+  fi
+  printf '%s' "$_rdir_val"
+}
+
 # Directory that holds the line wrapper as it is reachable on PATH.
 #
 # One hop only: the tools themselves are installed as symlinks, so "readlink -f"
@@ -94,7 +135,7 @@ line_bindir() {
   dirname "$p"
 }
 
-runner_root() { printf '%s/runners/r%s' "$(line_root "$1")" "$2"; }
+runner_root() { printf '%s/r%s' "$(runners_dir "$1")" "$2"; }
 
 # How many runners a line has -- the default for every command that takes an
 # optional count.
@@ -104,14 +145,22 @@ runner_root() { printf '%s/runners/r%s' "$(line_root "$1")" "$2"; }
 # call that relied on the default therefore walked into a non-existent r<N+1>
 # and died there: install had mirrored all N runners and installed none of them
 # by that point, which looked like a successful mirror rather than a failure.
-# The trailing slash is not decoration either: since the storage move runners/ is
-# a symlink to /scratch/runners/<line>, and find is handed the link itself as its
-# start directory -- without the slash it refuses to descend and the count is 0,
-# which silently sizes every fleet operation to nothing.
+# The trailing slash is not decoration either: the storage move once made
+# runners/ a symlink, and find is handed the start directory as it is -- without
+# the slash it refuses to descend into a link and the count is 0, which silently
+# sizes every fleet operation to nothing. runners_dir() returns a real directory
+# today, but a hand-placed link there must not resurrect that failure.
 runner_count() {
-  find "$(line_root "$1")/runners/" -mindepth 1 -maxdepth 1 -name 'r*' -type d 2>/dev/null | wc -l
+  find "$(runners_dir "$1")/" -mindepth 1 -maxdepth 1 -name 'r*' -type d 2>/dev/null | wc -l
 }
 runner_name() { printf '%s-r%s' "$1" "$2"; }
+
+# Has this line a fleet at all? Not the same question as whether the directory
+# exists: init creates it before there is anything in it and teardown leaves it
+# behind, so an empty one is the normal state of a line without runners. Asking
+# the directory instead let an unmatched "r*/" glob through, which cmd_status
+# then printed as a runner called "r*".
+have_runners() { [ "$(runner_count "$1")" -gt 0 ]; }
 
 # Read the value of a key from a .sav. A .sav carries the previous generation as
 # an "<obj>.old" block BEFORE the current one, so the LAST occurrence is the
@@ -249,9 +298,24 @@ cmd_init() {
   local lroot rroot name cfg dst_cfg link wrapper canon i port
   lroot="$(line_root "$line")"
   [ -d "$lroot" ] || die "line root missing: $lroot"
+  # Before anything counts or globs runners, they need somewhere to be. On A this
+  # is <line>/runners and usually exists already; on B it is the first thing that
+  # puts the line onto the /scratch export.
+  #
+  # lists/ gehoert dazu: gcs-testrun legt dort seine Plaene und Laufordner ab und
+  # verweist in seiner Fehlermeldung ausdruecklich auf "gcs-runners init". Auf A
+  # existierte das Verzeichnis seit jeher, deshalb ist nie aufgefallen, dass es
+  # niemand anlegt -- eine frisch aufgebaute Flotte scheitert daran sofort.
+  mkdir -p "$(runners_dir "$line")/lists"
   cfg="$lroot/config/defaults-$line.sav"
   canon="$(readlink -f "$lroot/config/$line" 2>/dev/null || true)"
   [ -n "$canon" ] && [ -x "$canon" ] || canon="$SCRIPT_DIR/$line"
+  # readlink -f canonicalises, and on the server that turns /home/<user> back
+  # into /export/home/<user>, which no other host has. The value goes into the
+  # generated wrapper as CS_TOOL_DIR and as the dot-sourced path, so it has to
+  # hold wherever the wrapper runs -- gcs-run-unit invokes it on the runner's
+  # own host, not here.
+  case "$canon" in /export/home/*) canon="/home${canon#/export/home}" ;; esac
   [ -x "$canon" ] || die "line script not found: $canon"
 
   # Collect free ports. Important: a runner that already has a port keeps it --
@@ -308,7 +372,7 @@ cmd_init() {
 
     # port visibility for gcs-feature-workspace (see the header comment)
     link="$lroot/config/defaults-$name.sav"
-    ln -sfn "../runners/r$i/config/defaults-$name.sav" "$link"
+    ln -sfn "$rroot/config/defaults-$name.sav" "$link"
 
     wrapper="$rroot/config/$name"
     cat > "$wrapper" <<EOF
@@ -336,17 +400,39 @@ EOF
   info "next step: gcs-runners $line install $want"
 }
 
+# Ports that are listening on the host the clusters actually run on.
+#
+# Asked once, on master_host, and matched locally afterwards -- not once per
+# runner, which would be one ssh round trip per row of the table.
+#
+# Asking the LOCAL ss was simply wrong: a runner's qmaster runs on master_host,
+# so the check never saw it and the CLUSTER column reported "-" for every
+# runner, running or not. Same blind spot that made a feature workspace look
+# safe to tear down while its cluster was up.
+listening_ports_on_master() {
+  local line="$1" mh
+  mh="$(read_sav_value "$(line_root "$1")/config/defaults-$line.sav" master_host)"
+  [ -n "$mh" ] || mh="$(hostname -s)"
+  if [ "$mh" = "$(hostname -s)" ]; then
+    ss -ltnH 2>/dev/null | awk '{print $4}' | sed 's/.*://' | grep -E '^[0-9]+$' | sort -u
+  else
+    timeout 15 ssh -o BatchMode=yes -o ConnectTimeout=4 -o StrictHostKeyChecking=no "$mh" \
+      "ss -ltnH 2>/dev/null | awk '{print \$4}' | sed 's/.*://' | grep -E '^[0-9]+\$' | sort -u" 2>/dev/null
+  fi
+}
+
 cmd_status() {
-  local line="${1:?line required}" lroot d i port root state
-  lroot="$(line_root "$line")"
-  [ -d "$lroot/runners" ] || { info "(no runners for $line)"; return; }
+  local line="${1:?line required}" d i port root state up
+  have_runners "$line" || { info "(no runners for $line)"; return; }
+  up=" $(listening_ports_on_master "$line" | tr '\n' ' ') "
   printf '%-10s %-6s %-9s %-8s %s\n' RUNNER PORT INST CLUSTER PATH
-  for d in "$lroot"/runners/r*/; do
-    d="${d%/}"; i="$(basename "$d" | tr -d 'r')"
+  for d in "$(runners_dir "$line")"/r*/; do
+    d="${d%/}"; [ -d "$d" ] || continue
+    i="$(basename "$d" | tr -d 'r')"
     port="$(read_sav_value "$d/config/defaults-$(runner_name "$line" "$i").sav" commd_port)"
     root="$(read_sav_value "$d/config/defaults-$(runner_name "$line" "$i").sav" product_root)"
     [ -d "$root/bin" ] && state=binary || state=empty
-    if ss -ltnH 2>/dev/null | grep -qE ":$port\b"; then
+    if case "$up" in *" $port "*) true ;; *) false ;; esac; then
       printf '%-10s %-6s %-9s %-8s %s\n' "r$i" "$port" "$state" "running" "$d"
     else
       printf '%-10s %-6s %-9s %-8s %s\n' "r$i" "$port" "$state" "-" "$d"
@@ -371,9 +457,15 @@ cmd_install() {
     esac
     shift
   done
-  local lroot rroot name i rc=0 pids=()
+  local lroot linst rroot name i rc=0 pids=()
   lroot="$(line_root "$line")"
-  [ -d "$lroot/runners" ] || die "no runners -- run 'gcs-runners $line init' first"
+  # The source of the mirror moves with the segment exactly as its destination
+  # does: on B the line's own inst/ is on /scratch, not in the tree. Asked the
+  # same way and with the same fallback as everywhere else.
+  linst="$("$SCRIPT_DIR/gcs-segment" inst "$lroot" 2>/dev/null)" || linst="$lroot/inst"
+  [ -n "$linst" ] || linst="$lroot/inst"
+  [ -d "$linst" ] || die "the line has nothing installed: $linst  ($line install)"
+  have_runners "$line" || die "no runners -- run 'gcs-runners $line init' first"
   [ -n "$want" ] || want="$(runner_count "$line")"
 
   for i in $(seq 1 "$want"); do
@@ -394,9 +486,9 @@ cmd_install() {
     # the installation -- that costs N full builds. A root rsync takes seconds
     # and yields the same result. Ownership is preserved (rsync -a), so only
     # this single file ends up root:root.
-    info "  r$i: mirroring inst/ from the line (as root, setuid binaries) ..."
+    info "  r$i: mirroring $linst (as root, setuid binaries) ..."
     "$SCRIPT_DIR/as-root" "$(hostname -s)" \
-        "rsync -a --delete --exclude=/default '$lroot/inst/' '$rroot/inst/'" >/dev/null
+        "rsync -a --delete --exclude=/default '$linst/' '$rroot/inst/'" >/dev/null
   done
 
   for i in $(seq 1 "$want"); do
@@ -474,7 +566,7 @@ cmd_teardown() {
     esac
   done
   lroot="$(line_root "$line")"
-  [ -d "$lroot/runners" ] || { info "(no runners)"; return; }
+  have_runners "$line" || { info "(no runners)"; return; }
   [ -n "$want" ] || want="$(runner_count "$line")"
 
   for i in $(seq 1 "$want"); do
@@ -495,7 +587,12 @@ cmd_teardown() {
   for i in $(seq 1 "$want"); do
     rroot="$(runner_root "$line" "$i")"; name="$(runner_name "$line" "$i")"
     [ -d "$rroot" ] || continue
-    rm -f "$lroot/config/defaults-$name.sav" "$(dirname "$(readlink -f "$lroot/config/$line")")/$name"
+    # line_bindir, not "readlink -f" -- exactly as init placed it. readlink -f
+    # follows through the link farm into the checkout, so teardown deleted
+    # <checkout>/tools/<line>-rN, which never existed, and left the wrapper
+    # symlink on PATH behind. That is how a torn down fleet kept leaving one dead
+    # link per runner in the link farm.
+    rm -f "$lroot/config/defaults-$name.sav" "$(line_bindir "$lroot" "$line")/$name"
     [ "$force" = "--force" ] && { rm -rf "$rroot"; info "  - r$i removed (including inst/results)"; } \
                              || info "  - r$i shut down, directory kept (--force removes it)"
   done
@@ -515,17 +612,42 @@ cmd_teardown() {
 # a ten second hard limit. A healthy execd kills it, a stalled one does not. One
 # job per cluster and execd host, all at the same time, so the check costs about
 # a minute regardless of how many runners there are.
+# qsub/qstat/qdel gegen einen Cluster ausfuehren -- aber VON EINEM CLUSTER-HOST.
+#
+# Auf A war der TS-Treiber zugleich master_host, deshalb lief das hier lokal und
+# fiel jahrelang nicht auf. Auf B ist der Treiber server-00 und gehoert dem
+# Cluster ueberhaupt nicht an: er steht in keiner Rolle der .sav, weder als
+# submit_only_host noch als admin_only_host. Ein qsub von dort wird dann nicht
+# einmal abgelehnt -- er bleibt in der Commlib haengen, ohne Fehler und ohne
+# Timeout. Am 01.09.2026 stand der erste Probe-qsub so zwoelf Minuten, waehrend
+# auf dem Master kein einziger Job ankam.
+#
+# master_host ist per Konstruktion Admin-Host, also die richtige Stelle. Ist er
+# der lokale Rechner -- der A-Fall -- bleibt alles wie bisher, ohne ssh.
+cluster_sh() {
+  local mh="$1" root="$2" port="$3" cmd="$4"
+  local pre="SGE_ROOT='$root' SGE_CELL=default SGE_QMASTER_PORT='$port' SGE_EXECD_PORT='$((port + 1))'"
+  if [ "$mh" = "$(hostname -s)" ]; then
+    sh -c "$pre $cmd"
+  else
+    timeout 60 ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$mh" "$pre $cmd"
+  fi
+}
+
 cmd_health() {
   local line="${1:?line required}" want="${2:-}"
-  local lroot cfg hosts root port arch qsub qstat qdel i h jid rc=0
+  local lroot cfg hosts root port arch qsub qstat qdel i h jid rc=0 mh
   local -a probes=()
 
   lroot="$(line_root "$line")"
-  [ -d "$lroot/runners" ] || die "no runners -- run 'gcs-runners $line init' first"
+  have_runners "$line" || die "no runners -- run 'gcs-runners $line init' first"
   [ -n "$want" ] || want="$(runner_count "$line")"
 
   hosts="$(read_sav_value "$lroot/config/defaults-$line.sav" execd_hosts)"
   [ -n "$hosts" ] || die "no execd_hosts in the line configuration"
+  mh="$(read_sav_value "$lroot/config/defaults-$line.sav" master_host)"
+  [ -n "$mh" ] || die "no master_host in the line configuration"
+  [ "$mh" = "$(hostname -s)" ] || info "  submitting from $mh (this host is not part of the cluster)"
 
   info "  probing $want runners on: $hosts  (h_rt=$HEALTH_LIMIT)"
   for i in $(seq 1 "$want"); do
@@ -549,11 +671,9 @@ cmd_health() {
       info "  r$i: cannot determine arch -- skipped"; rc=1; continue
     fi
     for h in $hosts; do
-      jid="$(SGE_ROOT="$root" SGE_CELL=default SGE_QMASTER_PORT="$port" \
-             SGE_EXECD_PORT="$((port + 1))" \
-             "$root/bin/$arch/qsub" -b y -l hostname="$h" -l h_rt="$HEALTH_LIMIT" \
-             -o /dev/null -e /dev/null sleep 300 2>/dev/null \
-             | grep -oE '[0-9]+' | head -1)" || true
+      jid="$(cluster_sh "$mh" "$root" "$port" \
+             "'$root/bin/$arch/qsub' -b y -l hostname='$h' -l h_rt='$HEALTH_LIMIT' -o /dev/null -e /dev/null sleep 300" \
+             2>/dev/null | grep -oE '[0-9]+' | head -1)" || true
       [ -n "$jid" ] && probes+=("$i $h $jid") || { info "  r$i/$h: qsub failed"; rc=1; }
     done
   done
@@ -585,10 +705,8 @@ cmd_health() {
     # reason to stop looking at the other 31.
     arch="$("$root/util/arch" 2>/dev/null)" || true
     local state
-    state="$(SGE_ROOT="$root" SGE_CELL=default SGE_QMASTER_PORT="$port" \
-             SGE_EXECD_PORT="$((port + 1))" \
-             "$root/bin/$arch/qstat" -u '*' 2>/dev/null \
-             | awk -v j="$jid" '$1 == j { print $5 }')" || true
+      state="$(cluster_sh "$mh" "$root" "$port" "'$root/bin/$arch/qstat' -u \\*" 2>/dev/null \
+               | awk -v j="$jid" '$1 == j { print $5 }')" || true
     case "$state" in
       "")         ok=$((ok + 1))
                   [ -n "${GCS_HEALTH_VERBOSE:-}" ] && printf '%-8s %-16s %-10s %s\n' "r$i" "$h" "$jid" "ok" ;;
@@ -597,9 +715,7 @@ cmd_health() {
     esac
     # A stalled execd will not remove its own job -- and it is a "sleep 300".
     if [ -n "$state" ]; then
-      SGE_ROOT="$root" SGE_CELL=default SGE_QMASTER_PORT="$port" \
-      SGE_EXECD_PORT="$((port + 1))" \
-      "$root/bin/$arch/qdel" -f "$jid" >/dev/null 2>&1 || true
+        cluster_sh "$mh" "$root" "$port" "'$root/bin/$arch/qdel' -f '$jid'" >/dev/null 2>&1 || true
     fi
   done
 

@@ -42,12 +42,17 @@ EOF
 }
 
 # "reset the TS" without deleting results: for every host-prefixed result
-# directory under $CS_HOME/results (h047.completed, v01701.failed, ...),
+# directory under the line's results dir (h047.completed, v01701.failed, ...),
 # move its .res.<level> marker files into the matching *.uncompleted dir
 # instead of rm'ing them, so completed/failed/unsupported test history
 # stays around for inspection but the TS treats every test as not-yet-run.
 reset_results() {
-   results_dir="$CS_HOME/results"
+   # Where the results are is a segment question, exactly like CS_INST below:
+   # on B they sit on the /scratch export, which is also what results_dir in the
+   # .sav says. Asked in the tree the reset silently found the old, stale copy
+   # and reported "nothing to reset" over a run that was writing elsewhere.
+   results_dir=$("$CS_TOOL_DIR/gcs-segment" results "$CS_HOME" 2>/dev/null) \
+      || results_dir="$CS_HOME/results"
    [ -d "$results_dir" ] || { printf 'no results dir at %s, nothing to reset\n' "$results_dir" >&2; return 0; }
    moved=0
    for d in "$results_dir"/*.completed "$results_dir"/*.failed "$results_dir"/*.unsupported; do
@@ -176,6 +181,15 @@ fi
 export CS_PIPELINE CS_HOME CS_MASTER_PORT
 unset CS_WRAPPER_ACTIVE
 
+# Where the installed cluster (SGE_ROOT / inst) belongs depends on the lab
+# segment: segment B puts it on the no_root_squash /scratch export, segment A
+# keeps it in the source tree. gcs-segment is the single source of truth for
+# that A/B distinction (the shell and python tools share it); fall back to the
+# in-tree location if the helper is missing, which is exactly segment A's answer
+# -- so this stays runnable on both sides.
+CS_INST=$("$CS_TOOL_DIR/gcs-segment" inst "$CS_HOME" 2>/dev/null) || CS_INST="$CS_HOME/inst"
+export CS_INST
+
 # scrub a foreign cluster environment out of what we inherited. A tmux server
 # keeps the environment of the shell that started it in its *global* env, so
 # every session it later spawns (including the one `ts` creates) starts with
@@ -193,6 +207,7 @@ strip_foreign_inst() {
       [ -n "$_p" ] || continue
       case $_p in
          "$CS_HOME"/*) ;;              # our own line — keep
+         "$CS_INST"|"$CS_INST"/*) ;;   # our own install (moved to scratch) — keep
          */inst|*/inst/*) continue ;;  # another workspace's install — drop
       esac
       _out="${_out:+$_out:}$_p"
@@ -207,7 +222,7 @@ export PATH LD_LIBRARY_PATH MANPATH
 # these only ever come from some settings.sh; ours is sourced below if it
 # exists, so anything still set here belongs to a foreign cluster
 case $SGE_ROOT in
-   "$CS_HOME"/*) ;;
+   "$CS_HOME"/*|"$CS_INST"|"$CS_INST"/*) ;;
    *) unset SGE_CELL SGE_CLUSTER_NAME ;;
 esac
 
@@ -218,7 +233,7 @@ SGE_QGPU="$CS_HOME/qgpu"
 SGE_TEST="$CS_HOME/testsuite"
 SGE_EXT_TEST="$CS_HOME/ocs-testsuite"
 SGE_PKG="$CS_HOME/pkg"
-export SGE_ROOT="$CS_HOME/inst"
+export SGE_ROOT="$CS_INST"
 SGE_BUILD="/usr/local/testsuite/$CS_MASTER_PORT/build"
 SGE_QMASTER_PORT=$CS_MASTER_PORT
 SGE_EXECD_PORT=$((SGE_QMASTER_PORT + 1))
@@ -398,35 +413,85 @@ fi
 # The pool is headroom for the X11 forwarding checks, not a fix for a measured
 # contention problem.
 #
+# WHICH display, and on WHICH host.
+#
+# The host is the one the pool runs on, and gcs-displays builds the pool on
+# $(hostname -s) -- the host the tools are driven from. It used to be read from
+# master_host instead, which is a different machine: the qmaster's host has no X
+# server, and since the compute hosts are meant to stay slim it will not get
+# one. Every runner action then died right here, in the reachability check
+# below, pointing at a display that could never exist. GCS_DISPLAY_HOST moves
+# the pool elsewhere if it ever has to.
+#
+# Which one WITHIN the pool follows the runner index, so r1..r6 share the first
+# display, r7..r12 the second. A line or a feature workspace is a single cluster
+# and takes the base display.
+#
+# The check applies to all three now. It used to sit inside the runner branch,
+# so a line run started with no display at all and CHECK_DISPLAY_OUTPUT stayed
+# "undefined" -- which is what display_test reported on 2026-09-01, several
+# hours into a run.
+#
 # GCS_DISPLAY overrides the computed display; set it empty to pass none at all.
 _disp_base=${GCS_DISPLAY_BASE:-51}
-_disp_per=${GCS_RUNNERS_PER_DISPLAY:-6}
-case $CS_PIPELINE in
-   *-r[0-9]|*-r[0-9][0-9])
-      if [ -z "${GCS_DISPLAY+set}" ]; then
+# The pool is a fixed resource of at most eight displays -- a technical limit,
+# not a preference. Runners share it ROUND ROBIN, so the pool never has to grow
+# with the fleet: 16 runners take two turns through it, 200 take twenty-five.
+# gcs-displays operates on the same number; keep them together, a runner that
+# addresses a display the pool never started aborts below.
+_disp_count=${GCS_DISPLAY_COUNT:-8}
+if [ -z "${GCS_DISPLAY+set}" ]; then
+   # Der Pool laeuft auf EINEM Host des Segments, nicht ueberall. "hostname -s"
+   # traf das nur solange, wie die TS ausschliesslich vom Pool-Host aus gefahren
+   # wurde -- auf host-0000 gesourct kam dabei host-0000:51 heraus, wo nie ein
+   # Display steht. Reihenfolge: ausdrueckliche Angabe, sonst der Host eines
+   # schon gesetzten DISPLAY, sonst der lokale Rechner.
+   if [ -n "${GCS_DISPLAY_HOST:-}" ]; then
+      _disp_host=$GCS_DISPLAY_HOST
+   elif [ -n "${DISPLAY:-}" ] && [ "${DISPLAY#*:}" != "$DISPLAY" ]; then
+      _disp_host=${DISPLAY%%:*}
+      [ -n "$_disp_host" ] || _disp_host=$(hostname -s)
+   else
+      _disp_host=$(hostname -s)
+   fi
+   case $CS_PIPELINE in
+      *-r[0-9]|*-r[0-9][0-9])
          _r_idx=$(printf '%s\n' "$CS_PIPELINE" | sed -n 's/.*-r\([0-9][0-9]*\)$/\1/p')
          [ -n "$_r_idx" ] || _r_idx=1
-         _r_host=$(read_sav_value "$CS_HOME/config/defaults-${CS_PIPELINE}.sav" master_host)
-         [ -n "$_r_host" ] || _r_host=$(hostname -s)
-         GCS_DISPLAY="$_r_host:$(( _disp_base + (_r_idx - 1) / _disp_per ))"
-      fi
+         GCS_DISPLAY="$_disp_host:$(( _disp_base + (_r_idx - 1) % _disp_count ))"
+         ;;
+      *)
+         GCS_DISPLAY="$_disp_host:$_disp_base"
+         ;;
+   esac
+fi
 
-      if [ -n "$GCS_DISPLAY" ]; then
-         # Fail FAST and loudly. Without this the run starts anyway and every
-         # X11 dependent check fails one by one, which is how a missing display
-         # cost an evening of triage on 2026-08-06: 8 of 13 "real defects" of
-         # that full run were nothing but the display not being there.
-         if xdpyinfo -display "$GCS_DISPLAY" >/dev/null 2>&1; then
-            echo "X DISPLAY         = $GCS_DISPLAY (shared by $_disp_per runners)"
-         else
-            echo "X DISPLAY         = $GCS_DISPLAY -- NOT REACHABLE" >&2
-            echo "  start the pool first:  gcs-displays start" >&2
-            exit 1
-         fi
-         args="$args display $GCS_DISPLAY"
-      fi
-      ;;
-esac
+if [ -n "$GCS_DISPLAY" ]; then
+   # Fail FAST and loudly. Without this the run starts anyway and every
+   # X11 dependent check fails one by one, which is how a missing display
+   # cost an evening of triage on 2026-08-06: 8 of 13 "real defects" of
+   # that full run were nothing but the display not being there.
+   if xdpyinfo -display "$GCS_DISPLAY" >/dev/null 2>&1; then
+      case $CS_PIPELINE in
+         *-r[0-9]|*-r[0-9][0-9]) echo "X DISPLAY         = $GCS_DISPLAY (pool of $_disp_count, round robin)" ;;
+         *)                      echo "X DISPLAY         = $GCS_DISPLAY" ;;
+      esac
+   else
+      echo "X DISPLAY         = $GCS_DISPLAY -- NOT REACHABLE" >&2
+      echo "  start the pool first:  gcs-displays start" >&2
+      echo "  set the pool host:     GCS_DISPLAY_HOST=<host> $CS_PIPELINE ..." >&2
+      echo "  or pass none at all:   GCS_DISPLAY= $CS_PIPELINE ..." >&2
+      # Dieses Skript wird dot-gesourct -- auch direkt in eine Login-Shell
+      # ("`. 92x`"). Ein exit beendet dann die Sitzung des Benutzers. Am
+      # 01.09.2026 hat genau das eine ssh-Verbindung auf host-0000 abgeraeumt.
+      # In einer interaktiven Shell also return, sonst exit.
+      case $- in
+         *i*) return 1 ;;
+         *)   exit 1 ;;
+      esac
+   fi
+   args="$args display $GCS_DISPLAY"
+fi
 
 case $action in
    all)

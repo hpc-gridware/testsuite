@@ -17,7 +17,7 @@
 #   gcs-feature-workspace create   <line> <feature>
 #   gcs-feature-workspace ts-init  <line> <feature> [port] [--force]
 #   gcs-feature-workspace ide-init <line> <feature> [--force]
-#   gcs-feature-workspace teardown <line> <feature> [--force]
+#   gcs-feature-workspace teardown <line> <feature> [--force] [--ignore-running]
 #   gcs-feature-workspace list     [<line>]
 #   gcs-feature-workspace path     <line> <feature>
 #   gcs-feature-workspace repos    <line>
@@ -60,6 +60,70 @@
 set -euo pipefail
 
 CLION_ROOT="${GCS_CLION_ROOT:-$HOME/Clion}"
+
+# Everything derived from this lands in symlinks, generated wrappers and .sav
+# files that OTHER hosts read: the cluster hosts mount the home as /home/<user>
+# and have no /export/home at all, which is what $HOME expands to on the server.
+# A path written in the server's spelling is a dangling link everywhere else --
+# that is how <line>-<feature> on PATH came to resolve only on server-00.
+# /home is the spelling that holds on every host, and it is what the .sav files
+# have always carried; fold onto it once, here, rather than at each use.
+case "$CLION_ROOT" in /export/home/*) CLION_ROOT="/home${CLION_ROOT#/export/home}" ;; esac
+# Follow symlinks: these tools are put on PATH as links, and they call each
+# other via SCRIPT_DIR -- which has to be the checkout, not the link farm.
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+
+# The .sav files and CLION_ROOT do not agree on how the home is spelled: a
+# configuration says /home/<user>/..., CLION_ROOT is built from $HOME and on the
+# server that expands to /export/home/<user>/... . Anything that compares or
+# substitutes whole paths has to fold them onto one spelling first, or it
+# silently matches nothing.
+home_form() {
+  case "$1" in
+    /export/home/*) printf '%s' "/home${1#/export/home}" ;;
+    *)              printf '%s' "$1" ;;
+  esac
+}
+
+# Where a tree, and where a leaf of it, belongs in this lab segment. gcs-segment
+# is the single source of truth for that -- the same helper gcs-pipeline,
+# gcs-runners and the python tools ask. Its absence degrades to the path itself,
+# which is exactly segment A's own answer.
+seg_map() {
+  local d
+  d="$("$SCRIPT_DIR/gcs-segment" map "$1" 2>/dev/null)" || d=""
+  [ -n "$d" ] || d="$1"
+  printf '%s' "$d"
+}
+seg_leaf() {
+  local d
+  d="$("$SCRIPT_DIR/gcs-segment" "$1" "$2" 2>/dev/null)" || d=""
+  [ -n "$d" ] || d="$2/$1"
+  printf '%s' "$d"
+}
+
+# The sed -E expressions that repoint every absolute path of <from> at <to>, in
+# every spelling a generated file can carry. One argument per line, for mapfile.
+#
+# With the $HOME spelling alone this matched NOTHING on segment B. A .sav says
+# /home/<user>/... for the source trees and /scratch/... for product_root and
+# results_dir; a CLion project says /home/<user>/... too -- while CLION_ROOT
+# expands to /export/home/<user>/... . A workspace therefore inherited the
+# line's source_dir, product_root and results_dir unchanged and would have
+# installed over the line's own cluster.
+#
+# One expression per spelling would be wrong rather than merely redundant:
+# /export/home/X contains /home/X, so a second expression rewrites what the
+# first produced and yields .../92x-features/f-features/f. The optional
+# (/export) group takes both home spellings in ONE substitution; /scratch
+# overlaps with neither and gets an expression of its own.
+repoint_args() {
+  local from="$1" to="$2" h_f h_t s_f s_t
+  h_f="$(home_form "$from")"; h_t="$(home_form "$to")"
+  s_f="$(seg_map "$h_f")";    s_t="$(seg_map "$h_t")"
+  printf '%s\n' "-e" "s|(/export)?$h_f|\\1$h_t|g"
+  if [ "$s_f" != "$h_f" ]; then printf '%s\n' "-e" "s|$s_f|$s_t|g"; fi
+}
 
 die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
 warn() { printf 'warn:  %s\n' "$*" >&2; }
@@ -309,6 +373,26 @@ port_registered() {
 # explicitly -- see remove_cluster_tree() for what happens when it does not.
 cluster_tree() { printf '/usr/local/testsuite/%s\n' "$1"; }
 
+# Every host the testsuite could have created a cluster tree on.
+#
+# The tree is made wherever the suite does something for the cluster: the
+# compile hosts build in <port>/build, the execd hosts spool in <port>/execd,
+# and the host driving the run keeps <port>/testsuite. Removing only the local
+# one left more than 8 G of build directories per torn-down workspace on hosts
+# nobody looks at -- and left exactly the stale CMakeCache.txt that
+# remove_cluster_tree exists to prevent.
+#
+# The list comes from the testsuite host configuration, because that is the
+# complete set the suite can address; a host that never had a tree simply has
+# nothing to remove. Read from the LINE's config, not the workspace's, so this
+# still works when --force has already taken the workspace config away.
+cluster_hosts() {
+  local line="$1" hcf
+  hcf="$(read_sav_value "$(line_root "$line")/config/defaults-$line.sav" host_config_file)"
+  [ -n "$hcf" ] && [ -f "$hcf" ] || return 0
+  sed -n 's/^:\([A-Za-z0-9._-]\{1,\}\),arch\(,[0-9]\{1,\}\)\{0,1\}:$/\1/p' "$hcf" | sort -u
+}
+
 # Is the cluster still up? Same source as used_ports().
 port_listening() {
   [ -n "$1" ] || return 1
@@ -329,6 +413,41 @@ port_claimed_outside() {
   return 1
 }
 
+# Hosts on which this workspace's cluster is still alive.
+#
+# Two signals, because either alone can lie: the port can be held by a daemon
+# whose spool is long gone, and a daemon can be up on a host while the port is
+# bound on another. What makes the answer specific to THIS workspace is argv[0]
+# under its own inst -- the line's cluster runs from the line's inst and must
+# never be mistaken for it.
+#
+# Asked on every host the suite knows, not only here. Checking the local ss was
+# what made a tear-down look safe on 2026-09-01 while the qmaster was running on
+# master_host all along: the workspace was removed underneath it and left seven
+# daemons behind with deleted binaries.
+cluster_running_hosts() {
+  local line="$1" port="$2" froot="$3" h me fmap seen=" "
+  me="$(hostname -s)"
+  fmap="$(seg_map "$(home_form "$froot")")"
+  for h in $(cluster_hosts "$line") "$me"; do
+    case " $seen " in *" $h "*) continue ;; esac
+    seen="$seen $h"
+    if [ "$h" = "$me" ]; then
+      if port_listening "$port" \
+         || ps -eo comm=,args= 2>/dev/null | awk -v p="$fmap/" 'index($2,p)==1' | grep -q .; then
+        printf '%s\n' "$h"
+      fi
+      continue
+    fi
+    case "$(timeout 20 ssh -o BatchMode=yes -o ConnectTimeout=4 -o StrictHostKeyChecking=no "$h" \
+              "if ss -ltnH 2>/dev/null | awk '{print \$4}' | sed 's/.*://' | grep -qx '$port'; then echo yes;
+               elif ps -eo comm=,args= 2>/dev/null | awk -v p='$fmap/' 'index(\$2,p)==1' | grep -q .; then echo yes;
+               else echo no; fi" 2>/dev/null)" in
+      yes) printf '%s\n' "$h" ;;
+    esac
+  done
+}
+
 # Remove the cluster tree of a torn-down workspace.
 #
 # Without this the tree outlives the workspace, and since pick_port hands a
@@ -337,7 +456,7 @@ port_claimed_outside() {
 # source tree -- every build then fails with "does not match the source
 # directory" until it is removed by hand.
 remove_cluster_tree() {
-  local port="$1" froot="$2" line="$3" feature="$4" tree
+  local port="$1" froot="$2" line="$3" feature="$4" tree seen=" "
 
   if [ -z "$port" ]; then
     warn "no commd_port recorded (no ts-init config?) — cluster tree, if any, left behind"
@@ -348,23 +467,50 @@ remove_cluster_tree() {
   esac
 
   tree="$(cluster_tree "$port")"
-  [ -d "$tree" ] || return 0
 
+  # This one is global: a port claimed by another configuration must not have
+  # its tree taken away on ANY host, so it is decided before the loop.
   if port_claimed_outside "$port" "$froot"; then
-    warn "port $port is configured outside this workspace too — leaving $tree"
-    return 0
-  fi
-  if port_listening "$port"; then
-    warn "cluster still running on port $port — leaving $tree"
-    warn "  shut it down ('$line-$feature shutdown') and remove it by hand, or the"
-    warn "  next workspace handed port $port inherits its stale CMake cache"
+    warn "port $port is configured outside this workspace too — leaving $tree everywhere"
     return 0
   fi
 
-  if rm -rf "$tree"; then
-    info "removed $tree (build + spool of port $port)"
-  else
-    warn "could not remove $tree — remove it by hand"
+  local h me gone=0 kept_h=0
+  me="$(hostname -s)"
+  for h in $(cluster_hosts "$line") "$me"; do
+    case " $seen " in *" $h "*) continue ;; esac
+    seen="$seen $h"
+
+    if [ "$h" = "$me" ]; then
+      [ -d "$tree" ] || continue
+      if port_listening "$port"; then
+        warn "  $h: cluster still listening on $port — leaving $tree"; kept_h=$((kept_h+1)); continue
+      fi
+      if rm -rf "$tree"; then info "  $h: removed $tree"; gone=$((gone+1))
+      else warn "  $h: could not remove $tree"; kept_h=$((kept_h+1)); fi
+      continue
+    fi
+
+    # One round trip per host, decision and removal together: asking first and
+    # removing afterwards would be two chances for the state to change in
+    # between. A host that cannot be reached is reported, not silently skipped.
+    case "$(timeout 25 ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$h" \
+              "if ss -ltnH 2>/dev/null | awk '{print \$4}' | sed 's/.*://' | grep -qx '$port'; then echo listening;
+               elif [ -d '$tree' ]; then rm -rf '$tree' && echo removed || echo failed;
+               else echo absent; fi" 2>/dev/null)" in
+      removed)   info "  $h: removed $tree"; gone=$((gone+1)) ;;
+      listening) warn "  $h: cluster still listening on $port — leaving $tree"; kept_h=$((kept_h+1)) ;;
+      failed)    warn "  $h: could not remove $tree"; kept_h=$((kept_h+1)) ;;
+      absent)    : ;;
+      *)         warn "  $h: not reachable — $tree, if any, left behind"; kept_h=$((kept_h+1)) ;;
+    esac
+  done
+
+  if [ "$kept_h" -gt 0 ]; then
+    warn "cluster tree of port $port: $gone removed, $kept_h left"
+    warn "  a surviving <port>/build breaks the next workspace that is handed this port"
+  elif [ "$gone" -gt 0 ]; then
+    info "cluster tree of port $port removed on $gone host(s)"
   fi
 }
 
@@ -392,6 +538,11 @@ cmd_ts_init() {
 
   canon="$(readlink -f "$lroot/config/$line" 2>/dev/null || true)"
   [ -n "$canon" ] && [ -x "$canon" ] || die "line pipeline script missing: $lroot/config/$line"
+  # readlink -f canonicalises, and on the server that turns /home/<user> back
+  # into /export/home/<user>. The value is written into the generated wrapper as
+  # CS_TOOL_DIR and as the path it dot-sources, so it has to hold on every host
+  # that may run the wrapper -- not only on the one that generated it.
+  canon="$(home_form "$canon")"
 
   base_port="$(read_commd_port "$src_cfg")"
   [ -n "$base_port" ] || die "no commd_port in $src_cfg"
@@ -417,13 +568,22 @@ cmd_ts_init() {
         || warn "port $port already in use elsewhere" ;;
   esac
 
-  mkdir -p "$froot/config" "$froot/inst" "$froot/pkg" "$froot/html" "$froot/results"
+  # inst/ and results/ go where the segment puts them: on B that is the /scratch
+  # export, which is where gcs-pipeline's CS_INST installs to and what
+  # results_dir in the generated .sav will say. Creating them in the tree left an
+  # empty, unused pair behind -- and made teardown believe it had removed them.
+  mkdir -p "$froot/config" "$froot/pkg" "$froot/html" \
+           "$(seg_leaf inst "$froot")" "$(seg_leaf results "$froot")"
 
   if [ -f "$dst_cfg" ] && [ "$force" -eq 0 ]; then
     info "  = config/$(basename "$dst_cfg")  (exists, skip; --force to regenerate)"
   else
     # Repoint every absolute line path at the workspace and move the port pair.
-    sed -e "s|$lroot|$froot|g" \
+    # See repoint_args() for why one substitution per spelling is not enough --
+    # and why it must not be one -e per spelling either.
+    local -a rp=()
+    mapfile -t rp < <(repoint_args "$lroot" "$froot")
+    sed -E "${rp[@]}" \
         -e "s|^:p$base_port:\$|:p$port:|" \
         -e "s|^:$base_port:\$|:$port:|" \
         "$src_cfg" > "$dst_cfg"
@@ -516,12 +676,25 @@ cmd_ide_init() {
   else
     rm -rf "$dst_idea"
     cp -r "$src_idea" "$dst_idea"
+    # Backups of the line's project state are not part of the project. cp -r
+    # takes the directory as it stands, and that is how a workspace.xml.bak from
+    # August turned up inside a workspace created today -- carrying, of all
+    # things, the pre-storage-move CMAKE_INSTALL_PREFIX. Dropped after the copy
+    # rather than filtered during it, so this stays a plain cp with no rsync
+    # dependency; -prune keeps find from descending into what it just removed.
+    find "$dst_idea" -name '*.bak*' -prune -exec rm -rf {} +
     # Repoint every absolute line-root path (CMAKE_INSTALL_PREFIX and anything
     # else hardcoded into run/CMake configs) at the feature workspace instead.
-    for f in "$dst_idea"/*.xml; do
-      [ -f "$f" ] || continue
-      sed -i "s|$lroot|$froot|g" "$f"
-    done
+    #
+    # Recursively: the glob "$dst_idea"/*.xml never reached runConfigurations/,
+    # where the generated "pending" configuration carries an absolute
+    # --tests-from-file path into the line. Same spelling problem as ts-init, so
+    # the same repoint_args().
+    local -a rp=()
+    mapfile -t rp < <(repoint_args "$lroot" "$froot")
+    while IFS= read -r f; do
+      sed -E -i "${rp[@]}" "$f"
+    done < <(find "$dst_idea" -type f \( -name '*.xml' -o -name '*.iml' \))
     # Name the project "<version> (<feature>)", e.g. "9.2.x (fixes)", so the
     # CLion window says which line and which workspace it belongs to. Lines
     # themselves carry the bare version, e.g. "9.2.x".
@@ -541,10 +714,15 @@ cmd_ide_init() {
 
 cmd_teardown() {
   local line="${1:?line required}" feature="${2:?feature required}"; shift 2 || true
-  local force=0
-  for a in "$@"; do [ "$a" = "--force" ] && force=1; done
+  local force=0 ignore_running=0 a
+  for a in "$@"; do
+    case "$a" in
+      --force)          force=1 ;;
+      --ignore-running) ignore_running=1 ;;
+    esac
+  done
 
-  local froot branch src target base d removed=0 kept=0 port
+  local froot branch src target base d removed=0 kept=0 port fmap
   froot="$(feature_root "$line" "$feature")"
   branch="$(branch_name "$line" "$feature")"
 
@@ -554,12 +732,33 @@ cmd_teardown() {
   # aim the cluster-tree removal at the line's own cluster.
   port="$(read_commd_port "$froot/config/defaults-$line-$feature.sav")"
 
+  # Nothing is removed while the cluster is still up. remove_cluster_tree checks
+  # per host too, but by the time it runs the worktrees and inst are already
+  # gone -- and daemons whose binaries have been deleted cannot even be shut
+  # down properly afterwards, they can only be killed as root. So the question
+  # is asked here, before the first irreversible step.
+  if [ -n "$port" ] && [ "$ignore_running" -eq 0 ]; then
+    local running
+    running="$(cluster_running_hosts "$line" "$port" "$froot" | tr '\n' ' ')"
+    if [ -n "${running// /}" ]; then
+      die "cluster of $line-$feature is still up on: $running
+       shut it down first:  $line-$feature shutdown
+       --ignore-running tears down anyway -- only for a cluster that can no
+       longer be shut down, and it leaves its daemons running"
+    fi
+  fi
+
   # Drop the on-PATH wrapper symlink (config/$line-$feature), if ts-init made one.
   local bindir link
   bindir="$(line_bindir "$(line_root "$line")" "$line")"
   if [ -n "$bindir" ]; then
     link="$bindir/$line-$feature"
-    if [ -L "$link" ] && [ "$(readlink -f "$link")" = "$froot/config/$line-$feature" ]; then
+    # Both sides canonicalised. Comparing a resolved link against a raw path
+    # holds only as long as no component of CLION_ROOT is itself a symlink; the
+    # moment one is, the link silently fails the test and stays on PATH as one
+    # more dead entry.
+    if [ -L "$link" ] \
+       && [ "$(readlink -f "$link")" = "$(readlink -f "$froot/config/$line-$feature")" ]; then
       rm -f "$link" && info "removed $link (wrapper symlink)"
     fi
   fi
@@ -602,6 +801,34 @@ cmd_teardown() {
     # --force takes the non-repo siblings too (config/ inst/ pkg/ html/ results/,
     # i.e. the ts-init scaffolding and any test results).
     rm -rf "$froot" && info "removed $froot (incl. config/inst/results)"
+    # And the segment side. On B inst/ and results/ are on the /scratch export,
+    # so removing the tree copy alone left the big half of the workspace behind.
+    # Guarded by shape, not by trust: this is an rm -rf on a computed path.
+    fmap="$(seg_map "$(home_form "$froot")")"
+    if [ "$fmap" != "$(home_form "$froot")" ] && [ -d "$fmap" ]; then
+      case "$fmap" in
+        */"$line-features/$feature")
+          rm -rf "$fmap" 2>/dev/null
+          # The testsuite installs as root, so inst/ is full of root-owned files
+          # -- utilbin/<arch>/testsuidroot is even setuid root -- and
+          # /export/scratch/<user>/Clion is the export that carries
+          # no_root_squash, so they really do belong to root. An unprivileged rm
+          # walks the tree, deletes what it may and leaves the rest: measured
+          # 1.4 G and 621 files on the first tear-down that got this far.
+          # Escalate only for what survived, and only for a path that still has
+          # the <line>-features/<feature> shape.
+          if [ -d "$fmap" ]; then
+            "$SCRIPT_DIR/as-root" "$(hostname -s)" "rm -rf '$fmap'" >/dev/null 2>&1 || true
+          fi
+          if [ -d "$fmap" ]; then
+            warn "left $fmap -- not removable, not even as root"
+          else
+            info "removed $fmap (inst/results on the export)"
+          fi ;;
+        *)
+          warn "left $fmap -- not shaped like <line>-features/<feature>" ;;
+      esac
+    fi
   else
     rmdir "$froot" 2>/dev/null && info "removed empty $froot" \
       || warn "workspace dir not empty (ts-init scaffolding?), left: $froot — --force removes it"

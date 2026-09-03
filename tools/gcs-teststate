@@ -58,15 +58,55 @@ import os, re, sys, glob, fcntl, time
 CLION_ROOT = os.environ.get("GCS_CLION_ROOT", os.path.expanduser("~/Clion"))
 
 
-def paths(line):
+_SEG_CACHE = {}
+
+
+def segment(sub, line):
+    """Where <sub> of this line lives. On segment B that is the no_root_squash
+    /scratch export, on A the source tree. gcs-segment -- a sibling tool, the
+    same one gcs-pipeline and gcs-runners use -- is the single source of truth
+    for that A/B distinction, so this stays correct on both sides. Falls back to
+    the in-tree location, which is exactly segment A's answer.
+
+    Cached: this is on the path of every recorded result, and the answer cannot
+    change while the process lives."""
     root = f"{CLION_ROOT}/{line}"
-    return root, f"{root}/runners/teststate.tsv"
+    key = (sub, root)
+    if key in _SEG_CACHE:
+        return _SEG_CACHE[key]
+    d = f"{root}/{sub}"
+    import subprocess
+    here = os.path.dirname(os.path.realpath(__file__))
+    try:
+        out = subprocess.run([f"{here}/gcs-segment", sub, root],
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             universal_newlines=True, timeout=5)
+        if out.stdout.strip():
+            d = out.stdout.strip()
+    except Exception:
+        pass
+    _SEG_CACHE[key] = d
+    return d
+
+
+def paths(line):
+    return f"{CLION_ROOT}/{line}", f"{segment('runners', line)}/teststate.tsv"
+
+
+def inst_dir(line):
+    """Where this line's installed cluster (inst / SGE_ROOT) lives."""
+    return segment("inst", line)
+
+
+def runners_dir(line):
+    """Where this line's runner fleet lives -- the r<N> directories, and the
+    lists, the ledger and pending.txt beside them."""
+    return segment("runners", line)
 
 
 def fingerprint(line):
     """Identify the build. Empty when nothing is installed."""
-    root, _ = paths(line)
-    for p in glob.glob(f"{root}/inst/bin/*/sge_qmaster"):
+    for p in glob.glob(f"{inst_dir(line)}/bin/*/sge_qmaster"):
         st = os.stat(p)
         return f"{int(st.st_mtime)}:{st.st_size}"
     return ""
@@ -132,12 +172,11 @@ def registered(line):
     rescanned, which costs a fraction of a second but spawns a process, and this
     is called once per finished test.
     """
-    root, _ = paths(line)
-    cached = f"{root}/runners/lists/ctest-names.txt"
+    cached = f"{runners_dir(line)}/lists/ctest-names.txt"
     if os.path.isfile(cached):
         return [l.strip() for l in open(cached) if l.strip()]
     import subprocess
-    here = os.path.dirname(os.path.abspath(__file__))
+    here = os.path.dirname(os.path.realpath(__file__))
     out = subprocess.run([f"{here}/gcs-testscan", line, "ctest-names"],
                          capture_output=True, text=True)
     return [l for l in out.stdout.split("\n") if l.strip()]
@@ -152,9 +191,8 @@ def running(line):
     survives a kill on purpose (that is how an interrupted run is detected), so a
     marker whose process is gone is reported as stale rather than as running.
     """
-    root, _ = paths(line)
     out = []
-    for d in sorted(glob.glob(f"{root}/runners/r*"),
+    for d in sorted(glob.glob(f"{runners_dir(line)}/r*"),
                     key=lambda p: int(re.sub(r"\D", "", os.path.basename(p)) or 0)):
         f = f"{d}/.unit-in-progress"
         if not os.path.isfile(f):
@@ -200,8 +238,7 @@ def plan(line):
     no second duration model that could drift away from the one that did the
     planning. Both missing means an ETA cannot be given, not that it is zero.
     """
-    root, _ = paths(line)
-    d = f"{root}/runners/lists"
+    d = f"{runners_dir(line)}/lists"
     over = int(os.environ.get("GCS_TS_OVERHEAD", "48"))
     slots = 0
     if os.path.isfile(f"{d}/manifest.txt"):
@@ -267,12 +304,16 @@ def write_pending(line, state):
     --tests-from-file and always run what is actually still open, without a
     preparation step the IDE would have to be taught.
     """
-    root, _ = paths(line)
     names = registered(line)
     never = [n for n in names if n not in state]
     failed = [n for n in names if state.get(n, ("",))[0] == "fail"]
-    f = f"{root}/runners/pending.txt"
+    f = f"{runners_dir(line)}/pending.txt"
     tmp = f + ".tmp"
+    # The fleet directory does not have to exist: a line can be tested serially,
+    # and since the storage move it is gcs-runners init that creates it. Writing
+    # into it blind turned "gcs-teststate <line> summary" into a traceback on a
+    # line that simply has no runners.
+    os.makedirs(os.path.dirname(f), exist_ok=True)
     with open(tmp, "w") as fh:
         fh.write("\n".join(never + failed) + ("\n" if never or failed else ""))
     os.replace(tmp, f)
@@ -298,7 +339,7 @@ def main():
 
     cur, state = load(line)
     if not cur:
-        sys.exit(f"  no installed binaries under {CLION_ROOT}/{line}/inst")
+        sys.exit(f"  no installed binaries under {inst_dir(line)}")
 
     all_names = registered(line)
     passed = [n for n in all_names if state.get(n, ("",))[0] == "ok"]

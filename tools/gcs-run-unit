@@ -44,6 +44,67 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 
 die() { printf 'gcs-run-unit: %s\n' "$*" >&2; exit 2; }
 
+# Where the runner fleet of a line is stored. A segment question, not a constant:
+# on B the fleet is on the /scratch export, on A it is in the tree. gcs-segment
+# is the single source of truth; its absence degrades to A's answer.
+runners_dir() {
+  local root d
+  root="${GCS_CLION_ROOT:-$HOME/Clion}/$1"
+  d="$("$SCRIPT_DIR/gcs-segment" runners "$root" 2>/dev/null)" || d=""
+  [ -n "$d" ] || d="$root/runners"
+  printf '%s' "$d"
+}
+
+# --- the cluster does not live here ------------------------------------------
+#
+# The health check below used to ask the LOCAL host whether a cluster answers.
+# On segment A that was invisible: the TS driver was also the master_host, so
+# "local" and "the cluster" were the same machine. On B the driver is server-00,
+# which belongs to no cluster at all -- it appears in no role of the .sav,
+# neither as submit_only_host nor as admin_only_host.
+#
+# The consequence was not a wrong answer but a destructive one. Every slot looked
+# dead, ensure_alive() escalated to "start" and then to "install", and on
+# 2026-09-01 that reinstalled sixteen HEALTHY clusters in a row; the run ended
+# with zero tests executed. gcs-runners had the same bug in its health probe and
+# was fixed the same way -- see cluster_sh() there.
+#
+# master_host is an admin host by construction, so it is the right place to ask.
+# If it is the local machine -- the A case -- nothing changes and no ssh happens.
+line_root() { printf '%s/%s' "${GCS_CLION_ROOT:-$HOME/Clion}" "$1"; }
+
+# The .sav files are the testsuite's own format: a key line ":name:" followed by
+# a value line ":value:". Last occurrence wins, which is what the TS itself does.
+read_sav_value() {
+  [ -f "$1" ] || return 0
+  awk -v key=":$2:" '
+    $0 == key { if ((getline v) > 0) { sub(/^:/,"",v); sub(/:$/,"",v); last = v } }
+    END { if (last != "") print last }' "$1"
+}
+
+_mh_line=""
+_mh_val=""
+master_host() {
+  if [ "$1" != "$_mh_line" ]; then
+    _mh_val="$(read_sav_value "$(line_root "$1")/config/defaults-$1.sav" master_host)"
+    # No .sav, no master_host: fall back to the old behaviour rather than to
+    # nothing. On A that is the correct answer anyway.
+    [ -n "$_mh_val" ] || _mh_val="$(hostname -s)"
+    _mh_line="$1"
+  fi
+  printf '%s' "$_mh_val"
+}
+
+on_master() {
+  local mh="$1" cmd="$2"
+  if [ "$mh" = "$(hostname -s)" ]; then
+    sh -c "$cmd"
+  else
+    timeout 60 ssh -o BatchMode=yes -o ConnectTimeout=5 \
+              -o StrictHostKeyChecking=accept-new "$mh" "$cmd"
+  fi
+}
+
 # --help prints the header comment above rather than a second copy of it.
 case "${1:-}" in
    -h|--help|help)
@@ -86,7 +147,7 @@ fi
 # The authoritative copy is the one gcs-runners writes into the runner
 # directory; the symlink it additionally puts on PATH is only for convenience,
 # so PATH is the fallback rather than the first choice.
-runner="${GCS_CLION_ROOT:-$HOME/Clion}/$line/runners/r$slot/config/$line-r$slot"
+runner="$(runners_dir "$line")/r$slot/config/$line-r$slot"
 if [ ! -x "$runner" ]; then
   runner="$(command -v "$line-r$slot" 2>/dev/null || true)"
 fi
@@ -105,29 +166,47 @@ fi
 # So check before every group and repair if needed, escalating by depth of
 # intervention: start first (the cell survives), then reinstall.
 
-port="$(awk -F= '/^CS_MASTER_PORT=/{print $2}' "$runner")"
+# The runner's own .sav sits next to its wrapper and carries both values the
+# probe needs. The wrapper stays as the fallback for the port, so a fleet built
+# before this change still works.
+sav="$(dirname "$runner")/defaults-$(basename "$runner").sav"
+port="$(read_sav_value "$sav" commd_port)"
+[ -n "$port" ] || port="$(awk -F= '/^CS_MASTER_PORT=/{print $2}' "$runner")"
+sge_root="$(read_sav_value "$sav" product_root)"
+mh="$(master_host "$line")"
+
+# qstat by absolute path instead of by dot-sourcing the wrapper. Sourcing would
+# run gcs-pipeline on the far side -- a lot of machinery for one query -- and the
+# two traps it needs there ('set --' against inherited positional parameters,
+# 'set +u' against the plain-sh line script reading $1) do not survive the trip
+# through ssh. The bin directory is named after the architecture; globbing it
+# avoids $root/util/arch, which costs 187ms and would be paid once per test unit.
+qstat_bin=""
+if [ -n "$sge_root" ]; then
+  for _q in "$sge_root"/bin/*/qstat; do
+    [ -x "$_q" ] && { qstat_bin="$_q"; break; }
+  done
+fi
 
 alive() {
-  # Two stages, because they differ by an order of magnitude: port check 28ms,
-  # full qstat query 450ms (335ms of which is sourcing the wrapper alone).
-  # Across 580 groups that is the difference between half a minute and four
-  # minutes. The case that actually hit us (qmaster gone) is already caught by
-  # the first stage.
-  [ -n "$port" ] && ss -ltnH 2>/dev/null | grep -qE ":${port}\b" || return 1
+  # Two stages, cheapest first. Both run ON master_host now: the port belongs to
+  # the qmaster, and the qmaster is there, not here. Asking the local ss was the
+  # bug -- on B it reported "nothing listening" for every healthy cluster.
+  [ -n "$port" ] || return 1
+  on_master "$mh" \
+    "ss -ltnH 2>/dev/null | awk '{print \$4}' | sed 's/.*://' | grep -qx '$port'" \
+    >/dev/null 2>&1 || return 1
 
-  # Two traps that depend on each other:
-  #
-  # 'set --'  Dot-sourcing without own arguments inherits the caller's
-  #           positional parameters. Without clearing them the wrapper would
-  #           receive the test path as its action, the line script would report
-  #           "unknown action" and end the subshell with exit 2 -- every running
-  #           cluster would count as dead.
-  # 'set +u'  The line script is plain sh and reads action=$1 directly. With the
-  #           'set -u' inherited from here it dies on the empty $1 with "unbound
-  #           variable" -- that is, exactly once the first trap is fixed. One run
-  #           failed on this: 255 tests, 255 failures, each with two futile
-  #           repairs.
-  ( set +u; set --; . "$runner" >/dev/null 2>&1; timeout 45 qstat -f >/dev/null 2>&1 )
+  # Nothing installed to query with: the listening port is then all we know, and
+  # the case this check exists for -- a qmaster gone after a test restarted it --
+  # is already covered by stage one. Reporting "alive" is the safe direction: a
+  # false "dead" costs a reinstall of a healthy cluster, a false "alive" costs
+  # one failed test.
+  [ -n "$qstat_bin" ] || return 0
+
+  on_master "$mh" \
+    "SGE_ROOT='$sge_root' SGE_CELL=default SGE_QMASTER_PORT='$port' SGE_EXECD_PORT='$((port + 1))' timeout 45 '$qstat_bin' -f" \
+    >/dev/null 2>&1
 }
 
 ensure_alive() {
@@ -160,7 +239,7 @@ ensure_alive() {
 # the next start means the previous run did not get to the end, and the only
 # reliable way back is a fresh install.
 marker=""
-_rdir="${GCS_CLION_ROOT:-$HOME/Clion}/$line/runners/r$slot"
+_rdir="$(runners_dir "$line")/r$slot"
 [ -d "$_rdir" ] && marker="$_rdir/.unit-in-progress"
 
 if [ -n "$marker" ] && [ -f "$marker" ]; then

@@ -1,0 +1,82 @@
+#!/bin/sh
+# Lab segment awareness for the gcs tools -- the single source of truth for the
+# A/B distinction, usable from both shell and python.
+#
+#   gcs-segment                 -> prints A or B
+#   gcs-segment map <path>      -> prints where <path> belongs in this segment
+#   gcs-segment inst <tree>     -> prints where the installed cluster (inst /
+#                                  SGE_ROOT) belongs for <tree>
+#   gcs-segment runners <tree>  -> prints where the runner fleet belongs for
+#                                  <tree>
+#   gcs-segment results <tree>  -> prints where the testsuite results belong
+#                                  for <tree>
+#
+# Segment B is the isolated lab.bablick.de network, segment A the original
+# NIS/NFS network. Two criteria, because one of them does not cover the whole
+# segment: every compute host on B is an IPA client of that realm and says so in
+# /etc/ipa/default.conf -- but server-00, the host the tools are actually driven
+# from, is not a client at all and has no /etc/ipa. Its FQDN is in the domain,
+# so that is the second criterion. On A neither holds: no IPA, and the domain is
+# fritz.box. Override both with CS_SEGMENT=A|B.
+#
+# What differs between the segments is where the big, root-owned trees live. On
+# B they belong on the no_root_squash /scratch export, mirroring the source tree
+# (/home/... -> /scratch/...); on A they stay in the tree. That is ONE mapping --
+# map() -- and inst/, runners/ and results/ are only leaves underneath it.
+# Anything else that has to move later is another leaf, not another rule.
+
+seg() {
+   [ -n "${CS_SEGMENT:-}" ] && { printf '%s' "$CS_SEGMENT"; return; }
+   if grep -qiE '^[[:space:]]*domain[[:space:]]*=[[:space:]]*lab\.bablick\.de[[:space:]]*$' \
+         /etc/ipa/default.conf 2>/dev/null; then
+      printf B
+      return
+   fi
+   case "$(hostname -f 2>/dev/null)" in
+      *.lab.bablick.de) printf B ;;
+      *)                printf A ;;
+   esac
+}
+
+# Where <path> belongs in this segment. On A the answer is always the path
+# itself -- byte for byte, so nothing there can shift under this.
+#
+# The fold of /export/home onto /home is not cosmetic. The same tree is spelled
+# both ways on B: the .sav files and the generated wrappers carry
+# /home/<user>/..., but every tool that builds its root from $HOME or from
+# expanduser("~") gets /home/<user>/... resolved to /export/home/<user>/... .
+# Without the fold that spelling misses the case below and quietly receives A's
+# answer on B.
+map() {
+   _p=$1
+   [ "$(seg)" = B ] || { printf '%s' "$_p"; return; }
+   case $_p in
+      /export/home/*) _p="/home${_p#/export/home}" ;;
+   esac
+   case $_p in
+      /home/*) printf '%s' "/scratch${_p#/home}" ;;
+      *)       printf '%s' "$_p" ;;   # unexpected layout: stay put
+   esac
+}
+
+case "${1:-segment}" in
+   segment)
+      seg; echo
+      ;;
+   map)
+      printf '%s\n' "$(map "${2:?usage: gcs-segment map <path>}")"
+      ;;
+   inst)
+      printf '%s\n' "$(map "${2:?usage: gcs-segment inst <tree>}")/inst"
+      ;;
+   runners)
+      printf '%s\n' "$(map "${2:?usage: gcs-segment runners <tree>}")/runners"
+      ;;
+   results)
+      printf '%s\n' "$(map "${2:?usage: gcs-segment results <tree>}")/results"
+      ;;
+   *)
+      echo "usage: gcs-segment [segment | map <path> | inst | runners | results <tree>]" >&2
+      exit 2
+      ;;
+esac

@@ -37,42 +37,64 @@
 #   * THEY ARE LONG-LIVED. Started once, they outlive individual runs, so no test
 #     run ever pays the startup race again.
 #
-# Runners share a display in groups (default 6), so 48 runners need 8 displays.
-# One display for the whole fleet works too - a 28 runner full run on one display
-# passed 244 entries with zero display errors - but a pool leaves headroom for
-# the X11 forwarding checks, which are the ones that care about sharing.
+# The pool is a FIXED RESOURCE of at most eight displays, and the runners share
+# it round robin: runner N takes display BASE + (N-1) % COUNT. Eight is a
+# technical ceiling, not a preference - so the pool never grows with the fleet,
+# a fleet of 16 or of 200 uses the same eight and simply shares more heavily.
+#
+# Sharing is cheap: a 28 runner full run on a SINGLE display passed 244 entries
+# with zero display errors. The pool exists as headroom for the X11 forwarding
+# checks, which are the ones that care about sharing at all.
+#
+# Round robin rather than blocks of PER: with blocks, a fleet of 16 crowded onto
+# :51..:53 and left :54..:58 idle. Modulo spreads the same 16 over all eight, two
+# per display, without anyone having to size anything.
 #
 # gcs-pipeline computes which display a runner uses; keep the two in sync via
-# GCS_DISPLAY_BASE and GCS_RUNNERS_PER_DISPLAY.
+# GCS_DISPLAY_BASE and GCS_DISPLAY_COUNT.
 
 set -u
 
 BASE=${GCS_DISPLAY_BASE:-51}
-PER=${GCS_RUNNERS_PER_DISPLAY:-6}
+# Size of the pool, and the hard ceiling at the same time. An argument may ask
+# for fewer, never for more.
+MAX=8
+COUNT=${GCS_DISPLAY_COUNT:-$MAX}
 HOST=$(hostname -s)
 
 usage() {
    cat >&2 <<EOF
 gcs-displays -- long-lived X displays shared by the testsuite runners
 
-  gcs-displays start [<runners>]   start enough displays for <runners> (default 32)
-  gcs-displays stop  [<runners>]   kill them
-  gcs-displays status [<runners>]  one line per display: running, reachable, access control
+  gcs-displays start [<count>]   start the pool (default $MAX displays, never more)
+  gcs-displays stop  [<count>]   kill them
+  gcs-displays status [<count>]  one line per display: running, reachable, access control
 
 Environment:
-  GCS_DISPLAY_BASE          first display number (default 51)
-  GCS_RUNNERS_PER_DISPLAY   how many runners share one display (default 6)
+  GCS_DISPLAY_BASE    first display number (default 51)
+  GCS_DISPLAY_COUNT   size of the pool (default $MAX, capped at $MAX)
 
-The display a runner uses is  BASE + (index - 1) / PER,  the same arithmetic
-gcs-pipeline does. With the default PER, runner r1..r6 -> :$BASE, r7..r12 ->
-:$((BASE + 1)), and so on.
+The argument is a DISPLAY count, not a runner count - it used to be the latter.
+Anything above $MAX is clamped, so an old call that passed a fleet size still
+lands on the full pool instead of failing.
+
+Runner N uses  BASE + (N - 1) % COUNT,  the same arithmetic gcs-pipeline does:
+r1 -> :$BASE, r2 -> :$((BASE + 1)), ... r$MAX -> :$((BASE + MAX - 1)), r$((MAX + 1)) -> :$BASE again.
 EOF
    exit 1
 }
 
-# how many displays are needed for N runners
+# How many displays to operate on. Never more than MAX -- that is a technical
+# limit, not a preference, so a request for more is clamped rather than refused.
+#
+# gcs-pipeline takes its modulo over the SAME number. The two MUST agree: a
+# runner that computes a display the pool never started dies in the
+# reachability check, which is what took r13..r16 down on 2026-09-01.
 displays_for() {
-   echo $(( ($1 + PER - 1) / PER ))
+   _n=$1
+   [ "$_n" -ge 1 ] 2>/dev/null || _n=$MAX
+   [ "$_n" -le "$MAX" ] || _n=$MAX
+   echo "$_n"
 }
 
 # is the display answering AND usable without a cookie?
@@ -126,11 +148,11 @@ start_one() {
 }
 
 action=${1:-}
-runners=${2:-32}
+count=${2:-$COUNT}
 case $action in
    start)
-      n=$(displays_for "$runners")
-      echo "starting $n display(s) for $runners runners ($PER per display), sequentially:"
+      n=$(displays_for "$count")
+      echo "starting $n display(s), shared round robin by any number of runners, sequentially:"
       rc=0
       i=0
       while [ $i -lt "$n" ]; do
@@ -140,7 +162,7 @@ case $action in
       exit $rc
       ;;
    stop)
-      n=$(displays_for "$runners")
+      n=$(displays_for "$count")
       i=0
       while [ $i -lt "$n" ]; do
          vncserver -kill ":$((BASE + i))" >/dev/null 2>&1 && echo "  :$((BASE + i)) killed"
@@ -148,7 +170,7 @@ case $action in
       done
       ;;
    status)
-      n=$(displays_for "$runners")
+      n=$(displays_for "$count")
       printf '%-8s %-10s %-10s %s\n' DISPLAY RUNNING USABLE "ACCESS CONTROL"
       i=0
       while [ $i -lt "$n" ]; do
