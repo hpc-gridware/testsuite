@@ -27,8 +27,20 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2024,2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
+# The remote execution of the testsuite passes its own environment on to the
+# remote host, TZ included, and clock format prefers TZ over the timezone the
+# host is configured for. Reading the offset with an inherited TZ reports the
+# timezone of the testsuite host for every cluster host, which is not what the
+# caller wants to know: the day boundary of a daemon is the one of the host it
+# runs on. So the inherited value is dropped and the system timezone is used.
+unset -nocomplain ::env(TZ)
+
+# The UTC offset is printed before the time on purpose: get_remote_time reads
+# everything after "current time is" up to the end of the output, so the time
+# has to stay the last line.
+puts "utc offset is [clock format [clock seconds] -format %z]"
 puts "current time is [clock seconds]"

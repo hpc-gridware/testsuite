@@ -265,8 +265,9 @@ proc check_all_system_times {} {
    set test_start [timestamp]
    foreach host $host_list {
       ts_log_fine "test remote system time on host $host ..."
-      set time($host) [get_remote_time $host]
-      ts_log_finest "$host: remote time: $time($host)"
+      set utc_offset($host) ""
+      set time($host) [get_remote_time $host utc_offset($host)]
+      ts_log_finest "$host: remote time: $time($host), utc offset: $utc_offset($host)"
       if {$time($host) != 0} {
          # fix remote execution time difference
          set time($host) [expr $time($host) - [expr [timestamp] - $test_start]]
@@ -290,6 +291,39 @@ proc check_all_system_times {} {
       }
    }
 
+   # The clocks may agree to the second and the cluster still have no common
+   # day boundary: hosts in different timezones cross midnight at different
+   # moments. The qmaster then writes its intermediate accounting records at
+   # its own midnight, the dbwriter computes daily derived values at the
+   # midnight of the host it runs on, and a check that waits for midnight uses
+   # the timezone of the testsuite host - three boundaries up to hours apart.
+   # Tests spanning a day boundary fail in ways that look like product defects,
+   # so an inconsistent setup is reported here, before anything is installed.
+   # string comparison, not expr's == / !=: an offset like "+0800" would be
+   # coerced to a number and "0800" is not a valid octal literal
+   set reference_offset $utc_offset($ts_config(master_host))
+   if {$reference_offset eq ""} {
+      ts_log_info "can not determine the UTC offset of host $ts_config(master_host),\
+                   skipping the timezone check"
+      return $return_value
+   }
+   foreach host $host_list {
+      if {$utc_offset($host) eq ""} {
+         ts_log_info "can not determine the UTC offset of host $host"
+         continue
+      }
+      ts_log_fine "host $host has UTC offset $utc_offset($host)"
+      if {$utc_offset($host) ne $reference_offset} {
+         ts_log_severe "host $host has UTC offset $utc_offset($host), host\
+                        $ts_config(master_host) has $reference_offset - all\
+                        hosts of a cluster must be configured for the same\
+                        timezone, else the day boundary of the qmaster, of the\
+                        dbwriter and of the testsuite are different points in\
+                        time"
+         set return_value 1
+      }
+   }
+
    return $return_value
 }
 
@@ -298,14 +332,19 @@ proc check_all_system_times {} {
 #     get_remote_time() -- get tcl timestamp on remote host
 #
 #  SYNOPSIS
-#     get_remote_time { host } 
+#     get_remote_time { host { a_utc_offset "" } }
 #
 #  FUNCTION
 #     This procedure returns the output of expect timestamp command on the
-#     specified host
+#     specified host, optionally together with the host's UTC offset
 #
 #  INPUTS
-#     host - host where timestamp should be returned
+#     host         - host where timestamp should be returned
+#     a_utc_offset - optional name of a variable that is filled with the UTC
+#                    offset of the host ("+0200", "+0000", ...). Set to "" if
+#                    the offset could not be read. The offset comes from the
+#                    same remote call as the time, so asking for it costs
+#                    nothing extra.
 #
 #  RESULT
 #     unix timestamp number or 0 in case of an error
@@ -313,9 +352,13 @@ proc check_all_system_times {} {
 #  SEE ALSO
 #     remote_procedures/check_all_system_times()
 #*******************************************************************************
-proc get_remote_time { host } {
-   global ts_config 
+proc get_remote_time { host { a_utc_offset "" } } {
+   global ts_config
    global CHECK_USER
+   if {$a_utc_offset ne ""} {
+      upvar $a_utc_offset utc_offset
+      set utc_offset ""
+   }
    set tcl_bin [get_binary_path $host "expect"]
    if {$tcl_bin == ""} {
       ts_log_severe "Host $host has no expect configured (expect: $tcl_bin)!"
@@ -323,6 +366,9 @@ proc get_remote_time { host } {
    }
    set time_script "$ts_config(testsuite_root_dir)/scripts/time.tcl"
    set result [string trim [start_remote_prog $host $CHECK_USER $tcl_bin $time_script]]
+   if {$a_utc_offset ne ""} {
+      set utc_offset [get_string_value_between "utc offset is" "current time is" $result]
+   }
    set time [get_string_value_between "current time is" -1 $result]
    return $time
 }
