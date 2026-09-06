@@ -2343,40 +2343,26 @@ proc get_binary_path {nodename binary {raise_error 1}} {
    return $binary
 }
 
-#                                                             max. column:     |
-#****** file_procedures/copy_directory() ******
+## @brief copy a directory recursively
 #
-#  NAME
-#     copy_directory -- copy a directory recursively
+# Copies source over target. An existing target is removed first through
+# delete_directory(), which keeps a copy of it in the testsuite trash folder.
 #
-#  SYNOPSIS
-#     copy_directory { source target }
+# The local "file delete" after that removal is not redundant. When the target
+# sits on an NFS export - e.g. results_dir
+# delete_directory() runs the removal on the host owning the export, and this
+# host's attribute cache goes on reporting the directory as present. "file
+# copy" then takes it for an existing directory and tries to copy into
+# "<target>/<basename of source>", which fails with ENOENT because the
+# directory is already gone on the server. The local delete drops that stale
+# entry and is a no-op once the removal has become visible.
 #
-#  FUNCTION
-#     This procedure will copy the given source directory to the target
-#     directory. The content of the target dir is deleted if it exists.
-#     (calling delete_directory, which will make a secure copy in the testsuite
-#     trash folder).
+# @param source path to the source directory
+# @param target path to the target directory
+# @return none, errors are reported through ts_log_severe()
 #
-#  INPUTS
-#     source - path to the source directory
-#     target - path to the target directory
-#
-#  RESULT
-#     no results
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     file_procedures/delete_directory
-#*******************************
+# @see delete_directory
+##
 proc copy_directory {source target} {
   if {[string length $source] <= 10 || [string length $target] <= 10} {
      # just more security (do not create undefined dirs or something like that)
@@ -2401,11 +2387,13 @@ proc copy_directory {source target} {
          ts_log_severe "can't delete dir \"$target\""
          return
       }
+      # the removal may have happened on another host, see above
+      catch {file delete -force $target}
   }
 
-  set back [catch {file copy -- $source $target}]
+  set back [catch {file copy -- $source $target} error_text]
   if {$back != 0} {
-     ts_log_severe "can't copy \"$source\" to \"$target\" "
+     ts_log_severe "can't copy \"$source\" to \"$target\": $error_text"
      return
   }
 }

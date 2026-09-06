@@ -140,6 +140,21 @@ while IFS= read -r file1; do
       echo "Excluding 'tmpdir' and 'slots' from diff of '$object_type' object '$object_name'"
       filter1="grep -Ev ^(tmpdir|slots) $file1"
       filter2="grep -Ev ^(tmpdir|slots) $file2"
+   elif [ "$object_name" = "centry" ]; then
+      # A builtin complex does not travel with an upgrade. The qmaster creates
+      # it itself (the table in daemons/qmaster/setup_qmaster.cc), so a backup
+      # taken from an older version cannot carry one that version did not have
+      # yet, while the backup taken after loading the upgraded configuration
+      # always has it. Comparing the two would report a difference for every
+      # release that adds one.
+      # Only names no supported source version knows belong here: 'devices'
+      # arrived with 9.2.0 and is absent from both the 9.0.0 and the 9.1.0
+      # reference backup, while 9.0.0 and 9.1.0 have an identical complex list.
+      # -w so that a complex of the site's own named 'devices_<something>'
+      # still takes part in the comparison.
+      echo "Excluding the builtin complexes added after the oldest supported version ('devices') from diff of '$object_name'"
+      filter1="grep -Evw ^devices $file1"
+      filter2="grep -Evw ^devices $file2"
    else
       filter1="cat $file1"
       filter2="cat $file2"
