@@ -801,15 +801,46 @@ proc cluster_delete_all_queues {} {
    cluster_delete_object_list "-dq" $queue_list "cluster queue(s)"
 }
 
+###
+# @brief delete the host groups a test may have left behind
+#
+# Two kinds of host group are left alone, because the qmaster refuses to delete
+# them - and asking anyway does not just fail for them: cluster_delete_object_list()
+# sends one request for the whole list and judges it by the exit status, so a
+# single denied name takes the deletion of every other group down with it.
+#
+#   - "@admin_hosts", "@submit_hosts" and "@exec_hosts" back the admin, submit
+#     and execution host lists since CS-2438. The qmaster answers "remove its
+#     members instead".
+#   - "@@<queue>" carries the host list of the cluster queue of that name
+#     (CS-2677) and is bound to its lifetime. It disappears with its queue,
+#     which cluster_delete_all_queues() has already removed by the time we get
+#     here; a leftover would still be refused on its own.
+#
+# They are in the same category as the reserved usersets in
+# cluster_delete_all_usersets(), the builtin complexes and the global host:
+# part of the cluster, not a test's leftovers.
+#
+# @return 1 on success, 0 on failure
+##
 proc cluster_delete_all_hostgroups {} {
    get_hostgroup_list hgroup_list "" "" 0
 
    # exit if list is already empty
    if {[llength $hgroup_list] == 1 && [lindex $hgroup_list 0] == "no host group list defined"} {
-      return
+      return 1
    }
 
-   cluster_delete_object_list "-dhgrp" $hgroup_list "host group(s)"
+   set to_delete {}
+   foreach hgroup_name $hgroup_list {
+      if {$hgroup_name eq "@admin_hosts" || $hgroup_name eq "@submit_hosts" ||
+          $hgroup_name eq "@exec_hosts" || [string match "@@*" $hgroup_name]} {
+         continue
+      }
+      lappend to_delete $hgroup_name
+   }
+
+   return [cluster_delete_object_list "-dhgrp" $to_delete "host group(s)"]
 }
 
 proc cluster_delete_all_exechosts {} {
