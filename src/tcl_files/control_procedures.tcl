@@ -1528,76 +1528,66 @@ proc ps_grep {forwhat {host "local"} {variable ps_info}} {
 
 
 
-#                                                             max. column:     |
-#****** control_procedures/get_ps_info() ******
+## @brief get ps output on remote or local host
 #
-#  NAME
-#     get_ps_info -- get ps output on remote or local host
+# Calls ps on the given host and parses its output into a two dimensional
+# array. If no info_array parameter is given the array is named ps_info.
 #
-#  SYNOPSIS
-#     get_ps_info { { pid 0 } { host "local"} { variable ps_info }
-#     {additional_run 0} }
+# The ps output is cut into columns by position: the start of a column is the
+# end of its predecessor, its end is taken from the width of the corresponding
+# name in the ps header line. Every column placeholder in the ps format string
+# must therefore be at least as wide as the widest value that column can hold
+# (that is why the uid column is requested as uid=BIGGERUIDUID rather than
+# plain uid). If a placeholder is too short, ps widens the data column but not
+# the header, and every column behind it is shifted against the header - the
+# state column then yields the last digit of the uid instead of the process
+# state, which no caller can distinguish from a real ps state.
 #
-#  FUNCTION
-#     This procedure will call ps on the host given and parse the output. All
-#     information is stored in a special array. If no variable parameter is
-#     given the array has the name ps_info
+# @param pid            pid for which ps_info($pid,error) is set; that entry
+#                       always exists when a pid is given, so the caller can
+#                       always access ps_info($pid,error)
+# @param host           host on which the ps command should be started
+# @param info_array     name of the array to fill (call-by-reference); the
+#                       default is "ps_info"
+# @param additional_run set when the procedure calls itself again to run a
+#                       second ps command with different information and mix
+#                       the results into one list; it distinguishes the
+#                       recursive subcalls. Used for glinux at this time
+# @return no value; the named array is filled instead
 #
-#  INPUTS
-#     { pid 0 }            - set pid for ps_info($pid,error) the
-#                            ps_info([given pid],error) array is always set when
-#                            the pid is given. You have always access to
-#                            ps_info($pid,error)
-#     { host "master"}     - host on which the ps command should be started
-#     { variable ps_info } - array name where the ps command output should be
-#                            stored the default for this value is "ps_info"
-#     {additional_run 0}   - if it is neccessary to start more than one ps command
-#                            to get the full information this number is used to be
-#                            able to differ the recursive subcalls. So this
-#                            parameter is only set when the procedure calls itself
-#                            again.
+# The array holds one error entry per requested pid: for pid 12,
+# ps_info(12,error) is 0 if that pid exists and -1 if it does not. When it is
+# 0, these entries are available for that pid:
 #
+#     ps_info(12,string)       complete ps output line
+#     ps_info(12,index_names)  column names of the ps output
+#     ps_info(12,pgid)         process group id
+#     ps_info(12,ppid)         parent pid
+#     ps_info(12,uid)          user id
+#     ps_info(12,state)        process state
+#     ps_info(12,stime)        start time
+#     ps_info(12,vsz)          virtual size
+#     ps_info(12,time)         cpu time
+#     ps_info(12,command)      command arguments of the process
+#     ps_info(12,nice)         nice level of the process
 #
-#  RESULT
-#     The procedure returns an 2 dimensional array with following entries:
+# In addition every line of the ps output is stored, with I being the line
+# number (or index) of that line:
 #
-#     If the parameter pid was set to 12 then ps_info(12,error) exists after
-#     calling this procedure ps_info(12,error) is set to 0 when the pid 12 exists,
-#     otherwise it is set to -1
+#     ps_info(proc_count)      number of processes (line count of ps output)
+#     ps_info(pid,I)           pid of the process
+#     ps_info(pgid,I)          process group id
+#     ps_info(ppid,I)          parent pid
+#     ps_info(uid,I)           user id
+#     ps_info(state,I)         process state
+#     ps_info(stime,I)         start time
+#     ps_info(vsz,I)           virtual size
+#     ps_info(time,I)          cpu time
+#     ps_info(command,I)       command arguments of the process
+#     ps_info(nice,I)          nice level of the process
+#     ps_info(string,I)        complete line
 #
-#     when ps_info(12,error) exists the following indicies are available:
-#
-#     ps_info(12,string)
-#     ps_info(12,index_names)
-#     ps_info(12,pgid)
-#     ps_info(12,ppid)
-#     ps_info(12,uid)
-#     ps_info(12,state)
-#     ps_info(12,stime)
-#     ps_info(12,vsz)
-#     ps_info(12,time)
-#     ps_info(12,command)
-#     ps_info(12,nice)
-#
-#     every output of the ps command is stored into these indicies:
-#     (I is the line number (or index) of the output)
-#
-#     ps_info(proc_count)   : number of processes (line count of ps command)
-#     ps_info(pid,I)        : pid of process
-#     ps_info(pgid,I)       : process group id
-#     ps_info(ppid,I)       : parent pid
-#     ps_info(uid,I)        : user id
-#     ps_info(state,I)      : state
-#     ps_info(stime,I)      : start time
-#     ps_info(vsz,I)        : virtual size
-#     ps_info(time,I)       : cpu time
-#     ps_info(command,I)    : command arguments of process
-#     ps_info(nice,I)       : nice level of the process
-#     ps_info(string,I)     : complete line
-#
-#  EXAMPLE
-#
-#     get process group id of pid 3919:
+# Example - get the process group id of pid 3919 on host fangorn:
 #
 #     get_ps_info 3919 fangorn
 #     if {$ps_info(3919,error) == 0} {
@@ -1606,30 +1596,14 @@ proc ps_grep {forwhat {host "local"} {variable ps_info}} {
 #        puts "pid 3919 not found!"
 #     }
 #
-#
-#
-#     print out all pids on local host:
+# Example - print all pids on the local host:
 #
 #     get_ps_info
 #     for {set i 0} {$i < $ps_info(proc_count) } {incr i 1} {
 #        puts "ps_info(pid,$i)     = $ps_info(pid,$i)"
 #     }
 #
-#  NOTES
-#     o additional_run is for glinux at this time
-#     o additionan_run is a number from 0 up to xxx at the end of the procedure
-#       it will start again a ps command with other information in order to mix
-#       up the information into one resulting list
-#
-#     o this procedure should run on following platforms:
-#       solaris64, solaris
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     control_procedures/ps_grep
-#*******************************
+# @see control_procedures/ps_grep
 proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional_run 0} } {
    global CHECK_USER ts_config
    upvar $info_array psinfo
@@ -1660,8 +1634,8 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       "osol-*" -
       "usol-*" {
          set myenvironment(COLUMNS) "1000"
-         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-e -o \"pid=_____pid\" -o \"pgid=_____pgid\" -o \"ppid=_____ppid\" -o \"uid=_____uid\" -o \"s=_____s\" -o \"stime=_____stime\" -o \"vsz=_____vsz\" -o \"time=_____time\" -o \"nice=_____nice\" -o \"args=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
-         set index_names "_____pid _____pgid _____ppid _____uid _____s _____stime _____vsz _____time _____nice _____args"
+         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-e -o \"pid=_____pid\" -o \"pgid=_____pgid\" -o \"ppid=_____ppid\" -o \"uid=_________uid\" -o \"s=_____s\" -o \"stime=_____stime\" -o \"vsz=_____vsz\" -o \"time=_____time\" -o \"nice=_____nice\" -o \"args=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
+         set index_names "_____pid _____pgid _____ppid _________uid _____s _____stime _____vsz _____time _____nice _____args"
          set pid_pos     0
          set gid_pos     1
          set ppid_pos    2
@@ -1676,8 +1650,8 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
 
       "darwi*" {
          set myenvironment(COLUMNS) "1000"
-         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-awwx -o \"pid=_____pid\" -o \"pgid=_____pgid\" -o \"ppid=_____ppid\" -o \"uid=_____uid\" -o \"state=_____s\" -o \"stime=_____stime\" -o \"vsz=_____vsz\" -o \"time=_____time\" -o \"nice=_____nice\" -o \"command=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
-         set index_names "_____pid _____pgid _____ppid _____uid _____s _____stime _____vsz _____time _____nice _____args"
+         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-awwx -o \"pid=_____pid\" -o \"pgid=_____pgid\" -o \"ppid=_____ppid\" -o \"uid=_________uid\" -o \"state=_____s\" -o \"stime=_____stime\" -o \"vsz=_____vsz\" -o \"time=_____time\" -o \"nice=_____nice\" -o \"command=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
+         set index_names "_____pid _____pgid _____ppid _________uid _____s _____stime _____vsz _____time _____nice _____args"
          set pid_pos     0
          set gid_pos     1
          set ppid_pos    2
@@ -1694,8 +1668,8 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
          set myenvironment(COLUMNS) "1000"
          #set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-eo \"pid pgid ppid uid state start vsz time args\"" prg_exit_state 60 0 "" myenvironment 1 0]
          #set index_names "  PID  PGID  PPID   UID STAT STARTED   VSZ      TIME COMMAND"
-         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-axww -o \"pid=_____pid\" -o \"pgid=_____pgid\" -o \"ppid=_____ppid\" -o \"uid=_____uid\" -o \"state=_____s\" -o \"start=_____stime\" -o \"vsz=_____vsz\" -o \"time=________time\" -o \"args=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
-         set index_names "_____pid _____pgid _____ppid _____uid _____s _____stime _____vsz ________time _____args"
+         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-axww -o \"pid=_____pid\" -o \"pgid=_____pgid\" -o \"ppid=_____ppid\" -o \"uid=_________uid\" -o \"state=_____s\" -o \"start=_____stime\" -o \"vsz=_____vsz\" -o \"time=________time\" -o \"args=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
+         set index_names "_____pid _____pgid _____ppid _________uid _____s _____stime _____vsz ________time _____args"
          set pid_pos     0
          set gid_pos     1
          set ppid_pos    2
@@ -1714,8 +1688,8 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       "ulx-*" -
       "xlx-*" {
          set myenvironment(COLUMNS) "1000"
-         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-weo \"pid pgid ppid uid=BIGGERUID s stime vsz time nice args=COMMANDCOMMANDCOMMANDCOMMANDCOMMAND\"" prg_exit_state 60 0 "" myenvironment 1 0]
-         set index_names "  PID  PGID  PPID BIGGERUID S STIME   VSZ     TIME NI COMMANDCOMMANDCOMMANDCOMMANDCOMMAND"
+         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-weo \"pid pgid ppid uid=BIGGERUIDUID s stime vsz time nice args=COMMANDCOMMANDCOMMANDCOMMANDCOMMAND\"" prg_exit_state 60 0 "" myenvironment 1 0]
+         set index_names "  PID  PGID  PPID BIGGERUIDUID S STIME   VSZ     TIME NI COMMANDCOMMANDCOMMANDCOMMANDCOMMAND"
          set pid_pos     0
          set gid_pos     1
          set ppid_pos    2
@@ -1767,8 +1741,8 @@ proc get_ps_info { { pid 0 } { host "master"} { info_array ps_info } {additional
       }
 
       "nbsd-*" {
-         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-axww -o \"pid=_____pid pgid=_____pgid ppid=_____ppid uid=_____uid state=_____s stime=_____stime vsz=_____vsz time=_____time args=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
-         set index_names "_____pid _____pgid _____ppid _____uid _____s _____stime _____vsz _____time _____args"
+         set result [start_remote_prog "$host" "$CHECK_USER" "ps" "-axww -o \"pid=_____pid pgid=_____pgid ppid=_____ppid uid=_________uid state=_____s stime=_____stime vsz=_____vsz time=_____time args=_____args\"" prg_exit_state 60 0 "" myenvironment 1 0]
+         set index_names "_____pid _____pgid _____ppid _________uid _____s _____stime _____vsz _____time _____args"
          set pid_pos     0
          set gid_pos     1
          set ppid_pos    2
