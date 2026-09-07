@@ -254,16 +254,23 @@ proc fjr_qresub_partial_array_test {} {
 
    wait_for_jobend $new_jid "" 60 0
 
-   # Give qacct's on-disk records a moment to flush. wait_for_jobend returns
-   # as soon as JAT_status flips to JFINISHED; the accounting file write is
-   # synchronous with sge_commit_job(_EE) but subject to reporting_params
-   # flush_time slack — a small settle window keeps this stable.
-   sleep_for_seconds 3 "let qacct records flush"
-
-   set out [start_sge_bin "qacct" "-j $new_jid" "" "" prg_exit_state]
-   if {$prg_exit_state != 0} {
-      ts_log_severe "qacct -j $new_jid failed (exit=$prg_exit_state); output:\n$out"
-      return
+   # Wait for qacct's on-disk record. wait_for_jobend returns as soon as
+   # JAT_status flips to JFINISHED; the accounting file write is synchronous
+   # with sge_commit_job(_EE) but subject to reporting_params flush_time
+   # slack. A fixed settle window is either too short under the load of a full
+   # run - where this failed with "job id N not found" - or needlessly long,
+   # so poll for the record rather than sleeping a guessed amount.
+   set deadline [expr {[clock seconds] + 30}]
+   while {1} {
+      set out [start_sge_bin "qacct" "-j $new_jid" "" "" prg_exit_state]
+      if {$prg_exit_state == 0} {
+         break
+      }
+      if {[clock seconds] >= $deadline} {
+         ts_log_severe "qacct -j $new_jid failed (exit=$prg_exit_state); output:\n$out"
+         return
+      }
+      after 500
    }
    # qacct emits one section per completed task. Count sections whose
    # "jobnumber" matches $new_jid.
