@@ -333,7 +333,10 @@ proc qsub_pty_io {} {
          return
       }
 
-      wait_for_file $input_tmpfile 10
+      # The file lives in $user's home and was written above as $user; the
+      # testsuite user cannot even read into a foreign home (mode 0700), so
+      # it has to be the writing host and user that answer this.
+      wait_for_remote_file $host $user $input_tmpfile 10
 
       set job_id [submit_job "-pty yes -N pty_io -o $output_tmpfile -e /dev/null -i $input_tmpfile $ts_config(testsuite_root_dir)/scripts/stdin.sh" 1 60 $host $user]
 
@@ -343,7 +346,7 @@ proc qsub_pty_io {} {
       }
 
       wait_for_jobend $job_id "pty_io" 60 0
-      wait_for_file $output_tmpfile 10
+      wait_for_remote_file $host $user $output_tmpfile 10
 
       set result [start_remote_prog $host $user cat $output_tmpfile exit_code]
 
