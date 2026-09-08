@@ -1,0 +1,322 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+
+# A *dynamic* resource quota limit - one whose value is a load formula rather
+# than a number - on a NON consumable complex.
+#
+# A dynamic limit carries no number when it is defined. rqs_verify_attributes()
+# in sge_resource_quota.cc recognises the formula by its "$", validates it, sets
+# RQRL_dynamic and leaves the value alone, with the comment
+#
+#     /* The evaluation of the value needs to be done at scheduling time.
+#        Per default it's zero */
+#
+# RQRL_dvalue is filled in only by rqs_set_dynamical_limit(), which evaluates the
+# formula against the host under consideration. Three places need it:
+#
+#   rqs_limitation_reached()                       sequential - calls it
+#   parallel_rqs_slots_by_time(), consumable       parallel   - calls it
+#   parallel_rqs_slots_by_time(), non consumable   parallel   - does NOT call it
+#
+# So a dynamic limit on a non consumable complex is expected to be evaluated as
+# zero for a parallel job, and with the usual <= operator every such job is then
+# rejected. This check exists to establish whether that is what actually happens.
+#
+# The neighbouring check rqs_non_consumable_limit covers the same two paths with
+# a static limit. The resource_quota check one level up covers a dynamic limit on
+# "slots", which is a consumable and therefore takes the branch that does call
+# rqs_set_dynamical_limit(). Neither reaches this combination.
+#
+# The parallel function needs the CS-2739 fix present, otherwise that branch
+# rejects every parallel job for an unrelated reason and nothing can be told
+# apart. It is skipped on older versions.
+#
+# Dynamic limits are accepted only at host or queue instance level -
+# rqs_verify_attributes() rejects them elsewhere - so the rule carries a hosts
+# and queues filter.
+
+set check_name           "rqs_dynamic_limit"
+set check_category       "RQS SCHEDULER VERIFIED"
+set check_description(0) "a dynamic resource quota limit on a non consumable complex is evaluated"
+
+set check_needs          "init_core_system"
+
+set check_setup_function   rqs_dyn_setup
+set check_cleanup_function rqs_dyn_cleanup
+
+set check_functions {}
+lappend check_functions "rqs_dyn_limit_is_applied_sequential"
+lappend check_functions "rqs_dyn_limit_is_applied_parallel"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc rqs_dyn_setup {} {
+   get_current_cluster_config_array ts_config
+   global check_name
+   global rqs_dyn_host rqs_dyn_complex_backup rqs_dyn_host_backup rqs_dyn_job_id
+   global rqs_dyn_rqs_name rqs_dyn_limit rqs_dyn_capacity rqs_dyn_below rqs_dyn_above
+   global rqs_dyn_pe_name rqs_dyn_queue_name
+
+   set rqs_dyn_job_id   0
+   set rqs_dyn_rqs_name "rqs_dyn_test"
+   # the host has to offer plenty, so that the ordinary request matching always
+   # succeeds and the resource quota is the only thing that can reject a job
+   set rqs_dyn_capacity 10000
+
+   set rqs_dyn_host [host_conf_get_suited_hosts 1]
+
+   # a NON consumable INT complex - consumable YES would take the other code path
+   get_complex rqs_dyn_complex_backup
+   #                    shortcut type relop requestable consumable default urgency
+   set complex(rqsdyn) "rqsdyn  INT  <=    YES         NO         0       0"
+   if {[set_complex complex] < 0} {
+      ts_log_config "cannot define the complex needed by this check"
+      return 99
+   }
+
+   # complex_values of an exec host already carry slots, so merge instead of
+   # assigning. Since 9.1.0 the slot capacity of a host defaults to its core
+   # count, which may be less than the parallel job below needs, so raise it in
+   # the same edit - that keeps one backup and one restore.
+   get_exechost rqs_dyn_host_backup $rqs_dyn_host
+   add_or_replace_array_param eh_tmp rqs_dyn_host_backup "complex_values" "rqsdyn" $rqs_dyn_capacity
+   add_or_replace_array_param eh eh_tmp "complex_values" "slots" 10
+   if {[set_exechost eh $rqs_dyn_host] < 0} {
+      ts_log_config "cannot set the complex values on host $rqs_dyn_host"
+      return 99
+   }
+
+   # A parallel job is needed to reach the second of the two code paths, so the
+   # check brings its own PE and its own queue to hold it. Modifying all.q was
+   # the alternative and is worse: pe_list is a plain list, not a list of
+   # key=value pairs, so it cannot be merged with add_or_replace_array_param,
+   # and a check that edits the default queue is one that other checks have to
+   # tolerate.
+   set rqs_dyn_pe_name    "rqsdyn.pe"
+   set rqs_dyn_queue_name "rqsdyn.q"
+
+   set pe(slots)           10
+   set pe(allocation_rule) "\$pe_slots"
+   if {[add_pe $rqs_dyn_pe_name pe] != 0} {
+      ts_log_config "cannot add the parallel environment $rqs_dyn_pe_name"
+      return 99
+   }
+
+   set q(slots)   10
+   set q(pe_list) $rqs_dyn_pe_name
+   if {[add_queue $rqs_dyn_queue_name $rqs_dyn_host q] != 0} {
+      ts_log_config "cannot add the queue $rqs_dyn_queue_name on host $rqs_dyn_host"
+      return 99
+   }
+
+   # Read num_proc from the live load report, i.e. the source the scheduler
+   # resolves the formula from. The static host config value is the physical core
+   # count and differs from the reported one on SMT hosts - a trap the
+   # resource_quota check one level up already documents.
+   set lookup_host [resolve_host $rqs_dyn_host]
+   get_load_values rqs_dyn_load {num_proc}
+   if {[info exists rqs_dyn_load($lookup_host,num_proc)]} {
+      set num_proc $rqs_dyn_load($lookup_host,num_proc)
+   } else {
+      set num_proc [node_get_processors $rqs_dyn_host]
+      ts_log_fine "num_proc not reported for $rqs_dyn_host, using the host config value $num_proc"
+   }
+
+   # the formula evaluates to twice num_proc, so a request of num_proc is below
+   # the limit and one of three times num_proc is above it, for any num_proc >= 1
+   set rqs_dyn_limit [expr {$num_proc * 2}]
+   set rqs_dyn_below $num_proc
+   set rqs_dyn_above [expr {$num_proc * 3}]
+   ts_log_fine "the dynamic limit num_proc*2 evaluates to $rqs_dyn_limit on $rqs_dyn_host"
+
+   set rqs(${rqs_dyn_rqs_name},description) "dynamic non consumable limit, generated by $check_name"
+   set rqs(${rqs_dyn_rqs_name},enabled)     "TRUE"
+   # add_rqs expects a list of rules; the string form of the list puts each rule
+   # in braces, which is what qconf -Arqs wants. A bare string is written without
+   # them and the file is rejected. The check one level up builds it the same way.
+   set rules {}
+   lappend rules "hosts {*} queues $rqs_dyn_queue_name to rqsdyn=\$num_proc*2"
+   set rqs(${rqs_dyn_rqs_name},limit) $rules
+   if {[add_rqs rqs] != 0} {
+      ts_log_config "cannot add the resource quota set $rqs_dyn_rqs_name"
+      return 99
+   }
+}
+
+proc rqs_dyn_cleanup {} {
+   global rqs_dyn_host rqs_dyn_complex_backup rqs_dyn_host_backup rqs_dyn_job_id
+   global rqs_dyn_rqs_name rqs_dyn_limit rqs_dyn_capacity rqs_dyn_below rqs_dyn_above
+   global rqs_dyn_pe_name rqs_dyn_queue_name
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # restore in reverse order of setup - the quota references the complex, and
+   # the host does too
+   del_rqs $rqs_dyn_rqs_name
+   # the queue references the PE, so it goes first
+   if {[info exists rqs_dyn_queue_name]} {
+      del_queue $rqs_dyn_queue_name "" 1 1
+   }
+   if {[info exists rqs_dyn_pe_name]} {
+      del_pe $rqs_dyn_pe_name
+   }
+   set_exechost rqs_dyn_host_backup $rqs_dyn_host
+   reset_complex rqs_dyn_complex_backup
+
+   unset -nocomplain rqs_dyn_host rqs_dyn_complex_backup rqs_dyn_host_backup rqs_dyn_job_id
+   unset -nocomplain rqs_dyn_rqs_name rqs_dyn_limit rqs_dyn_capacity rqs_dyn_below rqs_dyn_above
+   unset -nocomplain rqs_dyn_pe_name rqs_dyn_queue_name
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+##
+# @brief Delete a job if it is still there
+proc rqs_dyn_delete_job {job_id} {
+   if {$job_id > 0} {
+      delete_job $job_id 1 0 0
+   }
+}
+
+##
+# @brief Submit one sleeper requesting the given amount of the test complex
+#
+# The job is tied to the host the quota applies to, so the quota is certain to
+# be evaluated for it. The sleep is long enough that a job which is admitted is
+# still running when the state is read - a short one can finish inside the
+# settle period and then looks the same as a job that never started.
+#
+# amount - what to request of rqsdyn
+#
+# Returns the job id, or 0 when the submission failed.
+proc rqs_dyn_submit {amount {extra ""}} {
+   get_current_cluster_config_array ts_config
+   global rqs_dyn_queue_name
+
+   set args "-N rqsdyn_$amount $extra -q $rqs_dyn_queue_name -l rqsdyn=$amount -b y /bin/sleep 300"
+   set job_id [submit_job $args 0]
+   if {$job_id <= 0} {
+      ts_log_severe "could not submit a job requesting rqsdyn=$amount"
+      return 0
+   }
+   return $job_id
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+##
+# @brief Run the two jobs and report what the limit did with them
+#
+# label - what to call this path in the log and in a failure
+# extra - extra submit arguments, empty for a sequential job
+proc rqs_dyn_run_pair {label extra} {
+   global rqs_dyn_limit rqs_dyn_below rqs_dyn_above
+
+   set below $rqs_dyn_below
+   set above $rqs_dyn_above
+
+   set job_below [rqs_dyn_submit $below $extra]
+   set job_above [rqs_dyn_submit $above $extra]
+   if {$job_below <= 0 || $job_above <= 0} {
+      rqs_dyn_delete_job $job_below
+      rqs_dyn_delete_job $job_above
+      return
+   }
+
+   # A job asking for at most the limit has to run. Waiting for it also gets a
+   # scheduler run out of the way, so by the time the second job is looked at the
+   # scheduler has already had its chance to start it too.
+   set below_started [expr {[wait_for_jobstart $job_below "rqsdyn_$below" 60] == 0}]
+
+   # A job asking for more than the limit must not run. Here the timeout is the
+   # expected outcome, so do_errorcheck is off and the wait is short; do_tsm asks
+   # for one more scheduler run first so a short wait is still conclusive.
+   set above_started [expr {[wait_for_jobstart $job_above "rqsdyn_$above" 5 0 1] == 0}]
+
+   ts_log_fine "$label: limit rqsdyn=$rqs_dyn_limit - request $below started=$below_started,\
+                request $above started=$above_started"
+
+   rqs_dyn_delete_job $job_below
+   rqs_dyn_delete_job $job_above
+
+   if {$below_started && $above_started} {
+      ts_log_severe "$label: the limit rqsdyn=$rqs_dyn_limit admitted both a request of $below\
+                     and one of $above - the limit is not applied at all. The amount of\
+                     the limit is most likely not reaching the comparison."
+      return
+   }
+
+   if {!$below_started && !$above_started} {
+      ts_log_severe "$label: the limit rqsdyn=$rqs_dyn_limit rejected both a request of $below\
+                     and one of $above - no request can satisfy it."
+      return
+   }
+
+   if {!$below_started} {
+      ts_log_severe "$label: the limit rqsdyn=$rqs_dyn_limit rejected a request of $below and\
+                     admitted one of $above. A limit is expected to admit the smaller request."
+   }
+}
+
+##
+# @brief The sequential path: rqs_limitation_reached() into ri_time_by_slots()
+proc rqs_dyn_limit_is_applied_sequential {} {
+   rqs_dyn_run_pair "sequential" ""
+}
+
+##
+# @brief The parallel path: parallel_rqs_slots_by_time() into compare_complexes()
+#
+# A sequential job never reaches this branch, so without this function the check
+# cannot see that path at all - which is how CS-2739 stayed hidden.
+#
+# Before 9.1.6 the branch rejected every parallel job that requested a non
+# consumable limited complex, because it took the relation operator from the job
+# request and a job request does not carry one. Running this against an older
+# version would report a failure that is already known and fixed, so it is
+# skipped there rather than reported.
+proc rqs_dyn_limit_is_applied_parallel {} {
+   global rqs_dyn_pe_name
+
+   # CS-2739 has to be in, otherwise this branch rejects every parallel job for an
+   # unrelated reason and the two requests cannot be told apart.
+   if {![is_version_in_range "9.1.6"]} {
+      ts_log_config "needs the CS-2739 fix, which is in 9.1.6, skipping"
+      return
+   }
+
+   rqs_dyn_run_pair "parallel" "-pe $rqs_dyn_pe_name 2"
+}
