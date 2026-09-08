@@ -1,0 +1,310 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+
+# A resource quota limit on a NON consumable complex is evaluated on a code path
+# of its own, and there are two of them - a sequential job and a parallel job do
+# not go the same way:
+#
+#   rqs_limitation_reached()        sequential. Builds a temporary centry holding
+#                                   the limit and calls ri_time_by_slots() with
+#                                   the ordinary argument order, the job request
+#                                   as the request and the limit as the capacity.
+#   parallel_rqs_slots_by_time()    parallel. For a non consumable limit it calls
+#                                   compare_complexes() directly, and passes its
+#                                   arguments the other way round: the limit
+#                                   where a request goes and the job request
+#                                   where an offer goes.
+#
+# The two are near duplicates of one another and this check has to reach both,
+# which is why it submits a sequential job and a parallel one. A first version
+# submitted only sequential jobs and therefore could not see the parallel path
+# at all - and the parallel path turned out to be broken (CS-2739, fixed in
+# 9.1.6): it took the relation operator from the job request, which does not
+# carry one, so it rejected every parallel job requesting such a complex. The
+# parallel check function is skipped on versions before the fix.
+#
+# Every resource quota check that existed before this one limits "slots", which
+# is a consumable, so the non consumable path had no coverage at all. This check
+# closes that gap, and it is at the same time the regression test for the change
+# that made the scheduler read a request amount from CE_doubleval instead of
+# re-parsing the string form. The sequential path exercises that change in
+# ri_time_by_slots(); the parallel path exercises it in compare_complexes(),
+# where the limit is the request side, so that if only its string form were
+# filled in the comparison would run against a stale or zero amount.
+#
+# The limit reads the way one would expect: a job is admitted when it requests
+# at most the limit and rejected when it requests more. That was established by
+# measurement rather than from the source, because the two paths above orient
+# their arguments differently and a first reading of the code got the direction
+# backwards.
+#
+# The check asserts that direction, and its failure messages name the two ways
+# the path can break instead: both requests admitted means the amount of the
+# limit is not reaching the comparison, both rejected means the relation
+# operator is not.
+#
+# Both of the ways this path can break show up as the two jobs no longer being
+# distinguished: an amount that does not reach the comparison admits both, an
+# operator that does not reach it rejects both.
+
+set check_name           "rqs_non_consumable_limit"
+set check_category       "RQS SCHEDULER VERIFIED"
+set check_description(0) "a resource quota limit on a non consumable complex is applied"
+
+set check_needs          "init_core_system"
+
+set check_setup_function   rqs_nc_setup
+set check_cleanup_function rqs_nc_cleanup
+
+set check_functions {}
+lappend check_functions "rqs_nc_limit_is_applied_sequential"
+lappend check_functions "rqs_nc_limit_is_applied_parallel"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc rqs_nc_setup {} {
+   get_current_cluster_config_array ts_config
+   global check_name
+   global rqs_nc_host rqs_nc_complex_backup rqs_nc_host_backup rqs_nc_job_id
+   global rqs_nc_rqs_name rqs_nc_limit rqs_nc_capacity rqs_nc_below rqs_nc_above
+   global rqs_nc_pe_name rqs_nc_queue_name
+
+   set rqs_nc_job_id   0
+   set rqs_nc_rqs_name "rqs_nc_test"
+   set rqs_nc_limit    5
+   set rqs_nc_below    2
+   set rqs_nc_above    10
+   # the host has to offer plenty, so that the ordinary request matching always
+   # succeeds and the resource quota is the only thing that can reject a job
+   set rqs_nc_capacity 100
+
+   set rqs_nc_host [host_conf_get_suited_hosts 1]
+
+   # a NON consumable INT complex - consumable YES would take the other code path
+   get_complex rqs_nc_complex_backup
+   #                    shortcut type relop requestable consumable default urgency
+   set complex(rqsnc)  "rqsnc   INT  <=    YES         NO         0       0"
+   if {[set_complex complex] < 0} {
+      ts_log_config "cannot define the complex needed by this check"
+      return 99
+   }
+
+   # complex_values of an exec host already carry slots, so merge instead of
+   # assigning. Since 9.1.0 the slot capacity of a host defaults to its core
+   # count, which may be less than the parallel job below needs, so raise it in
+   # the same edit - that keeps one backup and one restore.
+   get_exechost rqs_nc_host_backup $rqs_nc_host
+   add_or_replace_array_param eh_tmp rqs_nc_host_backup "complex_values" "rqsnc" $rqs_nc_capacity
+   add_or_replace_array_param eh eh_tmp "complex_values" "slots" 10
+   if {[set_exechost eh $rqs_nc_host] < 0} {
+      ts_log_config "cannot set the complex values on host $rqs_nc_host"
+      return 99
+   }
+
+   # A parallel job is needed to reach the second of the two code paths, so the
+   # check brings its own PE and its own queue to hold it. Modifying all.q was
+   # the alternative and is worse: pe_list is a plain list, not a list of
+   # key=value pairs, so it cannot be merged with add_or_replace_array_param,
+   # and a check that edits the default queue is one that other checks have to
+   # tolerate.
+   set rqs_nc_pe_name    "rqsnc.pe"
+   set rqs_nc_queue_name "rqsnc.q"
+
+   set pe(slots)           10
+   set pe(allocation_rule) "\$pe_slots"
+   if {[add_pe $rqs_nc_pe_name pe] != 0} {
+      ts_log_config "cannot add the parallel environment $rqs_nc_pe_name"
+      return 99
+   }
+
+   set q(slots)   10
+   set q(pe_list) $rqs_nc_pe_name
+   if {[add_queue $rqs_nc_queue_name $rqs_nc_host q] != 0} {
+      ts_log_config "cannot add the queue $rqs_nc_queue_name on host $rqs_nc_host"
+      return 99
+   }
+
+   set rqs(${rqs_nc_rqs_name},description) "non consumable limit, generated by $check_name"
+   set rqs(${rqs_nc_rqs_name},enabled)     "TRUE"
+   set rqs(${rqs_nc_rqs_name},limit)       "{hosts $rqs_nc_host to rqsnc=$rqs_nc_limit}"
+   if {[add_rqs rqs] != 0} {
+      ts_log_config "cannot add the resource quota set $rqs_nc_rqs_name"
+      return 99
+   }
+}
+
+proc rqs_nc_cleanup {} {
+   global rqs_nc_host rqs_nc_complex_backup rqs_nc_host_backup rqs_nc_job_id
+   global rqs_nc_rqs_name rqs_nc_limit rqs_nc_capacity rqs_nc_below rqs_nc_above
+   global rqs_nc_pe_name rqs_nc_queue_name
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # restore in reverse order of setup - the quota references the complex, and
+   # the host does too
+   del_rqs $rqs_nc_rqs_name
+   # the queue references the PE, so it goes first
+   if {[info exists rqs_nc_queue_name]} {
+      del_queue $rqs_nc_queue_name "" 1 1
+   }
+   if {[info exists rqs_nc_pe_name]} {
+      del_pe $rqs_nc_pe_name
+   }
+   set_exechost rqs_nc_host_backup $rqs_nc_host
+   reset_complex rqs_nc_complex_backup
+
+   unset -nocomplain rqs_nc_host rqs_nc_complex_backup rqs_nc_host_backup rqs_nc_job_id
+   unset -nocomplain rqs_nc_rqs_name rqs_nc_limit rqs_nc_capacity rqs_nc_below rqs_nc_above
+   unset -nocomplain rqs_nc_pe_name rqs_nc_queue_name
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+##
+# @brief Delete a job if it is still there
+proc rqs_nc_delete_job {job_id} {
+   if {$job_id > 0} {
+      delete_job $job_id 1 0 0
+   }
+}
+
+##
+# @brief Submit one sleeper requesting the given amount of the test complex
+#
+# The job is tied to the host the quota applies to, so the quota is certain to
+# be evaluated for it. The sleep is long enough that a job which is admitted is
+# still running when the state is read - a short one can finish inside the
+# settle period and then looks the same as a job that never started.
+#
+# amount - what to request of rqsnc
+#
+# Returns the job id, or 0 when the submission failed.
+proc rqs_nc_submit {amount {extra ""}} {
+   get_current_cluster_config_array ts_config
+   global rqs_nc_queue_name
+
+   set args "-N rqsnc_$amount $extra -q $rqs_nc_queue_name -l rqsnc=$amount -b y /bin/sleep 300"
+   set job_id [submit_job $args 0]
+   if {$job_id <= 0} {
+      ts_log_severe "could not submit a job requesting rqsnc=$amount"
+      return 0
+   }
+   return $job_id
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+##
+# @brief Run the two jobs and report what the limit did with them
+#
+# label - what to call this path in the log and in a failure
+# extra - extra submit arguments, empty for a sequential job
+proc rqs_nc_run_pair {label extra} {
+   global rqs_nc_limit rqs_nc_below rqs_nc_above
+
+   set below $rqs_nc_below
+   set above $rqs_nc_above
+
+   set job_below [rqs_nc_submit $below $extra]
+   set job_above [rqs_nc_submit $above $extra]
+   if {$job_below <= 0 || $job_above <= 0} {
+      rqs_nc_delete_job $job_below
+      rqs_nc_delete_job $job_above
+      return
+   }
+
+   # A job asking for at most the limit has to run. Waiting for it also gets a
+   # scheduler run out of the way, so by the time the second job is looked at the
+   # scheduler has already had its chance to start it too.
+   set below_started [expr {[wait_for_jobstart $job_below "rqsnc_$below" 60] == 0}]
+
+   # A job asking for more than the limit must not run. Here the timeout is the
+   # expected outcome, so do_errorcheck is off and the wait is short; do_tsm asks
+   # for one more scheduler run first so a short wait is still conclusive.
+   set above_started [expr {[wait_for_jobstart $job_above "rqsnc_$above" 5 0 1] == 0}]
+
+   ts_log_fine "$label: limit rqsnc=$rqs_nc_limit - request $below started=$below_started,\
+                request $above started=$above_started"
+
+   rqs_nc_delete_job $job_below
+   rqs_nc_delete_job $job_above
+
+   if {$below_started && $above_started} {
+      ts_log_severe "$label: the limit rqsnc=$rqs_nc_limit admitted both a request of $below\
+                     and one of $above - the limit is not applied at all. The amount of\
+                     the limit is most likely not reaching the comparison."
+      return
+   }
+
+   if {!$below_started && !$above_started} {
+      ts_log_severe "$label: the limit rqsnc=$rqs_nc_limit rejected both a request of $below\
+                     and one of $above - no request can satisfy it."
+      return
+   }
+
+   if {!$below_started} {
+      ts_log_severe "$label: the limit rqsnc=$rqs_nc_limit rejected a request of $below and\
+                     admitted one of $above. A limit is expected to admit the smaller request."
+   }
+}
+
+##
+# @brief The sequential path: rqs_limitation_reached() into ri_time_by_slots()
+proc rqs_nc_limit_is_applied_sequential {} {
+   rqs_nc_run_pair "sequential" ""
+}
+
+##
+# @brief The parallel path: parallel_rqs_slots_by_time() into compare_complexes()
+#
+# A sequential job never reaches this branch, so without this function the check
+# cannot see that path at all - which is how CS-2739 stayed hidden.
+#
+# Before 9.1.6 the branch rejected every parallel job that requested a non
+# consumable limited complex, because it took the relation operator from the job
+# request and a job request does not carry one. Running this against an older
+# version would report a failure that is already known and fixed, so it is
+# skipped there rather than reported.
+proc rqs_nc_limit_is_applied_parallel {} {
+   global rqs_nc_pe_name
+
+   if {![is_version_in_range "9.1.6"]} {
+      ts_log_config "the parallel resource quota path is fixed in 9.1.6 (CS-2739), skipping"
+      return
+   }
+
+   rqs_nc_run_pair "parallel" "-pe $rqs_nc_pe_name 2"
+}
