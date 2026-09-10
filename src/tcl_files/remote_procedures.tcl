@@ -1273,6 +1273,37 @@ proc parse_ts_exit_code {buffer} {
 # @param[in] command
 # @param[in] args
 ##
+#****** remote_procedures/get_ssh_ip_args() ************************************
+#  NAME
+#     get_ssh_ip_args() -- ssh/scp arguments selecting the address family
+#
+#  SYNOPSIS
+#     get_ssh_ip_args { }
+#
+#  FUNCTION
+#     Returns the command line arguments that force the address family
+#     requested with the ssh_ip command line option onto an ssh or scp call.
+#     Both tools understand -4 and -6, so one list serves every call site.
+#
+#  RESULT
+#     a list with one element ("-4" or "-6"), or an empty list for "any"
+#
+#  SEE ALSO
+#     remote_procedures/open_remote_spawn_process()
+#*******************************************************************************
+proc get_ssh_ip_args {} {
+   global CHECK_SSH_IP
+
+   if {![info exists CHECK_SSH_IP]} {
+      return {}
+   }
+   switch -- $CHECK_SSH_IP {
+      "4" {return {-4}}
+      "6" {return {-6}}
+   }
+   return {}
+}
+
 proc ssh_start_remote_prog {hostname command args} {
    get_current_cluster_config_array ts_config
 
@@ -1283,7 +1314,7 @@ proc ssh_start_remote_prog {hostname command args} {
    }
    ts_log_finer "   -> starting ssh $hostname $cmd"
    set prg_exit_state [catch {
-      spawn "ssh" $hostname $cmd
+      spawn "ssh" {*}[get_ssh_ip_args] $hostname $cmd
    } catch_output]
    if {$prg_exit_state == 0} {
       # Both factors, not just the per host one. Five seconds to get an ssh
@@ -1346,7 +1377,11 @@ proc ssh_start_remote_prog {hostname command args} {
 proc scp_remote_file {hostname src dest} {
    get_current_cluster_config_array ts_config
    set start_script "$ts_config(testsuite_root_dir)/scripts/start_cmd.sh"
-   set cmd "scp $src $hostname:$dest"
+   set cmd "scp"
+   foreach arg [get_ssh_ip_args] {
+      append cmd " $arg"
+   }
+   append cmd " $src $hostname:$dest"
    ts_log_finer "   -> starting $start_script $cmd"
    set prg_exit_state [catch {
       spawn $start_script $cmd
@@ -1738,10 +1773,11 @@ proc open_remote_spawn_process { hostname
          if {$tmp_help || $ts_config(connection_type) == "ssh_with_password" || $ts_config(connection_type) == "ssh"} {
             # CS-2142: -tt forces remote PTY allocation so spawned commands' stderr flows
             # through the expect session (fd 1 + fd 2 both go through the PTY slave).
+            set ip_args [get_ssh_ip_args]
             if {$force_pty} {
-               set pid [spawn "ssh" "-tt" "-l" $connect_full_user $hostname]
+               set pid [spawn "ssh" {*}$ip_args "-tt" "-l" $connect_full_user $hostname]
             } else {
-               set pid [spawn "ssh" "-l" $connect_full_user $hostname]
+               set pid [spawn "ssh" {*}$ip_args "-l" $connect_full_user $hostname]
             }
          } else {
             set pid [spawn "rlogin" $hostname "-l" $connect_full_user]
