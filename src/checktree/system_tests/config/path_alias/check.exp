@@ -101,6 +101,35 @@ set path_alias_file_saved 0
 
 # -------- local test procedures -----------------------------------------------
 
+## @brief check whether a file is visible on a remote host, bypassing the NFS cache
+#
+# "cat" or "test -f" on the file itself only perform a lookup, which NFS
+# answers from the cached dentry of the containing directory. After a rename
+# that dentry still refers to a valid file handle - the inode was not removed,
+# only linked under a different name - so such a probe keeps reporting the file
+# as present until the client revalidates the directory. With acdirmax=60 on
+# the test hosts that takes as long as any caller here is willing to wait, and
+# the probe answers the attribute cache rather than the file system.
+#
+# Listing the directory forces a readdir() and with it the revalidation, so the
+# answer no longer depends on the cache. This is the remote counterpart of
+# file_procedures/file_isfile_revalidated().
+#
+# @param host remote host to run the listing on
+# @param user user who runs the listing
+# @param path full path of the file to look for
+# @return 1 if the file is listed in its directory, 0 if it is not
+proc path_alias_is_remote_file {host user path} {
+   # -a because the per user alias file is a dot file, -1 because the listing
+   # is parsed and not shown.
+   set output [start_remote_prog $host $user "ls" "-1a [file dirname $path]" \
+                                 prg_exit_state 60 0 "" "" 0]
+   if {$prg_exit_state != 0} {
+      return 0
+   }
+   return [expr {[lsearch -exact [split $output] [file tail $path]] >= 0}]
+}
+
 proc path_alias_setup {} {
    setup_host_slots_for_binding
 }
@@ -177,8 +206,7 @@ proc path_alias_setup_level {} {
       foreach elem $ts_config(unique_arch_nodes) {
          set gone 0
          for {set i 0} {$i < 60} {incr i} {
-            start_remote_prog $elem $CHECK_USER "cat" $file_name
-            if {$prg_exit_state != 0} {
+            if {![path_alias_is_remote_file $elem $CHECK_USER $file_name]} {
                set gone 1
                break
             }
@@ -235,17 +263,24 @@ proc path_alias_setup_level {} {
    set cat_hostname ""
    set last_host ""
    foreach elem $ts_config(unique_arch_nodes) {
-      set counter 60
-      while {$counter > 0} {
-         set result [start_remote_prog $elem $CHECK_USER "cat" $file_name]
-         incr counter -1
-         if {$prg_exit_state == 0} {
-            break;
+      # Wait for the file to show up in the directory listing before reading
+      # it - a negative dentry is cached just like a positive one.
+      set there 0
+      for {set i 0} {$i < 60} {incr i} {
+         if {[path_alias_is_remote_file $elem $CHECK_USER $file_name]} {
+            set there 1
+            break
          }
          after 1000
       }
+      if {!$there} {
+         ts_log_severe "file ${file_name} did not appear on host $elem"
+         return
+      }
+      set result [start_remote_prog $elem $CHECK_USER "cat" $file_name]
       if {$prg_exit_state != 0} {
          ts_log_severe "error reading file ${file_name} on host $elem"
+         return
       }
       lappend cat_hostname $elem
       lappend cat_output $result
