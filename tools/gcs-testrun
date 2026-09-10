@@ -2,9 +2,9 @@
 #
 # gcs-testrun -- complete test run of one line, in three phases.
 #
-#   gcs-testrun <line> [N] [-- <further ctest arguments>]
+#   gcs-testrun <line> <N> [-- <further ctest arguments>]
 #
-#   <line>   92x, 91x, ...          N   runners, default 32
+#   <line>   92x, 91x, ...          N   runners to use (mandatory, no default)
 #
 # Phase 1 runs in parallel across N runners, phase 2 reruns its failures with
 # -j 4, and phase 3 gives whatever is left one cluster at a time. Only phase 3
@@ -71,9 +71,16 @@ usage() {
 }
 case "${1:-}" in -h|--help|help) usage;; esac
 
-line="${1:?usage: gcs-testrun <line> [N] [-- <ctest-args>]   (--help for details)}"; shift
-n=32
-[ $# -gt 0 ] && [[ "${1:-}" =~ ^[0-9]+$ ]] && { n="$1"; shift; }
+line="${1:?usage: gcs-testrun <line> <N> [-- <ctest-args>]   (--help for details)}"; shift
+# N is mandatory. It used to default to 32, and on a line with fewer runners the
+# test list was then spread over clusters that do not exist: their units were
+# reported as "cannot determine arch -- skipped" and never ran, while the run
+# itself finished and looked successful. Nothing in the summary shows that most
+# of the tests were dropped, which is why this is an error rather than a guess.
+[ $# -gt 0 ] && [[ "${1:-}" =~ ^[0-9]+$ ]] \
+   || die "runner count missing -- usage: gcs-testrun <line> <N> [-- <ctest-args>]"
+n="$1"; shift
+[ "$n" -ge 1 ] || die "runner count must be at least 1 (got $n)"
 [ "${1:-}" = "--" ] && shift
 
 # The lists live with the fleet, and where that is depends on the segment -- on
@@ -87,6 +94,9 @@ D="$_fleet/lists"
 # Bedingung war also nur eine Huerde fuer den ersten Lauf einer neuen Flotte.
 ls -d "$_fleet"/r[0-9]* >/dev/null 2>&1 \
   || die "no runners under $_fleet  (gcs-runners $line init)"
+_have=$(ls -d "$_fleet"/r[0-9]* 2>/dev/null | wc -l)
+[ "$n" -le "$_have" ] \
+  || die "asked for $n runners, but only $_have exist under $_fleet  (gcs-runners $line init $n)"
 mkdir -p "$D"
 
 stamp="$(date '+%Y%m%d-%H%M%S')"
