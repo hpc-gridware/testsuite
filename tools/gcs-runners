@@ -266,18 +266,30 @@ free_runner_ports() {
 }
 
 # Derive the runner .sav from the line configuration: repoint ONLY port, cluster
-# name, product_root and results_dir. source_dir/testsuite_root_dir/
-# checktree_root_dir stay on the line -- that is the whole point of the exercise.
+# name, product_root, results_dir and the qmaster host. source_dir/
+# testsuite_root_dir/checktree_root_dir stay on the line -- that is the whole
+# point of the exercise.
+#
+# Why the qmaster host is per runner: inherited unchanged, every runner puts its
+# qmaster on the line's master_host, and so do the checks -- a great many submit
+# to ts_config(master_host) rather than letting the scheduler place the job.
+# Measured during the run of 2026-09-07, over 65 samples with four runners: that
+# one host sat at 10% busy while the other two execution hosts idled at 1% and
+# 2%. Two thirds of the execution capacity went unused. Handing each runner a
+# different host from execd_hosts spreads both the qmaster work and those
+# host-pinned jobs.
 gen_sav() {
-  local src="$1" dst="$2" port="$3" rroot="$4"
-  python3 - "$src" "$dst" "$port" "$rroot" <<'PY'
+  local src="$1" dst="$2" port="$3" rroot="$4" mhost="$5"
+  python3 - "$src" "$dst" "$port" "$rroot" "$mhost" <<'PY'
 import sys
-src, dst, port, rroot = sys.argv[1:5]
+src, dst, port, rroot, mhost = sys.argv[1:6]
 repl = {
-    "commd_port":   port,
-    "cluster_name": f"p{port}",
-    "product_root": f"{rroot}/inst",
-    "results_dir":  f"{rroot}/results",
+    "commd_port":    port,
+    "cluster_name":  f"p{port}",
+    "product_root":  f"{rroot}/inst",
+    "results_dir":   f"{rroot}/results",
+    "master_host":   mhost,
+    "shadowd_hosts": mhost,
 }
 lines = open(src).read().split("\n")
 hits = {k: 0 for k in repl}
@@ -338,8 +350,18 @@ cmd_init() {
     if [ -z "${assigned[$((i-1))]}" ]; then assigned[$((i-1))]="${ports[$next]}"; next=$((next+1)); fi
   done
 
+  # The candidates for the per-runner qmaster host. Every execd host is an admin
+  # host by construction, so each of them can carry a qmaster. Falling back to
+  # the line's master_host keeps a line whose execd_hosts cannot be read working
+  # exactly as before.
+  local -a _mhosts
+  read -r -a _mhosts <<< "$(read_sav_value "$cfg" execd_hosts)"
+  [ "${#_mhosts[@]}" -gt 0 ] \
+    || read -r -a _mhosts <<< "$(read_sav_value "$cfg" master_host)"
+  [ "${#_mhosts[@]}" -gt 0 ] || die "neither execd_hosts nor master_host in $cfg"
+
   info "line:    $lroot"
-  info "runners: $want   ports: ${assigned[*]}"
+  info "runners: $want   ports: ${assigned[*]}   qmaster hosts: ${_mhosts[*]}"
   for i in $(seq 1 "$want"); do
     port="${assigned[$((i-1))]}"
     rroot="$(runner_root "$line" "$i")"
@@ -355,7 +377,10 @@ cmd_init() {
       ln -sfn "$d" "$rroot/$(basename "$d")"
     done
 
-    gen_sav "$cfg" "$rroot/config/defaults-$name.sav" "$port" "$rroot"
+    # Round robin over the line's execd_hosts, so r1 gets the first, r2 the
+    # second and so on, wrapping when there are more runners than hosts.
+    gen_sav "$cfg" "$rroot/config/defaults-$name.sav" "$port" "$rroot" \
+            "${_mhosts[$(( (i-1) % ${#_mhosts[@]} ))]}"
 
     # Companion configurations (defaults-<line>.<project>.sav, .mpi.sav for
     # instance) are located by inserting the project name before the .sav
@@ -409,9 +434,12 @@ EOF
 # so the check never saw it and the CLUSTER column reported "-" for every
 # runner, running or not. Same blind spot that made a feature workspace look
 # safe to tear down while its cluster was up.
-listening_ports_on_master() {
-  local line="$1" mh
-  mh="$(read_sav_value "$(line_root "$1")/config/defaults-$line.sav" master_host)"
+# Ports listening on HOST. Which host that is matters since the runners got a
+# qmaster host of their own: asking only the line's master_host finds the one
+# runner that happens to sit there and reports every other cluster as down,
+# however healthy it is. Callers pass the host that carries the cluster.
+listening_ports_on_host() {
+  local mh="$1"
   [ -n "$mh" ] || mh="$(hostname -s)"
   if [ "$mh" = "$(hostname -s)" ]; then
     ss -ltnH 2>/dev/null | awk '{print $4}' | sed 's/.*://' | grep -E '^[0-9]+$' | sort -u
@@ -422,15 +450,23 @@ listening_ports_on_master() {
 }
 
 cmd_status() {
-  local line="${1:?line required}" d i port root state up
+  local line="${1:?line required}" d i port root state up cfg mh
+  local -A ports_seen=()
   have_runners "$line" || { info "(no runners for $line)"; return; }
-  up=" $(listening_ports_on_master "$line" | tr '\n' ' ') "
   printf '%-10s %-6s %-9s %-8s %s\n' RUNNER PORT INST CLUSTER PATH
   for d in "$(runners_dir "$line")"/r*/; do
     d="${d%/}"; [ -d "$d" ] || continue
     i="$(basename "$d" | tr -d 'r')"
-    port="$(read_sav_value "$d/config/defaults-$(runner_name "$line" "$i").sav" commd_port)"
-    root="$(read_sav_value "$d/config/defaults-$(runner_name "$line" "$i").sav" product_root)"
+    cfg="$d/config/defaults-$(runner_name "$line" "$i").sav"
+    port="$(read_sav_value "$cfg" commd_port)"
+    root="$(read_sav_value "$cfg" product_root)"
+    # One probe per host, not per runner: several runners may share a host when
+    # there are more of them than execution hosts.
+    mh="$(read_sav_value "$cfg" master_host)"
+    if [ -z "${ports_seen[$mh]+x}" ]; then
+      ports_seen[$mh]=" $(listening_ports_on_host "$mh" | tr '\n' ' ') "
+    fi
+    up="${ports_seen[$mh]}"
     [ -d "$root/bin" ] && state=binary || state=empty
     if case "$up" in *" $port "*) true ;; *) false ;; esac; then
       printf '%-10s %-6s %-9s %-8s %s\n' "r$i" "$port" "$state" "running" "$d"
