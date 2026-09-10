@@ -114,7 +114,7 @@ lappend generic_module_tests {test_sgeobj_manop "9.2.0" 0 ""}
 lappend generic_module_tests {test_sgeobj_role "9.2.0" 0 ""}
 lappend generic_module_tests {test_sgeobj_RequestLimits "9.1.0" 1 ""}
 lappend generic_module_tests {test_RequestLimits "" 1 "9.1.0"}
-lappend generic_module_tests {test_sgeobj_Session "" 0 ""}
+lappend generic_module_tests {test_sgeobj_Session "" 1 ""}
 lappend generic_module_tests {test_sched_resource_utilization "" 0 ""}
 lappend generic_module_tests {test_sched_load_formula "" 0 ""}
 lappend generic_module_tests {test_procedure_qquota_json "9.2.0" 0 ""}
