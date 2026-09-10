@@ -242,6 +242,11 @@ set CMAKE_COMPILE_INSTALL_SEPARATELY 0
 global create_csv_file
 set create_csv_file 0
 
+# address family for the ssh and scp connections the testsuite opens:
+# "any" leaves the choice to ssh, "4" and "6" pass -4 / -6
+global CHECK_SSH_IP
+set CHECK_SSH_IP "any"
+
 # if we know the config is ok, we don't want to check it,
 # e.g. we don't want to connect to all hosts during setup
 global fast_setup
@@ -8122,6 +8127,23 @@ for {set i 0} {$i < $argc} {incr i} {
       continue
    }
 
+   if {([string compare [lindex $argv $i] "--ssh_ip"] == 0) || ([string compare [lindex $argv $i] "ssh_ip"] == 0) } {
+      incr i
+      set ssh_ip [lindex $argv $i]
+      switch -exact $ssh_ip {
+         "any" -
+         "4" -
+         "6" {
+            set CHECK_SSH_IP $ssh_ip
+         }
+         default {
+            puts "invalid argument to option ssh_ip, must be \"any\", \"4\", or \"6\""
+            testsuite_shutdown 1
+         }
+      }
+      continue
+   }
+
    if {([string compare [lindex $argv $i] "--wait_on_error"] == 0) || ([string compare [lindex $argv $i] "wait_on_error"] == 0) } {
       set do_wait_on_error 1
       continue
@@ -8248,6 +8270,11 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "                      not close a rlogin connection. The testsuite will reuse the open connection"
       puts "                      for a later remote command. Use close_rlogin if the number of open file "
       puts "                      descriptors is low on your system)"
+      puts ""
+      puts "ssh_ip                address family for ssh/scp connections: \"any\" (default),"
+      puts "                      \"4\" or \"6\". Use 4 where the IPv6 addresses of the cluster"
+      puts "                      hosts are not stable for the runtime of a test - a withdrawn"
+      puts "                      prefix takes every connection bound to it down with it"
       puts ""
       puts "master_debug          procedure startup_qmaster will startup qmaster"
       puts "                      in debug mode (using x host from DISPLAY,"

@@ -204,7 +204,8 @@ proc bootstrap_add_hosts_to_host_config_file {gridengine_version bootstrap_var b
       unset -nocomplain host_config
       host_conf_get_host_defaults host_config
       set host_config(host) $host
-      set arch [string trim [exec "ssh" "-q" $host $ts_config(product_root)/util/arch]]
+      set ssh_args [get_ssh_ip_args]
+      set arch [string trim [exec "ssh" {*}$ssh_args "-q" $host $ts_config(product_root)/util/arch]]
       set host_config(arch,$gridengine_version) $arch
       # we set the first host we find for a specific arch as compile host
       # just to please testsuite - we will not compile for now
@@ -268,7 +269,7 @@ proc bootstrap_create_fs_config_file {gridengine_version bootstrap_var basedir} 
    # try to figure out the mounted file systems on the master host
    set host $ts_config(master_host)
    set ts_fs_config(fsname_list) {}
-   set output [exec "ssh" "-q" $host "mount" "-v"]
+   set output [exec "ssh" {*}[get_ssh_ip_args] "-q" $host "mount" "-v"]
    foreach line [split $output "\n"] {
       # we are interested in the nfs (nfs or nfs4) mounted file systems
       if {[string first "type nfs" $line] < 0} {
