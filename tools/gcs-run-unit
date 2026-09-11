@@ -173,7 +173,15 @@ sav="$(dirname "$runner")/defaults-$(basename "$runner").sav"
 port="$(read_sav_value "$sav" commd_port)"
 [ -n "$port" ] || port="$(awk -F= '/^CS_MASTER_PORT=/{print $2}' "$runner")"
 sge_root="$(read_sav_value "$sav" product_root)"
-mh="$(master_host "$line")"
+# The qmaster host is per runner: the fleet round-robins it over the execd hosts
+# so the qmasters do not all pile onto one VM. Asking the line here handed every
+# slot the line's master_host, alive() then looked for the port on a host that
+# does not carry that qmaster, and ensure_alive() escalated to a reinstall --
+# per unit, for every runner not sitting on the line's master_host. Six of eight
+# slots did nothing but reinstall. The line value stays as the fallback for a
+# runner configuration that carries no master_host of its own.
+mh="$(read_sav_value "$sav" master_host)"
+[ -n "$mh" ] || mh="$(master_host "$line")"
 
 # qstat by absolute path instead of by dot-sourcing the wrapper. Sourcing would
 # run gcs-pipeline on the far side -- a lot of machinery for one query -- and the
