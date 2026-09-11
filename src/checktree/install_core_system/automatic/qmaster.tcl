@@ -131,28 +131,26 @@ proc install_qmaster {} {
    }
 }
 
-#****** qmaster.60/write_autoinst_config() *************************************
-#  NAME
-#     write_autoinst_config() -- write the autoinst config file
+## @brief write the config file for the automatic installation
 #
-#  SYNOPSIS
-#     write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1}}
-#
-#  FUNCTION
-#     Writes the config file for autoinstallation.
-#
-#  INPUTS
-#     filename             - filename of the config file
-#     host                 - config file is for this host
-#     {do_cleanup 1}       - clean spool directories?
-#     {file_delete_wait 1} - delete the file before writing it, and wait for it
-#                            to vanish / reappear
-#     {exechost 0}         - is this a config for an exechost installation?
-#     {set_file_perms 0}   - shall the file permissions be checked
-#                            during (qmaster) installation?
-#     {{shadowd 0}         - is this a config for a shadowd host installation?
-#*******************************************************************************
-proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {exechost 0} {set_file_perms 0} {shadowd 0}} {
+# @param filename           - filename of the config file
+# @param host               - the config file is for this host
+# @param do_cleanup         - clean the spool directories (default 1)
+# @param file_delete_wait   - delete the file before writing it, and wait for
+#                             it to vanish / reappear (default 1)
+# @param exechost           - is this a config for an execution host
+#                             installation? (default 0)
+# @param set_file_perms     - shall the file permissions be set during the
+#                             (qmaster) installation? (default 0)
+# @param shadowd            - is this a config for a shadowd host installation?
+#                             (default 0)
+# @param allhosts_hostgroup - value of CREATE_ALLHOSTS_HOSTGROUP, "true" or
+#                             "false" (default), or "unset" to leave the entry
+#                             out like a legacy template does. The entry is only
+#                             written if the installer knows it (feature
+#                             "optional-allhosts").
+# @return nothing, or -1 if the postgres spooling config is incomplete
+proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {exechost 0} {set_file_perms 0} {shadowd 0} {allhosts_hostgroup "false"}} {
    global CHECK_USER local_execd_spool_set
    global CHECK_INSTALL_RC
    global ts_config
@@ -272,6 +270,11 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
       append auto_config_content "EXEC_HOST_LIST_RM=\"$ts_config(execd_nodes)\"\n"
       append auto_config_content "EXECD_SPOOL_DIR_LOCAL=\"\"\n"
    }
+   # an installer without the optional @allhosts rejects the entry, and
+   # without the entry the installer creates @allhosts (legacy template)
+   if {$allhosts_hostgroup != "unset" && [ge_has_feature "optional-allhosts"]} {
+      append auto_config_content "CREATE_ALLHOSTS_HOSTGROUP=\"$allhosts_hostgroup\"\n"
+   }
    append auto_config_content "HOSTNAME_RESOLVING=\"true\"\n"
    append auto_config_content "SHELL_NAME=\"rsh\"\n"
    append auto_config_content "COPY_COMMAND=\"rcp\"\n"
@@ -321,36 +324,16 @@ proc write_autoinst_config {filename host {do_cleanup 1} {file_delete_wait 1} {e
    write_remote_file $host $CHECK_USER $filename auto_config_content_array
 }
 
-#                                                             max. column:     |
-#****** install_core_system/create_autoinst_config() ******
+## @brief create the config file for the automatic qmaster installation
 #
-#  NAME
-#     create_autoinst_config -- ???
+# Writes $SGE_ROOT/autoinst_config_<cell>.conf, which install_qmaster passes to
+# "install_qmaster -auto". With tar packages the file permissions are set on
+# the file server first, or by the installation if the file server is unknown.
 #
-#  SYNOPSIS
-#     create_autoinst_config { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
-proc create_autoinst_config {} {
+# @param allhosts_hostgroup - value of CREATE_ALLHOSTS_HOSTGROUP, see
+#                             write_autoinst_config (default "false")
+# @return nothing
+proc create_autoinst_config {{allhosts_hostgroup "false"}} {
    global ts_config
    global CHECK_USER
    global CORE_INSTALLED
@@ -381,6 +364,6 @@ proc create_autoinst_config {} {
 
    ts_log_finer "creating automatic install config file ..."
    set config_file "$ts_config(product_root)/autoinst_config_$ts_config(cell).conf"
-   write_autoinst_config $config_file $ts_config(master_host) 1 1 0 $set_file_perm
+   write_autoinst_config $config_file $ts_config(master_host) 1 1 0 $set_file_perm 0 $allhosts_hostgroup
    ts_log_finer "automatic install config file successfully created ..."
 }

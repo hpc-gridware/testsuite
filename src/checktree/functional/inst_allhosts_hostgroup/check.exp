@@ -1,0 +1,226 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_use_installed_system
+global CHECK_ACTUAL_TEST_PATH
+
+# CS-2749: from 9.2 on the installer can skip the creation of the host group
+# @allhosts. The default queue all.q then references @exec_hosts, which the
+# qmaster maintains itself, and the execution host installation no longer asks
+# whether to add the host to a queue - it only sets the slots of its all.q queue
+# instance.
+#
+# The automatic installation decides with CREATE_ALLHOSTS_HOSTGROUP:
+#
+#   true     @allhosts is created, all.q references it, the execution host
+#            installation adds the host to it
+#   (unset)  an autoinstall config derived from the template of an older
+#            version - behaves like "true"
+#   false    no @allhosts, all.q references @exec_hosts (the shipped template
+#            and the testsuite default)
+#
+# The test installs the cluster once per variant and checks the result before
+# cleanup_system replaces all.q with the testsuite's own. "false" comes last, so
+# the test leaves the standard testsuite cluster behind - the remaining check
+# functions are the setup steps of install_core_system, as in issue_1330.
+
+ts_source $CHECK_ACTUAL_TEST_PATH/../../install_core_system/init_cluster
+ts_source $CHECK_ACTUAL_TEST_PATH/../../install_core_system/automatic/qmaster
+ts_source $CHECK_ACTUAL_TEST_PATH/../../install_core_system/automatic/shadowd
+ts_source $CHECK_ACTUAL_TEST_PATH/../../install_core_system/automatic/execd
+
+set check_root_access_needs "yes"
+
+# define test's name and run level descriptions
+set check_name            "inst_allhosts_hostgroup"
+set check_category        "COMPATIBILITY SYSTEM VERIFIED"
+set check_description(0)  "automatic installation with and without the host group @allhosts"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function inst_allhosts_hostgroup_setup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "inst_allhosts_hostgroup_create"
+lappend check_functions "inst_allhosts_hostgroup_legacy_template"
+lappend check_functions "inst_allhosts_hostgroup_default"
+
+# do standard testsuite setup
+# WARNING: If making changes here please also update install_core_system test !!!
+# ========
+lappend check_functions "setup_ids"
+lappend check_functions "cleanup_system"
+lappend check_functions "setup_queues"
+lappend check_functions "setup_testcheckpointobject"
+lappend check_functions "setup_conf"
+lappend check_functions "setup_execd_conf"
+lappend check_functions "setup_mytestproject"
+lappend check_functions "setup_mytestpe"
+lappend check_functions "setup_deadlineuser"
+lappend check_functions "setup_schedconf"
+lappend check_functions "setup_default_calendars"
+lappend check_functions "setup_check_messages_files"
+lappend check_functions "setup_and_check_users"
+lappend check_functions "setup_sge_aliases_file"
+
+# -------- local test procedures: initialization------------------------------
+
+## @brief check whether the test can run
+#
+# @return 99 (unsupported) if the installer has no optional @allhosts or the
+#         testsuite runs on an installed system, else nothing
+proc inst_allhosts_hostgroup_setup {} {
+   global check_use_installed_system
+
+   if {![ge_has_feature "optional-allhosts"]} {
+      ts_log_config "the installer of this version always creates @allhosts"
+      return 99
+   }
+   if {$check_use_installed_system} {
+      ts_log_config "the test installs the cluster, it cannot run on an installed system"
+      return 99
+   }
+}
+
+## @brief install the cluster with the given CREATE_ALLHOSTS_HOSTGROUP value
+#
+# The same steps as the install_core_system check up to the execution host
+# installation.
+#
+# @param allhosts_hostgroup - "true", "false" or "unset", see
+#                             write_autoinst_config
+# @return nothing, the install procedures report their errors
+proc inst_allhosts_hostgroup_install {allhosts_hostgroup} {
+   ts_log_fine "installing the cluster with CREATE_ALLHOSTS_HOSTGROUP \"$allhosts_hostgroup\" ..."
+
+   kill_running_system
+   install_spool_database
+   create_autoinst_config $allhosts_hostgroup
+   install_qmaster
+   clear_caches
+   install_wait_for_settings_file
+   make_user_cert
+   install_shadowd
+   install_execd
+}
+
+## @brief strip the domain from a host name
+#
+# @param host - the host name, with or without domain
+# @return the host name without domain
+proc inst_allhosts_hostgroup_short {host} {
+   return [lindex [split $host "."] 0]
+}
+
+## @brief check the host groups and all.q as the installation left them
+#
+# - the feature "allhosts-hostgroup" reports @allhosts as expected
+# - @allhosts, if expected, contains every execution host
+# - the host list of all.q is @allhosts or @exec_hosts
+# - all.q has a host specific slots value for every execution host, set by the
+#   execution host installation
+#
+# @param with_allhosts - 1 if the installation was to create @allhosts, else 0
+# @return nothing, errors are reported with ts_log_severe
+proc inst_allhosts_hostgroup_verify {with_allhosts} {
+   get_current_cluster_config_array ts_config
+
+   set execd_hosts {}
+   foreach host $ts_config(execd_nodes) {
+      lappend execd_hosts [inst_allhosts_hostgroup_short $host]
+   }
+   set execd_hosts [lsort -unique $execd_hosts]
+
+   if {[ge_has_feature "allhosts-hostgroup"] != $with_allhosts} {
+      ts_log_severe "host group @allhosts: expected [expr {$with_allhosts ? "" : "no "}]@allhosts after the installation"
+      return
+   }
+
+   if {$with_allhosts} {
+      set expected_hostlist "@allhosts"
+      if {[get_hostgroup "@allhosts" hgroup "" "" 0] != 0} {
+         ts_log_severe "could not read host group @allhosts"
+         return
+      }
+      set members {}
+      foreach host $hgroup(hostlist) {
+         lappend members [inst_allhosts_hostgroup_short $host]
+      }
+      set members [lsort -unique $members]
+      if {$members != $execd_hosts} {
+         ts_log_severe "host group @allhosts contains \"$members\", expected the execution hosts \"$execd_hosts\""
+      }
+   } else {
+      set expected_hostlist "@exec_hosts"
+   }
+
+   if {[get_queue "all.q" queue_conf "" "" 0] != 0} {
+      ts_log_severe "could not read queue all.q"
+      return
+   }
+   if {$queue_conf(hostlist) != $expected_hostlist} {
+      ts_log_severe "all.q has the host list \"$queue_conf(hostlist)\", expected \"$expected_hostlist\""
+   }
+
+   # the execution host installation sets slots=num_proc for its host
+   set slot_hosts {}
+   foreach {match host} [regexp -all -inline {\[([^]=]+)=[0-9]+\]} $queue_conf(slots)] {
+      lappend slot_hosts [inst_allhosts_hostgroup_short $host]
+   }
+   foreach host $execd_hosts {
+      if {[lsearch -exact $slot_hosts $host] < 0} {
+         ts_log_severe "all.q has no slots value for the execution host $host: \"$queue_conf(slots)\""
+      }
+   }
+}
+
+## @brief CREATE_ALLHOSTS_HOSTGROUP=true creates @allhosts and uses it in all.q
+#
+# @return nothing, errors are reported with ts_log_severe
+proc inst_allhosts_hostgroup_create {} {
+   inst_allhosts_hostgroup_install "true"
+   inst_allhosts_hostgroup_verify 1
+}
+
+## @brief without CREATE_ALLHOSTS_HOSTGROUP @allhosts is created as before
+#
+# @return nothing, errors are reported with ts_log_severe
+proc inst_allhosts_hostgroup_legacy_template {} {
+   inst_allhosts_hostgroup_install "unset"
+   inst_allhosts_hostgroup_verify 1
+}
+
+## @brief CREATE_ALLHOSTS_HOSTGROUP=false lets all.q reference @exec_hosts
+#
+# @return nothing, errors are reported with ts_log_severe
+proc inst_allhosts_hostgroup_default {} {
+   inst_allhosts_hostgroup_install "false"
+   inst_allhosts_hostgroup_verify 0
+}

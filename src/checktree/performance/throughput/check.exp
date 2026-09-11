@@ -481,7 +481,7 @@ proc throughput_setup {} {
    # This verifies IZ 1087 (and is a more realistic scenario)
    unset change_array
    set change_array(qtype) "INTERACTIVE"
-   add_queue "interactive" "@allhosts" change_array 1
+   add_queue "interactive" [get_all_hosts_hostgroup] change_array 1
 
    setup_host_slots_for_binding
 
@@ -510,7 +510,7 @@ proc throughput_cleanup {} {
    }
    del_queue $tp_queue_names $host_list 1 1
 
-   del_queue "interactive" "@allhosts" 1 1
+   del_queue "interactive" [get_all_hosts_hostgroup] 1 1
 
    reset_complex throughput_complex_backup
 

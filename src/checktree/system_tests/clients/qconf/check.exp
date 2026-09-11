@@ -2597,7 +2597,7 @@ proc qconf_brief_exercise {} {
    unset right_param
 
    ts_log_fine "* * * HOSTGROUP * * *"
-   set right_param(hostlist)       "@allhosts"
+   set right_param(hostlist)       [get_all_hosts_hostgroup]
    set args(name_prefix) "@"
    qconf_messages_basic_check hostgroup right_param args
    unset right_param
@@ -4140,35 +4140,15 @@ proc qconf_purge_queue {} {
    }
 }
 
-#                                                             max. column:     |
-#****** qconf/qconf_de_check() ******
+## @brief delete a live execution host with qconf -de and add it again
 #
-#  NAME
-#     qconf_de_check -- ???
+# A host cannot be deleted while a host group lists it, so it is removed from
+# the test host group @qconf_test and from @allhosts first; only @allhosts gets
+# it back afterwards. Without @allhosts (CS-2749) the host is also a member of
+# the system maintained @exec_hosts, which follows the execution host list by
+# itself and does not block the deletion.
 #
-#  SYNOPSIS
-#     qconf_de_check { }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************
+# @return nothing, errors are reported with ts_log_severe
 proc qconf_de_check {} {
    global ts_config
    global CHECK_PRODUCT_TYPE CHECK_USER CHECK
@@ -4187,12 +4167,18 @@ proc qconf_de_check {} {
       ts_log_severe "could not store execd config: $result"
    }
    ts_log_fine "tmp file is: $tmp_file"
-   ts_log_fine "doing qconf -dattr hostgroup hostlist $execd @allhosts:"
-   set result [start_sge_bin "qconf" "-dattr hostgroup hostlist $execd @allhosts @qconf_test" $ts_config(master_host) $CHECK_USER]
+   set has_allhosts [ge_has_feature "allhosts-hostgroup"]
+   if {$has_allhosts} {
+      set hgroups "@allhosts @qconf_test"
+   } else {
+      set hgroups "@qconf_test"
+   }
+   ts_log_fine "doing qconf -dattr hostgroup hostlist $execd $hgroups:"
+   set result [start_sge_bin "qconf" "-dattr hostgroup hostlist $execd $hgroups" $ts_config(master_host) $CHECK_USER]
    ts_log_fine $result
 
    if { $prg_exit_state != 0 } {
-      ts_log_severe "could not remove host from hostgroup @allhosts: $result"
+      ts_log_severe "could not remove host from hostgroup(s) $hgroups: $result"
    }
 
 
@@ -4215,9 +4201,11 @@ proc qconf_de_check {} {
    set result [start_sge_bin "qconf" "-Ae $tmp_file" $ts_config(master_host) $CHECK_USER]
    ts_log_fine $result
 
-   ts_log_fine "doing qconf -aattr hostgroup hostlist $execd @allhosts"
-   set result [start_sge_bin "qconf" "-aattr hostgroup hostlist $execd @allhosts" $ts_config(master_host) $CHECK_USER]
-   ts_log_fine $result
+   if {$has_allhosts} {
+      ts_log_fine "doing qconf -aattr hostgroup hostlist $execd @allhosts"
+      set result [start_sge_bin "qconf" "-aattr hostgroup hostlist $execd @allhosts" $ts_config(master_host) $CHECK_USER]
+      ts_log_fine $result
+   }
 
    ts_log_fine "added execd $execd to cluster"
 }

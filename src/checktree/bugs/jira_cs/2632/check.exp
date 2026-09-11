@@ -120,7 +120,7 @@ proc cs_2632_setup {} {
    unset -nocomplain q
    set q(slots)   $CS_2632_SLOTS
    set q(pe_list) $cs_2632_pe
-   if {[add_queue $cs_2632_queue "@allhosts" q] < 0} {
+   if {[add_queue $cs_2632_queue [get_all_hosts_hostgroup] q] < 0} {
       ts_log_config "cannot create queue $cs_2632_queue"
       return 99
    }

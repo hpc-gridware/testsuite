@@ -74,7 +74,7 @@ proc issue_3216_setup {} {
    set queue(pe_list)   "tight"
    set queue(slots)     10
    set queue(rerun)     "TRUE"
-   add_queue "tight" "@allhosts" queue 1 "" "" 0
+   add_queue "tight" [get_all_hosts_hostgroup] queue 1 "" "" 0
 }
 
 proc issue_3216_cleanup {} {

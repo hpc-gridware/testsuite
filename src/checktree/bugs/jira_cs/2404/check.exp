@@ -51,7 +51,7 @@ set check_cleanup_function drmaa_cs2404_cleanup
 set check_functions {}
 lappend check_functions "drmaa_cs2404_test"
 
-# Four real cluster queues attached to @allhosts, so every host provides one
+# Four real cluster queues attached to all execution hosts, so every host provides one
 # qinstance for each tier's queue. qsub validation (turned on by default in
 # recent releases) rejects references to unknown queues even for held jobs,
 # which is why we can't just use fake all.q@<host> names.
@@ -92,7 +92,7 @@ proc drmaa_cs2404_setup {} {
       return 99
    }
 
-   # Four cluster queues; @allhosts guarantees each has at least one qinstance
+   # Four cluster queues; spanning all execution hosts guarantees each has at least one qinstance
    # regardless of how many execution hosts the testsuite cluster provides.
    set drmaa_cs2404_state(queues) [list \
       $drmaa_cs2404_state(q_global) \
@@ -101,7 +101,7 @@ proc drmaa_cs2404_setup {} {
       $drmaa_cs2404_state(q_native)]
    foreach q $drmaa_cs2404_state(queues) {
       set q_conf(slots) 1
-      if {[add_queue $q "@allhosts" q_conf] != 0} {
+      if {[add_queue $q [get_all_hosts_hostgroup] q_conf] != 0} {
          ts_log_config "could not create queue $q; skipping"
          return 99
       }

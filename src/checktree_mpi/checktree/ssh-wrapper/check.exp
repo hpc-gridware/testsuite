@@ -68,7 +68,7 @@ proc ssh_wrapper_setup {} {
 
    set q(slots) 4
    set q(pe_list) "ssh-wrapper.pe"
-   add_queue "test.q" "@allhosts" q
+   add_queue "test.q" [get_all_hosts_hostgroup] q
 }
 
 proc ssh_wrapper_cleanup {} {

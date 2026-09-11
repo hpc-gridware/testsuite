@@ -78,7 +78,7 @@ proc issue_2433_queue {} {
    # try to create a queue with invalid slot count
    set queue_name "issue_2433_queue"
    set queue(slots) 3000000000
-   set ret [add_queue $queue_name "@allhosts" queue 1 "" "" 0]
+   set ret [add_queue $queue_name [get_all_hosts_hostgroup] queue 1 "" "" 0]
    if {$ret == 0} {
       ts_log_severe "adding a queue with invalid slot count should have failed"
       return
@@ -87,7 +87,7 @@ proc issue_2433_queue {} {
    # now create a regular queue (slot count 0),
    # and try to modify it with invalid slot count
    set queue(slots) 0
-   set ret [add_queue $queue_name "@allhosts" queue]
+   set ret [add_queue $queue_name [get_all_hosts_hostgroup] queue]
    if {$ret < 0} {
       # error has already been raised in add_queue
       return
@@ -95,7 +95,7 @@ proc issue_2433_queue {} {
 
    # now modify it with invalid slots
    set queue(slots) 3000000000
-   set ret [mod_queue $queue_name "@allhosts" queue 1 "" "" 0]
+   set ret [mod_queue $queue_name [get_all_hosts_hostgroup] queue 1 "" "" 0]
    if {$ret == 0} {
       ts_log_severe "modifying a queue with invalid slot count should have failed"
       return

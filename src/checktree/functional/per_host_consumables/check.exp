@@ -94,7 +94,7 @@ proc per_host_consumable_setup {} {
 
    set q(slots) "10"
    set q(pe_list) "test.pe"
-   add_queue "test.q" "@allhosts" q
+   add_queue "test.q" [get_all_hosts_hostgroup] q
 
    disable_queue "all.q"
 }

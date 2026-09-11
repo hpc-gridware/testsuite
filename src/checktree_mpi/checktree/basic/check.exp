@@ -73,7 +73,7 @@ proc mpi_basic_setup {} {
    # create a test queue
    # @todo CS-1157 can be reproduced by setting slots to 4
    set q(slots) 8
-   add_queue "mpi.q" "@allhosts" q
+   add_queue "mpi.q" [get_all_hosts_hostgroup] q
 
    # create the example's checkpointing environment and add it to the queue
    mpi_configure_ckpt

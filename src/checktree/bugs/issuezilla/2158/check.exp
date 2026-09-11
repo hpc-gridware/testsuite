@@ -58,7 +58,7 @@ lappend check_functions "issue_2158_test"
 proc issue_2158_test {} {
    global ts_config
 
-   set result [start_sge_bin "qconf" "-mattr queue slots 10 @allhosts"]
+   set result [start_sge_bin "qconf" "-mattr queue slots 10 [get_all_hosts_hostgroup]"]
    if {$prg_exit_state != 1} {
       # qconf had success => bug is present
       ts_log_severe "qconf could be called with invalid queue instance specification\n$result"

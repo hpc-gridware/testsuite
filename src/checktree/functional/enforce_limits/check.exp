@@ -151,14 +151,14 @@ proc enforce_limits_setup {} {
    set queue_conf(shell_start_mode) "unix_behavior"
    set queue_conf(rerun) "true"
    set queue_conf(h_rt) "00:00:30"
-   add_queue tight.q "@allhosts" queue_conf
+   add_queue tight.q [get_all_hosts_hostgroup] queue_conf
 
    # create a queue
    set queue_conf(load_thresholds) "np_load_avg=11"
    set queue_conf(slots) 10
    set queue_conf(rerun) "true"
    set queue_conf(h_rt) "00:00:30"
-   add_queue loose.q "@allhosts" queue_conf
+   add_queue loose.q [get_all_hosts_hostgroup] queue_conf
 
    # assign queue to tight pe
    assign_queues_with_pe_object tight.q "" tight

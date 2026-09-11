@@ -82,7 +82,7 @@ proc issue_1489_setup {} {
    set queue_conf(terminate_method)  "$CHECK_ACTUAL_TEST_PATH/termtest.sh \$host \$job_owner \$job_id \$job_name \$queue \$job_pid $issue_1489_log_file"
    set queue_conf(shell_start_mode)  "unix_behavior"   
    set queue_conf(notify)            "00:00:20"
-   add_queue "iz_1489" "@allhosts" queue_conf 1
+   add_queue "iz_1489" [get_all_hosts_hostgroup] queue_conf 1
    
    delete_file $issue_1489_lck_file 0
    delete_file $issue_1489_log_file 0
@@ -96,7 +96,7 @@ proc issue_1489_cleanup  {} {
    wait_for_end_of_all_jobs
   
    ts_log_fine "delete test queue"
-   del_queue "iz_1489" "@allhosts" 0 1
+   del_queue "iz_1489" [get_all_hosts_hostgroup] 0 1
   
    ts_log_fine "cleaning up log and lck files"
    delete_file $issue_1489_lck_file 0

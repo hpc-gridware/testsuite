@@ -61,7 +61,7 @@ proc limits_setup {} {
 
    # create a test queue
    set q(slots) 10
-   add_queue "test.q" "@allhosts" q
+   add_queue "test.q" [get_all_hosts_hostgroup] q
 }
 
 proc limits_setup_level {} {

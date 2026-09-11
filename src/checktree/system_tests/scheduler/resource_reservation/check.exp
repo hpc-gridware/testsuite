@@ -178,7 +178,7 @@ proc resource_reservation_level_setup {} {
       set queue_conf(complex_values)   "myslots=10,jobs=2"
 
       if {$CHECK_ACT_LEVEL == 4} {
-         add_queue "$rr_cal_queue_name" "@allhosts" queue_conf
+         add_queue "$rr_cal_queue_name" [get_all_hosts_hostgroup] queue_conf
          set no_rr_host [lindex $ts_config(execd_nodes) 1]
 
          # submit jobs into that queue
@@ -194,7 +194,7 @@ proc resource_reservation_level_setup {} {
          add_calendar "$cal_name" new_cal
          set cal_queue_conf(calendar)   $cal_name
 
-         mod_queue $rr_cal_queue_name "@allhosts" cal_queue_conf 1
+         mod_queue $rr_cal_queue_name [get_all_hosts_hostgroup] cal_queue_conf 1
       }
    }
 
@@ -256,7 +256,7 @@ proc resource_reservation_level_setup {} {
    }
 
    ts_log_fine "Add queue $rr_queue_name"
-   add_queue $rr_queue_name "@allhosts" queue_conf 1
+   add_queue $rr_queue_name [get_all_hosts_hostgroup] queue_conf 1
 
    disable_queue $rr_queue_name
    enable_queue [get_queue_instance $rr_queue_name $rr_host]
@@ -304,10 +304,10 @@ proc resource_reservation_level_cleanup {} {
    wait_for_end_of_all_jobs 60
 
    # del queues
-   del_queue $rr_queue_name "@allhosts" 0 1
+   del_queue $rr_queue_name [get_all_hosts_hostgroup] 0 1
 
    if {$CHECK_ACT_LEVEL == 4} {
-      del_queue $rr_cal_queue_name "@allhosts" 0 1
+      del_queue $rr_cal_queue_name [get_all_hosts_hostgroup] 0 1
       del_calendar "always_suspend_calendar"
    }
 

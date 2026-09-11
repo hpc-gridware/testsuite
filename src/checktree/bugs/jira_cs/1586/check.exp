@@ -67,7 +67,7 @@ proc issue_1586_setup {} {
 
    set q(slots) 2
    set q(pe_list) "test.pe"
-   add_queue "test.q" "@allhosts" q
+   add_queue "test.q" [get_all_hosts_hostgroup] q
 }
 
 proc issue_1586_cleanup {} {

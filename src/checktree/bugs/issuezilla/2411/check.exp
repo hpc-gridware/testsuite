@@ -91,7 +91,7 @@ proc issue_2411_setup_level {} {
       incr count
    }
    set queue_conf(slots) 10
-   set queue_conf(hostlist) "@allhosts"
+   set queue_conf(hostlist) [get_all_hosts_hostgroup]
    cluster_bulk_add_objects "-Aq" $queue_names qname set_queue_defaults queue_conf \
                             {issue_2411_add_queue}
 }
@@ -100,7 +100,7 @@ proc issue_2411_setup_level {} {
 # @param queue_name name of the queue
 proc issue_2411_add_queue {queue_name} {
    set queue_conf(slots) 10
-   add_queue $queue_name "@allhosts" queue_conf 1
+   add_queue $queue_name [get_all_hosts_hostgroup] queue_conf 1
 }
 
 proc issue_2411_cleanup_level {} {

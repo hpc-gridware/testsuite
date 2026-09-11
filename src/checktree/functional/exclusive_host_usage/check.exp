@@ -130,7 +130,7 @@ proc exclusive_host_usage_setup {} {
    # add queue
    set queue_conf(slots)            "10"
    set queue_conf(pe_list)          "round_robin fill_up"
-   add_queue "excl.q" "@allhosts" queue_conf
+   add_queue "excl.q" [get_all_hosts_hostgroup] queue_conf
 
    # setup resource quota set
    set rqs_name "exclusive_test"

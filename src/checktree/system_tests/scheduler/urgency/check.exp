@@ -91,7 +91,7 @@ proc urgency_calculation_setup {  } {
    set urgency_queue_name "urg_queue"   
    set queue_conf(slots) 0
    ts_log_fine "Add queue $urgency_queue_name"
-   add_queue $urgency_queue_name "@allhosts" queue_conf 1
+   add_queue $urgency_queue_name [get_all_hosts_hostgroup] queue_conf 1
    
    # Disable all queue instances of the urgency_queue
    set queue_list {}

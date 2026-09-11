@@ -62,12 +62,12 @@ proc dbwriter_custom_usage_setup {} {
    add_or_replace_array_param new_conf new_conf reporting_params "flush_time" "00:00:01" $delimiter
    set_config new_conf
 
-   # create a dedicated test queue on @allhosts with the custom-usage epilog
+   # create a dedicated test queue on all execution hosts with the custom-usage epilog
    # attached. Isolates the test from all.q; the epilog script ships alongside
    # this check.exp (cs1266_custom_usage_epilog.sh) so it lives at the same
    # test-tree location on every cluster host — no runtime NFS-write race.
    set queue_conf(epilog) "$CHECK_ACTUAL_TEST_PATH/cs1266_custom_usage_epilog.sh"
-   add_queue "test.q" "@allhosts" queue_conf
+   add_queue "test.q" [get_all_hosts_hostgroup] queue_conf
 
    # start dbwriter if it isn't already running
    if {[get_dbwriter_status 0] != 0} {
@@ -90,7 +90,7 @@ proc dbwriter_custom_usage_cleanup {} {
    wait_for_end_of_all_jobs
 
    # remove the dedicated test queue and restore global config
-   del_queue "test.q" "@allhosts" 0 1
+   del_queue "test.q" [get_all_hosts_hostgroup] 0 1
    reset_config dbwriter_custom_usage_backup
 
    unset -nocomplain dbwriter_custom_usage_backup

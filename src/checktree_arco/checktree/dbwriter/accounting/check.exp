@@ -122,7 +122,7 @@ proc accounting_setup {} {
 
    set queue_conf(slots)   10
    set queue_conf(pe_list) "$ACCOUNTING_PE_NAME $ACCOUNTING_PE_SUMMARY_NAME"
-   if {[add_queue $ACCOUNTING_QUEUE_NAME "@allhosts" queue_conf] < 0} {
+   if {[add_queue $ACCOUNTING_QUEUE_NAME [get_all_hosts_hostgroup] queue_conf] < 0} {
       ts_log_severe "can not create queue $ACCOUNTING_QUEUE_NAME"
       return -1
    }

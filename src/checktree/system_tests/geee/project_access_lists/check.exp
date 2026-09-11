@@ -91,7 +91,7 @@ proc project_access_lists_setup {} {
    # setup an own queue - we'll change a lot of config params - better not touch all.q
    set queue_values(load_thresholds)       "np_load_avg=11.00"
    set queue_values(qtype)                 "BATCH INTERACTIVE CHECKPOINTING PARALLEL"
-   add_queue "prjacc" "@allhosts" queue_values
+   add_queue "prjacc" [get_all_hosts_hostgroup] queue_values
    # ... and disable all.q
    foreach host $ts_config(execd_nodes) {
       disable_queue [get_queue_instance "all.q" $host]

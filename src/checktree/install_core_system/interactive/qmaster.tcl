@@ -131,6 +131,7 @@ proc install_qmaster {{report_var report}} {
    set ENTER_QMASTER_SPOOL_DIR      [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ENTER_QMASTER_SPOOL_DIR] "*"]
    set USING_GID_RANGE_HIT_RETURN   [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_USING_GID_RANGE_HIT_RETURN] "*"]
    set CREATING_ALL_QUEUE_HOSTGROUP [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ALL_QUEUE_HOSTGROUP] ]
+   set CREATE_ALLHOSTS_HOSTGROUP    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CREATE_ALLHOSTS_HOSTGROUP] ]
    set EXECD_SPOOLING_DIR_NOROOT_NOADMINUSER           [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_EXECD_SPOOLING_DIR_NOROOT_NOADMINUSER]]
    set EXECD_SPOOLING_DIR_NOROOT           [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_EXECD_SPOOLING_DIR_NOROOT] "*"]
    set EXECD_SPOOLING_DIR_DEFAULT   [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_EXECD_SPOOLING_DIR_DEFAULT] "*"]
@@ -840,6 +841,13 @@ proc install_qmaster {{report_var report}} {
 
          -i $sp_id $ENTER_HOSTS {
             install_send_answer $sp_id "" "15"
+            continue
+         }
+
+         # CS-2749: from 9.2 on the installer asks whether to create @allhosts,
+         # the testsuite installs without it like the automatic installation
+         -i $sp_id $CREATE_ALLHOSTS_HOSTGROUP {
+            install_send_answer $sp_id $ANSWER_NO "15a"
             continue
          }
 

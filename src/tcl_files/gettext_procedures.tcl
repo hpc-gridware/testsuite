@@ -1566,6 +1566,7 @@ proc sge_macro { macro_name {raise_error 1} } {
       "DISTINST_CHANGE_PORT_QUESTION" { set value "Do you want to change the port number? (y/n) \[n\] >> " }
       "DISTINST_ADD_DEFAULT_QUEUE" { set value "Do you want to add a default queue for this host (y/n) \[y\] >> " }
       "DISTINST_ALL_QUEUE_HOSTGROUP" { set value "Creating the default <all.q> queue and <allhosts> hostgroup" }
+      "DISTINST_CREATE_ALLHOSTS_HOSTGROUP" { set value "Do you want to create the <allhosts> hostgroup (y/n) \[n\] >> " }
       "DISTINST_ADD_DEFAULT_QUEUE_INSTANCE" { set value "Do you want to add a default queue instance for this host (y/n) \[y\] >> " }
       "DISTINST_ENTER_DATABASE_DIRECTORY_LOCAL_SPOOLING" { set value "Please enter the ?atabase ?irectory now, even if you want to spool locally,\nit is necessary to enter this ?atabase ?irectory. \n\nDefault: \[%s\] >> " }
       "DISTINST_DATABASE_DIR_NOT_ON_LOCAL_FS" {

@@ -86,7 +86,7 @@ proc issue_2254_setup {} {
    set queue_conf(complex_values) "F001=1"
    set queue_conf(slots) 10
    set queue_conf(pe_list) "intelpvm intelmpi"
-   add_queue $first_queue_name "@allhosts" queue_conf 1
+   add_queue $first_queue_name [get_all_hosts_hostgroup] queue_conf 1
 
 
    # 4b. setup the test queue second.q
@@ -95,7 +95,7 @@ proc issue_2254_setup {} {
    set queue_conf(slots) 10
    set queue_conf(pe_list) "intelmpi intelpvm"
    ts_log_fine "Add queue $second_queue_name"
-   add_queue $second_queue_name "@allhosts" queue_conf 1
+   add_queue $second_queue_name [get_all_hosts_hostgroup] queue_conf 1
 
    # 4. Add rqs yet_another_rqs
    set rqs_name              "yet_another_rqs"

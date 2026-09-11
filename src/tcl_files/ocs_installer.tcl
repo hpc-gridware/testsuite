@@ -369,9 +369,17 @@ proc installer_load_config {{backup_dir ""} {on_error "cont_if_exist"}} {
 
    # start the backup
    set result [start_remote_prog $hostname $admin_user $backup_script $arguments prg_exit_state 60 0 $working_dir env_array]
-   if {$prg_exit_state != 0} {
+   set exit_state $prg_exit_state
+   if {$exit_state != 0} {
       ts_log_severe "Load config script failed, see log file $log_file for details:\n$result"
    }
+
+   # the loaded configuration may differ from the installed one in what
+   # ge_has_feature derives from the cluster, e.g. a backup of an older version
+   # brings @allhosts along ("allhosts-hostgroup", CS-2749)
+   clear_feature_cache
+
+   return $exit_state
 }
 
 ## @brief create a new backup and compares it with the original one

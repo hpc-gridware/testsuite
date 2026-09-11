@@ -295,7 +295,7 @@ proc bigdecimal_test {} {
    add_project $Prj_Name2
    #add queue
    set chgar(slots) "10"
-   add_queue $Queue_Name2 "@allhosts" chgar
+   add_queue $Queue_Name2 [get_all_hosts_hostgroup] chgar
    array unset chgar
 
    if {[info exists AR_Name]} {
