@@ -4210,14 +4210,73 @@ proc plain_j_parse {output_var jobId plainoutput} {
    }
 }
 
+##
+# @brief Split a string on any of the delimiter characters, ignoring brackets
+#
+# Like Tcl's split - the delimiter is a set of characters, not a string - except that a
+# delimiter inside a bracketed block does not separate anything.
+#
+# A resource map value carries its per instance characteristics in brackets, and those are
+# separated by commas of their own:
+#
+#     gpu=2(gpu0[devices=/dev/nvidia0,memory=80G] gpu1[devices=/dev/nvidia1,memory=40G])
+#
+# Splitting the surrounding complex_values list on every comma tears such a value into pieces
+# which are not name/value pairs at all.
+#
+# @param source_string the string to split
+# @param delimiter     the characters which separate entries
+# @return              the list of entries
+proc split_outside_brackets {source_string delimiter} {
+   set tokens {}
+   set token ""
+   set depth 0
+
+   foreach c [split $source_string ""] {
+      if {[string compare $c "\["] == 0} {
+         incr depth
+      } elseif {[string compare $c "\]"] == 0 && $depth > 0} {
+         incr depth -1
+      }
+      if {$depth == 0 && [string first $c $delimiter] >= 0} {
+         lappend tokens $token
+         set token ""
+      } else {
+         append token $c
+      }
+   }
+   lappend tokens $token
+
+   return $tokens
+}
+
+##
+# @brief Parse a delimited list of name=value pairs into an array
+#
+# Two things about the values. They may contain the delimiter inside a bracketed block, which
+# split_outside_brackets() takes care of, and they may contain '=' - a resource map with
+# characteristics does, "gpu=2(gpu0[memory=80G])" - so only the first '=' separates the name
+# from the value. Reading the value as the second element of a split on '=' returned
+# "2(gpu0[memory" for that one.
+#
+# @param target_array_var name of the array to fill
+# @param source_string    the list
+# @param delimiter        the characters which separate entries
 proc parse_name_value_list {target_array_var source_string {delimiter ", "}} {
    upvar $target_array_var result
-   set split_source [split $source_string $delimiter]
-   foreach entry $split_source {
-      set split_entry [split $entry "="]
-      set name [lindex $split_entry 0]
-      set value [lindex $split_entry 1]
-      set result($name) $value
+
+   foreach entry [split_outside_brackets $source_string $delimiter] {
+      if {$entry eq ""} {
+         continue
+      }
+      set eq [string first "=" $entry]
+      if {$eq < 0} {
+         set result($entry) ""
+      } else {
+         set name  [string range $entry 0 [expr {$eq - 1}]]
+         set value [string range $entry [expr {$eq + 1}] end]
+         set result($name) $value
+      }
    }
 }
 
