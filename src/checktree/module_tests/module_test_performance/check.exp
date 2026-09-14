@@ -72,19 +72,26 @@ set check_needs           "init_core_system"
 # The level IS the index into performance_module_tests -- do not reorder.
 # ---------------------------------------------------------------------------
 
-# {binary min_version}
+# {binary min_version needs_gcs}
+#
+# needs_gcs: the binary measures something that exists only in the commercial
+# edition. The column follows module_test_generic, which has carried it since
+# its own gcs-only binaries arrived - the level always exists and the run
+# function skips the binary, so the index stays stable across editions.
 # check.exp is sourced from inside a proc, so the list has to be declared global
 # HERE, at file scope -- otherwise "set" makes a local and the run function's
 # "global performance_module_tests" finds nothing ("no such variable").
 global performance_module_tests
 set performance_module_tests {}
-lappend performance_module_tests {test_uti_profiling ""}
-lappend performance_module_tests {test_sgeobj_performance ""}
-lappend performance_module_tests {test_sched_eval_performance ""}
+lappend performance_module_tests {test_uti_profiling "" 0}
+lappend performance_module_tests {test_sgeobj_performance "" 0}
+lappend performance_module_tests {test_sched_eval_performance "" 0}
+lappend performance_module_tests {test_sgeobj_Matcher_performance "9.2.0" 1}
 
 set check_description(0) "test_uti_profiling (timing measurement)"
 set check_description(1) "test_sgeobj_performance (timing measurement)"
 set check_description(2) "test_sched_eval_performance (timing measurement)"
+set check_description(3) "test_sgeobj_Matcher_performance (timing measurement, CS-2680)"
 
 set check_functions {}
 lappend check_functions "performance_module_tests_run"
@@ -105,7 +112,7 @@ proc performance_module_tests_run {} {
       return
    }
 
-   lassign [lindex $performance_module_tests $index] module_test min_version
+   lassign [lindex $performance_module_tests $index] module_test min_version needs_gcs
 
    # ------------------------------------------------------------------------
    # ts_log_info, NEVER ts_log_config, in a check function.
@@ -129,6 +136,11 @@ proc performance_module_tests_run {} {
    # ------------------------------------------------------------------------
    if {$min_version ne "" && ![is_version_in_range $min_version]} {
       ts_log_info "$module_test needs version $min_version or newer - skipped"
+      return
+   }
+
+   if {$needs_gcs && ![ge_has_feature "gcs"]} {
+      ts_log_info "$module_test needs the gcs feature set - skipped"
       return
    }
 
