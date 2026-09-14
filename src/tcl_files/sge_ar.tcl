@@ -385,9 +385,31 @@ proc parse_qrstat {ar_id {output qrstat_info} {plain_output qrstat_output} {host
    set match_text(master_hard_queue_list)    "master hard queue_list*"
    set match_text(message)           message*
    set match_text(exec_binding_list) exec_binding_list*
+   set match_text(granted_resources_list) granted_resources_list*
 
+   # An attribute whose value does not fit on one line carries the name on the first line only
+   # and indents what follows to the column the value started in - granted_resources_list does
+   # this, one line per execution host. Such a continuation line matches no pattern and would
+   # be dropped, so it is appended to the attribute the previous line belonged to. A caller
+   # then sees one value per attribute, newline separated, whether it was printed on one line
+   # or on several.
+   #
+   # A line which does begin in the first column always names an attribute or is a separator,
+   # so starting with whitespace is what tells the two apart.
    set lines [split $result "\n"]
+   set last_name ""
    foreach line $lines {
+      if {[string trim $line] eq ""} {
+         continue
+      }
+      if {[string index $line 0] eq " "} {
+         if {$last_name ne ""} {
+            append out($last_name) "\n[string trim $line]"
+         }
+         continue
+      }
+
+      set last_name ""
       foreach name [array names match_text] {
          set pattern "$match_text($name)"
 
@@ -396,6 +418,7 @@ proc parse_qrstat {ar_id {output qrstat_info} {plain_output qrstat_output} {host
             set len [string length $line]
             set value [string trimright [string trimleft [string range $line $pos $len]]]
             set out($name) $value
+            set last_name $name
          }
       }
    }
