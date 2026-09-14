@@ -41,6 +41,7 @@ set check_description(2)  "test per host consumables on global layer granted to 
 set check_description(3)  "test per host consumables on exechost layer granted to an AR"
 set check_description(4)  "test per host consumables on global layer limited by resource quota"
 set check_description(5)  "test per host consumables on exechost layer limited by resource quota"
+set check_description(6)  "test per host consumables on exechost layer with resource reservation"
 
 # define test's dependencies
 set check_needs           "init_core_system"
@@ -121,7 +122,8 @@ proc per_host_consumable_setup_level {} {
          set complex_values "phc_int=5,phc_rsmap=5(A B A B C)"
          set test_hosts [host_conf_get_suited_hosts 2]
       }
-      1 {
+      1 -
+      6 {
          # set up consumables on exechost layer
          set phc_capacity_hosts [host_conf_get_suited_hosts 2]
          set test_hosts $phc_capacity_hosts
@@ -176,6 +178,19 @@ proc per_host_consumable_setup_level {} {
       add_rqs rqs
       set phc_is_rqs 1
    }
+
+   # Run level 6 repeats the exechost scenarios with resource reservation enabled. It is not
+   # about reservations being made - that needs a job submitted with -R y - but about
+   # max_reservation > 0 setting schedule_based for every job, which skips the early return in
+   # ri_time_by_slots() for a resource nothing has booked yet. Without it these scenarios only
+   # reach the full consumable path from the second task on a host onwards, which is where a
+   # regression in that path showed up once while every earlier run level passed.
+   if {$CHECK_ACT_LEVEL == 6} {
+      set sched_conf(max_reservation) 10
+      # so that a job which does not start says why
+      set sched_conf(schedd_job_info)  "true"
+      set_schedd_config sched_conf
+   }
 }
 
 proc per_host_consumable_cleanup_level {} {
@@ -198,6 +213,10 @@ proc per_host_consumable_cleanup_level {} {
    # delete RQS, if we have one
    if {$phc_is_rqs} {
       del_rqs "test.rqs"
+   }
+
+   if {$CHECK_ACT_LEVEL == 6} {
+      reset_schedd_config
    }
 }
 
