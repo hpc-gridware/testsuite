@@ -383,8 +383,30 @@ cmd_init() {
   else
     _hostcfg="$(read_sav_value "$cfg" host_config_file)"
     if [ -n "$_hostcfg" ] && [ -f "$_hostcfg" ]; then
-      read -r -a _mhosts <<< "$(read_sav_value "$_hostcfg" hostlist \
-                                | tr ' ' '\n' | grep -E '^host-[0-9]+$' | tr '\n' ' ')"
+      # Hosts the line reserves for another role are NOT candidates. A
+      # non-cluster, submit-only or admin-only host must not be an execution
+      # host, nor the qmaster, nor the shadow host -- and excluding them here
+      # covers all three, because gen_sav() takes master_host and shadowd_hosts
+      # from this same pool.
+      #
+      # The testsuite refuses the overlap outright, at configuration
+      # verification, long before anything is installed:
+      #
+      #   Cluster Scheduler (Grid Engine) submit only hosts ...Value host-0001 not allowed.
+      #   verify error in procedure "config_submit_only_hosts" !!!
+      #
+      # Measured 2026-09-15: four of sixteen runners died on exactly this,
+      # because the "host-NNNN" filter happily swept up the line's
+      # submit_only_host.
+      local _reserved=" $(read_sav_value "$cfg" submit_only_hosts) \
+                         $(read_sav_value "$cfg" admin_only_hosts) \
+                         $(read_sav_value "$cfg" non_cluster_hosts) "
+      local _h
+      for _h in $(read_sav_value "$_hostcfg" hostlist \
+                  | tr ' ' '\n' | grep -E '^host-[0-9]+$'); do
+        case "$_reserved" in *" $_h "*) continue ;; esac
+        _mhosts+=("$_h")
+      done
     fi
   fi
   [ "${#_mhosts[@]}" -gt 0 ] \
