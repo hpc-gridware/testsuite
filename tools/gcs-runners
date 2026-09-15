@@ -757,24 +757,38 @@ cluster_sh() {
 
 cmd_health() {
   local line="${1:?line required}" want="${2:-}"
-  local lroot cfg hosts root port arch qsub qstat qdel i h jid rc=0 mh
+  local lroot cfg hosts hosts_fallback root port arch qsub qstat qdel i h jid rc=0 mh rmh
   local -a probes=()
 
   lroot="$(line_root "$line")"
   have_runners "$line" || die "no runners -- run 'gcs-runners $line init' first"
   [ -n "$want" ] || want="$(runner_count "$line")"
 
-  hosts="$(read_sav_value "$lroot/config/defaults-$line.sav" execd_hosts)"
-  [ -n "$hosts" ] || die "no execd_hosts in the line configuration"
+  # Only as the fallback for a runner whose own configuration does not name its
+  # hosts -- since the runners get their own group of execution hosts, the
+  # line's list is no longer what any of them runs on. Probing every runner
+  # against the line's four hosts reports a dozen clusters as broken that are
+  # perfectly healthy, and `gcs-testrun` then refuses to start (seen 2026-09-16).
+  hosts_fallback="$(read_sav_value "$lroot/config/defaults-$line.sav" execd_hosts)"
   mh="$(read_sav_value "$lroot/config/defaults-$line.sav" master_host)"
   [ -n "$mh" ] || die "no master_host in the line configuration"
   [ "$mh" = "$(hostname -s)" ] || info "  submitting from $mh (this host is not part of the cluster)"
 
-  info "  probing $want runners on: $hosts  (h_rt=$HEALTH_LIMIT)"
+  info "  probing $want runners, each on its own execution hosts  (h_rt=$HEALTH_LIMIT)"
   for i in $(seq 1 "$want"); do
     cfg="$(runner_root "$line" "$i")/config/defaults-$(runner_name "$line" "$i").sav"
     root="$(read_sav_value "$cfg" product_root)"
     port="$(read_sav_value "$cfg" commd_port)"
+    hosts="$(read_sav_value "$cfg" execd_hosts)"
+    [ -n "$hosts" ] || hosts="$hosts_fallback"
+    [ -n "$hosts" ] || { info "  r$i: no execd_hosts -- skipped"; rc=1; continue; }
+    # Submit from THIS runner's qmaster host, not from the line's. Since every
+    # runner has its own group of hosts, the line's master host is not a submit
+    # host of most clusters, and every probe there comes back
+    # `denied: host "..." is no submit host` -- the cluster is fine, the probe
+    # was knocking on the wrong door (seen 2026-09-16).
+    rmh="$(read_sav_value "$cfg" master_host)"
+    [ -n "$rmh" ] || rmh="$mh"
     [ -d "$root/bin" ] || { info "  r$i: no installation -- skipped"; continue; }
     # `|| true` on every probe command, and it is not cosmetic. This script runs
     # under `set -euo pipefail`, and `var="$(cmd | ...)"` takes the pipeline's
@@ -792,7 +806,7 @@ cmd_health() {
       info "  r$i: cannot determine arch -- skipped"; rc=1; continue
     fi
     for h in $hosts; do
-      jid="$(cluster_sh "$mh" "$root" "$port" \
+      jid="$(cluster_sh "$rmh" "$root" "$port" \
              "'$root/bin/$arch/qsub' -b y -l hostname='$h' -l h_rt='$HEALTH_LIMIT' -o /dev/null -e /dev/null sleep 300" \
              2>/dev/null | grep -oE '[0-9]+' | head -1)" || true
       [ -n "$jid" ] && probes+=("$i $h $jid") || { info "  r$i/$h: qsub failed"; rc=1; }
@@ -825,8 +839,11 @@ cmd_health() {
     # reported. A cluster that dies between submit and check is a finding, not a
     # reason to stop looking at the other 31.
     arch="$("$root/util/arch" 2>/dev/null)" || true
+    # this runner's own qmaster host, for the same reason as at the submit above
+    rmh="$(read_sav_value "$cfg" master_host)"
+    [ -n "$rmh" ] || rmh="$mh"
     local state
-      state="$(cluster_sh "$mh" "$root" "$port" "'$root/bin/$arch/qstat' -u \\*" 2>/dev/null \
+      state="$(cluster_sh "$rmh" "$root" "$port" "'$root/bin/$arch/qstat' -u \\*" 2>/dev/null \
                | awk -v j="$jid" '$1 == j { print $5 }')" || true
     case "$state" in
       "")         ok=$((ok + 1))
@@ -836,7 +853,7 @@ cmd_health() {
     esac
     # A stalled execd will not remove its own job -- and it is a "sleep 300".
     if [ -n "$state" ]; then
-        cluster_sh "$mh" "$root" "$port" "'$root/bin/$arch/qdel' -f '$jid'" >/dev/null 2>&1 || true
+        cluster_sh "$rmh" "$root" "$port" "'$root/bin/$arch/qdel' -f '$jid'" >/dev/null 2>&1 || true
     fi
   done
 
