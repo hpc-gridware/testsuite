@@ -278,11 +278,18 @@ free_runner_ports() {
 # 2%. Two thirds of the execution capacity went unused. Handing each runner a
 # different host from execd_hosts spreads both the qmaster work and those
 # host-pinned jobs.
+#
+# Why the execution hosts are per runner as well: a cluster does not get better
+# by having more of them -- it only takes longer to install, since every host
+# means another execd. What does get better is the fleet, when clusters stop
+# sharing hosts. With sixteen hosts and a group size of four, four runners share
+# a group instead of all of them sharing everything. Fewer than two groups' worth
+# of hosts and this changes nothing, so a small line keeps its old behaviour.
 gen_sav() {
-  local src="$1" dst="$2" port="$3" rroot="$4" mhost="$5"
-  python3 - "$src" "$dst" "$port" "$rroot" "$mhost" <<'PY'
+  local src="$1" dst="$2" port="$3" rroot="$4" mhost="$5" ehosts="$6"
+  python3 - "$src" "$dst" "$port" "$rroot" "$mhost" "$ehosts" <<'PY'
 import sys
-src, dst, port, rroot, mhost = sys.argv[1:6]
+src, dst, port, rroot, mhost, ehosts = sys.argv[1:7]
 repl = {
     "commd_port":    port,
     "cluster_name":  f"p{port}",
@@ -291,6 +298,10 @@ repl = {
     "master_host":   mhost,
     "shadowd_hosts": mhost,
 }
+# empty means "keep the line's list", which is what a line with too few hosts
+# to form two groups wants
+if ehosts:
+    repl["execd_hosts"] = ehosts
 lines = open(src).read().split("\n")
 hits = {k: 0 for k in repl}
 for i, l in enumerate(lines):
@@ -354,11 +365,33 @@ cmd_init() {
   # host by construction, so each of them can carry a qmaster. Falling back to
   # the line's master_host keeps a line whose execd_hosts cannot be read working
   # exactly as before.
+  # The pool of machines the runners may use is a property of the LAB, not of
+  # the line's own cluster. Keeping the line at four execution hosts while the
+  # fleet spreads over sixteen is a deliberate split: the line cluster is the
+  # one people work in, and every host it carries is another execd to install.
+  #
+  # The inventory is the host configuration's "hostlist"; the cluster execution
+  # hosts are the "host-NNNN" entries in it, which is the naming convention the
+  # whole lab uses (the servers, build hosts and ts carry names of their own).
+  # GCS_RUNNER_EXECD_HOSTS overrides it for a site that names them differently.
+  # Falling back to the line's execd_hosts keeps a lab without that convention
+  # working exactly as before.
   local -a _mhosts
-  read -r -a _mhosts <<< "$(read_sav_value "$cfg" execd_hosts)"
+  local _hostcfg
+  if [ -n "${GCS_RUNNER_EXECD_HOSTS:-}" ]; then
+    read -r -a _mhosts <<< "$GCS_RUNNER_EXECD_HOSTS"
+  else
+    _hostcfg="$(read_sav_value "$cfg" host_config_file)"
+    if [ -n "$_hostcfg" ] && [ -f "$_hostcfg" ]; then
+      read -r -a _mhosts <<< "$(read_sav_value "$_hostcfg" hostlist \
+                                | tr ' ' '\n' | grep -E '^host-[0-9]+$' | tr '\n' ' ')"
+    fi
+  fi
+  [ "${#_mhosts[@]}" -gt 0 ] \
+    || read -r -a _mhosts <<< "$(read_sav_value "$cfg" execd_hosts)"
   [ "${#_mhosts[@]}" -gt 0 ] \
     || read -r -a _mhosts <<< "$(read_sav_value "$cfg" master_host)"
-  [ "${#_mhosts[@]}" -gt 0 ] || die "neither execd_hosts nor master_host in $cfg"
+  [ "${#_mhosts[@]}" -gt 0 ] || die "no execution hosts: neither hostlist in the host configuration, nor execd_hosts or master_host in $cfg"
 
   info "line:    $lroot"
   info "runners: $want   ports: ${assigned[*]}   qmaster hosts: ${_mhosts[*]}"
@@ -377,10 +410,29 @@ cmd_init() {
       ln -sfn "$d" "$rroot/$(basename "$d")"
     done
 
-    # Round robin over the line's execd_hosts, so r1 gets the first, r2 the
-    # second and so on, wrapping when there are more runners than hosts.
+    # Cut the line's execution hosts into groups of GROUP, hand runner i the
+    # group (i-1) mod <number of groups>, and rotate the qmaster host within it
+    # so the runners sharing a group do not share a qmaster host either.
+    #
+    #   16 hosts, 16 runners:  r1 -> hosts 0..3  qmaster host-0000
+    #                          r2 -> hosts 4..7  qmaster host-0004
+    #                          r5 -> hosts 0..3  qmaster host-0001
+    #
+    # With fewer than two groups' worth of hosts there is one group, every
+    # runner gets all of them and only the qmaster host rotates -- exactly what
+    # this did before.
+    local group=4 ngroups gstart ehosts=""
+    ngroups=$(( ${#_mhosts[@]} / group ))
+    if [ "$ngroups" -ge 2 ]; then
+      gstart=$(( ((i-1) % ngroups) * group ))
+      ehosts="${_mhosts[*]:$gstart:$group}"
+      mhost="${_mhosts[$(( gstart + ((i-1) / ngroups) % group ))]}"
+    else
+      mhost="${_mhosts[$(( (i-1) % ${#_mhosts[@]} ))]}"
+    fi
+
     gen_sav "$cfg" "$rroot/config/defaults-$name.sav" "$port" "$rroot" \
-            "${_mhosts[$(( (i-1) % ${#_mhosts[@]} ))]}"
+            "$mhost" "$ehosts"
 
     # Companion configurations (defaults-<line>.<project>.sav, .mpi.sav for
     # instance) are located by inserting the project name before the .sav
