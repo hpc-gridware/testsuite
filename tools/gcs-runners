@@ -443,14 +443,25 @@ cmd_init() {
     # With fewer than two groups' worth of hosts there is one group, every
     # runner gets all of them and only the qmaster host rotates -- exactly what
     # this did before.
-    local group=4 ngroups gstart ehosts=""
-    ngroups=$(( ${#_mhosts[@]} / group ))
+    #
+    # The groups wrap around the pool, so their number does not depend on the
+    # pool dividing evenly by GROUP: fifteen hosts still yield four groups, and
+    # one host then belongs to two of them. Sharing one host between two groups
+    # is a far smaller price than leaving three hosts idle, or than shrinking
+    # the fleet to fit the arithmetic.
+    local group=4 ngroups gstart ehosts="" k npool
+    npool=${#_mhosts[@]}
+    ngroups=$(( (npool + group - 1) / group ))
     if [ "$ngroups" -ge 2 ]; then
       gstart=$(( ((i-1) % ngroups) * group ))
-      ehosts="${_mhosts[*]:$gstart:$group}"
-      mhost="${_mhosts[$(( gstart + ((i-1) / ngroups) % group ))]}"
+      ehosts=""
+      for k in $(seq 0 $(( group - 1 ))); do
+        ehosts="$ehosts ${_mhosts[$(( (gstart + k) % npool ))]}"
+      done
+      ehosts="${ehosts# }"
+      mhost="${_mhosts[$(( (gstart + ((i-1) / ngroups) % group) % npool ))]}"
     else
-      mhost="${_mhosts[$(( (i-1) % ${#_mhosts[@]} ))]}"
+      mhost="${_mhosts[$(( (i-1) % npool ))]}"
     fi
 
     gen_sav "$cfg" "$rroot/config/defaults-$name.sav" "$port" "$rroot" \
