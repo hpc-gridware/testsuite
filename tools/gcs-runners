@@ -762,6 +762,16 @@ cmd_health() {
 
 [ $# -ge 2 ] || usage 1
 line="$1"; sub="$2"; shift 2 || true
+
+# Only the actions that actually put load on the machine are guarded; status
+# and health are two ssh round trips and are useful from anywhere.
+case "$sub" in
+  init|install|teardown)
+     . "$SCRIPT_DIR/gcs-host-guard.sh"
+     gcs_require_ts_host gcs-runners "$line" "$sub" "$@"
+     ;;
+esac
+
 case "$sub" in
   init)     cmd_init     "$line" "$@" ;;
   install)  cmd_install  "$line" "$@" ;;

@@ -71,6 +71,11 @@ usage() {
 }
 case "${1:-}" in -h|--help|help) usage;; esac
 
+# Every invocation of this tool is a test run, so there is nothing to
+# exempt -- unlike gcs-runners, which also has read-only actions.
+. "$SCRIPT_DIR/gcs-host-guard.sh"
+gcs_require_ts_host gcs-testrun "$@"
+
 line="${1:?usage: gcs-testrun <line> <N> [-- <ctest-args>]   (--help for details)}"; shift
 # N is mandatory. It used to default to 32, and on a line with fewer runners the
 # test list was then spread over clusters that do not exist: their units were
