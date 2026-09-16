@@ -368,11 +368,21 @@ proc systemd_get_job_slices {host} {
    if {[remote_file_isdirectory $host $slice_path]} {
       analyze_directory_structure $host $CHECK_USER $slice_path dirs "" ""
 
-      set pattern "ocs$ts_config(commd_port)-jobs-"
+      # The cgroup directory of a unit is named after the unit, so the unit
+      # name is the base name of the directory. Matching the pattern against
+      # the whole path and keeping the rest of it would build names like
+      # "ocs8028-jobs-37.2.slice/ocs8028.37.2.1.rocky-8-amd64-1.scope" for the
+      # task scopes a tightly integrated job nests inside its slice - systemd
+      # has no unit names with a "/" in them and rejects those.
+      #
+      # Only the job slices are collected. The scopes below them are stopped
+      # with their slice, and "systemctl status <slice>" lists them with their
+      # processes anyway, so nothing is lost by leaving them out.
+      set pattern "ocs$ts_config(commd_port)-jobs-*.slice"
       foreach dir $dirs {
-         set pos [string first $pattern $dir]
-         if {$pos >= 0} {
-            lappend slices [string range $dir $pos end]
+         set unit [file tail $dir]
+         if {[string match $pattern $unit]} {
+            lappend slices $unit
          }
       }
    }
@@ -440,7 +450,7 @@ proc systemd_check_cleanup_job_slices {host} {
    set statuses {}
    foreach slice $left_slices {
       ts_log_fine "   -> $slice"
-      set output [start_remote_prog $host "root" "systemctl" "status $slice"]
+      set output [start_remote_prog $host "root" "systemctl" "--no-pager status $slice"]
       ts_log_fine $output
       lappend statuses $output
       set output [start_remote_prog $host "root" "systemctl" "stop $slice"]
