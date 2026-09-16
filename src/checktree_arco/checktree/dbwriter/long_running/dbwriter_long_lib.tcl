@@ -100,7 +100,7 @@ proc dbwriter_long::wait {real_seconds {reason ""}} {
 # would never reach a retention boundary, so two of them are shortened until
 # the run does cross them:
 #   - the raw host_values sub_scope rule to 1 day,
-#   - the online_usage rule to 2 days.
+#   - the online_usage rule to 1 day.
 #
 # Everything else is deliberately left at its shipped retention. Two reasons:
 # the untouched catch-all rule of sge_host_values (2 years) is what lets
@@ -119,7 +119,7 @@ proc dbwriter_long::register_short_retention_rules {} {
    # {scope time_range time_amount {sub_scope ...}}
    set rules {
       {host_values  day 1 {np_load_avg cpu mem_free virtual_free}}
-      {online_usage day 2 {}}
+      {online_usage day 1 {}}
    }
 
    foreach rule $rules {
@@ -162,7 +162,41 @@ proc dbwriter_xml::config_path {} {
 }
 
 ##
+# @brief Copy the content of one file to another.
+#
+# Writes rather than copies. "file copy" keeps the modification time of the
+# source, and a running dbwriter re-reads its calculation file only when the
+# file is *newer* than the copy it holds (ReportingDBWriter.getDbWriterConfig,
+# "ts > configTimestamp"), so a file put back with an old timestamp never
+# reaches it. Writing also needs only write permission, where stamping the time
+# explicitly with "file mtime" would need ownership of the file.
+#
+# @param src source file
+# @param dst destination file
+# @return "" on success, else the error message
+proc dbwriter_xml::copy_content {src dst} {
+   if {[catch {
+      set fh [open $src r]
+      set content [::read $fh]
+      close $fh
+      set fh [open $dst w]
+      puts -nonewline $fh $content
+      close $fh
+   } msg]} {
+      return $msg
+   }
+   return ""
+}
+
+##
 # @brief Save a pristine copy of dbwriter.xml.
+#
+# A run that is aborted before its cleanup leaves the shortened retention rules
+# in the live file and its pristine copy in the backup. Backing the live file up
+# again would make the shortened rules the "original", and the restore in
+# Phase G would put them back instead of the shipped ones - the dbwriter would
+# keep deleting on a one day window for the rest of the run. So a backup left
+# over from an earlier run is put back first.
 #
 # @return 0 if the backup was created, else -1 (error reported via ts_log_severe)
 proc dbwriter_xml::backup {} {
@@ -174,7 +208,21 @@ proc dbwriter_xml::backup {} {
       return -1
    }
    set backup_path "${path}.testsuite_orig"
-   if {[catch {file copy -force $path $backup_path} msg]} {
+
+   if {[file exists $backup_path]} {
+      ts_log_info "dbwriter_xml: $backup_path is left over from a run that did\
+                   not clean up - putting it back before taking a new backup,\
+                   else the shortened retention rules would become the original"
+      set msg [dbwriter_xml::copy_content $backup_path $path]
+      if {$msg ne ""} {
+         ts_log_severe "can not put the leftover backup back: $msg"
+         set backup_path ""
+         return -1
+      }
+   }
+
+   set msg [dbwriter_xml::copy_content $path $backup_path]
+   if {$msg ne ""} {
       ts_log_severe "can not back up $path: $msg"
       set backup_path ""
       return -1
@@ -201,7 +249,11 @@ proc dbwriter_xml::restore {} {
       return 0
    }
    set path [dbwriter_xml::config_path]
-   if {[catch {file copy -force $backup_path $path} msg]} {
+   # copy_content and not "file copy": the restore has to reach a dbwriter that
+   # is still running, which only notices a calculation file that is newer than
+   # the copy it holds
+   set msg [dbwriter_xml::copy_content $backup_path $path]
+   if {$msg ne ""} {
       ts_log_severe "can not restore $path: $msg"
       return -1
    }
@@ -556,6 +608,34 @@ proc db::ago {seconds} {
       mysql      {return "(NOW() - INTERVAL $seconds SECOND)"}
       default    {return "(LOCALTIMESTAMP - INTERVAL '$seconds seconds')"}
    }
+}
+
+##
+# @brief Engine-portable row limit for a SELECT.
+#
+# Appended after the ORDER BY. Postgres and MySQL take LIMIT, Oracle the
+# standard FETCH FIRST (12c and later).
+#
+# @param rows maximum number of rows
+# @return the SQL clause limiting the result on the configured engine
+proc db::limit {rows} {
+   switch -- [get_database_type] {
+      oracle  {return "FETCH FIRST $rows ROWS ONLY"}
+      default {return "LIMIT $rows"}
+   }
+}
+
+##
+# @brief Is the ARCO database connection open?
+#
+# Lets a caller that only needs a connection temporarily leave an existing one
+# alone instead of closing it under its owner.
+#
+# @return 1 if connected, else 0
+proc db::is_connected {} {
+   variable sp_id
+
+   return [expr {$sp_id ne ""}]
 }
 
 ##
