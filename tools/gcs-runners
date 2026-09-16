@@ -523,6 +523,40 @@ EOF
 # qmaster host of their own: asking only the line's master_host finds the one
 # runner that happens to sit there and reports every other cluster as down,
 # however healthy it is. Callers pass the host that carries the cluster.
+## @brief The host that serves the filesystem the installations live on
+#
+# The mirroring copies the line's installation into each runner, and both ends
+# sit on the same NFS export. Running the rsync on whichever host invoked this
+# script therefore drags every byte across the network twice, to land it a
+# directory away from where it started. On the file server the very same paths
+# are local -- measured on server-00: /scratch and /export/scratch are the same
+# ZFS dataset, same device and inode -- so the copy never leaves the machine.
+#
+# Derived, not hardcoded: the mount that carries the installation names the
+# server. Ask about THAT path, not about /scratch -- the lab mounts it through
+# an autofs direct map, so findmnt on /scratch answers "auto.direct" and the
+# real NFS source stays hidden one level down.
+#
+# GCS_RUNNER_FS_HOST overrides it. On the file server itself the source has no
+# host part (local ZFS), so the derivation yields nothing and the caller stays
+# where it is -- which is already the right place.
+#
+# @param path a path on the filesystem in question
+# @return the short name of the file server, or empty when it is already local
+fs_host_for_mirroring() {
+  local path="$1" src host
+  if [ -n "${GCS_RUNNER_FS_HOST:-}" ]; then
+    printf '%s' "$GCS_RUNNER_FS_HOST"
+    return 0
+  fi
+  src="$(findmnt -no SOURCE --target "$path" 2>/dev/null)" || true
+  case "$src" in
+    *:*) host="${src%%:*}" ;;      # <host>:/export/... -- remote
+    *)   host="" ;;                # local already, nothing to gain
+  esac
+  printf '%s' "${host%%.*}"
+}
+
 listening_ports_on_host() {
   local mh="$1"
   [ -n "$mh" ] || mh="$(hostname -s)"
@@ -589,6 +623,23 @@ cmd_install() {
   have_runners "$line" || die "no runners -- run 'gcs-runners $line init' first"
   [ -n "$want" ] || want="$(runner_count "$line")"
 
+  # One probe for the whole loop: which host to mirror on, and can it see the
+  # paths at all. Falling back to this host keeps a site without a shared
+  # filesystem working exactly as before.
+  local _fsh _mjobs _mp
+  local -a _mpids=()
+  _mjobs="${GCS_MIRROR_JOBS:-4}"
+  case "$_mjobs" in ''|*[!0-9]*|0) _mjobs=4 ;; esac
+  _fsh="$(fs_host_for_mirroring "$linst")"
+  if [ -n "$_fsh" ] && [ "$_fsh" != "$(hostname -s)" ]; then
+    if ! "$SCRIPT_DIR/as-root" "$_fsh" "test -d '$linst'" >/dev/null 2>&1; then
+      info "  $_fsh cannot see $linst -- mirroring here instead"
+      _fsh="$(hostname -s)"
+    fi
+  else
+    _fsh="$(hostname -s)"
+  fi
+
   for i in $(seq 1 "$want"); do
     rroot="$(runner_root "$line" "$i")"
     [ -d "$rroot" ] || die "runner r$i missing -- run 'init' first"
@@ -607,9 +658,33 @@ cmd_install() {
     # the installation -- that costs N full builds. A root rsync takes seconds
     # and yields the same result. Ownership is preserved (rsync -a), so only
     # this single file ends up root:root.
-    info "  r$i: mirroring $linst (as root, setuid binaries) ..."
-    "$SCRIPT_DIR/as-root" "$(hostname -s)" \
-        "rsync -a --delete --exclude=/default '$linst/' '$rroot/inst/'" >/dev/null
+    #
+    # And on the FILE SERVER, not here: see fs_host_for_mirroring(). Sixteen
+    # runners are ~48 GB that otherwise travel over NFS to land on the disk they
+    # came from. Verified before use, because a host that cannot see the paths
+    # would turn a slow copy into a failed one.
+    #
+    # In parallel, but bounded. Serially this is the longest phase of an
+    # install -- sixteen runners took about 80 s each over NFS and about 52 s
+    # each on the file server, so twenty-odd minutes before a single cluster
+    # starts installing. Unbounded is not the answer either: these are many
+    # small files, so metadata operations dominate, and ZFS serialises those
+    # per directory -- past a handful of writers the copies slow each other
+    # down instead of finishing sooner. GCS_MIRROR_JOBS tunes it.
+    info "  r$i: mirroring $linst (as root, setuid binaries, on $_fsh) ..."
+    ( "$SCRIPT_DIR/as-root" "$_fsh" \
+        "rsync -a --delete --exclude=/default '$linst/' '$rroot/inst/'" >/dev/null ) &
+    _mpids+=("$!:$i")
+    # throttle: wait for the oldest as soon as the window is full
+    while [ "$(jobs -rp | wc -l)" -ge "$_mjobs" ]; do sleep 1; done
+  done
+
+  # Collect every mirroring job before anything installs -- a cluster whose
+  # binaries are half copied fails in ways that look like anything but that.
+  for _mp in "${_mpids[@]}"; do
+    if ! wait "${_mp%%:*}"; then
+      info "  r${_mp##*:}: mirroring FAILED"; rc=1
+    fi
   done
 
   for i in $(seq 1 "$want"); do
