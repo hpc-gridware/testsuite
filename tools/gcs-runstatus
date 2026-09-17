@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""gcs-runstatus -- one line per full test run, for a panel (GNOME Executor).
+
+    gcs-runstatus [<line> ...]
+
+Shows the phase of the latest gcs-testrun of each line as
+
+    <line> <phase> <failing>/<passed>/<total> <time>
+
+    91x P1 0/46/564 18:34            phase 1, run expected to end by 18:34
+    92x P2 6/684/690 13:20           phase 2, 6 tests still red, run to end by 13:20
+    92x X 1/689/690 13:07            finished 13:07, 1 real defect
+    92x E 00:42                      aborted, e.g. an unhealthy cluster in phase 0d
+    92x stalled? P1 ...              nothing in the run changed for GCS_RUNSTATUS_STALL s
+
+The time is the latest expected end of the whole run, or when it ended. It
+assumes every failure seen so far stays red through phases 2 and 3, so it moves
+out with each new failure and back in as reruns pass. Without a planned
+duration to go by (phase 0), the time is left out.
+
+Without arguments every line under ~/Clion that has a fleet is looked at: the
+runs in progress are shown, and if there is none, the most recently finished one.
+
+Read only. The phase comes from the run's summary.txt, the counts during a run
+from the teststate ledger -- read through gcs-teststate's own functions, but
+without its `summary` command, which rewrites pending.txt on every call and
+would race with the recording runners on ts.
+
+Environment:
+  GCS_RUNSTATUS_STALL   3600   seconds without any change before a run is
+                               reported as stalled (the ctest timeout is 2700)
+"""
+
+import glob, importlib.machinery, importlib.util, os, re, sys, time
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+STALL = int(os.environ.get("GCS_RUNSTATUS_STALL", "3600"))
+
+
+def load_teststate():
+    """Import gcs-teststate as a module; its file name has no .py suffix.
+
+    Without bytecode: a __pycache__ would otherwise appear in the checkout."""
+    sys.dont_write_bytecode = True
+    path = f"{HERE}/gcs-teststate"
+    loader = importlib.machinery.SourceFileLoader("gcs_teststate", path)
+    spec = importlib.util.spec_from_loader("gcs_teststate", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+ts = load_teststate()
+
+
+def latest_run(line):
+    """Directory of the newest gcs-testrun of this line, None if there is none."""
+    runs = sorted(glob.glob(f"{ts.runners_dir(line)}/lists/runs/[0-9]*-[0-9]*"))
+    return runs[-1] if runs else None
+
+
+def phase(run):
+    """(state, detail) from summary.txt.
+
+    state is one of P0, P1, P2, P3, done, aborted. detail carries the time of the
+    last header and, on done, the real defects."""
+    text = open(f"{run}/summary.txt", errors="replace").read()
+    heads = re.findall(r"^=== (.*?)  \((\d\d:\d\d):\d\d\)$", text, re.M)
+    if not heads:
+        return "P0", {}
+    last, at = heads[-1]
+    detail = {"at": at}
+    if last.startswith("aborted"):
+        return "aborted", detail
+    if last.startswith("phase 2 skipped"):
+        return "done", dict(detail, defects=0)
+    if last.startswith("phases 2 and 3 skipped"):
+        return "done", dict(detail, defects=None)
+    if last == "result":
+        # Runs older than the total line, or read in the instant between the
+        # header and that line, give no count.
+        m = re.search(r"\|\s+(\d+) real defects", text)
+        return "done", dict(detail, defects=int(m.group(1)) if m else None)
+    m = re.match(r"phase (\d)", last)
+    return (f"P{m.group(1)}" if m else "P0"), detail
+
+
+def last_change(run, line):
+    """Newest mtime of anything the run writes to, the ledger included."""
+    files = glob.glob(f"{run}/*") + [ts.paths(line)[1]]
+    return max((os.path.getmtime(f) for f in files if os.path.exists(f)), default=0)
+
+
+def pending_in(run, phase, ledger):
+    """(handed, todo) of phase 2 or 3: the failures gcs-testrun handed to the
+    phase, and those of them without a result recorded since it started.
+
+    The start is taken from the list gcs-testrun writes right before the phase:
+    failed-parallel.log for phase 2, failed-phase2.log for phase 3. None when
+    that list is not there yet."""
+    handed = f"{run}/failed-parallel.log" if phase == "P2" else f"{run}/failed-phase2.log"
+    if not os.path.isfile(handed):
+        return None
+    start = os.path.getmtime(handed)
+    names = [l.strip() for l in open(handed) if l.strip()]
+    todo = []
+    for n in names:
+        try:
+            when = time.mktime(time.strptime(ledger[n][1], "%Y-%m-%d %H:%M:%S"))
+        except (KeyError, ValueError):
+            when = 0
+        if when < start:
+            todo.append(n)
+    return names, todo
+
+
+def ahead(names, dur, jobs):
+    """Seconds a phase not yet started needs for <names>, <jobs> at a time.
+
+    The same two bounds as gcs-teststate's eta -- the work divided by the jobs,
+    and the longest single test -- but without the running markers: none of
+    these tests has started in that phase yet."""
+    if not names:
+        return 0
+    known = sorted(dur.values())
+    fallback = known[len(known) // 2] if known else 0
+    rest = [dur.get(n, fallback) for n in names]
+    return int(max(sum(rest) / max(jobs, 1), max(rest)))
+
+
+def expected_end(run, line, state, ledger, names):
+    """HH:MM at which the run is expected to end at the latest, "" if unknown.
+
+    The current phase is estimated from what it still has to do. The phases
+    after it are added as if every failure known so far stays red until the
+    end: each goes through phase 2 and then through phase 3 on its own. Usually
+    about half of them pass in phase 2, so this tends to read long -- but it
+    follows the tests that actually failed, whose durations range from two
+    minutes to forty. A flat hour fell short in three of eight 92x runs
+    (2026-09-07..17), by up to 48 minutes; this estimate in two, by up to 18,
+    because a rerun can take longer than its planned duration.
+
+    Phase 2 runs GCS_PHASE2_JOBS at a time, never more than there are runners,
+    phase 3 one at a time -- as gcs-testrun does."""
+    dur, slots = ts.plan(line)
+    if not dur:
+        return ""
+    jobs2 = int(os.environ.get("GCS_PHASE2_JOBS", "4"))
+    jobs2 = min(jobs2, slots) if slots else jobs2
+    failing = [n for n in names if ledger.get(n, ("",))[0] == "fail"]
+
+    if state == "P1":
+        never = [n for n in names if n not in ledger]
+        rem = ts.eta(line, never, dur, slots) or 0
+        rem += ahead(failing, dur, jobs2) + ahead(failing, dur, 1)
+    elif state in ("P2", "P3"):
+        got = pending_in(run, state, ledger)
+        if got is None:
+            return ""
+        handed, todo = got
+        rem = ts.eta(line, todo, dur, jobs2 if state == "P2" else 1) or 0
+        if state == "P2":
+            # Still red: failed in phase 1 and not yet rerun, or rerun and
+            # failed again. Either way it is phase 3's.
+            red = [n for n in handed if ledger.get(n, ("",))[0] == "fail"]
+            rem += ahead(red, dur, 1)
+    else:
+        return ""
+    return time.strftime("%H:%M", time.localtime(time.time() + rem))
+
+
+def status(line):
+    """(running, text) for one line, None if the line never had a run."""
+    run = latest_run(line)
+    if not run or not os.path.isfile(f"{run}/summary.txt"):
+        return None
+    state, d = phase(run)
+    total = sum(1 for _ in open(f"{run}/units.tsv")) if os.path.isfile(f"{run}/units.tsv") else 0
+
+    if state == "done":
+        red = d["defects"]
+        if red is None and os.path.isfile(f"{run}/failed-parallel.log"):
+            # GCS_PHASE1_ONLY: the phase 1 failures, unjudged.
+            red = sum(1 for l in open(f"{run}/failed-parallel.log") if l.strip())
+        if red is None:
+            return False, f"{line} X ?/?/{total} {d['at']}"
+        return False, f"{line} X {red}/{total - red}/{total} {d['at']}"
+    if state == "aborted":
+        return False, f"{line} E {d['at']}"
+
+    _, ledger = ts.load(line)
+    names = ts.registered(line)
+    failed = sum(1 for n in names if ledger.get(n, ("",))[0] == "fail")
+    passed = sum(1 for n in names if ledger.get(n, ("",))[0] == "ok")
+    stalled = "stalled? " if time.time() - last_change(run, line) > STALL else ""
+    end = expected_end(run, line, state, ledger, names)
+    return True, f"{line} {stalled}{state} {failed}/{passed}/{len(names)} {end}".rstrip()
+
+
+def lines_with_fleet():
+    """Every line under the Clion root that has a runner fleet."""
+    out = []
+    for p in sorted(glob.glob(f"{ts.CLION_ROOT}/*")):
+        line = os.path.basename(p)
+        if re.fullmatch(r"\d+x", line) and latest_run(line):
+            out.append(line)
+    return out
+
+
+def main():
+    lines = sys.argv[1:]
+    if lines:
+        rows = [status(l) or (False, f"{l} no run") for l in lines]
+    else:
+        found = [(latest_run(l), status(l)) for l in lines_with_fleet()]
+        found = [(r, s) for r, s in found if s]
+        rows = [s for _, s in found if s[0]]
+        if not rows and found:
+            rows = [max(found)[1]]
+    print("  |  ".join(t for _, t in rows) if rows else "no test run")
+
+
+if __name__ == "__main__":
+    main()
