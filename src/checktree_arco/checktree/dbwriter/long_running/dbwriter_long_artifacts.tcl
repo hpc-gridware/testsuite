@@ -50,14 +50,19 @@ namespace eval dbwriter_long_artifacts {
    variable issue_url "https://hpc-gridware.atlassian.net/browse"
    # tables a failure exports, with their column prefix
    variable tables {
-      sge_host_values      hv
-      sge_queue_values     qv
-      sge_user_values      uv
-      sge_project_values   pv
-      sge_statistic_values sv
-      sge_job              j
-      sge_job_usage        ju
-      sge_job_online_usage jou
+      sge_host_values          hv
+      sge_queue_values         qv
+      sge_user_values          uv
+      sge_project_values       pv
+      sge_statistic_values     sv
+      sge_job                  j
+      sge_job_usage            ju
+      sge_job_online_usage     jou
+      sge_ar                   ar
+      sge_ar_attribute         ara
+      sge_ar_usage             aru
+      sge_ar_log               arl
+      sge_ar_resource_usage    arru
    }
    # newest rows exported per table
    variable export_rows 5000

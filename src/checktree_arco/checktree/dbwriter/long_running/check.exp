@@ -699,6 +699,58 @@ proc dbwriter_long_phase_c_assert_jobs {} {
 #
 # @param host the host whose queue the AR reserves and the AR job runs on
 # @return 0 if the sge_ar* tables are correctly populated, else -1
+##
+# @brief Assert the resources the advance reservation requested were stored.
+#
+# The qmaster writes the resource list of a reservation into the
+# ar_granted_resources object of its ar_attribute record
+# (JsonReportingFileWriter::create_ar_attribute_record), and the dbwriter turns
+# every entry of it into one sge_ar_resource_usage row
+# (AdvanceReservationResourceManager). So the rows have to mirror exactly what
+# workload::ar_resources asked for.
+#
+# The value is only compared for arch: it is a plain string that arrives
+# unchanged, while a memory value may be normalised on its way through the
+# qmaster and comparing it would test the formatting rather than the storing.
+#
+# @param host the host of the reserved queue
+# @return 0 if every requested resource has a row, else -1 (via ts_log_severe)
+proc dbwriter_long_phase_c_assert_ar_resources {host} {
+   set rc 0
+   foreach resource [workload::ar_resources $host] {
+      lassign $resource name value
+
+      set n [db::count sge_ar_resource_usage "arru_variable = '$name'"]
+      if {$n < 0} {
+         return -1
+      }
+      if {$n == 0} {
+         ts_log_severe "dbwriter long test: the advance reservation requested\
+                        $name=$value, but sge_ar_resource_usage has no row for\
+                        it"
+         set rc -1
+         continue
+      }
+
+      if {$name eq "arch"} {
+         set n_value [db::count sge_ar_resource_usage \
+            "arru_variable = '$name' AND arru_value = '$value'"]
+         if {$n_value < 0} {
+            return -1
+         }
+         if {$n_value == 0} {
+            ts_log_severe "dbwriter long test: sge_ar_resource_usage has $n row(s)\
+                           for $name, but none with the requested value $value"
+            set rc -1
+            continue
+         }
+      }
+      ts_log_fine "dbwriter long test: the advance reservation request\
+                   $name=$value is stored in sge_ar_resource_usage"
+   }
+   return $rc
+}
+
 proc dbwriter_long_phase_c_check_ar {host} {
    global CHECK_USER
 
@@ -726,16 +778,19 @@ proc dbwriter_long_phase_c_check_ar {host} {
    # the dbwriter imports a record some time after qmaster writes it, and the
    # parent sge_ar row appears before its sub-records - so wait for each table
    # to be populated rather than reading the counts once
-   #
-   # sge_ar_resource_usage is intentionally not checked yet: the test AR
-   # requests no resources, so that table stays empty. It is to be added once
-   # workload::create_ar submits the AR with a resource request.
    set rc 0
-   foreach table {sge_ar sge_ar_attribute sge_ar_usage sge_ar_log} {
+   foreach table {sge_ar sge_ar_attribute sge_ar_usage sge_ar_log
+                  sge_ar_resource_usage} {
       if {[db::wait_for_rows $table] != 0} {
          ts_log_severe "dbwriter long test: $table is empty after the AR run"
          set rc -1
       }
+   }
+
+   # the reservation was submitted with resource requests, so every one of them
+   # has to be stored as its own row
+   if {[dbwriter_long_phase_c_assert_ar_resources $host] != 0} {
+      set rc -1
    }
 
    db::disconnect
@@ -1902,6 +1957,60 @@ proc dbwriter_long_phase_f_assert_jobs_finished_consistency {} {
 # @param ref_epoch   Phase F reference epoch (entry_epoch); used to derive the
 #                    k-th midnight via dbwriter_long_phase_f_midnight_n
 # @return 0 if every expectation holds, else -1
+##
+# @brief Report a long-running job that ended before a midnight.
+#
+# A long-running job is meant to outlive every midnight the assertions look at.
+# If it does not - the execd it ran on went away, something killed it, the host
+# rebooted - the qmaster writes no intermediate accounting record for it, and
+# the row count assertion below would report missing data although the dbwriter
+# behaved correctly. Checking this first turns an environment problem into a
+# message that says so.
+#
+# The final accounting record of a job is the one with an exit status other than
+# -1, so its presence with an end time before the midnight is the evidence. No
+# cluster query is needed - the record is in the database the test is reading
+# anyway.
+#
+# @param jid       the job number
+# @param kind      the job kind (for the message)
+# @param midnights the midnights the assertion covers, as clock seconds
+# @return 1 if the job ended before the last of those midnights, else 0
+proc dbwriter_long_phase_f_job_died_early {jid kind midnights} {
+   set last_midnight [lindex $midnights end]
+
+   set sql "SELECT [db::ts_str ju_end_time], ju_exit_status, ju_failed\
+            FROM sge_job, sge_job_usage\
+            WHERE j_id = ju_parent AND j_job_number = $jid\
+            AND ju_exit_status <> -1\
+            ORDER BY ju_end_time"
+   array set r {}
+   set cols {}
+   set n [db::query $sql r cols]
+   if {$n <= 0} {
+      array unset r
+      return 0
+   }
+
+   set died 0
+   for {set i 0} {$i < $n} {incr i} {
+      set end_epoch [dbwriter_long_phase_f_parse_ts $r($i,0)]
+      if {$end_epoch > 0 && $end_epoch < $last_midnight} {
+         ts_log_severe "dbwriter long test: $kind (jid $jid) ended at $r($i,0)\
+                        (exit status $r($i,1), failed $r($i,2)), before the\
+                        midnight at\
+                        [clock format $last_midnight -format {%Y-%m-%d %H:%M:%S}].\
+                        A job that is not running gets no intermediate\
+                        accounting record, so the assertions below can not\
+                        hold - look at why the job ended, not at the dbwriter."
+         set died 1
+         break
+      }
+   }
+   array unset r
+   return $died
+}
+
 proc dbwriter_long_phase_f_assert_intermediate_for_job {jd n_midnights ref_epoch} {
    set jid     [dict get $jd jid]
    set kind    [dict get $jd kind]
@@ -1922,6 +2031,12 @@ proc dbwriter_long_phase_f_assert_intermediate_for_job {jd n_midnights ref_epoch
    # qmaster writes intermediates within INTERMEDIATE_ACCT_WINDOW = 10 min of
    # the boundary; give it a generous extra to absorb ingest lag
    set midnight_tol 900
+
+   # a job that did not survive the midnights makes the assertions below
+   # meaningless - report that instead of missing rows
+   if {[dbwriter_long_phase_f_job_died_early $jid $kind $midnights]} {
+      return -1
+   }
 
    # the three timestamps are rendered by the database, not by the JDBC driver,
    # so every engine returns the format dbwriter_long_phase_f_parse_ts expects.
@@ -2351,10 +2466,16 @@ proc dbwriter_long_running_phase_f {} {
    # plus the pminiworm chains as background load. entry_epoch is shared with
    # wait_for_midnight so both compute the same midnight-2 boundary.
    if {[workload::submit_long_running $entry_epoch] != 0} {
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_f -1]
+   }
+   # the jobs have to run before the background load competes for the slots -
+   # a job left pending writes no intermediate accounting record at midnight,
+   # and the assertions below would report that as missing data
+   if {[workload::wait_for_long_running_start] != 0} {
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_f -1]
    }
    if {[workload::start_background_load] != 0} {
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_f -1]
    }
 
    set rc 0
@@ -2782,7 +2903,7 @@ proc dbwriter_long_phase_h_tables {} {
    return {
       sge_host_values sge_queue_values sge_user_values sge_project_values
       sge_job sge_job_request sge_job_usage sge_job_log sge_job_online_usage
-      sge_ar sge_ar_attribute sge_ar_usage sge_ar_log
+      sge_ar sge_ar_attribute sge_ar_usage sge_ar_log sge_ar_resource_usage
    }
 }
 

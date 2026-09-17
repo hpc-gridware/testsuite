@@ -523,6 +523,37 @@ proc workload::run_first_hour {host} {
 }
 
 ##
+# @brief The resources the advance reservation requests (CS-2246).
+#
+# The reservation carries a resource request so the qmaster writes it in the
+# ar_attribute record and the dbwriter stores one sge_ar_resource_usage row per
+# request.
+#
+# arch is used because a reservation can only request what the scheduler is able
+# to guarantee for a future time window: a static host value or a consumable.
+# The obvious looking alternatives do not work:
+#
+#   - mem_free and the other load values change all the time and can not be
+#     reserved - qrsub answers with "no suitable queues" (rc -60),
+#   - num_proc has relop "==", so a request of 1 matches only a single
+#     processor host,
+#   - hostname would be static, but it narrows the reservation to one host and
+#     the reservation may then no longer fit next to the running workload.
+#
+# arch is static, and requesting the arch of the reserved queue's host excludes
+# no host of a homogeneous cluster.
+#
+# Used by create_ar to build the request and by the Phase C assertion to know
+# what has to turn up in the database. The list may hold more than one entry -
+# both sides iterate over it.
+#
+# @param host the host of the reserved queue
+# @return a list of {name value} pairs
+proc workload::ar_resources {host} {
+   return [list [list arch [resolve_arch $host]]]
+}
+
+##
 # @brief Create an advance reservation spanning at least two hours.
 #
 # @param host the host qrsub runs on
@@ -531,15 +562,22 @@ proc workload::run_first_hour {host} {
 proc workload::create_ar {host} {
    variable config
 
+   set requests ""
+   foreach resource [workload::ar_resources $host] {
+      lassign $resource name value
+      append requests " -l $name=$value"
+   }
+
    # qrsub runs on the default submit host (master); $host is the reserved
    # queue's host, not where qrsub is invoked
-   set ar_id [submit_ar "-d $config(ar_duration) -q $config(queue_name)" "" "" 0]
+   set ar_id [submit_ar \
+      "-d $config(ar_duration) -q $config(queue_name)$requests" "" "" 0]
    if {$ar_id <= 0} {
       ts_log_severe "workload: can not create advance reservation (rc=$ar_id)"
       return -1
    }
    ts_log_fine "workload: created advance reservation $ar_id\
-                (duration $config(ar_duration)s)"
+                (duration $config(ar_duration)s, requests$requests)"
    return $ar_id
 }
 
@@ -733,6 +771,43 @@ proc workload::submit_long_running {ref_epoch} {
                    $tasks, pe_slots $pe_slots, summary $summary)"
    }
    return 0
+}
+
+##
+# @brief Wait until every long-running job has started.
+#
+# submit_long_running only submits - the scheduler may leave a job pending, for
+# instance when the background load holds the slots it needs. A job that is not
+# running produces no intermediate accounting record at midnight, so Phase F
+# would report missing records and the run would look like a dbwriter defect
+# while the job had simply never started. Waiting here turns that into a clear
+# statement about the cluster.
+#
+# An array or parallel job is started when its first task runs; the remaining
+# tasks follow as slots free up, which wait_for_end_of_all_jobs covers later.
+#
+# @param timeout seconds to wait per job
+# @return 0 once every job has started, else -1 (reported via ts_log_severe)
+proc workload::wait_for_long_running_start {{timeout 300}} {
+   variable long_running_jobs
+
+   set rc 0
+   foreach kind [workload::get_long_running_kinds] {
+      set jd $long_running_jobs($kind)
+      set jid [dict get $jd jid]
+      # the job name is passed as "" on purpose: qstat -f truncates names to
+      # 10 characters, so a comparison against the full name never matches
+      if {[wait_for_jobstart $jid "" $timeout 0] != 0} {
+         ts_log_severe "workload: long-running job $kind (jid $jid) did not\
+                        start within ${timeout}s - the cluster could not run\
+                        the workload, so no intermediate accounting record can\
+                        be written for it at midnight"
+         set rc -1
+         continue
+      }
+      ts_log_fine "workload: long-running $kind (jid $jid) is running"
+   }
+   return $rc
 }
 
 ##
