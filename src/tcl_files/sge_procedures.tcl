@@ -9948,29 +9948,24 @@ proc wait_for_job_end {job_id {timeout 60} {raise_error 1}} {
    return $result
 }
 
-#****** sge_procedures/sge_client_messages() ***********************************
-#  NAME
-#     sge_client_messages() -- returns the set of expected generic messages
+## @brief Returns the set of expected generic messages of a client action.
 #
-#  SYNOPSIS
-#     sge_client_messages {msg_var action obj_type obj_name {on_host ""}
-#     {as_user ""}}
+# Fills the message container with the generic messages the client can return
+# for the given action on the given object.
 #
-#  FUNCTION
-#     Returns the set of expected generic messages related to action on the given
-#     sge object which the client can return.
+# The host in these messages is the one the qmaster reports, i.e. the resolved
+# long name. A short name like "host-0000" never matches
+# "user@host-0000.domain modified ...", so an explicitly given host is resolved
+# first; without one any host matches.
 #
-#  INPUTS
-#     msg_var       - array of messages (the pair of message code and message value)
-#     action        - action examples: add, modify, delete,...
-#     obj_type      - sge object examples: project, host, user, calendar,...
-#     obj_name      - sge object name
-#     {on_host ""}  - execute on this host, default is master host
-#     {as_user ""}  - execute qconf as this user, default is $CHECK_USER
-#
-#  SEE ALSO
-#     sge_procedures/add_message_to_container
-#*******************************************************************************
+# @param msg_var  name of the message container array (message code -> message)
+# @param action   the action, e.g. add, mod, del, get
+# @param obj_type the object type as the client names it, e.g. project, host group
+# @param obj_name the object name
+# @param on_host  the host the client runs on, "" matches any host
+# @param as_user  the user the client runs as, "" matches any user
+# @return nothing, the messages are returned in msg_var
+# @see add_message_to_container
 proc sge_client_messages {msg_var action obj_type obj_name {on_host ""} {as_user ""}} {
    get_current_cluster_config_array ts_config
    upvar $msg_var messages
@@ -9978,6 +9973,8 @@ proc sge_client_messages {msg_var action obj_type obj_name {on_host ""} {as_user
    # set up the values of host and user for macro messages, if not set
    if {$on_host == ""} {
       set on_host "*"
+   } else {
+      set on_host [resolve_host $on_host 1]
    }
 
    if {$as_user == ""} {

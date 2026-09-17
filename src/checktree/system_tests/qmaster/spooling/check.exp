@@ -114,6 +114,13 @@ proc qmaster_spooling_setup {} {
    }
 }
 
+## @brief Restores the reserved host groups and removes the objects of this check.
+#
+# Puts "@admin_hosts" and "@submit_hosts" back from the backup taken in the
+# setup, then deletes the resource quota sets, jobs and advance reservations
+# the check functions left behind.
+#
+# @return nothing
 proc qmaster_spooling_cleanup {} {
    global ts_config
    global qmaster_spooling_dateformat
@@ -129,11 +136,16 @@ proc qmaster_spooling_cleanup {} {
    #
    # See the setup for why there is nothing to put back before 9.2: the array
    # stays empty there.
+   #
+   # The repair has to be sent from the master host: after the restart
+   # "@admin_hosts" holds the master host alone, so any other host - typically
+   # the testsuite host when the cluster has its own qmaster host - is refused
+   # with 'denied: host "..." is no admin host'.
    if {[info exists qmaster_spooling_hgroup_backup]} {
       foreach qmaster_spooling_hgroup [array names qmaster_spooling_hgroup_backup] {
          unset -nocomplain qmaster_spooling_hg
          set qmaster_spooling_hg(hostlist) $qmaster_spooling_hgroup_backup($qmaster_spooling_hgroup)
-         mod_hostgroup $qmaster_spooling_hgroup qmaster_spooling_hg
+         mod_hostgroup $qmaster_spooling_hgroup qmaster_spooling_hg 1 $ts_config(master_host)
       }
    }
 
