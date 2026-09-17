@@ -189,7 +189,7 @@ proc usage_setup {} {
 
    # set memory limits
    set queue_conf(h_vmem) "700M"
-   add_queue "usage.q" "@allhosts" queue_conf
+   add_queue "usage.q" [get_all_hosts_hostgroup] queue_conf
 }
 
 proc usage_cleanup {} {

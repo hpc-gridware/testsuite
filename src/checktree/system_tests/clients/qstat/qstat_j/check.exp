@@ -53,7 +53,7 @@ lappend check_functions "qstat_j_pending_tasks_array_dependency"
 
 proc qstat_j_pending_tasks_setup {} {
    get_current_cluster_config_array ts_config
-   global qstat_j_pending_tasks_queue
+   global qstat_j_pending_tasks_queue qstat_j_pending_tasks_host
 
    # the single-slot queue used by every test function in this file
    set qstat_j_pending_tasks_queue "pending_tasks.q"
@@ -61,7 +61,15 @@ proc qstat_j_pending_tasks_setup {} {
    # one-slot queue so that array jobs always have pending tasks while one
    # task is running. Pin it to a single execd to avoid surprises from
    # multi-host scheduling.
+   # Remember it. The queue exists on THIS host and nowhere else, so every
+   # assertion about its queue instance has to ask for this host -- not for
+   # whichever host happens to lead ts_config(execd_nodes). The two used to be
+   # the same, because host selection returned the first entry of that sorted
+   # list, and this file quietly relied on it. It stopped being true when host
+   # selection started rotating per cluster, and would equally stop being true
+   # under --random_host_select, which the testsuite has always supported.
    set host [host_conf_get_suited_hosts]
+   set qstat_j_pending_tasks_host $host
    set queue_conf(slots)            1
    set queue_conf(rerun)            "TRUE"
    set queue_conf(shell_start_mode) "unix_behavior"
@@ -70,12 +78,13 @@ proc qstat_j_pending_tasks_setup {} {
 
 proc qstat_j_pending_tasks_cleanup {} {
    get_current_cluster_config_array ts_config
-   global qstat_j_pending_tasks_queue
+   global qstat_j_pending_tasks_queue qstat_j_pending_tasks_host
 
    delete_all_jobs
    wait_for_end_of_all_jobs
 
    del_queue $qstat_j_pending_tasks_queue "" 0 1
+   unset -nocomplain qstat_j_pending_tasks_host
 }
 
 # -------- helper procedures -------------------------------------------------
@@ -160,10 +169,10 @@ proc qstat_j_pending_tasks_error {} {
 #   - re-run a task and suspend it; suspended tasks must not be counted
 proc qstat_j_pending_tasks_array {} {
    get_current_cluster_config_array ts_config
-   global qstat_j_pending_tasks_queue
+   global qstat_j_pending_tasks_queue qstat_j_pending_tasks_host
 
    set array_size 5
-   set queue_instance [get_queue_instance $qstat_j_pending_tasks_queue [lindex $ts_config(execd_nodes) 0]]
+   set queue_instance [get_queue_instance $qstat_j_pending_tasks_queue $qstat_j_pending_tasks_host]
 
    set job_id [submit_job "-q $qstat_j_pending_tasks_queue -t 1-$array_size -b y sleep 600"]
    if {$job_id <= 0} {

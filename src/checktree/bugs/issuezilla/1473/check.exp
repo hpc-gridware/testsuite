@@ -73,7 +73,7 @@ proc issue_1473_setup {} {
    for {set i 0} {$i < $num_queues} {incr i} {
       lappend queue_names "iz_1473_$i"
    }
-   set queue_conf(hostlist) "@allhosts"
+   set queue_conf(hostlist) [get_all_hosts_hostgroup]
    cluster_bulk_add_objects "-Aq" $queue_names qname set_queue_defaults queue_conf \
                             {issue_1473_add_queue}
 
@@ -211,5 +211,5 @@ proc issue_1473_del {} {
 # @param queue_name name of the queue
 proc issue_1473_add_queue {queue_name} {
    set queue_conf(slots) 1
-   add_queue $queue_name "@allhosts" queue_conf 1
+   add_queue $queue_name [get_all_hosts_hostgroup] queue_conf 1
 }

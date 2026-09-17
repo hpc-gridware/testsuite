@@ -40,6 +40,13 @@
 global simhost_cache
 set simhost_cache(free_hosts) {}
 set simhost_cache(used_hosts) {}
+
+# How many hosts go into one "qconf -de" call. At the delete rate measured on this
+# cluster (12.6 hosts/s) a chunk of this size takes about 20 s, far inside any
+# deadline, and it is the same order of magnitude the tests add in one go.
+global simhost_delete_chunk_size
+set simhost_delete_chunk_size 250
+
 proc simhost_init {} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
@@ -97,8 +104,26 @@ proc simhost_init {} {
    return 1
 }
 
-###
-# @brief add simulated hosts
+## @brief timeout for a qconf request covering many simulated hosts
+#
+# start_sge_bin() defaults to 60 seconds, and start_remote_prog() turns that into a
+# wall clock deadline for the whole call - not an idle timeout, so a command that is
+# still producing output is killed just the same. Simulated clusters are built and
+# torn down in thousands of hosts and the qmaster needs time per host: measured here,
+# "qconf -de" got through 758 hosts in 60 seconds, i.e. 12.6 per second.
+#
+# The rate assumed below is 5 hosts per second, a factor of 2.5 below that, so a
+# cluster that is busy with other tests does not run into the deadline again.
+# host_conf_scale_timeout() multiplies the factor of a slow host on top of this.
+#
+# @param num_hosts number of hosts the request covers
+# @param base seconds for connection, shell and settings file, independent of the host count
+# @return the timeout in seconds
+proc simhost_timeout {num_hosts {base 60}} {
+   return [expr {$base + ($num_hosts + 4) / 5}]
+}
+
+## @brief add simulated hosts
 #
 # A given number of simulated hosts are added as execution hosts.
 # Optionally the hosts can be added into a new host group.
@@ -116,11 +141,11 @@ proc simhost_init {} {
 # simhost_delete() to run, which does not happen if the test dies in between.
 # If a host group got created this also has to be deleted by the caller!
 #
-# @param[in] num_hosts
-# @param[in] host_group, if != "" the host group will be created and holds the newly created simulated hosts
-# @param[in] attribute_array, optional, a list of attributes to be set for the new hosts
-# @returns a list of hostnames or "" in case of error
-##
+# @param num_hosts number of simulated hosts to add
+# @param host_group if != "" the host group is created and holds the newly created simulated hosts
+# @param attribute_array name of an array of attributes to be set for the new hosts, "" for none
+# @param load_report_host host the simulated hosts report their load through, "" spreads them over the real execd nodes
+# @return a list of host names, or {} in case of error
 proc simhost_add {num_hosts {host_group ""} {attribute_array ""} {load_report_host ""}} {
    get_current_cluster_config_array ts_config
    global simhost_cache
@@ -272,7 +297,11 @@ proc simhost_add {num_hosts {host_group ""} {attribute_array ""} {load_report_ho
 
    # one request for all of them
    if {$use_bulk && [llength $added_hosts] > 0} {
-      set result [start_sge_bin "qconf" "-Ae $bulk_dir" $add_host]
+      # The timeout has to follow the host count: this is one request, but the
+      # qmaster still does the work per object behind it, and the 60 s default of
+      # start_sge_bin() is a deadline for the whole call.
+      set result [start_sge_bin "qconf" "-Ae $bulk_dir" $add_host "" prg_exit_state \
+                                [simhost_timeout [llength $added_hosts]]]
 
       # the summary line reads "<dir>: N object(s) added/modified, M failed";
       # anything but M == 0 means part of the cluster is missing and every
@@ -304,53 +333,88 @@ proc simhost_add {num_hosts {host_group ""} {attribute_array ""} {load_report_ho
    return $added_hosts
 }
 
-###
-# @brief delete simulated hosts
+## @brief delete simulated hosts
 #
-# Deletes the simulated execution hosts and returns them into the pool of all available simhosts.
+# Deletes the simulated execution hosts and returns them into the pool of all
+# available simhosts. Once the last one is gone the two side effects simhost_add()
+# established - the load_report_host complex and SIMULATE_EXECDS - are rolled back.
 #
-# @param[in] a list of hosts to delete
-##
+# @param hosts a list of hosts to delete
+# @return nothing
 proc simhost_delete {hosts} {
    get_current_cluster_config_array ts_config
-   global simhost_cache
+   global simhost_cache simhost_delete_chunk_size
 
-   set cmd "qconf"
-   set args "-de "
-   append args [join $hosts ","]
-   set output [start_sge_bin $cmd $args]
-   if {$prg_exit_state != 0} {
-      ts_log_severe "deleting hosts (qconf -de) failed $prg_exit_state:\n$output"
-   } else {
-      set simhost_cache(free_hosts) [lsort -dictionary -unique [concat $simhost_cache(free_hosts) $hosts]]
-      foreach host $hosts {
+   set num_hosts [llength $hosts]
+   if {$num_hosts == 0} {
+      ts_log_fine "no simulated hosts to delete"
+      return
+   }
+
+   # One qconf call per chunk instead of one call for all of them.
+   #
+   # "qconf -de <list>" only looks like a bulk request: del_host_of_type() in the
+   # client sends one GDI request per name, so the run time grows with the number of
+   # hosts while the deadline in start_remote_prog() does not. A cleanup of 1000 hosts
+   # was cut off after 758 of them and left the rest, the complex and SIMULATE_EXECDS
+   # behind. Chunking bounds what a single call has to get done, and a chunk that does
+   # fail costs only its own hosts.
+   set failed_chunks 0
+   set num_chunks [expr {($num_hosts + $simhost_delete_chunk_size - 1) / $simhost_delete_chunk_size}]
+   for {set first 0} {$first < $num_hosts} {incr first $simhost_delete_chunk_size} {
+      set chunk [lrange $hosts $first [expr {$first + $simhost_delete_chunk_size - 1}]]
+
+      set args "-de "
+      append args [join $chunk ","]
+      set output [start_sge_bin "qconf" $args "" "" prg_exit_state \
+                                [simhost_timeout [llength $chunk]]]
+      if {$prg_exit_state != 0} {
+         # Carry on with the remaining chunks. Whatever is not deleted here stays in
+         # the cluster and turns every following test into a mystery, so leaving 750
+         # hosts behind because the first chunk failed is the worse outcome.
+         ts_log_severe "deleting hosts (qconf -de) failed $prg_exit_state:\n$output"
+         incr failed_chunks
+         continue
+      }
+
+      # Book the hosts back per chunk, not once at the end, so the cache still
+      # describes the cluster if a later chunk fails.
+      set simhost_cache(free_hosts) [lsort -dictionary -unique [concat $simhost_cache(free_hosts) $chunk]]
+      foreach host $chunk {
          set pos [lsearch -exact $simhost_cache(used_hosts) $host]
          if {$pos >= 0} {
             set simhost_cache(used_hosts) [lreplace $simhost_cache(used_hosts) $pos $pos]
          }
       }
+   }
 
-      # The last simulated host is gone - take the complex variable back out if
-      # simhost_add() had to create it. This has to happen after the hosts have
-      # been deleted, they referenced it in their complex_values.
-      if {[llength $simhost_cache(used_hosts)] == 0 &&
-          [info exists simhost_cache(created_load_report_host)]} {
-         ts_log_fine "removing complex variable load_report_host again"
-         set cplx(load_report_host) ""
-         set_complex cplx
-         unset simhost_cache(created_load_report_host)
-      }
+   if {$failed_chunks > 0} {
+      ts_log_fine "$failed_chunks of $num_chunks delete requests failed -\
+                   [llength $simhost_cache(used_hosts)] simulated host(s) still in the cluster"
+   }
 
-      # Same for SIMULATE_EXECDS: with the last simulated host gone there is nothing
-      # left to simulate, and a leftover flag would silently turn the execds of every
-      # following test into simulated ones.
-      if {[llength $simhost_cache(used_hosts)] == 0 &&
-          [info exists simhost_cache(enabled_simulate_execds)]} {
-         ts_log_fine "disabling SIMULATE_EXECDS again"
-         get_config global_config
-         set gc(qmaster_params) [remove_param $global_config(qmaster_params) "SIMULATE_EXECDS"]
-         set_config gc
-         unset simhost_cache(enabled_simulate_execds)
-      }
+   # The last simulated host is gone - take the complex variable back out if
+   # simhost_add() had to create it. This has to happen after the hosts have
+   # been deleted, they referenced it in their complex_values.
+   # A failed chunk leaves hosts in used_hosts and thus skips both rollbacks, which
+   # is what we want: they still reference the complex.
+   if {[llength $simhost_cache(used_hosts)] == 0 &&
+       [info exists simhost_cache(created_load_report_host)]} {
+      ts_log_fine "removing complex variable load_report_host again"
+      set cplx(load_report_host) ""
+      set_complex cplx
+      unset simhost_cache(created_load_report_host)
+   }
+
+   # Same for SIMULATE_EXECDS: with the last simulated host gone there is nothing
+   # left to simulate, and a leftover flag would silently turn the execds of every
+   # following test into simulated ones.
+   if {[llength $simhost_cache(used_hosts)] == 0 &&
+       [info exists simhost_cache(enabled_simulate_execds)]} {
+      ts_log_fine "disabling SIMULATE_EXECDS again"
+      get_config global_config
+      set gc(qmaster_params) [remove_param $global_config(qmaster_params) "SIMULATE_EXECDS"]
+      set_config gc
+      unset simhost_cache(enabled_simulate_execds)
    }
 }

@@ -63,13 +63,13 @@ proc dbwriter_custom_usage_strings_setup {} {
    add_or_replace_array_param new_conf new_conf reporting_params "flush_time" "00:00:01" $delimiter
    set_config new_conf
 
-   # create a dedicated test queue on @allhosts with the mixed-usage epilog
+   # create a dedicated test queue on all execution hosts with the mixed-usage epilog
    # attached. Ships the epilog next to check.exp (referenced via
    # CHECK_ACTUAL_TEST_PATH) so every cluster host sees the same committed
    # bytes -- avoids the NFS-write-visibility race a runtime TCL open/puts
    # /close would hit.
    set queue_conf(epilog) "$CHECK_ACTUAL_TEST_PATH/cs849_custom_usage_strings_epilog.sh"
-   add_queue "test.q" "@allhosts" queue_conf
+   add_queue "test.q" [get_all_hosts_hostgroup] queue_conf
 
    # start dbwriter if it isn't already running
    if {[get_dbwriter_status 0] != 0} {
@@ -91,7 +91,7 @@ proc dbwriter_custom_usage_strings_cleanup {} {
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   del_queue "test.q" "@allhosts" 0 1
+   del_queue "test.q" [get_all_hosts_hostgroup] 0 1
    reset_config dbwriter_custom_usage_strings_backup
 
    unset -nocomplain dbwriter_custom_usage_strings_backup

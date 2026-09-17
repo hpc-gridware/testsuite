@@ -369,9 +369,17 @@ proc installer_load_config {{backup_dir ""} {on_error "cont_if_exist"}} {
 
    # start the backup
    set result [start_remote_prog $hostname $admin_user $backup_script $arguments prg_exit_state 60 0 $working_dir env_array]
-   if {$prg_exit_state != 0} {
+   set exit_state $prg_exit_state
+   if {$exit_state != 0} {
       ts_log_severe "Load config script failed, see log file $log_file for details:\n$result"
    }
+
+   # the loaded configuration may differ from the installed one in what
+   # ge_has_feature derives from the cluster, e.g. a backup of an older version
+   # brings @allhosts along ("allhosts-hostgroup", CS-2749)
+   clear_feature_cache
+
+   return $exit_state
 }
 
 ## @brief create a new backup and compares it with the original one
@@ -1726,23 +1734,44 @@ proc installer_check_classic_spool_permissions {} {
 
 ## @brief  test cluster after upgrade
 #
+# @param jobseqnum_before  the spooled job sequence number taken BEFORE the
+#                          upgrade, or 0 when the caller did not record one
 # @return     0 on success, 1 on failure
 #
-proc installer_test_cluster_after_upgrade {} {
+proc installer_test_cluster_after_upgrade {{jobseqnum_before 0}} {
    get_current_cluster_config_array ts_config
 
    ts_log_fine "testing cluster after upgrade ..."
 
-   # submit a job and check if jobid is divisible by 2000 for the first job after upgrade
+   # What the upgrade has to preserve is the job counter: the first job of the
+   # new cluster must not reuse a number the old one already handed out.
+   #
+   # CS-2766: this used to demand "divisible by 2000", and nothing in the
+   # product promises that. sge_store_job_number() spools the counter on a
+   # 15 second timer rather than per submit -- so a submit never waits for a
+   # disk write -- and sge_init_job_number() restores
+   # MAX(spooled value, guess_highest_job_number()). How far the counter has
+   # moved past the last tick is a function of machine speed and load, nothing
+   # else. Under eight clusters in parallel it drifted off the boundary and the
+   # check reported a defect where there was none; rerunning it alone put it
+   # back on a multiple often enough to look like a load artifact.
    set job_args "-b y sleep 120"
    set jid [submit_job $job_args]
    delete_all_jobs
    wait_for_end_of_all_jobs
 
-   if {$jid == 1 || ($jid % 2000) != 0} {
-      ts_log_severe "Job submission after upgrade failed, expected jid that is divisible by 2000, got $jid"
+   # 1 means the counter was lost entirely and numbering restarted
+   if {$jid == 1} {
+      ts_log_severe "Job submission after upgrade failed, the job counter restarted at 1"
       return 1
    }
+   if {$jobseqnum_before > 0 && $jid < $jobseqnum_before} {
+      ts_log_severe "Job submission after upgrade failed, jid $jid is below the job sequence number\
+                     $jobseqnum_before the cluster had before the upgrade - the upgrade would hand\
+                     out numbers a second time"
+      return 1
+   }
+   ts_log_fine "first job after upgrade got id $jid (sequence number before the upgrade: $jobseqnum_before)"
 
    # CS-2352: verify the reused classic spool tree was re-hardened by the upgrade.
    # 9.2 only -- the hardening was deliberately not backported to 9.1, so a 9.1

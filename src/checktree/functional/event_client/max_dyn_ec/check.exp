@@ -80,7 +80,7 @@ proc max_dyn_ec_setup_level {} {
       set max_dyn_ec_jobs_per_host 40
       # Create a test queue allowing to start up to 20 sleeper jobs per host.
       set q(slots) 20
-      add_queue "test.q" "@allhosts" q
+      add_queue "test.q" [get_all_hosts_hostgroup] q
       disable_queue "all.q"
    } else {
       set num_simulated_hosts 100

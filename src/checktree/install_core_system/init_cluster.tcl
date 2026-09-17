@@ -310,7 +310,7 @@ proc cleanup_system {} {
    # add new testsuite queues
    ts_log_newline
   ts_log_fine "adding testsuite queues ..."
-  add_queue "all.q" "@allhosts" q_param 1
+  add_queue "all.q" [get_all_hosts_hostgroup] q_param 1
 
 
   # execute the clean hooks of all checktrees

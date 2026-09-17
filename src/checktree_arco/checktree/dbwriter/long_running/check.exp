@@ -27,9 +27,8 @@
 # deletion rules and a mixed multi-user workload, and verifies the resulting
 # ARCO database content.
 #
-# This file currently contains the shared scaffolding (CS-2233), the
-# first-hour workload and the Phase C / D / E / F / G assertions; the restart
-# phase is added by the follow-up sub-task CS-2239.
+# This file contains the shared scaffolding (CS-2233), the first-hour workload
+# and the Phase C / D / E / F / G / H assertions.
 #
 # @see dbwriter_long_lib.tcl
 
@@ -68,8 +67,8 @@ set check_cleanup_function "dbwriter_long_running_cleanup"
 # CS-2233 ships the scaffolding self-test (run level 0); CS-2241 adds the
 # Phase C check, CS-2235 adds the Phase D raw-data check, CS-2236 adds the
 # Phase E hourly derived check, CS-2237 adds the Phase F daily derived check,
-# CS-2238 adds the Phase G deletion-rule check (all at run level 400); CS-2239
-# appends the restart phase function here.
+# CS-2238 adds the Phase G deletion-rule check and CS-2239 the Phase H restart
+# check (all at run level 400).
 set check_functions {}
 lappend check_functions "dbwriter_long_running_scaffolding"
 lappend check_functions "dbwriter_long_running_phase_c"
@@ -77,12 +76,14 @@ lappend check_functions "dbwriter_long_running_phase_d"
 lappend check_functions "dbwriter_long_running_phase_e"
 lappend check_functions "dbwriter_long_running_phase_f"
 lappend check_functions "dbwriter_long_running_phase_g"
+lappend check_functions "dbwriter_long_running_phase_h"
 
 # source the shared scaffolding library (dbwriter_xml / db / dbwriter_long)
 # and the job-load generator (workload)
 global CHECK_ACTUAL_TEST_PATH
 ts_source "$CHECK_ACTUAL_TEST_PATH/dbwriter_long_lib"
 ts_source "$CHECK_ACTUAL_TEST_PATH/dbwriter_long_workload"
+ts_source "$CHECK_ACTUAL_TEST_PATH/dbwriter_long_artifacts"
 
 # -------- setup / cleanup ------------------------------------------------------
 
@@ -178,6 +179,24 @@ proc dbwriter_long_running_setup {} {
       return -1
    }
 
+   # collect the artifacts of this run below CHECK_PROTOCOL_DIR
+   if {[dbwriter_long_artifacts::init] != 0} {
+      return -1
+   }
+
+   # start from an empty accounting file so a captured one holds only the
+   # records of this run. The qmaster opens the file with fopen("a") for every
+   # flush and recreates it when it is gone (ocs_ReportingFileWriter.cc), so
+   # deleting it underneath a running qmaster is safe.
+   set acct_file "$ts_config(product_root)/$ts_config(cell)/common/accounting"
+   if {[catch {
+      file delete -force $acct_file
+      close [open $acct_file w]
+   } msg]} {
+      ts_log_info "dbwriter long test: can not empty $acct_file: $msg - a\
+                   captured accounting file will hold older records as well"
+   }
+
    # shorten the two deletion rules Phase G asserts on. This happens before the
    # dbwriter is started so it reads the shortened rules right away and the
    # retention window starts running with the first workload record.
@@ -265,8 +284,12 @@ proc dbwriter_long_running_cleanup {} {
       array unset dbwriter_long_exechost_backup
    }
 
+   # the summary page over the whole run - written before the database is
+   # emptied so a failure's exports are already next to it
+   dbwriter_long_artifacts::write_index
+
    # leave the database empty
-   arco_clean_database
+   #arco_clean_database
 
    # drop every global variable this test introduces so a follow-up test in
    # the same testsuite run starts from a clean slate
@@ -299,8 +322,13 @@ proc dbwriter_long_running_cleanup {} {
 # that path.
 #
 # @param total_seconds total wait time in seconds
+# @param expected      optional list of string-match patterns for log lines a
+#                      caller knows are coming. A matching SEVERE / WARNING
+#                      line is logged and dropped instead of being reported as
+#                      a problem - Phase H uses it for the warnings a dbwriter
+#                      restart produces on purpose.
 # @return 0
-proc dbwriter_long_wait_and_check {total_seconds} {
+proc dbwriter_long_wait_and_check {total_seconds {expected {}}} {
    global file_procedure_logfile_wait_sp_id
 
    if {![info exists file_procedure_logfile_wait_sp_id]
@@ -352,7 +380,12 @@ proc dbwriter_long_wait_and_check {total_seconds} {
             }
             if {[string first "|E|" $line] >= 0
                 || [string first "|W|" $line] >= 0} {
-               lappend problems $line
+               if {[dbwriter_long_log_line_expected $line $expected]} {
+                  ts_log_fine "dbwriter long test: expected dbwriter.log line:\
+                               $line"
+               } else {
+                  lappend problems $line
+               }
             }
          }
          set now [clock seconds]
@@ -368,6 +401,21 @@ proc dbwriter_long_wait_and_check {total_seconds} {
    log_user 1
 
    dbwriter_long_flush_log_problems problems
+   return 0
+}
+
+##
+# @brief Does a dbwriter.log line match one of the caller's expected patterns?
+#
+# @param line     the log line
+# @param patterns list of string-match patterns ("" matches nothing)
+# @return 1 if the line was expected, else 0
+proc dbwriter_long_log_line_expected {line patterns} {
+   foreach pattern $patterns {
+      if {[string match $pattern $line]} {
+         return 1
+      }
+   }
    return 0
 }
 
@@ -415,7 +463,7 @@ proc dbwriter_long_running_scaffolding {} {
    # ---- dbwriter_xml: the active calculation file parses --------------------
    set doc [dbwriter_xml::read]
    if {$doc eq ""} {
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_scaffolding -1]
    }
    set root [$doc documentElement]
    set n_derive [llength [$root selectNodes {//derive}]]
@@ -423,34 +471,34 @@ proc dbwriter_long_running_scaffolding {} {
    $doc delete
    if {$n_derive == 0 || $n_delete == 0} {
       ts_log_severe "dbwriter.xml has $n_derive derive and $n_delete delete rules, expected both > 0"
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_scaffolding -1]
    }
    ts_log_fine "dbwriter.xml parsed: $n_derive derive rules, $n_delete delete rules"
 
    # ---- dbwriter_xml: short-retention rules can be written and read back ----
    if {[dbwriter_long::register_short_retention_rules] != 0} {
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_scaffolding -1]
    }
    # the first two rules are the ones the test shortens, the last two are left
    # at their shipped retention - Phase G relies on the untouched host_values
    # catch-all to tell a sub_scope-targeted deletion from a scope-wide one
    foreach {scope sub_scopes expected} {
       host_values      {np_load_avg cpu mem_free virtual_free}   {day 1}
-      online_usage     {}                                        {day 2}
+      online_usage     {}                                        {day 1}
       host_values      {}                                        {year 2}
       job              {}                                        {year 1}
    } {
       set got [dbwriter_xml::get_delete_rule $scope $sub_scopes]
       if {$got ne $expected} {
          ts_log_severe "delete rule $scope: expected {$expected}, got {$got}"
-         return -1
+         return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_scaffolding -1]
       }
    }
    ts_log_fine "short-retention deletion rules written and verified"
 
    # ---- dbwriter_xml: the original rules are restored -----------------------
    if {[dbwriter_xml::restore] != 0} {
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_scaffolding -1]
    }
    # the shortened rule must be back at its shipped retention of 7 days - the
    # job rule is not a witness here any more, the test no longer touches it
@@ -459,32 +507,32 @@ proc dbwriter_long_running_scaffolding {} {
    if {$got ne {day 7}} {
       ts_log_severe "dbwriter.xml restore failed: host_values sub_scope rule is\
                      {$got}, expected {day 7}"
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_scaffolding -1]
    }
    ts_log_fine "original dbwriter.xml restored"
 
    # ---- db: connect, query, disconnect --------------------------------------
    if {[db::connect] != 0} {
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_scaffolding -1]
    }
    # sge_version is populated by the schema install and is never cleaned
    set n_version [db::count "sge_version"]
    if {$n_version < 1} {
       ts_log_severe "db::count sge_version returned $n_version, expected >= 1"
       db::disconnect
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_scaffolding -1]
    }
    # setup ran arco_clean_database, so the job table must be empty
    set n_job [db::count "sge_job"]
    db::disconnect
    if {$n_job != 0} {
       ts_log_severe "ARCO database not empty after setup: sge_job has $n_job rows"
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_scaffolding -1]
    }
    ts_log_fine "db wrapper OK (sge_version rows: $n_version, sge_job rows: $n_job)"
 
    ts_log_fine "dbwriter long-running scaffolding self-test passed"
-   return 0
+   return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_scaffolding 0]
 }
 
 # -------- Phase C: first-hour workload + per-job record assertions -------------
@@ -651,6 +699,58 @@ proc dbwriter_long_phase_c_assert_jobs {} {
 #
 # @param host the host whose queue the AR reserves and the AR job runs on
 # @return 0 if the sge_ar* tables are correctly populated, else -1
+##
+# @brief Assert the resources the advance reservation requested were stored.
+#
+# The qmaster writes the resource list of a reservation into the
+# ar_granted_resources object of its ar_attribute record
+# (JsonReportingFileWriter::create_ar_attribute_record), and the dbwriter turns
+# every entry of it into one sge_ar_resource_usage row
+# (AdvanceReservationResourceManager). So the rows have to mirror exactly what
+# workload::ar_resources asked for.
+#
+# The value is only compared for arch: it is a plain string that arrives
+# unchanged, while a memory value may be normalised on its way through the
+# qmaster and comparing it would test the formatting rather than the storing.
+#
+# @param host the host of the reserved queue
+# @return 0 if every requested resource has a row, else -1 (via ts_log_severe)
+proc dbwriter_long_phase_c_assert_ar_resources {host} {
+   set rc 0
+   foreach resource [workload::ar_resources $host] {
+      lassign $resource name value
+
+      set n [db::count sge_ar_resource_usage "arru_variable = '$name'"]
+      if {$n < 0} {
+         return -1
+      }
+      if {$n == 0} {
+         ts_log_severe "dbwriter long test: the advance reservation requested\
+                        $name=$value, but sge_ar_resource_usage has no row for\
+                        it"
+         set rc -1
+         continue
+      }
+
+      if {$name eq "arch"} {
+         set n_value [db::count sge_ar_resource_usage \
+            "arru_variable = '$name' AND arru_value = '$value'"]
+         if {$n_value < 0} {
+            return -1
+         }
+         if {$n_value == 0} {
+            ts_log_severe "dbwriter long test: sge_ar_resource_usage has $n row(s)\
+                           for $name, but none with the requested value $value"
+            set rc -1
+            continue
+         }
+      }
+      ts_log_fine "dbwriter long test: the advance reservation request\
+                   $name=$value is stored in sge_ar_resource_usage"
+   }
+   return $rc
+}
+
 proc dbwriter_long_phase_c_check_ar {host} {
    global CHECK_USER
 
@@ -678,16 +778,19 @@ proc dbwriter_long_phase_c_check_ar {host} {
    # the dbwriter imports a record some time after qmaster writes it, and the
    # parent sge_ar row appears before its sub-records - so wait for each table
    # to be populated rather than reading the counts once
-   #
-   # sge_ar_resource_usage is intentionally not checked yet: the test AR
-   # requests no resources, so that table stays empty. It is to be added once
-   # workload::create_ar submits the AR with a resource request.
    set rc 0
-   foreach table {sge_ar sge_ar_attribute sge_ar_usage sge_ar_log} {
+   foreach table {sge_ar sge_ar_attribute sge_ar_usage sge_ar_log
+                  sge_ar_resource_usage} {
       if {[db::wait_for_rows $table] != 0} {
          ts_log_severe "dbwriter long test: $table is empty after the AR run"
          set rc -1
       }
+   }
+
+   # the reservation was submitted with resource requests, so every one of them
+   # has to be stored as its own row
+   if {[dbwriter_long_phase_c_assert_ar_resources $host] != 0} {
+      set rc -1
    }
 
    db::disconnect
@@ -723,21 +826,21 @@ proc dbwriter_long_running_phase_c {} {
 
    # Phase C: run the first-hour deterministic workload
    if {[workload::run_first_hour $host] != 0} {
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_c -1]
    }
 
    # assert every job of the first-hour workload is correctly recorded
    if {[dbwriter_long_phase_c_assert_jobs] != 0} {
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_c -1]
    }
 
    # advance reservation: create one, run a job in it, assert the sge_ar* tables
    if {[dbwriter_long_phase_c_check_ar $host] != 0} {
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_c -1]
    }
 
    ts_log_fine "dbwriter long test: Phase C passed"
-   return 0
+   return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_c 0]
 }
 
 # -------- Phase D: raw-data assertions -----------------------------------------
@@ -872,11 +975,11 @@ proc dbwriter_long_running_phase_d {} {
    ts_log_fine "dbwriter long test: Phase D - raw-data assertions"
 
    if {[dbwriter_long_phase_d_assert_raw_data] != 0} {
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_d -1]
    }
 
    ts_log_fine "dbwriter long test: Phase D passed"
-   return 0
+   return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_d 0]
 }
 
 # -------- Phase E: hourly derived assertions (CS-2012 regression) --------------
@@ -1038,21 +1141,182 @@ proc dbwriter_long_phase_e_assert_rows_exist {} {
 #
 # @return 0 if every value table is duplicate-free, else -1
 proc dbwriter_long_phase_e_assert_no_duplicates {} {
-   set rc 0
-   foreach {table prefix} {
+   # The escape character is a slash and not a backslash: MySQL processes
+   # backslash escapes inside string literals, so ESCAPE '\' ends up as an
+   # unterminated literal there, while PostgreSQL takes it as written.
+   return [dbwriter_long_assert_no_duplicate_rows "hourly" "CS-2012 regression" \
+              "__PFX__variable LIKE 'h/_%' ESCAPE '/'"]
+}
+
+##
+# @brief The value tables and their column prefixes.
+#
+# @return a list of alternating table name and column prefix
+proc dbwriter_long_value_tables {} {
+   return {
       sge_host_values      hv
       sge_user_values      uv
       sge_project_values   pv
       sge_queue_values     qv
       sge_statistic_values sv
-   } {
-      # The escape character is a slash and not a backslash: MySQL processes
-      # backslash escapes inside string literals, so ESCAPE '\' ends up as an
-      # unterminated literal there, while PostgreSQL takes it as written.
+   }
+}
+
+##
+# @brief The value columns of a value table.
+#
+# sge_statistic_values is the exception: it only ever holds numbers and has no
+# svalue column at all, so a query naming one fails there.
+#
+# @param prefix the table's column prefix
+# @return the comma separated value columns
+proc dbwriter_long_value_columns {prefix} {
+   if {$prefix eq "sv"} {
+      return "${prefix}_dvalue"
+   }
+   return "${prefix}_svalue, ${prefix}_dvalue"
+}
+
+##
+# @brief The WHERE condition restricting a scan to the derived rows.
+#
+# Only derived rows carry the "one row per (parent, variable, time_start)"
+# invariant. Their buckets are hourly or daily, so two legitimate rows can never
+# share a time_start - on any engine.
+#
+# Raw rows do not carry it. Two distinct reports can legitimately share a
+# timestamp, and the coarser the column the more often they do: sge_host_values
+# .hv_time_start is DATE on Oracle and DATETIME on MySQL, both with second
+# granularity, so every slots change within the same second collapses onto one
+# time_start. An Oracle run of this test held 13616 such keys, all of them
+# genuine pairs of reports imported in the same batch. Comparing the values as
+# well does not help either - the same variable reported twice with the same
+# value in one second is indistinguishable from a row stored twice.
+#
+# @return the WHERE condition, with __PFX__ standing for the column prefix
+proc dbwriter_long_derived_row_filter {} {
+   return "(__PFX__variable LIKE 'h/_%' ESCAPE '/'\
+            OR __PFX__variable LIKE 'd/_%' ESCAPE '/')"
+}
+
+##
+# @brief Count the duplicate (parent, variable, time_start) triples per table.
+#
+# The counterpart of dbwriter_long_assert_no_duplicate_rows for callers that
+# compare two points in time instead of asserting an absolute state.
+#
+# @param a_counts name of an array filled with counts($table)
+# @param filter   optional WHERE condition; __PFX__ is replaced by the column
+#                 prefix of the table being scanned
+# @return 0 if every table could be scanned, else -1 (via ts_log_severe)
+proc dbwriter_long_count_duplicate_rows {a_counts {filter ""}} {
+   upvar $a_counts counts
+
+   foreach {table prefix} [dbwriter_long_value_tables] {
+      set where ""
+      if {$filter ne ""} {
+         set where "WHERE [string map [list __PFX__ ${prefix}_] $filter]"
+      }
+      set columns "${prefix}_parent, ${prefix}_variable, ${prefix}_time_start"
+      set sql "SELECT $columns, COUNT(*)\
+               FROM $table $where\
+               GROUP BY $columns\
+               HAVING COUNT(*) > 1"
+      array set result {}
+      set columns {}
+      set n [db::query $sql result columns]
+      array unset result
+      if {$n < 0} {
+         ts_log_severe "dbwriter long test: duplicate-row scan on $table failed\
+                        - query returned an error"
+         return -1
+      }
+      set counts($table) $n
+   }
+   return 0
+}
+
+##
+# @brief Assert no value table holds a duplicate (parent, variable, time_start).
+#
+# Shared by Phase E, which restricts the scan to the hourly derived rows, and
+# by Phase H, which scans every row because a restart can re-insert raw values
+# just as well as derived ones.
+#
+# @param what    what kind of rows are scanned - used in the success message
+# @param context what a duplicate would mean - appended to the failure message
+# @param filter  optional WHERE condition; the literal __PFX__ in it is
+#                replaced by the column prefix of the table being scanned
+# @return 0 if every value table is duplicate-free, else -1
+##
+# @brief Log the full rows behind every duplicate (parent, variable, time_start).
+#
+# The key alone does not say whether a duplicate is a row the dbwriter inserted
+# twice or two reports that legitimately share a timestamp - only the values do.
+# The database is emptied by the cleanup, so the rows have to reach the log
+# while the test is still running or the evidence is gone.
+#
+# The timestamps are rendered by the database via db::ts_str so the output is
+# the same on every engine.
+#
+# @param table  the value table to report on
+# @param prefix the table's column prefix
+# @param limit  maximum number of rows to log
+# @return 0 (reporting only, never fails the caller)
+proc dbwriter_long_log_duplicate_row_details {table prefix {limit 20}} {
+   # the row constructor in "(a, b, c) IN (SELECT ...)" is understood by
+   # postgres, mysql and oracle alike
+   set columns "${prefix}_parent, ${prefix}_variable, ${prefix}_time_start"
+   set values [dbwriter_long_value_columns $prefix]
+   set sql "SELECT ${prefix}_parent, ${prefix}_variable,\
+                   [db::ts_str ${prefix}_time_start],\
+                   [db::ts_str ${prefix}_time_end],\
+                   $values\
+            FROM $table\
+            WHERE ($columns) IN\
+                  (SELECT $columns\
+                   FROM $table\
+                   GROUP BY $columns\
+                   HAVING COUNT(*) > 1)\
+            ORDER BY ${prefix}_parent, ${prefix}_variable, ${prefix}_time_start"
+   array set r {}
+   set cols {}
+   set n [db::query $sql r cols]
+   if {$n < 0} {
+      ts_log_info "dbwriter long test: can not read the duplicate rows of $table"
+      array unset r
+      return 0
+   }
+
+   set shown [expr {$n > $limit ? $limit : $n}]
+   set lines {}
+   for {set i 0} {$i < $shown} {incr i} {
+      set shown {}
+      for {set v 0} {$v < [llength [split $values ","]]} {incr v} {
+         lappend shown "'$r($i,[expr {4 + $v}])'"
+      }
+      lappend lines "   parent=$r($i,0) variable=$r($i,1)\
+                     time_start=$r($i,2) time_end=$r($i,3)\
+                     values=[join $shown " "]"
+   }
+   array unset r
+   if {$n > $shown} {
+      lappend lines "   ... $n rows in total, $shown shown"
+   }
+   ts_log_info "dbwriter long test: the duplicate rows of $table are:\n[join $lines "\n"]"
+   return 0
+}
+
+proc dbwriter_long_assert_no_duplicate_rows {what context {filter ""}} {
+   set rc 0
+   foreach {table prefix} [dbwriter_long_value_tables] {
+      set where ""
+      if {$filter ne ""} {
+         set where "WHERE [string map [list __PFX__ ${prefix}_] $filter]"
+      }
       set sql "SELECT ${prefix}_parent, ${prefix}_variable,\
                       ${prefix}_time_start, COUNT(*)\
-               FROM $table\
-               WHERE ${prefix}_variable LIKE 'h/_%' ESCAPE '/'\
+               FROM $table $where\
                GROUP BY ${prefix}_parent, ${prefix}_variable,\
                         ${prefix}_time_start\
                HAVING COUNT(*) > 1"
@@ -1068,16 +1332,18 @@ proc dbwriter_long_phase_e_assert_no_duplicates {} {
       }
       if {$n_dups > 0} {
          ts_log_severe "dbwriter long test: $table has $n_dups (parent, variable,\
-                        time_start) triples with duplicate rows - CS-2012\
-                        regression"
+                        time_start) triples with duplicate rows - $context"
          set lim [expr {$n_dups > 5 ? 5 : $n_dups}]
          for {set i 0} {$i < $lim} {incr i} {
             ts_log_severe "   parent=$result($i,0) variable=$result($i,1)\
                             time_start=$result($i,2) count=$result($i,3)"
          }
+         # the values decide whether these are re-inserted rows or two reports
+         # that share a timestamp, and the cleanup empties the database
+         dbwriter_long_log_duplicate_row_details $table $prefix
          set rc -1
       } else {
-         ts_log_fine "dbwriter long test: $table has no duplicate hourly rows"
+         ts_log_fine "dbwriter long test: $table has no duplicate $what rows"
       }
       array unset result
    }
@@ -1247,7 +1513,7 @@ proc dbwriter_long_running_phase_e {} {
    if {$rc == 0} {
       ts_log_fine "dbwriter long test: Phase E passed"
    }
-   return $rc
+   return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_e $rc]
 }
 
 # -------- Phase F: daily derived assertions (CS-1948 + CS-2011 regression) -----
@@ -1691,6 +1957,60 @@ proc dbwriter_long_phase_f_assert_jobs_finished_consistency {} {
 # @param ref_epoch   Phase F reference epoch (entry_epoch); used to derive the
 #                    k-th midnight via dbwriter_long_phase_f_midnight_n
 # @return 0 if every expectation holds, else -1
+##
+# @brief Report a long-running job that ended before a midnight.
+#
+# A long-running job is meant to outlive every midnight the assertions look at.
+# If it does not - the execd it ran on went away, something killed it, the host
+# rebooted - the qmaster writes no intermediate accounting record for it, and
+# the row count assertion below would report missing data although the dbwriter
+# behaved correctly. Checking this first turns an environment problem into a
+# message that says so.
+#
+# The final accounting record of a job is the one with an exit status other than
+# -1, so its presence with an end time before the midnight is the evidence. No
+# cluster query is needed - the record is in the database the test is reading
+# anyway.
+#
+# @param jid       the job number
+# @param kind      the job kind (for the message)
+# @param midnights the midnights the assertion covers, as clock seconds
+# @return 1 if the job ended before the last of those midnights, else 0
+proc dbwriter_long_phase_f_job_died_early {jid kind midnights} {
+   set last_midnight [lindex $midnights end]
+
+   set sql "SELECT [db::ts_str ju_end_time], ju_exit_status, ju_failed\
+            FROM sge_job, sge_job_usage\
+            WHERE j_id = ju_parent AND j_job_number = $jid\
+            AND ju_exit_status <> -1\
+            ORDER BY ju_end_time"
+   array set r {}
+   set cols {}
+   set n [db::query $sql r cols]
+   if {$n <= 0} {
+      array unset r
+      return 0
+   }
+
+   set died 0
+   for {set i 0} {$i < $n} {incr i} {
+      set end_epoch [dbwriter_long_phase_f_parse_ts $r($i,0)]
+      if {$end_epoch > 0 && $end_epoch < $last_midnight} {
+         ts_log_severe "dbwriter long test: $kind (jid $jid) ended at $r($i,0)\
+                        (exit status $r($i,1), failed $r($i,2)), before the\
+                        midnight at\
+                        [clock format $last_midnight -format {%Y-%m-%d %H:%M:%S}].\
+                        A job that is not running gets no intermediate\
+                        accounting record, so the assertions below can not\
+                        hold - look at why the job ended, not at the dbwriter."
+         set died 1
+         break
+      }
+   }
+   array unset r
+   return $died
+}
+
 proc dbwriter_long_phase_f_assert_intermediate_for_job {jd n_midnights ref_epoch} {
    set jid     [dict get $jd jid]
    set kind    [dict get $jd kind]
@@ -1711,6 +2031,12 @@ proc dbwriter_long_phase_f_assert_intermediate_for_job {jd n_midnights ref_epoch
    # qmaster writes intermediates within INTERMEDIATE_ACCT_WINDOW = 10 min of
    # the boundary; give it a generous extra to absorb ingest lag
    set midnight_tol 900
+
+   # a job that did not survive the midnights makes the assertions below
+   # meaningless - report that instead of missing rows
+   if {[dbwriter_long_phase_f_job_died_early $jid $kind $midnights]} {
+      return -1
+   }
 
    # the three timestamps are rendered by the database, not by the JDBC driver,
    # so every engine returns the format dbwriter_long_phase_f_parse_ts expects.
@@ -2140,10 +2466,16 @@ proc dbwriter_long_running_phase_f {} {
    # plus the pminiworm chains as background load. entry_epoch is shared with
    # wait_for_midnight so both compute the same midnight-2 boundary.
    if {[workload::submit_long_running $entry_epoch] != 0} {
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_f -1]
+   }
+   # the jobs have to run before the background load competes for the slots -
+   # a job left pending writes no intermediate accounting record at midnight,
+   # and the assertions below would report that as missing data
+   if {[workload::wait_for_long_running_start] != 0} {
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_f -1]
    }
    if {[workload::start_background_load] != 0} {
-      return -1
+      return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_f -1]
    }
 
    set rc 0
@@ -2223,7 +2555,7 @@ proc dbwriter_long_running_phase_f {} {
    if {$rc == 0} {
       ts_log_fine "dbwriter long test: Phase F passed"
    }
-   return $rc
+   return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_f $rc]
 }
 
 # -------- Phase G: deletion-rule assertions (CS-2238) --------------------------
@@ -2500,7 +2832,7 @@ proc dbwriter_long_phase_g_assert_restore_deletes_nothing {} {
 # more than two days and both shortened retention windows have been crossed.
 # The setup registered them before the dbwriter was started:
 #   - the raw host_values sub_scope rule at 1 day,
-#   - the online_usage rule at 2 days.
+#   - the online_usage rule at 1 day.
 #
 # Asserts that each rule expired what it covers, kept what it does not cover,
 # and that restoring the shipped windows removes nothing further.
@@ -2516,7 +2848,7 @@ proc dbwriter_long_running_phase_g {} {
 
    # the windows dbwriter_long::register_short_retention_rules wrote
    set raw_retention          86400
-   set online_usage_retention 172800
+   set online_usage_retention 86400
    # a row is not deleted the moment it ages out of its window: the dbwriter
    # deletes in the same pass in which it computes the derived values, and that
    # pass runs once per 71 minutes. Anything older than window plus one pass
@@ -2554,5 +2886,437 @@ proc dbwriter_long_running_phase_g {} {
    if {$rc == 0} {
       ts_log_fine "dbwriter long test: Phase G passed"
    }
+   return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_g $rc]
+}
+
+# -------- Phase H: dbwriter restart (CS-2239) ----------------------------------
+
+##
+# @brief The tables Phase H compares across the restart.
+#
+# sge_statistic_values is deliberately not in the list: its shipped retention
+# expires lines_per_second after two days, so on a run of this length it may
+# legitimately shrink and would report a row loss that is none.
+#
+# @return the list of table names
+proc dbwriter_long_phase_h_tables {} {
+   return {
+      sge_host_values sge_queue_values sge_user_values sge_project_values
+      sge_job sge_job_request sge_job_usage sge_job_log sge_job_online_usage
+      sge_ar sge_ar_attribute sge_ar_usage sge_ar_log sge_ar_resource_usage
+   }
+}
+
+##
+# @brief Count every table Phase H watches.
+#
+# @param a_counts name of an array filled with counts($table)
+# @return 0 if every table could be counted, else -1 (via ts_log_severe)
+proc dbwriter_long_phase_h_snapshot_counts {a_counts} {
+   upvar $a_counts counts
+
+   foreach table [dbwriter_long_phase_h_tables] {
+      set n [db::count $table]
+      if {$n < 0} {
+         ts_log_severe "dbwriter long test: can not count $table"
+         return -1
+      }
+      set counts($table) $n
+   }
+   return 0
+}
+
+##
+# @brief Wait until the restarted dbwriter has imported what accrued.
+#
+# The restarted process first works off the reporting file the qmaster kept
+# appending to while it was down. Waiting for sge_host_values to grow is the
+# cheapest proof that the import resumed at all - the assertions that follow
+# would otherwise measure a database the dbwriter has not touched yet.
+#
+# @param before   the sge_host_values row count taken before the stop
+# @param expected log-line patterns a restart produces on purpose
+# @param timeout  seconds to wait before giving up
+# @return 0 once the table has grown, else -1 (via ts_log_severe)
+proc dbwriter_long_phase_h_wait_for_import {before expected {timeout 900}} {
+   set deadline [expr {[clock seconds] + $timeout}]
+   while {1} {
+      set n [db::count sge_host_values]
+      if {$n > $before} {
+         ts_log_fine "dbwriter long test: the restarted dbwriter imported the\
+                      accrued records (sge_host_values $before -> $n rows)"
+         return 0
+      }
+      if {[clock seconds] >= $deadline} {
+         ts_log_severe "dbwriter long test: the restarted dbwriter imported\
+                        nothing within ${timeout}s - sge_host_values still has\
+                        $n rows, the resume did not pick up the reporting file"
+         return -1
+      }
+      dbwriter_long_wait_and_check 30 $expected
+   }
+}
+
+##
+# @brief Assert the restart lost no rows.
+#
+# Phase G put the shipped retention windows back, and none of them expires
+# anything on a run of this length, so every watched table may only have grown.
+#
+# @param a_before name of the array holding the pre-stop counts
+# @return 0 if no table shrank, else -1 (via ts_log_severe)
+proc dbwriter_long_phase_h_assert_no_row_loss {a_before} {
+   upvar $a_before before
+
+   set rc 0
+   foreach table [dbwriter_long_phase_h_tables] {
+      set n [db::count $table]
+      if {$n < 0} {
+         ts_log_severe "dbwriter long test: can not count $table after the restart"
+         set rc -1
+         continue
+      }
+      if {$n < $before($table)} {
+         ts_log_severe "dbwriter long test: $table lost\
+                        [expr {$before($table) - $n}] rows across the dbwriter\
+                        restart ($before($table) -> $n)"
+         set rc -1
+      } else {
+         ts_log_fine "dbwriter long test: $table across the restart:\
+                      $before($table) -> $n rows"
+      }
+   }
    return $rc
+}
+
+##
+# @brief Assert the restart introduced no new duplicate rows.
+#
+# The issue asks for "no duplicate insertion across the restart boundary", so
+# what matters is the difference, not the absolute state: the check compares the
+# duplicate count per table against the one taken before the dbwriter was
+# stopped and only fails on triples that were not there before.
+#
+# An absolute check would be the wrong assertion here. That the triple
+# (parent, variable, time_start) is unique is established for the derived rows
+# Phase E scans, but nothing guarantees it for raw values - two reports of the
+# same queue variable can share a millisecond - so a run may legitimately carry
+# duplicates that have nothing to do with a restart.
+#
+# @param a_before name of the array holding the pre-stop duplicate counts
+# @return 0 if no table gained duplicates, else -1 (via ts_log_severe)
+proc dbwriter_long_phase_h_assert_no_new_duplicates {a_before} {
+   upvar $a_before before
+
+   array set after {}
+   if {[dbwriter_long_count_duplicate_rows after \
+           [dbwriter_long_derived_row_filter]] != 0} {
+      return -1
+   }
+
+   set rc 0
+   foreach {table prefix} [dbwriter_long_value_tables] {
+      set gained [expr {$after($table) - $before($table)}]
+      if {$gained > 0} {
+         ts_log_severe "dbwriter long test: $table gained $gained derived rows\
+                        with a duplicate (parent, variable, time_start) across\
+                        the dbwriter restart ($before($table) ->\
+                        $after($table)) - the restarted dbwriter computed a\
+                        bucket it had already stored"
+         set rc -1
+      } elseif {$before($table) > 0} {
+         ts_log_info "dbwriter long test: $table already held $before($table)\
+                      derived rows with a duplicate (parent, variable,\
+                      time_start) before the dbwriter was stopped, so they were\
+                      not caused by the restart - worth a look, but not a\
+                      Phase H failure"
+         dbwriter_long_log_duplicate_row_details $table $prefix
+      } else {
+         ts_log_fine "dbwriter long test: $table has no duplicate derived rows"
+      }
+   }
+   return $rc
+}
+
+##
+# @brief Assert no record was stored a second time.
+#
+# The failure a restart can cause is a replay: the dbwriter renames the
+# reporting file to *.processing before it works it off, and a process that dies
+# in between inherits that file and imports its records again. The result is the
+# same row twice - same parent, variable, time_start and the same value.
+#
+# Sharing all of those is not proof on its own. sge_host_values.hv_time_start is
+# DATE on Oracle and DATETIME on MySQL, both with second granularity, so two
+# live reports of a variable that keeps its value within one second land on one
+# row twice over. An Oracle run of this test held 856 such pairs, spread evenly
+# over all 39 hours of the run.
+#
+# What separates the two is when the rows were inserted. Two live reports arrive
+# in the same parse batch and get adjacent ids - every one of those 856 pairs
+# was within 100 ids. A replayed record is imported minutes later, thousands of
+# rows further on. So a pair of identical rows whose ids lie far apart cannot be
+# two reports, and the default threshold keeps an order of magnitude of margin
+# over anything a healthy run produces.
+#
+# @param min_id_gap smallest id distance that counts as "imported twice"
+# @return 0 if no record was stored twice, else -1 (via ts_log_severe)
+proc dbwriter_long_phase_h_assert_no_replayed_rows {{min_id_gap 1000}} {
+   set rc 0
+   foreach {table prefix} [dbwriter_long_value_tables] {
+      set values [dbwriter_long_value_columns $prefix]
+      set n_values [llength [split $values ","]]
+      set columns "${prefix}_parent, ${prefix}_variable, ${prefix}_time_start,\
+                   $values"
+      set sql "SELECT ${prefix}_parent, ${prefix}_variable,\
+                      [db::ts_str ${prefix}_time_start],\
+                      $values, COUNT(*),\
+                      MIN(${prefix}_id), MAX(${prefix}_id)\
+               FROM $table\
+               GROUP BY $columns\
+               HAVING COUNT(*) > 1\
+                      AND MAX(${prefix}_id) - MIN(${prefix}_id) >= $min_id_gap"
+      array set r {}
+      set cols {}
+      set n [db::query $sql r cols]
+      if {$n < 0} {
+         ts_log_severe "dbwriter long test: replay scan on $table failed -\
+                        query returned an error"
+         set rc -1
+         array unset r
+         continue
+      }
+      if {$n > 0} {
+         ts_log_severe "dbwriter long test: $table holds $n record(s) that were\
+                        stored twice - identical rows more than ${min_id_gap}\
+                        ids apart can not be two reports, the dbwriter imported\
+                        the same data again"
+         # the value columns sit between time_start and COUNT(*), and there
+         # are one or two of them depending on the table
+         set i_count [expr {3 + $n_values}]
+         set lim [expr {$n > 5 ? 5 : $n}]
+         for {set i 0} {$i < $lim} {incr i} {
+            set shown {}
+            for {set v 0} {$v < $n_values} {incr v} {
+               lappend shown "'$r($i,[expr {3 + $v}])'"
+            }
+            ts_log_severe "   parent=$r($i,0) variable=$r($i,1)\
+                            time_start=$r($i,2) values=[join $shown " "]\
+                            rows=$r($i,$i_count)\
+                            ids $r($i,[expr {$i_count + 1}])..$r($i,[expr {$i_count + 2}])"
+         }
+         set rc -1
+      } else {
+         ts_log_fine "dbwriter long test: $table holds no record that was\
+                      stored twice"
+      }
+      array unset r
+   }
+   return $rc
+}
+
+##
+# @brief Assert the restart left no gap in the raw timeline.
+#
+# The qmaster keeps appending to the reporting file while the dbwriter is down,
+# so the records written during the downtime have to turn up in the database
+# afterwards. An empty downtime window means the restarted process skipped the
+# file it inherited instead of working it off - the failure the issue asks for a
+# useful diagnostic on.
+#
+# @param stop_epoch  when the dbwriter was stopped
+# @param start_epoch when it was started again
+# @return 0 if the downtime window holds raw rows, else -1 (via ts_log_severe)
+proc dbwriter_long_phase_h_assert_no_gap {stop_epoch start_epoch} {
+   # the window is widened by a minute on each side: the row timestamps are
+   # written by the qmaster, the comparison runs in the database and the epochs
+   # come from the testsuite host, so up to three clocks are involved and the
+   # assertion must not depend on them being in perfect sync
+   set margin 60
+   set now [clock seconds]
+   set from [db::ago [expr {$now - $stop_epoch + $margin}]]
+   set to   [db::ago [expr {$now - $start_epoch - $margin}]]
+
+   set n [db::count sge_host_values \
+      "hv_variable = 'cpu' AND hv_time_start >= $from AND hv_time_start < $to"]
+   if {$n < 0} {
+      ts_log_severe "dbwriter long test: can not count the raw host values of\
+                     the restart window"
+      return -1
+   }
+   if {$n == 0} {
+      ts_log_severe "dbwriter long test: no raw cpu value was stored for the\
+                     time the dbwriter was down\
+                     ([clock format $stop_epoch -format {%Y-%m-%d %H:%M:%S}] ..\
+                     [clock format $start_epoch -format {%Y-%m-%d %H:%M:%S}]) -\
+                     the records the qmaster wrote during the downtime were\
+                     lost instead of being imported after the restart"
+      return -1
+   }
+   ts_log_fine "dbwriter long test: $n raw cpu values cover the downtime window\
+                - the restart left no gap in the timeline"
+   return 0
+}
+
+##
+# @brief Assert the derived-value computation resumes after the restart.
+#
+# The DerivedValueThread starts over when the dbwriter does: it waits for the
+# first imported record, computes the buckets that are still missing and then
+# sleeps until the next tick. A new h_cpu row is the proof that the thread came
+# back - h_cpu keeps being produced from the load values even though no job is
+# running any more.
+#
+# @param before   the h_cpu row count taken before the stop
+# @param expected log-line patterns a restart produces on purpose
+# @param timeout  seconds to wait. Generous on purpose: a pass computes only
+#                 the hours that are closed at the time it runs, so the first
+#                 pass after the restart can find nothing to do and the row
+#                 then arrives one 71 minute cycle later.
+# @return 0 once a new row was written, else -1 (via ts_log_severe)
+proc dbwriter_long_phase_h_assert_derived_resumed {before expected {timeout 9000}} {
+   set where "hv_variable = 'h_cpu'"
+   set deadline [expr {[clock seconds] + $timeout}]
+   while {1} {
+      set n [db::count sge_host_values $where]
+      if {$n > $before} {
+         ts_log_fine "dbwriter long test: the derived-value computation resumed\
+                      after the restart (h_cpu $before -> $n rows)"
+         return 0
+      }
+      if {[clock seconds] >= $deadline} {
+         ts_log_severe "dbwriter long test: no new h_cpu row within ${timeout}s\
+                        after the restart - the derived-value computation did\
+                        not resume (still $n rows)"
+         return -1
+      }
+      dbwriter_long_wait_and_check 60 $expected
+   }
+}
+
+##
+# @brief Phase H - restart the dbwriter and assert it resumes cleanly.
+#
+# Runs at check run level 400 after Phase G. Stops the dbwriter, lets the
+# reporting file accrue while the qmaster keeps writing to it, starts the
+# dbwriter again and asserts that the resume neither loses nor duplicates data
+# and that the derived-value computation comes back.
+#
+# @return 0 if the restart was clean, else -1
+proc dbwriter_long_running_phase_h {} {
+   global CHECK_ACT_LEVEL
+
+   if {$CHECK_ACT_LEVEL != 400} {
+      return 0
+   }
+   ts_log_fine "dbwriter long test: Phase H - dbwriter restart assertions"
+
+   # seconds the dbwriter stays down. The qmaster writes load values about once
+   # per minute, so five minutes leave several report intervals for the
+   # restarted process to work off.
+   set downtime 300
+
+   # dbwriter.log lines a restart produces on purpose: the restarted process
+   # reports the data file left behind by the stopped one and the state of its
+   # checkpoint. They are warnings, but they are the expected outcome of the
+   # stop and must not be reported as problems by the log tail.
+   set restart_expected {
+      {*Found a data file left from a previous run*}
+      {*Couldn't retrieve a checkpoint from database*}
+      {*No row found in sge_checkpoint table*}
+   }
+
+   # Phase G restores the shipped retention as its last assertion, but if it
+   # failed before getting there the shortened windows would still be active and
+   # rows would legitimately disappear while this phase measures row loss.
+   # dbwriter_xml::restore is idempotent, so this is a no-op after Phase G.
+   if {[dbwriter_xml::restore] != 0} {
+      return -1
+   }
+
+   if {[db::connect] != 0} {
+      return -1
+   }
+
+   array set before {}
+   if {[dbwriter_long_phase_h_snapshot_counts before] != 0} {
+      db::disconnect
+      return -1
+   }
+   array set dups_before {}
+   if {[dbwriter_long_count_duplicate_rows dups_before \
+           [dbwriter_long_derived_row_filter]] != 0} {
+      db::disconnect
+      return -1
+   }
+   set h_cpu_before [db::count sge_host_values "hv_variable = 'h_cpu'"]
+   if {$h_cpu_before < 0} {
+      db::disconnect
+      return -1
+   }
+
+   # ---- stop, let the reporting file accrue, start again --------------------
+   # A dbwriter that is already gone would make the whole phase meaningless:
+   # the restart would not be a restart, and every assertion below would pass
+   # on a process that never stopped in the first place.
+   if {[get_dbwriter_status 0] != 0} {
+      ts_log_severe "dbwriter long test: the dbwriter is not running at the\
+                     start of Phase H - it stopped somewhere after Phase G, see\
+                     the end of dbwriter.log. Without a running dbwriter the\
+                     restart assertions would test nothing."
+      db::disconnect
+      return -1
+   }
+   set stop_epoch [clock seconds]
+   if {[shutdown_dbwriter] != 0} {
+      ts_log_severe "dbwriter long test: can not stop the dbwriter"
+      db::disconnect
+      return -1
+   }
+   ts_log_fine "dbwriter long test: dbwriter stopped, letting the reporting file\
+                accrue for ${downtime}s"
+   dbwriter_long_wait_and_check $downtime $restart_expected
+
+   set start_epoch [clock seconds]
+   if {[startup_dbwriter] != 0} {
+      ts_log_severe "dbwriter long test: can not start the dbwriter again"
+      db::disconnect
+      return -1
+   }
+   if {[get_dbwriter_status 0] != 0} {
+      ts_log_severe "dbwriter long test: the dbwriter is not running after the\
+                     restart"
+      db::disconnect
+      return -1
+   }
+   ts_log_fine "dbwriter long test: dbwriter restarted after ${downtime}s"
+
+   # ---- assertions ----------------------------------------------------------
+   set rc 0
+   if {[dbwriter_long_phase_h_wait_for_import $before(sge_host_values) \
+           $restart_expected] != 0} {
+      set rc -1
+   }
+   if {[dbwriter_long_phase_h_assert_no_row_loss before] != 0} {
+      set rc -1
+   }
+   if {[dbwriter_long_phase_h_assert_no_new_duplicates dups_before] != 0} {
+      set rc -1
+   }
+   if {[dbwriter_long_phase_h_assert_no_replayed_rows] != 0} {
+      set rc -1
+   }
+   if {[dbwriter_long_phase_h_assert_no_gap $stop_epoch $start_epoch] != 0} {
+      set rc -1
+   }
+   if {[dbwriter_long_phase_h_assert_derived_resumed $h_cpu_before \
+           $restart_expected] != 0} {
+      set rc -1
+   }
+
+   db::disconnect
+   if {$rc == 0} {
+      ts_log_fine "dbwriter long test: Phase H passed"
+   }
+   return [dbwriter_long_artifacts::finish_phase dbwriter_long_running_phase_h $rc]
 }

@@ -342,6 +342,18 @@ proc get_qmaster_spool_dir {} {
 #     "binding-in-scheduler"
 #     "exclusive-host-usage"
 #     "resource-maps"
+#     "thread-sanitizer"
+#     "scope"
+#     "gcs"
+#     "ocs"
+#     "par_option"
+#     "systemd"
+#     "bulk-object-requests"
+#     "bulk-object-export"
+#     "delete-object-lists"
+#     "finished_job_retention"
+#     "optional-allhosts" (the installer can skip the creation of @allhosts)
+#     "allhosts-hostgroup" (the cluster has the host group @allhosts)
 # @param[in] quiet - if false (0) then the function outputs if the feature is available, else it is quiet
 #
 # @returns 1 if the feature is available or 0 if the feature is not available or the feature string is invalid
@@ -515,6 +527,37 @@ proc ge_has_feature {feature {quiet 0}} {
             set output [start_sge_bin "qstat" "-help"]
             if {[string first "|f|" $output] >= 0} {
                set result 1
+            }
+         }
+         "optional-allhosts" {
+            # CS-2749: the installer can skip the creation of @allhosts and let
+            # all.q reference @exec_hosts instead. This is a property of the
+            # installer, not of the cluster, so it can be asked before the
+            # installation: the autoinstall template names the new entry. An
+            # older installer rejects an autoinstall config with that entry.
+            start_remote_prog $ts_config(master_host) $CHECK_USER "grep" \
+               "-q ^CREATE_ALLHOSTS_HOSTGROUP= $ts_config(product_root)/util/install_modules/inst_template.conf"
+            if {$prg_exit_state == 0} {
+               set result 1
+            } else {
+               set result 0
+            }
+         }
+         "allhosts-hostgroup" {
+            # CS-2749: the cluster has the host group @allhosts. Clusters
+            # installed with an installer without "optional-allhosts" always
+            # have it; with that installer it depends on the installation
+            # (and on the configuration a test may have restored since).
+            #
+            # A cluster that cannot be asked is judged by its installer.
+            if {[get_hostgroup_list hgroup_list "" "" 0] == 0} {
+               if {[lsearch -exact $hgroup_list "@allhosts"] >= 0} {
+                  set result 1
+               } else {
+                  set result 0
+               }
+            } else {
+               set result [expr ![ge_has_feature "optional-allhosts" 1]]
             }
          }
          default {

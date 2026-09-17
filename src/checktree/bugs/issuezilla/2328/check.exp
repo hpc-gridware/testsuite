@@ -101,7 +101,7 @@ proc issue_2328_setup {} {
       lappend queue_names "qsub_ts$queue_counter.q"
    }
    set queue_conf(slots) 10
-   set queue_conf(hostlist) "@allhosts"
+   set queue_conf(hostlist) [get_all_hosts_hostgroup]
    if {![cluster_bulk_add_objects "-Aq" $queue_names qname set_queue_defaults queue_conf \
                                   {issue_2328_add_queue}]} {
       ts_log_severe "creating $max_queue_count queues failed"
@@ -285,7 +285,7 @@ proc issue_2328 {} {
 # @param queue_name name of the queue
 proc issue_2328_add_queue {queue_name} {
    set queue_conf(slots) 10
-   set result [add_queue $queue_name "@allhosts" queue_conf 1]
+   set result [add_queue $queue_name [get_all_hosts_hostgroup] queue_conf 1]
    if {$result < 0} {
       ts_log_severe "add $queue_name failed:\n$result"
    }

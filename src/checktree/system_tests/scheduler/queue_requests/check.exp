@@ -112,7 +112,7 @@ proc scheduler_queue_requests_setup  {} {
       set queue_config(seq_no) $i
       set queue_name [scheduler_queue_requests_get_qname $i]
       lappend queue_names $queue_name
-      add_queue $queue_name "@allhosts" queue_config 1
+      add_queue $queue_name [get_all_hosts_hostgroup] queue_config 1
    }
 
    # every pe into every queue with one request instead of queue_count x pe_count
@@ -142,7 +142,7 @@ proc scheduler_queue_requests_cleanup  {} {
    for {set i 0} {$i < $queue_count} {incr i} {
       lappend queue_names [scheduler_queue_requests_get_qname $i]
    }
-   del_queue $queue_names "@allhosts" 0 1
+   del_queue $queue_names [get_all_hosts_hostgroup] 0 1
 
    unset -nocomplain queue_count pe_count queue_request_count sched_conf_backup
 }

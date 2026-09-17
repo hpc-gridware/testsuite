@@ -200,7 +200,7 @@ proc qmaster_size_setup_level {} {
    # create an additional interactive only queue
    # This verifies IZ 1087
    set queue_conf(qtype) INTERACTIVE
-   add_queue interactive "@allhosts" queue_conf 1
+   add_queue interactive [get_all_hosts_hostgroup] queue_conf 1
 
    # get qmaster spool dir
    set qmaster_spool_dir [ get_qmaster_spool_dir ]

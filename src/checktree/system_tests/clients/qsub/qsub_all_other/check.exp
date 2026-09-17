@@ -793,7 +793,7 @@ proc check_option_q {} {
    #  - to all queue instances on a host
    #  - to all qinstances of a hostgroup
    qsub_submit_check "-q *@${test_host} $default_args" 0
-   qsub_submit_check "-q *@@allhosts $default_args" 0
+   qsub_submit_check "-q *@[get_all_hosts_hostgroup] $default_args" 0
 }
 
 proc check_option_r_y {} {

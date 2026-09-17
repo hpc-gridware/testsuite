@@ -127,13 +127,13 @@ proc tight_integration_setup {} {
    add_pe tight pe
 
    # create a queue
-   # per-host slot count for tight.q (on @allhosts): with N hosts the massive
+   # per-host slot count for tight.q (on all execution hosts): with N hosts the massive
    # test runs N * <slots> tasks (capped by TIGHT_INTEGRATION_MASSIVE_SLOTS).
    set queue_conf(load_thresholds) "np_load_avg=11"
    set queue_conf(slots) 10
    set queue_conf(rerun) "true"
    set queue_conf(pe_list) "tight"
-   add_queue "tight.q" "@allhosts" queue_conf
+   add_queue "tight.q" [get_all_hosts_hostgroup] queue_conf
 
    # Adapt the number of slots according to memory.
    # A sge_shepherd takes vsz of some 90M on Ubuntu, some 130M on Alma 8, some 160M on Rocky-8,

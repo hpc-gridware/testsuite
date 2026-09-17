@@ -78,7 +78,7 @@ proc ge_3306_setup {} {
    add_pe "ge_3306" pe
    set queue(slots) 1
    set queue(pe_list) "ge_3306"
-   add_queue "ge_3306" "@allhosts" queue
+   add_queue "ge_3306" [get_all_hosts_hostgroup] queue
 
    # set a high scheduling interval - we trigger it manually
    set schedd_config(schedule_interval) "0:10:0"

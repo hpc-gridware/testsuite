@@ -124,7 +124,7 @@ proc access_lists_setup  {} {
    set access_lists_queue "access"
    set queue_values(load_thresholds)       "np_load_avg=11.00"
    set queue_values(qtype)                 "BATCH INTERACTIVE CHECKPOINTING PARALLEL"
-   add_queue $access_lists_queue "@allhosts" queue_values
+   add_queue $access_lists_queue [get_all_hosts_hostgroup] queue_values
    # ... and disable all.q
    foreach host $ts_config(execd_nodes) {
       disable_queue [get_queue_instance "all.q" $host]

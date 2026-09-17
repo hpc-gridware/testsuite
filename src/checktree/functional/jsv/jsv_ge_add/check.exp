@@ -166,7 +166,7 @@ proc jsv_ge_add_setup {} {
 
    # create queue
    set q_param(load_thresholds) "np_load_avg=100.00"
-   set result [add_queue "all2.q" "@allhosts" q_param]
+   set result [add_queue "all2.q" [get_all_hosts_hostgroup] q_param]
 
    # change global config
    get_config jsv_org_global_conf
@@ -191,7 +191,7 @@ proc jsv_ge_add_cleanup {} {
    reset_config_and_propagate jsv_org_global_conf
 
    # delete queue, pe and ckpt
-   del_queue "all2.q" "@allhosts" 0 1
+   del_queue "all2.q" [get_all_hosts_hostgroup] 0 1
    del_pe "jsv_ge_add_pe1"
    del_pe "jsv_ge_add_pe2"
    del_ckpt "jsv_ge_add_ckpt1"

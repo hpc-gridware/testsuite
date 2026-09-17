@@ -114,7 +114,7 @@ proc reprioritization_setup {} {
 
 
    # add a new queue for testing
-   add_queue "test.q" "@allhosts" q_param 1
+   add_queue "test.q" [get_all_hosts_hostgroup] q_param 1
    set new_values(load_thresholds)       "np_load_avg=11.00"
    set new_values(qtype)                 "BATCH INTERACTIVE CHECKPOINTING PARALLEL"
    set result [mod_queue "test.q" "" new_values]

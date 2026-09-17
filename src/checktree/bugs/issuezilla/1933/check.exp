@@ -63,14 +63,14 @@ proc issue_1933_setup  {} {
    set queue_name "1933.q"
    ts_log_fine "add $queue_name"
    set q_param(prolog) "invalid_prolog"
-   add_queue $queue_name "@allhosts" q_param
+   add_queue $queue_name [get_all_hosts_hostgroup] q_param
 }
 
 proc issue_1933_cleanup  {} {
    global ts_config queue_name
 
    ts_log_fine "delete $queue_name"
-   del_queue $queue_name "@allhosts" 1 1
+   del_queue $queue_name [get_all_hosts_hostgroup] 1 1
    start_sge_bin "qmod" "-cq all.q"
 }
 

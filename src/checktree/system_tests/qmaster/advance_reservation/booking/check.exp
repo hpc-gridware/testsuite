@@ -72,7 +72,7 @@ proc ar_booking_setup {} {
 
    set q(slots) 10
    set q(pe_list) "test.pe"
-   add_queue "test.q" "@allhosts" q
+   add_queue "test.q" [get_all_hosts_hostgroup] q
 
    # we want to trigger scheduling manually
    set sconf(schedule_interval) "1:0:0"

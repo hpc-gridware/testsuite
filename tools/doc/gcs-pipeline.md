@@ -80,6 +80,7 @@ for a feature workspace.
 | `CS_TOOL_DIR` | Directory the tools live in. A wrapper passes it in — it knows the absolute path it is sourcing. Deliberately no fallback to PATH: an IDE inherits the desktop session environment, where the tool directory usually is not on it. |
 | `CS_SELF_HEAL` | With `1`, `check` passes `re_init_on_tcl_error`: after a failed test the cluster is reinstalled fresh, so the next test on it starts clean. Used by [`gcs-run-unit`](gcs-run-unit.md). Off by default — interactively, an automatic reinstall after every failure would be surprising and expensive. |
 | `CS_OUTPUT_LEVEL` | How much the testsuite itself produces, default `FINE`. `FINER` and `FINEST` add the internals of the remote procedures. Separate from ctest's `-V`, which only decides how much is passed through. |
+| `CS_INSTALL_MODE` | How `install_core_system` installs the cluster, default `automatic`. `manual` drives the interactive installer and answers its questions, e.g. `CS_INSTALL_MODE=manual 92x install`. |
 | `GCS_PW_COMMAND` | A different password helper. Contract: print the password on stdout, nothing else. |
 | `GCS_CLION_ROOT` | Root of the release lines, default `~/Clion`. |
 

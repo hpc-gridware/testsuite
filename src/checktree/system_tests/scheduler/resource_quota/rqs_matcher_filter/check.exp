@@ -1,0 +1,332 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2680 / CS-2687 / CS-2690. The matcher notation in the host filter of a
+# resource quota set: "host:node01" means there exactly what "node01" means.
+#
+# -------- why this test starts jobs ------------------------------------------
+#
+# Because the display is not evidence, and this is the case that proves it.
+# Before CS-2687 a filter written with the prefix was ACCEPTED by "qconf -Arqs",
+# displayed back unchanged by "qconf -srqs", and never fired: the scope entry
+# reached the expression evaluation with its prefix still attached and matched no
+# host name. A test comparing what goes in with what comes out would have been
+# green throughout.
+#
+# The only observation that distinguishes a working limit from a limit-shaped
+# configuration is a job that does not start.
+#
+# -------- why there is a control ---------------------------------------------
+#
+# "the second job did not start" is also what a full cluster, a disabled queue or
+# a broken scheduler look like. The third scenario therefore runs the same two
+# jobs with NO rule set at all: both must start. Without it this test cannot tell
+# a working limit from a cluster on which nothing runs.
+#
+# -------- the edition boundary -----------------------------------------------
+#
+# The notation is not a commercial feature. On the reference side a prefix is
+# spelling, not semantics - "gpu*" already meant there what "host:gpu*" is to
+# mean - so it works in both editions and this test makes no distinction.
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+
+set check_version_range "9.2.0"
+
+set check_name           "rqs_matcher_filter"
+set check_category       "RQS SCHEDULER MATCHER VERIFIED"
+set check_description(0) "a host filter in matcher notation limits exactly as the plain one does (CS-2687)"
+
+set check_needs          "init_core_system"
+
+set check_setup_function   rqs_mf_setup
+set check_cleanup_function rqs_mf_cleanup
+
+set check_functions {}
+lappend check_functions "rqs_mf_prefixed_limits"
+lappend check_functions "rqs_mf_plain_limits"
+lappend check_functions "rqs_mf_without_rule_both_run"
+lappend check_functions "rqs_mf_refusals"
+
+global rqs_mf_host rqs_mf_rqs_name rqs_mf_queue
+set rqs_mf_host     ""
+set rqs_mf_rqs_name "rqs_matcher_filter_test"
+set rqs_mf_queue    ""
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief Run qconf on the master host and return its output
+#
+# @param args_string the arguments, as one string
+#
+# @return the output; the exit state is left in the global prg_exit_state
+proc rqs_mf_qconf {args_string} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER prg_exit_state
+
+   return [start_sge_bin "qconf" $args_string $ts_config(master_host) $CHECK_USER prg_exit_state]
+}
+
+## @brief Install a resource quota set limiting one host to a single slot
+#
+# @param host_entry the host filter entry, with or without the matcher prefix
+#
+# @return 1 when the rule set was accepted, 0 otherwise
+proc rqs_mf_install {host_entry} {
+   get_current_cluster_config_array ts_config
+   global rqs_mf_rqs_name CHECK_USER prg_exit_state
+
+   set file [get_tmp_file_name]
+   set rqs(0) 6
+   set rqs(1) "\{"
+   set rqs(2) "   name         $rqs_mf_rqs_name"
+   set rqs(3) "   description  NONE"
+   set rqs(4) "   enabled      TRUE"
+   set rqs(5) "   limit        hosts \{$host_entry\} to slots=1"
+   set rqs(6) "\}"
+   write_remote_file $ts_config(master_host) $CHECK_USER $file rqs
+
+   set out [rqs_mf_qconf "-Arqs $file"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "the resource quota set with host filter \"$host_entry\" was refused:\n$out"
+      return 0
+   }
+   return 1
+}
+
+## @brief Remove the test rule set, if it is there
+proc rqs_mf_remove {} {
+   global rqs_mf_rqs_name
+
+   rqs_mf_qconf "-drqs $rqs_mf_rqs_name"
+}
+
+## @brief Submit one job bound to the test host
+#
+# @param tag a name part, so the two jobs of a scenario can be told apart
+#
+# @return the job id, or 0 when the submission failed
+proc rqs_mf_submit {tag} {
+   global rqs_mf_host
+
+   set args "-N rqsmf_$tag -l h=$rqs_mf_host -b y /bin/sleep 300"
+   set job_id [submit_job $args 0]
+   if {$job_id <= 0} {
+      ts_log_severe "could not submit the job rqsmf_$tag bound to host $rqs_mf_host"
+      return 0
+   }
+   return $job_id
+}
+
+## @brief Run two jobs at the one host and report which of them started
+#
+# The first wait is generous and gets a scheduler run out of the way, so that by
+# the time the second job is looked at the scheduler has already had its chance
+# to start it too. The second wait is short and its timeout is the expected
+# outcome, so the error check is off and one more scheduler run is asked for.
+#
+# @param label what to call this scenario in a failure message
+#
+# @return a list of two booleans: did the first start, did the second start
+proc rqs_mf_run_pair {label} {
+   set job_a [rqs_mf_submit "a"]
+   set job_b [rqs_mf_submit "b"]
+   if {$job_a <= 0 || $job_b <= 0} {
+      delete_all_jobs
+      wait_for_end_of_all_jobs
+      return [list 0 0]
+   }
+
+   set a_started [expr {[wait_for_jobstart $job_a "rqsmf_a" 60] == 0}]
+   set b_started [expr {[wait_for_jobstart $job_b "rqsmf_b" 10 0 1] == 0}]
+
+   ts_log_fine "$label: first job started=$a_started, second job started=$b_started"
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   return [list $a_started $b_started]
+}
+
+## @brief Assert that a limit of one slot let exactly one of the two jobs run
+#
+# @param label what to call this scenario in a failure message
+# @param result the pair returned by rqs_mf_run_pair
+proc rqs_mf_expect_limited {label result} {
+   lassign $result a_started b_started
+
+   if {!$a_started} {
+      ts_log_severe "$label: the first job did not start although the limit allows one slot -\
+                     the limit is too narrow, or the host cannot run jobs at all"
+      return
+   }
+   if {$b_started} {
+      ts_log_severe "$label: the second job started although a limit of slots=1 is in force on\
+                     that host - the filter did not match the host, so the rule is configured\
+                     and does not apply"
+   }
+}
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+## @brief Pick a host that can run jobs, and make sure nothing is running
+#
+# @return 99 when no suitable host is available, nothing otherwise
+proc rqs_mf_setup {} {
+   get_current_cluster_config_array ts_config
+   global rqs_mf_host
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   rqs_mf_remove
+
+   # an execution host with at least two slots, or a limit of one cannot be seen
+   # to bite
+   set rqs_mf_host ""
+   foreach h $ts_config(execd_nodes) {
+      set rqs_mf_host [resolve_host $h]
+      break
+   }
+
+   if {$rqs_mf_host == ""} {
+      ts_log_config "need an execution host to bind the jobs to - skipping test"
+      return 99
+   }
+}
+
+## @brief Remove the rule set and every job, and assert that both are gone
+proc rqs_mf_cleanup {} {
+   global rqs_mf_rqs_name prg_exit_state
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   rqs_mf_remove
+
+   set out [rqs_mf_qconf "-srqsl"]
+   if {$prg_exit_state == 0 && [string first $rqs_mf_rqs_name $out] >= 0} {
+      ts_log_severe "the test resource quota set $rqs_mf_rqs_name could not be removed - it\
+                     would limit every test that runs after this one\noutput: $out"
+   }
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief A filter written with the prefix limits
+#
+# The assertion CS-2687 exists for. Before it, this rule was accepted, displayed
+# and inert.
+proc rqs_mf_prefixed_limits {} {
+   global rqs_mf_host
+
+   if {$rqs_mf_host == ""} {
+      return
+   }
+
+   if {![rqs_mf_install "host:$rqs_mf_host"]} {
+      return
+   }
+   rqs_mf_expect_limited "matcher notation" [rqs_mf_run_pair "matcher notation"]
+   rqs_mf_remove
+}
+
+## @brief The same filter without the prefix limits in the same way
+#
+# "Equivalent notation" is a claim about two spellings, so both are run and both
+# have to produce the same outcome. Were only the prefixed one tested, a change
+# breaking the plain spelling would pass here.
+proc rqs_mf_plain_limits {} {
+   global rqs_mf_host
+
+   if {$rqs_mf_host == ""} {
+      return
+   }
+
+   if {![rqs_mf_install "$rqs_mf_host"]} {
+      return
+   }
+   rqs_mf_expect_limited "plain notation" [rqs_mf_run_pair "plain notation"]
+   rqs_mf_remove
+}
+
+## @brief With no rule set at all, both jobs run
+#
+# The control. Without it "the second job did not start" would be indistinguishable
+# from a cluster on which nothing starts.
+proc rqs_mf_without_rule_both_run {} {
+   global rqs_mf_host
+
+   if {$rqs_mf_host == ""} {
+      return
+   }
+
+   rqs_mf_remove
+   lassign [rqs_mf_run_pair "no rule set"] a_started b_started
+
+   if {!$a_started || !$b_started} {
+      ts_log_severe "with no resource quota set in force, both jobs have to run on\
+                     $rqs_mf_host - they did not (first=$a_started, second=$b_started), so the\
+                     two scenarios above did not observe a limit but a cluster that cannot run\
+                     these jobs"
+   }
+}
+
+## @brief What a host filter refuses to store
+#
+# The reserved address prefixes and an empty pattern. Both would otherwise be
+# stored, displayed back unchanged and match nothing - and a filter that matches
+# nothing widens an exclusion filter instead of narrowing it.
+proc rqs_mf_refusals {} {
+   global rqs_mf_rqs_name prg_exit_state
+
+   foreach entry {"ip:10.0.0.0/8" "ip6:fd00::/8" "host:"} {
+      get_current_cluster_config_array ts_config
+      global CHECK_USER
+
+      set file [get_tmp_file_name]
+      set rqs(0) 6
+      set rqs(1) "\{"
+      set rqs(2) "   name         $rqs_mf_rqs_name"
+      set rqs(3) "   description  NONE"
+      set rqs(4) "   enabled      TRUE"
+      set rqs(5) "   limit        hosts \{$entry\} to slots=1"
+      set rqs(6) "\}"
+      write_remote_file $ts_config(master_host) $CHECK_USER $file rqs
+
+      set out [rqs_mf_qconf "-Arqs $file"]
+      if {$prg_exit_state == 0} {
+         ts_log_severe "the host filter entry \"$entry\" was accepted - it matches no host, and\
+                        in an exclusion filter an entry matching nothing widens the limit\
+                        instead of narrowing it\noutput: $out"
+         rqs_mf_remove
+      }
+   }
+}

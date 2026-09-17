@@ -313,7 +313,9 @@ args="$args output_level ${CS_OUTPUT_LEVEL:-FINE}"
 #args="$args coverage lcov"
 #args="$args coverage_dir /root_access/ebablick/coverage/build"
 args="$args disable_washing_machine"
-args="$args install_mode automatic"
+# install_core_system installs automatically by default. CS_INSTALL_MODE=manual
+# drives the interactive installer instead, to check its questions and texts.
+args="$args install_mode ${CS_INSTALL_MODE:-automatic}"
 args="$args html_dir $CS_HOME/html"
 args="$args no_local_qmaster_spool"
 # Debug is what the development loop wants: -O0 keeps the binaries readable in a

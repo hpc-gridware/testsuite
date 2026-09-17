@@ -145,6 +145,7 @@ lappend generic_module_tests {test_sgeobj_rsmap "9.0.14 9.1.6" 0 ""}
 lappend generic_module_tests {test_cull_no_transfer "9.2.0" 0 ""}
 lappend generic_module_tests {test_sched_request_amount "9.1.6" 0 ""}
 lappend generic_module_tests {test_sgeobj_request_parse "9.1.6" 0 ""}
+lappend generic_module_tests {test_sgeobj_Matcher "9.2.0" 1 ""}
 set check_description(0) "test_qmaster_timed_event"
 set check_description(1) "test_commlib_issue"
 set check_description(2) "test_comm_xml_parse"
@@ -200,6 +201,7 @@ set check_description(51) "test_sgeobj_rsmap"
 set check_description(52) "test_cull_no_transfer"
 set check_description(53) "test_sched_request_amount"
 set check_description(54) "test_sgeobj_request_parse"
+set check_description(53) "test_sgeobj_Matcher"
 
 set check_functions {}
 lappend check_functions "generic_module_tests_run"

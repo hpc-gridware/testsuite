@@ -228,6 +228,25 @@ proc get_hostgroup_list {{output_var result} {on_host ""} {as_user ""} {raise_er
    return [get_qconf_object "get_hostgroup_list" "-shgrpl" out messages 1 $on_host $as_user $raise_error]
 }
 
+## @brief get the host group that contains all execution hosts of the cluster
+#
+# Tests use it wherever a queue shall span all execution hosts.
+# Before 9.2 the installer always creates @allhosts and adds every execution
+# host to it. From 9.2 on the creation of @allhosts is optional (CS-2749);
+# without it the default queue all.q references @exec_hosts, which the qmaster
+# maintains itself.
+#
+# Note that @exec_hosts also contains simulated hosts (see simhost_add), while
+# @allhosts only contains the installed execution hosts.
+#
+# @return "@allhosts" if the cluster has this host group, else "@exec_hosts"
+proc get_all_hosts_hostgroup {} {
+   if {[ge_has_feature "allhosts-hostgroup" 1]} {
+      return "@allhosts"
+   }
+   return "@exec_hosts"
+}
+
 #****** sge_hostgroup.60/mod_hostgroup() ***************************************
 #  NAME
 #     mod_hostgroup() -- Modify existing host group configuration object

@@ -82,7 +82,7 @@ proc consumable_dec_setup {} {
 
    set q(pe_list) "test.pe"
    set q(slots) 10
-   add_queue "test.q" "@allhosts" q
+   add_queue "test.q" [get_all_hosts_hostgroup] q
 
    setup_host_slots_for_binding
 }

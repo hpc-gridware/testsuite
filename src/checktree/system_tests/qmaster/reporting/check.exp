@@ -798,13 +798,13 @@ proc reporting_queue_state_test {} {
    ###########################
    # test queue ambigous state
    ###########################
-   replace_attr "queue" "load_thresholds" "NONE,\[@allhosts=load_avg=10\],\[@reporting=load_avg=20\]" "reporting"
+   replace_attr "queue" "load_thresholds" "NONE,\[[get_all_hosts_hostgroup]=load_avg=10\],\[@reporting=load_avg=20\]" "reporting"
    set qstate [wait_for_queue_state [get_queue_instance "reporting" $reporting_test_host] "c" 60]
    if {$qstate == "c"} {
       reporting_wait_for_queue_state "c"
    }
    purge_queue "reporting@@reporting" "load_thresholds"
-   purge_queue "reporting@@allhosts" "load_thresholds"
+   purge_queue "reporting@[get_all_hosts_hostgroup]" "load_thresholds"
    if {$qstate == "c"} {
       reporting_wait_for_queue_state ""
    }

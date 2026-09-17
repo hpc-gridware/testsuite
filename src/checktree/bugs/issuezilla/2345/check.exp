@@ -72,7 +72,7 @@ proc issue_2345_setup {} {
    # 4a. setup the test queue A.q
    set first_queue_name "A.q"
    set queue_conf(slots) 10
-   add_queue $first_queue_name "@allhosts" queue_conf 1
+   add_queue $first_queue_name [get_all_hosts_hostgroup] queue_conf 1
 
    
    # 4. Add rqs a_new_rqs

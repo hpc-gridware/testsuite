@@ -71,7 +71,7 @@ proc issue_1334_setup {} {
    
    # create a queue with a termination_method
    set queue_conf(starter_method)  "$CHECK_ACTUAL_TEST_PATH/jobstarter.sh"
-   add_queue "iz_1334" "@allhosts" queue_conf 1
+   add_queue "iz_1334" [get_all_hosts_hostgroup] queue_conf 1
 
    delete_file $issue_1334_job_stdout_file 0
    delete_file $issue_1334_job_stderr_file 0
@@ -85,7 +85,7 @@ proc issue_1334_cleanup  {} {
    wait_for_end_of_all_jobs 60
    
    ts_log_fine "delete test queue"
-   del_queue "iz_1334" "@allhosts" 0 1
+   del_queue "iz_1334" [get_all_hosts_hostgroup] 0 1
    
    # delete the job stdout and stderr file
    delete_file $issue_1334_job_stdout_file 0

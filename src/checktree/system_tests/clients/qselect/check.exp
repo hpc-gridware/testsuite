@@ -76,7 +76,7 @@ proc qselect_setup {} {
 
    set q(pe_list) "qsel_pe"
    set q(user_lists) "qsel_users"
-   add_queue "qsel" "@allhosts" q
+   add_queue "qsel" [get_all_hosts_hostgroup] q
 }
 
 proc qselect_cleanup {} {

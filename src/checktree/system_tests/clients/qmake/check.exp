@@ -73,7 +73,7 @@ proc qmake_setup {} {
    # create a qmake queue
    set queue(load_thresholds) "np_load_avg=11"
    set queue(slots)           10
-   add_queue "qmake.q" "@allhosts" queue
+   add_queue "qmake.q" [get_all_hosts_hostgroup] queue
 }
 
 proc qmake_setup_level {} {

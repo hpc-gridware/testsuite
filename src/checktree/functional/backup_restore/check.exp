@@ -168,7 +168,7 @@ proc backup_restore_do_backup_restore {} {
    close_spawn_process $id
 
    #adding a queue
-   add_queue "lila.q" "@allhosts" "" 1
+   add_queue "lila.q" [get_all_hosts_hostgroup] "" 1
 
    # TODO Try to restore the database with running master (should not be possible)
 

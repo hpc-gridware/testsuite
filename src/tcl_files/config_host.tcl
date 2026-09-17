@@ -3163,6 +3163,55 @@ proc host_conf_get_suited_hosts {{num_hosts_param 1} {preferred_archs {}} {selec
    return $hosts
 }
 
+## @brief Rotate a node list so that the cluster's master host comes first
+#
+# The testsuite hands out hosts deterministically: config.tcl derives
+# ts_config(execd_nodes) from execd_hosts and then lsort's it, and with
+# CHECK_DETERMINISTIC_HOST_SELECT set -- the default -- host selection takes
+# that list in order. Every cluster therefore sees the same sorted list and
+# every test asking for one host gets the same, alphabetically first, host.
+#
+# On a runner fleet that concentrates the whole test load of every cluster on
+# one machine. Measured on the 92x fleet on 2026-09-15, eight clusters over four
+# hosts, during a full run: host-0000 carried load15 3.81 against 0.69, 0.74 and
+# 0.81 on the other three -- five to six times as much in absolute terms, and
+# still 1.3 to 2.3 times as much per core, although it has the most cores by far.
+#
+# Rotating to the master host fixes that without giving up reproducibility: the
+# master host differs per runner, so each runner starts at a different point of
+# the same list, while a given cluster still makes the same choice for the same
+# test every time. Sorting the list and then rotating it is what keeps both
+# properties -- the order stays a function of the configuration alone.
+#
+# The master host first, rather than the one after it, is deliberate: a great
+# many checks submit to ts_config(master_host) directly instead of letting the
+# scheduler place the job, so master host and test host coincide anyway. Keeping
+# them on one machine per cluster spreads the pair across the fleet rather than
+# smearing each cluster over two machines.
+#
+# @param nodes list of node names, in the order the configuration produced
+# @return the list rotated so the master host leads, or unchanged when the
+#         master host is not part of it
+proc host_conf_rotate_to_master {nodes} {
+   get_current_cluster_config_array ts_config
+
+   set master [resolve_host $ts_config(master_host)]
+   set pos -1
+   set i 0
+   foreach node $nodes {
+      if {[resolve_host $node] == $master} {
+         set pos $i
+         break
+      }
+      incr i
+   }
+   # not in the list, or already leading: nothing to do
+   if {$pos <= 0} {
+      return $nodes
+   }
+   return [concat [lrange $nodes $pos end] [lrange $nodes 0 [expr {$pos - 1}]]]
+}
+
 #****** config_host/host_conf_get_suited_hosts_rebuild_cache() *****************
 #  NAME
 #     host_conf_get_suited_hosts_rebuild_cache() -- initialization (internal)
@@ -3203,7 +3252,8 @@ proc host_conf_get_suited_hosts_rebuild_cache {} {
 
    # (re)build cache, if it doesn't exist
    if {![info exists suited_host_cache]} {
-      foreach host $ts_config(execd_nodes) {
+      # rotated, so this cluster does not start where every other one does
+      foreach host [host_conf_rotate_to_master $ts_config(execd_nodes)] {
          set suited_host_cache($host) 0
          set arch [host_conf_get_arch $host]
          if {![info exists suited_arch_cache($arch)]} {

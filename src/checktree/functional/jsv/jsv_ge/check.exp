@@ -109,7 +109,7 @@ proc jsv_ge_setup {} {
 
    # create queue
    set q_param(load_thresholds) "np_load_avg=100.00"
-   set result [add_queue "all2.q" "@allhosts" q_param]
+   set result [add_queue "all2.q" [get_all_hosts_hostgroup] q_param]
 
    # get base path of scripts
    set jsv_base_path $ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_ge
@@ -157,7 +157,7 @@ proc jsv_ge_cleanup {} {
    reset_config_and_propagate jsv_org_global_conf
 
    # remove the test queue
-   del_queue "all2.q" "@allhosts" 0 1
+   del_queue "all2.q" [get_all_hosts_hostgroup] 0 1
 
    # unset our test's global variables
    unset -nocomplain jsv_org_global_conf jsv_base_path

@@ -78,7 +78,7 @@ proc deadline_calculation_setup {  } {
 
    ts_log_fine "Add queue $deadline_queue_name"
    
-   add_queue $deadline_queue_name "@allhosts" queue_conf 1
+   add_queue $deadline_queue_name [get_all_hosts_hostgroup] queue_conf 1
    
    set queue_list {}
    foreach host $ts_config(execd_nodes) {
@@ -95,7 +95,7 @@ proc deadline_calculation_cleanup {  } {
    delete_all_jobs
    wait_for_end_of_all_jobs 60
    
-   del_queue $deadline_queue_name "@allhosts" 0 1
+   del_queue $deadline_queue_name [get_all_hosts_hostgroup] 0 1
    
    set queue_list {}
    foreach host $ts_config(execd_nodes) {
