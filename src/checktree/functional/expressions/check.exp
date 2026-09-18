@@ -61,6 +61,8 @@ lappend check_functions "qsub_host_expression_test"
 lappend check_functions "qsub_group_expression_test"
 lappend check_functions "qsub_complex_expression_test1"
 lappend check_functions "qsub_complex_expression_test2"
+lappend check_functions "qsub_character_class_test"
+lappend check_functions "qsub_character_class_comma_test"
 
 
 global eval_expression_test_hosts
@@ -154,3 +156,72 @@ proc qsub_complex_expression_test2 {} {
 }
     
     
+
+
+##
+# @brief A character class in a request pattern is honoured
+#
+# sge_types(1) documents "[...]" as an array or a range of allowed characters
+# for one position. This submits a pattern built from a real host name with its
+# first character replaced by a class, so the class has to match for the job to
+# run at all.
+#
+# The control for the test below: this class contains no separator, so it is
+# unaffected by how the request string is split into requests.
+proc qsub_character_class_test {} {
+   get_current_cluster_config_array ts_config
+
+   set host [host_conf_get_suited_hosts 1]
+   set first [string index $host 0]
+   set rest  [string range $host 1 end]
+
+   set remote_host_arg "-l 'h=\[$first]$rest'"
+   set output_argument "-o /dev/null -e /dev/null"
+   set job_argument "$ts_config(product_root)/examples/jobs/sleeper.sh 60"
+
+   ts_log_fine "Submit job: $remote_host_arg $output_argument $job_argument"
+   set job_id [submit_job "$remote_host_arg $output_argument $job_argument" 1 60 "" ""]
+   if {$job_id > 0} {
+      wait_for_job_state $job_id "r" 60
+   }
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+##
+# @brief A character class containing a comma is honoured
+#
+# Same pattern as above, but the class lists two alternatives separated by a
+# comma - "[r,x]ocky-8-amd64-1" matches a host whose name starts with "r".
+#
+# The request string used to be split on every comma and every space regardless
+# of context, so this one was torn into "h=[r" and a second request named "x]..."
+# and the submission failed with a complaint about an unknown resource. A
+# separator inside a bracketed part of the value is payload, not a separator.
+proc qsub_character_class_comma_test {} {
+   get_current_cluster_config_array ts_config
+
+   # the request string was split on every comma before CS-2741, so this class was torn
+   # in two and the submission failed. The control above is not gated, it passes either way.
+   if {![is_version_in_range "9.1.6"]} {
+      ts_log_config "a comma in a character class is fixed in 9.1.6 (CS-2741), skipping"
+      return
+   }
+
+   set host [host_conf_get_suited_hosts 1]
+   set first [string index $host 0]
+   set rest  [string range $host 1 end]
+
+   # a class matching the real first character, a comma, or an "x"
+   set remote_host_arg "-l 'h=\[$first,x]$rest'"
+   set output_argument "-o /dev/null -e /dev/null"
+   set job_argument "$ts_config(product_root)/examples/jobs/sleeper.sh 60"
+
+   ts_log_fine "Submit job: $remote_host_arg $output_argument $job_argument"
+   set job_id [submit_job "$remote_host_arg $output_argument $job_argument" 1 60 "" ""]
+   if {$job_id > 0} {
+      wait_for_job_state $job_id "r" 60
+   }
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
