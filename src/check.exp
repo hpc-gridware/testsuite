@@ -1580,19 +1580,33 @@ proc get_local_hostname {} {
    testsuite_shutdown 1
 }
 
-#****** check/check_executable_files() *****************************************
-#  NAME
-#     check_executable_files() -- check if testsuite files are executable
+## @brief Whether a permission string grants execute to user, group and other.
 #
-#  SYNOPSIS
-#     check_executable_files { }
+# CS-2802: the check used to demand the mode be exactly 00755, although what the
+# testsuite needs is only that it and the test users can run the script. A file
+# with 00775 - which is what a checkout under umask 0002 produces - is executable
+# by everyone and used to be rejected.
 #
-#  FUNCTION
-#     testsuite setup
+# "file attributes -permissions" renders the mode as "00755" on Tcl 8 and
+# "0o755" on Tcl 9, so the octal digits are taken from the end of the string
+# instead of assuming one of the two spellings.
 #
-#  SEE ALSO
-#     check/setup2()
-#*******************************************************************************
+# @param attribs permission string as returned by "file attributes -permissions"
+# @return 1 when a+x is set, 0 otherwise
+proc ts_mode_is_executable {attribs} {
+   if { ![regexp {([0-7]{3,4})$} $attribs -> oct] } {
+      return 0
+   }
+   return [expr {([scan $oct %o] & 0111) == 0111}]
+}
+
+## @brief Verify that the scripts the testsuite runs are executable.
+#
+# Covers the testsuite's own helper scripts, the job scripts the checktree
+# submits and the shipped example jobs. A file that is not executable by
+# everyone is repaired rather than reported, because a test run cannot ask.
+#
+# @return none
 proc check_executable_files {  } {
    global ts_config
 
@@ -1657,34 +1671,25 @@ proc check_executable_files {  } {
          continue
       }
       set attribs [ file attributes $filename -permissions]
-      if { [ string compare $attribs "00755" ] != 0 && [ string compare $attribs "0o755" ]} {
-         puts "file not executable (attributes: $attribs):\n $filename"
+      if { ![ts_mode_is_executable $attribs] } {
+         ts_log_fine "not executable by all (attributes: $attribs): $filename"
          lappend change_files $filename
          set file_error 1
          continue
       }
    }
 
-   if { $file_error != 0 } {
-      while { 1 } {
-         puts "should I set the file permissions to 00755? (yes/no)"
-         set answer [wait_for_enter 1]
-         if { [ string compare $answer "yes" ] == 0 } {
-            foreach elem $change_files {
-                catch { file attributes $elem -permissions 00755 }
-                set attribs [ file attributes $elem -permissions]
-                if { [ string compare $attribs "00755" ] != 0 && [ string compare $attribs "0o755" ] } {
-                   ts_log_fine "check_executable_files - error setting file permissions: $elem"
-                   testsuite_shutdown 1
-                }
-            }
-            break
-         }
-         if { [ string compare $answer "no" ] == 0 } {
-            ts_log_fine "check_executable_files - file errors. exit."
+   if { $file_error != 0 && [llength $change_files] > 0 } {
+      # CS-2802: repair without asking. A setup check cannot prompt - in an
+      # automated run nobody answers, and wait_for_enter() either loops forever
+      # (atimeout 0) or dies without a tty, which kills the whole run silently.
+      foreach elem $change_files {
+         catch { file attributes $elem -permissions 00755 }
+         if { ![ts_mode_is_executable [file attributes $elem -permissions]] } {
+            ts_log_severe "check_executable_files - cannot make executable: $elem"
             testsuite_shutdown 1
          }
-         puts "please enter \"yes\" or \"no\"!"
+         ts_log_fine "check_executable_files - made executable: $elem"
       }
    }
 }
