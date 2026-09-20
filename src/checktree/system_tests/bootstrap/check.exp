@@ -249,6 +249,28 @@ proc bootstrap_parsing_expect_required {attribute} {
 }
 
 ##
+# @brief Run one case which has to be refused and check the reason it was refused for.
+#
+# As with a missing attribute, the exit status alone would not tell a refusal for the
+# reason under test from one for any other reason, so the output has to name it.
+#
+# @param a_replace  attribute name to whole replacement line, as for the run above
+# @param what       what the case is about, for the messages
+# @param reason     text the output has to contain
+# @return nothing, a failed case is reported with ts_log_severe
+proc bootstrap_parsing_expect_refused {a_replace what reason} {
+   upvar $a_replace replace
+
+   set output [bootstrap_parsing_run replace parsed exit_state]
+   if {$exit_state == 0} {
+      ts_log_severe "a bootstrap file with $what was read successfully:\n$output"
+   } elseif {[string first $reason $output] < 0} {
+      ts_log_severe "a bootstrap file with $what was refused, but the output does not\
+                     say \"$reason\":\n$output"
+   }
+}
+
+##
 # @brief admin_user is taken as it is written.
 proc bootstrap_parsing_admin_user {} {
    set replace(admin_user) "admin_user sgetest"
@@ -348,9 +370,13 @@ proc bootstrap_parsing_stored_attributes {} {
 # in the order the product numbers them rather than in the order they were written.
 #
 # The case which matters is the one nobody wants to be wrong about: a mode which is
-# not recognised must not switch anything on. An administrator who misspells a mode
-# is told nothing today, so the file reads as if it had asked for no mode at all -
-# that is what the last case pins down.
+# not recognised must not switch anything on. Up to 9.1 an administrator who misspells
+# a mode is told nothing, so the file reads as if it had asked for no mode at all.
+# From 9.2.0 on such a file is refused, because the typo would otherwise leave a
+# cluster unsecured that its administrator believes to be secured. The modes removed
+# in 9.2.0 (csp, dce, kerberos) are refused for the same reason.
+#
+# @return nothing, a failed case is reported with ts_log_severe
 proc bootstrap_parsing_security_mode {} {
    set replace(security_mode) "security_mode none"
    set expect(security_modes) "NONE"
@@ -372,10 +398,23 @@ proc bootstrap_parsing_security_mode {} {
    array unset expect
 
    set replace(security_mode) "security_mode mnuge"
-   set expect(security_modes) "NONE"
-   bootstrap_parsing_expect replace expect "a misspelled security_mode"
+   if {[is_version_in_range "9.2.0"]} {
+      bootstrap_parsing_expect_refused replace "a misspelled security_mode" \
+                                       "unknown security mode \"mnuge\""
+   } else {
+      set expect(security_modes) "NONE"
+      bootstrap_parsing_expect replace expect "a misspelled security_mode"
+   }
    array unset replace
    array unset expect
+
+   # a removed mode is refused as well, and the message names the remaining ones
+   if {[is_version_in_range "9.2.0"]} {
+      set replace(security_mode) "security_mode csp"
+      bootstrap_parsing_expect_refused replace "the removed security_mode csp" \
+                                       "security mode \"csp\" is no longer supported"
+      array unset replace
+   }
 
    bootstrap_parsing_expect_required "security_mode"
 }
