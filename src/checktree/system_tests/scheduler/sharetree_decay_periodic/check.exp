@@ -218,10 +218,10 @@ proc sharetree_decay_periodic_run_one {sleep_time {project ""}} {
 # Common populate-wait-ping-read flow used by both check functions.
 #
 # Clears all usage, runs one user-only job + one project job to populate
-# UU_/PR_/UPP_, samples u0/p0/up0, waits 90 s with no submissions, pings
-# with a sleep-0 project job to force a decay-and-sum on the pre-refactor
-# tree (no-op on the post-refactor tree), samples u1/p1/up1, and returns
-# the six values via upvar.
+# UU_/PR_/UPP_, samples u0/p0/up0, waits 90 s with no submissions, triggers
+# a scheduler run so the pre-refactor tree applies the decay (no-op on the
+# post-refactor tree, where the timed event thread has done it), samples
+# u1/p1/up1, and returns the six values via upvar.
 #
 # Returns 1 on success, 0 if any step failed (in which case the caller
 # should return early - errors have already been logged by the helpers).
@@ -264,15 +264,18 @@ proc sharetree_decay_periodic_measure {u0_var p0_var up0_var u1_var p1_var up1_v
    # 2. wait without any submissions so wallclock decay applies.
    sleep_for_seconds 90 "waiting for usage to decay"
 
-   # 3. ping with a sleep-0 project job. On the pre-refactor tree the
-   # finish triggers decay_and_sum_usage (decay catch-up + sum ~ 0). On
-   # the post-refactor tree the TET task has already decayed and the
-   # ping needn't be done. The project ping touches user, project and UPP_
-   # objects so all three are guaranteed to be decay-stamped fresh.
+   # 3. apply the decay. On the pre-refactor tree the decay is applied by a
+   # scheduler run - and the setup pins schedule_interval to five minutes, so
+   # none happens during the 90 s wait above. A trigger is therefore needed,
+   # and it must not be a job: a finishing job runs decay_and_sum_usage, but
+   # it also books its own usage. Measured on 9.1.6 (CS-2803), one sleep-0
+   # ping adds ~0.37 of cpu while the wait only decays ~0.18 at halftime=1,
+   # so the ping alone turned p1 < p0 into p1 > p0. qconf -tsm applies the
+   # accumulated decay and books nothing. On the post-refactor tree the TET
+   # task has decayed already and the trigger is a no-op.
    if {[is_version_in_range "" "9.2.0"]} {
-      if {[sharetree_decay_periodic_run_one 0 $sharetree_decay_periodic_project] != 0} {
-         return 0
-      }
+      trigger_scheduling
+      sleep_for_seconds 5 "waiting for the decay to be applied"
    }
 
    set u1  [sharetree_decay_periodic_cpu $user_node]
@@ -288,8 +291,9 @@ proc sharetree_decay_periodic_measure {u0_var p0_var up0_var u1_var p1_var up1_v
 # Verifies that the top-level `halftime` field drives decay. Sets halftime
 # to the smallest accepted value (1, i.e. 1 hour) and clears
 # halflife_decay_list. With the setup's pinned STREE_TICK_INTERVAL=10
-# (post-refactor only - ignored on the pre-refactor tree where decay is
-# finish-driven), the expected decay over the test's 90 s wait is
+# (post-refactor only - on the pre-refactor tree the decay is applied by a
+# scheduler run, which the measure proc triggers), the expected decay over
+# the test's 90 s wait is
 # small (~ 1.7 % using the Euler approximation in ocs_Usage.cc:77) - this
 # check therefore asserts only the strict invariant "each post-wait value
 # is less than the corresponding pre-wait value".
