@@ -27,7 +27,7 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2024-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2024-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
@@ -327,8 +327,8 @@ proc mod_userlist {userlist array {fast_add 1} {on_host ""} {as_user ""} {raise_
 #     change_array    - array name with settings to modifiy
 #                       (e.g. set my_settings(default_project) NONE )
 #                       -> array name "name" must be set (for username)
-#     {fast_add 1} - if not 0 the add_calendar procedure will use a file for
-#                    adding a calendar
+#     {fast_add 1} - if not 0 the mod_user procedure will use a file for
+#                    modifying an user
 #     {on_host ""}    - execute qconf on this host, default is master host
 #     {as_user ""}    - execute qconf as this user, default is $CHECK_USER
 #     {raise_error 1} - raise error condition in case of errors

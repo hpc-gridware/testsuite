@@ -45,7 +45,7 @@ set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "qconf"
-set check_category        "EVENTCLIENT QCONF RQS SHARETREE TESTBIN VERIFIED"
+set check_category        "CALENDAR EVENTCLIENT QCONF RQS SHARETREE TESTBIN VERIFIED"
 set check_description(0)  "test all qconf options (test not complete)"
 set check_description(1)  "qconf -help output messages (qconf_brief_exercise)"
 set check_description(2)  "qconf backslash parsing of space/comma separated values"

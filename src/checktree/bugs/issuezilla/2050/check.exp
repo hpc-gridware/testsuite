@@ -27,29 +27,29 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2024,2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
 ## Issue 2050: still used usersets can be removed under certain conditions
 
 # define global variable in this namespace
-global check_name 
-global check_category 
-global check_description 
+global check_name
+global check_category
+global check_description
 global check_needs
-global check_functions 
+global check_functions
 global check_root_access_needs
 
 set check_root_access_needs "yes"
 
 # define test's name and run level descriptions
 set check_name            "issue_2050"
-set check_category        "COMPATIBILITY SYSTEM IJS VERIFIED"
+set check_category        "CALENDAR IJS VERIFIED"
 set check_description(0)  "check setup qlogin_daemon rlogin_daemon paths"
 
 # define test's dependencies
-set check_needs           "init_core_system" 
+set check_needs           "init_core_system"
 
 # setup and cleanup functions
 set check_setup_function issue_2050_setup
@@ -67,7 +67,7 @@ lappend check_functions "issue_2050_test"
 
 proc issue_2050_setup  {} {
    global test_host
-   global test_queue act_time 
+   global test_queue act_time
    global issue_2050_complex_backup
 
    get_complex issue_2050_complex_backup
@@ -100,11 +100,11 @@ proc issue_2050_cleanup  {} {
 # This is a test to check if objects, after being referenced in a queue are
 # gettting deleted without error or not (see CR 6422335)
 # The objects are deleted esp when they are referenced in queue instances of
-# non-existant hosts 
+# non-existant hosts
 
 proc issue_2050_test {} {
    global ts_config ts_user_config CHECK_USER
-   global test_queue act_time 
+   global test_queue act_time
    set test_items {}
    set act_time [timestamp]
    set object_spec "queue"
@@ -123,7 +123,7 @@ proc issue_2050_test {} {
       switch -exact $item {
          "ul" {
             ts_log_fine "-------- Testing userlists --------"
-            set test_userlist "testul_$act_time"         
+            set test_userlist "testul_$act_time"
             #create a userlist by adding a user to it
             ts_log_fine "Creating new userlist $test_userlist"
             set result [add_access_list $CHECK_USER $test_userlist]
@@ -160,7 +160,7 @@ proc issue_2050_test {} {
 
          "projects" {
             ts_log_fine "-------- Testing projects --------"
-            set test_project "testprj_$act_time"         
+            set test_project "testprj_$act_time"
             set error_mail_output ""
 
             #create a project by adding a user to it
@@ -179,7 +179,7 @@ proc issue_2050_test {} {
             } else {
                ts_log_fine "unable to add project($test_project) to $test_queueinst"
             }
-             
+
             #now try deleting the project, it should throw an error!
             ts_log_fine "Deleting project $test_project"
             set result [del_project $test_project "" "" 0]
@@ -200,9 +200,9 @@ proc issue_2050_test {} {
 
          "pe" {
             ts_log_fine "-------- Testing pe --------"
-            set test_pe "testpe_$act_time"         
+            set test_pe "testpe_$act_time"
             set error_mail_output ""
-            #create a pe 
+            #create a pe
             ts_log_fine "Creating new pe $test_pe"
             set result [add_pe "$test_pe"]
             if {$result == 0} {
@@ -238,7 +238,7 @@ proc issue_2050_test {} {
 
          "complexes" {
             ts_log_fine "-------- Testing complexes --------"
-            set test_complex "testcl_$act_time"         
+            set test_complex "testcl_$act_time"
             set error_mail_output ""
             #create a complex
             ts_log_fine "Creating new complex $test_complex"
@@ -318,7 +318,7 @@ proc issue_2050_test {} {
 
          "ckpt" {
             ts_log_fine "-------- Testing checkpoints --------"
-            set test_checkpoint "testckpt_$act_time"     
+            set test_checkpoint "testckpt_$act_time"
             #create a new checkpoint
             ts_log_fine "Creating new checkpoint $test_checkpoint"
             set result [add_ckpt "$test_checkpoint"]
