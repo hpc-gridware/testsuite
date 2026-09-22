@@ -27,7 +27,7 @@ global check_root_access_needs
 global check_need_running_system
 global check_version_range
 
-set check_version_range "9.1.6"
+set check_version_range "9.1.7"
 
 # CS-1000: a queue which a calendar closes later on gets no resource reservation before that
 # closed period, even when the reservation would fit there comfortably. The reservation is
