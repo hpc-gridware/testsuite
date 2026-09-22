@@ -1,0 +1,414 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+
+# CS-1000: a queue which a calendar closes later on gets no resource reservation before that
+# closed period, even when the reservation would fit there comfortably. The reservation is
+# pushed to the end of the closed period instead, which is far too late to be of any use -
+# other jobs backfill the resources in the meantime.
+#
+# The check runs one scenario twice on a queue with a single slot: a job occupies the slot for
+# a known time, a second job asks for a reservation with -R y, and the reservation has to be
+# placed at the moment the first job releases the slot. The first run has no calendar attached
+# and establishes that expectation; the second attaches a calendar which closes the queue well
+# after that moment, and the reservation has to stay where it was. Before the fix it moves to
+# the end of the closed period.
+#
+# The scheduler reaches the reservation time along two different paths, so the scenario runs on
+# two levels: a sequential job asks utilization_below() for the time a resource frees up, while a
+# parallel job walks the queue end time iterator instead. Both used to stop at the first blocked
+# stretch and land behind the closed period.
+#
+# The reservation becomes visible in the schedule file, so the scheduler runs with
+# MONITOR=true. A record there reads
+#    8:1:RESERVING:1739257200000000:3660000000:Q:all.q@host:slots:1.000000
+# that is job, task, state, start and duration in microseconds, then the object the
+# utilization is booked on.
+
+set check_name           "rr_calendar_window"
+set check_category       "BUG CALENDAR RESERVATION SCHEDULER VERIFIED"
+set check_description(0) "a reservation is placed before a calendar closes the queue"
+set check_description(1) "the same for a parallel job, which reserves along another path"
+
+set check_needs          "init_core_system"
+
+set check_setup_function         rr_cal_setup
+set check_setup_level_function   rr_cal_setup_level
+set check_cleanup_level_function rr_cal_cleanup_level
+set check_cleanup_function       rr_cal_cleanup
+
+set check_functions {}
+lappend check_functions "rr_cal_reservation_without_calendar"
+lappend check_functions "rr_cal_reservation_before_closed_period"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc rr_cal_setup {} {
+   get_current_cluster_config_array ts_config
+   global rr_cal_host rr_cal_queue rr_cal_calendar rr_cal_pe rr_cal_runtime
+   global rr_cal_calendar_attached
+
+   set rr_cal_host     [lindex $ts_config(execd_nodes) 0]
+   set rr_cal_queue    "rrcal.q"
+   set rr_cal_calendar "rrcal.cal"
+   set rr_cal_pe       "rrcal.pe"
+   # how long the blocking job holds the slot; the reservation is expected one
+   # DURATION_OFFSET after that, which the scheduler adds itself
+   set rr_cal_runtime  120
+   set rr_cal_calendar_attached 0
+
+   # The parallel level submits its jobs through this PE. One host holds the whole job, so that
+   # the two jobs compete for the same slots the way the sequential ones do.
+   set pe_conf(slots)           "999"
+   set pe_conf(allocation_rule) "\$fill_up"
+   if {[add_pe $rr_cal_pe pe_conf] < 0} {
+      ts_log_config "cannot create pe $rr_cal_pe"
+      return 99
+   }
+
+   # One host, and as many slots as a job takes - so the second job cannot start anywhere and has
+   # to ask for a reservation rather than simply running somewhere. The slot count belongs to the
+   # level, a parallel job needs more than one.
+   set queue_conf(slots)           "1"
+   set queue_conf(load_thresholds) "NONE"
+   set queue_conf(pe_list)         $rr_cal_pe
+   if {[add_queue $rr_cal_queue $rr_cal_host queue_conf 1] < 0} {
+      ts_log_config "cannot create queue $rr_cal_queue on host $rr_cal_host"
+      return 99
+   }
+
+   # MONITOR=true writes the schedule file, which is where a reservation can be seen at all.
+   # The weights are zeroed so that the order of the two jobs follows submission alone, and
+   # max_reservation has to be > 0 for any reservation to be made.
+   set schedconf(params)                     "MONITOR=true"
+   set schedconf(schedule_interval)          "0:0:05"
+   set schedconf(max_reservation)            "10"
+   set schedconf(weight_urgency)             "0.000000"
+   set schedconf(weight_ticket)              "0.000000"
+   set schedconf(weight_priority)            "1.000000"
+   set schedconf(job_load_adjustments)       "NONE"
+   set schedconf(load_adjustment_decay_time) "0:0:00"
+   set schedconf(schedd_job_info)            "true"
+   if {[set_schedd_config schedconf] < 0} {
+      ts_log_config "cannot configure the scheduler for reservation monitoring"
+      return 99
+   }
+}
+
+## @brief the level decides how many slots a job takes and how it is submitted
+#
+# Level 0 submits plain sequential jobs, level 1 sends them through a PE. The two reach the
+# reservation time by different code, so both are worth running.
+proc rr_cal_setup_level {} {
+   global CHECK_ACT_LEVEL
+   global rr_cal_host rr_cal_queue rr_cal_pe rr_cal_job_opts rr_cal_calendar_attached
+
+   set rr_cal_calendar_attached 0
+
+   switch $CHECK_ACT_LEVEL {
+      0 {
+         set slots 1
+         set rr_cal_job_opts ""
+      }
+      1 {
+         # two slots, and a job which takes both of them
+         set slots 2
+         set rr_cal_job_opts "-pe $rr_cal_pe 2"
+      }
+   }
+
+   unset -nocomplain queue_conf
+   set queue_conf(slots) $slots
+   if {[mod_queue $rr_cal_queue $rr_cal_host queue_conf 1] < 0} {
+      ts_log_config "cannot give queue $rr_cal_queue $slots slots"
+      return 99
+   }
+}
+
+proc rr_cal_cleanup_level {} {
+   global rr_cal_host rr_cal_queue rr_cal_calendar
+   global rr_cal_calendar_attached rr_cal_close_start rr_cal_close_end
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # The next level starts with its control run, which has to see a queue without a calendar.
+   # The queue references the calendar, so it has to let go of it first.
+   if {$rr_cal_calendar_attached} {
+      unset -nocomplain queue_conf
+      set queue_conf(calendar) "NONE"
+      mod_queue $rr_cal_queue $rr_cal_host queue_conf 1 "" "" 0
+      del_calendar $rr_cal_calendar "" "" 0
+      set rr_cal_calendar_attached 0
+   }
+
+   unset -nocomplain rr_cal_close_start rr_cal_close_end
+}
+
+proc rr_cal_cleanup {} {
+   global rr_cal_host rr_cal_queue rr_cal_calendar rr_cal_pe rr_cal_runtime
+   global rr_cal_calendar_attached rr_cal_job_opts
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # the queue references the pe, so it goes first
+   del_queue $rr_cal_queue $rr_cal_host 0 1
+   del_pe $rr_cal_pe "" "" 0
+   reset_schedd_config
+
+   unset -nocomplain rr_cal_host rr_cal_queue rr_cal_calendar rr_cal_pe rr_cal_runtime
+   unset -nocomplain rr_cal_calendar_attached rr_cal_job_opts
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief render a schedule file timestamp for a message
+#
+# The schedule file counts microseconds, which says nothing to a reader of the test output.
+proc rr_cal_format_us {us} {
+   return [clock format [expr {$us / 1000000}] -format "%Y-%m-%d %H:%M:%S"]
+}
+
+## @brief the last schedule record of one job in one state
+#
+# The scheduler appends a block per run, so the same job appears repeatedly and only the most
+# recent record describes the decision that stands. Fills in the start time and the duration,
+# both in microseconds, and returns 1 when a record was found.
+proc rr_cal_last_record {job_id state start_var duration_var} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   upvar $start_var start
+   upvar $duration_var duration
+
+   set start ""
+   set duration ""
+
+   set schedule_file "$ts_config(product_root)/$ts_config(cell)/common/schedule"
+   unset -nocomplain content
+   get_file_content $ts_config(master_host) $CHECK_USER $schedule_file content
+   if {$content(0) <= 0} {
+      ts_log_severe "the schedule file $schedule_file is empty - is MONITOR=true in effect?"
+      return 0
+   }
+
+   for {set i 1} {$i <= $content(0)} {incr i} {
+      set line [string trim $content($i)]
+      set pattern "^${job_id}:\[0-9\]+:${state}:(\[0-9\]+):(\[0-9\]+):"
+      if {[regexp $pattern $line -> rec_start rec_dur]} {
+         set start $rec_start
+         set duration $rec_dur
+      }
+   }
+
+   return [expr {$start ne ""}]
+}
+
+## @brief wait until the scheduler has written a record of the wanted state for a job
+#
+# Returns 1 once the record is there, 0 when it did not appear within the timeout.
+proc rr_cal_wait_for_record {job_id state start_var duration_var {timeout 90}} {
+   upvar $start_var start
+   upvar $duration_var duration
+
+   set end_time [expr {[clock seconds] + $timeout}]
+   while {[clock seconds] < $end_time} {
+      trigger_scheduling
+      sleep_for_seconds 5
+      if {[rr_cal_last_record $job_id $state start duration]} {
+         return 1
+      }
+   }
+
+   return 0
+}
+
+## @brief attach a calendar which closes the queue later today
+#
+# The closed period begins well after the blocking job has released the slot, so a reservation
+# has room before it. A year calendar names a day and a daytime range on that day, so the whole
+# window has to fall within today.
+proc rr_cal_attach_calendar {} {
+   global rr_cal_host rr_cal_queue rr_cal_calendar
+   global rr_cal_calendar_attached rr_cal_close_start rr_cal_close_end
+
+   set now [clock seconds]
+   set rr_cal_close_start [expr {$now + 900}]
+   set rr_cal_close_end   [expr {$now + 1800}]
+
+   if {[clock format $now -format "%j"] != [clock format $rr_cal_close_end -format "%j"]} {
+      ts_log_config "the closed period would cross midnight, the year calendar cannot say that"
+      return 0
+   }
+
+   # scan drops a leading zero, which also keeps the numbers out of octal territory
+   set day   [scan [clock format $now -format "%d"] "%d"]
+   set month [scan [clock format $now -format "%m"] "%d"]
+   set year  [clock format $now -format "%Y"]
+   set from  [clock format $rr_cal_close_start -format "%H:%M:%S"]
+   set to    [clock format $rr_cal_close_end -format "%H:%M:%S"]
+
+   unset -nocomplain cal_conf
+   set cal_conf(calendar_name) $rr_cal_calendar
+   set cal_conf(year)          "$day.$month.$year=$from-$to=off"
+   set cal_conf(week)          "NONE"
+   if {[add_calendar $rr_cal_calendar cal_conf] < 0} {
+      ts_log_severe "cannot create calendar $rr_cal_calendar with year $cal_conf(year)"
+      return 0
+   }
+   set rr_cal_calendar_attached 1
+
+   unset -nocomplain queue_conf
+   set queue_conf(calendar) $rr_cal_calendar
+   if {[mod_queue $rr_cal_queue $rr_cal_host queue_conf 1] < 0} {
+      ts_log_severe "cannot attach calendar $rr_cal_calendar to queue $rr_cal_queue"
+      return 0
+   }
+
+   set from_txt [rr_cal_format_us [expr {$rr_cal_close_start * 1000000}]]
+   set to_txt   [rr_cal_format_us [expr {$rr_cal_close_end * 1000000}]]
+   ts_log_fine "queue $rr_cal_queue is closed from $from_txt until $to_txt"
+   return 1
+}
+
+## @brief occupy the queue, then ask for a reservation and say where it landed
+#
+# Fills in the moment the blocking job releases the slot and the moment the reservation was
+# made for, both in microseconds. Returns 1 when both were observed.
+proc rr_cal_run_scenario {expected_var reserved_var} {
+   get_current_cluster_config_array ts_config
+   global rr_cal_queue rr_cal_runtime rr_cal_job_opts
+   upvar $expected_var expected
+   upvar $reserved_var reserved
+
+   set job_args "-o /dev/null -j y -q $rr_cal_queue -l h_rt=$rr_cal_runtime $rr_cal_job_opts"
+   set sleeper "$ts_config(product_root)/examples/jobs/sleeper.sh $rr_cal_runtime"
+
+   # the job which holds the slots
+   set blocker [submit_job "$job_args $sleeper"]
+   if {$blocker <= 0} {
+      ts_log_severe "could not submit the blocking job"
+      return 0
+   }
+   trigger_scheduling
+   if {[wait_for_jobstart $blocker "" 60] != 0} {
+      ts_log_severe "the blocking job $blocker did not start in queue $rr_cal_queue"
+      return 0
+   }
+
+   # the job under test - the queue is taken, so it has to reserve
+   set reserver [submit_job "$job_args -R y $sleeper"]
+   if {$reserver <= 0} {
+      ts_log_severe "could not submit the reserving job"
+      return 0
+   }
+
+   if {![rr_cal_wait_for_record $reserver "RESERVING" res_start res_duration]} {
+      set qstat_output [start_sge_bin "qstat" "-j $reserver"]
+      ts_log_severe "job $reserver did not get a resource reservation at all\n$qstat_output"
+      return 0
+   }
+
+   # The blocking job's own record says when it lets the slot go: its start plus the duration
+   # the scheduler booked for it, which already carries the DURATION_OFFSET.
+   if {![rr_cal_last_record $blocker "RUNNING" run_start run_duration]} {
+      ts_log_severe "the schedule file holds no RUNNING record for the blocking job $blocker"
+      return 0
+   }
+
+   set expected [expr {$run_start + $run_duration}]
+   set reserved $res_start
+
+   ts_log_fine "blocking job $blocker holds the slot until [rr_cal_format_us $expected],\
+                reserving job $reserver is reserved for [rr_cal_format_us $reserved]"
+   return 1
+}
+
+## @brief clear the jobs of one scenario away before the next one runs
+proc rr_cal_clear {} {
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief without a calendar the reservation is made for the moment the slot frees up
+#
+# This is the control. It fixes what "correct" means for the scenario, so that a failure of the
+# calendar case below cannot be blamed on the arithmetic or on the way the schedule file is read.
+proc rr_cal_reservation_without_calendar {} {
+   if {![rr_cal_run_scenario expected reserved]} {
+      rr_cal_clear
+      return
+   }
+
+   if {$reserved != $expected} {
+      ts_log_severe "without any calendar the reservation should be made for\
+                     [rr_cal_format_us $expected], the moment the blocking job releases the\
+                     slot, but it was made for [rr_cal_format_us $reserved]"
+   }
+
+   rr_cal_clear
+}
+
+## @brief a closed period later in the day does not push the reservation behind it
+#
+# The queue is open now and stays open long enough for the reservation to sit in front of the
+# closed period. Before the fix the reservation was made for the end of the closed period
+# instead, by which time other jobs have long since taken the resources.
+proc rr_cal_reservation_before_closed_period {} {
+   global rr_cal_close_start rr_cal_close_end
+
+   if {![rr_cal_attach_calendar]} {
+      return
+   }
+
+   if {![rr_cal_run_scenario expected reserved]} {
+      rr_cal_clear
+      return
+   }
+
+   if {$reserved != $expected} {
+      set detail ""
+      if {$reserved >= [expr {$rr_cal_close_end * 1000000}]} {
+         set detail " The reservation sits at or behind the end of the closed period, so it was\
+                     pushed past it instead of being placed in the open window before it."
+      }
+      set open_until [rr_cal_format_us [expr {$rr_cal_close_start * 1000000}]]
+      ts_log_severe "the queue is open until $open_until, so the reservation should be made\
+                     for [rr_cal_format_us $expected] as it is without a calendar, but it was\
+                     made for [rr_cal_format_us $reserved].$detail"
+   }
+
+   rr_cal_clear
+}
