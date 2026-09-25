@@ -1001,7 +1001,8 @@ proc compile_source_cmake_clean {compile_hosts report_var} {
       # delete the existing build directory
       if {[remote_file_isdirectory $host $build_dir]} {
          if {$check_do_3rdparty_build} {
-            # to trigger the 3rdparty build remove the build directory
+            # the 3rdparty rebuild itself is requested from cmake (REBUILD_3RDPARTY), removing the
+            # build directory also drops what the previous 3rdparty build left in it
             if {[remote_delete_directory $host $build_dir] != 0} {
                incr error_count
                report_task_add_message report $task_nr "cannot delete $build_dir on host $host"
@@ -1030,15 +1031,10 @@ proc compile_source_cmake_clean {compile_hosts report_var} {
    return $error_count
 }
 
-proc compile_source_cmake_make_build_dir {compile_hosts report_var {build_3rdparty_hosts_var ""}} {
+proc compile_source_cmake_make_build_dir {compile_hosts report_var} {
    global CHECK_USER
 
    upvar $report_var report
-
-   # these are the hosts where 3rdparty code needs to be built
-   if {$build_3rdparty_hosts_var != ""} {
-      upvar $build_3rdparty_hosts_var build_3rdparty_hosts
-   }
 
    set error_count 0
 
@@ -1062,7 +1058,6 @@ proc compile_source_cmake_make_build_dir {compile_hosts report_var {build_3rdpar
       # Creating it as root left the build directory root-owned inside a
       # user-owned port directory, which nothing relied on.
       if {![remote_file_isdirectory $host $build_dir]} {
-         lappend build_3rdparty_hosts $host
          set output [remote_file_mkdir $host $build_dir $CHECK_USER "777" prg_exit_state]
          if {$prg_exit_state == 0} {
             report_task_add_message report $task_nr "Successfully created build directory $build_dir on host $host"
@@ -1312,6 +1307,41 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
 }
 
 
+###
+# @brief do the sources decide themselves which 3rdparty tools have to be built?
+#
+# From 9.0.14 and 9.1.7 on, cmake adds only the 3rdparty tools which are not installed yet to the
+# 3rdparty target (add_third_party_if_missing() in cmake/BuildThirdParty.cmake), so the target
+# can be built on every compile. Older sources build every tool whenever their build directory is
+# new, and there the 3rdparty target must only be built when it is asked for.
+#
+# The sources are asked rather than the version: the version the testsuite knows is the one of
+# the installed product, not of the sources being compiled, and a branch reports its next
+# version before the change is merged to it.
+#
+# @param[in] host the host to read the sources on
+# @return 1 when cmake checks for the installed 3rdparty tools, else 0
+##
+proc compile_source_has_3rdparty_check {host} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set cmake_file "[file dirname $ts_config(source_dir)]/cmake/BuildThirdParty.cmake"
+   if {![is_remote_file $host $CHECK_USER $cmake_file]} {
+      ts_log_fine "$cmake_file does not exist on host $host"
+      return 0
+   }
+
+   get_file_content $host $CHECK_USER $cmake_file content
+   for {set i 1} {$i <= $content(0)} {incr i} {
+      if {[string first "function(add_third_party_if_missing" $content($i)] >= 0} {
+         return 1
+      }
+   }
+
+   return 0
+}
+
 proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 0}} {
    get_current_cluster_config_array ts_config
    global ts_host_config
@@ -1325,12 +1355,12 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
    # @todo what about do_only_hooks?
    # @todo check for tools and their versions? cmake, bison, flex, ...
 
-   # we do a 3rdparty build only when build directories had to be created
-   # - on first build
-   # - after clean
-   # @todo better check if tools are available and only build them if not (and this could be done in cmake itself)
-   set build_3rdparty 0
-
+   # The 3rdparty tools are built by the 3rdparty target after every cmake run. cmake adds only
+   # the packages which are not installed yet - in the version the sources expect - so the
+   # target builds what is missing and nothing when all of them are there. compile_clean_3rdparty
+   # has cmake add all of them.
+   # Older sources build all of them in every new build directory, there the 3rdparty target is
+   # only built with compile_clean_3rdparty, see compile_source_has_3rdparty_check().
    set error_count 0
 
    # if clean build requested: simply delete the build directories
@@ -1339,10 +1369,8 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
    }
 
    # create build directories if they do not yet exist
-   # where they got created we need to build the 3rdparty tools
-   set build_3rdparty_hosts {}
    if {$error_count == 0} {
-      incr error_count [compile_source_cmake_make_build_dir $compile_hosts report build_3rdparty_hosts]
+      incr error_count [compile_source_cmake_make_build_dir $compile_hosts report]
    }
 
    # no need to call cmake when compiling with 1t. we will not change any configuration
@@ -1417,6 +1445,11 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
             append args " -DWITH_LCOV=OFF"
          }
 
+         # rebuild all 3rdparty tools, not only the missing ones
+         if {$check_do_3rdparty_build} {
+            append args " -DREBUILD_3RDPARTY=ON"
+         }
+
          # add build type and build id
          append args " -DCMAKE_BUILD_TYPE=$CHECK_CMAKE_BUILD_TYPE -DCMAKE_BUILD_ID=$CMAKE_BUILD_ID -Wno-dev"
          set options($host,args) $args
@@ -1426,28 +1459,29 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
       incr error_count [compile_source_cmake_execute "cmake" $compile_hosts options report]
    }
 
-   if {$error_count == 0} {
-      # build 3rdparty tools only on hosts where required
-      if {[llength $build_3rdparty_hosts] > 0} {
-         unset -nocomplain options
-         foreach host $build_3rdparty_hosts {
-            set arch [resolve_arch $host]
-            if {$arch == "sol-amd64" || $arch == "osol-amd64"} {
-               set options($host,cmd) "gmake"
-            } else {
-               set options($host,cmd) "make"
-            }
-            set num_procs [node_get_processors $host]
-            if {$num_procs > 1} {
-               set options($host,args) "-j $num_procs VERBOSE=1 3rdparty"
-            } else {
-               set options($host,args) "VERBOSE=1 3rdparty"
-
-            }
-            set options($host,dir) [compile_source_cmake_get_build_dir $host]
+   # build the 3rdparty tools which cmake found missing, on every host cmake ran on
+   set build_3rdparty $check_do_3rdparty_build
+   if {!$build_3rdparty && $error_count == 0 && !$compile_only} {
+      set build_3rdparty [compile_source_has_3rdparty_check [lindex $compile_hosts 0]]
+   }
+   if {$error_count == 0 && !$compile_only && $build_3rdparty} {
+      unset -nocomplain options
+      foreach host $compile_hosts {
+         set arch [resolve_arch $host]
+         if {$arch == "sol-amd64" || $arch == "osol-amd64"} {
+            set options($host,cmd) "gmake"
+         } else {
+            set options($host,cmd) "make"
          }
-         incr error_count [compile_source_cmake_execute "3rdparty" $build_3rdparty_hosts options report]
+         set num_procs [node_get_processors $host]
+         if {$num_procs > 1} {
+            set options($host,args) "-j $num_procs VERBOSE=1 3rdparty"
+         } else {
+            set options($host,args) "VERBOSE=1 3rdparty"
+         }
+         set options($host,dir) [compile_source_cmake_get_build_dir $host]
       }
+      incr error_count [compile_source_cmake_execute "3rdparty" $compile_hosts options report]
    }
 
    if {$CMAKE_COMPILE_INSTALL_SEPARATELY == 1 && $error_count == 0} {
