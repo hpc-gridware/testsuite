@@ -81,7 +81,9 @@ proc docker_get_host {{skip_submit_hosts 0} {skip_admin_hosts 0}} {
       }
    }
 
+   ts_log_fine "docker_get_host: searching docker host"
    foreach host $ts_host_config(hostlist) {
+      ts_log_fine "   -> $host"
       if {[lsearch -exact $excluded [resolve_host $host]] >= 0} {
          ts_log_finer "docker_get_host: skipping $host, it has an excluded role"
          continue
@@ -94,5 +96,7 @@ proc docker_get_host {{skip_submit_hosts 0} {skip_admin_hosts 0}} {
       ts_log_finer "docker_get_host: no usable docker on $host"
    }
 
+   ts_log_fine "no docker host found"
+   ts_log_fine "we excluded $excluded"
    return ""
 }
