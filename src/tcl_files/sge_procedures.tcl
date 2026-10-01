@@ -4223,7 +4223,10 @@ proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
          set failed 0
          set q_r ""
          foreach queue $queue_array {
-            lappend q_r [array names load_values "$queue"]
+            # A pattern like *@host matches every queue instance on the host: add each of them.
+            # Appended as one element, a host with several queue instances was looked up under a
+            # name no queue has, nothing counted as failed, and this returned on the first poll.
+            lappend q_r {*}[array names load_values "$queue"]
          }
          ts_log_finest "queue_list=$q_r"
 
