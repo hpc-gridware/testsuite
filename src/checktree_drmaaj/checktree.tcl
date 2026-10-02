@@ -195,6 +195,8 @@ proc drmaaj_install_binaries { arch_list a_report } {
    report_finish_task report $task_nr 0
 
    # 3rdparty licenses / SBOM files
+   set ret 0
+   set errors {}
    set task_nr [report_create_task report "drmaaj_install_3rdparty_licenses" $ts_config(master_host)]
    set thirdparty_dst "$ts_config(product_root)/3rd_party/drmaaj"
    set bom_src "$source_dir/target/bom.json"
@@ -215,12 +217,18 @@ proc drmaaj_install_binaries { arch_list a_report } {
       if {$prg_exit_state != 0} {
          lappend errors "copying SBOM files from $bom_src to $bom_dst failed:\n$output"
          set ret -1
+      } elseif {[sbom_validate_installed drmaaj $bom_src $bom_dst report] != 0} {
+         lappend errors "the SBOM $bom_dst is not valid"
+         set ret -1
       }
    }
 
-   report_finish_task report $task_nr 0
+   foreach error $errors {
+      report_task_add_message report $task_nr $error
+   }
+   report_finish_task report $task_nr $ret
 
-   return 0
+   return $ret
 }
 
 

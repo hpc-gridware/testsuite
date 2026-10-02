@@ -426,6 +426,15 @@ proc arco_install_binaries { arch_list a_report } {
    }
    report_finish_task report $task_nr 0
 
+   # the SBOM the maven build produces is part of the tarball
+   if {[arco_have_maven_build]} {
+      set built_sbom "$arco_config(arco_source_dir)/target/bom.json"
+      set installed_sbom "$ts_config(product_root)/dbwriter/3rdparty-licenses/sbom.cyclonedx.json"
+      if {[sbom_validate_installed dbwriter $built_sbom $installed_sbom report] != 0} {
+         return -1
+      }
+   }
+
    # We might have installed a new version which might affect the tables/views.
    # Re-initialize the ARCO_TABLES and ARCO_VIEWS variables.
    arco_init_variables

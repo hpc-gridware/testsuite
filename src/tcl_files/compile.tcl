@@ -1308,6 +1308,24 @@ proc compile_source_cmake_execute {task_name compile_hosts options_var report_va
 
 
 ###
+# @brief do the sources generate a software bill of materials?
+#
+# The build writes the SBOM of the core system and installs it as 3rd_party/sbom.cyclonedx.json
+# from 9.1.7 on (cmake/Sbom.cmake, CS-1686). As with compile_source_has_3rdparty_check(), the
+# sources are asked rather than the version.
+#
+# @param[in] host the host to read the sources on
+# @return 1 when the build generates the SBOM, else 0
+##
+proc compile_source_generates_sbom {host} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set sbom_module "[file dirname $ts_config(source_dir)]/cmake/Sbom.cmake"
+   return [is_remote_file $host $CHECK_USER $sbom_module 1]
+}
+
+###
 # @brief do the sources decide themselves which 3rdparty tools have to be built?
 #
 # From 9.0.14 and 9.1.7 on, cmake adds only the 3rdparty tools which are not installed yet to the
@@ -1570,6 +1588,14 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
          set options($host,dir) [compile_source_cmake_get_build_dir $host]
       }
       incr error_count [compile_source_cmake_execute "install" $compile_hosts options report]
+   }
+
+   # the SBOM installed with the common files has to be a valid one
+   if {$error_count == 0 && [compile_source_generates_sbom [lindex $compile_hosts 0]]} {
+      set sbom_file "$ts_config(product_root)/3rd_party/sbom.cyclonedx.json"
+      if {[sbom_validate $sbom_file report] != 0} {
+         incr error_count
+      }
    }
 
    # @todo we might want to call setfileperm.sh in case we just replaced the binaries

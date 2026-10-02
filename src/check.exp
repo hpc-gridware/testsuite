@@ -7553,6 +7553,7 @@ proc source_tcl_files {} {
    ts_source $libdir/display
    ts_source $libdir/simhost
    ts_source $libdir/systemd
+   ts_source $libdir/sbom
    ts_source $libdir/security
 
    ts_source $libdir/ocs_qrsh_test_helpers
