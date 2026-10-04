@@ -873,19 +873,69 @@ proc qconf_sds_check {} {
 # sge_event_client/get_event_client_list()
 #*******************************
 
+## @brief Reject an answer that is empty or carries an error message
+#
+# Shared by the five show scenarios below. They used to run their switch and log
+# "succeded" in both branches of an if, asserting nothing at all - a tautology of
+# the kind CS-2818 found in the GDI request limit checks. What they are for is a
+# smoke test of qconf's basic read path, so what they have to establish is that
+# the command succeeded, that it answered, and that the answer is a list rather
+# than a diagnostic.
+#
+# Deliberately shape based and free of cluster specifics, because this check runs
+# on 9.1 and on 9.2 out of one branch. The deeper assertions live in the gcs
+# checktree, per switch.
+#
+# @param what   the switch, for the message
+# @param status the exit status the helper returned
+# @param lines  the answer as a list of lines
+# @param min    the fewest lines a healthy answer has
+# @return 1 when the answer is usable, 0 otherwise
+proc qconf_show_expect {what status lines min} {
+   if {$status != 0} {
+      ts_log_severe "qconf $what failed with status $status: $lines"
+      return 0
+   }
+   if {[llength $lines] < $min} {
+      ts_log_severe "qconf $what answered [llength $lines] line(s), expected at least $min: $lines"
+      return 0
+   }
+   foreach line $lines {
+      if {[string match -nocase "*error*" $line] || [string match -nocase "*denied*" $line]} {
+         ts_log_severe "qconf $what answered with what looks like a diagnostic: \"$line\""
+         return 0
+      }
+   }
+   ts_log_fine "qconf $what answered [llength $lines] line(s), as expected"
+   return 1
+}
+
 proc qconf_secl_check {} {
-   global ts_config env
    global CHECK_USER
 
-   # Do a positive test
-   ts_log_fine "Positive test for qconf -secl ...\n"
+   # get_event_client_list() takes its output variable as the FOURTH argument,
+   # unlike its four siblings below, which take it as the first
+   set evc {}
+   set ret [get_event_client_list "" "" 0 evc]
 
-   set result0 [get_event_client_list]
+   # header, separator and at least the scheduler
+   if {![qconf_show_expect "-secl" $ret $evc 3]} {
+      return
+   }
 
-   if { ( $result0 == 0 ) } {
-      ts_log_fine "qconf -secl succeded"
+   set header [lindex $evc 0]
+   foreach column {ID NAME HOST} {
+      if {![string match -nocase "*$column*" $header]} {
+         ts_log_severe "qconf -secl header is missing the $column column: $header"
+      }
+   }
+
+   # the scheduler is an event client of every running cluster, so its absence
+   # means the answer is not the event client list
+   if {![string match "*scheduler*" $evc]} {
+      ts_log_severe "qconf -secl does not list the scheduler: $evc"
    } else {
-      ts_log_fine "result is $result0"
+      ts_log_fine "qconf -secl lists the scheduler, as expected"
    }
 }
 
@@ -904,18 +954,15 @@ proc qconf_secl_check {} {
 # sge_host/get_processor_list()
 #*******************************
 proc qconf_sep_check {} {
-   global ts_config env
-   global CHECK_USER
+   # Kept to a smoke test on purpose: the columns, the row count and the fact
+   # that the SUM line equals the sum of the rows are asserted in the gcs
+   # checktree, object/host/exec_host_processors. Repeating that here would make
+   # two places to maintain for one switch.
+   set procs {}
+   set ret [get_processor_list procs "" "" 0]
 
-   # DO A Positive test
-   ts_log_fine "Positive test for qconf -sep ...\n"
-   set result0 [get_processor_list]
-
-  if { ( $result0 == 0 ) } {
-      ts_log_fine "qconf -sep succeded\n"
-   } else {
-      ts_log_fine "result is $result0"
-   }
+   # header, separator, at least one host, separator, SUM
+   qconf_show_expect "-sep" $ret $procs 5
 }
 #                                                             max. column:     |
 #****** qconf/qconf_sm_check() ******
@@ -933,18 +980,21 @@ proc qconf_sep_check {} {
 # sge_host/get_manager_list()
 #*******************************
 proc qconf_sm_check {} {
-   global ts_config env
    global CHECK_USER
 
-   # First do a positive test
-   ts_log_fine "Positive test for qconf -sm ...\n"
+   set managers {}
+   set ret [get_manager_list managers "" "" 0]
+   if {![qconf_show_expect "-sm" $ret $managers 1]} {
+      return
+   }
 
-   set result0 [get_manager_list]
-
-  if { ( $result0 == 0 ) } {
-      ts_log_fine "qconf -sm succeded"
+   # The testsuite user has to be a manager - every check that modifies the
+   # cluster depends on it - so its absence from the list means the list is wrong
+   # rather than the cluster being configured differently.
+   if {[lsearch -exact $managers $CHECK_USER] < 0} {
+      ts_log_severe "qconf -sm does not list the testsuite user \"$CHECK_USER\", which must be a manager: $managers"
    } else {
-      ts_log_fine "result is $result0"
+      ts_log_fine "qconf -sm lists the testsuite user, as expected"
    }
 }
 #                                                             max. column:     |
@@ -963,18 +1013,13 @@ proc qconf_sm_check {} {
 # sge_host/get_operator_list()
 #*******************************
 proc qconf_so_check {} {
-   global ts_config env
-   global CHECK_USER
-
-   # Do a positive test
-   ts_log_fine "Positive test for qconf -so ...\n"
-   set result0 [get_operator_list]
-
-   if { ( $result0 == 0 ) } {
-      ts_log_fine "qconf -so succeded"
-   } else {
-      ts_log_fine "result is $result0"
-   }
+   # No membership is asserted: whether the installation puts anyone in the
+   # operator list is an installation decision, and a manager is allowed to do an
+   # operator's work without appearing here. What is asserted is that the switch
+   # answers a list and not a diagnostic.
+   set operators {}
+   set ret [get_operator_list operators "" "" 0]
+   qconf_show_expect "-so" $ret $operators 1
 }
 
 #                                                             max. column:     |
@@ -993,17 +1038,22 @@ proc qconf_so_check {} {
 # sge_host/get_submithost_list()
 #*******************************
 proc qconf_ss_check {} {
-   global ts_config env
-   global CHECK_USER
+   global ts_config
 
-   # Do a positive test
-   ts_log_fine "Positive test for qconf -ss ...\n"
-   set result0 [get_submithost_list ]
+   set hosts {}
+   set ret [get_submithost_list hosts "" "" 0]
+   if {![qconf_show_expect "-ss" $ret $hosts 1]} {
+      return
+   }
 
-   if { ( $result0 == 0 ) } {
-      ts_log_fine "qconf -ss succeded"
+   # The master host is a submit host of every testsuite installation, and the
+   # suite submits from it, so its absence means the answer is not the submit
+   # host list.
+   set master [resolve_host $ts_config(master_host) 1]
+   if {[lsearch -exact $hosts $master] < 0} {
+      ts_log_severe "qconf -ss does not list the master host \"$master\": $hosts"
    } else {
-      ts_log_fine "result is $result0"
+      ts_log_fine "qconf -ss lists the master host, as expected"
    }
 }
 #                                                             max. column:     |
