@@ -1004,7 +1004,11 @@ proc ts_private_do_log {level message {raise_error 1} {function ""} {do_output 1
    # do output to stdout
    if {$do_output || $do_wait_on_error == 1} {
       ts_private_log_do_output $level $message $raise_error $function
-      if {$do_wait_on_error == 1 && $raise_error != 0 && $level <= 2} {
+      # SEVERE and WARNING only. CONFIG is level 2 and is not a failure - it reports that a
+      # check cannot run in the current cluster configuration, and the check is skipped - so
+      # holding the whole run at "press enter..." for one stalls an unattended run on an
+      # advisory. See the wait_on_error entry in the usage output.
+      if {$do_wait_on_error == 1 && $raise_error != 0 && $level <= 1} {
          ts_log_fine "\"wait_on_error\" command line option is enabled!"
          wait_for_enter
       }
