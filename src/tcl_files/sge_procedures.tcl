@@ -350,6 +350,7 @@ proc get_qmaster_spool_dir {} {
 #     "systemd"
 #     "bulk-object-requests"
 #     "bulk-object-export"
+#     "bulk-object-import"
 #     "delete-object-lists"
 #     "finished_job_retention"
 #     "optional-allhosts" (the installer can skip the creation of @allhosts)
@@ -501,6 +502,27 @@ proc ge_has_feature {feature {quiet 0}} {
             set result 0
             set output [start_sge_bin "qconf" "-help"]
             if {[string first "\[-Sq name|dir\]" $output] >= 0} {
+               set result 1
+            }
+         }
+         "bulk-object-import" {
+            # CS-2299: "qconf -A<obj>/-M<obj> fname|dir" takes a whole directory
+            # of files in one request, with -strict (apply nothing unless every
+            # file is valid) and -dry (report, change nothing) to govern it.
+            #
+            # The usage line is asked rather than the version, as for
+            # bulk-object-export above - and all three strings are asked, not
+            # one: the directory mode and the two switches are what a batch test
+            # actually uses, and a build in which one of them landed on another
+            # schedule then says so instead of failing somewhere in the middle.
+            #
+            # -Mcal is asked because it is the plainest of the directory-taking
+            # modify options.
+            set result 0
+            set output [start_sge_bin "qconf" "-help"]
+            if {[string first "\[-Mcal fname|dir\]" $output] >= 0 &&
+                [string first "\[-strict\]" $output] >= 0 &&
+                [string first "\[-dry\]" $output] >= 0} {
                set result 1
             }
          }
