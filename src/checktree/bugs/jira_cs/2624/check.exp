@@ -57,7 +57,10 @@ global check_root_access_needs
 global check_need_running_system
 global check_version_range
 
-set check_version_range "9.1.7"
+# The fix is backported, so the minimum differs per branch: version_select_for_branch() picks
+# the newest entry which is not newer than the branch under test - 9.0.14 on the 9.0 line,
+# 9.1.7 on 9.1 and on everything after it.
+set check_version_range {"9.0.14 9.1.7" ""}
 
 set check_name           "issue_2624"
 set check_category       "BUG QMASTER SCHEDULER VERIFIED"
