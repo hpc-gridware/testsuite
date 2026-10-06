@@ -8187,7 +8187,7 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "                      not the checks in its subdirectories (for schedulers"
       puts "                      that hand over one exact path per test)"
       puts ""
-      puts "compile               checkout source code and recompile"
+      puts "compile               build the source in source_dir and install the binaries"
       puts ""
       puts "compile_clean         do a clean build (remove old build artifacts)"
       puts "compile_clean_3rdparty do a clean build (remove old build artifacts) with re-building the 3rdparty tools"
