@@ -67,6 +67,8 @@ lappend check_functions "qconf_duser"
 lappend check_functions "qconf_Auser"
 lappend check_functions "qconf_muser"
 lappend check_functions "qconf_Muser"
+lappend check_functions "qconf_mcal_check"  ;# Characterise -mcal/-Mcal before the write path moves (CS-2822)
+lappend check_functions "qconf_mcal_event_check" ;# the write event, observed through the reader data store (CS-2822)
 lappend check_functions "qconf_segfault"
 lappend check_functions "qconf_se"
 lappend check_functions "qconf_sel"
@@ -495,6 +497,254 @@ proc check_queue_conf { queue_list attr_name check_value } {
         ts_log_severe "\"$check_value\" is not \"$q_attr_value\""
      }
   }
+}
+
+## @brief Observe that a calendar modification reaches the reader data store (CS-2822)
+#
+# A write procedure emits an event through the on_success hook of its object -
+# for a calendar that is calendar_update_queue_states() with sgeE_CALENDAR_MOD.
+# A check cannot watch the event itself, but it can watch its consequence, and
+# the routing makes that consequence exact: get_datastore_type() answers a qconf
+# read from the GLOBAL data store only when the caller is a manager, so a
+# NON-manager is answered from the READER store - and that store is only ever
+# brought up to date by the mirror thread merging the events the worker emitted.
+#
+# So a manager modifies the calendar and a non-manager reads it. When the new
+# value appears there, the event was generated, delivered and merged. That is
+# the whole chain, observed from outside it.
+#
+# Three reads, and each has a job. The non-manager reads the starting value
+# first, so the poll cannot pass on a store that was never behind. The manager
+# then reads the new value - from the GLOBAL store, the authoritative one - so a
+# poll that runs out cannot be blamed on the event when in truth nothing was
+# written. Only then does the non-manager poll.
+#
+# One precondition is checked rather than assumed: if the secondary data store
+# is switched off in qmaster_params, a reader request is routed to the global
+# queue and the non-manager reads the authoritative state - the poll would then
+# pass without an event ever being involved. The check skips in that case.
+#
+# What remains indistinguishable is a missing event from a mirror that has not
+# caught up: both look like "the value is not there". Hence the bounded poll -
+# the deadline is the verdict, and on failure the check names both causes
+# instead of picking one.
+#
+# Do not read the elapsed time as event latency. A reader request whose session
+# is not up to date is put into the ReaderWaitingRequestQueue and waits inside
+# qmaster until the store has merged - it is never rerouted to the global queue
+# (sge_qmaster_process_message.cc). So the waiting happens on the server side
+# and the loop usually reports 0s. That is expected, and it is also what makes
+# this check immune to a slow mirror; the evidence is WHICH store answered, not
+# how long it took.
+#
+# Runs after qconf_mcal_check, which is where -mcal itself is characterised.
+# @return none
+proc qconf_mcal_event_check {} {
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
+
+   ts_log_fine "testing that a calendar modification reaches the reader data store ..."
+
+   if {$CHECK_FIRST_FOREIGN_SYSTEM_USER == ""} {
+      # Not ts_log_config: from a check function that marks every following
+      # runlevel unsupported, and a missing test user is a configuration gap of
+      # this installation, not an unsupported product feature.
+      ts_log_fine "no foreign system user configured - skipping the reader store observation"
+      return
+   }
+
+   # The whole construction rests on the non-manager being answered from the
+   # READER store. It is not: sge_qmaster_process_message.cc routes a reader
+   # request to the GlobalRequestQueue when DISABLE_SECONDARY_DS or
+   # DISABLE_SECONDARY_DS_READER is set, and then the non-manager reads the
+   # authoritative state with no event involved at all - and this check would
+   # pass while proving nothing. So the configuration is asked first, and the
+   # check steps aside rather than reporting a success it did not earn.
+   set conf_out [start_sge_bin "qconf" "-sconf"]
+   foreach param {DISABLE_SECONDARY_DS DISABLE_SECONDARY_DS_READER} {
+      if {[string first $param $conf_out] >= 0} {
+         ts_log_fine "qmaster_params carries $param - a non-manager would be answered from the global store, so the event cannot be observed this way; skipping"
+         return
+      }
+   }
+
+   set cal "qconf_cs2822_event_cal"
+   set week_a "mon-sun=0-24=on"
+   set week_b "mon-fri=0-23=suspended"
+
+   del_calendar $cal "" "" 0
+
+   set add_arr(year) "NONE"
+   set add_arr(week) $week_a
+   if {[add_calendar $cal add_arr 1 "" "" 0] != 0} {
+      ts_log_severe "could not create calendar $cal"
+      return
+   }
+   unset add_arr
+
+   # The non-manager has to see the starting value first. Without this the poll
+   # below could pass on a store that was never behind in the first place.
+   set seen ""
+   if {[get_calendar $cal base_arr "" $CHECK_FIRST_FOREIGN_SYSTEM_USER 0] == 0} {
+      set seen $base_arr(week)
+   }
+   if {$seen != $week_a} {
+      ts_log_severe "the non-manager reads \"$seen\" before the modification, expected \"$week_a\""
+      del_calendar $cal "" "" 0
+      return
+   }
+   unset base_arr
+
+   # modify as a manager, through -mcal and therefore through the write procedure
+   set mod_arr(week) $week_b
+   if {[mod_calendar $cal mod_arr 0 "" $CHECK_USER 0] != 0} {
+      ts_log_severe "qconf -mcal failed for calendar $cal"
+      del_calendar $cal "" "" 0
+      return
+   }
+   unset mod_arr
+
+   # Before anything is concluded about the event: did the write actually change
+   # the attribute? A manager read is answered from the GLOBAL data store, so it
+   # is the authoritative state. Without this witness a poll that runs out could
+   # just as well mean "nothing was written", and the check would report a
+   # missing event for a write that never happened.
+   #
+   # It also guards the other half of the same trap: if the two week calendars
+   # were equal, the reader would see the object and still be unable to tell the
+   # old state from the new one, and the poll would pass or fail for no reason
+   # connected to the event.
+   if {[get_calendar $cal mgr_arr "" $CHECK_USER 0] != 0} {
+      ts_log_severe "could not read calendar $cal back as a manager"
+      del_calendar $cal "" "" 0
+      return
+   }
+   if {$mgr_arr(week) != $week_b} {
+      ts_log_severe "the manager reads \"$mgr_arr(week)\" after -mcal, expected \"$week_b\" - the modification did not change the attribute, so nothing can be concluded about the event"
+      unset mgr_arr
+      del_calendar $cal "" "" 0
+      return
+   }
+   unset mgr_arr
+
+   # and poll as a non-manager until the reader store has it
+   # ts_scale_timeout is the in-house way to respect "timeout_factor" on slow
+   # hosts; there is no timeout_factor proc, the value lives in
+   # CHECK_TIMEOUT_FACTOR.
+   set deadline [ts_scale_timeout 60]
+   set waited 0
+   set arrived 0
+   set last ""
+   while {$waited < $deadline} {
+      if {[get_calendar $cal poll_arr "" $CHECK_FIRST_FOREIGN_SYSTEM_USER 0] == 0} {
+         set last $poll_arr(week)
+         unset poll_arr
+         if {$last == $week_b} {
+            set arrived 1
+            break
+         }
+      }
+      after 2000
+      incr waited 2
+   }
+
+   if {$arrived} {
+      ts_log_fine "the non-manager saw the modification after ${waited}s - the event was generated, delivered and merged"
+   } else {
+      ts_log_severe "after ${deadline}s the non-manager still reads \"$last\" instead of \"$week_b\".\nEither the write procedure emitted no event, or the reader data store did not merge it. This check cannot tell those two apart."
+   }
+
+   del_calendar $cal "" "" 0
+}
+
+## @brief Pin the behaviour of "qconf -mcal" and "-Mcal" before the write path moves
+#
+# A characterisation test, and it is written before the C++ change on purpose.
+# The read migration could put old and new side by side with
+# "-ectx client|server", and that comparison is what found three defects. The
+# write migration has no such switch and is not getting one, so what the
+# current behaviour is has to be written down instead.
+#
+# Pinned here: the object both variants produce, and the two failures whose
+# messages and exit code are produced in the client today and will be produced
+# inside qmaster afterwards. Those are the part most likely to drift unnoticed,
+# because nothing else looks at them.
+#
+# The last assertion is the one that matters most: a rejected file must leave
+# the calendar exactly as it was. A write that reports an error after having
+# changed something would be worse than no check at all.
+# @return none
+proc qconf_mcal_check {} {
+   global CHECK_ACTUAL_TEST_PATH prg_exit_state
+
+   ts_log_fine "testing qconf -mcal / -Mcal ..."
+
+   set cal "qconf_cs2822_cal"
+   set week_a "mon-sun=0-24=on"
+   set week_b "mon-fri=0-23=suspended"
+
+   # a leftover from an interrupted run would make every assertion below lie
+   del_calendar $cal "" "" 0
+
+   set add_arr(year) "NONE"
+   set add_arr(week) $week_a
+   if {[add_calendar $cal add_arr 1 "" "" 0] != 0} {
+      ts_log_severe "could not create calendar $cal"
+      return
+   }
+   unset add_arr
+
+   get_calendar $cal cal_arr "" "" 0
+   if {$cal_arr(week) != $week_a} {
+      ts_log_severe "calendar $cal starts with week \"$cal_arr(week)\", expected \"$week_a\""
+   }
+
+   # -Mcal: modify from a file
+   set mod_arr(week) $week_b
+   if {[mod_calendar $cal mod_arr 1 "" "" 0] != 0} {
+      ts_log_severe "qconf -Mcal failed for calendar $cal"
+   }
+   unset mod_arr
+   unset cal_arr
+   get_calendar $cal cal_arr "" "" 0
+   if {$cal_arr(week) != $week_b} {
+      ts_log_severe "after -Mcal the week calendar is \"$cal_arr(week)\", expected \"$week_b\""
+   }
+
+   # -mcal: modify through the editor
+   set mod_arr(week) $week_a
+   if {[mod_calendar $cal mod_arr 0 "" "" 0] != 0} {
+      ts_log_severe "qconf -mcal failed for calendar $cal"
+   }
+   unset mod_arr
+   unset cal_arr
+   get_calendar $cal cal_arr "" "" 0
+   if {$cal_arr(week) != $week_a} {
+      ts_log_severe "after -mcal the week calendar is \"$cal_arr(week)\", expected \"$week_a\""
+   }
+
+   # a name the object has no attribute for
+   set output [start_sge_bin "qconf" "-Mcal $CHECK_ACTUAL_TEST_PATH/Mcal_file_unknown_attribute"]
+   if {$prg_exit_state != 1} {
+      ts_log_severe "qconf -Mcal with an unknown attribute exited $prg_exit_state, expected 1:\n$output"
+   }
+   if {[string first "weeek" $output] < 0} {
+      ts_log_severe "qconf -Mcal did not name the offending attribute:\n$output"
+   }
+
+   # a week calendar the parser cannot read
+   set output [start_sge_bin "qconf" "-Mcal $CHECK_ACTUAL_TEST_PATH/Mcal_file_bad_week"]
+   if {$prg_exit_state != 1} {
+      ts_log_severe "qconf -Mcal with a bad week calendar exited $prg_exit_state, expected 1:\n$output"
+   }
+
+   # neither rejection may have changed the object
+   unset cal_arr
+   get_calendar $cal cal_arr "" "" 0
+   if {$cal_arr(week) != $week_a} {
+      ts_log_severe "a rejected -Mcal changed the calendar to \"$cal_arr(week)\", expected \"$week_a\""
+   }
+
+   del_calendar $cal "" "" 0
 }
 
 proc qconf_aattr_check {} {
