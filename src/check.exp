@@ -260,6 +260,7 @@ global l10n_cache
 set l10n_cache 0
 
 global do_compile
+global do_compile_binaries
 global CHECK_TESTSUITE_LOCKFILE
 set CHECK_TESTSUITE_LOCKFILE "testsuite_lockfile"
 global CHECK_TESTSUITE_INSTALL_MODE
@@ -8027,6 +8028,7 @@ set do_install        0
 set do_start          0
 set do_bootstrap      0
 set do_compile        0
+set do_compile_binaries 0
 set do_all            0
 set do_one_test       0
 # Every "check <path> <level>" on the command line appends here. A single
@@ -8187,7 +8189,14 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "                      not the checks in its subdirectories (for schedulers"
       puts "                      that hand over one exact path per test)"
       puts ""
-      puts "compile               build the source in source_dir and install the binaries"
+      puts "compile               build the source in source_dir and install the binaries."
+      puts "                      This empties SGE_ROOT, so it has to be followed by a"
+      puts "                      separate \"install\" to get a cluster again."
+      puts ""
+      puts "compile_binaries      shut the cluster down, build the source in source_dir,"
+      puts "                      replace the binaries and start the cluster again. SGE_ROOT"
+      puts "                      is kept, so no install is needed afterwards - this is what"
+      puts "                      menu item 1t does. Only for a cluster built from source."
       puts ""
       puts "compile_clean         do a clean build (remove old build artifacts)"
       puts "compile_clean_3rdparty do a clean build (remove old build artifacts) with re-building the 3rdparty tools"
@@ -8708,6 +8717,11 @@ for {set i 0} {$i < $argc} {incr i} {
       continue
    }
 
+   if { ( [string compare [lindex $argv $i] "--compile_binaries"] == 0 ) || ([string compare [lindex $argv $i] "compile_binaries"] == 0 ) } {
+      set do_compile_binaries 1
+      continue
+   }
+
    if { ( [string compare [lindex $argv $i] "--disable_washing_machine"] == 0 ) || ([string compare [lindex $argv $i] "disable_washing_machine"] == 0 ) } {
       set DISABLE_WASHING_MACHINE 1
       puts " ---> disable_washing_machine is set <---"
@@ -9144,18 +9158,26 @@ if { $check_reinit_on_tcl_error == 1 } {
    set_root_passwd
 }
 
-if {$do_compile} {
+if {$do_compile || $do_compile_binaries} {
    if { [have_root_passwd] == -1 } {
          puts "need root access ..."
          set_root_passwd
    }
 
    if {$ts_config(package_directory) == "none" || $ts_config(package_type) == "create_tar"} {
-      if {[ compile_source ] != 0} {
+      # compile_binaries passes compile_only, which keeps SGE_ROOT and only replaces the
+      # binaries - the cluster is shut down before and started again afterwards. This is
+      # what menu item 1t does. Plain compile empties SGE_ROOT, so it has to be followed
+      # by an install.
+      if {[compile_source 0 $do_compile_binaries] != 0} {
          testsuite_shutdown 1
       } else {
          testsuite_shutdown 0
       }
+   } elseif {$do_compile_binaries} {
+      # there is nothing to replace in place when the product comes from packages
+      puts "compile_binaries builds from source_dir and cannot be used with product packages"
+      testsuite_shutdown 1
    } else {
       # we have product packages
       set back [prepare_packages]
