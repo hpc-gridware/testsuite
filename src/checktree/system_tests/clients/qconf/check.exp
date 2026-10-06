@@ -69,6 +69,7 @@ lappend check_functions "qconf_muser"
 lappend check_functions "qconf_Muser"
 lappend check_functions "qconf_mcal_check"  ;# Characterise -mcal/-Mcal before the write path moves (CS-2822)
 lappend check_functions "qconf_mcal_event_check" ;# the write event, observed through the reader data store (CS-2822)
+lappend check_functions "qconf_Mcal_batch_check"  ;# the file batch as it behaves today, before it moves (CS-2822)
 lappend check_functions "qconf_segfault"
 lappend check_functions "qconf_se"
 lappend check_functions "qconf_sel"
@@ -497,6 +498,180 @@ proc check_queue_conf { queue_list attr_name check_value } {
         ts_log_severe "\"$check_value\" is not \"$q_attr_value\""
      }
   }
+}
+
+## @brief Pin the behaviour of the qconf file batch before it moves (CS-2822)
+#
+# `-Mcal` and `-Acal` still go through `qconf_apply_path()`, the batch from
+# CS-2299: a file **or** a directory, one bulk name GET to partition add against
+# modify, `-strict`, `-dry`, one GDI multi-request, and one summary line per
+# directory. All of that has to survive the move onto a stored procedure, and
+# the write migration has no `-ectx client|server` comparison to fall back on -
+# so what the batch does today is written down here, before it is touched.
+#
+# Pinned: the directory case and its summary, partial success with one broken
+# file, `-strict` rejecting the whole batch while leaving the objects alone,
+# `-dry` applying nothing, and a file naming an unknown calendar adding it
+# (CS-2299 C2).
+#
+# The exit codes are asserted, not just the messages. They are what a script
+# around qconf reacts to, and they are the part most easily changed by accident
+# when the batch is rebuilt.
+# @return none
+proc qconf_Mcal_batch_check {} {
+   global prg_exit_state
+
+   ts_log_fine "testing the qconf -Mcal/-Acal file batch ..."
+
+   # The testsuite is ONE branch for 9.1 and 9.2, and everything below is
+   # CS-2299: directories, -strict, -dry and the summary line arrived with 9.2.
+   # Asked as a capability rather than a version, see ge_has_feature().
+   if {![ge_has_feature "bulk-object-import"]} {
+      ts_log_fine "the qconf file batch is not available here - skipping"
+      return
+   }
+
+   set cal_a "qconf_batch_a"
+   set cal_b "qconf_batch_b"
+   set cal_c "qconf_batch_c"
+   set week_1 "mon-sun=0-24=on"
+   set week_2 "mon-fri=0-23=suspended"
+
+   # leftovers from an interrupted run would make every assertion below lie
+   foreach c "$cal_a $cal_b $cal_c" {
+      del_calendar $c "" "" 0
+   }
+
+   set dir [get_tmp_directory_name]
+   file mkdir $dir
+
+   # two valid files, one object each
+   foreach {name week} [list $cal_a $week_1 $cal_b $week_1] {
+      set f(0) 3
+      set f(1) "calendar_name    $name"
+      set f(2) "year             NONE"
+      set f(3) "week             $week"
+      save_file "$dir/$name" f
+      unset f
+   }
+
+   # ---- the directory adds both, and reports one summary line -------------
+   set output [start_sge_bin "qconf" "-Acal $dir"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qconf -Acal on a directory exited $prg_exit_state, expected 0:\n$output"
+   }
+   if {[string first "2 object(s) added/modified, 0 failed" $output] < 0} {
+      ts_log_severe "the directory batch did not report 2 added and 0 failed:\n$output"
+   }
+   foreach c "$cal_a $cal_b" {
+      if {[get_calendar $c arr "" "" 0] != 0 || $arr(week) != $week_1} {
+         ts_log_severe "calendar $c was not created from the directory batch"
+      }
+      unset -nocomplain arr
+   }
+
+   # ---- one broken file: partial success by default -----------------------
+   set f(0) 3
+   set f(1) "calendar_name    $cal_c"
+   set f(2) "year             NONE"
+   set f(3) "weeek            $week_1"
+   save_file "$dir/$cal_c" f
+   unset f
+
+   # change the two good ones so the batch has something to do
+   foreach {name week} [list $cal_a $week_2 $cal_b $week_2] {
+      set f(0) 3
+      set f(1) "calendar_name    $name"
+      set f(2) "year             NONE"
+      set f(3) "week             $week"
+      save_file "$dir/$name" f
+      unset f
+   }
+
+   set output [start_sge_bin "qconf" "-Mcal $dir"]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "qconf -Mcal with one broken file exited 0, expected non-zero:\n$output"
+   }
+   if {[string first "2 object(s) added/modified, 1 failed" $output] < 0} {
+      ts_log_severe "the batch did not report 2 applied and 1 failed:\n$output"
+   }
+   foreach c "$cal_a $cal_b" {
+      if {[get_calendar $c arr "" "" 0] != 0 || $arr(week) != $week_2} {
+         ts_log_severe "calendar $c was not modified although only $cal_c was broken"
+      }
+      unset -nocomplain arr
+   }
+   if {[get_calendar $cal_c arr "" "" 0] == 0} {
+      ts_log_severe "the broken file created calendar $cal_c"
+      unset -nocomplain arr
+   }
+
+   # ---- -strict: nothing at all is applied --------------------------------
+   foreach {name week} [list $cal_a $week_1 $cal_b $week_1] {
+      set f(0) 3
+      set f(1) "calendar_name    $name"
+      set f(2) "year             NONE"
+      set f(3) "week             $week"
+      save_file "$dir/$name" f
+      unset f
+   }
+
+   set output [start_sge_bin "qconf" "-strict -Mcal $dir"]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "qconf -strict -Mcal with one broken file exited 0, expected non-zero:\n$output"
+   }
+   if {[string first "nothing applied (-strict)" $output] < 0} {
+      ts_log_severe "-strict did not report that nothing was applied:\n$output"
+   }
+   # the decisive half: a refusal that had already written would be worse than none
+   foreach c "$cal_a $cal_b" {
+      if {[get_calendar $c arr "" "" 0] != 0 || $arr(week) != $week_2} {
+         ts_log_severe "-strict changed calendar $c to \"$arr(week)\" although it rejected the batch"
+      }
+      unset -nocomplain arr
+   }
+
+   # ---- -dry: report, change nothing --------------------------------------
+   file delete "$dir/$cal_c"
+   set output [start_sge_bin "qconf" "-dry -Mcal $dir"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qconf -dry -Mcal exited $prg_exit_state, expected 0:\n$output"
+   }
+   if {[string first "would modify" $output] < 0} {
+      ts_log_severe "-dry did not report what it would do:\n$output"
+   }
+   foreach c "$cal_a $cal_b" {
+      if {[get_calendar $c arr "" "" 0] != 0 || $arr(week) != $week_2} {
+         ts_log_severe "-dry changed calendar $c"
+      }
+      unset -nocomplain arr
+   }
+
+   # ---- a single file naming an unknown calendar adds it (CS-2299 C2) -----
+   set f(0) 3
+   set f(1) "calendar_name    $cal_c"
+   set f(2) "year             NONE"
+   set f(3) "week             $week_1"
+   save_file "$dir/single" f
+   unset f
+
+   set output [start_sge_bin "qconf" "-Mcal $dir/single"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qconf -Mcal on an unknown calendar exited $prg_exit_state, expected 0:\n$output"
+   }
+   if {[get_calendar $cal_c arr "" "" 0] != 0 || $arr(week) != $week_1} {
+      ts_log_severe "-Mcal on an unknown calendar did not add it"
+   }
+   unset -nocomplain arr
+   # a single file gets no summary line - that is a directory's
+   if {[string first "object(s) added/modified" $output] >= 0} {
+      ts_log_severe "a single file produced a directory summary:\n$output"
+   }
+
+   foreach c "$cal_a $cal_b $cal_c" {
+      del_calendar $c "" "" 0
+   }
+   file delete -force $dir
 }
 
 ## @brief Observe that a calendar modification reaches the reader data store (CS-2822)
