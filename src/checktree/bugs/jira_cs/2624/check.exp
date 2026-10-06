@@ -1,0 +1,386 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2624: after the machine running the qmaster has been away for a while - a
+# laptop closed and reopened, a container or a VM suspended - the scheduler no
+# longer dispatches anything. "qconf -kt scheduler" followed by
+# "qconf -at scheduler" brings it back.
+#
+# What the qmaster does while it is away from its own point of view is nothing:
+# when it runs again, every event client has been silent for longer than its
+# acknowledge timeout, so the event master drops all of them and they register
+# again:
+#
+#   W|acknowledge timeout after 600 seconds for event client scheduler with id 1
+#   E|removing event client scheduler with id 1 ... after acknowledge timeout
+#   I|event client "scheduler" with id 1 deregistered
+#   I|"scheduler" registers as event client with id 1 event delivery interval 10
+#
+# So the scheduler does come back as an event client. What it does not do is
+# schedule, which is why this check does not stop at asking whether it is
+# registered - "qconf -sss" and "qconf -stl" both look healthy in the broken
+# state. The assertion that matters is that a job runs.
+#
+# The 600 seconds are not tunable from the outside: the event master computes
+# the acknowledge timeout as 10 * the client's delivery interval and then clamps
+# it to EVENT_ACK_MIN_TIMEOUT, which is 600 (sge_event_master.cc). That is why
+# five minutes of suspension do not reproduce the issue and eleven do, and it is
+# why this check takes about twelve minutes to run. The qmaster_params
+# SCHEDULER_TIMEOUT overrides the timeout for the scheduler's own event client
+# only - not for the mirror clients, which time out here as well - so it is not
+# used: a faster check would no longer be the situation that was reported.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.1.7"
+
+set check_name           "issue_2624"
+set check_category       "BUG QMASTER SCHEDULER VERIFIED"
+set check_description(0) "the scheduler still dispatches after the qmaster was suspended past the event client acknowledge timeout (CS-2624)"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_2624_setup
+set check_cleanup_function issue_2624_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2624_suspend_past_ack_timeout"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2624_setup {} {
+   get_current_cluster_config_array ts_config
+   global issue_2624_master issue_2624_pid issue_2624_suspend_seconds
+   global issue_2624_signal_user
+
+   set issue_2624_master $ts_config(master_host)
+
+   # Comfortably past EVENT_ACK_MIN_TIMEOUT (600s), so that the event clients
+   # have certainly timed out when the qmaster runs again. There is no point in
+   # cutting this fine - a suspension which ends just before the timeout proves
+   # nothing, and the reporter saw the issue after hours rather than seconds.
+   set issue_2624_suspend_seconds 660
+
+   set issue_2624_pid [get_qmaster_pid $issue_2624_master]
+   if {$issue_2624_pid == "" || $issue_2624_pid <= 0} {
+      ts_log_config "cannot read the qmaster pid on host $issue_2624_master"
+      return 99
+   }
+
+   # Which user may signal the qmaster process. It runs as the test user in a
+   # testsuite cluster, but a cluster installed by hand may well have it as
+   # root, so establish this once instead of guessing per call.
+   set issue_2624_signal_user [issue_2624_find_signal_user]
+   if {$issue_2624_signal_user == ""} {
+      ts_log_config "cannot signal the qmaster process $issue_2624_pid on\
+                     host $issue_2624_master as any available user"
+      return 99
+   }
+}
+
+proc issue_2624_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global issue_2624_master issue_2624_pid issue_2624_suspend_seconds
+   global issue_2624_signal_user
+
+   # Whatever happened above, the qmaster must not be left stopped - a suspended
+   # qmaster would take every check after this one with it. SIGCONT on a running
+   # process does nothing, so this is safe to repeat.
+   if {[info exists issue_2624_pid] && [info exists issue_2624_signal_user]} {
+      issue_2624_signal CONT 0
+   }
+
+   # The scheduler comes first, before any attempt to drain jobs: while it is
+   # wedged nothing is dispatched, so a job left behind by this check cannot
+   # finish and wait_for_end_of_all_jobs would sit out its timeout and report a
+   # failure which is only a consequence of the one already reported.
+   #
+   # If the issue reproduced, the scheduler is registered but not dispatching,
+   # and every check which runs after this one would fail on that. Restore it the
+   # way the reporter does by hand.
+   if {![issue_2624_can_schedule "during cleanup" 0]} {
+      ts_log_fine "the scheduler does not dispatch - restarting the thread"
+      start_sge_bin "qconf" "-kt scheduler" $issue_2624_master
+      sleep_for_seconds 5 "waiting for the scheduler thread to go down"
+      start_sge_bin "qconf" "-at scheduler" $issue_2624_master
+      wait_for_connected_scheduler 90 0
+      if {![issue_2624_can_schedule "after restarting the scheduler thread" 0]} {
+         ts_log_severe "the scheduler still does not dispatch after\
+                        qconf -kt scheduler and qconf -at scheduler"
+      }
+   }
+
+   # now that something is dispatching again, the jobs this check left can go
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   unset -nocomplain issue_2624_master issue_2624_pid issue_2624_suspend_seconds
+   unset -nocomplain issue_2624_signal_user
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+###
+# @brief which user can send a signal to the qmaster process
+#
+# Tries a harmless "kill -0" as the test user and then as root, and returns the
+# first that works, or an empty string when neither does.
+##
+proc issue_2624_find_signal_user {} {
+   global CHECK_USER issue_2624_master issue_2624_pid
+
+   foreach user [list $CHECK_USER "root"] {
+      # positions after exec_arguments: exit_var, timeout, background, cd_dir,
+      # envlist, do_file_check, source_settings_file, set_shared_lib_path,
+      # raise_error - the last one is what matters here, a failing kill -0 is
+      # the answer and not an error of this check
+      set output [start_remote_prog $issue_2624_master $user "kill" "-0 $issue_2624_pid" \
+                                    prg_exit_state 60 0 "" "" 1 1 0 0]
+      if {$prg_exit_state == 0} {
+         ts_log_fine "can signal qmaster pid $issue_2624_pid as user $user"
+         return $user
+      }
+      ts_log_fine "cannot signal qmaster pid $issue_2624_pid as user $user: $output"
+   }
+
+   return ""
+}
+
+###
+# @brief send a signal to the qmaster process
+#
+# @param signal      signal name without the dash, e.g. STOP or CONT
+# @param raise_error whether a failure is an error of this check
+# @return 1 when the signal was delivered, 0 otherwise
+##
+proc issue_2624_signal {signal {raise_error 1}} {
+   global issue_2624_master issue_2624_pid issue_2624_signal_user
+
+   set output [start_remote_prog $issue_2624_master $issue_2624_signal_user "kill" \
+                                 "-$signal $issue_2624_pid" prg_exit_state 60 0 "" "" 1 1 0 0]
+   if {$prg_exit_state != 0} {
+      if {$raise_error} {
+         ts_log_severe "cannot send SIG$signal to qmaster pid $issue_2624_pid on\
+                        host $issue_2624_master:\n$output"
+      }
+      return 0
+   }
+
+   ts_log_fine "sent SIG$signal to qmaster pid $issue_2624_pid on host $issue_2624_master"
+   return 1
+}
+
+###
+# @brief is the qmaster answering at all?
+#
+# Asked before the scheduling question is asked, so that a qmaster which did not
+# survive the suspension is reported as that rather than as a scheduler fault.
+#
+# @param timeout how long to keep trying, in seconds
+# @return 1 when qhost answered, 0 on timeout
+##
+proc issue_2624_wait_for_reachable_qmaster {{timeout 120}} {
+   get_current_cluster_config_array ts_config
+
+   set end_time [expr [clock seconds] + $timeout]
+   while {1} {
+      set output [start_sge_bin "qhost" "" $ts_config(master_host) "" prg_exit_state 60]
+      if {$prg_exit_state == 0} {
+         ts_log_fine "qmaster answers qhost again"
+         return 1
+      }
+      if {[clock seconds] >= $end_time} {
+         ts_log_severe "the qmaster does not answer qhost ${timeout}s after it was\
+                        resumed:\n$output"
+         return 0
+      }
+      sleep_for_seconds 10 "waiting for the qmaster to answer qhost"
+   }
+}
+
+###
+# @brief does a job get scheduled?
+#
+# This is the question the issue is about. A registered scheduler which does not
+# dispatch passes every check on "qconf -sss" and "qconf -stl", so the only
+# reliable statement is that a job ran.
+#
+# @param what        what to call this moment in the messages
+# @param raise_error whether a job which does not run is an error of this check
+# @return 1 when a job ran, 0 otherwise
+##
+proc issue_2624_can_schedule {what {raise_error 1}} {
+   get_current_cluster_config_array ts_config
+
+   set output [start_sge_bin "qrsh" "hostname" $ts_config(master_host) "" prg_exit_state 120]
+   if {$prg_exit_state == 0} {
+      ts_log_fine "a job was scheduled $what"
+      return 1
+   }
+
+   if {$raise_error} {
+      ts_log_severe "no job could be scheduled $what - qrsh hostname failed:\n$output\
+                     \n[issue_2624_diagnostics]"
+   }
+   return 0
+}
+
+###
+# @brief does a read only request still get real data out of the reader data store?
+#
+# The scheduler is not the only thread with a data store of its own. A GDI GET request which does
+# not come from qconf is answered by a reader thread out of the READER data store
+# (sge_qmaster_process_message.cc), which is fed by its own event mirror client - one of the
+# clients which time out and re-register here along with the scheduler. "qhost -F" reads the
+# hosts, the queues and the complexes, so an empty or stale reader snapshot shows up as missing
+# hosts or missing complex values rather than as an error.
+#
+# The requesting user does not decide this: only a qconf GET by a manager is answered from the
+# GLOBAL store. It is run as a foreign user anyway, because that is the ordinary case for a read
+# only client and costs nothing.
+#
+# @param what        what to call this moment in the messages
+# @param raise_error whether a bad answer is an error of this check
+# @return 1 when the answer looks complete, 0 otherwise
+##
+proc issue_2624_reader_ds_is_sane {what {raise_error 1}} {
+   get_current_cluster_config_array ts_config
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER
+
+   set user $CHECK_FIRST_FOREIGN_SYSTEM_USER
+   set output [start_sge_bin "qhost" "-F arch" $ts_config(master_host) $user prg_exit_state 60]
+   if {$prg_exit_state != 0} {
+      if {$raise_error} {
+         ts_log_severe "qhost -F arch as user $user failed $what:\n$output"
+      }
+      return 0
+   }
+
+   # every execd has to be in the answer, and it has to carry the complex value - a reader
+   # snapshot which lost the complexes still lists the hosts
+   set missing {}
+   foreach host $ts_config(execd_nodes) {
+      set short [resolve_host $host 0]
+      if {![string match "*$short*" $output]} {
+         lappend missing $short
+      }
+   }
+   if {[llength $missing] > 0 || ![string match "*arch=*" $output]} {
+      if {$raise_error} {
+         ts_log_severe "the reader data store does not answer with complete data $what -\
+                        missing hosts: \[$missing\], arch values present:\
+                        [string match "*arch=*" $output]\nqhost -F arch:\n$output"
+      }
+      return 0
+   }
+
+   ts_log_fine "the reader data store answers with all execds and their arch $what"
+   return 1
+}
+
+###
+# @brief what to report alongside a failure
+#
+# The event client list is the interesting part: it says whether the scheduler
+# registered again after the event master dropped it, which separates "it never
+# came back" from "it came back and does not work".
+##
+proc issue_2624_diagnostics {} {
+   get_current_cluster_config_array ts_config
+
+   set text ""
+   foreach {label option} {"event clients" "-secl" "scheduler state" "-sss" \
+                           "qmaster threads" "-stl"} {
+      set output [start_sge_bin "qconf" $option $ts_config(master_host) "" prg_exit_state 60]
+      append text "\nqconf $option ($label), exit $prg_exit_state:\n$output"
+   }
+
+   return $text
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+###
+# @brief suspend the qmaster past the acknowledge timeout and schedule again
+#
+# The sequence is the one from the issue: a healthy cluster, SIGSTOP on the
+# qmaster for longer than the event client acknowledge timeout, SIGCONT, and
+# then the two questions - is the qmaster there, and does it schedule.
+##
+proc issue_2624_suspend_past_ack_timeout {} {
+   get_current_cluster_config_array ts_config
+   global issue_2624_suspend_seconds
+
+   # A cluster which cannot schedule now would make the rest meaningless.
+   if {![issue_2624_can_schedule "before the qmaster was suspended"]} {
+      return
+   }
+   if {![issue_2624_reader_ds_is_sane "before the qmaster was suspended"]} {
+      return
+   }
+
+   if {![issue_2624_signal STOP]} {
+      return
+   }
+
+   # No early return between here and the SIGCONT: the qmaster is stopped, and
+   # leaving it that way would break every check that follows.
+   sleep_for_seconds $issue_2624_suspend_seconds \
+      "keeping the qmaster suspended past the event client acknowledge timeout"
+
+   if {![issue_2624_signal CONT]} {
+      return
+   }
+
+   if {![issue_2624_wait_for_reachable_qmaster]} {
+      return
+   }
+
+   # The execds were talking to a qmaster which did not answer, so give the
+   # cluster time to find itself again before asking it to run something. Load
+   # reports are the last thing to come back.
+   wait_for_load_from_all_queues 180 0
+
+   # The event clients should have re-registered by now. This is reported but not
+   # asserted: whether the scheduler is registered is not the question, and in
+   # the broken state it is.
+   ts_log_fine "state after resuming the qmaster:[issue_2624_diagnostics]"
+
+   # The reader mirror re-registered along with the scheduler, and its total update now runs
+   # with the GLOBAL data store selected as well, so a read only request is the other half of
+   # the question.
+   issue_2624_reader_ds_is_sane "after the qmaster was resumed"
+
+   issue_2624_can_schedule "after the qmaster was resumed"
+}
