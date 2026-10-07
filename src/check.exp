@@ -5486,13 +5486,54 @@ proc check_if_test_cleaned_up {{test_failed 0}} {
    global check_cleanup_baseline_jobs check_cleanup_baseline_ars
    global check_cleanup_findings
 
-   if {![is_qmaster_alive $ts_config(master_host) [get_qmaster_spool_dir]]} {
+   set qmaster_spool_dir [get_qmaster_spool_dir]
+   if {![is_qmaster_alive $ts_config(master_host) $qmaster_spool_dir]} {
       # test must have failed and will trigger a re-install anyway
       # or in case of init_core_system it might not have been done due to clock issues
       #
       # CS-984: whatever the baseline says, it describes a cluster that is no
       # longer there. Keeping it would read as "the test deleted everything".
       set check_cleanup_baseline_valid 0
+
+      # CS-2860: and say so. The caller counts a 0 return as an error, so leaving
+      # this path silent marked a check as failed - even one whose own functions
+      # all passed - with nothing anywhere to explain it, and with no
+      # ts_log_severe for wait_on_error to pause on. The two things a reader
+      # otherwise has to reconstruct by hand are named in the message: what
+      # qmaster.pid says, and which sge_qmaster processes the host really runs.
+      set qmaster_pid [get_qmaster_pid $ts_config(master_host) $qmaster_spool_dir]
+      if {$qmaster_pid == 0} {
+         set report "no qmaster is alive on host $ts_config(master_host):\
+                     $qmaster_spool_dir/qmaster.pid does not exist or could not be read"
+      } else {
+         set report "no qmaster is alive on host $ts_config(master_host):\
+                     $qmaster_spool_dir/qmaster.pid holds pid $qmaster_pid, which is not a\
+                     running sge_qmaster"
+      }
+
+      set running [ps_grep "sge_qmaster" $ts_config(master_host) qmaster_ps]
+      if {[llength $running] == 0} {
+         append report "\nno sge_qmaster process is running on that host at all"
+      } else {
+         append report "\nthe sge_qmaster process(es) running on that host are - a process of\
+                        another cluster on the same host shows up here too, the binary path says\
+                        which cluster it belongs to:"
+         foreach idx $running {
+            append report "\n  $qmaster_ps(string,$idx)"
+         }
+      }
+      append report "\nthe cleanup baseline was dropped, so the cleanup verification says nothing\
+                     about what $check_name left behind"
+
+      if {$test_failed} {
+         # CS-984 again: a check which has already failed gets its leftovers
+         # reported but never a second failure on top, and a qmaster which is
+         # gone is the normal debris of a check which took it down.
+         ts_log_info "cleanup check: $report"
+      } else {
+         ts_log_severe $report
+      }
+
       return 0
    }
 

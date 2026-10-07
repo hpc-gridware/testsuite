@@ -7854,7 +7854,9 @@ proc is_scheduler_alive { hostname qmaster_spool_dir } {
 #*******************************************************************************
 proc is_qmaster_alive { hostname qmaster_spool_dir } {
    get_current_cluster_config_array ts_config
-   set qmaster_pid [get_qmaster_pid]
+   # CS-2860: both arguments used to be dropped here, so this always asked about
+   # the master host and the default spool directory whatever the caller passed
+   set qmaster_pid [get_qmaster_pid $hostname $qmaster_spool_dir]
    get_ps_info $qmaster_pid $hostname
 
    set alive 0
