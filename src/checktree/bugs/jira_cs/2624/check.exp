@@ -81,9 +81,10 @@ lappend check_functions "issue_2624_suspend_past_ack_timeout"
 proc issue_2624_setup {} {
    get_current_cluster_config_array ts_config
    global issue_2624_master issue_2624_pid issue_2624_suspend_seconds
-   global issue_2624_signal_user
+   global issue_2624_signal_user issue_2624_act_qmaster issue_2624_stopped_shadowds
 
    set issue_2624_master $ts_config(master_host)
+   set issue_2624_stopped_shadowds {}
 
    # Comfortably past EVENT_ACK_MIN_TIMEOUT (600s), so that the event clients
    # have certainly timed out when the qmaster runs again. There is no point in
@@ -106,12 +107,24 @@ proc issue_2624_setup {} {
                      host $issue_2624_master as any available user"
       return 99
    }
+
+   # Which host the cluster currently calls the qmaster host, so that the questions asked after
+   # the suspension can be shown to have been answered by the qmaster which was suspended.
+   set issue_2624_act_qmaster [resolve_host [get_act_qaster "" 0] 0]
+
+   # Stopping the shadow daemons is deliberately the last thing this setup does: check.exp runs
+   # the cleanup function only when the setup did not return 99, so nothing may bail out after a
+   # daemon has been stopped.
+   if {![issue_2624_stop_foreign_shadowds]} {
+      ts_log_config "cannot stop the shadow daemons on the hosts which are not the qmaster host"
+      return 99
+   }
 }
 
 proc issue_2624_cleanup {} {
    get_current_cluster_config_array ts_config
    global issue_2624_master issue_2624_pid issue_2624_suspend_seconds
-   global issue_2624_signal_user
+   global issue_2624_signal_user issue_2624_act_qmaster issue_2624_stopped_shadowds
 
    # Whatever happened above, the qmaster must not be left stopped - a suspended
    # qmaster would take every check after this one with it. SIGCONT on a running
@@ -119,6 +132,12 @@ proc issue_2624_cleanup {} {
    if {[info exists issue_2624_pid] && [info exists issue_2624_signal_user]} {
       issue_2624_signal CONT 0
    }
+
+   # The shadow daemons go back up directly after that, before anything else here which could
+   # report an error, so that the cluster is not left without them. The qmaster is running again
+   # at this point and a shadow daemon needs minutes of a standing still heartbeat before it even
+   # considers a takeover, so starting them now cannot provoke one.
+   issue_2624_start_foreign_shadowds
 
    # The scheduler comes first, before any attempt to drain jobs: while it is
    # wedged nothing is dispatched, so a job left behind by this check cannot
@@ -145,12 +164,115 @@ proc issue_2624_cleanup {} {
    wait_for_end_of_all_jobs
 
    unset -nocomplain issue_2624_master issue_2624_pid issue_2624_suspend_seconds
-   unset -nocomplain issue_2624_signal_user
+   unset -nocomplain issue_2624_signal_user issue_2624_act_qmaster
+   unset -nocomplain issue_2624_stopped_shadowds
 }
 
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+###
+# @brief stop the shadow daemons which could take over while the qmaster is suspended
+#
+# A shadow daemon on a host other than the qmaster host does with this check exactly what it is
+# built to do: the heartbeat file stops changing, the suspended qmaster does not answer on its
+# port, and once the heartbeat has stood still for get_active_interval plus delay_time the shadow
+# daemon takes the qmaster lock and starts a qmaster of its own (shadowd.cc). What is left is two
+# qmasters, a rewritten act_qmaster file, and questions asked after the suspension which a freshly
+# started qmaster answers happily - and which then say nothing at all about CS-2624.
+#
+# The shadow daemon on the qmaster host itself is left running: check_if_valid_shadow() returns
+# -2 for it, "qmaster was running on same machine", so it can never promote and is harmless here.
+#
+# Every daemon which is stopped is remembered in issue_2624_stopped_shadowds and started again by
+# issue_2624_start_foreign_shadowds. When one of them cannot be stopped, the ones which already
+# are get started again before returning, so that the caller is free to bail out.
+#
+# @return 1 when all of them are down, 0 when one of them could not be stopped
+##
+proc issue_2624_stop_foreign_shadowds {} {
+   get_current_cluster_config_array ts_config
+   global issue_2624_master issue_2624_stopped_shadowds
+
+   set master [resolve_host $issue_2624_master 0]
+   foreach host $ts_config(shadowd_hosts) {
+      if {[resolve_host $host 0] == $master} {
+         ts_log_fine "leaving the shadow daemon on host $host running - it is the qmaster host\
+                      and cannot take over from a qmaster on its own host"
+         continue
+      }
+
+      # A pid file alone is not a running daemon, and asking shutdown_shadowd to kill a pid which
+      # is not there would be reported as an error of this check
+      set pid [get_shadowd_pid $host]
+      if {$pid == 0 || [is_pid_with_name_existing $host $pid "sge_shadowd"] != 0} {
+         ts_log_fine "no shadow daemon is running on host $host"
+         continue
+      }
+
+      if {[shutdown_shadowd $host] < 0} {
+         issue_2624_start_foreign_shadowds
+         return 0
+      }
+      lappend issue_2624_stopped_shadowds $host
+   }
+
+   return 1
+}
+
+###
+# @brief start the shadow daemons which issue_2624_stop_foreign_shadowds stopped
+#
+# Starts only what this check stopped, and may be called more than once - the list is emptied
+# here, so a second call does nothing.
+##
+proc issue_2624_start_foreign_shadowds {} {
+   global issue_2624_stopped_shadowds
+
+   if {![info exists issue_2624_stopped_shadowds]} {
+      return
+   }
+
+   foreach host $issue_2624_stopped_shadowds {
+      startup_shadowd $host
+   }
+   set issue_2624_stopped_shadowds {}
+}
+
+###
+# @brief is the qmaster which answers now the one which was suspended?
+#
+# This check says something about the fix only when the questions after the suspension are
+# answered by the process which was suspended. The shadow daemons which could have replaced it
+# are stopped for the duration, so this is a statement that stopping them worked rather than a
+# likely outcome - but it is the assertion whose absence made an earlier run of this check look
+# green while proving nothing, so it is asked rather than assumed.
+#
+# Both halves are needed: with a qmaster spool directory on shared storage a promoted qmaster
+# overwrites qmaster.pid, and with a local one it does not but it does rewrite act_qmaster.
+#
+# @return 1 when the qmaster host and the qmaster pid are both unchanged, 0 otherwise
+##
+proc issue_2624_same_qmaster_as_before {} {
+   global issue_2624_master issue_2624_pid issue_2624_act_qmaster
+
+   set act_qmaster [resolve_host [get_act_qaster "" 0] 0]
+   set pid [get_qmaster_pid $issue_2624_master]
+
+   if {$act_qmaster != $issue_2624_act_qmaster || $pid != $issue_2624_pid} {
+      ts_log_severe "the qmaster answering after the suspension is not the one which was\
+                     suspended - a shadow daemon took over. before: host\
+                     $issue_2624_act_qmaster pid $issue_2624_pid, now: host $act_qmaster\
+                     pid $pid. Everything this check asks from here on would be answered by the\
+                     new qmaster and would say nothing about CS-2624"
+      return 0
+   }
+
+   ts_log_fine "the qmaster on host $act_qmaster still runs as pid $pid - the same process which\
+                was suspended"
+   return 1
+}
 
 ###
 # @brief which user can send a signal to the qmaster process
@@ -367,6 +489,11 @@ proc issue_2624_suspend_past_ack_timeout {} {
    }
 
    if {![issue_2624_wait_for_reachable_qmaster]} {
+      return
+   }
+
+   # Before anything is asked of the cluster: is this still the qmaster which was suspended?
+   if {![issue_2624_same_qmaster_as_before]} {
       return
    }
 
