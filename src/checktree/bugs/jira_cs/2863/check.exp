@@ -1,0 +1,375 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2863: "qrdel <ar_name>" without -u used to select the ARs of every user with that name. A
+# manager deleting an AR of their own by name deleted everyone else's of the same name along with
+# the jobs bound to them, and a regular user deleted their own and then got a privilege error
+# naming the ids of the others - a partial success reported as a failure.
+#
+# A wildcard was already restricted to the caller, so the two spellings of the same request
+# disagreed with each other, and the plain name disagreed with what qrdel(1) documents.
+#
+# qdel has always had the rule this check asserts - job_list_filter() in sge_job_qmaster.cc adds
+# the caller to the user list for anything that does not start with a digit - so the qdel half
+# below is a consistency assertion rather than a regression test for a fix. It is here because
+# nothing covered it: the qdel and qrdel system tests exercise names and -u separately and never
+# together, which is how the two clients could drift apart unnoticed.
+#
+# The matrix both clients have to agree on:
+#
+#   <name>            only the caller's objects of that name
+#   '<pattern>'       only the caller's objects matching
+#   -u <user> <name>  that user's objects of that name
+#   -u '*' <name>     every user's objects of that name, manager only
+#   <id>              that one object, whoever owns it, subject to the permission check
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+# The fix is backported, so the minimum differs per branch: version_select_for_branch() picks
+# the newest entry which is not newer than the branch under test - 9.0.14 on the 9.0 line,
+# 9.1.7 on 9.1 and on everything after it.
+set check_version_range {"9.0.14 9.1.7" ""}
+
+set check_name           "issue_2863"
+set check_category       "BUG AR VERIFIED"
+set check_description(0) "qrdel and qdel scope a name to the calling user unless -u says otherwise"
+
+set check_needs          "init_core_system"
+
+# the ARs and jobs of a second user are submitted as that user
+set check_root_access_needs "yes"
+
+set check_setup_function issue_2863_setup
+set check_cleanup_function issue_2863_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2863_qrdel_name_scope"
+lappend check_functions "issue_2863_qdel_name_scope"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2863_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global issue_2863_other_user issue_2863_ar_name issue_2863_job_name
+
+   if {$CHECK_FIRST_FOREIGN_SYSTEM_USER == "" || $CHECK_FIRST_FOREIGN_SYSTEM_USER == $CHECK_USER} {
+      ts_log_config "this check needs a second user - first_foreign_user is not configured"
+      return 99
+   }
+
+   set issue_2863_other_user $CHECK_FIRST_FOREIGN_SYSTEM_USER
+   set issue_2863_ar_name "cs2863ar"
+   set issue_2863_job_name "cs2863job"
+
+   # the second user has to be allowed to submit ARs; the caller is a manager and always may
+   if {[add_user_to_access_list $issue_2863_other_user "arusers"] < 0} {
+      ts_log_config "cannot put user $issue_2863_other_user into the arusers access list"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_2863_cleanup {} {
+   global issue_2863_other_user issue_2863_ar_name issue_2863_job_name
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   delete_all_ars
+
+   if {[info exists issue_2863_other_user]} {
+      del_user_from_access_list $issue_2863_other_user "arusers"
+
+      # The list itself and not only its members: "qconf -au" creates the access list when it
+      # does not exist yet while "qconf -du" only takes the user out, so an empty "arusers"
+      # would outlive the check (CS-2587).
+      del_access_list "arusers"
+   }
+
+   unset -nocomplain issue_2863_other_user issue_2863_ar_name issue_2863_job_name
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief submit an advance reservation which starts right away
+#
+# No start time is given, so the AR starts now and reserves a single slot for its duration. No
+# absolute date is used on purpose: an AR cannot be submitted further ahead than the advance
+# reservation window allows, so a fixed future date would quietly stop being submittable once it
+# falls outside that window, and the check would fail at submission rather than at its assertion.
+# The duration only has to outlast the check; every AR is deleted by the check itself or by its
+# cleanup function.
+#
+# @param user the user to submit as
+# @return the AR id, or -1 when the submission failed
+proc issue_2863_submit_ar {user} {
+   global issue_2863_ar_name
+
+   set ar_id [submit_ar "-N $issue_2863_ar_name -d 600" "" $user]
+   if {$ar_id <= 0} {
+      ts_log_severe "cannot submit an advance reservation as user $user"
+      return -1
+   }
+
+   return $ar_id
+}
+
+## @brief does this advance reservation still exist?
+#
+# @param ar_id the AR to look for
+# @return 1 when qrstat still reports it, 0 when it is gone
+proc issue_2863_ar_exists {ar_id} {
+   return [expr {[parse_qrstat $ar_id] == 0}]
+}
+
+## @brief does this job still exist?
+#
+# @param job_id the job to look for
+# @return 1 when qstat still reports it, 0 when it is gone
+proc issue_2863_job_exists {job_id} {
+   start_sge_bin "qstat" "-u '*' -j $job_id"
+   return [expr {$prg_exit_state == 0}]
+}
+
+## @brief wait for the objects which should be gone and then check the ones which should remain
+#
+# A delete is not necessarily visible at once - the reader data store lags behind - so the
+# disappearance is waited for, while the survival is asserted straight away. Waiting the other
+# way round would turn a wrongly deleted object into a timeout instead of the explanation.
+#
+# @param exists_proc name of the procedure which says whether one object still exists
+# @param kind        what to call the objects in a message
+# @param gone_var    name of a list of ids which the command should have deleted
+# @param alive_var   name of a list of ids which it must have left alone
+# @param context     what was run, for the message
+# @return 1 when the outcome is as expected, 0 after reporting why not
+proc issue_2863_expect {exists_proc kind gone_var alive_var context} {
+   upvar $gone_var gone
+   upvar $alive_var alive
+
+   set timeout 60
+   while {1} {
+      set remaining {}
+      foreach id $gone {
+         if {[$exists_proc $id]} {
+            lappend remaining $id
+         }
+      }
+      if {[llength $remaining] == 0} {
+         break
+      }
+      if {$timeout <= 0} {
+         ts_log_severe "$context: $kind $remaining should have been deleted and still exist\
+                        after 60 seconds"
+         return 0
+      }
+      ts_log_progress
+      incr timeout -1
+      sleep_for_seconds 1
+   }
+
+   set wrongly_deleted {}
+   foreach id $alive {
+      if {![$exists_proc $id]} {
+         lappend wrongly_deleted $id
+      }
+   }
+   if {[llength $wrongly_deleted] > 0} {
+      ts_log_severe "$context: $kind $wrongly_deleted were deleted although they belong to\
+                     another user and were not selected. A name without -u must select only the\
+                     objects of the calling user"
+      return 0
+   }
+
+   ts_log_fine "$context: as expected - deleted [join $gone " "], kept [join $alive " "]"
+   return 1
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief qrdel selects by name within the caller's own ARs
+proc issue_2863_qrdel_name_scope {} {
+   global CHECK_USER issue_2863_other_user issue_2863_ar_name
+
+   delete_all_ars
+
+   set name $issue_2863_ar_name
+   set pattern "[string range $name 0 end-1]*"
+
+   # 1. a plain name, no -u: only the caller's AR
+   set own [issue_2863_submit_ar $CHECK_USER]
+   set other [issue_2863_submit_ar $issue_2863_other_user]
+   if {$own < 0 || $other < 0} {
+      return
+   }
+
+   start_sge_bin "qrdel" $name
+   set gone $own
+   set alive $other
+   if {![issue_2863_expect issue_2863_ar_exists "AR(s)" gone alive "qrdel $name as $CHECK_USER"]} {
+      return
+   }
+
+   # 2. a pattern behaves the same - it always did, and has to keep doing so
+   set own [issue_2863_submit_ar $CHECK_USER]
+   if {$own < 0} {
+      return
+   }
+   start_sge_bin "qrdel" "'$pattern'"
+   set gone $own
+   set alive $other
+   if {![issue_2863_expect issue_2863_ar_exists "AR(s)" gone alive \
+                           "qrdel '$pattern' as $CHECK_USER"]} {
+      return
+   }
+
+   # 3. -u names whose ARs to take, and only those
+   set own [issue_2863_submit_ar $CHECK_USER]
+   if {$own < 0} {
+      return
+   }
+   start_sge_bin "qrdel" "-u $issue_2863_other_user $name"
+   set gone $other
+   set alive $own
+   if {![issue_2863_expect issue_2863_ar_exists "AR(s)" gone alive \
+                           "qrdel -u $issue_2863_other_user $name"]} {
+      return
+   }
+
+   # 4. -u '*' is how a manager asks for the ARs of everybody
+   set other [issue_2863_submit_ar $issue_2863_other_user]
+   if {$other < 0} {
+      return
+   }
+   start_sge_bin "qrdel" "-u '*' $name"
+   set gone "$own $other"
+   set alive {}
+   if {![issue_2863_expect issue_2863_ar_exists "AR(s)" gone alive "qrdel -u '*' $name"]} {
+      return
+   }
+
+   # 5. an id is not restricted to the caller - it names one AR, and a manager may have it
+   set own [issue_2863_submit_ar $CHECK_USER]
+   set other [issue_2863_submit_ar $issue_2863_other_user]
+   if {$own < 0 || $other < 0} {
+      return
+   }
+   start_sge_bin "qrdel" $other
+   set gone $other
+   set alive $own
+   if {![issue_2863_expect issue_2863_ar_exists "AR(s)" gone alive \
+                           "qrdel $other (an AR of $issue_2863_other_user, by id)"]} {
+      return
+   }
+}
+
+## @brief qdel does the same for job names - the consistency qrdel had to be brought in line with
+proc issue_2863_qdel_name_scope {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER issue_2863_other_user issue_2863_job_name
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   set name $issue_2863_job_name
+   set pattern "[string range $name 0 end-1]*"
+   set job_args "-N $name -o /dev/null -j y $ts_config(product_root)/examples/jobs/sleeper.sh 600"
+
+   set own [submit_job $job_args 1 60 "" $CHECK_USER]
+   set other [submit_job $job_args 1 60 "" $issue_2863_other_user]
+   if {$own <= 0 || $other <= 0} {
+      ts_log_severe "cannot submit the jobs this check needs"
+      return
+   }
+
+   # 1. a plain name, no -u: only the caller's job
+   start_sge_bin "qdel" $name
+   set gone $own
+   set alive $other
+   if {![issue_2863_expect issue_2863_job_exists "job(s)" gone alive "qdel $name as $CHECK_USER"]} {
+      return
+   }
+
+   # 2. a pattern behaves the same
+   set own [submit_job $job_args 1 60 "" $CHECK_USER]
+   if {$own <= 0} {
+      return
+   }
+   start_sge_bin "qdel" "'$pattern'"
+   set gone $own
+   set alive $other
+   if {![issue_2863_expect issue_2863_job_exists "job(s)" gone alive \
+                           "qdel '$pattern' as $CHECK_USER"]} {
+      return
+   }
+
+   # 3. -u names whose jobs to take
+   set own [submit_job $job_args 1 60 "" $CHECK_USER]
+   if {$own <= 0} {
+      return
+   }
+   start_sge_bin "qdel" "-u $issue_2863_other_user $name"
+   set gone $other
+   set alive $own
+   if {![issue_2863_expect issue_2863_job_exists "job(s)" gone alive \
+                           "qdel -u $issue_2863_other_user $name"]} {
+      return
+   }
+
+   # 4. -u '*' takes the jobs of everybody
+   set other [submit_job $job_args 1 60 "" $issue_2863_other_user]
+   if {$other <= 0} {
+      return
+   }
+   start_sge_bin "qdel" "-u '*' $name"
+   set gone "$own $other"
+   set alive {}
+   if {![issue_2863_expect issue_2863_job_exists "job(s)" gone alive "qdel -u '*' $name"]} {
+      return
+   }
+
+   # 5. a job id is not restricted to the caller either
+   set own [submit_job $job_args 1 60 "" $CHECK_USER]
+   set other [submit_job $job_args 1 60 "" $issue_2863_other_user]
+   if {$own <= 0 || $other <= 0} {
+      return
+   }
+   start_sge_bin "qdel" $other
+   set gone $other
+   set alive $own
+   if {![issue_2863_expect issue_2863_job_exists "job(s)" gone alive \
+                           "qdel $other (a job of $issue_2863_other_user, by id)"]} {
+      return
+   }
+}
