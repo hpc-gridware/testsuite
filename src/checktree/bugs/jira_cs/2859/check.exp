@@ -1,0 +1,284 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2859: a mirror client whose lists no longer agree with the qmaster's used to stay that way
+# for good. A failed callback was logged and counted and nothing else happened, and the one
+# function which forces a full resend - sge_resync_schedd() - is reachable only from the GDI order
+# path. A scheduler with no exec hosts dispatches nothing, so it sends no orders, so the only
+# trigger sits behind the very outage it would cure. Restarting the thread was the only way out.
+#
+# The fix lets the client ask for itself: enough failed callbacks close together and the mirror
+# asks for a new registration, which the event master answers with a total update of every
+# subscribed list.
+#
+# Produced here with SGE_PRODUCE_MIRROR_CALLBACK_ERROR, which makes that many callbacks fail on
+# purpose and mirrors none of their events, so the client's lists really do fall behind. qevent is
+# the client under test rather than the scheduler: the code which counts the failures and asks for
+# the registration is the same one the scheduler thread runs - sge_mirror_process_event_list() in
+# libs/mir/sge_mirror.cc - and driving an external client needs no cluster surgery, whereas
+# breaking the scheduler's mirror on purpose means restarting the qmaster with the variable set.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.7"
+
+set check_name           "issue_2859"
+set check_category       "BUG EVENTCLIENT TESTBIN VERIFIED"
+set check_description(0) "a mirror client with failing callbacks asks for a total update (CS-2859)"
+
+set check_needs          "init_core_system"
+set check_root_access_needs "no"
+
+set check_setup_function issue_2859_setup
+set check_cleanup_function issue_2859_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2859_healthy_client_asks_for_nothing"
+lappend check_functions "issue_2859_broken_client_asks_for_total_update"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2859_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global issue_2859_qevent issue_2859_resync_msg issue_2859_failed_msg
+
+   # translate_macro parses the source code for the message texts this check matches on
+   if {$ts_config(source_dir) == "none"} {
+      ts_log_config "source directory is set to \"none\" - cannot translate the mirror messages"
+      return 99
+   }
+
+   set issue_2859_qevent [get_test_or_source_path "qevent" $ts_config(master_host)]
+   if {![is_remote_file $ts_config(master_host) $CHECK_USER $issue_2859_qevent]} {
+      ts_log_config "the qevent test binary does not exist as\
+                     $issue_2859_qevent on host $ts_config(master_host)"
+      return 99
+   }
+
+   # The client id and the counters differ from run to run, so the numbers are wildcards
+   set issue_2859_resync_msg [translate_macro MSG_MIRROR_RESYNC_UUU "*" "*" "*"]
+   set issue_2859_failed_msg [translate_macro MSG_MIRROR_CALLBACKFAILED_S "*"]
+
+   return 0
+}
+
+proc issue_2859_cleanup {} {
+   global issue_2859_qevent issue_2859_resync_msg issue_2859_failed_msg
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   unset -nocomplain issue_2859_qevent issue_2859_resync_msg issue_2859_failed_msg
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief run qevent while jobs come and go and return everything it printed
+#
+# qevent is started in testsuite mode, which subscribes to the job and array task events and has
+# them flushed within a second, so a handful of short jobs produce far more events than the
+# failure threshold needs. The jobs are submitted after the client is up, so that their events
+# arrive as events and not as part of the total update of the first registration.
+#
+# @param forced_failures how many callbacks are to fail on purpose, "" to leave the client healthy
+# @param nr_jobs         how many short jobs to submit while it is listening
+# @param deadline        how many seconds to collect output for at most
+# @return the lines qevent printed, as a list, empty if it could not be started
+proc issue_2859_run_qevent {forced_failures nr_jobs deadline} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER issue_2859_qevent
+
+   if {$forced_failures != ""} {
+      set env_list(SGE_PRODUCE_MIRROR_CALLBACK_ERROR) $forced_failures
+   }
+
+   set sid [open_remote_spawn_process $ts_config(master_host) $CHECK_USER \
+                                      $issue_2859_qevent "-ts" 0 "" env_list 0 15 1]
+   if {[llength $sid] < 2} {
+      ts_log_severe "cannot start $issue_2859_qevent on host $ts_config(master_host)"
+      return {}
+   }
+   set sp_id [lindex $sid 1]
+
+   for {set i 0} {$i < $nr_jobs} {incr i} {
+      submit_job "-o /dev/null -e /dev/null -b y /bin/sleep 3"
+   }
+
+   set lines {}
+   set end_time [expr {[timestamp] + $deadline}]
+   set collecting 1
+   while {$collecting} {
+      if {[timestamp] >= $end_time} {
+         break
+      }
+
+      set timeout 10
+      expect {
+         -i $sp_id full_buffer {
+            ts_log_severe "expect full_buffer error while reading from qevent"
+            set collecting 0
+         }
+         -i $sp_id timeout {
+            # a quiet client is not an error here - the deadline decides when to stop
+            ts_log_finer "no qevent output for $timeout seconds"
+         }
+         -i $sp_id eof {
+            ts_log_severe "qevent exited unexpectedly"
+            set collecting 0
+         }
+         -i $sp_id -- "*\n" {
+            foreach line [split $expect_out(0,string) "\n"] {
+               set line [string trim $line]
+               if {$line != ""} {
+                  ts_log_finer "qevent: $line"
+                  lappend lines $line
+               }
+            }
+         }
+      }
+   }
+
+   close_spawn_process $sid
+
+   return $lines
+}
+
+## @brief count the lines which match a pattern
+#
+# @param lines   the lines to search
+# @param pattern a string match pattern
+# @return how many of the lines match
+proc issue_2859_count_matches {lines pattern} {
+   set count 0
+   foreach line $lines {
+      if {[string match "*$pattern*" $line]} {
+         incr count
+      }
+   }
+   return $count
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief a client whose callbacks all work must not ask for anything
+#
+# The control: the same client, the same jobs, no forced failures. It guards the detector against
+# firing on a cluster which is simply busy - a total update is expensive and a client which asks
+# for one without cause would be a regression of its own.
+proc issue_2859_healthy_client_asks_for_nothing {} {
+   global issue_2859_resync_msg issue_2859_failed_msg
+
+   set lines [issue_2859_run_qevent "" 6 45]
+   if {[llength $lines] == 0} {
+      return
+   }
+
+   set failed [issue_2859_count_matches $lines $issue_2859_failed_msg]
+   set resync [issue_2859_count_matches $lines $issue_2859_resync_msg]
+
+   if {$failed != 0} {
+      ts_log_severe "$failed callback(s) of a healthy mirror client failed. Nothing was asked to\
+                     fail, so these are real failures and this check cannot tell whether the\
+                     total update it is about to look for was earned"
+      return
+   }
+   if {$resync != 0} {
+      ts_log_severe "a mirror client whose callbacks all worked asked for a total update $resync\
+                     time(s). The request is meant to need failed callbacks"
+      return
+   }
+
+   ts_log_fine "no callback of the healthy client failed and it asked for no total update"
+}
+
+## @brief a client whose callbacks keep failing asks for a total update and gets one
+#
+# The forced failure count is well above the threshold on purpose: it has to outlast the total
+# update, because that is the only way the total update becomes visible. A LIST event which is
+# mirrored without complaint prints nothing, whereas one which is failed is logged with its own
+# event text - and a LIST event numbered 1 is the first event of a fresh registration, which is
+# what the request was for.
+proc issue_2859_broken_client_asks_for_total_update {} {
+   global issue_2859_resync_msg issue_2859_failed_msg
+
+   set lines [issue_2859_run_qevent 300 6 60]
+   if {[llength $lines] == 0} {
+      return
+   }
+
+   set failed [issue_2859_count_matches $lines $issue_2859_failed_msg]
+   set resync [issue_2859_count_matches $lines $issue_2859_resync_msg]
+
+   if {$failed == 0} {
+      ts_log_severe "no callback failed although SGE_PRODUCE_MIRROR_CALLBACK_ERROR was set.\
+                     Without a broken mirror there is nothing for this check to observe"
+      return
+   }
+   ts_log_fine "$failed callback(s) failed, as asked for"
+
+   if {$resync == 0} {
+      ts_log_severe "the mirror of the client failed $failed callback(s) and never asked for a\
+                     total update. That is CS-2859: the client cannot repair its lists from the\
+                     events it receives, and nothing else asks on its behalf, so it stays broken\
+                     until it is restarted"
+      return
+   }
+   ts_log_fine "the client asked for a total update $resync time(s)"
+
+   # The total update which answers the request: a fresh registration starts its event numbering
+   # at 1 again, so a LIST event number 1 after the request is the resend arriving.
+   set seen_request 0
+   set total_update ""
+   foreach line $lines {
+      if {!$seen_request} {
+         if {[string match "*$issue_2859_resync_msg*" $line]} {
+            set seen_request 1
+         }
+         continue
+      }
+      if {[string match {*"1. EVENT * LIST *} $line]} {
+         set total_update $line
+         break
+      }
+   }
+
+   if {$total_update == ""} {
+      ts_log_severe "the client asked for a total update but none arrived - no event numbered 1\
+                     was delivered after the request. The request reached the event master or it\
+                     did not, but the lists were not resent either way"
+      return
+   }
+
+   ts_log_fine "the total update arrived after the request: $total_update"
+}
