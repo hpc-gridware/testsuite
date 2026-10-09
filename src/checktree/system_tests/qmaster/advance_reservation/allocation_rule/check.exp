@@ -1,0 +1,305 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.1.7"
+
+# define test's name and run level descriptions
+set check_name            "ar_allocation_rule"
+set check_category        "AR RESERVATION SCHEDULER VERIFIED"
+set check_description(0)  "qrsub -par reserves the AR slots with the given allocation rule"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function ar_allocation_rule_setup
+set check_cleanup_function ar_allocation_rule_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "ar_allocation_rule_reserve"
+lappend check_functions "ar_allocation_rule_reject"
+lappend check_functions "ar_allocation_rule_job_in_ar"
+
+# -------- local test procedures: initialization------------------------------
+
+proc ar_allocation_rule_setup {} {
+   get_current_cluster_config_array ts_config
+   global ar_allocation_rule_hosts ar_allocation_rule_slots
+   global ar_allocation_rule_pe ar_allocation_rule_queue
+
+   set ar_allocation_rule_pe "cs2864.pe"
+   set ar_allocation_rule_queue "cs2864.q"
+
+   # The whole point of an allocation rule is how it spreads slots over hosts, so a single host
+   # cannot tell $pe_slots from $round_robin and the check has nothing to assert.
+   set ar_allocation_rule_hosts $ts_config(execd_nodes)
+   if {[llength $ar_allocation_rule_hosts] < 2} {
+      ts_log_config "need at least 2 execd nodes to tell allocation rules apart"
+      return 99
+   }
+
+   # the number of slots every AR in this check reserves, and the per host capacity which lets a
+   # single host hold all of them
+   set ar_allocation_rule_slots 4
+
+   # beginning with 9.1.0 a host's slot capacity defaults to its number of cores
+   setup_host_slots_for_binding
+
+   # The PE spreads by default. A request for $pe_slots therefore cannot pass by accident: it has
+   # to override this rule to put all slots on one host.
+   set pe(slots) [expr {[llength $ar_allocation_rule_hosts] * $ar_allocation_rule_slots}]
+   set pe(allocation_rule) "\$round_robin"
+   add_pe $ar_allocation_rule_pe pe
+
+   set q(slots) $ar_allocation_rule_slots
+   set q(pe_list) $ar_allocation_rule_pe
+   add_queue $ar_allocation_rule_queue [get_all_hosts_hostgroup] q
+
+   # jobs shall start when the check asks for it, not when the interval expires
+   set sconf(schedule_interval) "1:0:0"
+   set_schedd_config sconf
+}
+
+proc ar_allocation_rule_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global ar_allocation_rule_hosts ar_allocation_rule_slots
+   global ar_allocation_rule_pe ar_allocation_rule_queue
+
+   reset_schedd_config
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   delete_all_ars
+
+   del_queue $ar_allocation_rule_queue "" 1 1
+   del_pe $ar_allocation_rule_pe
+
+   cleanup_host_slots_for_binding
+
+   unset -nocomplain ar_allocation_rule_hosts ar_allocation_rule_slots
+   unset -nocomplain ar_allocation_rule_pe ar_allocation_rule_queue
+}
+
+# -------- local test procedures ---------------------------------------------
+
+## @brief read how an AR spread its reserved slots over the execution hosts
+#
+# Takes the exec_queue_list of qrstat -ar, which names one queue instance and its slot count per
+# entry, and reduces it to the slot counts alone, sorted. That is what an allocation rule decides:
+# $pe_slots gives a single entry holding every slot, $round_robin gives one entry per host, and a
+# fixed rule gives that many slots in each entry. Which host got which slots is not part of the
+# rule and is deliberately not reported here.
+#
+# @param ar_id the AR to look at
+# @return the sorted list of slot counts, or an empty list when qrstat could not be read
+proc ar_allocation_rule_get_slot_counts {ar_id} {
+   get_current_cluster_config_array ts_config
+
+   if {[parse_qrstat $ar_id qrstat_info] != 0} {
+      ts_log_severe "qrstat -ar $ar_id failed"
+      return {}
+   }
+   if {![info exists qrstat_info(exec_queue_list)]} {
+      ts_log_severe "qrstat -ar $ar_id shows no exec_queue_list, so the AR reserved nothing"
+      return {}
+   }
+
+   set counts {}
+   foreach entry [split $qrstat_info(exec_queue_list) ","] {
+      set entry [string trim $entry]
+      if {$entry eq ""} {
+         continue
+      }
+      set pos [string last "=" $entry]
+      if {$pos < 0} {
+         ts_log_severe "cannot read slot count from exec_queue_list entry \"$entry\""
+         return {}
+      }
+      lappend counts [string range $entry [expr {$pos + 1}] end]
+   }
+
+   return [lsort -integer $counts]
+}
+
+## @brief check that an AR reserved its slots the way the given rule prescribes
+#
+# @param name what the row is called in the log
+# @param par_option the -par option to submit with, empty for an AR which requests no rule
+# @param expected_counts the sorted slot counts the AR is expected to hold, or "spread" when the
+#        rule only says that more than one host has to be involved
+# @param expected_rule the allocation rule qrstat is expected to show, empty when it must show none
+# @return 1 when the AR reserved as expected, 0 when it did not
+proc ar_allocation_rule_check_one {name par_option expected_counts expected_rule} {
+   get_current_cluster_config_array ts_config
+   global ar_allocation_rule_pe ar_allocation_rule_slots
+
+   set ar_id [submit_ar "-pe $ar_allocation_rule_pe $ar_allocation_rule_slots $par_option -d 600"]
+   if {$ar_id < 0} {
+      # error raised in submit_ar
+      return 0
+   }
+
+   set ret 1
+   set counts [ar_allocation_rule_get_slot_counts $ar_id]
+   if {[llength $counts] == 0} {
+      # error raised in ar_allocation_rule_get_slot_counts
+      set ret 0
+   } elseif {$expected_counts eq "spread"} {
+      if {[llength $counts] < 2} {
+         ts_log_severe "$name: the AR reserved all slots on one host ($counts), but the allocation\
+                        rule of the PE spreads them over several hosts"
+         set ret 0
+      }
+   } elseif {$counts ne $expected_counts} {
+      ts_log_severe "$name: the AR reserved slots \"$counts\", expected \"$expected_counts\""
+      set ret 0
+   }
+
+   # the rule has to be visible in qrstat as well, and only for an AR which asked for one
+   parse_qrstat $ar_id qrstat_info
+   set shown ""
+   if {[info exists qrstat_info(allocation_rule)]} {
+      set shown $qrstat_info(allocation_rule)
+   }
+   if {$shown ne $expected_rule} {
+      if {$expected_rule eq ""} {
+         ts_log_severe "$name: qrstat shows allocation_rule \"$shown\" for an AR which requested\
+                        none"
+      } else {
+         ts_log_severe "$name: qrstat shows allocation_rule \"$shown\", expected \"$expected_rule\""
+      }
+      set ret 0
+   }
+
+   if {$ret} {
+      ts_log_fine "$name: as expected - slots $counts, qrstat allocation_rule \"$shown\""
+   }
+
+   delete_ar $ar_id
+
+   return $ret
+}
+
+proc ar_allocation_rule_reserve {} {
+   get_current_cluster_config_array ts_config
+   global ar_allocation_rule_slots
+
+   set all_on_one_host [list $ar_allocation_rule_slots]
+   set two_per_host [list 2 2]
+
+   # the control row first: without -par the PE's own rule applies, as it always did
+   ar_allocation_rule_check_one "no -par" "" "spread" ""
+
+   # $pe_slots is the case the feature was asked for: every slot on a single host
+   ar_allocation_rule_check_one "-par '\$pe_slots'" "-par '\$pe_slots'" $all_on_one_host \
+                                "\$pe_slots"
+
+   # a fixed rule has to be honoured just as well
+   ar_allocation_rule_check_one "-par 2" "-par 2" $two_per_host "2"
+
+   # and asking for the rule the PE already has must not change the outcome
+   ar_allocation_rule_check_one "-par '\$round_robin'" "-par '\$round_robin'" "spread" \
+                                "\$round_robin"
+}
+
+## @brief check that a qrsub which cannot be honoured is rejected
+#
+# @param name what the row is called in the log
+# @param options the qrsub options to submit with
+# @param expected_message the error qrsub is expected to print
+# @return 1 when qrsub rejected the request with that error, 0 when it did not
+proc ar_allocation_rule_reject_one {name options expected_message} {
+   get_current_cluster_config_array ts_config
+
+   set output [start_sge_bin "qrsub" $options]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "$name: qrsub $options was accepted, it should have been rejected"
+      delete_all_ars
+      return 0
+   }
+   if {![string match "*$expected_message*" $output]} {
+      ts_log_severe "$name: qrsub $options was rejected, but not with the expected\
+                     error.\nexpected: $expected_message\ngot: $output"
+      return 0
+   }
+
+   ts_log_fine "$name: as expected - rejected with \"[string trim $output]\""
+   return 1
+}
+
+proc ar_allocation_rule_reject {} {
+   get_current_cluster_config_array ts_config
+   global ar_allocation_rule_pe ar_allocation_rule_slots
+
+   # a rule overrides the rule of a PE, so without -pe there is nothing it could override
+   ar_allocation_rule_reject_one "-par without -pe" "-par '\$pe_slots' -d 600" \
+                                 [translate_macro MSG_AR_PAR_WITHOUT_PE]
+
+   # The same values qsub -par accepts, and no others. A rule which is syntactically a rule but
+   # names nothing the scheduler knows is rejected by the qmaster when it validates the AR.
+   set pe_request "-pe $ar_allocation_rule_pe $ar_allocation_rule_slots"
+   foreach rule {no_such_rule 0 -1 4x} {
+      ar_allocation_rule_reject_one "-par $rule" "$pe_request -par '$rule' -d 600" \
+                                    [translate_macro MSG_PE_ALLOCRULE_S $rule]
+   }
+
+   # An unknown $variable does not even get that far: the shared submit parser resolves the
+   # placeholders in the argument and rejects the switch itself when one of them is unknown.
+   ar_allocation_rule_reject_one "-par '\$bogus'" "$pe_request -par '\$bogus' -d 600" \
+         [translate_macro MSG_PARSE_INVALIDOPTIONARGUMENT_SS "-par" "\$bogus"]
+}
+
+proc ar_allocation_rule_job_in_ar {} {
+   get_current_cluster_config_array ts_config
+   global ar_allocation_rule_pe ar_allocation_rule_slots
+
+   # The case from the field: the AR reserves every slot on one host, and the job which needs them
+   # all on one host runs in it. With the PE's own rule the AR would have spread the slots and the
+   # job would have stayed pending.
+   set ar_options "-pe $ar_allocation_rule_pe $ar_allocation_rule_slots -par '\$pe_slots' -d 600"
+   set ar_id [submit_ar $ar_options]
+   if {$ar_id < 0} {
+      # error raised in submit_ar
+      return
+   }
+
+   set job_opts "-ar $ar_id -pe $ar_allocation_rule_pe $ar_allocation_rule_slots -par '\$pe_slots'"
+   set job_id [submit_job "$job_opts -b y sleep 600"]
+   if {$job_id > 0} {
+      trigger_scheduling
+      if {[wait_for_jobstart $job_id "" 60] == 0} {
+         ts_log_fine "job $job_id started in AR $ar_id, both with -par '\$pe_slots'"
+      }
+   }
+
+   # deleting the AR deletes its jobs as well
+   delete_ar $ar_id
+}

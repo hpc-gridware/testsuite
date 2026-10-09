@@ -376,6 +376,7 @@ proc parse_qrstat {ar_id {output qrstat_info} {plain_output qrstat_output} {host
    set match_text(resource_list)     resource_list*
    set match_text($attribute_name)   "$attribute_name*"
    set match_text(granted_parallel_environment)   granted_parallel_environment*
+   set match_text(allocation_rule)   allocation_rule*
    set match_text(checkpoint_name)   checkpoint_name*
    set match_text(mail_options)      mail_options*
    set match_text(mail_list)         mail_list*
