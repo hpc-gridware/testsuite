@@ -1008,6 +1008,12 @@ proc check_execd_messages { hostname { show_mode 0 } } {
 #     even asserts on them - so reporting them would bury the real thing under
 #     false alarms. No test provokes a crash.
 #
+#     The same scan reports one |E| entry: the message a daemon writes when the
+#     file descriptor of its connection to systemd has been closed by code which
+#     did not own it. No test provokes that one either, and it names the test
+#     under which it happened - which is the only way to find the code that
+#     closes the descriptor. See get_systemd_fd_stolen_pattern().
+#
 #     Why this is worth a check of its own: a dead execd does NOT stop the
 #     cluster. The remaining execds keep taking work, so the run continues and
 #     the failure surfaces somewhere else entirely - as "didn't accept task",
@@ -1037,14 +1043,15 @@ proc check_execd_messages { hostname { show_mode 0 } } {
 proc check_daemon_crashes {} {
    get_current_cluster_config_array ts_config
 
-   set nr_crashes 0
+   set nr_problems 0
 
    foreach host $ts_config(execd_nodes) {
-      incr nr_crashes [check_daemon_crashes_of_host $host "execd" [check_execd_messages $host 2]]
+      incr nr_problems [check_daemon_crashes_of_host $host "execd" [check_execd_messages $host 2]]
    }
-   incr nr_crashes [check_daemon_crashes_of_host $ts_config(master_host) "qmaster" [check_qmaster_messages 2]]
+   incr nr_problems [check_daemon_crashes_of_host $ts_config(master_host) "qmaster" \
+                                                  [check_qmaster_messages 2]]
 
-   return $nr_crashes
+   return $nr_problems
 }
 
 #****** sge_procedures/check_daemon_crashes_of_host() **************************
@@ -1055,8 +1062,12 @@ proc check_daemon_crashes {} {
 #     check_daemon_crashes_of_host { host daemon messages_file }
 #
 #  FUNCTION
-#     Helper of check_daemon_crashes(). Reports every crash banner in
-#     messages_file that has not been reported before, and remembers it.
+#     Helper of check_daemon_crashes(). Reports every crash banner and every
+#     stolen systemd file descriptor in messages_file that has not been reported
+#     before, and remembers it.
+#
+#     Both are searched in one grep call: the scan already costs one remote grep
+#     per messages file per test, and both messages live in the same files.
 #
 #  INPUTS
 #     host          - host the daemon runs on
@@ -1064,7 +1075,10 @@ proc check_daemon_crashes {} {
 #     messages_file - path of the messages file on that host
 #
 #  RESULT
-#     number of crashes reported for this file
+#     number of problems reported for this file
+#
+#  SEE ALSO
+#     sge_procedures/check_systemd_fd_stolen_report()
 #*******************************************************************************
 proc check_daemon_crashes_of_host {host daemon messages_file} {
    global CHECK_USER
@@ -1074,13 +1088,17 @@ proc check_daemon_crashes_of_host {host daemon messages_file} {
       return 0
    }
 
+   set fd_pattern [get_systemd_fd_stolen_pattern]
+
    # -a because a partially written last line may hold binary
+   # -F -e twice: both patterns stay literal, the crash banner holds characters a
+   # regular expression would interpret
    # raise_error 0: grep exits 1 when it finds nothing, which is the normal case
-   set output [start_remote_prog $host $CHECK_USER "grep" \
-                                 "-a -A 6 -F \"|C|*** SIGNAL\" $messages_file" \
+   set grep_args "-a -A 6 -F -e \"|C|*** SIGNAL\" -e \"$fd_pattern\" $messages_file"
+   set output [start_remote_prog $host $CHECK_USER "grep" $grep_args \
                                  prg_exit_state 60 0 "" "" 0 1 0 0]
 
-   set nr_crashes 0
+   set nr_problems 0
    set banner ""
    set frames ""
 
@@ -1088,19 +1106,23 @@ proc check_daemon_crashes_of_host {host daemon messages_file} {
       if {[string first "|C|*** SIGNAL" $line] >= 0} {
          # a new banner ends the previous one
          if {$banner != ""} {
-            incr nr_crashes [check_daemon_crashes_report $host $daemon $messages_file $banner $frames]
+            incr nr_problems [check_daemon_crashes_report $host $daemon $messages_file \
+                                                          $banner $frames]
          }
          set banner [string trim $line]
          set frames ""
+      } elseif {[string first $fd_pattern $line] >= 0} {
+         incr nr_problems [check_systemd_fd_stolen_report $host $daemon $messages_file \
+                                                          [string trim $line]]
       } elseif {$banner != "" && [string first "|C|" $line] >= 0} {
          append frames "   [string trim [lindex [split $line "|"] 5]]\n"
       }
    }
    if {$banner != ""} {
-      incr nr_crashes [check_daemon_crashes_report $host $daemon $messages_file $banner $frames]
+      incr nr_problems [check_daemon_crashes_report $host $daemon $messages_file $banner $frames]
    }
 
-   return $nr_crashes
+   return $nr_problems
 }
 
 #****** sge_procedures/check_daemon_crashes_report() ***************************
@@ -1169,6 +1191,122 @@ proc check_daemon_crashes_report {host daemon messages_file banner frames} {
    }
 
    ts_log_severe "$daemon on host \"$host\" died: $signal\nat $timestamp\ntop of the stacktrace:\n$frames\nfull trace in $messages_file on $host$saved\n\nThe cluster keeps running on its remaining daemons, so results of this and\nof later tests on this cluster are not trustworthy."
+
+   return 1
+}
+
+#****** sge_procedures/get_systemd_fd_stolen_pattern() *************************
+#  NAME
+#     get_systemd_fd_stolen_pattern() -- literal of the stolen descriptor message
+#
+#  SYNOPSIS
+#     get_systemd_fd_stolen_pattern { }
+#
+#  FUNCTION
+#     Returns the literal part of MSG_SYSTEMD_BUS_FD_CLOSED_IS, the message a
+#     daemon writes when it finds that the file descriptor of its connection to
+#     systemd has been closed by code which did not own it. Dropping such a
+#     connection aborts the process inside libsystemd, so the daemon leaks it
+#     and writes this message instead (CS-2552).
+#
+#     grep needs a literal and the message is a format string, so the literal is
+#     kept here and verified against the macro parsed from the source under test.
+#     If the message is reworded, this says so instead of silently never
+#     matching again.
+#
+#  RESULT
+#     the literal to search for in a messages file
+#
+#  SEE ALSO
+#     sge_procedures/check_daemon_crashes_of_host()
+#*******************************************************************************
+proc get_systemd_fd_stolen_pattern {} {
+   set pattern "has been closed by someone else"
+
+   set macro [get_macro_string_from_name "MSG_SYSTEMD_BUS_FD_CLOSED_IS"]
+   if {$macro != -1 && [string first $pattern $macro] < 0} {
+      ts_log_severe "MSG_SYSTEMD_BUS_FD_CLOSED_IS does not contain \"$pattern\" any more, so the\
+                     check for stolen systemd file descriptors cannot match it:\n$macro"
+   }
+
+   return $pattern
+}
+
+#****** sge_procedures/check_systemd_fd_stolen_report() ************************
+#  NAME
+#     check_systemd_fd_stolen_report() -- report one stolen descriptor
+#
+#  SYNOPSIS
+#     check_systemd_fd_stolen_report { host daemon messages_file line }
+#
+#  FUNCTION
+#     Helper of check_daemon_crashes_of_host(). Reports one occurrence of
+#     MSG_SYSTEMD_BUS_FD_CLOSED_IS unless it has been reported before. The
+#     identity of an occurrence is the host plus the timestamp of its line, so
+#     the same one is reported once however often the file is scanned
+#     afterwards - the same approach as for crashes, and for the same reasons.
+#
+#  INPUTS
+#     host          - host the daemon runs on
+#     daemon        - "execd" or "qmaster", for the error message
+#     messages_file - path of the messages file on that host
+#     line          - the matching line of the messages file
+#
+#  RESULT
+#     1 if the occurrence was reported by this call, 0 if it was already known
+#
+#  SEE ALSO
+#     sge_procedures/get_systemd_fd_stolen_pattern()
+#*******************************************************************************
+proc check_systemd_fd_stolen_report {host daemon messages_file line} {
+   global CHECK_USER
+   get_current_cluster_config_array ts_config
+
+   set fields [split $line "|"]
+   set timestamp [lindex $fields 0]
+   set message [lindex $fields 5]
+   set id "$host $timestamp"
+
+   # Remembered in a file, not in a variable - see check_daemon_crashes_report()
+   set fd_dir "$ts_config(results_dir)/systemd_fd"
+   set reported_file "$fd_dir/reported.txt"
+   if {[catch {file mkdir $fd_dir} mkdir_error] != 0} {
+      ts_log_severe "cannot create $fd_dir: $mkdir_error"
+      return 0
+   }
+   if {[file exists $reported_file]} {
+      set fh [open $reported_file r]
+      set already [split [string trim [read $fh]] "\n"]
+      close $fh
+      if {[lsearch -exact $already $id] >= 0} {
+         return 0
+      }
+   }
+   set fh [open $reported_file a]
+   puts $fh $id
+   close $fh
+
+   # Keep the file. The next run reinstalls the cluster and a reinstall recreates
+   # the execd spool, and this message is the only evidence there is of who closed
+   # the descriptor. The results directory is on shared storage, so the remote
+   # host can copy into it directly.
+   set stamp [string map {" " "_" ":" "" "." "" "-" ""} $timestamp]
+   set target "$fd_dir/$host-$stamp.messages"
+   start_remote_prog $host $CHECK_USER "cp" "$messages_file $target" \
+                     prg_exit_state 60 0 "" "" 0 1 0 0
+   if {$prg_exit_state == 0} {
+      set saved "\nmessages file kept as $target"
+   } else {
+      set saved "\ncould not keep the messages file as $target"
+   }
+
+   ts_log_severe "$daemon on host \"$host\" found the file descriptor of its connection to systemd\
+                  closed by code which does not own it:\n$message\nat $timestamp\nin\
+                  $messages_file on $host$saved\n\nThe daemon survived, it leaked the connection\
+                  instead of closing it - closing it would have aborted the process inside\
+                  libsystemd (CS-2552). No test provokes this, so the test reported here is the\
+                  one under which it happened and the place to look for the code that closes the\
+                  descriptor."
 
    return 1
 }
