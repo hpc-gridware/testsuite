@@ -8147,6 +8147,41 @@ proc get_mail_subject {text} {
    return "$text"
 }
 
+#****** check/one_test_option_error() ******
+#
+#  NAME
+#     one_test_option_error() -- report a check option which is missing an argument
+#
+#  SYNOPSIS
+#     one_test_option_error { option }
+#
+#  FUNCTION
+#     Reports a command line option which needs a check path and a runlevel but did not get
+#     both, sends the mail report which the other command line errors send, and shuts the
+#     testsuite down. It does not return.
+#
+#  INPUTS
+#     option - name of the command line option, "check" or "check_all"
+#
+#*******************************
+proc one_test_option_error {option} {
+   global mail_body ts_config
+
+   set text "used $option parameter without runlevel or checkname"
+
+   puts $text
+   setup2
+   set local_host [gethostname]
+   set local_arch [resolve_arch $local_host]
+   append mail_body "product version is [get_version_info]\n"
+   append mail_body "testsuite root directory is \"$ts_config(testsuite_root_dir)\"\n"
+   append mail_body "check is running on host \"$local_host\" architecture is \"$local_arch\"\n"
+   append mail_body "product root directory is \"$ts_config(product_root)\"\n-------\n"
+   append mail_body "SGE CELL is  \"$ts_config(cell)\"\n-------\n"
+   mail_report [get_mail_subject "testsuite error - main"] "$mail_body $text"
+   testsuite_shutdown 1
+}
+
 # commandline parsing
 set log_to_file 0
 set ts_logging_file_name "$CHECK_CURRENT_WORKING_DIR/defaults.ts.log"
@@ -8270,9 +8305,16 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "all RUNLEVEL          run every test automatically up to runlevel RUNLEVEL"
       puts "                      (RUNLEVEL is a value from 0=short tests, up to 4=week tests)"
       puts ""
-      puts "check PATH RUNLEVEL   run test in checktree sub-path automatically up to runlevel"
-      puts "                      RUNLEVEL. PATH is as check sub-path, relative to checktree."
+      puts "check PATH RUNLEVEL   run exactly runlevel RUNLEVEL of the test in checktree sub-path"
+      puts "                      PATH. PATH is as check sub-path, relative to checktree."
       puts "                      If PATH begins with \"/\" then the path is used absolute"
+      puts "                      (RUNLEVEL is one of the runlevels the check defines, e.g. 0 or 2)"
+      puts ""
+      puts "check_all PATH RUNLEVEL"
+      puts "                      run every runlevel which the tests in checktree sub-path PATH"
+      puts "                      define, up to runlevel class RUNLEVEL - what \"all\" does for the"
+      puts "                      whole check tree. Which runlevels a check has does not have to be"
+      puts "                      known to the caller."
       puts "                      (RUNLEVEL is a value from 0=short tests, up to 4=week tests)"
       puts ""
       puts "execute_func ARGS     just run this procedure with given arguments"
@@ -8899,6 +8941,24 @@ for {set i 0} {$i < $argc} {incr i} {
       continue
    }
 
+   if {[string compare [lindex $argv $i] "--check_all"] == 0 ||
+       [string compare [lindex $argv $i] "check_all"] == 0} {
+      set do_one_test 1
+      set do_one_test_name [lindex $argv [expr {1 + $i}]]
+      set do_one_test_level [lindex $argv [expr {2 + $i}]]
+      puts "path: $do_one_test_name   runlevel class: $do_one_test_level"
+      if {[llength $do_one_test_level] != 1 || [llength $do_one_test_name] != 1} {
+         one_test_option_error "check_all"
+      } else {
+         # Save them to the new global array, as "check" does, but with the runlevel class
+         # instead of one runlevel - see the main part below.
+         lappend custom_checktree $do_one_test_name
+         lappend do_one_test_list [list $do_one_test_name $do_one_test_level "class"]
+      }
+      incr i 2
+      continue
+   }
+
    if { ( [string compare [lindex $argv $i] "--check"] == 0 ) || ([string compare [lindex $argv $i] "check"] == 0 ) } {
       set do_one_test 1
       set ru_lev [ expr ( 1 + $i ) ]
@@ -8907,21 +8967,11 @@ for {set i 0} {$i < $argc} {incr i} {
       set do_one_test_level [lindex $argv $ru_lev]
       puts "path: $do_one_test_name   level: $do_one_test_level"
       if { [ llength $do_one_test_level ] != 1 || [ llength $do_one_test_name ] != 1} {
-         puts "used check parameter without runlevel or checkname"
-         setup2
-         set local_host [gethostname]
-         set local_arch [resolve_arch $local_host]
-         set mail_body "$mail_body product version is [get_version_info]\n"
-         set mail_body "$mail_body testsuite root directory is \"$ts_config(testsuite_root_dir)\"\n"
-         set mail_body "$mail_body check is running on host \"$local_host\" architecture is \"$local_arch\"\n"
-         set mail_body "$mail_body product root directory is \"$ts_config(product_root)\"\n-------\n"
-         set mail_body "$mail_body SGE CELL is  \"$ts_config(cell)\"\n-------\n"
-         mail_report [get_mail_subject "testsuite error - main"] "$mail_body used check parameter without runlevel or checkname"
-         testsuite_shutdown 1
+         one_test_option_error "check"
       } else {
          #Save then to the new global array
          lappend custom_checktree $do_one_test_name
-         lappend do_one_test_list [list $do_one_test_name $do_one_test_level]
+         lappend do_one_test_list [list $do_one_test_name $do_one_test_level "level"]
       }
       incr i 2
       continue
@@ -9334,9 +9384,15 @@ if {$do_one_test} {
    set selected_levels ""
    ts_log_fine "run all tests ..."
 
+   # "check" runs one runlevel and leaves the enabled runlevels alone, "check_all" replaces them
+   # by the classes it was given, so the value has to be restored for every "check" which follows
+   # a "check_all" in the same invocation.
+   set saved_enabled_runlevels $CHECK_ENABLED_RUNLEVELS
+
    foreach _check $do_one_test_list {
       set do_one_test_name  [lindex $_check 0]
       set do_one_test_level [lindex $_check 1]
+      set do_one_test_mode  [lindex $_check 2]
 
       # ts_checktree ok
       if { [string first "/" $do_one_test_name] == 0 || [string first "\\" $do_one_test_name] == 0 } {
@@ -9345,10 +9401,26 @@ if {$do_one_test} {
          set CHECK_ACT_PATH "$ts_config(checktree_root_dir)/$do_one_test_name"
       }
 
-      set ONLY_ONE_LEVEL $do_one_test_level
+      if {$do_one_test_mode == "class"} {
+         # check_all: run every runlevel which the checks under this path define, up to the
+         # given runlevel class. Leaving ONLY_ONE_LEVEL empty makes run_test take the runlevels
+         # from the check tree, and the enabled runlevels then say which of them to run - the
+         # same two steps "all" does for the whole check tree, so the caller does not have to
+         # know which runlevels a check has.
+         set ONLY_ONE_LEVEL ""
+         set CHECK_ENABLED_RUNLEVELS {}
+         for {set _class 0} {$_class <= $do_one_test_level} {incr _class} {
+            lappend CHECK_ENABLED_RUNLEVELS [expr {$_class * 100}]
+         }
+         set _what "runlevel class"
+      } else {
+         set ONLY_ONE_LEVEL $do_one_test_level
+         set CHECK_ENABLED_RUNLEVELS $saved_enabled_runlevels
+         set _what "level"
+      }
 
       if {[llength $do_one_test_list] > 1} {
-         ts_log_fine "bundle: $do_one_test_name level $do_one_test_level"
+         ts_log_fine "bundle: $do_one_test_name $_what $do_one_test_level"
       }
 
       set _failed [run_tests $CHECK_ACT_PATH "all"]
