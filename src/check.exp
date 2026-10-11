@@ -536,6 +536,8 @@ global CHECK_ENABLE_MAIL           ;# is mail sending enabled
 set CHECK_ENABLE_MAIL 1
 global CHECK_ADMIN_USER_SYSTEM     ;# if no root account is possible
 set CHECK_ADMIN_USER_SYSTEM 0
+global check_nothing_to_do         ;# run_tests had no check to run, see run_tests()
+set check_nothing_to_do 0
 set have_ssh_access_state -1
 set pe_for_version_check_result "undefined"
 set CHECK_ENABLED_RUNLEVELS "0"
@@ -4128,10 +4130,12 @@ proc run_tests {path state_to_run} {
    global fast_setup custom_checktree
    global CHECK_USE_HUDSON
    global check_id
+   global check_nothing_to_do
 
    array unset exclude_array
 
    set CHECK_TESTS_RUNNING 1
+   set check_nothing_to_do 0
    set CHECK_MAILS_SENT 0  ;# clear mail counter
    set local_host [gethostname]
 
@@ -4146,8 +4150,13 @@ proc run_tests {path state_to_run} {
    build_checks_to_do_list checks_to_do $path $state_to_run
 
    # don't we have any tests to run? return immediately!
+   # The check tree filters a check out when its check_version_range does not cover the version
+   # under test, or when none of its check_category entries is enabled. That is not a failure, but
+   # the return value cannot say so - callers read it as one - so it is reported in
+   # check_nothing_to_do.
    if {[llength $checks_to_do] == 0} {
       set CHECK_TESTS_RUNNING 0
+      set check_nothing_to_do 1
       return 1
    }
 
@@ -9343,7 +9352,7 @@ if {$do_one_test} {
       }
 
       set _failed [run_tests $CHECK_ACT_PATH "all"]
-      if {$_failed} {
+      if {$_failed && !$check_nothing_to_do} {
          set at_least_one_failed 1
       }
 
@@ -9351,7 +9360,18 @@ if {$do_one_test} {
       # tell which of its checks failed. Without it the only signal is the exit
       # status of the whole invocation, and a bundle would have to be reported
       # -- and rerun -- as a unit even though the testsuite knows better.
-      puts "### check-result [expr {$_failed ? {failed} : {ok}}] $do_one_test_name $do_one_test_level"
+      #
+      # A check which the check tree filtered out is reported as skipped, not as failed: it never
+      # ran, it wrote no result file, and reporting it as a failure sends the caller looking for a
+      # problem in a check which cannot even run on this version.
+      if {$check_nothing_to_do} {
+         set _result "skipped"
+      } elseif {$_failed} {
+         set _result "failed"
+      } else {
+         set _result "ok"
+      }
+      puts "### check-result $_result $do_one_test_name $do_one_test_level"
    }
 
    if {$do_kill} {
