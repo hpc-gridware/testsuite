@@ -2184,7 +2184,7 @@ proc qconf_add_delete_modify_replace_attr {} {
    set result01 [mod_attr  $obj_spec $attr_name $val $target 1 $host $CHECK_USER 0]
 
    if {$result01 != -2} {
-      ts_log_info "Negative test qconf -Mattr <emptyfile> Failed! $result01"
+      ts_log_fine "Negative test qconf -Mattr <emptyfile> Failed! $result01"
    } else {
       ts_log_fine "Negative test:qconf -Mattr <emptyfile> Success!"
    }
