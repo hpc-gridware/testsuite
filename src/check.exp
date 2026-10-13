@@ -8183,6 +8183,36 @@ proc one_test_option_error {option {text ""}} {
    exit 1
 }
 
+#****** check/is_runlevel_class() ******
+#
+#  NAME
+#     is_runlevel_class() -- is the value a runlevel class, a number from 0 to 4?
+#
+#  SYNOPSIS
+#     is_runlevel_class { value }
+#
+#  FUNCTION
+#     Tells whether a value may be used as the runlevel class of "all" and "check_all":
+#     0=short, 1=medium, 2=long, 3=day, 4=week.
+#
+#     Both options expand the class in a loop which counts up to it, and "expr" compares a
+#     number against a non-numeric operand as a string. Every integer sorts before a letter,
+#     so "$class <= ALL" is true whatever the counter holds, the loop never ends and appends
+#     one element to the enabled runlevels per iteration: the testsuite then grows by about
+#     150 MB a second until the kernel kills it, and its log ends after "run all tests ..."
+#     with no hint of why. The value is therefore checked before it reaches the loop.
+#
+#  INPUTS
+#     value - the value given on the command line
+#
+#  RESULT
+#     1 if the value is a runlevel class, 0 if it is not
+#
+#*******************************
+proc is_runlevel_class {value} {
+   return [expr {[string is integer -strict $value] && $value >= 0 && $value <= 4}]
+}
+
 # commandline parsing
 set log_to_file 0
 set ts_logging_file_name "$CHECK_CURRENT_WORKING_DIR/defaults.ts.log"
@@ -8950,6 +8980,9 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "path: $do_one_test_name   runlevel class: $do_one_test_level"
       if {[llength $do_one_test_level] != 1 || [llength $do_one_test_name] != 1} {
          one_test_option_error "check_all"
+      } elseif {![is_runlevel_class $do_one_test_level]} {
+         one_test_option_error "check_all" \
+            "check_all needs a runlevel class from 0 to 4, got \"$do_one_test_level\""
       } else {
          # Save them to the new global array, as "check" does, but with the runlevel class
          # instead of one runlevel - see the main part below.
@@ -8969,6 +9002,9 @@ for {set i 0} {$i < $argc} {incr i} {
       puts "path: $do_one_test_name   level: $do_one_test_level"
       if { [ llength $do_one_test_level ] != 1 || [ llength $do_one_test_name ] != 1} {
          one_test_option_error "check"
+      } elseif {![string is integer -strict $do_one_test_level]} {
+         one_test_option_error "check" \
+            "check needs one runlevel number, got \"$do_one_test_level\""
       } else {
          #Save then to the new global array
          lappend custom_checktree $do_one_test_name
@@ -8984,6 +9020,10 @@ for {set i 0} {$i < $argc} {incr i} {
       set do_all_runlevel [lindex $argv $ru_lev]
       if { [ llength $do_all_runlevel ] != 1 } {
          one_test_option_error "all" "used all parameter without runlevel"
+      }
+      if {![is_runlevel_class $do_all_runlevel]} {
+         one_test_option_error "all" \
+            "all needs a runlevel class from 0 to 4, got \"$do_all_runlevel\""
       }
       incr i
       continue
