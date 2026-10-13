@@ -1,0 +1,255 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2888: sge_qmaster keeps one connection to the PostgreSQL spooling database per worker thread.
+# When the database server is restarted, the connections stay in place, and libpq only notices
+# that one is dead when the next statement on it fails. So the first spooling operation of every
+# worker thread after the restart failed, and it was not repeated on a new connection:
+#
+#   - a job submission failed at BEGIN, but the job was written anyway on a new connection: qsub
+#     reported "Unable to run job" and exited 1 for a job which had been accepted and ran
+#   - a submission which had to create an auto user (enforce_user auto) was rejected, because
+#     writing the user object failed
+#
+# The check terminates the sessions of sge_qmaster in the spooling database, which for sge_qmaster
+# is the same as a restart of the database server, and submits a burst of jobs which is spread
+# over the worker threads. Every submission has to succeed.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.7"
+
+set check_name           "issue_2888"
+set check_category       "BUG SPOOLING VERIFIED"
+set check_description(0) "submitting jobs succeeds after the spooling sessions were terminated"
+
+set check_needs          "init_core_system"
+
+# the auto user test submits as a second user
+set check_root_access_needs "yes"
+
+set check_setup_function issue_2888_setup
+set check_cleanup_function issue_2888_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2888_submit"
+lappend check_functions "issue_2888_auto_user"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2888_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global issue_2888_burst_size issue_2888_auto_user issue_2888_config_backup
+
+   if {$ts_config(spooling_method) != "postgres"} {
+      ts_log_config "spooling_method is \"$ts_config(spooling_method)\" - this check needs postgres"
+      return 99
+   }
+
+   if {$CHECK_FIRST_FOREIGN_SYSTEM_USER == "" || $CHECK_FIRST_FOREIGN_SYSTEM_USER == $CHECK_USER} {
+      ts_log_config "this check needs a second user - first_foreign_user is not configured"
+      return 99
+   }
+   set issue_2888_auto_user $CHECK_FIRST_FOREIGN_SYSTEM_USER
+
+   # Twice as many submissions as there are worker threads, so that every worker thread gets at
+   # least one with a high probability - each one holds a connection of its own.
+   set worker_threads 4
+   if {[bootstrap_file_read bootstrap] && [info exists bootstrap(worker_threads)]} {
+      set worker_threads $bootstrap(worker_threads)
+   }
+   set issue_2888_burst_size [expr {2 * $worker_threads}]
+
+   # the auto user test needs auto users to be created
+   get_config issue_2888_config_backup
+   if {$issue_2888_config_backup(enforce_user) != "auto"} {
+      set new_config(enforce_user) "auto"
+      if {[set_config new_config] < 0} {
+         ts_log_config "cannot set enforce_user to auto"
+         return 99
+      }
+   }
+
+   return 0
+}
+
+proc issue_2888_cleanup {} {
+   global issue_2888_burst_size issue_2888_auto_user issue_2888_config_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   if {[info exists issue_2888_config_backup]} {
+      reset_config issue_2888_config_backup
+   }
+
+   unset -nocomplain issue_2888_burst_size issue_2888_auto_user issue_2888_config_backup
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief submit a burst of jobs and check every submission
+#
+# Every qsub has to exit with 0. A failed qsub is reported with its output; the output tells
+# whether the job was rejected or whether it was accepted although qsub reported a failure.
+#
+# @param user         the user submitting the jobs
+# @param context      what is tested, for the messages
+# @param failures_var name of a variable receiving the report of the failed submissions, "" when
+#                     all of them succeeded
+# @return 1 when the burst was submitted, 0 when it could not be (reported via ts_log_severe)
+proc issue_2888_burst {user context failures_var} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH issue_2888_burst_size
+   upvar $failures_var failures
+
+   set failures ""
+
+   set host $ts_config(master_host)
+   set script "$CHECK_ACTUAL_TEST_PATH/qsub_burst.sh"
+   set script_args "$issue_2888_burst_size cs2888"
+   set output [start_remote_prog $host $user $script $script_args prg_exit_state 120]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "$context: running qsub_burst.sh failed:\n$output"
+      return 0
+   }
+
+   # split the output into the exit status and the output of every qsub
+   set current ""
+   foreach line [split [string map {"\r" ""} $output] "\n"] {
+      if {[regexp {^QSUB ([0-9]+) RC ([0-9]+)$} $line match nr rc]} {
+         set current $nr
+         set exit_status($nr) $rc
+         set qsub_output($nr) ""
+      } elseif {[regexp {^QSUB ([0-9]+) END$} $line]} {
+         set current ""
+      } elseif {$current != ""} {
+         append qsub_output($current) "$line\n"
+      }
+   }
+
+   if {[array size exit_status] != $issue_2888_burst_size} {
+      ts_log_severe "$context: expected the result of $issue_2888_burst_size qsub calls, got\
+                     [array size exit_status]:\n$output"
+      return 0
+   }
+
+   set submitted_message [translate_macro MSG_JOB_SUBMITJOB_US "*" "*"]
+   set accepted_failed 0
+   set rejected 0
+   set details ""
+   foreach nr [lsort -integer [array names exit_status]] {
+      if {$exit_status($nr) == 0} {
+         continue
+      }
+      if {[string match "*$submitted_message*" $qsub_output($nr)]} {
+         incr accepted_failed
+         append details "qsub $nr exited $exit_status($nr), but the job was accepted:\n"
+      } else {
+         incr rejected
+         append details "qsub $nr exited $exit_status($nr), the job was rejected:\n"
+      }
+      append details "$qsub_output($nr)\n"
+   }
+
+   if {$details != ""} {
+      set failures "$accepted_failed of $issue_2888_burst_size submissions were accepted but\
+                    reported as failed, $rejected were rejected:\n\n$details"
+   }
+
+   return 1
+}
+
+## @brief terminate the spooling sessions of sge_qmaster, then submit a burst of jobs
+#
+# @param user    the user submitting the jobs
+# @param context what is tested, for the messages
+# @return none (reports failures via ts_log_severe)
+proc issue_2888_submit_after_session_loss {user context} {
+   global CHECK_USER
+
+   # A worker thread opens its connection with its first spooling operation. A first burst,
+   # submitted as the check user so that it does not create an auto user, makes every worker
+   # thread hold a connection which the second burst then finds terminated.
+   if {![issue_2888_burst $CHECK_USER "$context, first burst" failures]} {
+      return
+   }
+   if {$failures != ""} {
+      ts_log_severe "$context: the first burst, before terminating the sessions, failed:\
+                     $failures"
+      return
+   }
+
+   if {[spool_database_terminate_connections] <= 0} {
+      ts_log_severe "$context: sge_qmaster has no session in the spooling database to terminate"
+      return
+   }
+
+   if {![issue_2888_burst $user $context failures]} {
+      return
+   }
+   if {$failures != ""} {
+      ts_log_severe "$context: $failures"
+   } else {
+      ts_log_fine "$context: all submissions succeeded"
+   }
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief submit jobs after the spooling sessions were terminated
+#
+# @return none (reports failures via ts_log_severe)
+proc issue_2888_submit {} {
+   global CHECK_USER
+
+   issue_2888_submit_after_session_loss $CHECK_USER "job submission"
+}
+
+## @brief submit jobs which have to create an auto user after the spooling sessions were terminated
+#
+# The user is deleted first, so that the submissions have to create it again as an auto user.
+#
+# @return none (reports failures via ts_log_severe)
+proc issue_2888_auto_user {} {
+   global issue_2888_auto_user
+
+   del_user $issue_2888_auto_user "" "" 0
+   if {[get_user $issue_2888_auto_user user_config "" "" 0] >= 0} {
+      ts_log_severe "cannot delete user $issue_2888_auto_user"
+      return
+   }
+
+   issue_2888_submit_after_session_loss $issue_2888_auto_user "job submission creating an auto user"
+}

@@ -298,3 +298,59 @@ proc spool_database_init {} {
 
    return 0
 }
+
+##
+# @brief Terminate the sessions sge_qmaster holds in this cluster's spooling database.
+#
+# For sge_qmaster this is the same as a restart of the database server: every session is ended
+# with "FATAL: terminating connection due to administrator command", and sge_qmaster only notices
+# it when it next uses the connection. Other clusters spooling into the same database server are
+# not affected: psql connects as this cluster's own role, which may only terminate sessions of that
+# role, and only the sessions in this cluster's database are selected.
+#
+# pg_terminate_backend() is called with a timeout, so the sessions are gone when it returns. That
+# form needs PostgreSQL 14 or newer.
+#
+# @return the number of terminated sessions, or -1 on error
+proc spool_database_terminate_connections {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   if {$ts_config(spooling_method) != "postgres"} {
+      ts_log_severe "spooling_method is \"$ts_config(spooling_method)\", not postgres"
+      return -1
+   }
+
+   set host [spool_database_get_base_field "dbhost"]
+   if {$host == ""} {
+      ts_log_severe "no ts_db_config entry for the spooling database"
+      return -1
+   }
+   set port [spool_database_get_base_field "dbport"]
+   set db_name [spool_database_get_name]
+   set db_user [spool_database_get_user]
+
+   # one row per session, "t" when it was terminated within the timeout of 10 seconds
+   set sql "SELECT pg_terminate_backend(pid, 10000) FROM pg_stat_activity\
+            WHERE datname = '$db_name' AND usename = '$db_user' AND pid <> pg_backend_pid()"
+   set args "--no-password -X -A -t -h $host -p $port -d $db_name -U $db_user"
+   append args " -v ON_ERROR_STOP=1 -c \"$sql\""
+
+   set envlist(PGPASSWORD) [spool_database_get_password]
+   set output [start_remote_prog $host $CHECK_USER "psql" $args prg_exit_state 60 0 "" envlist \
+                                 1 0 0]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "terminating the sessions of $db_user in database $db_name failed:\n$output"
+      return -1
+   }
+
+   set count 0
+   foreach line [split $output "\n"] {
+      if {[string trim $line] == "t"} {
+         incr count
+      }
+   }
+   ts_log_fine "terminated $count session(s) of $db_user in database $db_name"
+
+   return $count
+}
