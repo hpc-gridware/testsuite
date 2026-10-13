@@ -8150,36 +8150,37 @@ proc get_mail_subject {text} {
 #****** check/one_test_option_error() ******
 #
 #  NAME
-#     one_test_option_error() -- report a check option which is missing an argument
+#     one_test_option_error() -- report a check option which cannot be used
 #
 #  SYNOPSIS
-#     one_test_option_error { option }
+#     one_test_option_error { option {text ""} }
 #
 #  FUNCTION
 #     Reports a command line option which needs a check path and a runlevel but did not get
-#     both, sends the mail report which the other command line errors send, and shuts the
-#     testsuite down. It does not return.
+#     both, and shuts the testsuite down. It does not return.
+#
+#     A caller which found a different fault in the option - an argument which is there but
+#     cannot be used - passes its own text.
+#
+#     The command line is parsed before the configuration has been read and before the
+#     procedure library has been sourced, so this cannot send the mail report which the errors
+#     found later on send: setup2() fails with "invalid command name read_array_from_file" and
+#     buries the message under a stack trace. The report goes to the console, and the exit is
+#     a plain one - there is no log to close and no rlogin session to end at this point, and
+#     testsuite_shutdown() would only add the error of its own first missing procedure.
 #
 #  INPUTS
-#     option - name of the command line option, "check" or "check_all"
+#     option - name of the command line option, "check", "check_all" or "all"
+#     text   - what to report, the default says that an argument is missing
 #
 #*******************************
-proc one_test_option_error {option} {
-   global mail_body ts_config
-
-   set text "used $option parameter without runlevel or checkname"
+proc one_test_option_error {option {text ""}} {
+   if {$text == ""} {
+      set text "used $option parameter without runlevel or checkname"
+   }
 
    puts $text
-   setup2
-   set local_host [gethostname]
-   set local_arch [resolve_arch $local_host]
-   append mail_body "product version is [get_version_info]\n"
-   append mail_body "testsuite root directory is \"$ts_config(testsuite_root_dir)\"\n"
-   append mail_body "check is running on host \"$local_host\" architecture is \"$local_arch\"\n"
-   append mail_body "product root directory is \"$ts_config(product_root)\"\n-------\n"
-   append mail_body "SGE CELL is  \"$ts_config(cell)\"\n-------\n"
-   mail_report [get_mail_subject "testsuite error - main"] "$mail_body $text"
-   testsuite_shutdown 1
+   exit 1
 }
 
 # commandline parsing
@@ -8982,17 +8983,7 @@ for {set i 0} {$i < $argc} {incr i} {
       set ru_lev [ expr (1 + $i) ]
       set do_all_runlevel [lindex $argv $ru_lev]
       if { [ llength $do_all_runlevel ] != 1 } {
-         puts "used all parameter without runlevel"
-         setup2
-         set local_host [gethostname]
-         set local_arch [resolve_arch $local_host]
-         set mail_body "$mail_body product version is [get_version_info]\n"
-         set mail_body "$mail_body testsuite root directory is \"$ts_config(testsuite_root_dir)\"\n"
-         set mail_body "$mail_body check is running on host \"$local_host\" architecture is \"$local_arch\"\n"
-         set mail_body "$mail_body product root directory is \"$ts_config(testsuite_root_dir)\"\n-------\n"
-         set mail_body "$mail_body SGE CELL is  \"$ts_config(cell)\"\n-------\n"
-         mail_report [get_mail_subject "testsuite error - main"] "$mail_body used all parameter without runlevel"
-         testsuite_shutdown 1
+         one_test_option_error "all" "used all parameter without runlevel"
       }
       incr i
       continue
