@@ -2359,290 +2359,309 @@ proc qconf_add_delete_modify_replace_attr {} {
    }
 }
 
-#****** qconf/qconf_modify_checkpoint() ******
+###
+# @brief Compare two configuration values the way the product compares them
 #
-#  NAME
-#     qconf_modify_checkpoint - Modify chekcpoint
+# An attribute that holds nothing comes back as "none" from a freshly installed
+# cluster and as "NONE" once the testsuite has written it back, and the product
+# treats the two as the same empty value - so a test that distinguishes them
+# asserts something the product does not promise.
 #
-#  SYNOPSIS
-#     qconf_modify_checkpoint { } - Call "qconf -Mckpt "
+# @param a first value
+# @param b second value
+# @return 1 when both values mean the same thing, 0 otherwise
+##
+proc qconf_value_equal {a b} {
+   foreach v [list a b] {
+      set t [string trim [set $v]]
+      if {[string toupper $t] eq "NONE"} {
+         set t ""
+      }
+      set $v $t
+   }
+   return [expr {$a eq $b}]
+}
+
+###
+# @brief Assert that an attribute read back from the cluster has an expected value
 #
-#  FUNCTION
-#     Check basic functionality of qconf
+# The counterpart of a write assertion: a modify that reports success has to be
+# visible in the object afterwards, and a modify that was refused has to have
+# left it alone. Both are the same comparison, with a different expectation.
 #
-#  SEE ALSO
-# sge_procedures/get_scheduler_status()
-#*******************************
+# @param what     what was run, for the report, e.g. "qconf -Mckpt"
+# @param name     the object's name, for the report
+# @param arr_var  name of the caller's array holding the object's configuration
+# @param attr     the attribute to look at
+# @param expected the value it has to have
+# @return none
+##
+proc qconf_assert_attr_value {what name arr_var attr expected} {
+   upvar $arr_var arr
+
+   if {![info exists arr($attr)]} {
+      ts_log_severe "$what: \"$name\" has no attribute \"$attr\" in its configuration"
+      return
+   }
+   if {![qconf_value_equal $arr($attr) $expected]} {
+      ts_log_severe "$what: \"$name\" has $attr \"$arr($attr)\" after the write, expected \"$expected\""
+   }
+}
+
+###
+# @brief qconf -Mckpt / -mckpt: modify a checkpointing environment
+#
+# Four writes, each asserted by reading the object back: the file form and the
+# editor form have to apply what they were given, and a name that does not exist
+# has to behave the way the line it runs on promises.
+#
+# That last case is why the check carries a version switch. Up to 9.1 a modify
+# of a missing object failed; since 9.2 (CS-2300 for checkpoints, CS-2299 for
+# calendars, CS-2302 for roles) "-m<obj>" and "-a<obj>" are interchangeable and
+# a missing name is created from a template. The testsuite serves both lines, so
+# the expectation is asked of the version rather than written for one of them.
+# Before CS-2585 this was an expectation of "-1" that no branch enforced and
+# that had been wrong since 9.2 shipped - the object it created was left behind
+# in the cluster.
+#
+# @return none
+##
 proc qconf_modify_checkpoint {} {
    global ts_config env
    global CHECK_USER
 
-   # First let's create queue qconf_queue.q
+   # a checkpointing environment is only meaningful with a queue, and the queue
+   # is removed again at the end
    set queue_name "qconf_queue.q"
-   ts_log_fine "Create  queue $queue_name ..."
-
    set host [host_conf_get_suited_hosts]
-   set result0 [add_queue $queue_name $host new_queue]
-
-   if {$result0 == 0} {
-      ts_log_fine "qconf -Aq  $queue_name succeded"
-   } else {
-      ts_log_fine "result is $result0"
+   if {[add_queue $queue_name $host new_queue] != 0} {
+      ts_log_severe "could not create queue $queue_name"
+      return
    }
 
-   # Next, let's create a checkpoint
-   set CKPT_NAME "qconf_ckpt_name"
-   ts_log_fine "Create  checkpoint  $CKPT_NAME ..."
-
-   set result1 [add_ckpt $CKPT_NAME]
-
-   if {$result1 == 0} {
-      ts_log_fine "qconf -ackpt  succeded"
-   } else {
-      ts_log_fine "result is $result1"
+   set ckpt_name "qconf_ckpt_name"
+   if {[add_ckpt $ckpt_name] != 0} {
+      ts_log_severe "qconf -ackpt $ckpt_name failed"
+      del_queue $queue_name $host 1
+      return
    }
 
-   # Now modify it using set_checkpointobj
+   # 1 - the file form
    set myarray(clean_command) "ls"
-   ts_log_fine "Modify checkpoint $CKPT_NAME ..."
-   set result2 [mod_ckpt $CKPT_NAME myarray 1]
-
-   if {$result2 == 0} {
-      ts_log_fine "qconf -Mckpt succeded"
-   } else {
-      ts_log_fine "result is $result2"
+   if {[mod_ckpt $ckpt_name myarray 1] != 0} {
+      ts_log_severe "qconf -Mckpt $ckpt_name failed for clean_command=ls"
    }
+   if {[get_ckpt $ckpt_name current] == 0} {
+      qconf_assert_attr_value "qconf -Mckpt" $ckpt_name current clean_command "ls"
+   }
+   unset -nocomplain current
 
-   # Now modify it using CLI
+   # 2 - the editor form, writing a different value so that the read back can
+   #     tell an applied write from one that was refused
    set myarray(clean_command) "none"
-   ts_log_fine "Modify checkpoint $CKPT_NAME using CLI..."
-   set result21 [mod_ckpt $CKPT_NAME myarray 0]
+   if {[mod_ckpt $ckpt_name myarray 0] != 0} {
+      ts_log_severe "qconf -mckpt $ckpt_name failed for clean_command=none"
+   }
+   if {[get_ckpt $ckpt_name current] == 0} {
+      qconf_assert_attr_value "qconf -mckpt" $ckpt_name current clean_command "none"
+   }
+   unset -nocomplain current
 
-   if {$result21 == 0} {
-      ts_log_fine "qconf -mckpt succeded"
+   # 3 - a name that does not exist
+   set missing "qconf_ckpt_wrong"
+   set result [mod_ckpt $missing myarray 1 "" "" 0]
+   if {[is_version_in_range "9.2.0"]} {
+      if {$result != 0} {
+         ts_log_severe "qconf -Mckpt $missing returned $result - since 9.2 a modify of a name that does not exist adds the object"
+      }
+      if {[get_ckpt $missing created "" "" 0] != 0} {
+         ts_log_severe "qconf -Mckpt $missing reported success but did not create the object"
+      }
+      unset -nocomplain created
+      # created by the assertion above, so it does not outlive the check
+      del_ckpt $missing "" "" 0
    } else {
-      ts_log_fine "result is $result21"
+      if {$result == 0} {
+         ts_log_severe "qconf -Mckpt $missing succeeded - before 9.2 a modify of a name that does not exist fails"
+      }
+      if {[get_ckpt $missing created "" "" 0] == 0} {
+         ts_log_severe "qconf -Mckpt $missing created \"$missing\" although the modify failed"
+         unset -nocomplain created
+         del_ckpt $missing "" "" 0
+      }
    }
 
-   # Now try to modify using a non-existent checkpoint
-   set CKPT_NAME "qconf_ckpt_wrong"
-   ts_log_fine "Modify wrong checkpoint $CKPT_NAME ..."
-   set result21 [mod_ckpt $CKPT_NAME myarray 1 "" "" 0]
-
-   if {$result21 == -1} {
-      ts_log_fine "qconf -Mckpt failed correctly"
-   } else {
-      ts_log_fine "result is $result21"
+   # 4 - teardown, asserted: a delete that silently fails leaves the cluster
+   #     changed for every check that runs after this one
+   if {[del_ckpt $ckpt_name] != 0} {
+      ts_log_severe "qconf -dckpt $ckpt_name failed"
    }
-
-   # Remove what the modify above created. Since 9.2 a modify implicitly adds:
-   # "-a/-A and -m/-M no longer fail depending on whether an object already
-   # exists" (release notes; CS-2300 for checkpoints, CS-2299 for calendars,
-   # CS-2302 for roles). So "$CKPT_NAME" is not rejected any more - it is created,
-   # and it used to stay in the cluster after this check (CS-2585).
-   #
-   # Note for whoever revisits this: the expectation above still reads
-   # "result21 == -1", i.e. the pre-9.2 behaviour. It never failed the check
-   # because the else branch only logs, but the negative case no longer tests
-   # what its comment claims.
-   del_ckpt $CKPT_NAME "" "" 0
-
-   # Now try to modify using a non-existent checkpoint slow
-# TODO: we have to modify the way how handle_vi_edit works.
-#       at least, handle_vi_edit has to accept multiple error messages.
-#       Best might be to pass arrays of messages to handle_vi_edit, similar to
-#       handle_sge_error.
-#   ts_log_fine "Modify wrong checkpoint $myarray(ckpt_name) slow ...\n"
-#   set result22 [mod_ckpt $myarray(ckpt_name) myarray 0 "" "" 0]
-#
-#   if {$result22 == -9} {
-#      ts_log_fine "qconf -mckpt failed correctly"
-#   } else {
-#      ts_log_fine "result is $result22"
-#   }
-
-   # Now delete checkpoint
-   set CKPT_NAME "qconf_ckpt_name"
-   ts_log_fine "Delete checkpoint $CKPT_NAME ..."
-   set result4 [del_ckpt $CKPT_NAME]
-
-   if {$result4 == 0} {
-      ts_log_fine "qconf -dckpt $CKPT_NAME succeded"
-   } else {
-      ts_log_fine "result is $result4"
-   }
-
-   # Now delete queue
-   ts_log_fine "Delete queue $queue_name ..."
-   set result8 [del_queue  $queue_name $host 1]
-
-   if {$result8 == 0} {
-      ts_log_fine "qconf -dq $queue_name succeded"
-   } else {
-      ts_log_fine "result is $result8"
+   if {[del_queue $queue_name $host 1] != 0} {
+      ts_log_severe "qconf -dq $queue_name failed"
    }
 }
 
-#****** qconf/qconf_modify_exechost() ******
-#  NAME
-#     qconf_modify_exechost - Modify exec host
+###
+# @brief qconf -Me / -me: modify an execution host
 #
-#  SYNOPSIS
-#     qconf_sep_check { } - Call set_exechost to modify exechost
-#                         from CLI or file
+# Both writers of the exec host, each asserted twice: the attribute has to carry
+# the new value after a write that reported success, and it has to carry the old
+# one after a write that was refused. The refusal is produced by naming a project
+# that does not exist, which qmaster rejects in host_mod() - the one error of
+# this path that is independent of how the client got there, and therefore the
+# one that is the same on every line the testsuite serves.
 #
-#  FUNCTION
-#     Check basic functionality of qconf
+# The return codes are the ones set_exechost() maps: -1 for the file form, where
+# the denial is recognised by set_exechost_error(), and -3 for the editor form,
+# where handle_vi_edit() recognises it as the third expected message.
 #
-#  SEE ALSO
-# sge_host/get_processor_list()
-#*******************************
+# The host is restored at the end. Before CS-2585 every branch of this check
+# only logged, so neither the writes nor the restore were ever asserted.
+#
+# @return none
+##
 proc qconf_modify_exechost {} {
    global ts_config env
    global CHECK_USER
 
    set host [host_conf_get_suited_hosts]
 
-   # Save the initial values
-   get_exechost old_values $host
+   # the state to restore at the end
+   if {[get_exechost old_values $host] != 0} {
+      ts_log_severe "could not read the configuration of exec host $host"
+      return
+   }
 
-   # First create project qconf_test_prj
    set my_project "qconf_test_prj"
-   ts_log_fine "Create project $my_project ...\n"
-   set result [add_project "$my_project"]
-   ts_log_fine $result
-
-   # Modify exechost fast
-   ts_log_fine "Modify exec host  $host  from file ...\n"
-   set new_exechost_charray(projects) "$my_project"
-   set result0 [mod_exechost new_exechost_charray $host]
-
-  if { ( $result0 == 0 ) } {
-      ts_log_fine "qconf -Me succeded\n"
-   } else {
-      ts_log_fine "result is $result0"
+   if {[add_project $my_project] != 0} {
+      ts_log_severe "could not create project $my_project"
+      return
    }
 
-   # Now modify from CLI
-   ts_log_fine "Modify exec host $host from CLI ...\n"
-   set result1 [mod_exechost new_exechost_charray $host 0]
-
-  if { ( $result1 == 0 ) } {
-      ts_log_fine "qconf -me succeded\n"
-   } else {
-      ts_log_fine "result is $result1"
+   # 1 - the file form
+   set chgar(projects) $my_project
+   if {[mod_exechost chgar $host 1] != 0} {
+      ts_log_severe "qconf -Me $host failed for projects=$my_project"
    }
-
-   # Modify exechost fast wrongly
-   ts_log_fine "Modify exec host  $host  from file wrongly...\n"
-   set new_exechost_charray(projects) "qconf_wrong_prj"
-   set result1 [mod_exechost new_exechost_charray $host 1 $host $CHECK_USER 0]
-
-  if { ( $result1 == -1 ) } {
-      ts_log_fine "qconf -Me failed  successfully \n"
-   } else {
-     # See IZ 1967 for why this returns wrongly 0
-     ts_log_fine "result is $result1"
+   if {[get_exechost current $host] == 0} {
+      qconf_assert_attr_value "qconf -Me" $host current projects $my_project
    }
+   unset -nocomplain current
 
-   # Now modify from CLI wrongly
-   ts_log_fine "Modify exec host $host from CLI wrongly...\n"
-   set result12 [mod_exechost new_exechost_charray $host 0 $host $CHECK_USER 0]
-
-  if { ( $result12 == -3 ) } {
-      ts_log_fine "qconf -me failed  successfully\n"
-   } else {
-      ts_log_fine "result is $result12"
+   # 2 - the editor form, writing a different value so that the read back can
+   #     tell an applied write from one that was refused
+   set chgar(projects) "NONE"
+   if {[mod_exechost chgar $host 0] != 0} {
+      ts_log_severe "qconf -me $host failed for projects=NONE"
    }
-
-   # Now restore the old values
-   ts_log_fine "Restoring old values for  $host  ...\n"
-   set result2 [mod_exechost old_values $host 0]
-
-  if { ( $result2 == 0 ) } {
-      ts_log_fine "qconf -me succeded\n"
-   } else {
-      ts_log_fine "result is $result2"
+   if {[get_exechost current $host] == 0} {
+      qconf_assert_attr_value "qconf -me" $host current projects "NONE"
    }
+   unset -nocomplain current
 
-  # Now delete project qconf_test_prj
-   ts_log_fine "Delete project $my_project ...\n"
-   set result [del_project $my_project]
+   # 3 - the file form with a project that does not exist: refused, and nothing
+   #     written
+   set chgar(projects) "qconf_wrong_prj"
+   set result [mod_exechost chgar $host 1 $host $CHECK_USER 0]
+   if {$result != -1} {
+      ts_log_severe "qconf -Me $host with an unknown project returned $result, expected -1 (the denial of host_mod())"
+   }
+   if {[get_exechost current $host] == 0} {
+      qconf_assert_attr_value "qconf -Me (refused)" $host current projects "NONE"
+   }
+   unset -nocomplain current
+
+   # 4 - the editor form, same case
+   set result [mod_exechost chgar $host 0 $host $CHECK_USER 0]
+   if {$result != -3} {
+      ts_log_severe "qconf -me $host with an unknown project returned $result, expected -3 (the denial of host_mod())"
+   }
+   if {[get_exechost current $host] == 0} {
+      qconf_assert_attr_value "qconf -me (refused)" $host current projects "NONE"
+   }
+   unset -nocomplain current
+
+   # 5 - restore, asserted: the host belongs to the cluster, not to this check
+   if {[mod_exechost old_values $host 0] != 0} {
+      ts_log_severe "could not restore the configuration of exec host $host"
+   }
+   if {[get_exechost current $host] == 0} {
+      qconf_assert_attr_value "restore" $host current projects $old_values(projects)
+   }
+   unset -nocomplain current
+
+   if {[del_project $my_project] != 0} {
+      ts_log_severe "qconf -dprj $my_project failed"
+   }
 }
 
-#****** qconf/qconf_modify_project() ******
+###
+# @brief qconf -Mprj / -mprj: modify a project
 #
-#  NAME
-#     qconf_modify_project - Modify project's fshare
+# Two writes that have to be applied and three that have to be refused, each one
+# read back. The refusals are asserted as "it failed and the project is what it
+# was", not as a return code: an unknown attribute and a negative share are
+# caught while the object is being parsed, and CS-2823 moved that parse from the
+# client into qmaster, so the error travels back in the answer list instead of
+# being printed locally. What must not change is that nothing is written, and
+# that is what is asserted.
 #
-#  SYNOPSIS
-#     qconf_modify_project { } - Call mod_project
+# Before CS-2585 every branch only logged, with two comments pointing at
+# IZ 1968 for why the expected return codes do not appear.
 #
-#  FUNCTION
-#     Check basic functionality of qconf
-#
-#  SEE ALSO
-# sge_project/get_project_list()
-#*******************************
+# @return none
+##
 proc qconf_modify_project {} {
    global ts_config qconf_project
 
    set my_project "$qconf_project"
 
-   # Next modify fast
-   ts_log_fine "Modify project $my_project fast ...\n"
-   set old_values(fshare) "0"
-   set result1 [mod_project $my_project old_values]
-
-   if {$result1 == 0} {
-      ts_log_fine "qconf -Mprj $my_project succeded"
-   } else {
-      ts_log_fine "result is $result1"
+   # 1 - the file form
+   set chgar(fshare) "7"
+   if {[mod_project $my_project chgar] != 0} {
+      ts_log_severe "qconf -Mprj $my_project failed for fshare=7"
    }
-
-   # Next modify slow
-   ts_log_fine "Modify project $my_project slow ...\n"
-   set result2 [mod_project $my_project old_values 0]
-
-   if {$result2 == 0} {
-      ts_log_fine "qconf -mprj $my_project succeded"
-   } else {
-      ts_log_fine "result is $result2"
+   if {[get_project $my_project current] == 0} {
+      qconf_assert_attr_value "qconf -Mprj" $my_project current fshare "7"
    }
+   unset -nocomplain current
 
-   # Next modify fast wrong
-   ts_log_fine "Modify project $my_project fast with wrong attribute  ...\n"
-   set old_values(stuff) "5"
-   set result21 [mod_project $my_project old_values 1 "" "" 0]
-
-   if {$result21 == -1} {
-      ts_log_fine "qconf -Mprj $my_project failed  correctly"
-   } else {
-      # See IZ 1968 on why this does not fail as expected
-      ts_log_fine "result is $result21"
+   # 2 - the editor form, writing a different value so that the read back can
+   #     tell an applied write from one that was refused
+   set chgar(fshare) "0"
+   if {[mod_project $my_project chgar 0] != 0} {
+      ts_log_severe "qconf -mprj $my_project failed for fshare=0"
    }
-
-   # Next modify fast wrong again
-   ts_log_fine "Modify project $my_project wrong fast again ...\n"
-   set old_values(fshare) "-1"
-
-   set result3 [mod_project $my_project old_values 1 "" "" 0]
-
-   if {$result3 == -2} {
-      ts_log_fine "qconf -Mprj $my_project failed again correctly"
-   } else {
-      # See IZ 1968 on why this does not fail as expected
-      ts_log_fine "result is $result3"
+   if {[get_project $my_project current] == 0} {
+      qconf_assert_attr_value "qconf -mprj" $my_project current fshare "0"
    }
+   unset -nocomplain current
 
-   # Next modify slow
-   ts_log_fine "Modify project $my_project  wrong slow ...\n"
-   set result4 [mod_project $my_project old_values 0 "" "" 0]
+   # 3 - an attribute the project has no field for
+   unset chgar
+   set chgar(qconf_no_such_attribute) "5"
+   if {[mod_project $my_project chgar 1 "" "" 0] == 0} {
+      ts_log_severe "qconf -Mprj $my_project accepted the unknown attribute \"qconf_no_such_attribute\""
+   }
+   if {[get_project $my_project current] == 0} {
+      qconf_assert_attr_value "qconf -Mprj (refused)" $my_project current fshare "0"
+   }
+   unset -nocomplain current
 
-   if {$result4 == -3} {
-      ts_log_fine "qconf -mprj $my_project failed  correctly"
-   } else {
-      ts_log_fine "result is $result4"
+   # 4 - a share that is not an unsigned number, through both writers. The value
+   #     is rejected while the object is parsed, which is the step CS-2823 moved
+   #     into qmaster for the editor form - so the two now fail in the same
+   #     place and for the same reason.
+   unset chgar
+   set chgar(fshare) "-1"
+   foreach {sw fast} [list "-Mprj" 1 "-mprj" 0] {
+      if {[mod_project $my_project chgar $fast "" "" 0] == 0} {
+         ts_log_severe "qconf $sw $my_project accepted fshare=-1"
+      }
+      if {[get_project $my_project current] == 0} {
+         qconf_assert_attr_value "qconf $sw (refused)" $my_project current fshare "0"
+      }
+      unset -nocomplain current
    }
 }
 

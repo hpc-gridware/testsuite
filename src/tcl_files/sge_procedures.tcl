@@ -9984,7 +9984,14 @@ proc sge_client_messages {msg_var action obj_type obj_name {on_host ""} {as_user
          set NO_ULONG [translate_macro MSG_OBJECT_VALUENOTULONG_S "*"]
          add_message_to_container messages -4 $NO_ULONG
 
-         set NO_ATTR "error: [translate_macro MSG_UNKNOWNATTRIBUTENAME_S \"*\" ]"
+         # No "error: " prefix on purpose: the message travels back in an answer
+         # list, and the two writers print such a list differently - the client's
+         # answer_list_output() logs it as "error: <text>", the stored write
+         # procedure of CS-2822/CS-2823 prints the text as qmaster sent it, and
+         # since CS-2823 the editor of every converted object parses in qmaster.
+         # Matching the text alone recognises both, which is what a testsuite
+         # shared between the 9.1 and 9.2 lines needs.
+         set NO_ATTR [translate_macro MSG_UNKNOWNATTRIBUTENAME_S \"*\" ]
          add_message_to_container messages -5 $NO_ATTR
 
          set NOT_EXISTS [translate_macro MSG_SGETEXT_DOESNOTEXIST_SS $obj_type $obj_name]

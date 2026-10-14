@@ -337,7 +337,11 @@ proc set_exechost_error {result old_values tmpfile  raise_error} {
       set host "unknown"
    }
 
-   add_message_to_container messages -1 [translate_macro MSG_SGETEXT_UNKNOWNPROJECT_SSSS $attributes $project $elem $host]
+   # The macro is (project, attribute, object kind, object name) - see
+   # verify_project_list() in sge_userprj_qmaster.cc. The first two used to be
+   # passed the other way round here, so this entry never matched and an
+   # unknown project came back as the generic -999 instead of -1.
+   add_message_to_container messages -1 [translate_macro MSG_SGETEXT_UNKNOWNPROJECT_SSSS $project $attributes $elem $host]
    add_message_to_container messages -2 [translate_macro MSG_QUEUE_MODCMPLXDENYDUETOAR_SS "*" "*"]
    add_message_to_container messages -3 [translate_macro MSG_CPLX_ATTRIBISNEG_S "*"]
    add_message_to_container messages -4 [translate_macro MSG_RSMAP_INCONSISTENTAMOUNT_SSUU "*" "*" "*" "*"]

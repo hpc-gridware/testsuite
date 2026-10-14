@@ -364,7 +364,13 @@ proc get_pe_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
       "add" {
          set USET_NOT_EXISTS [translate_macro MSG_CQUEUE_UNKNOWNUSERSET_S "*"]
          add_message_to_container messages -3 $USET_NOT_EXISTS
-         add_message_to_container messages -4 "error: [translate_macro MSG_ULONG_INCORRECTSTRING "*"]"
+         # No "error: " prefix on purpose: the message travels back in an answer
+         # list, and the two writers print such a list differently - the client's
+         # answer_list_output() logs it as "error: <text>", the stored write
+         # procedure of CS-2822/CS-2823 prints the text as qmaster sent it.
+         # Matching the text alone recognises both, which is what a testsuite
+         # shared between the 9.1 and 9.2 lines needs.
+         add_message_to_container messages -4 [translate_macro MSG_ULONG_INCORRECTSTRING "*"]
          add_message_to_container messages -5 [translate_macro MSG_GDI_APATH_S "*"]
       }
       "get" {
@@ -373,7 +379,13 @@ proc get_pe_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
      }
       "mod" {
          add_message_to_container messages -6 [translate_macro MSG_CQUEUE_UNKNOWNUSERSET_S "*"]
-         add_message_to_container messages -7 "error: [translate_macro MSG_ULONG_INCORRECTSTRING "*"]"
+         # No "error: " prefix on purpose: the message travels back in an answer
+         # list, and the two writers print such a list differently - the client's
+         # answer_list_output() logs it as "error: <text>", the stored write
+         # procedure of CS-2822/CS-2823 prints the text as qmaster sent it.
+         # Matching the text alone recognises both, which is what a testsuite
+         # shared between the 9.1 and 9.2 lines needs.
+         add_message_to_container messages -7 [translate_macro MSG_ULONG_INCORRECTSTRING "*"]
          set REJECTED_DUE_TO_AR_PE_SLOTS_U [translate_macro MSG_PARSE_MOD_REJECTED_DUE_TO_AR_PE_SLOTS_U "*"]
          add_message_to_container messages -8 $REJECTED_DUE_TO_AR_PE_SLOTS_U
          add_message_to_container messages -9 [translate_macro MSG_GDI_APATH_S "*"]

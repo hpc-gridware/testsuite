@@ -380,7 +380,13 @@ proc get_project_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
          # BUG: returns: error parsing unsigned long value from string "xxx"
          #                cant read project
          # should return: MSG_OBJECT_VALUENOTULONG_S (already among the messages)
-         add_message_to_container messages -5 "error: [translate_macro MSG_ULONG_INCORRECTSTRING "*"]"
+         # No "error: " prefix on purpose: the message travels back in an answer
+         # list, and the two writers print such a list differently - the client's
+         # answer_list_output() logs it as "error: <text>", the stored write
+         # procedure of CS-2822/CS-2823 prints the text as qmaster sent it.
+         # Matching the text alone recognises both, which is what a testsuite
+         # shared between the 9.1 and 9.2 lines needs.
+         add_message_to_container messages -5 [translate_macro MSG_ULONG_INCORRECTSTRING "*"]
       }
       "get" {
          # CD: not expected generic message
@@ -396,7 +402,13 @@ proc get_project_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
          # BUG: returns: error parsing unsigned long value from string "xxx"
          #                cant read project
          # should return: MSG_OBJECT_VALUENOTULONG_S (already among the messages)
-         add_message_to_container messages -8 "error: [translate_macro MSG_ULONG_INCORRECTSTRING "*"]"
+         # No "error: " prefix on purpose: the message travels back in an answer
+         # list, and the two writers print such a list differently - the client's
+         # answer_list_output() logs it as "error: <text>", the stored write
+         # procedure of CS-2822/CS-2823 prints the text as qmaster sent it.
+         # Matching the text alone recognises both, which is what a testsuite
+         # shared between the 9.1 and 9.2 lines needs.
+         add_message_to_container messages -8 [translate_macro MSG_ULONG_INCORRECTSTRING "*"]
       }
       "del" {
          # references: queue, user
