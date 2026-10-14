@@ -341,7 +341,10 @@ proc check_c_source_code_files_for_macros {} {
    }
 
    set c_files [get_files_to_parse_for_macros $ts_config(source_dir)]
-   append c_files " [get_files_to_parse_for_macros [file normalize "$ts_config(source_dir)/../$ts_config(ext_source_dir)/source"]]"
+   set ext_source_dir [get_ext_source_code_dir]
+   if {$ext_source_dir != ""} {
+      append c_files " [get_files_to_parse_for_macros $ext_source_dir]"
+   }
 
    set search_list ""
    for {set i 1} {$i <= $macro_messages_list(0) } {incr i 1} {
@@ -420,6 +423,29 @@ proc check_c_source_code_files_for_macros {} {
 # --   ts_log_fine "macros removed"
 }
 
+## @brief the source code directory of the HPC-Gridware extensions
+#
+# ext_source_dir is either an absolute path or relative to the directory above source_dir.
+#
+# @return the normalized path of the extensions' source code directory, or "" when no extensions
+#         are configured (ext_source_dir "none") or there is no source directory (source_dir "none")
+proc get_ext_source_code_dir {} {
+   global ts_config
+
+   if {$ts_config(source_dir) == "none" || $ts_config(ext_source_dir) == "none"} {
+      return ""
+   }
+
+   # file join drops the components before an absolute ext_source_dir
+   return [file normalize [file join $ts_config(source_dir) .. $ts_config(ext_source_dir) source]]
+}
+
+## @brief the message files (msg_*.h) of the source code
+#
+# The message files of the HPC-Gridware extensions are included when they are configured.
+#
+# @return a list of the paths of the message files, an empty list when there is no source
+#         directory (reported via ts_log_severe)
 proc get_source_msg_files {} {
    global ts_config
 
@@ -428,12 +454,18 @@ proc get_source_msg_files {} {
       return {}
    }
 
+   set source_dirs [list $ts_config(source_dir)]
+   set ext_source_dir [get_ext_source_code_dir]
+   if {$ext_source_dir != ""} {
+      lappend source_dirs $ext_source_dir
+   }
+
    set msg_files {}
-   set dirs [get_all_subdirectories $ts_config(source_dir)]
-   foreach dir $dirs {
-      set files [get_file_names $ts_config(source_dir)/$dir "msg_*.h"]
-      foreach file $files {
-         lappend msg_files $ts_config(source_dir)/$dir/$file
+   foreach source_dir $source_dirs {
+      foreach dir [get_all_subdirectories $source_dir] {
+         foreach file [get_file_names $source_dir/$dir "msg_*.h"] {
+            lappend msg_files $source_dir/$dir/$file
+         }
       }
    }
 
@@ -450,7 +482,8 @@ proc get_source_msg_files {} {
 #  FUNCTION
 #     This procedure reads all sge source code messages files (msg_*.h) in order
 #     to get all macro strings and store it to the global variable
-#     macro_messages_list.
+#     macro_messages_list. The messages files of the HPC-Gridware extensions are
+#     read as well when ext_source_dir is configured.
 #
 #  NOTES
 #     This procedure is called when the source code is updated ( procedure
@@ -518,12 +551,19 @@ proc update_macro_messages_list {} {
             ts_log_fine "Testsuite is using macro file \"$filename\"!"
             return
          } else {
-            # Verify that the messages file comes from the correct source directory.
-            if {[string compare $macro_messages_list(source_code_directory) $ts_config(source_dir)] != 0} {
-               ts_log_fine "source code directory from macro spool file:"
-               ts_log_fine $macro_messages_list(source_code_directory)
-               ts_log_fine "actual source code directory:"
-               ts_log_fine $ts_config(source_dir)
+            # Verify that the messages file comes from the correct source directories. A file
+            # written before the extensions were parsed has no ext_source_code_directory.
+            set ext_source_dir [get_ext_source_code_dir]
+            set spooled_ext_source_dir ""
+            if {[info exists macro_messages_list(ext_source_code_directory)]} {
+               set spooled_ext_source_dir $macro_messages_list(ext_source_code_directory)
+            }
+            if {$macro_messages_list(source_code_directory) != $ts_config(source_dir) ||
+                $spooled_ext_source_dir != $ext_source_dir} {
+               ts_log_fine "source code directories from macro spool file:"
+               ts_log_fine "$macro_messages_list(source_code_directory) $spooled_ext_source_dir"
+               ts_log_fine "actual source code directories:"
+               ts_log_fine "$ts_config(source_dir) $ext_source_dir"
                ts_log_fine "the macro spool dir doesn't match to actual source code directory."
                ts_log_fine "start parsing new source code directory ..."
                if {[info exists macro_messages_list]} {
@@ -760,6 +800,7 @@ proc update_macro_messages_list {} {
   ts_log_fine "saving macro file ..."
 
   set macro_messages_list(source_code_directory) $ts_config(source_dir)
+  set macro_messages_list(ext_source_code_directory) [get_ext_source_code_dir]
 
   spool_array_to_file $filename "macro_messages_list" macro_messages_list
   check_c_source_code_files_for_macros

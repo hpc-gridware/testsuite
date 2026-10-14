@@ -189,9 +189,8 @@ proc issue_2889_expect_rejected {context result expected} {
       append problems "- the client got messages of the spooling database\n"
    }
    # The spooling database cannot be reached - a warning about a connection which the server
-   # closed earlier is not the reason. MSG_POSTGRES_CONNECTFAILED_SS is defined in gcs-extensions,
-   # whose messages translate_macro does not know, so its text is given here.
-   set reason "postgres connect failed for"
+   # closed earlier is not the reason.
+   set reason [translate_macro MSG_POSTGRES_CONNECTFAILED_SS "*" "*"]
    if {![string match "*$reason*" $res(messages)]} {
       append problems "- the messages file does not name the reason \"$reason\"\n"
    }
