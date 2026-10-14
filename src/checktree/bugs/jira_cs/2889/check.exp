@@ -1,0 +1,307 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2889: when spooling failed, sge_qmaster passed the messages of the spooling layer on to the
+# client and did not write them to its messages file:
+#
+#   - the client got the low-level messages of the spooling database, including its connection
+#     data (role, database, passfile path, database host), sometimes without a message saying
+#     what had failed
+#   - the messages file had no record of why a request was rejected, or no record at all
+#   - a rejected script job was reported with the text of an unrelated errno ("Success")
+#
+# The check makes the spooling database unavailable for this cluster only - the role of the
+# cluster may not log in and its sessions are terminated - and runs a request which has to be
+# spooled. The request has to be rejected with a high-level message and without any message of
+# the spooling database, the messages file has to name the reason, and nothing may have changed.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.7"
+
+set check_name           "issue_2889"
+set check_category       "BUG SPOOLING VERIFIED"
+set check_description(0) "a request which cannot be spooled is rejected with a high-level message"
+
+set check_needs          "init_core_system"
+
+# the auto user test submits as a second user
+set check_root_access_needs "yes"
+
+set check_setup_function issue_2889_setup
+set check_cleanup_function issue_2889_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2889_binary_job"
+lappend check_functions "issue_2889_script_job"
+lappend check_functions "issue_2889_job_modify"
+lappend check_functions "issue_2889_auto_user"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2889_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global issue_2889_auto_user issue_2889_config_backup
+
+   if {$ts_config(spooling_method) != "postgres"} {
+      ts_log_config "spooling_method is \"$ts_config(spooling_method)\" - this check needs postgres"
+      return 99
+   }
+
+   if {$CHECK_FIRST_FOREIGN_SYSTEM_USER == "" || $CHECK_FIRST_FOREIGN_SYSTEM_USER == $CHECK_USER} {
+      ts_log_config "this check needs a second user - first_foreign_user is not configured"
+      return 99
+   }
+   set issue_2889_auto_user $CHECK_FIRST_FOREIGN_SYSTEM_USER
+
+   # the auto user test needs auto users to be created
+   get_config issue_2889_config_backup
+   if {$issue_2889_config_backup(enforce_user) != "auto"} {
+      set new_config(enforce_user) "auto"
+      if {[set_config new_config] < 0} {
+         ts_log_config "cannot set enforce_user to auto"
+         return 99
+      }
+   }
+
+   return 0
+}
+
+proc issue_2889_cleanup {} {
+   global issue_2889_auto_user issue_2889_config_backup
+
+   # a check function which failed half-way must not leave the cluster without spooling
+   spool_database_set_login 1
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   if {[info exists issue_2889_config_backup]} {
+      reset_config issue_2889_config_backup
+   }
+
+   unset -nocomplain issue_2889_auto_user issue_2889_config_backup
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief number of lines in the messages file of sge_qmaster
+#
+# @return the number of lines, or -1 when the file cannot be read (reported via ts_log_severe)
+proc issue_2889_messages_lines {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   get_file_content $ts_config(master_host) $CHECK_USER [get_qmaster_messages_file] messages
+   if {![info exists messages(0)]} {
+      return -1
+   }
+   return $messages(0)
+}
+
+## @brief run a client command while sge_qmaster cannot spool
+#
+# The login of the cluster's role is forbidden for the command only and allowed again right
+# afterwards, also when running the command failed.
+#
+# @param user         the user running the command
+# @param command      the client, e.g. qsub
+# @param args         its arguments
+# @param result_var   name of an array receiving the result: exit_state, output and messages,
+#                     the lines which sge_qmaster wrote to its messages file meanwhile
+# @return 1 when the command was run, 0 when it could not be (reported via ts_log_severe)
+proc issue_2889_run_without_spooling {user command args result_var} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   upvar $result_var result
+
+   set first_line [issue_2889_messages_lines]
+   if {$first_line < 0} {
+      return 0
+   }
+
+   if {[spool_database_set_login 0] != 0} {
+      spool_database_set_login 1
+      return 0
+   }
+   set result(output) [start_sge_bin $command $args $ts_config(master_host) $user]
+   set result(exit_state) $prg_exit_state
+   spool_database_set_login 1
+
+   get_file_content $ts_config(master_host) $CHECK_USER [get_qmaster_messages_file] messages
+   # Only the level and the text of each line: the testsuite's error report separates its fields
+   # with "|", like the messages file does, and would cut the line at the first one.
+   set result(messages) ""
+   for {set i [expr {$first_line + 1}]} {$i <= $messages(0)} {incr i} {
+      set fields [split $messages($i) "|"]
+      append result(messages) "[lindex $fields 4] [join [lrange $fields 5 end] " "]\n"
+   }
+
+   return 1
+}
+
+## @brief check that a request was rejected the way it should be
+#
+# @param context  what was run, for the messages
+# @param result   the result of issue_2889_run_without_spooling
+# @param expected the high-level message the client has to get, a string match pattern
+# @return none (reports failures via ts_log_severe)
+proc issue_2889_expect_rejected {context result expected} {
+   array set res $result
+
+   set problems ""
+   if {$res(exit_state) == 0} {
+      append problems "- the request was accepted, exit status 0\n"
+   }
+   if {![string match "*$expected*" $res(output)]} {
+      append problems "- the client did not get the message \"$expected\"\n"
+   }
+   if {[string match -nocase "*postgres*" $res(output)]} {
+      append problems "- the client got messages of the spooling database\n"
+   }
+   # The spooling database cannot be reached - a warning about a connection which the server
+   # closed earlier is not the reason. MSG_POSTGRES_CONNECTFAILED_SS is defined in gcs-extensions,
+   # whose messages translate_macro does not know, so its text is given here.
+   set reason "postgres connect failed for"
+   if {![string match "*$reason*" $res(messages)]} {
+      append problems "- the messages file does not name the reason \"$reason\"\n"
+   }
+
+   if {$problems != ""} {
+      ts_log_severe "$context:\n$problems\nclient output (exit status $res(exit_state)):\n\
+                     $res(output)\nnew lines in the messages file:\n$res(messages)"
+   } else {
+      ts_log_fine "$context: rejected as expected"
+   }
+}
+
+## @brief check that a rejected job does not exist
+#
+# @param context  what was run, for the messages
+# @param job_name the name of the rejected job
+# @return none (reports failures via ts_log_severe)
+proc issue_2889_expect_no_job {context job_name} {
+   set output [start_sge_bin "qstat" "-u '*' -j $job_name"]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "$context: the rejected job $job_name exists:\n$output"
+   }
+}
+
+## @brief submit a job while sge_qmaster cannot spool
+#
+# @param context  what is tested, for the messages
+# @param user     the user submitting the job
+# @param job_name the name of the job
+# @param job_args the job, e.g. "-b y /bin/sleep 5"
+# @param expected the high-level message the client has to get, a string match pattern
+# @return none (reports failures via ts_log_severe)
+proc issue_2889_submit_without_spooling {context user job_name job_args expected} {
+   set args "-o /dev/null -j y -N $job_name $job_args"
+   if {![issue_2889_run_without_spooling $user "qsub" $args result]} {
+      return
+   }
+
+   issue_2889_expect_rejected $context [array get result] $expected
+   issue_2889_expect_no_job $context $job_name
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief submitting a binary job while sge_qmaster cannot spool
+#
+# @return none (reports failures via ts_log_severe)
+proc issue_2889_binary_job {} {
+   global CHECK_USER
+
+   issue_2889_submit_without_spooling "binary job" $CHECK_USER "cs2889bin" "-b y /bin/sleep 5" \
+                                      [translate_macro MSG_JOB_NOWRITE_U "*"]
+}
+
+## @brief submitting a script job while sge_qmaster cannot spool
+#
+# The script is spooled separately from the job.
+#
+# @return none (reports failures via ts_log_severe)
+proc issue_2889_script_job {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set script "$ts_config(product_root)/examples/jobs/sleeper.sh 5"
+   issue_2889_submit_without_spooling "script job" $CHECK_USER "cs2889scr" $script \
+                                      [translate_macro MSG_JOB_NOWRITE_U "*"]
+}
+
+## @brief modifying a job while sge_qmaster cannot spool
+#
+# @return none (reports failures via ts_log_severe)
+proc issue_2889_job_modify {} {
+   global CHECK_USER
+
+   set job_id [submit_job "-h -b y -o /dev/null -j y -N cs2889held /bin/sleep 60"]
+   if {$job_id <= 0} {
+      return
+   }
+
+   if {[issue_2889_run_without_spooling $CHECK_USER "qalter" "-N cs2889renamed $job_id" result]} {
+      issue_2889_expect_rejected "job modification" [array get result] \
+                                 [translate_macro MSG_JOB_NOALTERNOWRITE_U $job_id]
+
+      if {[get_qstat_j_info $job_id] && $qstat_j_info(job_name) != "cs2889held"} {
+         ts_log_severe "job modification: the rejected modification changed the name of job\
+                        $job_id to \"$qstat_j_info(job_name)\""
+      }
+   }
+
+   delete_job $job_id
+}
+
+## @brief submitting a job which has to create an auto user while sge_qmaster cannot spool
+#
+# The user is deleted first, so that the submission has to create it as an auto user.
+#
+# @return none (reports failures via ts_log_severe)
+proc issue_2889_auto_user {} {
+   global issue_2889_auto_user
+
+   del_user $issue_2889_auto_user "" "" 0
+   if {[get_user $issue_2889_auto_user user_config "" "" 0] >= 0} {
+      ts_log_severe "cannot delete user $issue_2889_auto_user"
+      return
+   }
+
+   issue_2889_submit_without_spooling "job creating an auto user" $issue_2889_auto_user \
+                                      "cs2889auto" "-b y /bin/sleep 5" \
+                                      [translate_macro MSG_PERSISTENCE_WRITE_FAILED_S \
+                                                       $issue_2889_auto_user]
+}

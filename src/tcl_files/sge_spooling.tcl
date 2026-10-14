@@ -354,3 +354,61 @@ proc spool_database_terminate_connections {} {
 
    return $count
 }
+
+##
+# @brief Allow or forbid this cluster's role to log in to its spooling database.
+#
+# Forbidding the login also terminates the sessions of the role, so sge_qmaster cannot spool at
+# all: every attempt to open a new connection fails. For this cluster that is a spooling database
+# which is down, while other clusters spooling into the same database server keep working. Runs as
+# the base role of the ts_db_config entry, which may alter the role of the cluster.
+#
+# A check which forbids the login has to allow it again in its cleanup function.
+#
+# @param enabled 1 to allow the login, 0 to forbid it
+# @return 0 on success, -1 on error
+proc spool_database_set_login {enabled} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   if {$ts_config(spooling_method) != "postgres"} {
+      ts_log_severe "spooling_method is \"$ts_config(spooling_method)\", not postgres"
+      return -1
+   }
+
+   set base_host [spool_database_get_base_field "dbhost"]
+   if {$base_host == ""} {
+      ts_log_severe "no ts_db_config entry for the spooling database"
+      return -1
+   }
+   set base_port [spool_database_get_base_field "dbport"]
+   set base_name [spool_database_get_base_field "dbname"]
+   set base_user [spool_database_get_base_field "username"]
+   set db_user [spool_database_get_user]
+
+   set statements {}
+   if {$enabled} {
+      lappend statements "ALTER ROLE $db_user LOGIN"
+   } else {
+      lappend statements "ALTER ROLE $db_user NOLOGIN"
+      lappend statements "SELECT pg_terminate_backend(pid, 10000) FROM pg_stat_activity\
+                          WHERE usename = '$db_user'"
+   }
+
+   set args "--no-password -X -A -t -h $base_host -p $base_port -d $base_name -U $base_user"
+   append args " -v ON_ERROR_STOP=1"
+   foreach statement $statements {
+      append args " -c \"$statement\""
+   }
+
+   set envlist(PGPASSWORD) [spool_database_get_base_field "password"]
+   set output [start_remote_prog $base_host $CHECK_USER "psql" $args prg_exit_state 60 0 "" \
+                                 envlist 1 0 0]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "changing the login of role $db_user to $enabled failed:\n$output"
+      return -1
+   }
+
+   ts_log_fine "login of role $db_user set to $enabled"
+   return 0
+}
