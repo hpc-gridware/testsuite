@@ -1456,6 +1456,14 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
             append args " $compile_options"
          }
 
+         # TLS encryption needs OpenSSL 3, which CentOS 7 (ulx-amd64) and CentOS 6 (xlx-amd64) do not
+         # provide. Since 9.1.7 WITH_OPENSSL defaults to ON and cmake fails without OpenSSL 3, before
+         # it defaulted to OFF and an older OpenSSL disabled it. Passed after the compile options,
+         # as the last -D wins.
+         if {$arch == "ulx-amd64" || $arch == "xlx-amd64"} {
+            append args " -DWITH_OPENSSL=OFF"
+         }
+
          # if TS was started with -cov "lcov" then add the required cmake switches
          if {[coverage_enabled "lcov"]} {
             append args " -DWITH_LCOV=ON"
