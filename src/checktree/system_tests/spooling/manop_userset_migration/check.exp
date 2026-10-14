@@ -71,6 +71,12 @@ set    manop_marker_manager  "cs2394mgr"
 set    manop_marker_operator "cs2394op"
 
 # define test's name and run level descriptions
+global check_name check_category check_description check_needs
+global check_root_access_needs check_functions check_version_range
+global check_cleanup_function
+
+# the reserved manager/operator access lists exist since 9.2.0
+set check_version_range   "9.2.0"
 set check_name            "manop_userset_migration"
 set check_category        "COMPATIBILITY SYSTEM SPOOLING RBAC VERIFIED"
 set check_description(0)  "upgrade of a pre-9.2 configuration migrates managers/operators into the reserved manager/operator access lists (CS-2394)"
@@ -150,11 +156,6 @@ proc manop_userset_migration_check {} {
    global CHECK_USER manop_upgrade_from_version
    global manop_marker_manager manop_marker_operator
 
-   if {![is_version_in_range "9.2.0"]} {
-      ts_log_fine "version under test < 9.2.0 - migration not applicable, skipping"
-      return
-   }
-
    set host  $ts_config(master_host)
    set spool [get_spool_dir $host qmaster]
 
@@ -211,16 +212,19 @@ proc manop_userset_migration_check {} {
       ts_log_severe "manager \"$manop_marker_manager\" is not an entry of the \"manager\" access list - the manop CLI and the userset interface disagree:\n$manager_acl"
    }
 
-   # 5. on disk: members live in the usersets object dir ...
-   foreach acl {manager operator} {
-      if {![manop_remote_exists $host $CHECK_USER "$spool/usersets/$acl"]} {
-         ts_log_severe "reserved access list not spooled at $spool/usersets/$acl"
+   # 5. on disk, with classic spooling only - the other spooling methods keep the objects in
+   #    their database: members live in the usersets object dir ...
+   if {$ts_config(spooling_method) == "classic"} {
+      foreach acl {manager operator} {
+         if {![manop_remote_exists $host $CHECK_USER "$spool/usersets/$acl"]} {
+            ts_log_severe "reserved access list not spooled at $spool/usersets/$acl"
+         }
       }
-   }
-   # ... and the legacy files are never written again
-   foreach old {managers operators} {
-      if {[manop_remote_exists $host $CHECK_USER "$spool/$old"]} {
-         ts_log_severe "legacy $spool/$old present - it must not be written any more"
+      # ... and the legacy files are never written again
+      foreach old {managers operators} {
+         if {[manop_remote_exists $host $CHECK_USER "$spool/$old"]} {
+            ts_log_severe "legacy $spool/$old present - it must not be written any more"
+         }
       }
    }
 

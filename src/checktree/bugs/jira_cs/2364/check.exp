@@ -84,8 +84,8 @@ proc issue_2364_check {} {
    global CHECK_USER issue_2364_job_id
 
    # the job script is only stored as a file with classic (flatfile) spooling
-   if {$ts_config(spooling_method) == "berkeleydb"} {
-      ts_log_config "test needs classic (flatfile) spooling - skipping for berkeleydb"
+   if {$ts_config(spooling_method) != "classic"} {
+      ts_log_config "test needs classic spooling - skipping for $ts_config(spooling_method)"
       return
    }
 
