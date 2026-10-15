@@ -1,0 +1,156 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2899: the worker thread opens an event master transaction around every GDI request. An
+# event client registering via GDI gets its total update in total_update(), which opened and
+# committed a transaction of its own. Its commit ended the worker's transaction early, and the
+# qmaster logged
+#
+#    attempting to open a new event master transaction, but we already have a transaction open
+#    attempting to commit an event master transaction, but no transaction is open
+#
+# The warnings are written with literal text, not with a message macro, so they are matched as
+# they are.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.7"
+
+set check_name           "issue_2899"
+set check_category       "BUG EVENTCLIENT VERIFIED"
+set check_description(0) "registering an event client keeps the GDI request's event master transaction"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_2899_setup
+set check_cleanup_function issue_2899_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2899_register_event_client"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2899_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global issue_2899_qevent issue_2899_messages issue_2899_warnings
+
+   set issue_2899_qevent [get_test_or_source_path "qevent" $ts_config(master_host)]
+   if {![is_remote_file $ts_config(master_host) $CHECK_USER $issue_2899_qevent]} {
+      ts_log_config "the qevent test binary does not exist as\
+                     $issue_2899_qevent on host $ts_config(master_host)"
+      return 99
+   }
+
+   set issue_2899_messages [get_qmaster_messages_file]
+   set issue_2899_warnings {}
+   lappend issue_2899_warnings "attempting to open a new event master transaction,\
+                                but we already have a transaction open"
+   lappend issue_2899_warnings "attempting to commit an event master transaction,\
+                                but no transaction is open"
+
+   return 0
+}
+
+proc issue_2899_cleanup {} {
+   global issue_2899_qevent issue_2899_messages issue_2899_warnings
+
+   unset -nocomplain issue_2899_qevent issue_2899_messages issue_2899_warnings
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief how many lines does the qmaster messages file have?
+#
+# @param lines_var name of an array which gets the content of the file
+# @return the number of lines, -1 when the file could not be read
+proc issue_2899_read_messages {lines_var} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER issue_2899_messages
+   upvar $lines_var lines
+
+   unset -nocomplain lines
+   get_file_content $ts_config(master_host) $CHECK_USER $issue_2899_messages lines
+   if {![info exists lines(0)]} {
+      ts_log_severe "cannot read the qmaster messages file $issue_2899_messages"
+      return -1
+   }
+
+   return $lines(0)
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief an event client registering via GDI does not end the worker's transaction
+#
+# qevent registers via GDI, so the qmaster runs its total update inside the transaction of the
+# worker which handles the request. The lines the qmaster wrote meanwhile must not contain the
+# warnings about an unbalanced transaction.
+proc issue_2899_register_event_client {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER issue_2899_qevent issue_2899_warnings
+
+   set first_line [issue_2899_read_messages before]
+   if {$first_line < 0} {
+      return
+   }
+   incr first_line
+
+   set sid [open_remote_spawn_process $ts_config(master_host) $CHECK_USER $issue_2899_qevent "-ts"]
+   if {[llength $sid] < 2} {
+      ts_log_severe "cannot start $issue_2899_qevent on host $ts_config(master_host)"
+      return
+   }
+   wait_for_event_client "qevent"
+   close_spawn_process $sid
+   wait_for_event_client "qevent" 1
+
+   set last_line [issue_2899_read_messages after]
+   if {$last_line < 0} {
+      return
+   }
+
+   set found {}
+   for {set i $first_line} {$i <= $last_line} {incr i} {
+      foreach warning $issue_2899_warnings {
+         if {[string first $warning $after($i)] >= 0} {
+            lappend found $after($i)
+         }
+      }
+   }
+
+   if {[llength $found] > 0} {
+      ts_log_severe "the registration of qevent ended the event master transaction of the GDI\
+                     request early, the qmaster logged:\n[join $found "\n"]"
+   }
+}
