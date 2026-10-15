@@ -69,7 +69,7 @@ proc add_rqs_single { name rule } {
 
 proc issue_2339_setup {} {
    global ts_config
-   global issue_2339_hosts
+   global issue_2339_hosts issue_2339_host_backup
 
    # For this test we need at least 2 hosts
    if { [llength $ts_config(execd_nodes)] < 2 } {
@@ -94,6 +94,9 @@ proc issue_2339_setup {} {
    set issue_2339_hosts [host_conf_get_suited_hosts 2]
    set first [lindex $issue_2339_hosts 0]
    set second [lindex $issue_2339_hosts 1]
+
+   # the job needs 2 slots per host, more than a host with a single core has by default
+   setup_host_slots_for_binding $issue_2339_hosts issue_2339_host_backup
 
    # setup queues A and B each with one slot on a single host
    set queue_conf(slots)            "1"
@@ -132,6 +135,7 @@ proc issue_2339_wait_for_pattern {case_name pattern {timeout 10}} {
 
 proc issue_2339_cleanup {  } {
    global ts_config
+   global issue_2339_host_backup
 
    del_rqs "two_in_total"
    del_rqs "trap"
@@ -148,6 +152,10 @@ proc issue_2339_cleanup {  } {
       lappend queue_list [get_queue_instance "all.q" $host]
    }
    enable_queue $queue_list
+
+   if {[info exists issue_2339_host_backup]} {
+      cleanup_host_slots_for_binding issue_2339_host_backup
+   }
 
    # reset the scheduler configuration
    reset_schedd_config

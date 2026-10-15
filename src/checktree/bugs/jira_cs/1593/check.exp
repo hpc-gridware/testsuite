@@ -55,10 +55,13 @@ lappend check_functions "issue_1593_jift_f_rr"
 
 proc issue_1593_setup {} {
    get_current_cluster_config_array ts_config
-   global issue_1593_hosts issue_1593_backup issue_1593_complex_backup
+   global issue_1593_hosts issue_1593_backup issue_1593_complex_backup issue_1593_host_backup
 
    # let's assume we need 2 test hosts
    set issue_1593_hosts [host_conf_get_suited_hosts 2]
+
+   # the jobs need more slots per host than a host with few cores has by default
+   setup_host_slots_for_binding $issue_1593_hosts issue_1593_host_backup
 
    # enable schedd_job_info
    set sconf(schedd_job_info) "true"
@@ -93,7 +96,7 @@ proc issue_1593_setup {} {
 
 proc issue_1593_cleanup {} {
    get_current_cluster_config_array ts_config
-   global issue_1593_hosts issue_1593_backup issue_1593_complex_backup
+   global issue_1593_hosts issue_1593_backup issue_1593_complex_backup issue_1593_host_backup
 
    delete_all_jobs
    wait_for_end_of_all_jobs
@@ -112,6 +115,10 @@ proc issue_1593_cleanup {} {
    reset_schedd_config
 
    enable_queue "all.q"
+
+   if {[info exists issue_1593_host_backup]} {
+      cleanup_host_slots_for_binding issue_1593_host_backup
+   }
 
    unset -nocomplain issue_1593_hosts issue_1593_backup issue_1593_complex_backup
 }
