@@ -87,11 +87,16 @@ lappend performance_module_tests {test_uti_profiling "" 0}
 lappend performance_module_tests {test_sgeobj_performance "" 0}
 lappend performance_module_tests {test_sched_eval_performance "" 0}
 lappend performance_module_tests {test_sgeobj_Matcher_performance "9.2.0" 1}
+# 9.2.0 although the binary is installed by 9.0 and 9.1 as well: there it still
+# throws the value it reads away, so the optimiser is free to remove the work
+# and the number it prints measures the compiler rather than CULL (CS-2901).
+lappend performance_module_tests {test_ocs_cull_perf "9.2.0" 0}
 
 set check_description(0) "test_uti_profiling (timing measurement)"
 set check_description(1) "test_sgeobj_performance (timing measurement)"
 set check_description(2) "test_sched_eval_performance (timing measurement)"
 set check_description(3) "test_sgeobj_Matcher_performance (timing measurement, CS-2680)"
+set check_description(4) "test_ocs_cull_perf (timing measurement, CS-2901)"
 
 set check_functions {}
 lappend check_functions "performance_module_tests_run"
