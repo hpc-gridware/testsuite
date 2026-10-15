@@ -1,0 +1,228 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2893: when an advance reservation with a parallel environment was created or deleted, the
+# qmaster booked the slots into the PE of the master list, but sent the AR's own copy of the PE
+# (AR_pe_object) in the PE modify event. The scheduler replaced its PE with that copy.
+#
+# The copy is taken before the AR's slots are booked, so the scheduler did not see the booking
+# of an AR. After a qmaster restart the copy is read from the spool without any resource
+# utilization, as that is not spooled. Deleting such an AR left the scheduler with a PE without
+# a slots entry, and the next job requesting the PE crashed the qmaster in the scheduler.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.7"
+
+set check_name           "issue_2893"
+set check_category       "BUG AR VERIFIED"
+set check_description(0) "the scheduler gets the PE holding the booking of an advance reservation"
+
+set check_needs          "init_core_system"
+
+# the qmaster is restarted
+set check_root_access_needs "yes"
+
+set check_setup_function issue_2893_setup
+set check_cleanup_function issue_2893_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2893_ar_booking_seen_by_scheduler"
+lappend check_functions "issue_2893_ar_delete_after_restart"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2893_setup {} {
+   global issue_2893_host issue_2893_host_backup issue_2893_pe issue_2893_queue
+
+   set issue_2893_host [host_conf_get_suited_hosts 1]
+   set issue_2893_pe "cs2893.pe"
+   set issue_2893_queue "cs2893.q"
+
+   # the queue has more slots than the PE, so only the PE can keep a job from being scheduled
+   setup_host_slots_for_binding $issue_2893_host issue_2893_host_backup 10
+
+   set pe(slots) 2
+   set pe(allocation_rule) "\$pe_slots"
+   if {[add_pe $issue_2893_pe pe] < 0} {
+      ts_log_config "cannot add the PE $issue_2893_pe"
+      return 99
+   }
+
+   set q(slots) 4
+   set q(pe_list) $issue_2893_pe
+   if {[add_queue $issue_2893_queue $issue_2893_host q] < 0} {
+      ts_log_config "cannot add the queue $issue_2893_queue"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_2893_cleanup {} {
+   global issue_2893_host issue_2893_host_backup issue_2893_pe issue_2893_queue
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   delete_all_ars
+
+   del_queue $issue_2893_queue "" 1 1
+   del_pe $issue_2893_pe
+
+   if {[info exists issue_2893_host_backup]} {
+      cleanup_host_slots_for_binding issue_2893_host_backup
+   }
+
+   unset -nocomplain issue_2893_host issue_2893_host_backup issue_2893_pe issue_2893_queue
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief submit an advance reservation in the PE which starts right away
+#
+# @param slots the number of PE slots to reserve
+# @return the AR id, or -1 when the submission failed
+proc issue_2893_submit_ar {slots} {
+   global issue_2893_pe
+
+   set ar_id [submit_ar "-pe $issue_2893_pe $slots -d 600"]
+   if {$ar_id <= 0} {
+      ts_log_severe "cannot submit an advance reservation for $slots slots of $issue_2893_pe"
+      return -1
+   }
+
+   return $ar_id
+}
+
+## @brief submit a job in the PE, outside of any advance reservation
+#
+# @param runtime how long the job sleeps
+# @return the job id, or -1 when the submission failed
+proc issue_2893_submit_pe_job {runtime} {
+   global issue_2893_pe
+
+   set job_id [submit_job "-pe $issue_2893_pe 1 -o /dev/null -j y -b y /bin/sleep $runtime"]
+   if {$job_id <= 0} {
+      ts_log_severe "cannot submit a job requesting the PE $issue_2893_pe"
+      return -1
+   }
+
+   return $job_id
+}
+
+## @brief is the qmaster still running? If not, report it and start it again
+#
+# @param context what was done before, for the message
+# @return 1 when the qmaster is running, 0 when it had to be restarted
+proc issue_2893_qmaster_survived {context} {
+   get_current_cluster_config_array ts_config
+
+   if {[is_qmaster_alive $ts_config(master_host) [get_qmaster_spool_dir]]} {
+      return 1
+   }
+
+   ts_log_severe "sge_qmaster is no longer running after $context"
+   startup_qmaster
+   return 0
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief an AR's booking of the PE keeps a job outside the AR from getting the PE's slots
+#
+# The AR reserves both slots of the PE. The queue still has free slots, so if the scheduler did
+# not see the AR's booking of the PE, it would start the job.
+proc issue_2893_ar_booking_seen_by_scheduler {} {
+   set ar_id [issue_2893_submit_ar 2]
+   if {$ar_id < 0} {
+      return
+   }
+
+   set job_id [issue_2893_submit_pe_job 600]
+   if {$job_id < 0} {
+      return
+   }
+
+   trigger_scheduling
+   set end [expr {[clock seconds] + 10}]
+   while {[clock seconds] < $end} {
+      if {[get_job_state $job_id] == "r"} {
+         ts_log_severe "job $job_id got a slot of the PE although AR $ar_id reserves all slots\
+                        of the PE - the scheduler does not see the AR's booking of the PE"
+         break
+      }
+      sleep_for_seconds 1
+   }
+
+   delete_job $job_id 1
+   delete_ar $ar_id 1
+}
+
+## @brief deleting an AR read back from the spool does not break the scheduler's PE
+proc issue_2893_ar_delete_after_restart {} {
+   set ar_id [issue_2893_submit_ar 1]
+   if {$ar_id < 0} {
+      return
+   }
+
+   # the AR and its copy of the PE are read back from the spool
+   shutdown_and_restart_qmaster
+
+   delete_ar $ar_id 1
+
+   set job_id [issue_2893_submit_pe_job 5]
+   if {$job_id < 0} {
+      return
+   }
+
+   # No qconf -tsm and no wait_for_jobstart: the scheduling run triggered by the submission is
+   # the one which crashed, and qstat would report a dead qmaster as its own error. Whether the
+   # qmaster is alive is therefore looked at before each qstat.
+   set end [expr {[clock seconds] + 60}]
+   while {1} {
+      if {![issue_2893_qmaster_survived "scheduling job $job_id in a PE whose AR was deleted"]} {
+         return
+      }
+      if {[get_job_state $job_id] == "r"} {
+         break
+      }
+      if {[clock seconds] >= $end} {
+         ts_log_severe "job $job_id requesting the PE of the deleted AR $ar_id was not started"
+         return
+      }
+      sleep_for_seconds 1
+   }
+
+   wait_for_jobend $job_id "" 60 0
+   issue_2893_qmaster_survived "running job $job_id"
+}
