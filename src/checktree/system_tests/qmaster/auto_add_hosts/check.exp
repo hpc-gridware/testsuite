@@ -1,0 +1,503 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+# we start and stop an execution daemon on a host which is not part of the cluster
+set check_root_access_needs "yes"
+set check_version_range "9.1.7"
+
+set check_name            "auto_add_hosts"
+set check_category        "HOST QMASTER VERIFIED"
+set check_description(0)  "a host which matches a rule of the qmaster_params AUTO_ADD_HOSTS adds\
+                           itself to the cluster"
+
+set check_needs           "init_core_system"
+
+set check_setup_function auto_add_hosts_setup
+set check_cleanup_function auto_add_hosts_cleanup
+
+set check_functions {}
+lappend check_functions "auto_add_hosts_by_name"
+lappend check_functions "auto_add_hosts_by_name_pattern"
+lappend check_functions "auto_add_hosts_by_address"
+lappend check_functions "auto_add_hosts_by_address_pattern"
+lappend check_functions "auto_add_hosts_by_network"
+lappend check_functions "auto_add_hosts_without_hostgroup"
+lappend check_functions "auto_add_hosts_creates_hostgroup"
+lappend check_functions "auto_add_hosts_first_match_wins"
+lappend check_functions "auto_add_hosts_no_match"
+lappend check_functions "auto_add_hosts_invalid_rules"
+
+# -------- local test procedures: initialization------------------------------
+
+proc auto_add_hosts_setup {} {
+   get_current_cluster_config_array ts_config
+   global auto_add_hosts_host auto_add_hosts_ip auto_add_hosts_config_backup
+   global auto_add_hosts_hgroup auto_add_hosts_hgroup2 auto_add_hosts_hgroup3 auto_add_hosts_queue
+
+   set auto_add_hosts_hgroup "@autoadd"
+   set auto_add_hosts_hgroup2 "@autoadd2"
+   set auto_add_hosts_hgroup3 "@autoadd3"
+   set auto_add_hosts_queue "autoadd.q"
+
+   # the test needs a host which is not part of the cluster: a host which is already an execution
+   # host does not go through the automatic adding of hosts
+   set auto_add_hosts_host [host_conf_get_non_cluster_host 0]
+   if {$auto_add_hosts_host == ""} {
+      ts_log_config "no non-cluster host is configured, cannot test a host which adds itself"
+      return 99
+   }
+   set auto_add_hosts_host [resolve_host $auto_add_hosts_host 0]
+
+   # the rules can name a network or an address, so we need the address of that host
+   set auto_add_hosts_ip [auto_add_hosts_get_ip $auto_add_hosts_host]
+   if {$auto_add_hosts_ip == ""} {
+      ts_log_config "cannot figure out the IPv4 address of host $auto_add_hosts_host"
+      return 99
+   }
+   ts_log_fine "host $auto_add_hosts_host has the address $auto_add_hosts_ip"
+
+   # the host groups the rules point to. They are created empty here, so that a cluster queue can
+   # reference them - the product creates a host group which does not exist yet, which is tested
+   # by auto_add_hosts_invalid_rules having no effect on them
+   foreach hgroup "$auto_add_hosts_hgroup $auto_add_hosts_hgroup2" {
+      unset -nocomplain hgroup_conf
+      if {[add_hostgroup $hgroup hgroup_conf] < 0} {
+         return 99
+      }
+   }
+
+   # a cluster queue on the first host group: the queue instance of the new host has to appear
+   # through the host group, without any further configuration
+   unset -nocomplain queue_conf
+   if {[add_queue $auto_add_hosts_queue $auto_add_hosts_hgroup queue_conf] < 0} {
+      return 99
+   }
+
+   # we modify qmaster_params
+   get_config auto_add_hosts_config_backup
+}
+
+proc auto_add_hosts_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global auto_add_hosts_host auto_add_hosts_ip auto_add_hosts_config_backup
+   global auto_add_hosts_hgroup auto_add_hosts_hgroup2 auto_add_hosts_hgroup3 auto_add_hosts_queue
+
+   # make sure that we do not leave an execd behind on the non-cluster host
+   if {[info exists auto_add_hosts_host] && $auto_add_hosts_host != ""} {
+      auto_add_hosts_remove_host
+   }
+
+   # the objects do not have to exist: the setup may have failed before creating them, and the
+   # third host group is created by the product only when a rule names it
+   if {[info exists auto_add_hosts_queue]} {
+      del_queue $auto_add_hosts_queue "" 1 1 "" "" 0
+   }
+   foreach hgroup_var {auto_add_hosts_hgroup auto_add_hosts_hgroup2 auto_add_hosts_hgroup3} {
+      if {[info exists $hgroup_var]} {
+         del_hostgroup [set $hgroup_var] "" "" 0
+      }
+   }
+
+   if {[info exists auto_add_hosts_config_backup]} {
+      reset_config auto_add_hosts_config_backup
+   }
+
+   unset -nocomplain auto_add_hosts_host auto_add_hosts_ip auto_add_hosts_config_backup
+   unset -nocomplain auto_add_hosts_hgroup auto_add_hosts_hgroup2 auto_add_hosts_hgroup3
+   unset -nocomplain auto_add_hosts_queue
+}
+
+# -------- local test procedures ---------------------------------------------
+
+## @brief figure out the IPv4 address of a host as the master host resolves it
+#
+# @param host name of the host
+# @return the address in dotted decimal notation, or an empty string if it cannot be figured out
+proc auto_add_hosts_get_ip {host} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set ret ""
+
+   # ahostsv4 reports IPv4 addresses only, one per line, the address being the first word
+   set output [start_remote_prog $ts_config(master_host) $CHECK_USER "getent" "ahostsv4 $host"]
+   if {$prg_exit_state == 0} {
+      set address [lindex [split [string trim $output]] 0]
+      if {[regexp {^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$} $address]} {
+         set ret $address
+      } else {
+         ts_log_fine "getent ahostsv4 $host returned unexpected output:\n$output"
+      }
+   }
+
+   return $ret
+}
+
+## @brief set the AUTO_ADD_HOSTS rules in the global configuration
+#
+# The parameter is one of many in qmaster_params, the other ones are kept.
+#
+# @param rules value of the AUTO_ADD_HOSTS parameter
+# @param raise_error whether a rejected configuration is an error
+# @return the return value of set_config, < 0 if the configuration was rejected
+proc auto_add_hosts_set_rules {rules {raise_error 1}} {
+   global auto_add_hosts_config_backup
+
+   add_or_replace_array_param new_config auto_add_hosts_config_backup qmaster_params \
+                              "AUTO_ADD_HOSTS" $rules
+
+   return [set_config new_config "global" 0 $raise_error]
+}
+
+## @brief check if a host is part of a list of host names
+#
+# Both the list and the host are resolved to their short form, so that the comparison does not
+# depend on whether the cluster stores host names with or without their domain. The placeholder
+# NONE, which the host list of an empty host group contains, is not a host name and is skipped.
+#
+# @param host_list list of host names
+# @param host name of the host to look for
+# @return 1 if the host is part of the list, 0 if it is not
+proc auto_add_hosts_host_in_list {host_list host} {
+   set hosts {}
+   foreach entry $host_list {
+      if {$entry != "NONE"} {
+         lappend hosts $entry
+      }
+   }
+
+   return [expr {[lsearch -exact [resolve_host_list $hosts 0] [resolve_host $host 0]] >= 0}]
+}
+
+## @brief wait until a host is part of the execution host list, or until it is clear that it is not
+#
+# @param host name of the host
+# @param expected 1 to wait for the host to appear, 0 to wait for it to stay away
+# @return 1 if the host is an execution host, 0 if it is not
+proc auto_add_hosts_wait_for_exechost {host expected} {
+   # a registration which is refused is retried every 30 seconds, so a host which may add itself
+   # is there within seconds, and waiting a bit longer than one retry interval is enough to tell
+   # that a host is not going to be added
+   if {$expected} {
+      set timeout 60
+   } else {
+      set timeout 40
+   }
+
+   set ret 0
+   set end_time [expr [clock seconds] + $timeout]
+   while {[clock seconds] < $end_time} {
+      if {[get_exechost_list host_list "" "" 0] == 0 &&
+          [auto_add_hosts_host_in_list $host_list $host]} {
+         set ret 1
+         break
+      }
+      sleep_for_seconds 2
+   }
+
+   return $ret
+}
+
+## @brief shut the execd on the non-cluster host down and remove the host from the cluster again
+#
+# The host has to leave the host groups before it can be deleted from the execution host list,
+# otherwise it is still referenced.
+proc auto_add_hosts_remove_host {} {
+   get_current_cluster_config_array ts_config
+   global auto_add_hosts_host auto_add_hosts_hgroup auto_add_hosts_hgroup2 auto_add_hosts_hgroup3
+
+   shutdown_system_daemon $auto_add_hosts_host "execd"
+
+   foreach hgroup "$auto_add_hosts_hgroup $auto_add_hosts_hgroup2 $auto_add_hosts_hgroup3" {
+      if {[get_hostgroup $hgroup hgroup_config "" "" 0] == 0} {
+         if {[auto_add_hosts_host_in_list $hgroup_config(hostlist) $auto_add_hosts_host]} {
+            unset -nocomplain hgroup_change
+            set hgroup_change(hostlist) "NONE"
+            mod_hostgroup $hgroup hgroup_change 1 "" "" 0
+         }
+      }
+   }
+
+   if {[get_exechost_list host_list "" "" 0] == 0 &&
+       [auto_add_hosts_host_in_list $host_list $auto_add_hosts_host]} {
+      set output [start_sge_bin "qconf" "-de $auto_add_hosts_host"]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "deleting the execution host $auto_add_hosts_host failed:\n$output"
+      }
+   }
+}
+
+## @brief run a job on the host which added itself
+#
+# A host which was added automatically is a full execution host, so a job which requests it runs
+# there. The queue instance has to leave the unknown state first: before the first load report of
+# the new execution daemon arrives, the scheduler does not dispatch a job to it.
+proc auto_add_hosts_run_job {} {
+   global auto_add_hosts_host auto_add_hosts_queue
+
+   if {[wait_for_queue_state "$auto_add_hosts_queue@$auto_add_hosts_host" "" 120] != ""} {
+      return
+   }
+
+   set output [start_sge_bin "qrsh" "-l h=$auto_add_hosts_host hostname" "" "" prg_exit_state 120]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "cannot run a job on the automatically added host\
+                     $auto_add_hosts_host:\n$output"
+   } elseif {![string match "*$auto_add_hosts_host*" $output]} {
+      ts_log_severe "a job which requested host $auto_add_hosts_host ran somewhere else,\
+                     qrsh reported:\n$output"
+   } else {
+      ts_log_fine "a job ran on the automatically added host, qrsh reported\
+                   \"[string trim $output]\""
+   }
+}
+
+## @brief verify that a host which added itself is configured as expected
+#
+# @param expected_hgroup host group the host shall be part of, empty if none is expected
+proc auto_add_hosts_verify_host {expected_hgroup} {
+   get_current_cluster_config_array ts_config
+   global auto_add_hosts_host auto_add_hosts_hgroup auto_add_hosts_hgroup2 auto_add_hosts_hgroup3
+   global auto_add_hosts_queue
+
+   # the host is marked as automatically added, so that it can be told apart from a host which an
+   # administrator added by hand. qconf -se shows the joker only when MORE_INFO is set
+   set my_env(MORE_INFO) "1"
+   set output [start_sge_bin "qconf" "-se $auto_add_hosts_host" "" "" prg_exit_state 60 "" "bin" \
+                             output_lines my_env]
+   if {$prg_exit_state == 0} {
+      set output [string trim $output]
+      parse_simple_record output exechost_config
+      if {![info exists exechost_config(joker)]} {
+         ts_log_severe "execution host $auto_add_hosts_host has no joker, expected the\
+                        auto_added marker"
+      } elseif {![string match "*auto_added*" $exechost_config(joker)]} {
+         ts_log_severe "execution host $auto_add_hosts_host is not marked as automatically added,\
+                        its joker is \"$exechost_config(joker)\""
+      }
+   } else {
+      ts_log_severe "cannot read the configuration of execution host $auto_add_hosts_host:\n$output"
+   }
+
+   # without MORE_INFO the joker stays out of the output of qconf -se: an additional line would
+   # change an interface
+   if {[get_exechost plain_config $auto_add_hosts_host "" "" 0] == 0} {
+      if {[info exists plain_config(joker)]} {
+         ts_log_severe "qconf -se shows the joker of host $auto_add_hosts_host without\
+                        MORE_INFO being set"
+      }
+   } else {
+      ts_log_severe "cannot read the configuration of execution host $auto_add_hosts_host"
+   }
+
+   # the host group which the matching rule names. It is created by the product if it does not
+   # exist yet, therefore its existence is part of the test
+   if {$expected_hgroup != ""} {
+      if {[get_hostgroup $expected_hgroup hgroup_config "" "" 0] != 0} {
+         ts_log_severe "host group $expected_hgroup does not exist although a rule names it"
+      } elseif {![auto_add_hosts_host_in_list $hgroup_config(hostlist) $auto_add_hosts_host]} {
+         ts_log_severe "host $auto_add_hosts_host was not added to host group $expected_hgroup,\
+                        its host list is \"$hgroup_config(hostlist)\""
+      }
+   }
+
+   # a host group which no rule names stays as it is
+   foreach hgroup "$auto_add_hosts_hgroup $auto_add_hosts_hgroup2 $auto_add_hosts_hgroup3" {
+      if {$hgroup == $expected_hgroup} {
+         continue
+      }
+      if {[get_hostgroup $hgroup hgroup_config "" "" 0] == 0 &&
+          [auto_add_hosts_host_in_list $hgroup_config(hostlist) $auto_add_hosts_host]} {
+         ts_log_severe "host $auto_add_hosts_host was added to host group $hgroup, which no\
+                        rule names"
+      }
+   }
+
+   # the queue instance of the cluster queue which uses the first host group
+   if {$expected_hgroup == $auto_add_hosts_hgroup} {
+      set queue_instance "$auto_add_hosts_queue@$auto_add_hosts_host"
+      set output [start_sge_bin "qselect" "-q $queue_instance"]
+      if {$prg_exit_state != 0 || ![string match "*$queue_instance*" $output]} {
+         ts_log_severe "queue instance $queue_instance does not exist although the host is part of\
+                        host group $expected_hgroup:\n$output"
+      } else {
+         auto_add_hosts_run_job
+      }
+   }
+
+   # adding itself is all the host may do: it is neither an admin host nor a submit host
+   if {[get_adminhost_list admin_hosts "" "" 0] == 0} {
+      if {[auto_add_hosts_host_in_list $admin_hosts $auto_add_hosts_host]} {
+         ts_log_severe "host $auto_add_hosts_host became an admin host, it may only add itself"
+      }
+   }
+   if {[get_submithost_list submit_hosts "" "" 0] == 0} {
+      if {[auto_add_hosts_host_in_list $submit_hosts $auto_add_hosts_host]} {
+         ts_log_severe "host $auto_add_hosts_host became a submit host, it may only add itself"
+      }
+   }
+}
+
+## @brief start the execd on the non-cluster host and verify that the host adds itself
+#
+# @param rules value of the AUTO_ADD_HOSTS parameter
+# @param expected_hgroup host group the host shall be part of, empty if none is expected
+proc auto_add_hosts_test_rules {rules expected_hgroup} {
+   get_current_cluster_config_array ts_config
+   global auto_add_hosts_host
+
+   ts_log_fine "testing AUTO_ADD_HOSTS=$rules"
+   if {[auto_add_hosts_set_rules $rules] < 0} {
+      return
+   }
+
+   # starting the execution daemon is all that happens on the host - it registers at the qmaster,
+   # which adds the host because one of the rules matches it
+   startup_execd $auto_add_hosts_host
+
+   if {[auto_add_hosts_wait_for_exechost $auto_add_hosts_host 1]} {
+      auto_add_hosts_verify_host $expected_hgroup
+   } else {
+      ts_log_severe "host $auto_add_hosts_host did not add itself to the cluster although the rules\
+                     \"$rules\" match it"
+   }
+
+   auto_add_hosts_remove_host
+}
+
+# -------- test functions ----------------------------------------------------
+
+proc auto_add_hosts_by_name {} {
+   global auto_add_hosts_host auto_add_hosts_hgroup
+
+   auto_add_hosts_test_rules "$auto_add_hosts_host:$auto_add_hosts_hgroup" $auto_add_hosts_hgroup
+}
+
+proc auto_add_hosts_by_name_pattern {} {
+   global auto_add_hosts_host auto_add_hosts_hgroup
+
+   # the first characters of the host name plus a wildcard
+   set pattern "[string range $auto_add_hosts_host 0 3]*"
+   auto_add_hosts_test_rules "$pattern:$auto_add_hosts_hgroup" $auto_add_hosts_hgroup
+}
+
+proc auto_add_hosts_by_address {} {
+   global auto_add_hosts_ip auto_add_hosts_hgroup
+
+   auto_add_hosts_test_rules "$auto_add_hosts_ip:$auto_add_hosts_hgroup" $auto_add_hosts_hgroup
+}
+
+proc auto_add_hosts_by_address_pattern {} {
+   global auto_add_hosts_ip auto_add_hosts_hgroup
+
+   # the first two octets of the address plus a wildcard
+   set octets [split $auto_add_hosts_ip "."]
+   set pattern "[lindex $octets 0].[lindex $octets 1].*"
+   auto_add_hosts_test_rules "$pattern:$auto_add_hosts_hgroup" $auto_add_hosts_hgroup
+}
+
+proc auto_add_hosts_by_network {} {
+   global auto_add_hosts_ip auto_add_hosts_hgroup
+
+   # the network of the host, in CIDR notation
+   set octets [split $auto_add_hosts_ip "."]
+   set network "[lindex $octets 0].[lindex $octets 1].[lindex $octets 2].0/24"
+   auto_add_hosts_test_rules "$network:$auto_add_hosts_hgroup" $auto_add_hosts_hgroup
+}
+
+proc auto_add_hosts_without_hostgroup {} {
+   global auto_add_hosts_host
+
+   # a rule does not have to name a host group - the host is then added to the execution host list
+   # only, and gets no queue instance
+   auto_add_hosts_test_rules "$auto_add_hosts_host" ""
+}
+
+proc auto_add_hosts_creates_hostgroup {} {
+   global auto_add_hosts_host auto_add_hosts_hgroup3
+
+   # the host group of a matching rule does not have to exist, the qmaster creates it
+   del_hostgroup $auto_add_hosts_hgroup3 "" "" 0
+   auto_add_hosts_test_rules "$auto_add_hosts_host:$auto_add_hosts_hgroup3" $auto_add_hosts_hgroup3
+   del_hostgroup $auto_add_hosts_hgroup3 "" "" 0
+}
+
+proc auto_add_hosts_first_match_wins {} {
+   global auto_add_hosts_host auto_add_hosts_ip auto_add_hosts_hgroup auto_add_hosts_hgroup2
+
+   # both rules match the host, the first one decides which host group it is added to
+   set rules "$auto_add_hosts_host:$auto_add_hosts_hgroup"
+   append rules ";$auto_add_hosts_ip:$auto_add_hosts_hgroup2"
+   auto_add_hosts_test_rules $rules $auto_add_hosts_hgroup
+}
+
+proc auto_add_hosts_no_match {} {
+   get_current_cluster_config_array ts_config
+   global auto_add_hosts_host auto_add_hosts_hgroup
+
+   # a rule which does not match the host leaves it outside the cluster, as before
+   set rules "no-such-host-*:$auto_add_hosts_hgroup"
+   ts_log_fine "testing AUTO_ADD_HOSTS=$rules"
+   if {[auto_add_hosts_set_rules $rules] < 0} {
+      return
+   }
+
+   startup_execd $auto_add_hosts_host
+
+   if {[auto_add_hosts_wait_for_exechost $auto_add_hosts_host 0]} {
+      ts_log_severe "host $auto_add_hosts_host added itself to the cluster although no rule of\
+                     \"$rules\" matches it"
+   }
+
+   auto_add_hosts_remove_host
+}
+
+proc auto_add_hosts_invalid_rules {} {
+   global auto_add_hosts_hgroup auto_add_hosts_config_backup
+
+   # rules which cannot work are rejected when the configuration is modified, instead of being
+   # accepted and then never matching anything
+   set invalid_rules {}
+   lappend invalid_rules "10.42.0.0/33:@autoadd"
+   lappend invalid_rules "10.42.0.0.0/16:@autoadd"
+   lappend invalid_rules "10.42.0.0/abc:@autoadd"
+   lappend invalid_rules "2a05:d014::/32:@autoadd"
+   lappend invalid_rules "host-*:autoadd"
+   lappend invalid_rules ":@autoadd"
+
+   foreach rules $invalid_rules {
+      ts_log_fine "testing that AUTO_ADD_HOSTS=$rules is rejected"
+      if {[auto_add_hosts_set_rules $rules 0] >= 0} {
+         ts_log_severe "the invalid AUTO_ADD_HOSTS rules \"$rules\" were accepted"
+
+         # the configuration has been modified, get rid of the rules again
+         reset_config auto_add_hosts_config_backup
+      }
+   }
+}
