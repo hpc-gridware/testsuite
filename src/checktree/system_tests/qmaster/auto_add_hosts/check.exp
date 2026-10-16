@@ -175,6 +175,16 @@ proc auto_add_hosts_set_rules {rules {raise_error 1}} {
    return [set_config new_config "global" 0 $raise_error]
 }
 
+## @brief name of the exec host attribute which marks a host that added itself
+#
+# @return "auto_added_time" from 9.2.0 on, "joker" in the 9.1 line
+proc auto_add_hosts_marker_attribute {} {
+   if {[is_version_in_range "9.2.0"]} {
+      return "auto_added_time"
+   }
+   return "joker"
+}
+
 ## @brief check if a host is part of a list of host names
 #
 # Both the list and the host are resolved to their short form, so that the comparison does not
@@ -286,30 +296,40 @@ proc auto_add_hosts_verify_host {expected_hgroup} {
    global auto_add_hosts_host auto_add_hosts_hgroup auto_add_hosts_hgroup2 auto_add_hosts_hgroup3
    global auto_add_hosts_queue
 
-   # the host is marked as automatically added, so that it can be told apart from a host which an
-   # administrator added by hand. qconf -se shows the joker only when MORE_INFO is set
+   # the attribute which marks a host as automatically added, so that it can be told apart from a
+   # host which an administrator added by hand. It is auto_added_time from 9.2.0 on; in the 9.1
+   # line the marker is an entry of the joker, because adding an attribute would have changed the
+   # classic spooling format of an execution host
+   set marker [auto_add_hosts_marker_attribute]
+
+   # qconf -se shows the marker only when MORE_INFO is set
    set my_env(MORE_INFO) "1"
    set output [start_sge_bin "qconf" "-se $auto_add_hosts_host" "" "" prg_exit_state 60 "" "bin" \
                              output_lines my_env]
    if {$prg_exit_state == 0} {
       set output [string trim $output]
       parse_simple_record output exechost_config
-      if {![info exists exechost_config(joker)]} {
-         ts_log_severe "execution host $auto_add_hosts_host has no joker, expected the\
-                        auto_added marker"
-      } elseif {![string match "*auto_added*" $exechost_config(joker)]} {
+      if {![info exists exechost_config($marker)]} {
+         ts_log_severe "execution host $auto_add_hosts_host has no $marker attribute, expected the\
+                        marker of a host which added itself"
+      } elseif {$exechost_config($marker) == "NONE"} {
+         ts_log_severe "execution host $auto_add_hosts_host is not marked as automatically added,\
+                        its $marker is \"NONE\""
+      } elseif {$marker == "joker" && ![string match "*auto_added*" $exechost_config(joker)]} {
          ts_log_severe "execution host $auto_add_hosts_host is not marked as automatically added,\
                         its joker is \"$exechost_config(joker)\""
+      } else {
+         ts_log_fine "host $auto_add_hosts_host carries $marker \"$exechost_config($marker)\""
       }
    } else {
       ts_log_severe "cannot read the configuration of execution host $auto_add_hosts_host:\n$output"
    }
 
-   # without MORE_INFO the joker stays out of the output of qconf -se: an additional line would
+   # without MORE_INFO the marker stays out of the output of qconf -se: an additional line would
    # change an interface
    if {[get_exechost plain_config $auto_add_hosts_host "" "" 0] == 0} {
-      if {[info exists plain_config(joker)]} {
-         ts_log_severe "qconf -se shows the joker of host $auto_add_hosts_host without\
+      if {[info exists plain_config($marker)]} {
+         ts_log_severe "qconf -se shows the $marker of host $auto_add_hosts_host without\
                         MORE_INFO being set"
       }
    } else {
