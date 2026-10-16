@@ -49,6 +49,7 @@ lappend check_functions "auto_add_hosts_by_address_pattern"
 lappend check_functions "auto_add_hosts_by_network"
 lappend check_functions "auto_add_hosts_without_hostgroup"
 lappend check_functions "auto_add_hosts_creates_hostgroup"
+lappend check_functions "auto_add_hosts_slots_from_num_proc"
 lappend check_functions "auto_add_hosts_first_match_wins"
 lappend check_functions "auto_add_hosts_no_match"
 lappend check_functions "auto_add_hosts_invalid_rules"
@@ -183,6 +184,90 @@ proc auto_add_hosts_marker_attribute {} {
       return "auto_added_time"
    }
    return "joker"
+}
+
+## @brief read the slots complex value, the processors and the num_proc load value of a host
+#
+# The output of qconf -se wraps a long value over several lines, which parse_simple_record cannot
+# put back together, so the values are read from the unwrapped output directly.
+#
+# @param host name of the host
+# @param values name of an array which receives the elements slots, processors and num_proc, each
+#               of them empty if the output does not carry it
+# @return 1 if the host could be read, 0 if it could not
+proc auto_add_hosts_get_slots_values {host values} {
+   upvar $values out
+
+   unset -nocomplain out
+   set out(slots) ""
+   set out(processors) ""
+   set out(num_proc) ""
+
+   set output [start_sge_bin "qconf" "-se $host"]
+   if {$prg_exit_state != 0} {
+      return 0
+   }
+
+   # join the continuation lines, so that a wrapped load_values line can be searched as a whole
+   regsub -all {\\[ \t]*\n[ \t]*} $output "" output
+
+   if {[regexp {complex_values[ \t]+([^\n]*)} $output match complex_values]} {
+      if {[regexp {slots=([0-9]+)} $complex_values match value]} {
+         set out(slots) $value
+      }
+   }
+   if {[regexp {processors[ \t]+([0-9]+)} $output match value]} {
+      set out(processors) $value
+   }
+   if {[regexp {num_proc=([0-9]+)} $output match value]} {
+      set out(num_proc) $value
+   }
+
+   return 1
+}
+
+## @brief the configured interval between two load reports, in seconds
+#
+# @return the load_report_time of the global configuration in seconds, at least 15
+proc auto_add_hosts_get_load_report_time {} {
+   set load_report_time "00:00:15"
+   if {[get_config conf] == 0 && [info exists conf(load_report_time)]} {
+      set load_report_time $conf(load_report_time)
+   }
+
+   # scan rather than expr, because expr reads a value with a leading zero as octal
+   set parts [split $load_report_time ":"]
+   scan [lindex $parts 0] "%d" hours
+   scan [lindex $parts 1] "%d" minutes
+   scan [lindex $parts 2] "%d" seconds
+
+   set total [expr {$hours * 3600 + $minutes * 60 + $seconds}]
+   if {$total < 15} {
+      set total 15
+   }
+
+   return $total
+}
+
+## @brief wait until a host reports a slots complex value and a num_proc load value
+#
+# @param host name of the host
+# @param values name of an array which receives the values, see auto_add_hosts_get_slots_values
+# @return 1 if both values are there, 0 if they are not
+proc auto_add_hosts_wait_for_slots {host values} {
+   upvar $values out
+
+   # the values arrive with the first load report of the new execution daemon
+   set end_time [expr [clock seconds] + 120]
+   while {[clock seconds] < $end_time} {
+      if {[auto_add_hosts_get_slots_values $host out] && $out(slots) != "" &&
+          $out(num_proc) != ""} {
+         return 1
+      }
+      sleep_for_seconds 5
+   }
+
+   return 0
 }
 
 ## @brief check if a host is part of a list of host names
@@ -466,6 +551,72 @@ proc auto_add_hosts_creates_hostgroup {} {
    del_hostgroup $auto_add_hosts_hgroup3 "" "" 0
    auto_add_hosts_test_rules "$auto_add_hosts_host:$auto_add_hosts_hgroup3" $auto_add_hosts_hgroup3
    del_hostgroup $auto_add_hosts_hgroup3 "" "" 0
+}
+
+proc auto_add_hosts_slots_from_num_proc {} {
+   get_current_cluster_config_array ts_config
+   global auto_add_hosts_host
+
+   # the execution host installation, which does not run on a host that adds itself, is what sets
+   # the slots of an installed host. The master daemon sets them from the num_proc of the load
+   # report instead, and it leaves a value which an administrator sets afterwards alone
+   ts_log_fine "testing the slots of an automatically added host"
+   if {[auto_add_hosts_set_rules "$auto_add_hosts_host"] < 0} {
+      return
+   }
+
+   startup_execd $auto_add_hosts_host
+
+   if {![auto_add_hosts_wait_for_exechost $auto_add_hosts_host 1]} {
+      ts_log_severe "host $auto_add_hosts_host did not add itself to the cluster although the\
+                     rules match it"
+      auto_add_hosts_remove_host
+      return
+   }
+
+   if {![auto_add_hosts_wait_for_slots $auto_add_hosts_host values]} {
+      ts_log_severe "host $auto_add_hosts_host reported no slots complex value or no num_proc\
+                     load value, its slots are \"$values(slots)\" and its num_proc is\
+                     \"$values(num_proc)\""
+      auto_add_hosts_remove_host
+      return
+   }
+
+   if {$values(slots) != $values(num_proc)} {
+      ts_log_severe "host $auto_add_hosts_host has slots=$values(slots) in its complex values,\
+                     expected the num_proc of its load report, which is $values(num_proc)"
+   } else {
+      ts_log_fine "host $auto_add_hosts_host has slots=$values(slots), its num_proc is\
+                   $values(num_proc) and its processors are $values(processors)"
+   }
+
+   # a value which an administrator sets is not overwritten by the following load reports
+   set manual_slots [expr $values(num_proc) + 1]
+   if {[get_exechost old_config $auto_add_hosts_host] != 0} {
+      ts_log_severe "cannot read the configuration of execution host $auto_add_hosts_host"
+      auto_add_hosts_remove_host
+      return
+   }
+   unset -nocomplain new_config
+   add_or_replace_array_param new_config old_config complex_values "slots" $manual_slots
+   if {[set_exechost new_config $auto_add_hosts_host] < 0} {
+      auto_add_hosts_remove_host
+      return
+   }
+
+   # wait long enough for more than one load report to arrive
+   sleep_for_seconds [expr {3 * [auto_add_hosts_get_load_report_time]}]
+
+   if {![auto_add_hosts_get_slots_values $auto_add_hosts_host values]} {
+      ts_log_severe "cannot read the configuration of execution host $auto_add_hosts_host"
+   } elseif {$values(slots) != $manual_slots} {
+      ts_log_severe "the slots of host $auto_add_hosts_host were set to $manual_slots by hand, but\
+                     after further load reports they are \"$values(slots)\""
+   } else {
+      ts_log_fine "slots=$manual_slots set by hand survived the following load reports"
+   }
+
+   auto_add_hosts_remove_host
 }
 
 proc auto_add_hosts_first_match_wins {} {
