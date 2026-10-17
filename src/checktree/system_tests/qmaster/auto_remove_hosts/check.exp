@@ -1,0 +1,452 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+# we start and stop an execution daemon on a host which is not part of the cluster
+set check_root_access_needs "yes"
+set check_version_range "9.1.7"
+
+set check_name            "auto_remove_hosts"
+set check_category        "HOST QMASTER VERIFIED"
+set check_description(0)  "a host which added itself to the cluster is removed again when it has\
+                           not been heard from for the qmaster_params AUTO_REMOVE_HOSTS_AFTER"
+
+set check_needs           "init_core_system"
+
+set check_setup_function auto_remove_hosts_setup
+set check_cleanup_function auto_remove_hosts_cleanup
+
+set check_functions {}
+lappend check_functions "auto_remove_hosts_removes_silent_host"
+lappend check_functions "auto_remove_hosts_keeps_manual_host"
+lappend check_functions "auto_remove_hosts_keeps_busy_host"
+lappend check_functions "auto_remove_hosts_keeps_returning_host"
+lappend check_functions "auto_remove_hosts_switched_off"
+lappend check_functions "auto_remove_hosts_invalid_time"
+
+# -------- local test procedures: initialization------------------------------
+
+proc auto_remove_hosts_setup {} {
+   get_current_cluster_config_array ts_config
+   global auto_remove_hosts_host auto_remove_hosts_config_backup
+   global auto_remove_hosts_hgroup auto_remove_hosts_queue auto_remove_hosts_after
+
+   set auto_remove_hosts_hgroup "@autoremove"
+   set auto_remove_hosts_queue "autoremove.q"
+
+   # the configured time starts when the master daemon declares the host unknown, which takes
+   # max_unheard, and the hosts are checked once a minute on top of that
+   set auto_remove_hosts_after 60
+
+   # the test needs a host which is not part of the cluster: only a host which adds itself is a
+   # candidate for the automatic removal
+   set auto_remove_hosts_host [host_conf_get_non_cluster_host 0]
+   if {$auto_remove_hosts_host == ""} {
+      ts_log_config "no non-cluster host is configured, cannot test a host which adds itself"
+      return 99
+   }
+   set auto_remove_hosts_host [resolve_host $auto_remove_hosts_host 0]
+
+   # a host group with a cluster queue on it, so that the removal of the queue instances and the
+   # survival of the host group can be checked
+   unset -nocomplain hgroup_conf
+   if {[add_hostgroup $auto_remove_hosts_hgroup hgroup_conf] < 0} {
+      return 99
+   }
+   unset -nocomplain queue_conf
+   if {[add_queue $auto_remove_hosts_queue $auto_remove_hosts_hgroup queue_conf] < 0} {
+      return 99
+   }
+
+   # we modify qmaster_params
+   get_config auto_remove_hosts_config_backup
+}
+
+proc auto_remove_hosts_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global auto_remove_hosts_host auto_remove_hosts_config_backup
+   global auto_remove_hosts_hgroup auto_remove_hosts_queue auto_remove_hosts_after
+
+   # make sure that we do not leave an execd behind on the non-cluster host
+   if {[info exists auto_remove_hosts_host] && $auto_remove_hosts_host != ""} {
+      auto_remove_hosts_remove_host
+   }
+
+   # the objects do not have to exist: the setup may have failed before creating them
+   if {[info exists auto_remove_hosts_queue]} {
+      del_queue $auto_remove_hosts_queue "" 1 1 "" "" 0
+   }
+   if {[info exists auto_remove_hosts_hgroup]} {
+      del_hostgroup $auto_remove_hosts_hgroup "" "" 0
+   }
+
+   if {[info exists auto_remove_hosts_config_backup]} {
+      reset_config auto_remove_hosts_config_backup
+   }
+
+   unset -nocomplain auto_remove_hosts_host auto_remove_hosts_config_backup
+   unset -nocomplain auto_remove_hosts_hgroup auto_remove_hosts_queue auto_remove_hosts_after
+}
+
+# -------- local test procedures ---------------------------------------------
+
+## @brief set the AUTO_ADD_HOSTS and AUTO_REMOVE_HOSTS_AFTER parameters
+#
+# Both are entries of qmaster_params, the other entries are kept.
+#
+# @param rules value of the AUTO_ADD_HOSTS parameter, empty to leave it out
+# @param remove_after value of the AUTO_REMOVE_HOSTS_AFTER parameter, empty to leave it out
+# @param raise_error whether a rejected configuration is an error
+# @return the return value of set_config, < 0 if the configuration was rejected
+proc auto_remove_hosts_set_params {rules remove_after {raise_error 1}} {
+   global auto_remove_hosts_config_backup
+
+   unset -nocomplain intermediate new_config
+   array set intermediate [array get auto_remove_hosts_config_backup]
+
+   if {$rules != ""} {
+      add_or_replace_array_param intermediate auto_remove_hosts_config_backup qmaster_params \
+                                 "AUTO_ADD_HOSTS" $rules
+   }
+   if {$remove_after != ""} {
+      add_or_replace_array_param new_config intermediate qmaster_params \
+                                 "AUTO_REMOVE_HOSTS_AFTER" $remove_after
+   } else {
+      set new_config(qmaster_params) $intermediate(qmaster_params)
+   }
+
+   return [set_config new_config "global" 0 $raise_error]
+}
+
+## @brief wait until a host has left the execution host list, or until it is clear that it stays
+#
+# @param host name of the host
+# @param expected 1 to wait for the host to vanish, 0 to wait for it to stay
+# @param timeout how long to wait, in seconds
+# @return 1 if the host is gone, 0 if it is still an execution host
+proc auto_remove_hosts_wait_for_removal {host expected timeout} {
+   set ret 0
+   set end_time [expr {[clock seconds] + [ts_scale_timeout $timeout]}]
+   while {[clock seconds] < $end_time} {
+      if {[get_exechost_list host_list "" "" 0] == 0 &&
+          ![auto_remove_hosts_host_in_list $host_list $host]} {
+         set ret 1
+         break
+      }
+      sleep_for_seconds 5
+   }
+
+   return $ret
+}
+
+## @brief check if a host is part of a list of host names
+#
+# Both the list and the host are resolved to their short form, so that the comparison does not
+# depend on whether the cluster stores host names with or without their domain. The placeholder
+# NONE, which the host list of an empty host group contains, is not a host name and is skipped.
+#
+# @param host_list list of host names
+# @param host name of the host to look for
+# @return 1 if the host is part of the list, 0 if it is not
+proc auto_remove_hosts_host_in_list {host_list host} {
+   set hosts {}
+   foreach entry $host_list {
+      if {$entry != "NONE"} {
+         lappend hosts $entry
+      }
+   }
+
+   return [expr {[lsearch -exact [resolve_host_list $hosts 0] [resolve_host $host 0]] >= 0}]
+}
+
+## @brief start the execution daemon on the non-cluster host and wait until the host is there
+#
+# @param rules value of the AUTO_ADD_HOSTS parameter
+# @param remove_after value of the AUTO_REMOVE_HOSTS_AFTER parameter, empty to leave it out
+# @return 1 if the host added itself, 0 if it did not
+proc auto_remove_hosts_add_host {rules remove_after} {
+   get_current_cluster_config_array ts_config
+   global auto_remove_hosts_host
+
+   if {[auto_remove_hosts_set_params $rules $remove_after] < 0} {
+      return 0
+   }
+
+   startup_execd $auto_remove_hosts_host
+
+   set end_time [expr {[clock seconds] + [ts_scale_timeout 60]}]
+   while {[clock seconds] < $end_time} {
+      if {[get_exechost_list host_list "" "" 0] == 0 &&
+          [auto_remove_hosts_host_in_list $host_list $auto_remove_hosts_host]} {
+         return 1
+      }
+      sleep_for_seconds 2
+   }
+
+   ts_log_severe "host $auto_remove_hosts_host did not add itself to the cluster although the\
+                  rules \"$rules\" match it"
+   return 0
+}
+
+## @brief shut the execution daemon down and remove the host from the cluster again
+#
+# Everything is tolerated here: the point of this check is that the master daemon removes the
+# host, so in most cases there is nothing left to clean up.
+proc auto_remove_hosts_remove_host {} {
+   get_current_cluster_config_array ts_config
+   global auto_remove_hosts_host auto_remove_hosts_hgroup
+
+   shutdown_system_daemon $auto_remove_hosts_host "execd"
+
+   if {[get_hostgroup $auto_remove_hosts_hgroup hgroup_config "" "" 0] == 0} {
+      if {[auto_remove_hosts_host_in_list $hgroup_config(hostlist) $auto_remove_hosts_host]} {
+         unset -nocomplain hgroup_change
+         set hgroup_change(hostlist) "NONE"
+         mod_hostgroup $auto_remove_hosts_hgroup hgroup_change 1 "" "" 0
+      }
+   }
+
+   if {[get_exechost_list host_list "" "" 0] == 0 &&
+       [auto_remove_hosts_host_in_list $host_list $auto_remove_hosts_host]} {
+      start_sge_bin "qconf" "-de $auto_remove_hosts_host"
+   }
+}
+
+## @brief verify that the host group survived and carries no queue instance of the removed host
+proc auto_remove_hosts_verify_aftermath {} {
+   get_current_cluster_config_array ts_config
+   global auto_remove_hosts_host auto_remove_hosts_hgroup auto_remove_hosts_queue
+
+   # the host group is kept even when its last member is gone: a cluster queue uses it
+   if {[get_hostgroup $auto_remove_hosts_hgroup hgroup_config "" "" 0] != 0} {
+      ts_log_severe "host group $auto_remove_hosts_hgroup was deleted together with its last host"
+   } elseif {[auto_remove_hosts_host_in_list $hgroup_config(hostlist) $auto_remove_hosts_host]} {
+      ts_log_severe "host $auto_remove_hosts_host is still part of host group\
+                     $auto_remove_hosts_hgroup although it was removed from the cluster"
+   }
+
+   # the queue instance went with the host
+   set queue_instance "$auto_remove_hosts_queue@$auto_remove_hosts_host"
+   set output [start_sge_bin "qselect" "-q $queue_instance"]
+   if {$prg_exit_state == 0 && [string match "*$queue_instance*" $output]} {
+      ts_log_severe "queue instance $queue_instance still exists although the host was removed\
+                     from the cluster:\n$output"
+   }
+
+   # the cluster queue itself is untouched
+   if {[get_queue $auto_remove_hosts_queue queue_config "" "" 0] != 0} {
+      ts_log_severe "cluster queue $auto_remove_hosts_queue was deleted together with the host"
+   }
+}
+
+# -------- test functions ----------------------------------------------------
+
+proc auto_remove_hosts_removes_silent_host {} {
+   get_current_cluster_config_array ts_config
+   global auto_remove_hosts_host auto_remove_hosts_hgroup auto_remove_hosts_after
+
+   ts_log_fine "testing AUTO_REMOVE_HOSTS_AFTER=$auto_remove_hosts_after"
+   if {![auto_remove_hosts_add_host "$auto_remove_hosts_host:$auto_remove_hosts_hgroup" \
+                                    $auto_remove_hosts_after]} {
+      auto_remove_hosts_remove_host
+      return
+   }
+
+   # the host goes away without telling the master daemon, as a reclaimed cloud node would
+   shutdown_system_daemon $auto_remove_hosts_host "execd"
+
+   # max_unheard until the host counts as unknown, the configured time, the one minute interval
+   # of the check, and room for a loaded cluster on top
+   set timeout [expr {$auto_remove_hosts_after + 300}]
+   if {[auto_remove_hosts_wait_for_removal $auto_remove_hosts_host 1 $timeout]} {
+      ts_log_fine "host $auto_remove_hosts_host was removed from the cluster"
+      auto_remove_hosts_verify_aftermath
+   } else {
+      ts_log_severe "host $auto_remove_hosts_host is still an execution host although its\
+                     execution daemon was shut down more than $timeout seconds ago and\
+                     AUTO_REMOVE_HOSTS_AFTER is $auto_remove_hosts_after"
+   }
+
+   auto_remove_hosts_remove_host
+}
+
+proc auto_remove_hosts_keeps_manual_host {} {
+   get_current_cluster_config_array ts_config
+   global auto_remove_hosts_host auto_remove_hosts_after
+
+   # a host which an administrator added carries no marker and is never removed, however long it
+   # has been unreachable
+   ts_log_fine "testing that a host added by hand is not removed"
+   if {[auto_remove_hosts_set_params "" $auto_remove_hosts_after] < 0} {
+      return
+   }
+
+   # add_exechost raises an error itself, it has no return value to check
+   unset -nocomplain host_conf
+   set host_conf(hostname) $auto_remove_hosts_host
+   add_exechost host_conf
+   if {[get_exechost_list host_list "" "" 0] != 0 ||
+       ![auto_remove_hosts_host_in_list $host_list $auto_remove_hosts_host]} {
+      ts_log_severe "host $auto_remove_hosts_host could not be added to the execution host list"
+      return
+   }
+
+   # the host never had an execution daemon, so it was never heard from
+   set timeout [expr {$auto_remove_hosts_after + 180}]
+   if {[auto_remove_hosts_wait_for_removal $auto_remove_hosts_host 0 $timeout]} {
+      ts_log_severe "host $auto_remove_hosts_host was added by hand but removed automatically"
+   } else {
+      ts_log_fine "host $auto_remove_hosts_host added by hand was not removed"
+   }
+
+   start_sge_bin "qconf" "-de $auto_remove_hosts_host"
+}
+
+proc auto_remove_hosts_keeps_busy_host {} {
+   get_current_cluster_config_array ts_config
+   global auto_remove_hosts_host auto_remove_hosts_hgroup auto_remove_hosts_after
+   global auto_remove_hosts_queue
+
+   # a host which still has a job running is kept until the job is gone
+   ts_log_fine "testing that a host with a running job is not removed"
+   if {![auto_remove_hosts_add_host "$auto_remove_hosts_host:$auto_remove_hosts_hgroup" \
+                                    $auto_remove_hosts_after]} {
+      auto_remove_hosts_remove_host
+      return
+   }
+
+   if {[wait_for_queue_state "$auto_remove_hosts_queue@$auto_remove_hosts_host" "" 120] != ""} {
+      auto_remove_hosts_remove_host
+      return
+   }
+
+   # a job which outlives the configured time, submitted before the daemon goes away
+   set runtime [expr {2 * $auto_remove_hosts_after + 240}]
+   set job_id [submit_job "-b y -l h=$auto_remove_hosts_host -o /dev/null -j y /bin/sleep $runtime"]
+   if {$job_id <= 0} {
+      auto_remove_hosts_remove_host
+      return
+   }
+
+   if {[wait_for_jobstart $job_id "" 120 1 1] == 0} {
+      # the execution daemon goes away while the job is still running, so the master daemon
+      # keeps believing that the job is there
+      shutdown_system_daemon $auto_remove_hosts_host "execd"
+
+      set timeout [expr {$auto_remove_hosts_after + 180}]
+      if {[auto_remove_hosts_wait_for_removal $auto_remove_hosts_host 0 $timeout]} {
+         ts_log_severe "host $auto_remove_hosts_host was removed from the cluster although job\
+                        $job_id is still running on it"
+      } else {
+         ts_log_fine "host $auto_remove_hosts_host with a running job was not removed"
+      }
+   }
+
+   # the job can only be reaped once the execution daemon is back
+   startup_execd $auto_remove_hosts_host
+   delete_job $job_id 1 0 0
+
+   auto_remove_hosts_remove_host
+}
+
+proc auto_remove_hosts_keeps_returning_host {} {
+   get_current_cluster_config_array ts_config
+   global auto_remove_hosts_host auto_remove_hosts_hgroup auto_remove_hosts_after
+
+   # a host which reports again before the time is up stays
+   ts_log_fine "testing that a host which comes back is not removed"
+   if {![auto_remove_hosts_add_host "$auto_remove_hosts_host:$auto_remove_hosts_hgroup" \
+                                    $auto_remove_hosts_after]} {
+      auto_remove_hosts_remove_host
+      return
+   }
+
+   # the daemon is restarted well within the configured time, several times over, and the host
+   # has to survive all of it
+   set end_time [expr {[clock seconds] + [ts_scale_timeout [expr {2 * $auto_remove_hosts_after}]]}]
+   while {[clock seconds] < $end_time} {
+      shutdown_system_daemon $auto_remove_hosts_host "execd"
+      sleep_for_seconds 5
+      startup_execd $auto_remove_hosts_host
+      sleep_for_seconds [expr {$auto_remove_hosts_after / 3}]
+
+      if {[get_exechost_list host_list "" "" 0] != 0 ||
+          ![auto_remove_hosts_host_in_list $host_list $auto_remove_hosts_host]} {
+         ts_log_severe "host $auto_remove_hosts_host was removed from the cluster although its\
+                        execution daemon kept reporting within AUTO_REMOVE_HOSTS_AFTER\
+                        ($auto_remove_hosts_after seconds)"
+         break
+      }
+   }
+
+   auto_remove_hosts_remove_host
+}
+
+proc auto_remove_hosts_switched_off {} {
+   get_current_cluster_config_array ts_config
+   global auto_remove_hosts_host auto_remove_hosts_hgroup auto_remove_hosts_after
+
+   # 0 and an unset parameter both switch the automatic removal off
+   foreach remove_after {"0" ""} {
+      if {$remove_after == ""} {
+         ts_log_fine "testing that an unset AUTO_REMOVE_HOSTS_AFTER removes no host"
+      } else {
+         ts_log_fine "testing AUTO_REMOVE_HOSTS_AFTER=$remove_after"
+      }
+
+      if {![auto_remove_hosts_add_host "$auto_remove_hosts_host:$auto_remove_hosts_hgroup" \
+                                       $remove_after]} {
+         auto_remove_hosts_remove_host
+         continue
+      }
+
+      shutdown_system_daemon $auto_remove_hosts_host "execd"
+
+      set timeout [expr {$auto_remove_hosts_after + 180}]
+      if {[auto_remove_hosts_wait_for_removal $auto_remove_hosts_host 0 $timeout]} {
+         ts_log_severe "host $auto_remove_hosts_host was removed although the automatic removal\
+                        is switched off"
+      } else {
+         ts_log_fine "host $auto_remove_hosts_host was not removed, as expected"
+      }
+
+      auto_remove_hosts_remove_host
+   }
+}
+
+proc auto_remove_hosts_invalid_time {} {
+   get_current_cluster_config_array ts_config
+
+   # a value which is not a time is rejected when the configuration is modified
+   foreach invalid_time {"abc" "1:2:3:4" "00:xx:00"} {
+      ts_log_fine "testing AUTO_REMOVE_HOSTS_AFTER=$invalid_time, which has to be rejected"
+      if {[auto_remove_hosts_set_params "" $invalid_time 0] >= 0} {
+         ts_log_severe "the configuration with AUTO_REMOVE_HOSTS_AFTER=$invalid_time was accepted"
+      }
+   }
+}
