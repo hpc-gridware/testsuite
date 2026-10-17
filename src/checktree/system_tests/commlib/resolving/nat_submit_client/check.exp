@@ -189,6 +189,19 @@ proc nat_submit_client_setup {} {
       return 99
    }
 
+   # With Munge authentication the client needs libmunge and a munged it can reach.
+   # The image has neither, and the client then gives up before it ever contacts the
+   # qmaster, so none of the functions could see what they are looking for.
+   if {[config_has_product_feature "munge"]} {
+      set output [nat_submit_client_run prg_exit_state "qstat"]
+      if {[string first "Munge initialization failed" $output] >= 0 ||
+          [string first "failed to munge encode" $output] >= 0} {
+         ts_log_config "Munge authentication is enabled, but it does not work in container\
+                        $nat_submit_client_hostname on host $nat_submit_client_host:\n$output"
+         return 99
+      }
+   }
+
    return 0
 }
 

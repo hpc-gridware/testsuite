@@ -105,7 +105,9 @@ proc issue_3179_setup {} {
    set queue_conf(slots)           5
 
    # set memory limits
-   set queue_conf(h_vmem) "500M"
+   # with munge and tls a 2 slot job needs about 1.1G of virtual memory (qrsh client
+   # loading two OpenSSL versions, bash with a large locale archive), keep enough headroom
+   set queue_conf(h_vmem) "2G"
    add_queue "usage.q" [get_all_hosts_hostgroup] queue_conf
 }
 

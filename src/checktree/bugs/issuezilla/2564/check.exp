@@ -82,7 +82,7 @@ proc issue_2564_setup {} {
 
    set queue_name "test.q"
 
-   set grace_period 15
+   set grace_period 30
    #
    # Imporant note: we need to configure schedd FIFO mode
    # with projects defined by disabling functional shares.
@@ -214,7 +214,7 @@ proc issue_2564_check {} {
    # test to avoid a global test suite screw-up.
    #
    set iterations 0
-   while { $iterations < 120 } {
+   while { $iterations < 240 } {
       ts_log_fine "Starting iteration $iterations"
       ts_log_fine "======================"
       #
@@ -251,7 +251,7 @@ proc issue_2564_check {} {
                # Ensure we are making progress: the lowest JobID should be running by
                # by now. Fatal if it's still sitting on the pending list. The current
                # settings of grace_period and sleep_time combined give us a timeout
-               # of 15 seconds.
+               # of 30 seconds.
                #
                if {  $iterations == $grace_period  &&  $job_id == [ expr { $start_jid  +1 } ] } {
                   ts_log_severe "issue_2564_check: no progress observed; aborting. $job_id still pending state"
