@@ -241,9 +241,7 @@ proc bigdecimal_test {} {
 
    # add queue
    set chgar(slots) "10"
-   # we may only add a single queue instance, otherwise the following code (bigdecimal_duplicate_record)
-   # would try to create multiple records with the same big id,
-   # which is prevented by the sge_queue's table primary key
+   # a single queue instance is all this test needs
    add_queue $Queue_Name1 [lindex $ts_config(execd_nodes) 0] chgar
    # duplicate queue record with big id
    if {[bigdecimal_duplicate_record "sge_queue" "q_id"] != 0} {
@@ -380,9 +378,13 @@ proc bigdecimal_record_exists { table_name where_clause } {
 #    bigdecimal_duplicate_record { table_name id_name {where_clause ""} }
 #
 #  FUNCTION
-#   Duplicate a record in the table $table_name and replace the primary key number
-#   by $Big_Number. If only one other column than id is in the table, it will
+#   Duplicate a single record in the table $table_name and replace the primary key
+#   number by $Big_Number. If only one other column than id is in the table, it will
 #   also put a different column value.
+#   Where more than one record matches, the record which has been written last is
+#   duplicated. Duplicating all of them would give every copy $Big_Number as primary
+#   key and the table would reject all but the first.
+#   A table which dbwriter has not written a record to yet is left alone.
 #
 #  INPUTS
 #     table_name        - the name of ARCo table
@@ -398,20 +400,30 @@ proc bigdecimal_duplicate_record { table_name id_name {where_clause ""} } {
    global sqlutil_id sqlutil_sp_id
    global Big_Number
 
-   # get the column names
-   set columns ""
-   set sql_select "SELECT * FROM $table_name"
+   # get the column names and the records which are candidates for duplication,
+   # the record written last first
+   set sql_select "SELECT * FROM $table_name $where_clause ORDER BY $id_name DESC"
    ts_log_finest "Execute sql statement: $sql_select"
-   if {[sqlutil_query $sqlutil_sp_id "$sql_select" result_array column_names] < 0} {
+   set rows [sqlutil_query $sqlutil_sp_id "$sql_select" result_array column_names]
+   if {$rows < 0} {
       ts_log_severe "Can't execute statement: $sql_select"
       return -1
    }
-   set columns [join [replace_string $column_names "$id_name" ""] ", "]
+   set column_list [replace_string $column_names "$id_name" ""]
+   set columns [join $column_list ", "]
 
    # compose the sql statement for duplicating of the record
    set sql "INSERT INTO $table_name ($id_name, $columns) "
-   if { [llength $columns] > 1} {
-      append sql "SELECT $Big_Number, $columns FROM $table_name $where_clause"
+   if {[llength $column_list] > 1} {
+      if {$rows == 0} {
+         # dbwriter writes the records of a table when a job refers to the object,
+         # earlier in a test run there is nothing to duplicate
+         ts_log_fine "no record in table $table_name, nothing to duplicate"
+         return 0
+      }
+      # duplicate this one record only, $Big_Number can be the primary key of just one
+      set id_value $result_array(0,[lsearch -exact $column_names $id_name])
+      append sql "SELECT $Big_Number, $columns FROM $table_name WHERE $id_name = $id_value"
    } else {
       append sql "VALUES ($Big_Number, '${table_name}_name')"
    }
