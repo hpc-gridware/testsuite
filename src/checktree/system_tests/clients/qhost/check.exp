@@ -118,8 +118,8 @@ proc test_issue132 {} {
 
    # qhost -q
    # TODO must be in the exact time
-   set result [qhost_q_xml_parse xml]
-   set result [qhost_q_parse plain job]
+   parse_xml_and_plain_of_same_load_report xml plain {qhost_q_xml_parse xml} \
+                                                     {qhost_q_parse plain job}
    parray xml
    parray plain
 
@@ -198,8 +198,8 @@ proc test_issue132_h {} {
    ts_log_fine "host $host selected for test"
 
    set params "-h $host"
-   set result [qhost_xml_parse xml $params ]
-   set result [qhost_parse plain job $params ]
+   parse_xml_and_plain_of_same_load_report xml plain {qhost_xml_parse xml $params} \
+                                                     {qhost_parse plain job $params}
 
    # for each host test that the xml and plain outpus are the same
    for {set ind 0} {$ind < 2} {incr ind 1} {
@@ -366,8 +366,8 @@ proc test_issue132_l {} {
    ts_log_fine "host $host selected for test"
 
    set args "-l arch=$arch"
-   set results1 [qhost_xml_parse xml $args]
-   set results1 [qhost_parse plain job $args]
+   parse_xml_and_plain_of_same_load_report xml plain {qhost_xml_parse xml $args} \
+                                                     {qhost_parse plain job $args}
 
    # for each host test that the xml and plain outputs are the same
    set errors ""
@@ -399,8 +399,8 @@ proc test_issue132_F {} {
    }
 
    set params "-F"
-   qhost_xml_parse xml $params
-   qhost_F_parse plain job $params
+   parse_xml_and_plain_of_same_load_report xml plain {qhost_xml_parse xml $params} \
+                                                     {qhost_F_parse plain job $params}
 
    parray xml
    parray plain

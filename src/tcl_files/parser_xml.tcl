@@ -2225,3 +2225,72 @@ proc xml_date_time {unixtime} {
    }
    return $date
 }
+
+###
+# @brief which load values differ between a parsed XML and a parsed plain output?
+#
+# Compares the entries of both arrays whose attribute, the part of the key after
+# the last comma (e.g. "host0,load_avg" or "all.q@host,load_avg"), is a value which
+# changes with every load report.
+#
+# @param[in] xml_var   name of the array with the parsed XML output
+# @param[in] plain_var name of the array with the parsed plain output
+# @return list of the array keys whose values differ, empty if all load values agree
+##
+proc changed_load_values {xml_var plain_var} {
+   upvar $xml_var xml
+   upvar $plain_var plain
+
+   set load_values "load_avg load_short load_medium load_long np_load_avg np_load_short"
+   append load_values " np_load_medium np_load_long cpu cqload mem_used mem_free swap_used"
+   append load_values " swap_free virtual_used virtual_free"
+
+   set changed {}
+   foreach key [array names xml] {
+      if {![regexp {,([^,]+)$} $key -> attrib]} {
+         continue
+      }
+      if {[lsearch -exact $load_values $attrib] < 0 || ![info exists plain($key)]} {
+         continue
+      }
+      if {[string trim $xml($key)] != [string trim $plain($key)]} {
+         lappend changed $key
+      }
+   }
+
+   return $changed
+}
+
+###
+# @brief parse the XML and the plain output of a client from the same load report
+#
+# Both outputs come from separate client calls, e.g. "qhost -xml" and "qhost". A load
+# report which arrives between them changes the load values, and a comparison of the
+# two outputs fails although both are correct. The calls are therefore repeated
+# until the load values agree. If they still differ after the last attempt, the
+# outputs are left as they are and the comparison reports the difference.
+#
+# The scripts are evaluated in the caller's frame, so variables they set, e.g. the
+# result of the parse function, are available to the caller.
+#
+# @param[in] xml_var      name of the array the XML output is parsed into
+# @param[in] plain_var    name of the array the plain output is parsed into
+# @param[in] xml_script   script parsing the XML output
+# @param[in] plain_script script parsing the plain output
+##
+proc parse_xml_and_plain_of_same_load_report {xml_var plain_var xml_script plain_script} {
+   upvar $xml_var xml
+   upvar $plain_var plain
+
+   for {set attempt 1} {$attempt <= 5} {incr attempt} {
+      unset -nocomplain xml plain
+      uplevel 1 $xml_script
+      uplevel 1 $plain_script
+
+      set changed [changed_load_values xml plain]
+      if {$changed == ""} {
+         return
+      }
+      ts_log_fine "load values changed between the two client calls ($changed), reading again"
+   }
+}

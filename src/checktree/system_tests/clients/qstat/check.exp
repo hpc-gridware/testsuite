@@ -1163,10 +1163,13 @@ proc qstat_f_r_plain_xml_comparison {} {
 
    # qstat_f_r_plain_output contains the plain qstat output in an assoc. array
    # qstat_f_r_plain_output(jobid) contains a list of jobids.
-   set result1 [qstat_f_r_plain_parse qstat_f_r_plain_output]
 
    # qstat_f_r_xml_output contains the XML qstat output in an assoc. array
-   set result2 [qstat_f_xml_parse qstat_f_r_xml_output "-r"]
+   parse_xml_and_plain_of_same_load_report qstat_f_r_xml_output qstat_f_r_plain_output {
+      set result2 [qstat_f_xml_parse qstat_f_r_xml_output "-r"]
+   } {
+      set result1 [qstat_f_r_plain_parse qstat_f_r_plain_output]
+   }
 
    # Now let's compare them by jobid.
    set jobid_list  $qstat_f_r_plain_output(jobid_list)
@@ -1350,10 +1353,13 @@ proc qstat_f_urg_plain_xml_comparison {} {
 
    # qstat_f_urg_plain_output contains the plain qstat  output in an assoc. array
    # qstat_f_urg_plain_output(jobid) contains a list of jobids.
-   set result1 [qstat_f_urg_plain_parse qstat_f_urg_plain_output "-f"]]
 
    # qstat_f_urg_xml_output contains the XML qstat output in an assoc. array
-   set result2 [qstat_f_xml_parse qstat_f_urg_xml_output "-urg"]
+   parse_xml_and_plain_of_same_load_report qstat_f_urg_xml_output qstat_f_urg_plain_output {
+      set result2 [qstat_f_xml_parse qstat_f_urg_xml_output "-urg"]
+   } {
+      set result1 [qstat_f_urg_plain_parse qstat_f_urg_plain_output "-f"]]
+   }
 
    # Now let's compare them by jobid.
    set jobid_list  $qstat_f_urg_plain_output(jobid_list)
@@ -1708,10 +1714,13 @@ proc qstat_f_ext_plain_xml_comparison {} {
 
    # qstat_f_ext_plain_output contains the plain qstat output in an assoc. array
    # qstat_f_ext_plain_output(jobid) contains a list of jobids.
-   set result1 [qstat_ext_plain_parse qstat_f_ext_plain_output "-f"]
 
    # qstat_f_ext_xml_output contains the XML qstat output in an assoc. array
-   set result2 [qstat_f_xml_parse qstat_f_ext_xml_output "-ext"]
+   parse_xml_and_plain_of_same_load_report qstat_f_ext_xml_output qstat_f_ext_plain_output {
+      set result2 [qstat_f_xml_parse qstat_f_ext_xml_output "-ext"]
+   } {
+      set result1 [qstat_ext_plain_parse qstat_f_ext_plain_output "-f"]
+   }
 
    # Now let's compare them by jobid. For now we skip the last entry
    # due to bug in parse_qstat. See IZ 2024.
@@ -1831,10 +1840,12 @@ proc qstat_f_plain_xml_comparison {} {
    # qstat_f_plain_output contains the plain qstat -f output in an assoc. array
    # qstat_f_plain_output(jobid) contains a list of jobids.
 
-   set result1 [qstat_f_plain_parse qstat_f_plain_output]
-
    # qstat_f_xml_output contains the XML qstat output in an assoc. array
-   set result2 [qstat_f_xml_parse qstat_f_xml_output]
+   parse_xml_and_plain_of_same_load_report qstat_f_xml_output qstat_f_plain_output {
+      set result2 [qstat_f_xml_parse qstat_f_xml_output]
+   } {
+      set result1 [qstat_f_plain_parse qstat_f_plain_output]
+   }
 
    # Now let's compare them by jobid
    set jobid_list  $qstat_f_plain_output(jobid_list)
@@ -1943,10 +1954,12 @@ proc qstat_explain_plain_xml_comparison {} {
    # qstat_explain_plain_output contains the plain "qstat -explain E" output in an assoc. array
    # qstat_explain_plain_output(jobid) contains a list of jobids.
 
-   set result1 [qstat_f_plain_parse qstat_explain_plain_output "-explain E"]
-
    # qstat_explain_xml_output contains the XML qstat output in an assoc. array
-   set result2 [qstat_f_xml_parse qstat_explain_xml_output "-explain E"]
+   parse_xml_and_plain_of_same_load_report qstat_explain_xml_output qstat_explain_plain_output {
+      set result2 [qstat_f_xml_parse qstat_explain_xml_output "-explain E"]
+   } {
+      set result1 [qstat_f_plain_parse qstat_explain_plain_output "-explain E"]
+   }
 
    #Now let's compare them by jobid
 
@@ -2057,10 +2070,12 @@ proc qstat_f_q_plain_xml_comparison {} {
    # qstat_f_q_plain_output contains the plain qstat -f output in an assoc. array
    # qstat_f_q_plain_output(jobid) contains a list of jobids.
 
-   set result1 [qstat_f_plain_parse qstat_f_q_plain_output "-q all.q"]
-
    # qstat_f_q_xml_output contains the XML qstat output in an assoc. array
-   set result2 [qstat_f_xml_parse qstat_f_q_xml_output "-q all.q"]
+   parse_xml_and_plain_of_same_load_report qstat_f_q_xml_output qstat_f_q_plain_output {
+      set result2 [qstat_f_xml_parse qstat_f_q_xml_output "-q all.q"]
+   } {
+      set result1 [qstat_f_plain_parse qstat_f_q_plain_output "-q all.q"]
+   }
 
    #Now let's compare them by jobid
 
@@ -2290,10 +2305,12 @@ proc qstat_F_plain_xml_comparison {} {
    # qstat_F_plain_output contains the plain qstat -F output in an assoc. array
    # qstat_F_plain_output(jobid_list) contains a list of jobids.
 
-   set result1 [qstat_F_plain_parse qstat_F_plain_output ""]
-
    # qstat_F_xml_output contains the XML qstat output in an assoc. array
-   set result2 [qstat_F_xml_parse qstat_F_xml_output ""]
+   parse_xml_and_plain_of_same_load_report qstat_F_xml_output qstat_F_plain_output {
+      set result2 [qstat_F_xml_parse qstat_F_xml_output ""]
+   } {
+      set result1 [qstat_F_plain_parse qstat_F_plain_output ""]
+   }
 
    #ts_log_fine "plain jobid's are these: $qstat_F_plain_output(jobid_list) ...\n"
    #ts_log_fine "xml jobid's are these: $qstat_F_xml_output(jobid_list) ...\n"
@@ -2412,11 +2429,15 @@ proc qstat_F_rerun_h_vmem_plain_xml_comparison {} {
    # qstat_F_rerun_h_vmem_plain_output(jobid_list) contains a list of jobids.
 
    # Pass "rerun h_vmem" to qstat_F_plain_parse to get this output
-   set result1 [qstat_F_plain_parse qstat_F_rerun_h_vmem_plain_output "rerun h_vmem"]
 
    # qstat_F_rerun_h_vmem_xml_output contains the XML qstat output in an assoc. array
    #set result2 [qstat_F_rerun_h_vmem_xml_parse qstat_F_rerun_h_vmem_xml_output]
-   set result2 [qstat_F_xml_parse qstat_F_rerun_h_vmem_xml_output "rerun h_vmem"]
+   parse_xml_and_plain_of_same_load_report qstat_F_rerun_h_vmem_xml_output \
+                                           qstat_F_rerun_h_vmem_plain_output {
+      set result2 [qstat_F_xml_parse qstat_F_rerun_h_vmem_xml_output "rerun h_vmem"]
+   } {
+      set result1 [qstat_F_plain_parse qstat_F_rerun_h_vmem_plain_output "rerun h_vmem"]
+   }
 
    #Now let's compare them by jobid
 
@@ -2614,10 +2635,13 @@ proc qstat_g_c_plain_xml_comparison {} {
    after 10000
 
    # qstat_g_c_plain_output contains the plain qstat output in an assoc. array
-   set result1 [qstat_g_c_plain_parse qstat_g_c_plain_output]
 
    # qstat_g_c_xml_output contains the XML qstat output in an assoc. array
-   set result2 [qstat_g_c_xml_parse qstat_g_c_xml_output]
+   parse_xml_and_plain_of_same_load_report qstat_g_c_xml_output qstat_g_c_plain_output {
+      set result2 [qstat_g_c_xml_parse qstat_g_c_xml_output]
+   } {
+      set result1 [qstat_g_c_plain_parse qstat_g_c_plain_output]
+   }
 
    # Now let's compare them by queues. For now we skip the last entry
 
