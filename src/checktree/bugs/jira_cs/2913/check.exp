@@ -1,0 +1,221 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2913: sge_qmaster_do_final_spooling() returned the opposite of what it was supposed to
+# return. The exit state is 100 only when the heartbeat finds that another qmaster has taken
+# over, so the final spooling of the worker thread ran in that case alone and was skipped on
+# every normal shutdown.
+#
+# The job and AR counters are written to the spool by a timer every 15 seconds and, as the last
+# thing before exiting, by that final spooling. Without the latter, the counter value of the
+# last up to 15 seconds before a shutdown was lost, and the ids of jobs which had already
+# finished were handed out a second time after the restart.
+#
+# The check works on the counter files rather than on the ids, because that is the state the
+# shutdown is responsible for. It first waits until the timer has stored both counters, which
+# leaves a full interval for the rest of the test, then advances both counters and shuts the
+# qmaster down. If the stored value did not follow, the shutdown skipped the final spooling.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_2913"
+set check_category       "BUG QMASTER AR VERIFIED"
+set check_description(0) "a normal qmaster shutdown stores the job and the AR counter"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_2913_setup
+set check_cleanup_function issue_2913_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2913_shutdown_stores_counters"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2913_setup {} {
+   global issue_2913_jobs issue_2913_ars
+
+   set issue_2913_jobs {}
+   set issue_2913_ars {}
+
+   return 0
+}
+
+proc issue_2913_cleanup {} {
+   global issue_2913_jobs issue_2913_ars
+   get_current_cluster_config_array ts_config
+
+   # the jobs and ARs can only be deleted while the qmaster is running. A check function
+   # which ended between the shutdown and the startup left it down.
+   if {![is_qmaster_alive $ts_config(master_host) [get_qmaster_spool_dir]]} {
+      ts_log_fine "the qmaster is down, starting it up again"
+      startup_qmaster 0
+   }
+
+   foreach ar_id $issue_2913_ars {
+      delete_ar $ar_id
+   }
+   foreach job_id $issue_2913_jobs {
+      delete_job $job_id
+   }
+
+   unset -nocomplain issue_2913_jobs issue_2913_ars
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief read one of the sequence number files of the qmaster
+#
+# The job and the AR counter are written to plain files in the qmaster spool directory,
+# whatever the spooling method of the cluster is.
+#
+# @param name the name of the file, "jobseqnum" or "arseqnum"
+# @return the number in the file, or -1 when it cannot be read
+proc issue_2913_read_counter {name} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   get_file_content $ts_config(master_host) $CHECK_USER "[get_qmaster_spool_dir]/$name" content
+   if {$content(0) < 1} {
+      return -1
+   }
+
+   # the qmaster truncates the file before it writes, so a read may catch it empty
+   set value [string trim $content(1)]
+   if {![string is integer -strict $value]} {
+      return -1
+   }
+   return $value
+}
+
+## @brief wait until a counter file holds at least the given value
+#
+# Returning means that the timer which stores the counters has just run, so the next run
+# of it is a full interval away. That interval is the window the test needs: it has to
+# advance the counter and shut the qmaster down before the timer stores the counter by
+# itself, which would make the two cases indistinguishable.
+#
+# @param name the name of the file, "jobseqnum" or "arseqnum"
+# @param value the value to wait for
+# @return 1 when the file holds the value, else 0
+proc issue_2913_wait_for_counter {name value} {
+   for {set i 0} {$i < 60} {incr i} {
+      if {[issue_2913_read_counter $name] >= $value} {
+         ts_log_fine "$name holds $value after $i seconds"
+         return 1
+      }
+      sleep_for_seconds 1
+   }
+
+   ts_log_severe "$name did not reach $value within 60 seconds"
+   return 0
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief shut the qmaster down and require it to have stored both counters
+proc issue_2913_shutdown_stores_counters {} {
+   global issue_2913_jobs issue_2913_ars
+   get_current_cluster_config_array ts_config
+
+   # a first job and a first AR mark both counters as changed. The jobs are submitted in
+   # hold, they only have to exist.
+   set job_id [submit_job "-h -b y /bin/true"]
+   if {$job_id <= 0} {
+      return
+   }
+   lappend issue_2913_jobs $job_id
+
+   set ar_id [submit_ar "-d 600"]
+   if {$ar_id <= 0} {
+      return
+   }
+   lappend issue_2913_ars $ar_id
+
+   # wait until the timer has stored both of them
+   if {![issue_2913_wait_for_counter "jobseqnum" $job_id]} {
+      return
+   }
+   if {![issue_2913_wait_for_counter "arseqnum" $ar_id]} {
+      return
+   }
+
+   # from here on the test is in the window. Advance both counters, their new values are
+   # only in memory now.
+   set job_id [submit_job "-h -b y /bin/true"]
+   if {$job_id <= 0} {
+      return
+   }
+   lappend issue_2913_jobs $job_id
+
+   set ar_id [submit_ar "-d 600"]
+   if {$ar_id <= 0} {
+      return
+   }
+   lappend issue_2913_ars $ar_id
+
+   # should the timer have been faster after all, then both values are already stored and
+   # the test cannot tell a shutdown which does the final spooling from one which does not
+   set job_stored [issue_2913_read_counter "jobseqnum"]
+   set ar_stored [issue_2913_read_counter "arseqnum"]
+   if {$job_stored == $job_id || $ar_stored == $ar_id} {
+      ts_log_info "the timer stored the counters before the qmaster was shut down,\
+                   nothing has been verified"
+      return
+   }
+
+   # a normal shutdown, which has to store what is only in memory
+   shutdown_qmaster
+   set job_stored [issue_2913_read_counter "jobseqnum"]
+   set ar_stored [issue_2913_read_counter "arseqnum"]
+
+   # Where the cluster is installed with the init scripts, the qmaster belongs to a service
+   # whose processes systemd does not track individually. A qmaster taken down with
+   # "qconf -km" leaves that service with nothing running, so systemd deactivates it and runs
+   # its stop command, which takes a few seconds and kills whatever qmaster it finds - a new
+   # one started in the meantime included. Let that finish before starting the qmaster again.
+   sleep_for_seconds 15
+   startup_qmaster 0
+
+   if {$job_stored != $job_id} {
+      ts_log_severe "the qmaster shutdown did not store the job counter: jobseqnum holds\
+                     $job_stored, expected $job_id - job ids of the last 15 seconds before\
+                     a shutdown are handed out a second time"
+   }
+   if {$ar_stored != $ar_id} {
+      ts_log_severe "the qmaster shutdown did not store the AR counter: arseqnum holds\
+                     $ar_stored, expected $ar_id - AR ids of the last 15 seconds before\
+                     a shutdown are handed out a second time"
+   }
+}
