@@ -1,0 +1,192 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2912: when the qmaster verified the schedulability of a job, it ran the scheduler code
+# with the global complex list of the cluster. For a consumable the job did not request, that
+# code built the default request in the complex definition itself, so the definition was left
+# holding the default value.
+#
+# CE_stringval is spooled but is not one of the fields of the "qconf -sc" format, so the value
+# could neither be seen nor removed through the complex configuration. Every "qconf -Mc"
+# compared whole objects and reported the entry as modified from then on, even for the
+# unchanged output of "qconf -sc".
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_2912"
+set check_category       "BUG CENTRY QCONF VERIFIED"
+set check_description(0) "verifying a job does not leave a value in a complex definition"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_2912_setup
+set check_cleanup_function issue_2912_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2912_verification_keeps_complex_unchanged"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2912_setup {} {
+   global CHECK_PROTOCOL_DIR
+   global issue_2912_complex_file issue_2912_complex_name issue_2912_host_backup
+   global issue_2912_complex_backup
+
+   set issue_2912_complex_name "cs2912"
+   set issue_2912_complex_file "$CHECK_PROTOCOL_DIR/cs2912_complex.txt"
+
+   # the complex definitions of the cluster as they are now, the cleanup resets them to this
+   if {[get_complex issue_2912_complex_backup] != 0} {
+      ts_log_config "cannot read the complex configuration of the cluster"
+      return 99
+   }
+
+   # a consumable of our own with a default request. A default request is what the scheduler
+   # code builds for a consumable a job does not ask for, and building it is what left the
+   # value in the definition.
+   set complex($issue_2912_complex_name) "$issue_2912_complex_name INT <= YES YES 1 0"
+   if {[set_complex complex] < 0} {
+      ts_log_config "cannot add the complex entry $issue_2912_complex_name"
+      return 99
+   }
+
+   # the consumable needs a capacity, else it is not in the resource utilization of any
+   # object and no default request is built for it. The global host serves every queue.
+   host_backup_complex_values "global" issue_2912_host_backup
+   get_exechost old_config "global"
+   add_or_replace_array_param host_config old_config "complex_values" $issue_2912_complex_name "10"
+   if {[set_exechost host_config "global"] < 0} {
+      ts_log_config "cannot set complex_values of the global host"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_2912_cleanup {} {
+   global issue_2912_complex_file issue_2912_complex_name issue_2912_host_backup
+   global issue_2912_complex_backup
+
+   # the capacity goes first - a complex entry an object refers to cannot be deleted
+   if {[info exists issue_2912_host_backup]} {
+      host_restore_complex_values issue_2912_host_backup
+   }
+
+   # resetting the definitions to the backup removes the entry the setup added
+   if {[info exists issue_2912_complex_backup]} {
+      reset_complex issue_2912_complex_backup
+   }
+
+   unset -nocomplain issue_2912_complex_file issue_2912_complex_name issue_2912_host_backup
+   unset -nocomplain issue_2912_complex_backup
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief write the complex configuration of the cluster to a file
+#
+# The file is written by the shell on the master host, which is where qconf runs and where
+# it is read again - a file written from here might not be visible there yet.
+#
+# @param filename the file to write
+# @return 1 on success, else 0
+proc issue_2912_save_complex {filename} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set master_arch [resolve_arch $ts_config(master_host)]
+   set qconf "$ts_config(product_root)/bin/$master_arch/qconf"
+   set output [start_remote_prog $ts_config(master_host) $CHECK_USER $qconf "-sc > $filename"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "cannot write the complex configuration to $filename: $output"
+      return 0
+   }
+   return 1
+}
+
+## @brief apply a complex file and require that nothing changes
+#
+# The file holds the output of "qconf -sc", so applying it may not change a thing. A message
+# naming a complex entry means that the qmaster sees a difference in a field which the file
+# format does not carry, and which an administrator can therefore not get rid of.
+#
+# @param filename the complex file on the master host
+# @param when names the phase of the test, for the error message
+# @return 1 when nothing was changed, else 0
+proc issue_2912_complex_unchanged {filename when} {
+   set output [start_sge_bin "qconf" "-Mc $filename"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qconf -Mc $filename failed: $output"
+      return 0
+   }
+
+   set not_changed [translate_macro MSG_CENTRY_NOTCHANGED]
+   if {[string match "*$not_changed*" $output]} {
+      ts_log_fine "the complex configuration is unchanged $when"
+      return 1
+   }
+
+   ts_log_severe "applying the unchanged output of \"qconf -sc\" reports a change $when:\n$output"
+   return 0
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief verify a job and require the complex definitions to be untouched
+proc issue_2912_verification_keeps_complex_unchanged {} {
+   global issue_2912_complex_file
+
+   # applying the current configuration may not change anything. Should it do so here, then
+   # something which ran before this check has already left a value in a definition.
+   if {![issue_2912_save_complex $issue_2912_complex_file]} {
+      return
+   }
+   if {![issue_2912_complex_unchanged $issue_2912_complex_file "before the job verification"]} {
+      return
+   }
+
+   # verify a job which does not request the consumable
+   set output [start_sge_bin "qsub" "-w v -b y /bin/sleep 10"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "verifying a job with \"qsub -w v\" failed: $output"
+      return
+   }
+   ts_log_fine "job verification reported: [string trim $output]"
+
+   # the verification may not have changed the complex definitions
+   if {![issue_2912_save_complex $issue_2912_complex_file]} {
+      return
+   }
+   issue_2912_complex_unchanged $issue_2912_complex_file "after the job verification"
+}
