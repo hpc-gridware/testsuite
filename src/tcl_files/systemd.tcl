@@ -552,6 +552,26 @@ proc systemd_is_service_active {host service} {
    return $ret
 }
 
+###
+# @brief check if a cluster service is installed as a systemd unit on a host
+#
+# install_rc installs the units only on the hosts that were installed as qmaster or execution
+# hosts. A check may start a daemon on another host, e.g. an execd on a host that becomes an
+# execution host only during the check.
+#
+# @param host The host to check.
+# @param service The cluster service, e.g. "execd" or "qmaster".
+# @returns 1 if the unit file exists on the host, 0 otherwise.
+proc systemd_has_service {host service} {
+   set unit_path [systemd_get_unit_path [systemd_get_service_name $service]]
+   start_remote_prog $host "root" "test" "-f $unit_path"
+   if {$prg_exit_state == 0} {
+      return 1
+   }
+
+   return 0
+}
+
 # @todo add functions for is-enabled, ...
 
 ###
