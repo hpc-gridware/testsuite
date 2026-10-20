@@ -203,9 +203,13 @@ proc issue_2913_shutdown_stores_counters {} {
    # Where the cluster is installed with the init scripts, the qmaster belongs to a service
    # whose processes systemd does not track individually. A qmaster taken down with
    # "qconf -km" leaves that service with nothing running, so systemd deactivates it and runs
-   # its stop command, which takes a few seconds and kills whatever qmaster it finds - a new
-   # one started in the meantime included. Let that finish before starting the qmaster again.
-   sleep_for_seconds 15
+   # its stop command. Up to 9.1.7 that command read the pid file of the qmaster only after it
+   # had stopped the shadow daemon, which takes a few seconds, and so killed a qmaster started
+   # within them. CS-2920 reads the pid files before stopping anything, so only an older
+   # cluster has to wait here for the stop to be over.
+   if {![is_version_in_range "9.1.8"]} {
+      sleep_for_seconds 15
+   }
    startup_qmaster 0
 
    if {$job_stored != $job_id} {
