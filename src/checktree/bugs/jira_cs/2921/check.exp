@@ -1,0 +1,187 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2921: the execution daemon registers a started task at the PTF in notify_ptf(), and that
+# registration is what takes the task out of the JWAITING4OSJID state. The call used to sit
+# inside the block the PDC trigger guards, so with "PDC_INTERVAL=NEVER" it never ran: the task
+# stayed in JWAITING4OSJID for the rest of its life, and everything which skips a task in that
+# state was skipped with it. The task got no online wallclock usage and, worse, its h_rt and
+# s_rt were never enforced - the daemon is the only component which enforces them, so the job
+# ran until it ended by itself.
+#
+# CS-2495 fixed this on the master branch; the 9.1 branch was missing the backport. Both
+# symptoms are covered here because both come from the same skipped state transition.
+#
+# Nothing in this check depends on the usage the PDC collects. A disabled PDC is supposed to
+# cost the cpu and memory figures of a running job - it may not cost the wallclock of the job
+# or the enforcement of its limits.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+global check_root_access_needs
+
+set check_version_range "9.1.8"
+
+set check_root_access_needs "yes"
+
+set check_name           "issue_2921"
+set check_category       "BUG EXECD VERIFIED"
+set check_description(0) "a disabled PDC does not switch off the h_rt of a job"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_2921_setup
+set check_cleanup_function issue_2921_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2921_limits_enforced_without_pdc"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2921_setup {} {
+   global issue_2921_host issue_2921_job_id issue_2921_execd_params_backup
+   global issue_2921_h_rt
+
+   set issue_2921_job_id 0
+
+   # the wallclock limit of the job. It has to leave room for one load report interval, which
+   # is when the online usage of the job reaches the qmaster, and the job itself has to outlive
+   # it by far - it may only end because the limit ended it.
+   set issue_2921_h_rt 60
+
+   set hosts [host_conf_get_suited_hosts]
+   if {[llength $hosts] < 1} {
+      ts_log_config "cannot find a host to run the job on"
+      return 99
+   }
+   set issue_2921_host [lindex $hosts 0]
+
+   if {[get_config old_config] != 0} {
+      ts_log_config "cannot read the global configuration of the cluster"
+      return 99
+   }
+   if {[info exists old_config(execd_params)]} {
+      set issue_2921_execd_params_backup $old_config(execd_params)
+   } else {
+      set issue_2921_execd_params_backup "none"
+   }
+   add_or_replace_array_param config_change old_config "execd_params" "PDC_INTERVAL" "NEVER"
+   if {[set_config config_change] < 0} {
+      ts_log_config "cannot disable the PDC in the global configuration"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_2921_cleanup {} {
+   global issue_2921_host issue_2921_job_id issue_2921_execd_params_backup
+   global issue_2921_h_rt
+
+   # with the defect the job is not ended by its limit, so it is still there
+   if {[info exists issue_2921_job_id] && $issue_2921_job_id > 0} {
+      delete_job $issue_2921_job_id 1
+   }
+
+   if {[info exists issue_2921_execd_params_backup]} {
+      set config_change(execd_params) $issue_2921_execd_params_backup
+      set_config config_change
+   }
+
+   # the daemon reads the restored interval on the next configuration event, but a restart
+   # leaves no doubt about it for whatever runs next
+   if {[info exists issue_2921_host]} {
+      shutdown_execd $issue_2921_host 1 120 0
+      startup_execd $issue_2921_host
+      wait_for_load_from_all_queues 60
+   }
+
+   unset -nocomplain issue_2921_host issue_2921_job_id issue_2921_execd_params_backup
+   unset -nocomplain issue_2921_h_rt
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief require a job to report wallclock and to be ended by its h_rt with the PDC disabled
+proc issue_2921_limits_enforced_without_pdc {} {
+   global issue_2921_host issue_2921_job_id issue_2921_h_rt
+
+   # restart the daemon so that the disabled PDC is certainly the value it runs with
+   if {[shutdown_execd $issue_2921_host 1 120 0] != 0} {
+      return
+   }
+   startup_execd $issue_2921_host
+   if {[wait_for_load_from_all_queues 60] != 0} {
+      return
+   }
+
+   set issue_2921_job_id [submit_job "-l h=$issue_2921_host,h_rt=$issue_2921_h_rt -o /dev/null\
+                                      -j y -b y /bin/sleep 300"]
+   if {$issue_2921_job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $issue_2921_job_id "" 60] != 0} {
+      return
+   }
+
+   # the wallclock of a running job does not come from the PDC, it is counted by the daemon
+   # itself - a task which is not taken out of JWAITING4OSJID never gets it
+   if {![wait_for_online_usage $issue_2921_job_id 40 "wallclock"]} {
+      ts_log_severe "job $issue_2921_job_id reports no wallclock usage with the PDC disabled -\
+                     the task was not taken out of the JWAITING4OSJID state"
+   }
+
+   # and the limit of the job has to end it
+   set job_id $issue_2921_job_id
+   if {[wait_for_job_end $job_id 120 0] != 0} {
+      ts_log_severe "job $job_id is still there although its h_rt of $issue_2921_h_rt seconds\
+                     has passed - a disabled PDC switched the enforcement of the wallclock\
+                     limits off"
+      return
+   }
+   set issue_2921_job_id 0
+
+   if {[get_qacct $job_id job_accounting] != 0} {
+      return
+   }
+
+   set limit [expr {$issue_2921_h_rt + 20}]
+   if {$job_accounting(ru_wallclock) > $limit} {
+      ts_log_severe "job ran for $job_accounting(ru_wallclock) seconds although its h_rt is\
+                     $issue_2921_h_rt:\n[format_array job_accounting]"
+      return
+   }
+   ts_log_fine "the job ran for $job_accounting(ru_wallclock) seconds, at most $limit were expected"
+
+   if {$job_accounting(exit_status) != 137 || ![string match "*100*" $job_accounting(failed)]} {
+      ts_log_severe "job was not ended by its wallclock limit: expected exit_status 137 and\
+                     failed \"*100*\", got exit_status $job_accounting(exit_status) and failed\
+                     \"$job_accounting(failed)\":\n[format_array job_accounting]"
+   }
+}
