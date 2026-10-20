@@ -1,0 +1,233 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2920: the stop section of the sgemaster script read the pid file of each daemon at the
+# moment it got around to stopping it. Stopping the shadow daemon takes a few seconds, so the
+# qmaster pid was read seconds after the stop had begun - and a qmaster started within those
+# seconds had written its own pid into that file by then, so the stop killed an instance it
+# was never asked to end.
+#
+# A "qconf -km" is what makes this happen without anybody stopping the service: the qmaster
+# service has no main process for systemd to track, so systemd declares the service stopped as
+# soon as its control group runs empty and runs the script as the ExecStop of the service. A
+# qmaster started right afterwards - by an administrator who does not go through systemctl, or
+# by a shadow daemon - was killed by that stop.
+#
+# The check needs the cluster the init scripts start, because the stop section only runs by
+# itself where the service exists, and it needs one particular state of that service: the
+# qmaster alone in its control group, with a shadow daemon running outside it.
+#
+# Both halves matter. A service whose control group also holds the shadow daemon does not run
+# empty when the qmaster goes away, so systemd leaves it active and its stop never runs - the
+# defect cannot show up there at all. And the few seconds the stop of the shadow daemon costs
+# are the window a new qmaster has to be started into; without a shadow daemon at all the stop
+# reaches its qmaster part at once.
+#
+# The setup builds that state the way an administrator produces it: it starts the shadow daemon
+# before the service, and "sgemaster start" then leaves the running one alone and puts only the
+# qmaster into the control group of the service.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+global check_root_access_needs
+
+set check_version_range "9.1.8"
+
+set check_root_access_needs "yes"
+
+set check_name           "issue_2920"
+set check_category       "BUG QMASTER SYSTEMD VERIFIED"
+set check_description(0) "stopping the qmaster service does not kill a qmaster started meanwhile"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_2920_setup
+set check_cleanup_function issue_2920_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2920_service_stop_spares_a_new_qmaster"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2920_setup {} {
+   global CHECK_INSTALL_RC
+   global issue_2920_host
+   get_current_cluster_config_array ts_config
+
+   set issue_2920_host $ts_config(master_host)
+
+   # the defect is in the stop command of the qmaster service, so that service has to exist
+   if {!$CHECK_INSTALL_RC} {
+      ts_log_config "the daemons of this cluster are not started by the init system - start the\
+                     testsuite with the option install_rc to run this check"
+      return 99
+   }
+   if {![ge_has_feature "systemd"] || ![host_has_systemd $issue_2920_host]} {
+      ts_log_config "host $issue_2920_host has no systemd"
+      return 99
+   }
+   if {![systemd_has_service $issue_2920_host "qmaster"]} {
+      ts_log_config "host $issue_2920_host has no qmaster service"
+      return 99
+   }
+   if {![systemd_is_service_active $issue_2920_host "qmaster"]} {
+      ts_log_config "the qmaster service on host $issue_2920_host is not active - something\
+                     which ran before this check started the qmaster outside the service"
+      return 99
+   }
+
+   # the stop of the shadow daemon is what makes the window large enough to be hit
+   set shadowd_hosts {}
+   foreach host $ts_config(shadowd_hosts) {
+      lappend shadowd_hosts [resolve_host $host 0]
+   }
+   if {[lsearch -exact $shadowd_hosts [resolve_host $issue_2920_host 0]] < 0} {
+      ts_log_config "host $issue_2920_host is no shadow daemon host - the window this check\
+                     has to hit does not exist without a shadow daemon"
+      return 99
+   }
+
+   # Put the service into the state the defect lives in: the qmaster alone in its control
+   # group, the shadow daemon outside it. Stopping the service takes both down, the shadow
+   # daemon is then started on its own, and the start of the service leaves that one alone.
+   systemd_stop_service $issue_2920_host "qmaster" 0
+   if {[wait_till_qmaster_is_down $issue_2920_host] != 1} {
+      ts_log_config "the qmaster did not shut down with its service"
+      return 99
+   }
+   issue_2920_start_daemon "sge_shadowd"
+   startup_qmaster 0
+   if {![systemd_is_service_active $issue_2920_host "qmaster"]} {
+      ts_log_config "the qmaster service on host $issue_2920_host is not active after it was\
+                     started again"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_2920_cleanup {} {
+   global issue_2920_host
+
+   # Whatever is running now, the cluster has to end up the way the installation starts it:
+   # both daemons inside the service. A daemon this check started directly is not in the
+   # service, and a stop of an already inactive service does not run its stop command - so
+   # take the daemons down with the script, by their pid files, and start the service after.
+   if {[info exists issue_2920_host]} {
+      systemd_stop_service $issue_2920_host "qmaster" 0
+      get_current_cluster_config_array ts_config
+      set sgemaster "$ts_config(product_root)/$ts_config(cell)/common/sgemaster"
+      start_remote_prog $issue_2920_host "root" $sgemaster "stop"
+      startup_qmaster 0
+      wait_for_load_from_all_queues 60
+   }
+
+   unset -nocomplain issue_2920_host
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief start a daemon binary on the master host, bypassing the init system
+#
+# This is what an administrator who starts a daemon with the binary or with the sgemaster
+# script does, and what a shadow daemon taking over does. A daemon started this way is not in
+# the control group of the service, which is what the state this check needs is made of.
+#
+# Going through systemctl would not do for the qmaster of the check function either: systemd
+# runs the jobs of one unit one after the other, so a start would simply wait for the stop
+# which is to be raced to be over.
+#
+# @param name the name of the binary in the bin directory, e.g. sge_qmaster
+# @return nothing, the caller looks at what became of the daemon
+proc issue_2920_start_daemon {name} {
+   get_current_cluster_config_array ts_config
+   global issue_2920_host
+
+   set arch [resolve_arch $issue_2920_host]
+   set binary "$ts_config(product_root)/bin/$arch/$name"
+   ts_log_fine "starting $binary on host $issue_2920_host directly"
+   start_remote_prog $issue_2920_host "root" $binary ""
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief require a qmaster started during the service stop to survive it
+proc issue_2920_service_stop_spares_a_new_qmaster {} {
+   global issue_2920_host
+
+   # The stimulus has to be quick, and the first remote call to a host pays for setting the
+   # connection up - so pay for it now and not between the shutdown and the start.
+   start_remote_prog $issue_2920_host "root" "echo" "warming the connection up"
+
+   # a normal administrator shutdown. It leaves the service with nothing running, so systemd
+   # declares it stopped and runs its stop command.
+   ts_log_fine "shutting the qmaster down with \"qconf -km\""
+   set output [start_sge_bin "qconf" "-km"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qconf -km failed: $output"
+      return
+   }
+   if {[wait_till_qmaster_is_down $issue_2920_host] != 1} {
+      ts_log_severe "the qmaster did not shut down after \"qconf -km\""
+      return
+   }
+
+   # The control group of the service has to have run empty now, which is what makes systemd
+   # stop the service and run its stop command. A service which is still active did not, so
+   # there is no stop to race and the check cannot say anything.
+   if {[systemd_is_service_active $issue_2920_host "qmaster"]} {
+      ts_log_info "the qmaster service is still active after the shutdown of the qmaster, so\
+                   its stop command did not run - nothing has been verified"
+      return
+   }
+
+   # the stop command of the service is running now - start a qmaster into it
+   issue_2920_start_daemon "sge_qmaster"
+
+   # and give that stop command the time it needs to reach its qmaster part
+   sleep_for_seconds 15
+
+   if {![is_qmaster_alive $issue_2920_host [get_qmaster_spool_dir]]} {
+      ts_log_severe "the qmaster which was started right after a \"qconf -km\" is gone - the\
+                     stop command of the qmaster service read its pid file after the shutdown\
+                     had begun and killed it"
+      return
+   }
+
+   # and it has to be a working qmaster, not just a process
+   set output [start_sge_bin "qstat" "-f"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "the qmaster survived the stop of the service but does not answer:\
+                     qstat -f exited $prg_exit_state:\n$output"
+      return
+   }
+   ts_log_fine "the qmaster started during the stop of the service is alive and answers"
+}
