@@ -1,0 +1,210 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2914: the execution daemon did not fix the wallclock limits of a job when it started it.
+# It computed them on its first pass which found the task running, as that moment plus the h_rt
+# of the job, and spooled the job then. A daemon which went down before that pass found no limit
+# in the spool file after the restart and computed it again, from the time of the first pass
+# after the restart - so the job was granted the downtime of the daemon on top of its h_rt.
+#
+# The pass skips a task which is still waiting for its os job id, and such a task leaves that
+# state only when the daemon registers it at the PDC. The check therefore sets PDC_INTERVAL to
+# two minutes, which holds the task in that state for the whole test instead of the second or
+# two it normally takes, and makes the window the defect lives in large enough to shut the
+# daemon down in it without racing against it. A daemon which has just been started runs the
+# PDC once before honouring the interval, so the task is registered right after the restart and
+# the limits are enforced from then on: against the stored value with the fix, against the time
+# of the restart without it.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+global check_root_access_needs
+
+set check_version_range "9.1.8"
+
+set check_root_access_needs "yes"
+
+set check_name           "issue_2914"
+set check_category       "BUG EXECD VERIFIED"
+set check_description(0) "a restart of the execution daemon does not extend the h_rt of a job"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_2914_setup
+set check_cleanup_function issue_2914_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2914_restart_keeps_h_rt"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2914_setup {} {
+   global issue_2914_host issue_2914_job_id issue_2914_execd_params_backup
+   global issue_2914_h_rt issue_2914_downtime
+
+   set issue_2914_job_id 0
+
+   # the wallclock limit of the job and how long the daemon is kept down. The limit has to be
+   # short enough for the job to be over it when the daemon comes back, and the job itself has
+   # to outlive both by far - it may only end because the limit ended it.
+   set issue_2914_h_rt 30
+   set issue_2914_downtime 20
+
+   set hosts [host_conf_get_suited_hosts]
+   if {[llength $hosts] < 1} {
+      ts_log_config "cannot find a host to run the job on"
+      return 99
+   }
+   set issue_2914_host [lindex $hosts 0]
+
+   # hold the started task in the "waiting for os job id" state for the whole test
+   if {[get_config old_config] != 0} {
+      ts_log_config "cannot read the global configuration of the cluster"
+      return 99
+   }
+   if {[info exists old_config(execd_params)]} {
+      set issue_2914_execd_params_backup $old_config(execd_params)
+   } else {
+      set issue_2914_execd_params_backup "none"
+   }
+   add_or_replace_array_param config_change old_config "execd_params" "PDC_INTERVAL" "00:02:00"
+   if {[set_config config_change] < 0} {
+      ts_log_config "cannot set PDC_INTERVAL in the global configuration"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_2914_cleanup {} {
+   global issue_2914_host issue_2914_job_id issue_2914_execd_params_backup
+   global issue_2914_h_rt issue_2914_downtime
+
+   # a check function which ended between the shutdown and the startup left the daemon down,
+   # and the job can only be deleted once it is back
+   if {[info exists issue_2914_host] && ![is_daemon_running $issue_2914_host "sge_execd"]} {
+      ts_log_fine "the execution daemon on host $issue_2914_host is down, starting it up again"
+      startup_execd $issue_2914_host
+      wait_for_load_from_all_queues 60
+   }
+
+   if {[info exists issue_2914_job_id] && $issue_2914_job_id > 0} {
+      delete_job $issue_2914_job_id 1
+   }
+
+   if {[info exists issue_2914_execd_params_backup]} {
+      set config_change(execd_params) $issue_2914_execd_params_backup
+      set_config config_change
+   }
+
+   unset -nocomplain issue_2914_host issue_2914_job_id issue_2914_execd_params_backup
+   unset -nocomplain issue_2914_h_rt issue_2914_downtime
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief require the h_rt of a job to be measured from the start of the job
+#
+# Starts a job whose h_rt is shorter than the time the execution daemon of its host is then kept
+# down, and requires the job to be gone as soon as the daemon is back. A job whose limit was
+# recomputed after the restart outlives it by another h_rt.
+proc issue_2914_restart_keeps_h_rt {} {
+   global issue_2914_host issue_2914_job_id
+   global issue_2914_h_rt issue_2914_downtime
+
+   # the daemon runs the PDC once when it starts and then only every PDC_INTERVAL, so restarting
+   # it here is what puts the start of the job into an interval of its own
+   if {[shutdown_execd $issue_2914_host 1 120 0] != 0} {
+      return
+   }
+   startup_execd $issue_2914_host
+   if {[wait_for_load_from_all_queues 60] != 0} {
+      return
+   }
+
+   set issue_2914_job_id [submit_job "-l h=$issue_2914_host,h_rt=$issue_2914_h_rt -o /dev/null\
+                                      -j y -b y /bin/sleep 600"]
+   if {$issue_2914_job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $issue_2914_job_id "" 60] != 0} {
+      return
+   }
+
+   # the clock the expectation is built on. The job started shortly before this, so every
+   # tolerance below is on the safe side.
+   set job_running_at [timestamp]
+
+   if {[shutdown_execd $issue_2914_host 1 120 0] != 0} {
+      return
+   }
+   sleep_for_seconds $issue_2914_downtime
+   startup_execd $issue_2914_host
+   set execd_back_after [expr {[timestamp] - $job_running_at}]
+   ts_log_fine "the execution daemon was back $execd_back_after seconds after the job was running"
+
+   # the job cannot be killed while the daemon is down, so it lives until the daemon is back -
+   # but not a whole h_rt longer than that
+   set job_id $issue_2914_job_id
+   if {[wait_for_job_end $job_id 180 0] != 0} {
+      ts_log_severe "job $job_id did not end within 180 seconds after the execution daemon was\
+                     restarted - its wallclock limit was not enforced at all"
+      return
+   }
+   set issue_2914_job_id 0
+
+   if {[get_qacct $job_id job_accounting] != 0} {
+      return
+   }
+
+   # the job lives until the later of its limit and the return of the daemon, plus the second
+   # the pass which kills it may take. The tolerance is half of the h_rt: a job whose limit was
+   # recomputed after the restart lives a whole h_rt longer than that.
+   set limit $issue_2914_h_rt
+   if {$execd_back_after > $limit} {
+      set limit $execd_back_after
+   }
+   incr limit [expr {$issue_2914_h_rt / 2 - 3}]
+
+   if {$job_accounting(ru_wallclock) > $limit} {
+      ts_log_severe "job ran for $job_accounting(ru_wallclock) seconds although its h_rt is\
+                     $issue_2914_h_rt and the execution daemon was back after\
+                     $execd_back_after seconds - the restart of the daemon granted the job\
+                     another h_rt:\n[format_array job_accounting]"
+      return
+   }
+   ts_log_fine "the job ran for $job_accounting(ru_wallclock) seconds, at most $limit were expected"
+
+   # and it has to be the wallclock limit which ended it
+   if {$job_accounting(exit_status) != 137 || ![string match "*100*" $job_accounting(failed)]} {
+      ts_log_severe "job was not ended by its wallclock limit: expected exit_status 137 and\
+                     failed \"*100*\", got exit_status $job_accounting(exit_status) and failed\
+                     \"$job_accounting(failed)\":\n[format_array job_accounting]"
+   }
+}
