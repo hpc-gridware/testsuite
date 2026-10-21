@@ -1,0 +1,213 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2923: the PDC builds the ioops usage value in procfs.cc from /proc/<pid>/io. The branch
+# which counts the I/O syscalls compared the label against "syscr:" twice, where the second
+# comparison had to be "syscw:", so only read syscalls were counted and write syscalls were
+# never added to the value. A job which only writes reported an ioops close to zero - in the
+# online usage of qstat -j, in the accounting record and therefore in qacct -j, and in the
+# JSONL reporting.
+#
+# The check runs a job which does a known number of write syscalls and next to no read ones,
+# and requires the ioops of the job to reflect them. The io value next to it was always correct
+# and is checked as well, so that the check covers the whole block.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_2923"
+set check_category       "BUG EXECD ACCOUNTING VERIFIED"
+set check_description(0) "write syscalls are counted in the ioops usage value"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_2923_setup
+set check_cleanup_function issue_2923_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2923_ioops_counts_write_syscalls"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2923_setup {} {
+   get_current_cluster_config_array ts_config
+   global issue_2923_host issue_2923_backup issue_2923_writes issue_2923_min_ioops
+   global issue_2923_job_runtime
+
+   # 100000 write syscalls of 512 bytes, which is 51 MB written in about a second. It is three
+   # orders of magnitude above the few dozen read syscalls the job needs to start up, so the
+   # two cannot be confused in the result.
+   set issue_2923_writes 100000
+
+   # the PDC reads /proc/<pid>/io once per interval, so the writes of the last part of an
+   # interval are not in the value. A tenth of the writes is still far above what the read
+   # syscalls of the job alone produce, which is what the unfixed code reported.
+   set issue_2923_min_ioops [expr {$issue_2923_writes / 10}]
+
+   set hosts [host_conf_get_suited_hosts]
+   if {[llength $hosts] < 1} {
+      ts_log_config "cannot find a host to run the test job on"
+      return 99
+   }
+   set issue_2923_host [lindex $hosts 0]
+
+   # the io and ioops values come from /proc/<pid>/io, which only Linux has
+   set arch [host_conf_get_arch $issue_2923_host]
+   if {![string match "lx-*" $arch]} {
+      ts_log_config "host $issue_2923_host has the architecture $arch, but io and ioops are read\
+                     from /proc/<pid>/io, which only Linux has"
+      return 99
+   }
+
+   # The usage of a job reaches the qmaster with the load report of its execd, and the first
+   # report which carries usage comes a cycle or two after the job start. The job therefore has
+   # to live for several load report intervals, otherwise its online usage is still zero when it
+   # ends - and the check would be measuring the reporting interval rather than the usage value.
+   set load_report_time "00:00:15"
+   get_config issue_2923_global_conf
+   if {[info exists issue_2923_global_conf(load_report_time)]} {
+      set load_report_time $issue_2923_global_conf(load_report_time)
+   }
+   set issue_2923_job_runtime 0
+   foreach part [split $load_report_time ":"] {
+      # scan, because expr reads a leading zero as an octal number
+      scan $part "%d" value
+      set issue_2923_job_runtime [expr {$issue_2923_job_runtime * 60 + $value}]
+   }
+   set issue_2923_job_runtime [expr {$issue_2923_job_runtime * 5}]
+   if {$issue_2923_job_runtime < 60} {
+      set issue_2923_job_runtime 60
+   }
+   ts_log_fine "load_report_time is $load_report_time, so the test job will run\
+                $issue_2923_job_runtime seconds"
+
+   get_config issue_2923_backup $issue_2923_host
+
+   # The PDC has to be collecting usage for the job: in the default mode on a systemd host io
+   # and ioops are not collected at all, as systemd does not deliver them. PDC_INTERVAL is set
+   # to its own default of one second as well, so that a cluster which switched the PDC off
+   # does not fail the check instead of exercising it.
+   add_or_replace_array_param conf issue_2923_backup "execd_params" "USAGE_COLLECTION" "HYBRID"
+   add_or_replace_array_param conf conf "execd_params" "PDC_INTERVAL" "1"
+   set_config_and_propagate conf $issue_2923_host
+
+   return 0
+}
+
+proc issue_2923_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global issue_2923_host issue_2923_backup issue_2923_writes issue_2923_min_ioops
+   global issue_2923_job_runtime
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 120
+
+   if {[info exists issue_2923_backup]} {
+      reset_config_and_propagate issue_2923_backup $issue_2923_host
+   }
+
+   unset -nocomplain issue_2923_host issue_2923_backup issue_2923_writes issue_2923_min_ioops
+   unset -nocomplain issue_2923_job_runtime
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief require the ioops usage value to count write syscalls and not only read ones
+proc issue_2923_ioops_counts_write_syscalls {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH
+   global issue_2923_host issue_2923_writes issue_2923_min_ioops issue_2923_job_runtime
+
+   # the job writes and then stays alive, so that the PDC samples it afterwards and the execd
+   # reports what it found
+   set job_script "$CHECK_ACTUAL_TEST_PATH/cs2923_write_only.sh"
+   set job_id [submit_job "-N cs2923 -l h=$issue_2923_host $job_script $issue_2923_writes\
+                           $issue_2923_job_runtime"]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $job_id "" 60] != 0} {
+      return
+   }
+
+   # the writes are done within a second or two of the job start, so the value has to appear
+   # with one of the load reports the job lives through
+   set ioops -1
+   set io -1
+   set polls [expr {$issue_2923_job_runtime / 2}]
+   for {set i 0} {$i < $polls} {incr i} {
+      sleep_for_seconds 2
+      set cur_ioops [get_online_usage $job_id "ioops"]
+      set cur_io [get_online_usage $job_id "io" 1 1]
+
+      # the job ends while we are polling and its online usage is then gone, so keep the
+      # highest value seen rather than whatever the last poll happened to return
+      if {$cur_ioops > $ioops} {
+         set ioops $cur_ioops
+      }
+      if {$cur_io > $io} {
+         set io $cur_io
+      }
+      if {$ioops >= $issue_2923_min_ioops} {
+         break
+      }
+   }
+   ts_log_fine "online usage of job $job_id: ioops=$ioops io=$io"
+
+   if {$ioops < $issue_2923_min_ioops} {
+      ts_log_severe "job $job_id did $issue_2923_writes write syscalls, but its online usage\
+                     reports ioops=$ioops, where at least $issue_2923_min_ioops were expected -\
+                     the write syscalls do not appear in the value"
+   }
+   if {$io <= 0} {
+      ts_log_severe "job $job_id wrote [expr {$issue_2923_writes * 512}] bytes, but its online\
+                     usage reports io=$io"
+   }
+
+   # the value has to arrive in the accounting record as well, which is what qacct -j reports
+   if {[wait_for_jobend $job_id "" 120 0] != 0} {
+      return
+   }
+   # the accounting record is written when the job ends, which the wait above does not cover -
+   # so give qacct time to find it
+   if {[get_qacct $job_id qacct_info "" "" 1 -1 60] != 0} {
+      return
+   }
+   ts_log_fine "accounting record of job $job_id: ioops=$qacct_info(ioops) io=$qacct_info(io)"
+
+   if {$qacct_info(ioops) < $issue_2923_min_ioops} {
+      ts_log_severe "the accounting record of job $job_id reports ioops=$qacct_info(ioops),\
+                     where at least $issue_2923_min_ioops were expected"
+   }
+   if {$qacct_info(io) <= 0} {
+      ts_log_severe "the accounting record of job $job_id reports io=$qacct_info(io)"
+   }
+}

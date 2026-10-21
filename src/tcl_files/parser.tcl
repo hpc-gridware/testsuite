@@ -1634,6 +1634,7 @@ proc parse_qacct {input output {jobid 0} {sum 1} {pe_task_id ""}} {
    set rules(cpu)             $rule_sum
    set rules(mem)             $rule_sum
    set rules(io)              $rule_sum
+   set rules(ioops)           $rule_sum
    set rules(iow)             $rule_sum
    set rules(maxvmem)         $rule_max_vmem
    set rules(taskid)          rule_list
