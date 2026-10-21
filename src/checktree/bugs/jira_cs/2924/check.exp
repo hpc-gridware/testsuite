@@ -1,0 +1,173 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2924: the "devices" characteristic of a resource map instance becomes the DeviceAllow of
+# the systemd scope of a job which is granted that instance. Systemd accepts a device node or a
+# pattern below /dev, or a device class specifier beginning with "char-" or "block-", and
+# refuses anything else - a relative path above all. The characteristic was not checked, so a
+# value systemd refuses was accepted into the configuration and made the scope creation of
+# every job granted that instance fail, which with the state CS-2914 added halts every queue of
+# the host and sends the job to the next one.
+#
+# The check configures the values systemd accepts and requires them to be accepted, and the
+# values it refuses and requires them to be rejected. It works on the configuration alone, so
+# it needs no systemd on the host and runs everywhere.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_2924"
+set check_category       "BUG CENTRY QCONF VERIFIED"
+set check_description(0) "a devices characteristic systemd would refuse is not accepted"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_2924_setup
+set check_cleanup_function issue_2924_cleanup
+
+set check_functions {}
+lappend check_functions "issue_2924_devices_characteristic_is_checked"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2924_setup {} {
+   global issue_2924_host issue_2924_rsmap issue_2924_complex_backup
+   global issue_2924_host_backup
+   get_current_cluster_config_array ts_config
+
+   set issue_2924_rsmap "cs2924.rsmap"
+
+   set hosts [host_conf_get_suited_hosts]
+   if {[llength $hosts] < 1} {
+      ts_log_config "cannot find a host to configure the resource map on"
+      return 99
+   }
+   set issue_2924_host [lindex $hosts 0]
+
+   # the complex definitions as they are now, the cleanup resets them to this
+   if {[get_complex issue_2924_complex_backup] != 0} {
+      ts_log_config "cannot read the complex configuration of the cluster"
+      return 99
+   }
+
+   # a resource map of our own - a characteristic needs one, and "devices" is a complex which
+   # the cluster defines by default
+   set complex($issue_2924_rsmap) "$issue_2924_rsmap RSMAP <= YES YES 0 0"
+   if {[set_complex complex] < 0} {
+      ts_log_config "cannot add the complex entry $issue_2924_rsmap"
+      return 99
+   }
+
+   host_backup_complex_values $issue_2924_host issue_2924_host_backup
+
+   return 0
+}
+
+proc issue_2924_cleanup {} {
+   global issue_2924_host issue_2924_rsmap issue_2924_complex_backup
+   global issue_2924_host_backup
+
+   # the host goes first - a complex entry an object refers to cannot be deleted
+   if {[info exists issue_2924_host_backup]} {
+      host_restore_complex_values issue_2924_host_backup
+   }
+   if {[info exists issue_2924_complex_backup]} {
+      reset_complex issue_2924_complex_backup
+   }
+
+   unset -nocomplain issue_2924_host issue_2924_rsmap issue_2924_complex_backup
+   unset -nocomplain issue_2924_host_backup
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief configure a devices characteristic and report whether it was accepted
+#
+# @param devices the value of the devices characteristic, without the brackets
+# @return 1 when the configuration was accepted, else 0
+proc issue_2924_set_devices {devices} {
+   global issue_2924_host issue_2924_rsmap
+
+   set value "$issue_2924_rsmap=1(d0\[devices=$devices\])"
+   set output [start_sge_bin "qconf" "-mattr exechost complex_values \"$value\" $issue_2924_host"]
+   if {$prg_exit_state == 0} {
+      return 1
+   }
+   ts_log_fine "qconf refused \"$devices\": [string trim $output]"
+   return 0
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief require the devices characteristic to be checked against what systemd accepts
+proc issue_2924_devices_characteristic_is_checked {} {
+   global issue_2924_host issue_2924_host_backup
+
+   # What systemd accepts. A node which is not there is among them on purpose: systemd does not
+   # look, and a cluster may well be configured before the devices appear.
+   set accepted {}
+   lappend accepted "/dev/null"
+   lappend accepted "/dev/null:rw"
+   lappend accepted "/dev/nvidia*"
+   lappend accepted "/dev/does-not-exist"
+   lappend accepted "char-pts"
+   lappend accepted "block-sd:rw"
+   lappend accepted "/dev/null:r;/dev/zero:rw"
+
+   # What it refuses.
+   set refused {}
+   lappend refused "dev/null"
+   lappend refused "nvidia0"
+   lappend refused "/devfoo"
+   lappend refused "/"
+   lappend refused "/dev/"
+   lappend refused "/not/under/dev/foo"
+   lappend refused "/dev/null:r;relative/path:rw"
+
+   foreach devices $accepted {
+      if {![issue_2924_set_devices $devices]} {
+         ts_log_severe "the devices characteristic \"$devices\" was refused although systemd\
+                        accepts it"
+      }
+      host_restore_complex_values issue_2924_host_backup
+   }
+
+   foreach devices $refused {
+      if {[issue_2924_set_devices $devices]} {
+         ts_log_severe "the devices characteristic \"$devices\" was accepted although systemd\
+                        refuses it - every job granted that instance would fail to start and\
+                        would set all queues of host $issue_2924_host into error state"
+      }
+      host_restore_complex_values issue_2924_host_backup
+   }
+}
