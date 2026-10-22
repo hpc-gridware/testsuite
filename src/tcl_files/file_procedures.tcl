@@ -3101,37 +3101,24 @@ proc wait_for_file {path_to_file seconds {to_go_away 0} {do_error_check 1}} {
 }
 
 
-#****** file_procedures/wait_for_remote_file() *********************************
-#  NAME
-#     wait_for_remote_file() -- waiting for a file to apear (NFS-Check)
+## @brief Wait for a file to appear or vanish on a host (NFS check)
 #
-#  SYNOPSIS
-#     wait_for_remote_file { hostname user path { mytimeout 60 } }
+# With method "complete_remote" the wait runs on the remote host in the
+# wait_for_file.exp script; otherwise ls and cat are run from here until
+# they succeed. An error is reported when the timeout is reached. Opens a
+# poll context in the report record stream (CS-2936). See also wait_for_file
+# and wait_for_remote_dir.
 #
-#  FUNCTION
-#     The function is using the ls command on the remote host. If the command
-#     returns no error the procedure returns. Otherwise an error is reported
-#     when reaching timeout value.
-#
-#  INPUTS
-#     hostname         - host where the file should be checked
-#     user             - user id who performs check
-#     path             - full path to file
-#     { mytimeout 60 } - timeout in seconds
-#     {raise_error 1}  - do report errors?
-#     {to_go_away}     - if 1 the method waits until the file disappears
-#                        else it waits until the file appears
-#     {method "complete_remote"}  - if this parameter is "complete_remote" the wait_for_remote_file.exp scripts is
-#                        used. Otherwise the traditional method is used
-#
-#  RESULT
-#     0 on success
-#     -1 on error
-#
-#  SEE ALSO
-#     file_procedures/wait_for_file()
-#     file_procedures/wait_for_remote_dir()
-#*******************************************************************************
+# @param hostname the host where the file is checked
+# @param user the user who performs the check
+# @param path the full path of the file
+# @param mytimeout timeout in seconds
+# @param raise_error if 1, report errors
+# @param to_go_away if 1, wait until the file disappears, otherwise until it
+#        appears
+# @param method "complete_remote" to wait in a script on the remote host,
+#        anything else for the traditional method
+# @return 0 on success, -1 on error or timeout
 proc wait_for_remote_file {hostname user path {mytimeout 60} {raise_error 1} {to_go_away 0} { method "complete_remote"} } {
    global ts_host_config
    global ts_config
@@ -3249,36 +3236,24 @@ proc wait_for_remote_file {hostname user path {mytimeout 60} {raise_error 1} {to
 }
 
 
-#****** file_procedures/wait_for_remote_dir() *********************************
-#  NAME
-#     wait_for_remote_dir() -- waiting for a file to apear (NFS-Check)
+## @brief Wait for a directory to appear or vanish on a host (NFS check)
 #
-#  SYNOPSIS
-#     wait_for_remote_dir { hostname user path { mytimeout 60 } }
+# With method "complete_remote" the wait runs on the remote host in the
+# wait_for_file.exp script; otherwise ls is run from here until it succeeds.
+# An error is reported when the timeout is reached. Opens a poll context in
+# the report record stream (CS-2936). See also wait_for_file and
+# wait_for_remote_file.
 #
-#  FUNCTION
-#     The function is using the ls command on the remote host. If the command
-#     returns no error the procedure returns. Otherwise an error is reported
-#     when reaching timeout value.
-#
-#  INPUTS
-#     hostname         - host where the file should be checked
-#     user             - user id who performs check
-#     path             - full path to file
-#     { mytimeout 60 } - timeout in seconds
-#     {raise_error 1}  - do report errors?
-#     {to_go_away}     - if 1 the method waits until the directory disappears
-#                        else it waits until the directory appears
-#     {method "fast}   - if this parameter is "complete_remote" the wait_for_remote_file.exp scripts is
-#                        used. Otherwise the traditional method is used
-#  RESULT
-#     0 on success
-#     -1 on error
-#
-#  SEE ALSO
-#     file_procedures/wait_for_file()
-#     file_procedures/wait_for_remote_file()
-#*******************************************************************************
+# @param hostname the host where the directory is checked
+# @param user the user who performs the check
+# @param path the full path of the directory
+# @param mytimeout timeout in seconds
+# @param raise_error if 1, report errors
+# @param to_go_away if 1, wait until the directory disappears, otherwise
+#        until it appears
+# @param method "complete_remote" to wait in a script on the remote host,
+#        anything else for the traditional method
+# @return 0 on success, -1 on error or timeout
 proc wait_for_remote_dir { hostname user path { mytimeout 60 } {raise_error 1} {to_go_away 0} {method "complete_remote"}} {
 
    global ts_host_config

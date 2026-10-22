@@ -1030,33 +1030,19 @@ proc ts_private_do_log {level message {raise_error 1} {function ""} {do_output 1
    }
 }
 
-#****** logging/ts_private_log_store_error() ***********************************
-#  NAME
-#     ts_private_log_store_error() -- store error description
+## @brief Store an error raised through the logging in the per check information
 #
-#  SYNOPSIS
-#     ts_private_log_store_error {level message raise_error function}
+# Called from error logging (levels SEVERE, WARNING and CONFIG). If
+# raise_error is 1 and DISABLE_ADD_PROC_ERROR is not set, stores the error in the global variables check_errno and
+# check_errstr, which the framework uses to decide whether a check
+# succeeded, and records it in the report record stream (CS-2936). See also
+# print_errors and save_result.
 #
-#  FUNCTION
-#     If called from error logging (level SEVERE, WARNING, or CONFIG),
-#     and raise_error is 1,
-#     stores the error description in the global variables
-#     check_errno and check_errstr.
-#
-#     The error information is used by the testsuite framework to
-#     figure out, if a check was successfull, and is stored in
-#     per check information.
-#
-#  INPUTS
-#     level       - logging level
-#     message     - error message
-#     raise_error - shall an error condition be raised?
-#     function    - name of the function having triggered error output
-#
-#  SEE ALSO
-#     check/print_errors()
-#     check/save_result()
-#*******************************************************************************
+# @param level the logging level
+# @param message the error message
+# @param raise_error if 1, raise an error condition
+# @param function name of the function that triggered the error output
+# @return nothing
 proc ts_private_log_store_error {level message raise_error function} {
    global CHECK_CUR_PROC_NAME check_name
    global check_errno check_errstr
@@ -1081,7 +1067,7 @@ proc ts_private_log_store_error {level message raise_error function} {
    lappend check_errstr($CHECK_CUR_PROC_NAME) $new_error
 
    # CS-2936: the report record stream gets every stored error when it happens.
-   # report.tcl is sourced later than this file, hence the check.
+   # tsrec.tcl is sourced later than this file, hence the check.
    if {[llength [info procs tsrec_error]] > 0} {
       tsrec_error [lindex {SEVERE WARNING CONFIG} $level] $message
    }

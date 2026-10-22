@@ -3777,36 +3777,18 @@ proc ts_no_timeout_scaling {body} {
    return -options $options $result
 }
 
-#                                                             max. column:     |
-#****** sge_procedures/wait_for_load_from_all_queues() ******
+## @brief Wait until every queue reports a load value, i.e. all execds are connected
 #
-#  NAME
-#     wait_for_load_from_all_queues -- wait for load value reports from queues
+# Parses qstat -f until no queue is in unknown state, or, without
+# test_for_unknown_state, until every load value is available and below 99.
+# Opens a poll context in the report record stream (CS-2936). See also
+# wait_for_unknown_load.
 #
-#  SYNOPSIS
-#     wait_for_load_from_all_queues { seconds }
-#
-#  FUNCTION
-#     This procedure waits until all queues are reporting a load value smaller
-#     than 99. If this is the case all execd should be successfully connected
-#     to the qmaster.
-#
-#  INPUTS
-#     seconds         - timeout value in seconds
-#     {raise_error 1} - optional: report errors if set to 1
-#
-#  RESULT
-#     "-1" on error
-#
-#  SEE ALSO
-#     sge_procedures/wait_for_load_from_all_queues()
-#     sge_procedures/wait_for_unknown_load()
-#     file_procedures/wait_for_file()
-#     sge_procedures/wait_for_jobstart()
-#     sge_procedures/wait_for_end_of_transfer()
-#     sge_procedures/wait_for_jobpending()
-#     sge_procedures/wait_for_jobend()
-#*******************************
+# @param seconds timeout in seconds
+# @param raise_error if 1, report errors
+# @param test_for_unknown_state if 1, wait for no queue in state u,
+#        otherwise for every load value below 99
+# @return 0 when all queues report load, -1 on timeout
 proc wait_for_load_from_all_queues {{seconds 60} {raise_error 1} {test_for_unknown_state 1}} {
    get_current_cluster_config_array ts_config
    global CHECK_VALGRIND
@@ -3894,16 +3876,16 @@ proc wait_for_load_from_all_queues {{seconds 60} {raise_error 1} {test_for_unkno
    }
 }
 
-###
-# @brief wait_for_online_usage
+## @brief Wait until a job reports online usage
 #
-# This procedure waits until a given job reports online usage.
+# Opens a poll context in the report record stream (CS-2936).
 #
-#  @param job_id    - the job id to wait for online usage
-#  @param mytimeout - the number of seconds to wait for online usage
-#  @param usage_name - the name of the usage variable to wait for (default: "cpu")
-#  @param ja_task_id - the array task id to wait for online usage (default: 1)
-#  @return 0 if no online usage was reported within timeout seconds, 1 if online usage was reported
+# @param job_id the job id to wait for
+# @param mytimeout the number of seconds to wait
+# @param usage_name the name of the usage value to wait for
+# @param ja_task_id the array task id to wait for
+# @return 1 if online usage was reported, 0 if none was reported within the
+#         timeout
 proc wait_for_online_usage {job_id {mytimeout 60} {usage_name "cpu"} {ja_task_id 1}} {
    set mytimeout [ts_scale_timeout $mytimeout]
    tsrec_poll_begin "online usage $usage_name of job $job_id.$ja_task_id reported" $mytimeout
@@ -3991,25 +3973,15 @@ proc get_online_usage {job_id name {ja_task_id 1} {with_fractional 0}} {
    return $ret
 }
 
-#****** sge_procedures/wait_for_connected_scheduler() **************************
-#  NAME
-#     wait_for_connected_scheduler() -- wait for scheduler connected to master
+## @brief Wait until the scheduler is connected to the qmaster
 #
-#  SYNOPSIS
-#     wait_for_connected_scheduler { {seconds 90} {raise_error 1} }
+# Polls the scheduler status with qconf -sss; an error there means the
+# scheduler is not connected. Opens a poll context in the report record
+# stream (CS-2936).
 #
-#  FUNCTION
-#     This function tries to do a qconf -sss to get the scheduler status
-#     If getting scheduler status is reporting an error the scheduler is not
-#     connected. If the scheduler status is not available during the specified
-#     time the function fails.
-#
-#  INPUTS
-#     seconds - timeout waiting for connected scheduler
-#
-#  RESULT
-#     0 when there is a scheduler connected, 1 on error
-#*******************************************************************************
+# @param seconds timeout in seconds
+# @param raise_error if 1, report errors
+# @return 0 when a scheduler is connected, 1 on timeout
 proc wait_for_connected_scheduler { {seconds 90} {raise_error 1} } {
    get_current_cluster_config_array ts_config
    set seconds [ts_scale_timeout $seconds]
@@ -4047,30 +4019,16 @@ proc wait_for_connected_scheduler { {seconds 90} {raise_error 1} } {
 
 
 
-#****** sge_procedures/wait_for_job_state() ************************************
-#  NAME
-#     wait_for_job_state() -- wait for job to become special job state
+## @brief Wait until a job is in a given state
 #
-#  SYNOPSIS
-#     wait_for_job_state { jobid state wait_timeout }
+# Parses qstat -f for the job's state. Opens a poll context in the report
+# record stream (CS-2936). See also wait_for_queue_state.
 #
-#  FUNCTION
-#     This procedure is checking the job state of the given job id by parsing
-#     the qstat -f command. If the job has the state given in the parameter
-#     state the procedure returns the job state. If an timeout occurs the
-#     procedure returns -1.
-#
-#  INPUTS
-#     jobid        - job id of job to check state
-#     state        - state to check for
-#     wait_timeout - given timeout in seconds
-#
-#  RESULT
-#     job state or -1 on error
-#
-#  SEE ALSO
-#     sge_procedures/wait_for_queue_state()
-#*******************************************************************************
+# @param jobid the job id
+# @param state the state to wait for
+# @param wait_timeout timeout in seconds
+# @param raise_error if 1, report errors
+# @return the job state, or -1 on timeout
 proc wait_for_job_state {jobid state wait_timeout {raise_error 1}} {
    get_current_cluster_config_array ts_config
 
@@ -4096,27 +4054,17 @@ proc wait_for_job_state {jobid state wait_timeout {raise_error 1}} {
    return $job_state
 }
 
-#****** sge_procedures/wait_for_queue_state() **********************************
-#  NAME
-#     wait_for_queue_state() -- wait for queue to become special error state
+## @brief Wait until a queue is in a given state
 #
-#  SYNOPSIS
-#     wait_for_queue_state { queue state wait_timeout }
+# Polls the queue state; "" waits for a queue without any special state.
+# After a timeout the qstat -f output of the queue is logged with the error,
+# run as a diagnostic command. Opens a poll context in the report record
+# stream (CS-2936). See also wait_for_job_state.
 #
-#  FUNCTION
-#     This procedure is checking the queue by parsing the qstat -f command.
-#
-#  INPUTS
-#     queue        - name of queue to check
-#     state        - state to check for
-#     wait_timeout - given timeout in seconds
-#
-#  RESULT
-#     queue state or -1 on error
-#
-#  SEE ALSO
-#     sge_procedures/wait_for_job_state()
-#*******************************************************************************
+# @param queue the queue to check
+# @param state the state to wait for
+# @param wait_timeout timeout in seconds
+# @return the queue state, or -1 on timeout
 proc wait_for_queue_state {queue state wait_timeout} {
    get_current_cluster_config_array ts_config
 
@@ -4293,29 +4241,16 @@ proc shutdown_execd {host_list {soft 0} {timeout 120} {wait_for_unknown_load 1}}
    return 0
 }
 
-#****** sge_procedures/wait_for_unknown_load() *********************************
-#  NAME
-#     wait_for_unknown_load() -- wait for load to get >= 99 for a list of queues
+## @brief Wait until a list of queues reports unknown load (>= 99)
 #
-#  SYNOPSIS
-#     wait_for_unknown_load { seconds queue_array { do_error_check 1 } }
+# Parses the load values from qstat -f until every given queue reports a
+# load of 99 or more. Opens a poll context in the report record stream
+# (CS-2936). See also wait_for_load_from_all_queues.
 #
-#  FUNCTION
-#     This procedure is starting the qstat -f command and parse the output for
-#     the queue load values. If the load value of the given queue(s) have a value
-#     greater than 99 the procedure will return. If not an error message is
-#     generated after timeout.
-#
-#  INPUTS
-#     seconds        - number of seconds to wait before creating timeout error
-#     queue_array    - an array of queue names for which to wait
-#     do_error_check - (optional) if 1: report errors
-#                                 if 0: don't report errors
-#
-#  SEE ALSO
-#     sge_procedures/wait_for_load_from_all_queues()
-#
-#*******************************************************************************
+# @param seconds timeout in seconds
+# @param queue_array list of the queue names to wait for
+# @param do_error_check if 1, report errors
+# @return 0 when all queues report unknown load, -1 on error or timeout
 proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
    get_current_cluster_config_array ts_config
    set seconds [ts_scale_timeout $seconds]
@@ -4411,34 +4346,15 @@ proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
 }
 
 
+## @brief Wait until no job is left in the cluster
 #
-#                                                             max. column:     |
+# Opens a poll context in the report record stream (CS-2936). See also
+# wait_for_jobend and get_spooled_jobs.
 #
-#****** sge_procedures/wait_for_end_of_all_jobs() ******
-#  NAME
-#     wait_for_end_of_all_jobs() -- wait for end of all jobs
-#
-#  SYNOPSIS
-#     wait_for_end_of_all_jobs { seconds }
-#
-#  FUNCTION
-#     This procedure will wait until no further jobs are remaining in the cluster.
-#
-#  INPUTS
-#     {seconds 60}        - optional: timeout value (if < 1 no timeout is set)
-#     {raise_error 1}     - optional: report errors
-#     {check_spool_dir 1} - optional: also check that job spooling is done
-#
-#  RESULT
-#     0 - ok
-#    -1 - timeout
-#
-#  SEE ALSO
-#     sge_procedures/wait_for_jobend()
-#     sge_procedures/wait_for_end_of_all_jobs()
-#     sge_procedures/get_spooled_jobs()
-#*******************************
-#
+# @param seconds timeout in seconds; below 1 waits without a timeout
+# @param raise_error if 1, report errors
+# @param check_spool_dir if 1, also wait until no job is spooled any more
+# @return 0 when all jobs are gone, -1 on error or timeout
 proc wait_for_end_of_all_jobs {{seconds 60} {raise_error 1} {check_spool_dir 1}} {
    get_current_cluster_config_array ts_config
 
@@ -7139,53 +7055,25 @@ proc get_job_state {jobid {not_all_equal 0} {taskid task_id}} {
    return -1
 }
 
-# wait for start of job ($jobid,$jobname) ; timeout after $seconds
-# results : -1 on timeout ; 0 on jobstart
-#                                                             max. column:     |
-#****** sge_procedures/wait_for_jobstart() ******
+## @brief Wait until a job is running
 #
-#  NAME
-#     wait_for_jobstart -- wait for job to get out of pending list
+# Polls the job until it runs. A job that is no longer in qstat but already
+# finished with exit status 0 counts as started. After a timeout the qstat
+# -f -g t and qalter -w p output is logged with the error, run as diagnostic
+# commands. Opens a poll context in the report record stream (CS-2936).
 #
-#  SYNOPSIS
-#     wait_for_jobstart { jobid jobname seconds {do_errorcheck 1} {do_tsm 0} }
+# Example:
+#    foreach elem $jobs {
+#       wait_for_jobstart $elem "Sleeper" 300
+#       wait_for_end_of_transfer $elem 300
+#    }
 #
-#  FUNCTION
-#     This procedure will call the is_job_running procedure in a while
-#     loop. When the job is scheduled to a queue the job is "running"
-#     and the procedure returns.
-#
-#  INPUTS
-#     jobid             - job identification number
-#     jobname           - name of the job
-#     seconds           - timeout in seconds
-#     {do_errorcheck 1} - enable error check (default)
-#                         if 0: do not report errors
-#     {do_tsm 0}        - do qconf -tsm before waiting
-#                         if 1: do qconf -tsm (trigger scheduler)
-#
-#  RESULT
-#     -1 - job is not running (timeout error)
-#      0 - job is running (not in pending state)
-#
-#  EXAMPLE
-#     foreach elem $jobs {
-#        wait_for_jobstart $elem "Sleeper" 300
-#        wait_for_end_of_transfer $elem 300
-#        append jobs_string "$elem "
-#     }
-#
-#  SEE ALSO
-#     sge_procedures/wait_for_load_from_all_queues()
-#     file_procedures/wait_for_file()
-#     sge_procedures/wait_for_jobstart()
-#     sge_procedures/wait_for_end_of_transfer()
-#     sge_procedures/wait_for_jobpending()
-#     sge_procedures/wait_for_jobend()
-#  NOTES
-#     TODO: add an option to wait for all array tasks of a job
-#           to be running
-#*******************************
+# @param jobid the job id
+# @param jobname the name of the job
+# @param seconds timeout in seconds
+# @param do_errorcheck if 1, report errors
+# @param do_tsm if 1, trigger a scheduling run (qconf -tsm) before waiting
+# @return 0 when the job is running, -1 on timeout or error
 proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
    get_current_cluster_config_array ts_config
 
@@ -7249,39 +7137,16 @@ proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
    return 0
 }
 
-#                                                             max. column:     |
-#****** sge_procedures/wait_for_end_of_transfer() ******
+## @brief Wait until a job has left the transfer state
 #
-#  NAME
-#     wait_for_end_of_transfer -- wait transfer end of job
+# Parses the qstat output of the job for the t state. Opens a poll context
+# in the report record stream (CS-2936).
 #
-#  SYNOPSIS
-#     wait_for_end_of_transfer { jobid seconds }
-#
-#  FUNCTION
-#     This procedure will parse the qstat output of the job for the t state. If
-#     no t state is found for the given job id, the procedure will return.
-#
-#  INPUTS
-#     jobid   - job identification number
-#     seconds - timeout in seconds
-#
-#  RESULT
-#      0 - job left transfer state, i.e. it is running or beyond
-#     -1 - timeout
-#      1 - jobid not found in qstat output, probably it finished already?
-#
-#  EXAMPLE
-#     see "sge_procedures/wait_for_jobstart"
-#
-#  SEE ALSO
-#     sge_procedures/wait_for_load_from_all_queues()
-#     file_procedures/wait_for_file()
-#     sge_procedures/wait_for_jobstart()
-#     sge_procedures/wait_for_end_of_transfer()
-#     sge_procedures/wait_for_jobpending()
-#     sge_procedures/wait_for_jobend()
-#*******************************
+# @param jobid the job id
+# @param seconds timeout in seconds
+# @return 0 when the job left the transfer state (it is running or beyond),
+#         -1 on timeout, 1 if the job is not in the qstat output (probably
+#         finished already)
 proc wait_for_end_of_transfer { jobid seconds } {
    set seconds [ts_scale_timeout $seconds]
    tsrec_poll_begin "job $jobid out of transfer state" $seconds
@@ -7343,43 +7208,20 @@ proc wait_for_end_of_transfer { jobid seconds } {
    return $result
 }
 
-# wait for job to be in pending state ($jobid,$jobname) ; timeout after $seconds
-# results : -1 on timeout ; 0 on pending
-#                                                             max. column:     |
-#****** sge_procedures/wait_for_jobpending() ******
+## @brief Wait until a job is pending
 #
-#  NAME
-#     wait_for_jobpending -- wait for job to get into pending state
+# Opens a poll context in the report record stream (CS-2936).
 #
-#  SYNOPSIS
-#     wait_for_jobpending { jobid jobname seconds { or_running 0 } }
+# Example:
+#    foreach elem $sched_jobs {
+#       wait_for_jobpending $elem "Sleeper" 300
+#    }
 #
-#  FUNCTION
-#     This procedure will return when the job is in pending state.
-#
-#  INPUTS
-#     jobid   - job identification number
-#     jobname - name of the job
-#     seconds - timeout value in seconds
-#     { or_running 0 } - if job is already running, report no error
-#
-#  RESULT
-#     -1  on timeout
-#     0   when job is in pending state
-#
-#  EXAMPLE
-#     foreach elem $sched_jobs {
-#         wait_for_jobpending $elem "Sleeper" 300
-#     }
-#
-#  SEE ALSO
-#     sge_procedures/wait_for_load_from_all_queues()
-#     file_procedures/wait_for_file()
-#     sge_procedures/wait_for_jobstart()
-#     sge_procedures/wait_for_end_of_transfer()
-#     sge_procedures/wait_for_jobpending()
-#     sge_procedures/wait_for_jobend()
-#*******************************
+# @param jobid the job id
+# @param jobname the name of the job
+# @param seconds timeout in seconds
+# @param or_running if 1, a running job is accepted as well
+# @return 0 when the job is pending, -1 on timeout or error
 proc wait_for_jobpending {jobid jobname seconds {or_running 0}} {
   get_current_cluster_config_array ts_config
 
@@ -7553,59 +7395,21 @@ proc release_job { jobid } {
 }
 
 
-#                                                             max. column:     |
-#****** sge_procedures/wait_for_jobend() ******
+## @brief Wait until a job has ended
 #
-#  NAME
-#     wait_for_jobend -- wait for end of job
+# Checks first that the job is running, then waits for it to disappear from
+# the qstat output, and optionally for the qmaster to remove it. Opens a
+# poll context in the report record stream (CS-2936).
 #
-#  SYNOPSIS
-#     wait_for_jobend { jobid jobname seconds
-#                       { runcheck 1}
-#                       { wait_for_end 0 } }
-#
-#  FUNCTION
-#     This procedure is testing first if the given job is really running. After
-#     that it waits for the job to disappear in the qstat output.
-#
-#  INPUTS
-#     jobid   - job identification number
-#     jobname - name of job
-#     seconds - timeout in seconds
-#
-#     optional parameters:
-#     { runcheck }     - if 1 (default): check if job is running
-#     { wait_for_end } - if 0 (default): no for real job end waiting (job
-#                                        removed from qmaster internal list)
-#                        if NOT 0:       wait for qmaster to remove job from
-#                                        internal list
-#     {raise_error 1}  - shall an error condition be raised, in case it is a
-#                        SEVERE, WARNING, or CONFIG message
-#     {trigger_scheduler 0} - trigger schedling runs while waiting for the job to end
-#
-#  RESULT
-#      0 - job stops running
-#     -1 - timeout error
-#     -2 - job is not running
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     sge_procedures/wait_for_end_of_all_jobs()
-#     sge_procedures/wait_for_load_from_all_queues()
-#     file_procedures/wait_for_file()
-#     sge_procedures/wait_for_jobstart()
-#     sge_procedures/wait_for_end_of_transfer()
-#     sge_procedures/wait_for_jobpending()
-#     sge_procedures/wait_for_jobend()
-#*******************************
+# @param jobid the job id
+# @param jobname the name of the job
+# @param seconds timeout in seconds
+# @param runcheck if 1, check first that the job is running
+# @param wait_for_end if not 0, also wait (up to 90 s) until the qmaster has
+#        removed the job from its internal list
+# @param raise_err if 1, report errors
+# @return 0 when the job has ended, -1 on timeout, -2 if the job is not
+#         running
 proc wait_for_jobend {jobid jobname seconds {runcheck 1} {wait_for_end 0} {raise_err 1}} {
    get_current_cluster_config_array ts_config
 
@@ -9987,26 +9791,16 @@ proc get_detached_settings {{output_var result} {on_host ""} {as_user ""} {raise
 }
 
 
-#****** sge_procedures/wait_for_event_client() *********************************
-#  NAME
-#     wait_for_event_client() -- wait for a event client
+## @brief Wait until an event client is registered, or gone
 #
-#  SYNOPSIS
-#     wait_for_event_client { evc_name {to_go_away 0} }
+# Calls qconf -secl for the registered event clients, for at most 60
+# seconds. Opens a poll context in the report record stream (CS-2936).
 #
-#  FUNCTION
-#     procedure calls qconf -secl to find out which event clients are registered
-#     and returns when the specified event client is available/not available
-#
-#  INPUTS
-#     evc_name       - name of event client, e.g. "qsub"
-#                      (Its allowed to use reg expr. match synatx)
-#     {to_go_away 0} - default 0: return when client is connected
-#                      if 1: return when client is NOT connected
-#
-#  RESULT
-#     none
-#*******************************************************************************
+# @param evc_name name of the event client, e.g. "qsub"; regular expression
+#        syntax is allowed
+# @param to_go_away if 1, wait until the client is not connected, otherwise
+#        until it is
+# @return nothing
 proc wait_for_event_client { evc_name {to_go_away 0}} {
    set my_timeout [clock seconds]
    incr my_timeout 60
@@ -10058,29 +9852,15 @@ proc trigger_scheduling {} {
    }
 }
 
-#****** sge_procedures/wait_for_job_end() **************************************
-#  NAME
-#     wait_for_job_end() -- waits for a job to leave qmaster
+## @brief Wait until a job is no longer referenced in the qmaster
 #
-#  SYNOPSIS
-#     wait_for_job_end { job_id {timeout 60} }
+# That is, after the scheduler has sent the job delete order to the
+# qmaster. Opens a poll context in the report record stream (CS-2936).
 #
-#  FUNCTION
-#     Waits until a job is no longer referenced in qmaster (after sge_schedd
-#     has sent a job delete order to sge_qmaster).
-#
-#  INPUTS
-#     job_id          - job id to wait for
-#     {timeout 60}    - how long to wait
-#     {raise_error 1} - report errors if 1
-#
-#  RESULT
-#     0  - on success
-#     -1 - on error
-#
-#  SEE ALSO
-#     sge_procedures/get_qstat_j_info()
-#*******************************************************************************
+# @param job_id the job id
+# @param timeout timeout in seconds
+# @param raise_error if 1, report errors
+# @return 0 on success, -1 on timeout
 proc wait_for_job_end {job_id {timeout 60} {raise_error 1}} {
    get_current_cluster_config_array ts_config
    set result 0
@@ -11790,15 +11570,14 @@ proc get_submit_date_time {timestamp} {
    return $ret
 }
 
-###
-# @brief wait for load values to appear
+## @brief Wait until load values appear on execution hosts
 #
-# This function waits for the specified load values to appear
-# on the specified execution hosts.
+# Opens a poll context in the report record stream (CS-2936).
 #
-# @param variables - a list of load values to be removed, e.g. "load1", "load5", "load15"
-# @param hosts     - a list of hosts to check, if not given all execution hosts are checked
-# @param timeout   - the maximum time to wait for the load values to be removed, default is 120 seconds
+# @param variables a list of load value names, e.g. "load1 load5 load15"
+# @param hosts a list of hosts to check, all execution hosts if empty
+# @param timeout the maximum time to wait in seconds
+# @return nothing
 proc wait_for_load_values {variables {hosts {}} {timeout 120}} {
    get_current_cluster_config_array ts_config
 
@@ -11838,15 +11617,14 @@ proc wait_for_load_values {variables {hosts {}} {timeout 120}} {
    ts_log_fine "waited for [llength $variables] load values to appear on [llength $hosts] hosts for [expr $end_time - $start_time] seconds"
 }
 
-###
-# @brief wait for load values to be trashed
+## @brief Wait until load values are removed from execution hosts
 #
-# This function waits for the specified load values to be removed from the
-# execution host load values.
+# Opens a poll context in the report record stream (CS-2936).
 #
-# @param variables - a list of load values to be removed, e.g. "load1", "load5", "load15"
-# @param hosts     - a list of hosts to check, if not given all execution hosts are checked
-# @param timeout   - the maximum time to wait for the load values to be removed, default is 120 seconds
+# @param variables a list of load value names, e.g. "load1 load5 load15"
+# @param hosts a list of hosts to check, all execution hosts if empty
+# @param timeout the maximum time to wait in seconds
+# @return nothing
 proc wait_for_load_values_trashed {variables {hosts {}} {timeout 120}} {
    get_current_cluster_config_array ts_config
 

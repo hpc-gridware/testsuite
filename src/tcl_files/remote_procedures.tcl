@@ -620,52 +620,43 @@ proc get_home_dir_path {user {host ""}} {
    return "cannot_determine_home_directory"
 }
 
-#                                                             max. column:     |
+## @brief Run a command on a host and return its output
 #
-#****** remote_procedures/start_remote_prog() ******
-#  NAME
-#     start_remote_prog() -- start remote application
+# Opens (or reuses) a session on the host as the given user through
+# open_remote_spawn_process, runs the command in a generated shell script and
+# waits for it to finish. The exit status goes to the variable named by
+# exit_var. Each call is recorded as one command in the report record stream
+# (CS-2936).
 #
-#  SYNOPSIS
-#     start_remote_prog { hostname user exec_command exec_arguments 
-#     {exit_var prg_exit_state} {mytimeout 60} {background 0} {envlist ""}} 
+# Example:
+#    set envlist(COLUMNS) 500
+#    start_remote_prog "ahost" "auser" "ls" "-la" "prg_exit_state" "60" "0" "" "envlist"
 #
-#  FUNCTION
-#     This procedure will start the given command on the given remote
-#     host.
-#
-#  INPUTS
-#     hostname                  - hostname
-#     user                      - user name
-#     exec_command              - application to start
-#     exec_arguments            - application arguments
-#     {exit_var prg_exit_state} - return value of the (last) remote command
-#     {mytimeout 60}            - problem timeout (for connection building)
-#     {background 0}            - if not 0 -> start remote prog in background
-#                                 this will always take 15 seconds 
-#     {cd_dir ""}               - directory to cd to before executing command
-#     {envlist ""}              - array with environment settings to export
-#                                 before starting program
-#     { do_file_check 1 }       - internal parameter for file existence check
-#                                 if 0: don't do a file existence check
-#     { source_settings_file 1 }- if 1 (default):
-#                                 source $SGE_ROOT/$SGE_CELL/settings.csh
-#                                 if not 1: don't source settings file
-#     { set_shared_lib_path 1 } - if 1 (default): set shared lib path
-#                               - if not 1: don't set shared lib path 
-#     { without_start_output 0 } - if 0 (default): put out start/end mark of output
-#                                  if not 0:       don't print out start/end marks
-#     { without_sge_single_line 0} - if 0 (default): set SGE_SINGLE_LINE=1 and export it 
-#                                    if not 0:       unset SGE_SINGLE_LINE
-#
-#  RESULT
-#     program output
-#
-#  EXAMPLE
-#     set envlist(COLUMNS) 500
-#     start_remote_prog "ahost" "auser" "ls" "-la" "prg_exit_state" "60" "0" "envlist"
-#*******************************
-# CR checked
+# @param hostname the host to run the command on
+# @param user the user to run it as (special user names are mapped)
+# @param exec_command the command to start
+# @param exec_arguments its arguments
+# @param exit_var name of the caller's variable receiving the exit status of
+#        the (last) remote command; -255 if no session could be opened
+# @param mytimeout timeout in seconds for the command (scaled per host)
+# @param background if not 0, start the command in the background; with 2,
+#        wait background_wait_time seconds after starting it
+# @param cd_dir directory to cd to before executing the command
+# @param envlist name of an array with environment settings to export before
+#        starting the command
+# @param do_file_check if 0, skip the check that the command file exists
+# @param source_settings_file if 1, source the cell's settings file first
+# @param set_shared_lib_path if 1, set the shared library path
+# @param raise_error if 1, failures are reported as errors
+# @param without_start_output if not 0, do not print the start and end marks
+#        of the output
+# @param without_sge_single_line if 0, export SGE_SINGLE_LINE=1, otherwise
+#        unset it
+# @param new_grp group to switch to with newgrp before running the command,
+#        "" for none
+# @param background_wait_time seconds to wait after starting a background
+#        command with background 2
+# @return the output of the command, "" if no session could be opened
 proc start_remote_prog { hostname
                          user
                          exec_command
@@ -1508,94 +1499,61 @@ proc get_ts_local_script {hostname script} {
 }
 
 
-#****** remote_procedures/open_remote_spawn_process() **************************
-#  NAME
-#     open_remote_spawn_process() -- open spawn process on remote host
+## @brief Open a spawn session on a host that runs a command
 #
-#  SYNOPSIS
-#     open_remote_spawn_process { hostname user exec_command exec_arguments 
-#     { background 0 } {envlist ""} { source_settings_file 1 } 
-#     { nr_of_tries 15 } } 
+# Creates a shell script with the default settings for the cluster and starts
+# it as a spawn process on the given host (which can be the local host).
+# Sessions are cached per host and user and reused when idle. Each opened
+# session must be closed with close_spawn_process, or its file descriptor is
+# never freed.
 #
-#  FUNCTION
-#     This procedure creates a shell script with default settings for Grid
-#     Engine and starts it as spawn process on the given host.
+# Example:
+#    set id [open_remote_spawn_process "boromir" "testuser" "ls" "-la"]
+#    set sp_id [lindex $id 1]
+#    expect {
+#       -i $sp_id full_buffer { ts_log_severe "buffer overflow" }
+#       -i $sp_id timeout {}
+#       -i $sp_id eof {}
+#       -i $sp_id "*\r" { append output $expect_out(0,string); exp_continue }
+#    }
+#    close_spawn_process $id
 #
-#  INPUTS
-#     hostname                   -  remote host (can also be local host!)
-#     user                       -  user to start script
-#     exec_command               -  command after script init
-#     exec_arguments             -  arguments for command
-#     { background 0 }           -  if not 0: 
-#                                      start command with "&" in background 
-#                                   if 2:
-#                                      wait 30 seconds after starting 
-#                                      background process
-#     {cd_dir ""}                -  directory in which to execute the command
-#     {envlist ""}               -  array with environment settings to export
-#                                   Be aware that the specified environment is "added"
-#                                   ontop of the default environment of the user. 
-#                                   Variables of the users env can be redefined but not 
-#                                   directly unset! (the ""-string is a value!)
-#                                   
-#                                   The users env variables can be unset wirh the meta entry 
-#                                   UNSET_VARS in the envlist array. Lappend any env variable name
-#                                   that should be unsetted before execution of the command.
+# See also increase_timeout, close_spawn_id and map_special_users.
 #
-#                                   Example:
-#                                   lappend envlist (UNSET_VARS) SDM_SYSTEM     
-#
-#     { source_settings_file 1 } -  if 1 (default):
-#                                      source $SGE_ROOT/$SGE_CELL/settings.csh
-#                                   if not 1:
-#                                      don't source settings file
-#     { nr_of_tries 15 }         -  timout value
-#     { without_start_output 0 } - if 0 (default): put out start/end mark of output
-#                                  if not 0:       don't print out start/end marks
-#     { without_sge_single_line 0} - if 0 (default): set SGE_SINGLE_LINE=1 and export it 
-#                                    if not 0:       unset SGE_SINGLE_LINE
-#     {disable_stty_echo 0}      - if 0 (default): no action
-#                                  if not 0: disalbe stty echo before executing command,
-#                                            enable again after command
-#
-#
-#  RESULT
-#     spawn id of process (internal format, see close_spawn_process for details)
-#
-#  EXAMPLE
-#     set id [open_remote_spawn_process "boromir" "testuser" "ls" "-la"]
-#     set do_stop 0
-#     set output ""
-#     set sp_id [lindex $id 1]
-#     while { $do_stop == 0 } {
-#        expect {
-#           -i $sp_id full_buffer {     ;# input buffer default size is 2000 byte 
-#              set do_stop 1
-#              puts "error - buffer overflow" 
-#           } 
-#           -i $sp_id timeout { set do_stop 1 }
-#           -i $sp_id eof { set do_stop 1 }
-#           -i $sp_id "*\r" {
-#              set output "$output$expect_out(0,string)"
-#           }
-#        }
-#     }  
-#     close_spawn_process $id
-#     ts_log_fine ">>> output start <<<"
-#     ts_log_fine $output
-#     ts_log_fine ">>> output end <<<"
-#
-#  NOTES
-#     The spawn command is from the TCL enhancement EXPECT
-#
-#  BUGS
-#     ??? 
-#
-#  SEE ALSO
-#     remote_procedures/increase_timeout()
-#     remote_procedures/close_spawn_id()
-#     remote_procedures/map_special_users()
-#*******************************************************************************
+# @param hostname the host to run the command on
+# @param user the user to start the script as (special user names are mapped)
+# @param exec_command the command to run after the script initialisation
+# @param exec_arguments its arguments
+# @param background if not 0, start the command with "&" in the background;
+#        with 2, wait background_wait_time seconds after starting it
+# @param cd_dir directory in which to execute the command
+# @param envlist name of an array with environment settings to export; they
+#        are added on top of the user's environment. Variables cannot be unset
+#        by an empty value; list their names in the meta entry UNSET_VARS
+#        instead, e.g. lappend envlist(UNSET_VARS) SDM_SYSTEM
+# @param source_settings_file if 1, source the cell's settings file first
+# @param nr_of_tries number of attempts while waiting for the session to
+#        answer (at least 5)
+# @param set_shared_lib_path if 1, set the shared library path
+# @param raise_error if 1, failures are reported as errors
+# @param without_start_output if not 0, do not print the start and end marks
+#        of the output
+# @param without_sge_single_line if 0, export SGE_SINGLE_LINE=1, otherwise
+#        unset it
+# @param shell_script_name_var name of the caller's variable receiving the
+#        path of the generated script
+# @param disable_stty_echo if not 0, disable stty echo before the command and
+#        enable it again afterwards
+# @param no_final_enter if not 0, do not print an empty line before the end
+#        marks of the output
+# @param new_grp group to switch to with newgrp before running the command,
+#        "" for none
+# @param background_wait_time seconds to wait after starting a background
+#        command with background 2
+# @param force_pty if not 0, never reuse a cached session and open a new one
+#        with a remote PTY (CS-2142)
+# @return the session id "pid spawn_id nr_of_shells" (see
+#         close_spawn_process), "" if no session could be opened
 proc open_remote_spawn_process { hostname
                                  user
                                  exec_command
@@ -3474,48 +3432,20 @@ proc is_spawn_process_in_use {spawn_id} {
    return 0
 }
 
-#                                                             max. column:     |
-#****** remote_procedures/close_spawn_process() ******
-# 
-#  NAME
-#     close_spawn_process -- close open spawn process id 
+## @brief Close a session opened by open_remote_spawn_process
 #
-#  SYNOPSIS
-#     close_spawn_process { id { check_exit_state 0 } } 
+# With keep_open, the session stays cached for reuse: a still running
+# program is stopped with CTRL-C and the session is marked idle. If that
+# fails, or without keep_open, the shells are left with exit and the process
+# is waited for. A session that is never closed keeps its file descriptor;
+# once all are used, no new process can be spawned.
 #
-#  FUNCTION
-#     This procedure will close the process associated with the spawn id
-#     returned from the procedures open_spawn_process or open_root_spawn_process.
-#
-#     Sends a CTRL-C to the session to terminate possibly still running
-#     processes.
-#
-#  INPUTS
-#     id - spawn process id (returned from open_spawn_process or 
-#          open_root_spawn_process)
-#     { check_exit_state 0 } - if 0: check exit state
-#
-#  RESULT
-#     exit state of the "spawned" process
-#
-#  EXAMPLE
-#     see open_root_spawn_process or open_spawn_process 
-#
-#  NOTES
-#     After a process is "spawned" with the  open_spawn_process procedure it 
-#     must be closed with the close_spawn_process procedure. id is the return 
-#     value of open_spawn_process or open_root_spawn_process.
-#     If a open spawn process id is not closed, it will not free the file
-#     descriptor for that id. If all file descriptors are used, no new spawn
-#     process can be forked!
-#
-#  SEE ALSO
-#     remote_procedures/open_spawn_process
-#     remote_procedures/open_root_spawn_process
-#     remote_procedures/close_spawn_process
-#     remote_procedures/start_remote_tcl_prog
-#     remote_procedures/start_remote_prog
-#*******************************
+# @param id the session id returned by open_remote_spawn_process
+# @param check_exit_state if 0, check that the expected pid and spawn id were
+#        reaped
+# @param keep_open if 1, keep the connection open and cached for reuse
+# @return -1 if the session was kept open and is idle again, otherwise the
+#         exit status of the spawned process
 proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
    global CHECK_DEBUG_LEVEL
    global CHECK_SHELL_PROMPT CHECK_USE_HUDSON

@@ -3083,6 +3083,17 @@ proc verify_version_range {check_version_range_var levels_in} {
    return $levels
 }
 
+## @brief Read a checktree directory and its subdirectories into ts_checktree
+#
+# Gives the directory a node number, sources its check information file, if
+# any, and remembers the check's name, categories, levels and needs. The
+# per-check globals (check_description, check_version_range,
+# check_test_cases) are cleared first, so a directory without a check does
+# not inherit the values of the previous one. Recurses into every
+# subdirectory except tcl_files.
+#
+# @param path the checktree directory
+# @return 0
 proc read_checktree_nodes {path} {
    global ts_checktree CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
    global check_name check_needs
@@ -3877,6 +3888,14 @@ proc get_test_level_state {name level} {
    return $local_test_state
 }
 
+## @brief Delete the result files of the tests below a checktree path
+#
+# @param path the checktree path whose tests are affected
+# @param state_to_delete the result state to delete ("completed",
+#        "uncompleted", "failed", "unsupported") or "all"
+# @param only_if_not_there if 1, keep the results of a test that has no
+#        level completed or unsupported yet
+# @return nothing
 proc delete_tests {path state_to_delete {only_if_not_there 0}} {
    global ts_checktree
    global CHECK_ACT_LEVEL
@@ -4565,32 +4584,23 @@ proc unlock_testsuite {} {
 }
 
 
-# run_test_level: returns
-# -1 on error,
-# -2 check can not run
-#  0 if ok,
-#  1 already done
+## @brief Run one level of a check: level setup, the check functions, level cleanup
 #
-#                                                             max. column:     |
-#****** check/run_test_level() ******
+# Skips the level if its result state does not match state_to_run, otherwise
+# runs the check functions in order, evaluates check_errno into the level
+# result, records the unit in the report record stream (CS-2936) and saves the
+# result file.
 #
-#  NAME
-#     run_test_level -- ???
-#
-#  SYNOPSIS
-#     run_test_level { path state_to_run level {do_save 1} {warnings 0}}
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     path         - ???
-#     state_to_run - "completed", "uncompleted", "failed", "unsupported" or "all"
-#     level        - ???
-#     {do_save 1}  - ???
-#     {warnings 0}  - warnings count of setup function
-#
-#*******************************
+# @param path the checktree path of the check
+# @param state_to_run run the level only if its result is in this state
+#        ("completed", "uncompleted", "failed", "unsupported") or "all"
+# @param level the runlevel to run
+# @param do_save if 1, save the result file of the level
+# @param warnings the number of warnings of the check's setup function,
+#        counted as unsupported
+# @return 0 if the level passed, -1 if it failed, -2 if it is unsupported,
+#         -101 on a Tcl error in a check function, 1 if it was not run (state
+#         does not match or invalid state)
 proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
    global check_needs CHECK_RESULT_DIRS check_name CHECK_ACTUAL_TEST_PATH
    global check_errstr check_description check_functions check_errno
@@ -4933,6 +4943,13 @@ proc private_check_error_run_test_level { errorvar unsupvar } {
    return $was_error
 }
 
+## @brief Tell whether a check needs root access
+#
+# Sources the check information file of the path with the per-check globals
+# reset and looks at check_root_access_needs.
+#
+# @param path the checktree path of the check
+# @return 0 if the check needs root access, -1 otherwise
 proc check_root_access {path} {
   global check_root_access_needs
   global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
@@ -5058,25 +5075,23 @@ proc execute_test_preparation_procedure {func_name type {warning_counter ""}} {
    return $ret
 }
 
-# run test
-#                                                             max. column:     |
-#****** check/run_test() ******
+## @brief Run a check: check-wide setup, every selected level, check-wide cleanup
 #
-#  NAME
-#     run_test -- ???
+# Sources the check, verifies its needs, runs its setup function, each level
+# through run_test_level, its cleanup function and the post-check cleanup
+# checks, records the phases in the report record stream (CS-2936) and
+# reports the result.
 #
-#  SYNOPSIS
-#     run_test { path state_to_run {run_single_test "all"} }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     path                    - ???
-#     state_to_run            - "uncompleted", "failed", "unsupported", "completed" or "all"
-#     {run_single_test "all"} - ???
-#
-#*******************************
+# @param path the checktree path of the check
+# @param state_to_run run only levels whose result is in this state
+#        ("uncompleted", "failed", "unsupported", "completed") or "all"
+# @param run_single_test name of the only check function to run, "all" for
+#        every function of the check
+# @param send_mail_report if not 1, send no result mail
+# @return 0 on success, 1 if every level was done before, 2 if no level
+#         matches state_to_run, -1 on errors, -2 if dependencies are not
+#         fulfilled, -3 on warnings or if the check supports no level,
+#         -101 on a Tcl error, nothing for an invalid state_to_run
 proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } } {
    global ts_config
    global check_cleanup_verification check_cleanup_baseline check_cleanup_baseline_valid
@@ -5774,6 +5789,8 @@ proc check_if_test_cleaned_up {{test_failed 0}} {
    return $ret
 }
 
+## @brief Reset the per-check globals before the next check is sourced
+# @return nothing
 proc clean_up_globals {} {
   global check_name check_description
   global check_needs check_functions check_category
@@ -7565,6 +7582,13 @@ proc setup_shared_lib_path {} {
    }
 }
 
+## @brief Source the testsuite library files from tcl_files
+#
+# Runs at startup, again once the product version is known, and from the
+# menu after the setup was changed or to re-read the checktree. Every run
+# redefines the procedures, so state must live in globals, not in them.
+#
+# @return nothing
 proc source_tcl_files {} {
    global ts_config
 
