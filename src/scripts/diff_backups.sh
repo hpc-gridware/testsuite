@@ -155,9 +155,9 @@ while IFS= read -r file1; do
       # yet, while the backup taken after loading the upgraded configuration
       # always has it. Comparing the two would report a difference for every
       # release that adds one.
-      # Only names no supported source version knows belong here: 'devices'
-      # arrived with 9.2.0 and is absent from both the 9.0.0 and the 9.1.0
-      # reference backup, while 9.0.0 and 9.1.0 have an identical complex list.
+      # Only names that not every supported source version knows belong here:
+      # 'devices' arrived with 9.1.5 (CS-1338), the reference backups before
+      # 9.1.5 do not have it.
       # -w so that a complex of the site's own named 'devices_<something>'
       # still takes part in the comparison.
       echo "Excluding the builtin complexes added after the oldest supported version ('devices') from diff of '$object_name'"
