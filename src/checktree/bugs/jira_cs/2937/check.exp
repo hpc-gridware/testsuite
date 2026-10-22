@@ -41,7 +41,10 @@ global check_needs
 global check_functions
 global check_version_range
 
-set check_version_range "9.1.8"
+# The fix is backported, so the minimum differs per branch: version_select_for_branch() picks
+# the newest entry which is not newer than the branch under test - 9.0.14 on the 9.0 line,
+# 9.1.8 on 9.1 and on everything after it.
+set check_version_range {"9.0.14 9.1.8" ""}
 
 set check_name           "issue_2937"
 set check_category       "BUG DRMAA VERIFIED"
@@ -170,7 +173,8 @@ proc issue_2937_event_clients {{min_id 0}} {
 # @param edtime    the value for SGE_JAPI_EDTIME, or "" to leave it unset
 # @param init_var  name of the variable the init time is returned in
 # @param exit_var  name of the variable the exit time is returned in
-# @return 1 if the run delivered both times, 0 if it did not
+# @return 1 if the run delivered both times, 0 if it did not, and 2 if the release refused the
+#         requested event delivery time, which is not a defect of its own
 proc issue_2937_run {user edtime init_var exit_var} {
    global issue_2937_host issue_2937_timeout
    upvar $init_var init
@@ -190,10 +194,21 @@ proc issue_2937_run {user edtime init_var exit_var} {
    ts_log_fine "running test_drmaa_cs2937 $what on $issue_2937_host"
    set output [start_test_bin "test_drmaa_cs2937" "" $issue_2937_host $user \
                               prg_exit_state $issue_2937_timeout myenv]
-   set denials [issue_2937_count_messages $before \
-                   "must be manager to initiate TRIGGER operation" denial]
+   # the wording of the denial differs per release - the 9.0 line says "must be manager for
+   # this operation", later ones name the operation - so the part they share is what is looked
+   # for. Nothing else runs while the probe does, so a manager denial in that window is this one.
+   set denials [issue_2937_count_messages $before "must be manager" denial]
 
    if {$prg_exit_state != 0} {
+      # the event delivery interval may not be shorter than the flush delay of the session's
+      # own subscription, and drmaa_init() refuses it where it is. The flush delay differs per
+      # release, so the workaround is simply not available everywhere.
+      if {[string first "event flush delay may not be greater than event delivery time" \
+                        $output] >= 0} {
+         ts_log_fine "=== $what: refused in drmaa_init(), this release does not take that\
+                      event delivery time"
+         return 2
+      }
       ts_log_severe "test_drmaa_cs2937 $what failed ($prg_exit_state):\n$output"
       return 0
    }
@@ -240,9 +255,12 @@ proc issue_2937_exit_time {} {
       # SGE_JAPI_EDTIME is the event delivery interval the session waits for when the
       # shutdown of its event client is denied, so a low value shortens the exit without
       # changing what the qmaster does
-      if {[issue_2937_run $user 1 init exit_time]} {
+      set ret [issue_2937_run $user 1 init exit_time]
+      if {$ret == 1} {
          set data($col_work,$row) [format "%.3f s" $exit_time]
          set workaround($row) $exit_time
+      } elseif {$ret == 2} {
+         set data($col_work,$row) "refused"
       }
    }
 
@@ -279,6 +297,9 @@ proc issue_2937_exit_time {} {
       ts_log_fine "SGE_JAPI_EDTIME=1 brings the exit of $issue_2937_user down to\
                    $workaround(non-manager) s - the workaround shortens the wait, it does not\
                    stop the request from being denied"
+   } else {
+      ts_log_fine "SGE_JAPI_EDTIME=1 is refused by this release, so the workaround for the\
+                   defect is not available here"
    }
 }
 
