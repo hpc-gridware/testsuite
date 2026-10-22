@@ -1,0 +1,352 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-1697: the execd sends administrator mail for a failed job, and the admail_states table
+# in admin_mail.cc says per error state whether a mail goes out every time, only once until
+# a configuration change, or never. The table has an offset at its start and entries
+# missing in the middle, so the states it describes are not the states it is applied to,
+# and the table in sge_diagnostics.1 documents the intent rather than the behaviour.
+#
+# This check provokes the error states which can be provoked with reasonable effort and
+# measures, per state, which failure code the job ends with and how many administrator
+# mails that produces. Both are read from the execd messages file, which carries one
+# "sending admin mail" line per mail, with the job in its subject, and one "shepherd of
+# job ... exited with exit status" line per failing task, with the failure code. The
+# cluster's mailer is replaced by a script which discards what it is given, so that the
+# mails are not delivered anywhere.
+#
+# Measuring how often a mail is sent needs more than one failure to reach one execd with
+# no configuration or queue change in between: both reset the suppression, through
+# adm_mail_reset(BIT_ADM_NEW_CONF) and adm_mail_reset(BIT_ADM_QCHANGE), and clearing the
+# error state of a queue counts as a queue change. The failures are therefore produced by
+# the tasks of one array job, which are dispatched in a single scheduling run and start
+# together, so that the queue error state the first failure causes does not stop the rest.
+#
+# A failing prolog or epilog also makes the job be rescheduled. The only queue it may run
+# in is then the one just set into error state, so it goes back to pending and stays
+# there - which is why the check waits for the mails and not for the job to end, and reads
+# the failure code from the messages file and not from an accounting record.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_1697"
+set check_category       "BUG EXECD MAIL VERIFIED"
+set check_description(0) "administrator mail is sent for a failed job as often as documented"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_1697_setup
+set check_cleanup_function issue_1697_cleanup
+
+set check_functions {}
+lappend check_functions "issue_1697_sequential_states"
+lappend check_functions "issue_1697_suppression_is_released"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_1697_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH
+   global issue_1697_host issue_1697_queue issue_1697_tasks issue_1697_messages
+   global issue_1697_conf_backup issue_1697_host_backup issue_1697_fail_script
+
+   set issue_1697_queue "cs1697.q"
+   set issue_1697_fail_script "$CHECK_ACTUAL_TEST_PATH/cs1697_fail.sh"
+
+   # one array job per error state, with this many tasks - enough to tell a mail which is
+   # sent every time from one which is sent once, and a slot for each of them so that they
+   # are dispatched in the same scheduling run
+   set issue_1697_tasks 3
+
+   set issue_1697_host [host_conf_get_suited_hosts]
+   set issue_1697_messages "[get_spool_dir $issue_1697_host "execd"]/messages"
+
+   # The mailer is replaced so that the mails are not delivered, and the administrator mail
+   # address with it so that none is addressed to a person. The mailer has to be replaced in
+   # the local configuration of the test host as well: the testsuite installs a local mailer
+   # on every exec host, and a local value hides the global one.
+   set mailer "$CHECK_ACTUAL_TEST_PATH/cs1697_mailer.sh"
+
+   get_config issue_1697_conf_backup
+   set conf(mailer) $mailer
+   set conf(administrator_mail) "cs1697@localhost"
+   set_config_and_propagate conf
+
+   get_config issue_1697_host_backup $issue_1697_host
+   set hconf(mailer) $mailer
+   set_config_and_propagate hconf $issue_1697_host
+
+   # the queue the failing jobs run in - its prolog and epilog are what most of the error
+   # states are provoked with, and it keeps all.q out of the test
+   set qconf(slots) $issue_1697_tasks
+   if {[add_queue $issue_1697_queue $issue_1697_host qconf 1] < 0} {
+      ts_log_config "cannot add the queue $issue_1697_queue on host $issue_1697_host"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_1697_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global issue_1697_host issue_1697_queue issue_1697_tasks issue_1697_messages
+   global issue_1697_conf_backup issue_1697_host_backup issue_1697_fail_script
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 120
+
+   if {[info exists issue_1697_queue]} {
+      del_queue $issue_1697_queue $issue_1697_host 0 1
+   }
+   if {[info exists issue_1697_host_backup]} {
+      reset_config_and_propagate issue_1697_host_backup $issue_1697_host
+   }
+   if {[info exists issue_1697_conf_backup]} {
+      reset_config_and_propagate issue_1697_conf_backup
+   }
+
+   unset -nocomplain issue_1697_host issue_1697_queue issue_1697_tasks issue_1697_messages
+   unset -nocomplain issue_1697_conf_backup issue_1697_host_backup issue_1697_fail_script
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief read the administrator mails and failure codes of one job from the execd messages
+#
+# @param job_id     the job to look for
+# @param mails_var  name of the variable the number of mails is returned in
+# @param codes_var  name of the variable the failure codes are returned in, as a list
+proc issue_1697_scan_messages {job_id mails_var codes_var} {
+   global CHECK_USER issue_1697_host issue_1697_messages
+   upvar $mails_var mails
+   upvar $codes_var codes
+
+   set mails 0
+   set codes {}
+
+   get_file_content $issue_1697_host $CHECK_USER $issue_1697_messages lines
+   set code_pattern "shepherd of job ${job_id}\\.\[0-9\]+ exited with exit status = (\[0-9\]+)"
+
+   # the subject reads "<tag> <product>: Job-array task <job_id>.<task> failed" for a task of
+   # an array job and "<tag> <product>: Job <job_id> failed" for a job without tasks. The job
+   # id is anchored on both sides, otherwise the id of one job matches the subject of another
+   # whose id begins with the same digits.
+   set mail_pattern "sending admin mail.*(task ${job_id}\\.\[0-9\]+|Job ${job_id}) failed"
+
+   for {set i 1} {$i <= $lines(0)} {incr i} {
+      set line $lines($i)
+      if {[regexp $mail_pattern $line]} {
+         incr mails
+      }
+      if {[regexp $code_pattern $line match code]} {
+         if {[lsearch -exact $codes $code] == -1} {
+            lappend codes $code
+         }
+      }
+   }
+}
+
+## @brief provoke one error state and compare the mails and the failure code with the docs
+#
+# @param name          the name of the state, for the log
+# @param queue_changes attributes to set on the test queue, as a name value list
+# @param job_opts      options and arguments for the array job
+# @param exp_code      the failure code the failing tasks are expected to report
+# @param exp_mails     the number of administrator mails documented for that code
+proc issue_1697_check_state {name queue_changes job_opts exp_code exp_mails} {
+   get_current_cluster_config_array ts_config
+   global issue_1697_host issue_1697_queue issue_1697_tasks
+
+   ts_log_fine "=== $name: expecting failure code $exp_code and $exp_mails mail(s)"
+
+   # the queue is reset first, so that a state does not inherit the prolog, the epilog or
+   # the shell start mode of the one before it
+   array set qconf [list prolog "NONE" epilog "NONE" shell_start_mode "unix_behavior"]
+   foreach {attr value} $queue_changes {
+      set qconf($attr) $value
+   }
+   if {[mod_queue $issue_1697_queue $issue_1697_host qconf 1] < 0} {
+      ts_log_severe "$name: cannot configure the queue $issue_1697_queue"
+      return
+   }
+
+   set job_id [submit_job "-t 1-$issue_1697_tasks -q $issue_1697_queue@$issue_1697_host\
+                           $job_opts"]
+   if {$job_id <= 0} {
+      ts_log_severe "$name: cannot submit the test job"
+      return
+   }
+
+   # wait for the mails rather than for the job - a rescheduled job stays pending
+   set mails 0
+   set codes {}
+   for {set i 0} {$i < 8} {incr i} {
+      sleep_for_seconds 4
+      issue_1697_scan_messages $job_id mails codes
+      if {$mails >= $exp_mails && [llength $codes] > 0} {
+         break
+      }
+   }
+
+   ts_log_fine "=== $name: job $job_id reported failure code(s) [join $codes ,] and produced\
+                $mails mail(s)"
+
+   # the premise first: without the state the number of mails says nothing about it
+   if {[llength $codes] != 1 || [lindex $codes 0] != $exp_code} {
+      ts_log_severe "$name: the failing tasks of job $job_id report the failure code(s)\
+                     \"[join $codes ,]\", where only $exp_code was expected - the state was\
+                     not provoked"
+   } elseif {$mails != $exp_mails} {
+      ts_log_severe "$name: job $job_id produced $mails administrator mail(s) for its\
+                     $issue_1697_tasks tasks failing with code $exp_code, where $exp_mails\
+                     is documented in sge_diagnostics.1"
+   }
+
+   # the next state starts from a queue with no jobs in it and no error state left over
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60 0
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief provoke the error states of a sequential job and count the administrator mails
+proc issue_1697_sequential_states {} {
+   get_current_cluster_config_array ts_config
+   global issue_1697_fail_script issue_1697_tasks
+
+   set sleeper "$ts_config(product_root)/examples/jobs/sleeper.sh 1"
+
+   # The documented frequency, from the table in sge_diagnostics.1: ALWAYS means one mail per
+   # failing task, ONCE means one mail for all of them until the queue instance or the cluster
+   # configuration changes. All tasks of one array job are dispatched together and so carry
+   # the same queue version, which is what the execd suppresses a repeated mail by.
+   set always $issue_1697_tasks
+   set once 1
+
+   # SSTATE_BEFORE_PROLOG - a prolog which cannot be executed at all
+   issue_1697_check_state "before_prolog" \
+      [list prolog "/no/such/cs1697_prolog"] $sleeper 7 $once
+
+   # SSTATE_PROLOG_FAILED - a prolog which runs and exits non-zero
+   issue_1697_check_state "prolog_failed" \
+      [list prolog $issue_1697_fail_script] $sleeper 8 $once
+
+   # SSTATE_BEFORE_EPILOG - an epilog which cannot be executed at all
+   issue_1697_check_state "before_epilog" \
+      [list epilog "/no/such/cs1697_epilog"] $sleeper 14 $once
+
+   # SSTATE_EPILOG_FAILED - an epilog which runs and exits non-zero
+   issue_1697_check_state "epilog_failed" \
+      [list epilog $issue_1697_fail_script] $sleeper 15 $once
+
+   # SSTATE_OPEN_OUTPUT - the output file cannot be opened
+   issue_1697_check_state "open_output" {} \
+      "-o /no/such/cs1697_dir/out -e /no/such/cs1697_dir/err $sleeper" 26 $always
+
+   # SSTATE_NO_SHELL - the requested shell is not there. The shepherd only looks the shell
+   # up in the shell_start_mode values which use it; with unix_behavior the script is
+   # started through its own interpreter line, -S is ignored and the job simply succeeds.
+   issue_1697_check_state "no_shell" [list shell_start_mode "posix_compliant"] \
+      "-S /no/such/cs1697_shell $sleeper" 27 $always
+
+   # SSTATE_NO_CWD - the requested working directory is not there
+   issue_1697_check_state "no_cwd" {} "-wd /no/such/cs1697_dir $sleeper" 28 $always
+
+   # SSTATE_BEFORE_JOB is not provoked here. A binary job whose binary does not exist was
+   # measured to end with failed=0 and exit status 127: the shepherd starts it and the
+   # failing exec is reported as an ordinary job exit, not as a state of its own. The
+   # shepherd reports the state only where it cannot get as far as the exec, which no job
+   # or queue configuration produces.
+}
+
+## @brief require a queue change to release a mail which is sent only once
+#
+# The counterpart of the states above: a mail which is suppressed has to be sent again once
+# the queue instance it happened in has changed. The execd tells a change by the queue
+# version the scheduler puts into the granted destination list of every job, so a job
+# dispatched after the change carries a version the suppressed mail was not sent for.
+proc issue_1697_suppression_is_released {} {
+   get_current_cluster_config_array ts_config
+   global issue_1697_host issue_1697_queue
+
+   set sleeper "$ts_config(product_root)/examples/jobs/sleeper.sh 1"
+
+   # Two jobs, one after the other, each dispatched after a change of the queue instance.
+   # The change is the epilog, which stays a path which does not exist, so that both jobs
+   # fail in the same way and in the same state - the state the check above has already
+   # had a mail suppressed for. Both jobs therefore have to produce a mail of their own:
+   # the first one because the change releases what the check above suppressed, the second
+   # one because the change releases the first one.
+   set round 0
+   foreach epilog {"/no/such/cs1697_release_a" "/no/such/cs1697_release_b"} {
+      incr round
+
+      array set qconf [list prolog "NONE" epilog $epilog shell_start_mode "unix_behavior"]
+      if {[mod_queue $issue_1697_queue $issue_1697_host qconf 1] < 0} {
+         ts_log_severe "round $round: cannot configure the queue $issue_1697_queue"
+         return
+      }
+
+      set job_id [submit_job "-q $issue_1697_queue@$issue_1697_host $sleeper"]
+      if {$job_id <= 0} {
+         ts_log_severe "round $round: cannot submit the test job"
+         return
+      }
+
+      set mails 0
+      set codes {}
+      for {set i 0} {$i < 8} {incr i} {
+         sleep_for_seconds 4
+         issue_1697_scan_messages $job_id mails codes
+         if {$mails >= 1} {
+            break
+         }
+      }
+      ts_log_fine "=== released/round $round: job $job_id reported failure code(s) [join $codes ,]\
+                   and produced $mails mail(s)"
+
+      if {[llength $codes] != 1 || [lindex $codes 0] != 14} {
+         ts_log_severe "released/round $round: job $job_id reports the failure code(s)\
+                        \"[join $codes ,]\", where only 14 was expected - the state was not\
+                        provoked"
+      } elseif {$mails != 1} {
+         ts_log_severe "released/round $round: job $job_id produced $mails administrator mail(s),\
+                        where exactly 1 was expected - a mail which is sent once per queue\
+                        instance has to be sent again after the queue instance changed"
+      }
+
+      delete_all_jobs
+      wait_for_end_of_all_jobs 60 0
+   }
+}
