@@ -166,6 +166,7 @@ proc issue_2624_cleanup {} {
    unset -nocomplain issue_2624_master issue_2624_pid issue_2624_suspend_seconds
    unset -nocomplain issue_2624_signal_user issue_2624_act_qmaster
    unset -nocomplain issue_2624_stopped_shadowds
+   unset -nocomplain issue_2624_messages_file issue_2624_messages_lines
 }
 
 # ---------------------------------------------------------------------------
@@ -325,6 +326,88 @@ proc issue_2624_signal {signal {raise_error 1}} {
 }
 
 ###
+# @brief remember where the qmaster messages file ends before the qmaster is suspended
+#
+# issue_2624_wait_for_execd_registration only looks at what the qmaster logged after this point.
+# The path comes from qconf -sconf, which needs a running qmaster.
+#
+# @return 1 when the position is known, 0 otherwise
+##
+proc issue_2624_mark_messages {} {
+   global CHECK_USER issue_2624_master issue_2624_messages_file issue_2624_messages_lines
+
+   set issue_2624_messages_file [get_qmaster_messages_file]
+   set output [start_remote_prog $issue_2624_master $CHECK_USER "wc" \
+                                 "-l $issue_2624_messages_file" prg_exit_state]
+   set lines [lindex [string trim $output] 0]
+   if {$prg_exit_state != 0 || ![string is integer -strict $lines]} {
+      ts_log_severe "cannot count the lines of $issue_2624_messages_file on host\
+                     $issue_2624_master:\n$output"
+      return 0
+   }
+   set issue_2624_messages_lines $lines
+   return 1
+}
+
+###
+# @brief wait until every execd the qmaster rejected after the resume has registered again
+#
+# The munge credentials of the execds expire while the qmaster is suspended. After the resume the
+# qmaster rejects their requests with "incorrect authentication information" until an execd has
+# registered again, which took up to 17 seconds. A job dispatched to such a host in the meantime
+# is not acknowledged and stays in transfer state until the qmaster delivers it again after 300
+# seconds - longer than the cleanup waits for the end of all jobs. The load reports do not show
+# this: the qmaster did not mark any host unknown while it was stopped.
+#
+# A host which was not rejected, e.g. without munge, is not waited for.
+#
+# @param timeout how long to wait, in seconds
+# @return 1 when no rejected execd is left, 0 on timeout
+##
+proc issue_2624_wait_for_execd_registration {{timeout 120}} {
+   global CHECK_USER issue_2624_master issue_2624_messages_file issue_2624_messages_lines
+
+   set pattern "execd/\[0-9\]+: incorrect authentication information|execd on \[^ \]+ registered"
+   set end_time [expr [clock seconds] + [ts_scale_timeout $timeout]]
+   while {1} {
+      set output [start_remote_prog $issue_2624_master $CHECK_USER "grep" \
+                                    "-n -E '$pattern' $issue_2624_messages_file" prg_exit_state]
+
+      # the last line number each host was rejected and registered on
+      set rejected {}
+      set registered {}
+      foreach line [split $output "\n"] {
+         set line [string trim $line]
+         if {![regexp {^([0-9]+):} $line all line_nr] || $line_nr <= $issue_2624_messages_lines} {
+            continue
+         }
+         if {[regexp {from ([^/]+)/execd/[0-9]+: incorrect authentication} $line all host]} {
+            dict set rejected $host $line_nr
+         } elseif {[regexp {execd on ([^ ]+) registered} $line all host]} {
+            dict set registered $host $line_nr
+         }
+      }
+
+      set waiting {}
+      dict for {host line_nr} $rejected {
+         if {![dict exists $registered $host] || [dict get $registered $host] < $line_nr} {
+            lappend waiting $host
+         }
+      }
+      if {[llength $waiting] == 0} {
+         ts_log_fine "execds which registered again after the resume: [dict keys $registered]"
+         return 1
+      }
+      if {[clock seconds] >= $end_time} {
+         ts_log_severe "the execds on $waiting did not register again ${timeout}s after the\
+                        qmaster was resumed"
+         return 0
+      }
+      sleep_for_seconds 5 "waiting for the execds on $waiting to register again"
+   }
+}
+
+###
 # @brief is the qmaster answering at all?
 #
 # Asked before the scheduling question is asked, so that a qmaster which did not
@@ -474,6 +557,9 @@ proc issue_2624_suspend_past_ack_timeout {} {
    if {![issue_2624_reader_ds_is_sane "before the qmaster was suspended"]} {
       return
    }
+   if {![issue_2624_mark_messages]} {
+      return
+   }
 
    if {![issue_2624_signal STOP]} {
       return
@@ -501,6 +587,7 @@ proc issue_2624_suspend_past_ack_timeout {} {
    # cluster time to find itself again before asking it to run something. Load
    # reports are the last thing to come back.
    wait_for_load_from_all_queues 180 0
+   issue_2624_wait_for_execd_registration
 
    # The event clients should have re-registered by now. This is reported but not
    # asserted: whether the scheduler is registered is not the question, and in
