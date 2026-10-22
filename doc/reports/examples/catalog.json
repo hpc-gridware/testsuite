@@ -1,0 +1,93 @@
+{
+  "format": "ts-report/catalog/1",
+  "source": {
+    "title": "PIM/RBAC specification",
+    "version": "0.39",
+    "files": [
+      {
+        "path": "19_Test_Cases.md",
+        "sha256": "<sha256>"
+      },
+      {
+        "path": "21_Schedule.md",
+        "sha256": "<sha256>"
+      }
+    ]
+  },
+  "milestones": [
+    {
+      "id": "M3",
+      "title": "Verification and acceptance"
+    }
+  ],
+  "test_cases": [
+    {
+      "id": "STR-03",
+      "title": "Change shares on own node",
+      "section": "ShareTree Tests",
+      "phase": "Phase 1",
+      "milestone": "M3",
+      "see": "UC-4.40",
+      "verifies": "a tenant administrator can change shares inside the own subtree",
+      "steps": [
+        "As soca_admin01: qconf -mstnode /fks/div01/grp01/soca/fa=200.",
+        "As gcs_admin01: qconf -sstpath /fks/div01/grp01/soca/fa."
+      ],
+      "pass": "step 1 succeeds; step 2 shows shares=200.",
+      "notes": [],
+      "owner": "product"
+    },
+    {
+      "id": "AUD-13",
+      "title": "External log forwarding",
+      "section": "Audit Tests",
+      "phase": "Site",
+      "milestone": null,
+      "see": "UC-5.20",
+      "verifies": "audit records reach the site SIEM",
+      "steps": [
+        "..."
+      ],
+      "pass": "...",
+      "notes": [],
+      "owner": "site"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "M3-AC-04",
+      "milestone": "M3",
+      "criterion": "Administer ShareTree by subtree",
+      "focus": "-sstpath, -mstnode, add and delete",
+      "test_ids": [
+        "STR-01",
+        "STR-02",
+        "STR-03",
+        "STR-04",
+        "STR-05",
+        "STR-06",
+        "STR-07",
+        "STR-08",
+        "STR-09",
+        "ADM-09",
+        "ADM-10",
+        "ADM-11"
+      ],
+      "mapping": "test_ids"
+    },
+    {
+      "id": "M3-AC-08",
+      "milestone": "M3",
+      "criterion": "Validate the target scope with the automated test suite",
+      "focus": "Automated M1-M3 test matrix",
+      "mapping": "run"
+    },
+    {
+      "id": "M3-AC-10",
+      "milestone": "M3",
+      "criterion": "Enable the customer to reproduce tenant-isolation verification",
+      "focus": "Documentation, introspection, evidence",
+      "mapping": "manual"
+    }
+  ]
+}

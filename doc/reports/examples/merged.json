@@ -1,0 +1,144 @@
+{
+  "format": "ts-report/merged/1",
+  "run_id": "20261022-140000",
+  "merged_at": "2026-10-22T16:10:00.000+02:00",
+  "inputs": [
+    "/scratch/ebablick/Clion/91x/runners/r1/results/reports/20261022-140000",
+    "/scratch/ebablick/Clion/91x/runners/r2/results/reports/20261022-140000"
+  ],
+  "invocations": [
+    {
+      "invocation_id": "r2-48211-1792663391204",
+      "attempt": 1,
+      "attempt_label": "phase1",
+      "provenance": {
+        "ts_host": "ts",
+        "ts_user": "ebablick",
+        "product": "GCS",
+        "product_version": "9.1.7",
+        "product_root": "/usr/local/testsuite/8070/inst",
+        "build": {
+          "arch": "lx-amd64",
+          "type": "Debug"
+        },
+        "sources": [
+          {
+            "repo": "clusterscheduler",
+            "commit": "1a2b3c4d",
+            "dirty": false
+          },
+          {
+            "repo": "testsuite",
+            "commit": "5e6f7a8b",
+            "dirty": true
+          }
+        ],
+        "cluster": {
+          "name": "p8070",
+          "qmaster_host": "host-0012",
+          "execd_hosts": [
+            "host-0013",
+            "host-0014"
+          ],
+          "submit_hosts": [
+            "host-0012"
+          ]
+        },
+        "results_dir": "/home/ebablick/Clion/91x-features/ts-reports/results"
+      }
+    },
+    {
+      "invocation_id": "r1-50332-1792670102117",
+      "attempt": 3,
+      "attempt_label": "phase3",
+      "provenance": {
+        "ts_host": "ts",
+        "ts_user": "ebablick",
+        "product": "GCS",
+        "product_version": "9.1.7",
+        "product_root": "/usr/local/testsuite/8070/inst",
+        "build": {
+          "arch": "lx-amd64",
+          "type": "Debug"
+        },
+        "sources": [
+          {
+            "repo": "clusterscheduler",
+            "commit": "1a2b3c4d",
+            "dirty": false
+          },
+          {
+            "repo": "testsuite",
+            "commit": "5e6f7a8b",
+            "dirty": true
+          }
+        ],
+        "cluster": {
+          "name": "p8070",
+          "qmaster_host": "host-0012",
+          "execd_hosts": [
+            "host-0013",
+            "host-0014"
+          ],
+          "submit_hosts": [
+            "host-0012"
+          ]
+        },
+        "results_dir": "/home/ebablick/Clion/91x-features/ts-reports/results"
+      }
+    }
+  ],
+  "warnings": [],
+  "units": [
+    {
+      "check": "functional/sharetree",
+      "level": 0,
+      "verdict": "passed",
+      "retried": true,
+      "attention": true,
+      "deciding": {
+        "invocation_id": "r1-50332-1792670102117",
+        "attempt": 3
+      },
+      "functions": [
+        {
+          "function": "sharetree_basic",
+          "verdict": "passed",
+          "test_cases": []
+        },
+        {
+          "function": "sharetree_modify",
+          "verdict": "passed",
+          "test_cases": [
+            {
+              "id": "STR-03",
+              "relation": "covers"
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "invocation_id": "r2-48211-1792663391204",
+          "attempt": 1,
+          "attempt_label": "phase1",
+          "verdict": "failed",
+          "class": "assertion",
+          "errors": [
+            {
+              "function": "sharetree_modify",
+              "origin": "assertion",
+              "message": "share of /soca is 100, expected 200"
+            }
+          ]
+        },
+        {
+          "invocation_id": "r1-50332-1792670102117",
+          "attempt": 3,
+          "attempt_label": "phase3",
+          "verdict": "passed"
+        }
+      ]
+    }
+  ]
+}
