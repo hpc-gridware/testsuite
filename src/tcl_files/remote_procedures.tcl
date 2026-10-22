@@ -685,9 +685,15 @@ proc start_remote_prog { hostname
                          {background_wait_time 15}
                        } {
    global CHECK_MAIN_RESULTS_DIR CHECK_DEBUG_LEVEL CHECK_USE_HUDSON
+   global tsrec
    upvar $exit_var back_exit_state
 
    set mytimeout [host_conf_scale_timeout $hostname $mytimeout]
+
+   # CS-2936: one command line in the report record stream per call
+   set report_start_ms [clock milliseconds]
+   set report_timed_out 0
+   incr tsrec(in_start_remote_prog)
 
    if {$envlist != ""} {
       upvar $envlist users_env
@@ -715,8 +721,12 @@ proc start_remote_prog { hostname
                                      shell_script_name 0 0 $new_grp $background_wait_time]
 
    if {$id == ""} {
+      tsrec_set_origin "connection"
       ts_log_severe "got no spawn id" $raise_error
       set back_exit_state -255
+      incr tsrec(in_start_remote_prog) -1
+      tsrec_command $hostname $user $exec_command $exec_arguments $cd_dir $report_start_ms [clock milliseconds] \
+                        -255 0 $background 0 ""
       return ""
    }
 
@@ -742,6 +752,7 @@ proc start_remote_prog { hostname
    expect {
      -i $myspawn_id timeout {
         set find_out_more 1
+        set report_timed_out 1
      }
      -i $myspawn_id eof {
         ts_log_severe "got unexpected eof" $raise_error
@@ -784,6 +795,8 @@ proc start_remote_prog { hostname
         }
         if {!$do_stop} {
            if {[clock seconds] > $final_timeout} {
+             set report_timed_out 1
+             tsrec_set_origin "command_timeout"
              ts_log_severe "timeout after $mytimeout seconds for \"$exec_command $exec_arguments\"" $raise_error
            } else {
              exp_continue
@@ -865,7 +878,16 @@ proc start_remote_prog { hostname
    }
    close_spawn_process $id
 
+   incr tsrec(in_start_remote_prog) -1
+   set report_user $user
+   if {[info exists tsrec(last_real_user)] && $tsrec(last_real_user) != ""} {
+      set report_user $tsrec(last_real_user)
+   }
+   tsrec_command $hostname $report_user $exec_command $exec_arguments $cd_dir $report_start_ms [clock milliseconds] \
+                     $exit_status $report_timed_out $background 0 $output
+
    if {$info_message_text != ""} {
+      tsrec_set_origin "command_timeout"
       ts_log_severe "$info_message_text" $raise_error
    }
 
@@ -1602,6 +1624,7 @@ proc open_remote_spawn_process { hostname
    upvar $shell_script_name_var used_script_name
    get_current_cluster_config_array ts_config
 
+   set report_open_ms [clock milliseconds]
    set testsuite_root_dir $ts_config(testsuite_root_dir)
    if {$CHECK_DEBUG_LEVEL != 0} {
       ts_log_finest "open_remote_spawn_process on host \"$hostname\""
@@ -2303,6 +2326,8 @@ proc open_remote_spawn_process { hostname
    }
 
    set back "$pid $spawn_id $nr_of_shells"
+   # CS-2936: the user the session really runs as, and sessions a check drives itself
+   tsrec_spawn_opened $hostname $real_user $exec_command $exec_arguments $cd_dir $background $spawn_id $report_open_ms
    return $back
 }
 
@@ -3498,6 +3523,7 @@ proc close_spawn_process {id {check_exit_state 0} {keep_open 1}} {
 
    set pid      [lindex $id 0]
    set spawn_id [lindex $id 1]
+   tsrec_spawn_closed $spawn_id
    if {[llength $id] > 2} {
       set nr_of_shells [lindex $id 2]
    } else {

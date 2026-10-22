@@ -51,7 +51,10 @@ proc tsrec_time {{ms ""}} {
 proc tsrec_str {value} {
    set map [list "\\" "\\\\" "\"" "\\\"" "\n" "\\n" "\r" "\\r" "\t" "\\t" "\b" "\\b" "\f" "\\f"]
    set escaped [string map $map $value]
-   # remaining control characters
+   # remaining control characters - rare, so only then character by character
+   if {![regexp {[\x00-\x1f]} $escaped]} {
+      return "\"$escaped\""
+   }
    set out ""
    foreach char [split $escaped ""] {
       scan $char %c code
@@ -216,6 +219,8 @@ proc tsrec_init {} {
    set tsrec(context) ""
    set tsrec(cleanup_messages) {}
    set tsrec(next_origin) ""
+   set tsrec(in_start_remote_prog) 0
+   set tsrec(last_real_user) ""
    set tsrec(enabled) 1
 
    # provenance
@@ -472,6 +477,9 @@ proc tsrec_error {level_name message {origin "assertion"}} {
    if {$tsrec(next_origin) != ""} {
       set origin $tsrec(next_origin)
       set tsrec(next_origin) ""
+   } elseif {$origin == "assertion" && [tsrec_in_proc "open_remote_spawn_process"]} {
+      # raised while a connection to a host was being set up
+      set origin "connection"
    }
    if {$tsrec(context) == "cleanup_check"} {
       lappend tsrec(cleanup_messages) $message
@@ -560,4 +568,132 @@ proc tsrec_cleanup_check_end {levels} {
    set tsrec(context) ""
    set tsrec(cleanup_messages) {}
    set tsrec(check) ""
+}
+
+## @brief Tell whether a procedure is on the current call stack
+# @param name the procedure name
+# @return 1 if a frame of that procedure is active, 0 otherwise
+proc tsrec_in_proc {name} {
+   for {set level [expr {[info level] - 1}]} {$level > 0} {incr level -1} {
+      if {[lindex [info level $level] 0] == $name} {
+         return 1
+      }
+   }
+   return 0
+}
+
+## @brief Mark the start of a check, so its setup commands are recorded too
+# @param path the check path
+# @return nothing
+proc tsrec_check_start {path} {
+   global tsrec
+   if {!$tsrec(enabled)} {
+      return
+   }
+   set tsrec(check) [tsrec_check_path $path]
+}
+
+## @brief Encode command output as a JSON object with size and excerpt
+#
+# Keeps the first and the last 2 KiB of longer output.
+# @param output the command output
+# @return the JSON object with bytes, excerpt and truncated
+proc tsrec_output {output} {
+   set length [string length $output]
+   set truncated 0
+   if {$length > 4096} {
+      set output "[string range $output 0 2047]\n...\n[string range $output end-2047 end]"
+      set truncated 1
+   }
+   return [tsrec_obj [list bytes $length \
+                               excerpt [tsrec_str $output] \
+                               truncated [tsrec_bool $truncated]]]
+}
+
+## @brief Record one finished command
+# @param host the host the command ran on
+# @param user the user it ran as
+# @param command the command
+# @param arguments its arguments
+# @param cwd its working directory, "" for the default
+# @param start_ms start time in milliseconds
+# @param end_ms end time in milliseconds
+# @param exit_status the exit status, "" if unknown
+# @param timed_out 1 if the command did not finish in time
+# @param background 1 if it was started in the background
+# @param interactive 1 for a session driven by the check (no exit status)
+# @param output the command output
+# @return nothing
+proc tsrec_command {host user command arguments cwd start_ms end_ms exit_status timed_out background interactive output} {
+   global tsrec CHECK_CUR_PROC_NAME
+   if {!$tsrec(enabled) || $tsrec(check) == ""} {
+      return
+   }
+   set function $tsrec(function)
+   if {$tsrec(context) == "cleanup_check"} {
+      set function "cleanup_check"
+   } elseif {$function == "" && [info exists CHECK_CUR_PROC_NAME]} {
+      set function $CHECK_CUR_PROC_NAME
+   }
+   # commands the framework runs around a check (the cleanup baseline before
+   # the setup, the post-check cleanup checks), not the check itself
+   set framework [expr {$function == "main" || $function == "cleanup_check"}]
+   set exit_json "null"
+   if {[string is integer -strict $exit_status]} {
+      set exit_json $exit_status
+   }
+   tsrec_line "command" [list function [tsrec_str $function] \
+                                  host [tsrec_str $host] \
+                                  user [tsrec_str $user] \
+                                  root [tsrec_bool [expr {$user == "root"}]] \
+                                  command [tsrec_str $command] \
+                                  args [tsrec_str $arguments] \
+                                  cwd [tsrec_str $cwd] \
+                                  start [tsrec_str [tsrec_time $start_ms]] \
+                                  end [tsrec_str [tsrec_time $end_ms]] \
+                                  exit $exit_json \
+                                  timed_out [tsrec_bool $timed_out] \
+                                  background [tsrec_bool $background] \
+                                  interactive [tsrec_bool $interactive] \
+                                  framework [tsrec_bool $framework] \
+                                  diagnostic [tsrec_bool 0] \
+                                  output [tsrec_output $output]]
+}
+
+## @brief Note a spawned session; called by open_remote_spawn_process before it returns
+#
+# Remembers the user the session really runs as, for start_remote_prog. A
+# session opened directly by a check (not through start_remote_prog) is kept
+# until close_spawn_process, which records it as an interactive command.
+# @param host the host
+# @param user the user the session runs as
+# @param command the command
+# @param arguments its arguments
+# @param cwd the working directory
+# @param background the background flag
+# @param spawn_id the expect spawn id of the session
+# @param start_ms when the session was requested, in milliseconds
+# @return nothing
+proc tsrec_spawn_opened {host user command arguments cwd background spawn_id start_ms} {
+   global tsrec
+   if {!$tsrec(enabled)} {
+      return
+   }
+   set tsrec(last_real_user) $user
+   if {$tsrec(in_start_remote_prog) == 0 && $tsrec(check) != ""} {
+      set tsrec(open,$spawn_id) [list $host $user $command $arguments $cwd $background $start_ms]
+   }
+}
+
+## @brief Record a session opened directly by a check when it is closed
+# @param spawn_id the expect spawn id of the session
+# @return nothing
+proc tsrec_spawn_closed {spawn_id} {
+   global tsrec
+   if {!$tsrec(enabled) || ![info exists tsrec(open,$spawn_id)]} {
+      return
+   }
+   lassign $tsrec(open,$spawn_id) host user command arguments cwd background start_ms
+   unset tsrec(open,$spawn_id)
+   tsrec_command $host $user $command $arguments $cwd $start_ms [clock milliseconds] "" 0 $background 1 ""
 }

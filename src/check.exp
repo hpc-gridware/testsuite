@@ -5220,6 +5220,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       lappend report_units [list $path $level]
    }
    tsrec_selection "run_test" $report_units
+   tsrec_check_start $path
 
    # in case testsuite had been idle for a long time we might want to re-start valgrinded daemons
    valgrind_restart_daemon_after_idle

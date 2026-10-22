@@ -195,15 +195,24 @@ Function verdicts:
  "host": "host-0012", "user": "ebablick", "root": false,
  "command": "qconf", "args": "-mstnode /soca=200", "cwd": "/tmp",
  "start": "...", "end": "...", "exit": 0, "timed_out": false,
- "background": false, "poll": 3, "diagnostic": false,
+ "background": false, "interactive": false, "framework": false,
+ "poll": 3, "diagnostic": false,
  "output": {"bytes": 312, "excerpt": "...", "truncated": false}}
 ```
 
 - `function` is the check function, or the phase name while a phase runs.
   Errors raised by the post-check cleanup checks carry `cleanup_check`.
 - `poll` is the id of the enclosing poll context, absent outside one.
+- `framework` marks commands the testsuite framework runs around a check, not
+  the check itself: the cleanup baseline before the setup (`function` is
+  `main`) and the post-check cleanup checks (`cleanup_check`).
+- `interactive` marks a session a check drives itself through
+  `open_remote_spawn_process`; it has no `exit` (null) and no `output`.
+- `user` is the user the command really ran as, after the testsuite mapped
+  special user names (e.g. `ts_def_con`).
 - `diagnostic` marks commands a helper runs only to explain a failure (for
   example `qstat -f` after a `wait_for_jobstart` timeout).
+- `exit` is null when the status is unknown (interactive sessions).
 - `output.excerpt` holds at most 4 KiB (first 2 KiB and last 2 KiB);
   `truncated` says whether bytes were dropped.
 - `command` lines appear when the command finishes; `start` keeps the order
