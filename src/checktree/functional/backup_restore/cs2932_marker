@@ -1,0 +1,6 @@
+# Created by the testsuite check backup_restore to verify that inst_sge -bup and -rst keep
+# the files of the cell directory (CS-2932). The check removes it again when it is done.
+#
+# A comment is valid content for every file this is copied to - sge_request, sge_aliases,
+# sge_ar_request, sge_qstat, sge_qselect and sge_qquota - so no job and no client changes
+# its behaviour while the check runs.

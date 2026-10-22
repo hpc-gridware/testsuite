@@ -54,8 +54,34 @@ lappend check_functions "backup_restore_do_backup_restore"
 lappend check_functions "backup_restore_check_cluster"
 
 proc backup_restore_setup {} {
-   global ts_config CHECK_USER
+   global ts_config CHECK_USER CHECK_ACTUAL_TEST_PATH
    global test_ar backup_restore_config
+   global backup_restore_created_files backup_restore_common_before
+
+   # The files a site puts into the cell directory by hand are what this check lost without
+   # a message: the backup and the restore take the files of common/ from fixed lists, and
+   # a file which is not in them is gone after a restore. Create the ones this installation
+   # does not have, so that the check covers all of them and not only those the testsuite
+   # installed, and remember them so that the cleanup leaves the cell as it found it.
+   set common_dir "$ts_config(product_root)/$ts_config(cell)/common"
+   set backup_restore_created_files {}
+   foreach file {sge_aliases sge_request sge_ar_request sge_qstat sge_qselect sge_qquota} {
+      if {[is_remote_file $ts_config(master_host) $CHECK_USER "$common_dir/$file"]} {
+         continue
+      }
+      start_remote_prog $ts_config(master_host) $CHECK_USER \
+         "cp" "$CHECK_ACTUAL_TEST_PATH/cs2932_marker $common_dir/$file"
+      if {![is_remote_file $ts_config(master_host) $CHECK_USER "$common_dir/$file"]} {
+         ts_log_config "cannot create $common_dir/$file"
+         return 99
+      }
+      lappend backup_restore_created_files $file
+   }
+   ts_log_fine "created in the common directory: $backup_restore_created_files"
+
+   # what the restore has to bring back - taken here, because nothing below this point
+   # changes the common directory before the backup is made
+   set backup_restore_common_before [backup_restore_list_common "before the backup"]
 
    # create a rqs
    set rules {}
@@ -70,6 +96,71 @@ proc backup_restore_setup {} {
    get_config backup_restore_config
    add_or_replace_array_param myconfig backup_restore_config "execd_params" "KEEP_ACTIVE" "ERROR"
    set_config_and_propagate myconfig
+}
+
+## @brief list the entries of the cell's common directory on the master host
+#
+# @param context what the listing is taken for, for the log output
+# @return the sorted list of entries, empty if the directory cannot be listed
+proc backup_restore_list_common {context} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   set dir "$ts_config(product_root)/$ts_config(cell)/common"
+
+   # -1 is not optional: the remote call runs through a pty, so ls formats in columns and
+   # the names would arrive tab separated on one line
+   set listing [start_remote_prog $ts_config(master_host) $CHECK_USER "ls" "-1 $dir" \
+                                  prg_exit_state 60 0]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "cannot list the common directory $dir ($context)"
+      return {}
+   }
+
+   set entries {}
+   foreach name [split [string trim $listing] "\n"] {
+      set name [string trim $name]
+      if {$name ne ""} {
+         lappend entries $name
+      }
+   }
+
+   set entries [lsort $entries]
+   ts_log_fine "common directory $context: $entries"
+
+   return $entries
+}
+
+## @brief require that the restore brought back every file of the common directory
+#
+# The files which are not expected back are the ones the cluster writes while it runs: the
+# scheduler's run log and schedule, the monitoring data the dbwriter consumes and the log of
+# a shadow daemon. Everything else was configuration before the backup and has to be
+# configuration again afterwards.
+proc backup_restore_check_common_restored {} {
+   global backup_restore_common_before
+
+   set not_backed_up {schedd_runlog schedule monitoring.jsonl reporting}
+
+   set after [backup_restore_list_common "after the restore"]
+   set lost {}
+   foreach name $backup_restore_common_before {
+      if {[lsearch -exact $after $name] >= 0} {
+         continue
+      }
+      if {[lsearch -exact $not_backed_up $name] >= 0 || [string match "messages_shadowd.*" $name]} {
+         ts_log_fine "$name is written while the cluster runs and is no part of a backup"
+         continue
+      }
+      lappend lost $name
+   }
+
+   if {[llength $lost] > 0} {
+      ts_log_severe "the restored cell directory is missing [llength $lost] file(s) which were\
+                     there before the backup: [join $lost ", "] - inst_sge -bup and -rst take\
+                     the files of the common directory from fixed lists, so a file which is\
+                     not in them is dropped without a message"
+   }
 }
 
 proc backup_restore_do_backup_restore {} {
@@ -296,6 +387,8 @@ proc backup_restore_do_backup_restore {} {
       ts_log_fine "The st.enabled file is not restored!"
       ts_log_severe "restore did not work for ST!"
    }
+
+   backup_restore_check_common_restored
 }
 
 proc backup_restore_check_cluster {} {
@@ -337,6 +430,7 @@ proc backup_restore_check_cluster {} {
 proc backup_restore_cleanup {} {
    global CHECK_USER ts_config
    global test_ar backup_restore_config
+   global backup_restore_created_files backup_restore_common_before
 
    set spooling_method $ts_config(spooling_method)
    set master_spool_dir [get_spool_dir $ts_config(master_host) qmaster]
@@ -386,5 +480,15 @@ proc backup_restore_cleanup {} {
    del_rqs test
    delete_ar $test_ar
    reset_config_and_propagate backup_restore_config
+
+   # and the files the setup put into the cell directory
+   if {[info exists backup_restore_created_files]} {
+      set common_dir "$ts_config(product_root)/$ts_config(cell)/common"
+      foreach file $backup_restore_created_files {
+         start_remote_prog $remote_host $CHECK_USER "rm" "-f $common_dir/$file"
+      }
+      unset backup_restore_created_files
+   }
+   unset -nocomplain backup_restore_common_before
 }
 
