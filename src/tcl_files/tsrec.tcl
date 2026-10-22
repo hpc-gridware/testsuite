@@ -1,0 +1,563 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# Report record stream (CS-2936).
+#
+# Writes one JSON Lines file per testsuite invocation to
+# <results_dir>/reports/<run_id>/<invocation_id>.jsonl. The format is
+# described in testsuite/doc/reports/format.md. Recording is off unless
+# TS_REPORT=1 or TS_REPORT_RUN_ID is set in the environment; while it is off,
+# every tsrec_* procedure returns at once.
+
+global tsrec
+if {![info exists tsrec(enabled)]} {
+   set tsrec(enabled) 0
+}
+
+## @brief Format a time stamp as ISO 8601 with milliseconds and offset
+# @param ms milliseconds since the epoch, "" for now
+# @return the time stamp, e.g. 2026-10-22T14:03:11.204+02:00
+proc tsrec_time {{ms ""}} {
+   if {$ms == ""} {
+      set ms [clock milliseconds]
+   }
+   set sec [expr {$ms / 1000}]
+   set frac [format "%03d" [expr {$ms % 1000}]]
+   set base [clock format $sec -format "%Y-%m-%dT%H:%M:%S"]
+   set zone [clock format $sec -format "%z"]
+   return "$base.$frac[string range $zone 0 2]:[string range $zone 3 4]"
+}
+
+## @brief Encode a Tcl string as a JSON string literal
+# @param value the string
+# @return the quoted and escaped JSON string
+proc tsrec_str {value} {
+   set map [list "\\" "\\\\" "\"" "\\\"" "\n" "\\n" "\r" "\\r" "\t" "\\t" "\b" "\\b" "\f" "\\f"]
+   set escaped [string map $map $value]
+   # remaining control characters
+   set out ""
+   foreach char [split $escaped ""] {
+      scan $char %c code
+      if {$code < 0x20} {
+         append out [format "\\u%04x" $code]
+      } else {
+         append out $char
+      }
+   }
+   return "\"$out\""
+}
+
+## @brief Encode a Tcl list of strings as a JSON array of strings
+# @param values the list
+# @return the JSON array
+proc tsrec_str_list {values} {
+   set items {}
+   foreach value $values {
+      lappend items [tsrec_str $value]
+   }
+   return "\[[join $items ","]\]"
+}
+
+## @brief Encode a Tcl list of integers as a JSON array of numbers
+# @param values the list
+# @return the JSON array
+proc tsrec_num_list {values} {
+   return "\[[join $values ","]\]"
+}
+
+## @brief Encode an integer as a JSON number, anything else as a JSON string
+# @param value the value
+# @return the JSON number or string
+proc tsrec_num_or_str {value} {
+   if {[string is integer -strict $value]} {
+      return $value
+   }
+   return [tsrec_str $value]
+}
+
+## @brief Encode a Tcl boolean as a JSON boolean
+# @param value a Tcl boolean
+# @return true or false
+proc tsrec_bool {value} {
+   if {[string is true -strict $value]} {
+      return "true"
+   }
+   return "false"
+}
+
+## @brief Build a JSON object from key/value pairs whose values are already JSON
+# @param pairs flat list: key json-value key json-value ...
+# @return the JSON object
+proc tsrec_obj {pairs} {
+   set items {}
+   foreach {key value} $pairs {
+      lappend items "[tsrec_str $key]:$value"
+   }
+   return "\{[join $items ","]\}"
+}
+
+## @brief Append one line of the given type to the record stream
+#
+# Adds "type" and "t" in front of the given pairs, writes the line and
+# flushes it, so a killed invocation keeps every line written so far.
+# @param type the line type, e.g. unit_start
+# @param pairs flat list of key json-value pairs
+# @return nothing
+proc tsrec_line {type pairs} {
+   global tsrec
+   if {!$tsrec(enabled)} {
+      return
+   }
+   set line [tsrec_obj [concat [list type [tsrec_str $type] t [tsrec_str [tsrec_time]]] $pairs]]
+   if {[catch {
+      puts $tsrec(fd) $line
+      flush $tsrec(fd)
+   } msg]} {
+      puts "tsrec: cannot write record stream, recording stopped: $msg"
+      set tsrec(enabled) 0
+   }
+}
+
+## @brief Return the commit and dirty state of the git repository containing a directory
+# @param dir a directory inside the repository
+# @return a JSON object with repo, commit and dirty, or "" if dir is no git tree
+proc tsrec_git_source {dir} {
+   if {$dir == "" || $dir == "none" || ![file isdirectory $dir]} {
+      return ""
+   }
+   if {[catch {exec git -C $dir rev-parse --show-toplevel} top]} {
+      return ""
+   }
+   if {[catch {exec git -C $top rev-parse --short=10 HEAD} commit]} {
+      return ""
+   }
+   set dirty 0
+   if {![catch {exec git -C $top status --porcelain --untracked-files=no} status] && $status != ""} {
+      set dirty 1
+   }
+   return [tsrec_obj [list repo [tsrec_str [file tail $top]] \
+                               commit [tsrec_str $commit] \
+                               dirty [tsrec_bool $dirty]]]
+}
+
+## @brief Start recording if the environment asks for it
+#
+# Reads TS_REPORT, TS_REPORT_RUN_ID, TS_REPORT_ATTEMPT and
+# TS_REPORT_ATTEMPT_LABEL, opens the stream file, writes the invocation line
+# and prints the run id and report directory. Must be called once the
+# configuration (ts_config) is loaded.
+# @return nothing
+proc tsrec_init {} {
+   global tsrec ts_config env CHECK_USER
+
+   set tsrec(enabled) 0
+   set on 0
+   if {[info exists env(TS_REPORT)] && $env(TS_REPORT) == "1"} {
+      set on 1
+   }
+   if {[info exists env(TS_REPORT_RUN_ID)] && $env(TS_REPORT_RUN_ID) != ""} {
+      set on 1
+   }
+   if {!$on} {
+      return
+   }
+
+   set start_ms [clock milliseconds]
+   if {[info exists env(TS_REPORT_RUN_ID)] && $env(TS_REPORT_RUN_ID) != ""} {
+      set run_id $env(TS_REPORT_RUN_ID)
+   } else {
+      set run_id [clock format [expr {$start_ms / 1000}] -format "%Y%m%d-%H%M%S"]
+   }
+   set attempt 0
+   if {[info exists env(TS_REPORT_ATTEMPT)] && [string is integer -strict $env(TS_REPORT_ATTEMPT)]} {
+      set attempt $env(TS_REPORT_ATTEMPT)
+   }
+   set label "interactive"
+   if {[info exists env(TS_REPORT_ATTEMPT_LABEL)] && $env(TS_REPORT_ATTEMPT_LABEL) != ""} {
+      set label $env(TS_REPORT_ATTEMPT_LABEL)
+   }
+
+   set host [lindex [split [info hostname] "."] 0]
+   set invocation_id "$host-[pid]-$start_ms"
+   set dir "$ts_config(results_dir)/reports/$run_id"
+   if {[catch {
+      file mkdir $dir
+      set fd [open "$dir/$invocation_id.jsonl" a]
+      fconfigure $fd -encoding utf-8 -translation lf
+   } msg]} {
+      puts "tsrec: cannot open record stream in $dir, recording off: $msg"
+      return
+   }
+
+   set tsrec(fd) $fd
+   set tsrec(run_id) $run_id
+   set tsrec(invocation_id) $invocation_id
+   set tsrec(dir) $dir
+   set tsrec(check) ""
+   set tsrec(level) ""
+   set tsrec(function) ""
+   set tsrec(context) ""
+   set tsrec(cleanup_messages) {}
+   set tsrec(next_origin) ""
+   set tsrec(enabled) 1
+
+   # provenance
+   set sources {}
+   foreach dir_key {source_dir ext_source_dir testsuite_root_dir} {
+      if {[info exists ts_config($dir_key)]} {
+         set src_dir $ts_config($dir_key)
+         # ext_source_dir is given relative to the clusterscheduler directory,
+         # the cmake source root it is handed to as PROJECT_EXTENSIONS
+         if {$dir_key == "ext_source_dir" && $src_dir != "none" && [file pathtype $src_dir] != "absolute"} {
+            set src_dir [file normalize [file join [file dirname $ts_config(source_dir)] $src_dir]]
+         }
+         set src [tsrec_git_source $src_dir]
+         if {$src != ""} {
+            lappend sources $src
+         }
+      }
+   }
+   if {[info exists ts_config(additional_checktree_dirs)]} {
+      foreach checktree_dir $ts_config(additional_checktree_dirs) {
+         set src [tsrec_git_source $checktree_dir]
+         if {$src != "" && [lsearch -exact $sources $src] < 0} {
+            lappend sources $src
+         }
+      }
+   }
+   # get_version_info returns e.g. "GCS 9.1.8prealpha (221026-1628)"
+   set version ""
+   catch {set version [get_version_info]}
+   set product [lindex $version 0]
+   set version [lrange $version 1 end]
+   set user ""
+   if {[info exists CHECK_USER]} {
+      set user $CHECK_USER
+   }
+   set cluster [tsrec_obj [list \
+      name [tsrec_str $ts_config(cluster_name)] \
+      qmaster_host [tsrec_str $ts_config(master_host)] \
+      qmaster_port $ts_config(commd_port) \
+      execd_hosts [tsrec_str_list $ts_config(execd_nodes)] \
+      submit_hosts [tsrec_str_list $ts_config(submit_only_hosts)]]]
+   set provenance [tsrec_obj [list \
+      ts_host [tsrec_str $host] \
+      ts_user [tsrec_str $user] \
+      product [tsrec_str $product] \
+      product_version [tsrec_str $version] \
+      product_root [tsrec_str $ts_config(product_root)] \
+      sources "\[[join $sources ","]\]" \
+      cluster $cluster \
+      results_dir [tsrec_str $ts_config(results_dir)]]]
+
+   puts $fd [tsrec_obj [list \
+      format [tsrec_str "ts-report/record/1"] \
+      type [tsrec_str "invocation"] \
+      t [tsrec_str [tsrec_time $start_ms]] \
+      run_id [tsrec_str $run_id] \
+      invocation_id [tsrec_str $invocation_id] \
+      attempt $attempt \
+      attempt_label [tsrec_str $label] \
+      producer [tsrec_str "testsuite"] \
+      provenance $provenance]]
+   flush $fd
+
+   exit -onexit tsrec_invocation_end
+   puts "tsrec: recording run \"$run_id\" to $dir/$invocation_id.jsonl"
+}
+
+## @brief Write the closing line of the stream; installed as exit handler
+# @return nothing
+proc tsrec_invocation_end {} {
+   global tsrec
+   if {!$tsrec(enabled)} {
+      return
+   }
+   tsrec_line "invocation_end" {}
+   catch {close $tsrec(fd)}
+   set tsrec(enabled) 0
+}
+
+## @brief Turn a check path into the absolute spelling the units are keyed by
+# @param path a check path as given on the command line or by the checktree
+# @return the absolute path
+proc tsrec_check_path {path} {
+   global ts_config
+   if {[file pathtype $path] != "absolute"} {
+      set path "$ts_config(testsuite_root_dir)/checktree/$path"
+   }
+   return [file normalize $path]
+}
+
+## @brief Record the units an invocation intends to run
+# @param source command_line or run_test
+# @param units list of {path level} pairs
+# @return nothing
+proc tsrec_selection {source units} {
+   global tsrec
+   if {!$tsrec(enabled) || [llength $units] == 0} {
+      return
+   }
+   set items {}
+   foreach unit $units {
+      lassign $unit path level
+      lappend items [tsrec_obj [list check [tsrec_str [tsrec_check_path $path]] level $level]]
+   }
+   tsrec_line "selection" [list source [tsrec_str $source] units "\[[join $items ","]\]"]
+}
+
+## @brief Record a check-wide phase (setup or cleanup) of the current check
+# @param path the check path
+# @param levels the levels the check runs in this invocation
+# @param phase setup or cleanup
+# @param ret the return value of the phase procedure
+# @return nothing
+proc tsrec_check_phase {path levels phase ret} {
+   tsrec_line "phase" [list check [tsrec_str [tsrec_check_path $path]] \
+                                levels [tsrec_num_list $levels] \
+                                phase [tsrec_str $phase] \
+                                result [tsrec_str [tsrec_phase_result $ret]] \
+                                return [tsrec_num_or_str $ret]]
+}
+
+## @brief Map the return value of execute_test_preparation_procedure to a phase result
+# @param ret 0 failure, 1 ok, 2 no procedure, 99 skip
+# @return ok, skip or error
+proc tsrec_phase_result {ret} {
+   switch -- $ret {
+      0 {return "error"}
+      99 {return "skip"}
+      default {return "ok"}
+   }
+}
+
+## @brief Record the start of a unit (one check at one level)
+# @param path the check path
+# @param level the run level
+# @return nothing
+proc tsrec_unit_start {path level} {
+   global tsrec check_name check_description check_category check_functions check_test_cases
+   if {!$tsrec(enabled)} {
+      return
+   }
+   set tsrec(check) [tsrec_check_path $path]
+   set tsrec(level) $level
+   set description ""
+   if {[info exists check_description($level)]} {
+      set description $check_description($level)
+   }
+   set functions {}
+   if {[info exists check_functions]} {
+      set functions $check_functions
+   }
+   set pairs [list check [tsrec_str $tsrec(check)] \
+                   name [tsrec_str $check_name] \
+                   level $level \
+                   description [tsrec_str $description] \
+                   categories [tsrec_str_list $check_category] \
+                   functions [tsrec_str_list $functions]]
+   if {[array exists check_test_cases]} {
+      set per_function {}
+      foreach function [lsort [array names check_test_cases]] {
+         set cases {}
+         foreach entry $check_test_cases($function) {
+            lassign $entry id relation
+            if {$relation == ""} {
+               set relation "covers"
+            }
+            lappend cases [tsrec_obj [list id [tsrec_str $id] relation [tsrec_str $relation]]]
+         }
+         lappend per_function $function "\[[join $cases ","]\]"
+      }
+      lappend pairs test_cases [tsrec_obj $per_function]
+   }
+   tsrec_line "unit_start" $pairs
+}
+
+## @brief Record a level phase (setup_level or cleanup_level) of the current unit
+# @param phase setup_level or cleanup_level
+# @param ret the return value of the phase procedure
+# @return nothing
+proc tsrec_level_phase {phase ret} {
+   global tsrec
+   if {!$tsrec(enabled)} {
+      return
+   }
+   tsrec_line "phase" [list check [tsrec_str $tsrec(check)] \
+                                level $tsrec(level) \
+                                phase [tsrec_str $phase] \
+                                result [tsrec_str [tsrec_phase_result $ret]] \
+                                return [tsrec_num_or_str $ret]]
+}
+
+## @brief Record the start of a check function
+# @param function the function name
+# @param index its position in check_functions, counted from 1
+# @return nothing
+proc tsrec_function_start {function index} {
+   global tsrec
+   if {!$tsrec(enabled)} {
+      return
+   }
+   set tsrec(function) $function
+   tsrec_line "function_start" [list function [tsrec_str $function] index $index]
+}
+
+## @brief Record the end of a check function and derive its verdict
+# @param function the function name
+# @param duration_ms the function's run time in milliseconds
+# @param tcl_failed 1 if the function raised a Tcl error
+# @return nothing
+proc tsrec_function_end {function duration_ms tcl_failed} {
+   global tsrec check_errno
+   if {!$tsrec(enabled)} {
+      return
+   }
+   set errors 0
+   set config 0
+   if {[info exists check_errno($function)]} {
+      foreach code $check_errno($function) {
+         switch -- $code {
+            -1 - -2 {incr errors}
+            -3 {incr config}
+         }
+      }
+   }
+   if {$tcl_failed} {
+      set verdict "tcl_error"
+   } elseif {$errors > 0} {
+      set verdict "failed"
+   } elseif {$config > 0} {
+      set verdict "unsupported"
+   } else {
+      set verdict "passed"
+   }
+   tsrec_line "function_end" [list function [tsrec_str $function] \
+                                       verdict [tsrec_str $verdict] \
+                                       duration [format "%.3f" [expr {$duration_ms / 1000.0}]]]
+   set tsrec(function) ""
+}
+
+## @brief Record an error raised through the testsuite logging
+#
+# Called from the logging code for SEVERE, WARNING and CONFIG messages.
+# During the post-check cleanup checks the messages are collected for the
+# cleanup_check line instead.
+# @param level_name SEVERE, WARNING or CONFIG
+# @param message the error text
+# @param origin assertion, tcl_error, poll_timeout, command_timeout or connection
+# @return nothing
+proc tsrec_error {level_name message {origin "assertion"}} {
+   global tsrec CHECK_CUR_PROC_NAME
+   if {!$tsrec(enabled)} {
+      return
+   }
+   if {$tsrec(next_origin) != ""} {
+      set origin $tsrec(next_origin)
+      set tsrec(next_origin) ""
+   }
+   if {$tsrec(context) == "cleanup_check"} {
+      lappend tsrec(cleanup_messages) $message
+      set origin "cleanup"
+   }
+   set function $tsrec(function)
+   if {$tsrec(context) == "cleanup_check"} {
+      set function "cleanup_check"
+   } elseif {$function == "" && [info exists CHECK_CUR_PROC_NAME]} {
+      set function $CHECK_CUR_PROC_NAME
+   }
+   set pairs [list function [tsrec_str $function] \
+                   level [tsrec_str $level_name] \
+                   origin [tsrec_str $origin] \
+                   message [tsrec_str $message]]
+   if {$tsrec(check) != ""} {
+      set pairs [concat [list check [tsrec_str $tsrec(check)]] $pairs]
+   }
+   tsrec_line "error" $pairs
+}
+
+## @brief Set the origin of the next recorded error
+#
+# For errors whose cause the caller knows better than the logging code, e.g.
+# a Tcl error caught around a check function.
+# @param origin one of the origins listed for tsrec_error
+# @return nothing
+proc tsrec_set_origin {origin} {
+   global tsrec
+   if {!$tsrec(enabled)} {
+      return
+   }
+   set tsrec(next_origin) $origin
+}
+
+## @brief Record the end of the current unit
+# @param verdict passed, failed, unsupported or skipped
+# @param duration_s the unit's run time in seconds
+# @return nothing
+proc tsrec_unit_end {verdict duration_s} {
+   global tsrec
+   if {!$tsrec(enabled)} {
+      return
+   }
+   tsrec_line "unit_end" [list check [tsrec_str $tsrec(check)] \
+                                   level $tsrec(level) \
+                                   verdict [tsrec_str $verdict] \
+                                   duration [format "%.3f" $duration_s]]
+   set tsrec(level) ""
+}
+
+## @brief Mark the start of the post-check cleanup checks
+# @param path the check path
+# @return nothing
+proc tsrec_cleanup_check_start {path} {
+   global tsrec
+   if {!$tsrec(enabled)} {
+      return
+   }
+   set tsrec(check) [tsrec_check_path $path]
+   set tsrec(context) "cleanup_check"
+   set tsrec(cleanup_messages) {}
+}
+
+## @brief Record the result of the post-check cleanup checks
+#
+# The result is "error" when any error was raised since
+# tsrec_cleanup_check_start - by check_if_test_cleaned_up or by the other
+# checks run after the cleanup function (daemon crashes, session leaks,
+# valgrind).
+# @param levels the levels the check ran in this invocation
+# @return nothing
+proc tsrec_cleanup_check_end {levels} {
+   global tsrec
+   if {!$tsrec(enabled)} {
+      return
+   }
+   set result "ok"
+   if {[llength $tsrec(cleanup_messages)] > 0} {
+      set result "error"
+   }
+   tsrec_line "cleanup_check" [list check [tsrec_str $tsrec(check)] \
+                                        levels [tsrec_num_list $levels] \
+                                        result [tsrec_str $result] \
+                                        messages [tsrec_str_list $tsrec(cleanup_messages)]]
+   set tsrec(context) ""
+   set tsrec(cleanup_messages) {}
+   set tsrec(check) ""
+}

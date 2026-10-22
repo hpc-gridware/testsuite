@@ -66,21 +66,29 @@ merge and reported as a warning.
 ### 1.3 Line types
 
 Every line has `"type"` and `"t"` (time). Lines of one file appear in this
-order: `invocation`, then per unit `unit_start` … `unit_end`, then
-`invocation_end`.
+order: `invocation`, then any number of `selection` lines, then per check
+`phase` (`setup`), per level `unit_start` … `unit_end`, `phase` (`cleanup`),
+`cleanup_check`; finally `invocation_end`. A `selection` line may also appear
+between checks.
+
+Setup, cleanup and the cleanup check belong to the **check**, not to a level:
+the framework runs the check's `setup`, then every selected level, then the
+check's `cleanup` and `check_if_test_cleaned_up`. Those lines therefore carry
+`check` and the `levels` they cover and stand outside the units.
 
 | type | when | content |
 |---|---|---|
-| `invocation` | first line | provenance, attempt, selection (the manifest) |
-| `unit_start` | before setup of a check level | check, level, metadata |
+| `invocation` | first line | provenance, attempt (the manifest head) |
+| `selection` | after `invocation`, or when a check is entered | units the invocation intends to run |
 | `phase` | setup, setup_level, cleanup_level, cleanup | phase name, result |
+| `unit_start` | before the level setup | check, level, metadata |
 | `function_start` | before a check function | function name, index |
 | `command` | per spawned command | host, user, command, status, times |
 | `poll` | per finished poll context | condition, timeout, outcome, count |
 | `error` | per raised error | level, origin, message |
 | `function_end` | after a check function | verdict, duration |
-| `cleanup_check` | after the post-check cleanup checks | result, messages |
-| `unit_end` | after the level cleanup | unit verdict |
+| `unit_end` | after the level cleanup | level verdict |
+| `cleanup_check` | after the check's cleanup | result, messages, levels |
 | `invocation_end` | last line | exit status |
 
 #### `invocation` (the manifest)
@@ -102,19 +110,34 @@ order: `invocation`, then per unit `unit_start` … `unit_end`, then
    "cluster": {"name": "p8070", "qmaster_host": "host-0012",
                "execd_hosts": ["host-0013", "host-0014"],
                "submit_hosts": ["host-0012"]},
-   "results_dir": "/home/ebablick/Clion/91x-features/ts-reports/results"},
- "selection": [
-   {"check": "functional/sharetree", "level": 0,
-    "functions": ["sharetree_basic", "sharetree_modify"]}]}
+   "results_dir": "/home/ebablick/Clion/91x-features/ts-reports/results"}}
 ```
 
 - `attempt` is an integer order (`TS_REPORT_ATTEMPT`, default `0`); merge takes
   the highest. `attempt_label` is free text (`TS_REPORT_ATTEMPT_LABEL`,
   default `interactive`), e.g. the gcs-testrun phase.
-- `selection` is what this invocation intends to run. Merge checks
-  completeness against the union of all `selection` lists of the run.
 - `producer` is `testsuite` or `module_test` (section 1.5).
 - `dirty` says whether the working tree had uncommitted changes.
+
+#### `selection`
+
+```json
+{"type": "selection", "t": "...", "source": "command_line",
+ "units": [{"check": "functional/sharetree", "level": 0},
+           {"check": "functional/qconf", "level": 2}]}
+```
+
+What the invocation intends to run. Merge checks completeness against the
+union of all `selection` lines of the run. `source` is
+
+- `command_line`: the `check <path> <level>` pairs of the invocation, written
+  right after `invocation` (this is how `gcs-run-unit` starts bundles), so a
+  unit of a bundle killed midway shows up as `not_run`;
+- `run_test`: written when the framework enters a check, with the levels it
+  will run. This covers menu and category runs.
+
+Known limit: when a menu or category run is killed, the checks it had not
+reached yet appear nowhere, because their selection is only written on entry.
 
 #### `unit_start`
 
@@ -138,11 +161,14 @@ selects.
 #### `phase`
 
 ```json
-{"type": "phase", "t": "...", "phase": "setup_level", "result": "ok", "return": 0}
+{"type": "phase", "t": "...", "check": "functional/sharetree", "levels": [0],
+ "phase": "setup", "result": "ok", "return": 1}
 ```
 
-`phase` is `setup`, `setup_level`, `cleanup_level` or `cleanup`; `result` is
-`ok`, `skip` (setup returned 99), `error`.
+`phase` is `setup` or `cleanup` (check-wide, with `levels`) or `setup_level` or
+`cleanup_level` (inside a unit, with `level`). `result` is `ok`, `skip` (setup
+returned 99) or `error`. A check-wide `setup` error makes every listed unit
+`failed`.
 
 #### `function_start` / `function_end`
 
@@ -174,6 +200,7 @@ Function verdicts:
 ```
 
 - `function` is the check function, or the phase name while a phase runs.
+  Errors raised by the post-check cleanup checks carry `cleanup_check`.
 - `poll` is the id of the enclosing poll context, absent outside one.
 - `diagnostic` marks commands a helper runs only to explain a failure (for
   example `qstat -f` after a `wait_for_jobstart` timeout).
@@ -215,16 +242,6 @@ after `ts_scale_timeout`. `parent` links a nested context.
 
 When the framework cannot tell, it writes `assertion`.
 
-#### `cleanup_check`
-
-```json
-{"type": "cleanup_check", "t": "...", "result": "error",
- "messages": ["job 1235 still in the cluster"]}
-```
-
-The checks the framework runs after a unit (`check_if_test_cleaned_up`). An
-`error` here makes the unit `cleanup_failed` even if every function passed.
-
 #### `unit_end`
 
 ```json
@@ -232,24 +249,51 @@ The checks the framework runs after a unit (`check_if_test_cleaned_up`). An
  "verdict": "failed", "duration": 41.07}
 ```
 
-Unit verdicts, in order of precedence:
+The level verdict the framework knows when the level ends, in order of
+precedence:
 
 | verdict | rule |
 |---|---|
-| `skipped` | a setup phase returned 99 |
+| `skipped` | the level setup returned 99 |
 | `failed` | a function `failed` or `tcl_error`, or a setup phase `error` |
-| `cleanup_failed` | all functions passed, but `cleanup_check` reported an error |
 | `unsupported` | every function `unsupported` |
 | `passed` | otherwise |
 
-Merge adds `interrupted` (a `unit_start` without `unit_end`) and `not_run` (a
-selected unit without `unit_start`).
+#### `cleanup_check`
+
+```json
+{"type": "cleanup_check", "t": "...", "check": "functional/sharetree",
+ "levels": [0, 1], "result": "error",
+ "messages": ["job 1235 still in the cluster"]}
+```
+
+The checks the framework runs after the check's cleanup
+(`check_if_test_cleaned_up`), once for all levels the check ran in this
+invocation.
+
+#### Unit verdict after merge
+
+Merge combines `unit_end` with the check-wide lines:
+
+| verdict | rule |
+|---|---|
+| `skipped` | `unit_end` says `skipped`, or the check `setup` returned 99 |
+| `failed` | `unit_end` says `failed`, or the check `setup` or `cleanup` phase reported `error` |
+| `cleanup_failed` | `unit_end` says `passed`, but the check's `cleanup_check` reported `error` |
+| `unsupported` | `unit_end` says `unsupported` |
+| `passed` | otherwise |
+| `interrupted` | `unit_start` without `unit_end` |
+| `not_run` | selected, but no `unit_start` |
 
 #### `invocation_end`
 
 ```json
-{"type": "invocation_end", "t": "...", "exit": 0}
+{"type": "invocation_end", "t": "..."}
 ```
+
+Written by the exit handler. `exit` (the exit status) is optional: the
+testsuite's handler does not know it, a module test writes it. A file without
+`invocation_end` belongs to an invocation that was killed.
 
 ### 1.4 Environment
 

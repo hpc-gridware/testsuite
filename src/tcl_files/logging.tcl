@@ -1079,6 +1079,12 @@ proc ts_private_log_store_error {level message raise_error function} {
    }
    lappend check_errno($CHECK_CUR_PROC_NAME) [expr -1 -$level]
    lappend check_errstr($CHECK_CUR_PROC_NAME) $new_error
+
+   # CS-2936: the report record stream gets every stored error when it happens.
+   # report.tcl is sourced later than this file, hence the check.
+   if {[llength [info procs tsrec_error]] > 0} {
+      tsrec_error [lindex {SEVERE WARNING CONFIG} $level] $message
+   }
 }
 
 #****** logging/ts_private_log_do_output() *************************************

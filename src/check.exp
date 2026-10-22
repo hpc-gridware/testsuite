@@ -3087,7 +3087,7 @@ proc read_checktree_nodes {path} {
    global ts_checktree CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
    global check_name check_needs
    global check_category CHECK_USER check_functions
-   global CHECK_ACT_LEVEL sourced_commands check_description check_version_range
+   global CHECK_ACT_LEVEL sourced_commands check_description check_version_range check_test_cases
 
    # remember last check name - we'll reset to it on function exit
    set last_check_name $check_name
@@ -3106,6 +3106,7 @@ proc read_checktree_nodes {path} {
    set check_functions "--"
    unset -nocomplain check_description
    unset -nocomplain check_version_range
+   unset -nocomplain check_test_cases
 
    # try to find and source check files in this directory for the configured Cluster Scheduler (Grid Engine) version
    set sourced_files [ts_source $path/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT]
@@ -3885,7 +3886,7 @@ proc delete_tests {path state_to_delete {only_if_not_there 0}} {
    global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
    global check_setup_function check_cleanup_function
    global check_setup_level_function check_cleanup_level_function
-   global check_version_range
+   global check_version_range check_test_cases
    global DISABLE_ADD_PROC_ERROR
    global CHECK_RESULT_DIRS
 
@@ -3902,6 +3903,7 @@ proc delete_tests {path state_to_delete {only_if_not_there 0}} {
       set check_highest_level 0
       set check_name ""
       unset -nocomplain check_version_range
+      unset -nocomplain check_test_cases
 
       # sourcing the test modules sets the global variables check_name and check_needs
       if {[ts_source $elem/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT]} {
@@ -4630,6 +4632,7 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
 
    set CHECK_ACT_LEVEL $level
    ts_log_fine "starting test functions (runlevel is $CHECK_ACT_LEVEL)..."
+   tsrec_unit_start $path $level
 
    # call all check functions
    clear_all_check_errors $check_name
@@ -4699,6 +4702,7 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
       # If we have a level specific setup function: execute it
       if { [info exists check_setup_level_function] }  {
          set setup_ret [execute_test_preparation_procedure $check_setup_level_function "setup_level"]
+         tsrec_level_phase "setup_level" $setup_ret
       } else {
          set setup_ret 1
       }
@@ -4727,16 +4731,19 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
                set CHECK_HUDSON_OUTPUT ""
                set CHECK_HUDSON_STACKTRACE ""
             }
+            tsrec_function_start $elem [expr {[lsearch -exact $check_functions $elem] + 1}]
             set check_duration [clock clicks -milliseconds]
             # this starts the test procedure
             set catch_return [catch {$elem} errMsg]
             if {$catch_return != 0} {
+               tsrec_set_origin "tcl_error"
                ts_log_warning "TCL Error\n${errMsg}\n${errorInfo}"
                set hudson_failure_type "TCL.ERROR"
                set hudson_failure_reason "TCL ERROR\n${errMsg}\n${errorInfo}"
             }
             set check_duration [expr [clock clicks -milliseconds] - $check_duration]
             set total_check_duration [expr $total_check_duration + $check_duration]
+            tsrec_function_end $elem $check_duration [expr {$catch_return != 0}]
 
             # Per check FUNCTION timing, in every run.
             #
@@ -4808,7 +4815,8 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
 
       # if we have a level specific cleanup function: execute it
       if {[info exists check_cleanup_level_function] && $setup_ret != 99}  {
-         execute_test_preparation_procedure $check_cleanup_level_function "cleanup_level"
+         set cleanup_level_ret [execute_test_preparation_procedure $check_cleanup_level_function "cleanup_level"]
+         tsrec_level_phase "cleanup_level" $cleanup_level_ret
       }
 
       if {$do_run_hook == 1} {
@@ -4873,6 +4881,17 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
       set ret 0
    }
 
+   # CS-2936: the level verdict for the report record stream
+   switch -- $finished {
+      "failed" {set report_verdict "failed"}
+      "unsupported" {set report_verdict "unsupported"}
+      default {set report_verdict "passed"}
+   }
+   if {$setup_ret == 99 && $report_verdict != "failed"} {
+      set report_verdict "skipped"
+   }
+   tsrec_unit_end $report_verdict [expr {$end_time - $start_time}]
+
    if {$CHECK_USE_HUDSON == 1 } {
       #Never report global as failure, so that we have a correct count for failed tests
       generate_xml_junit_report $pkg $check_name "000_GLOBAL" $duration $CHECK_HUDSON_OUTPUT "" ""
@@ -4917,10 +4936,11 @@ proc private_check_error_run_test_level { errorvar unsupvar } {
 proc check_root_access {path} {
   global check_root_access_needs
   global CHECK_INFORMATION_FILE CHECK_INFORMATION_EXT
-  global check_version_range
+  global check_version_range check_test_cases
 
   set check_root_access_needs "no"
   unset -nocomplain check_version_range
+  unset -nocomplain check_test_cases
   ts_source $path/$CHECK_INFORMATION_FILE $CHECK_INFORMATION_EXT
 
   if { [string compare -nocase "yes" $check_root_access_needs] == 0 } {
@@ -5070,7 +5090,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    global check_category CHECK_GROUP DISABLE_ADD_PROC_ERROR
    global check_setup_function check_cleanup_function
    global check_setup_level_function check_cleanup_level_function
-   global check_version_range
+   global check_version_range check_test_cases
    global CHECK_TEST_RUNNING
    global CHECK_INTERRUPT
    global CHECK_USE_HUDSON
@@ -5111,6 +5131,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    set check_root_access_needs   "no"
    set check_need_running_system "yes"
    unset -nocomplain check_version_range
+   unset -nocomplain check_test_cases
 
    if {$ONLY_ONE_LEVEL != ""} {
       set check_levels $ONLY_ONE_LEVEL
@@ -5171,6 +5192,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    }
 
    # check if this test is enabled for the actual runlevel, test is already done, ...
+   set report_levels {}
    foreach level $check_levels {
       # check if this is a global enabled level
       if {![is_level_enabled $level]} {
@@ -5184,6 +5206,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
          continue
       }
       incr no_of_test_runs 1
+      lappend report_levels $level
    }
 
    if {$no_of_test_runs == 0} {
@@ -5191,6 +5214,12 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       set CHECK_TEST_RUNNING 0
       return 2
    }
+
+   set report_units {}
+   foreach level $report_levels {
+      lappend report_units [list $path $level]
+   }
+   tsrec_selection "run_test" $report_units
 
    # in case testsuite had been idle for a long time we might want to re-start valgrinded daemons
    valgrind_restart_daemon_after_idle
@@ -5243,6 +5272,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    # start a setup function for this check - should it exist
    set CHECK_ACT_LEVEL 0
    set setup_ret [execute_test_preparation_procedure $check_setup_function "setup" nr_warnings]
+   tsrec_check_phase $path $report_levels "setup" $setup_ret
    if {$setup_ret == 0} {
       set immediate_return -1
       ts_log_fine "******************************************************************"
@@ -5355,6 +5385,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    # if we have a specific cleanup function: execute it
    if {$setup_ret != 99} {
       set cleanup_ret [execute_test_preparation_procedure $check_cleanup_function "cleanup" nr_warnings]
+      tsrec_check_phase $path $report_levels "cleanup" $cleanup_ret
       if {$cleanup_ret == 0} {
          ts_log_fine "******************************************************************"
          ts_log_fine "* Cleanup function returned error. Setting test state to failed! *"
@@ -5366,6 +5397,10 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
          }
       }
    }
+
+   # CS-2936: everything from here to check_if_test_cleaned_up checks the state
+   # the test left behind; errors raised here go to the cleanup_check record
+   tsrec_cleanup_check_start $path
 
    # do another valgrind check after executing the cleanup function
    # it has probably called some Cluster Scheduler binaries
@@ -5413,6 +5448,7 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
    if {![check_if_test_cleaned_up [expr {$nr_errors > 0}]]} {
       incr nr_errors
    }
+   tsrec_cleanup_check_end $report_levels
 
    # remove temporary files and directories created by the test
    delete_temp_script_files
@@ -5740,12 +5776,13 @@ proc check_if_test_cleaned_up {{test_failed 0}} {
 proc clean_up_globals {} {
   global check_name check_description
   global check_needs check_functions check_category
-  global check_version_range
+  global check_version_range check_test_cases
   global check_cleanup_expected_changes
 
   unset -nocomplain check_category
   unset -nocomplain check_description
   unset -nocomplain check_version_range
+  unset -nocomplain check_test_cases
 
   set check_name        ""          ;# name of current check module
   set check_needs       ""          ;# dependencies of this check (name of other check)
@@ -7598,6 +7635,7 @@ proc source_tcl_files {} {
    ts_source $libdir/smf_procedures
 
    ts_source $libdir/checktree_helper
+   ts_source $libdir/tsrec
    ts_source $libdir/report_procedures
    ts_source $libdir/hudson_procedures
 
@@ -9227,6 +9265,21 @@ load_additional_packages
 
 # initialize caches for translated product messages
 init_messages_caches
+
+# CS-2936: start the report record stream if TS_REPORT or TS_REPORT_RUN_ID asks
+# for it, and record the units given on the command line, so that a unit of an
+# invocation killed midway still shows up as selected
+tsrec_init
+if {[info exists do_one_test_list]} {
+   set report_units {}
+   foreach entry $do_one_test_list {
+      lassign $entry report_path report_level report_kind
+      if {$report_kind == "level"} {
+         lappend report_units [list $report_path $report_level]
+      }
+   }
+   tsrec_selection "command_line" $report_units
+}
 
 if { $do_category == 1 } {
    set CHECK_ENABLED_CATEGORIES $do_category_list
