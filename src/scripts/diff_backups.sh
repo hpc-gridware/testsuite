@@ -111,18 +111,26 @@ while IFS= read -r file1; do
       filter1="grep -v ^delete_time $file1"
       filter2="grep -v ^delete_time $file2"
    elif [ "$object_type" = "cell" ] && [ "$object_name" = "bootstrap" ]; then
-      # Users delete_time will differ for different backups, exclude it
-      filter1="grep -Ev ^(binary_path|qmaster_spool_dir|security_mode|spooling_params|#) $file1"
-      filter2="grep -Ev ^(binary_path|qmaster_spool_dir|security_mode|spooling_params|#) $file2"
+      # Paths, security mode and spooling are chosen at installation time and
+      # load_config does not change them, exclude them.
+      # communication_params arrived with 9.1.5 (CS-2578), the reference backups
+      # before 9.1.7 do not have it.
+      exclude="^(binary_path|qmaster_spool_dir|security_mode|spooling_method|spooling_lib"
+      exclude="$exclude|spooling_params|communication_params|#)"
+      filter1="grep -Ev $exclude $file1"
+      filter2="grep -Ev $exclude $file2"
    elif [ "$object_type" = "configurations" ] && [ "$object_name" = "global" ]; then
       # auto_user_delete_time is excluded because upgrade_config sets it to 0
       # itself: the auto users in a reference backup carry an absolute
       # delete_time that is long past, so the qmaster would clean them up again
       # between the load and the comparison backup. See
       # upgrade_config_keep_auto_users.
-      echo "Excluding 'execd_spool_dir', 'mail_tag', 'gid_range' and 'auto_user_delete_time' from diff of '$object_type' object '$object_name'"
-      filter1="grep -Ev ^(execd_spool_dir|mail_tag|gid_range|auto_user_delete_time) $file1"
-      filter2="grep -Ev ^(execd_spool_dir|mail_tag|gid_range|auto_user_delete_time) $file2"
+      # port_range arrived with 9.1.2 (CS-2013), the reference backups before
+      # 9.1.7 do not have it.
+      exclude="^(execd_spool_dir|mail_tag|gid_range|auto_user_delete_time|port_range)"
+      echo "Excluding '$exclude' from diff of '$object_type' object '$object_name'"
+      filter1="grep -Ev $exclude $file1"
+      filter2="grep -Ev $exclude $file2"
    elif [ "$object_type" = "configurations" ]; then
       # Users delete_time will differ for different backups, exclude it
       echo "Excluding 'execd_spool_dir' from diff of '$object_type' object '$object_name'"
