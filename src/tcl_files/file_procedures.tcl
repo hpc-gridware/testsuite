@@ -3067,6 +3067,7 @@ proc wait_for_file {path_to_file seconds {to_go_away 0} {do_error_check 1}} {
    # them is therefore safe -- unlike logfile_wait, which IS used to assert
    # that a pattern never shows up (issue_1806). See ts_scale_timeout.
    set seconds [ts_scale_timeout $seconds]
+   tsrec_poll_begin [expr {$to_go_away ? "file $path_to_file gone" : "file $path_to_file present"}] $seconds
 
    set time [expr [timestamp] + $seconds]
    set wasok -1
@@ -3139,6 +3140,7 @@ proc wait_for_remote_file {hostname user path {mytimeout 60} {raise_error 1} {to
    # See wait_for_file: appear and vanish are both waits. cmd_timeout below is
    # derived from mytimeout, so it follows along.
    set mytimeout [ts_scale_timeout $mytimeout]
+   tsrec_poll_begin [expr {$to_go_away ? "file $path on $hostname gone" : "file $path on $hostname present"}] $mytimeout
 
    if {$to_go_away == 0} {
       ts_log_fine "looking for file \"$path\" to appear on host $hostname"
@@ -3285,6 +3287,7 @@ proc wait_for_remote_dir { hostname user path { mytimeout 60 } {raise_error 1} {
 
    # See wait_for_file.
    set mytimeout [ts_scale_timeout $mytimeout]
+   tsrec_poll_begin [expr {$to_go_away ? "directory $path on $hostname gone" : "directory $path on $hostname present"}] $mytimeout
 
    if {$to_go_away == 0} {
       ts_log_fine [format "looking for directory \"%s\" on host \"%s\" as user \"%s\" to appear" $path $hostname $user]

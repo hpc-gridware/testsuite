@@ -203,15 +203,17 @@ Function verdicts:
 - `function` is the check function, or the phase name while a phase runs.
   Errors raised by the post-check cleanup checks carry `cleanup_check`.
 - `poll` is the id of the enclosing poll context, absent outside one.
-- `framework` marks commands the testsuite framework runs around a check, not
-  the check itself: the cleanup baseline before the setup (`function` is
-  `main`) and the post-check cleanup checks (`cleanup_check`).
+- `framework` marks commands the testsuite framework runs, not the check
+  itself: around a check, the cleanup baseline before the setup (`function`
+  is `main`) and the post-check cleanup checks (`cleanup_check`); inside a
+  check function, the error mail of the logging and the result marker.
 - `interactive` marks a session a check drives itself through
   `open_remote_spawn_process`; it has no `exit` (null) and no `output`.
 - `user` is the user the command really ran as, after the testsuite mapped
   special user names (e.g. `ts_def_con`).
 - `diagnostic` marks commands a helper runs only to explain a failure (for
-  example `qstat -f` after a `wait_for_jobstart` timeout).
+  example `qstat -f` after a `wait_for_jobstart` timeout); the helper wraps
+  them in `tsrec_diagnostic`.
 - `exit` is null when the status is unknown (interactive sessions).
 - `output.excerpt` holds at most 4 KiB (first 2 KiB and last 2 KiB);
   `truncated` says whether bytes were dropped.
@@ -223,12 +225,29 @@ Function verdicts:
 ```json
 {"type": "poll", "t": "...", "id": 3, "parent": null,
  "function": "sharetree_modify", "helper": "wait_for_jobstart",
- "condition": "job 1234 running", "timeout": 60, "start": "...",
+ "framework": false, "condition": "job 1234 running", "timeout": 60,
+ "start": "...",
  "end": "...", "outcome": "met", "commands": 7}
 ```
 
-`outcome` is `met`, `timeout` or `error`. `timeout` is the effective value
-after `ts_scale_timeout`. `parent` links a nested context.
+A poll context covers one call of a `wait_for_*` helper: the helper opens it
+with `tsrec_poll_begin` once it knows its effective timeout, and it closes
+when the helper returns, on any path. `timeout` is that effective value in
+seconds, after `ts_scale_timeout`. `parent` links a nested context.
+`commands` counts the commands recorded directly inside the context.
+`framework` has the same meaning as for `command`.
+
+`outcome` is
+
+- `timeout` if a timeout error was raised inside the context, or if the
+  deadline was reached without an error (a helper called with its error
+  check switched off, e.g. to show that a job does not start);
+- `error` if any other error was raised inside the context;
+- `met` otherwise.
+
+The helpers count whole seconds, so the deadline counts as reached up to one
+second early. A helper that gives up early without raising an error (an
+invalid job id with the error check off) reads as `met`.
 
 #### `error`
 
@@ -242,14 +261,15 @@ after `ts_scale_timeout`. `parent` links a nested context.
 
 | origin | raised by | class |
 |---|---|---|
-| `poll_timeout` | a poll context that ended with `timeout` | load |
+| `poll_timeout` | a timeout inside a poll context: the message mentions a timeout or the deadline was reached | load |
 | `command_timeout` | a spawned command that did not finish in time | load |
 | `connection` | host unreachable, ssh or connection failure | infrastructure |
 | `assertion` | any other error raised by the check | assertion |
 | `tcl_error` | a Tcl error in the check | assertion |
 | `cleanup` | a post-check cleanup check | assertion |
 
-When the framework cannot tell, it writes `assertion`.
+When the framework cannot tell, it writes `assertion`. An error raised inside
+a poll context carries the context's id in `poll`.
 
 #### `unit_end`
 

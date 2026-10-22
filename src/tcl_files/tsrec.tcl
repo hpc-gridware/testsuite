@@ -221,6 +221,9 @@ proc tsrec_init {} {
    set tsrec(next_origin) ""
    set tsrec(in_start_remote_prog) 0
    set tsrec(last_real_user) ""
+   set tsrec(poll_stack) {}
+   set tsrec(poll_next) 0
+   set tsrec(diagnostic) 0
    set tsrec(enabled) 1
 
    # provenance
@@ -481,6 +484,18 @@ proc tsrec_error {level_name message {origin "assertion"}} {
       # raised while a connection to a host was being set up
       set origin "connection"
    }
+   set poll [lindex $tsrec(poll_stack) end]
+   if {$poll != ""} {
+      # raised inside a wait helper: a timeout there points at load
+      if {$origin == "assertion" && ([string match -nocase "*timeout*" $message] || [tsrec_poll_due $poll [clock milliseconds]])} {
+         set origin "poll_timeout"
+      }
+      if {$origin == "poll_timeout"} {
+         dict set tsrec(poll,$poll) timeout_error 1
+      } else {
+         dict set tsrec(poll,$poll) error 1
+      }
+   }
    if {$tsrec(context) == "cleanup_check"} {
       lappend tsrec(cleanup_messages) $message
       set origin "cleanup"
@@ -495,6 +510,9 @@ proc tsrec_error {level_name message {origin "assertion"}} {
                    level [tsrec_str $level_name] \
                    origin [tsrec_str $origin] \
                    message [tsrec_str $message]]
+   if {$poll != ""} {
+      lappend pairs poll $poll
+   }
    if {$tsrec(check) != ""} {
       set pairs [concat [list check [tsrec_str $tsrec(check)]] $pairs]
    }
@@ -582,6 +600,25 @@ proc tsrec_in_proc {name} {
    return 0
 }
 
+## @brief Tell whether the testsuite framework itself is running, not a check
+#
+# True around a check (the cleanup baseline before the setup, the post-check
+# cleanup checks) and inside the framework procedures a check function calls
+# indirectly: the error mail of the logging and the result marker.
+# @param function the function the record is attributed to
+# @return 1 for framework activity, 0 otherwise
+proc tsrec_in_framework {function} {
+   if {$function == "main" || $function == "cleanup_check"} {
+      return 1
+   }
+   foreach name {ts_private_log_send_mail mail_report send_mail save_result} {
+      if {[tsrec_in_proc $name]} {
+         return 1
+      }
+   }
+   return 0
+}
+
 ## @brief Mark the start of a check, so its setup commands are recorded too
 # @param path the check path
 # @return nothing
@@ -635,29 +672,33 @@ proc tsrec_command {host user command arguments cwd start_ms end_ms exit_status 
    } elseif {$function == "" && [info exists CHECK_CUR_PROC_NAME]} {
       set function $CHECK_CUR_PROC_NAME
    }
-   # commands the framework runs around a check (the cleanup baseline before
-   # the setup, the post-check cleanup checks), not the check itself
-   set framework [expr {$function == "main" || $function == "cleanup_check"}]
+   set framework [tsrec_in_framework $function]
    set exit_json "null"
    if {[string is integer -strict $exit_status]} {
       set exit_json $exit_status
    }
-   tsrec_line "command" [list function [tsrec_str $function] \
-                                  host [tsrec_str $host] \
-                                  user [tsrec_str $user] \
-                                  root [tsrec_bool [expr {$user == "root"}]] \
-                                  command [tsrec_str $command] \
-                                  args [tsrec_str $arguments] \
-                                  cwd [tsrec_str $cwd] \
-                                  start [tsrec_str [tsrec_time $start_ms]] \
-                                  end [tsrec_str [tsrec_time $end_ms]] \
-                                  exit $exit_json \
-                                  timed_out [tsrec_bool $timed_out] \
-                                  background [tsrec_bool $background] \
-                                  interactive [tsrec_bool $interactive] \
-                                  framework [tsrec_bool $framework] \
-                                  diagnostic [tsrec_bool 0] \
-                                  output [tsrec_output $output]]
+   set pairs [list function [tsrec_str $function] \
+                   host [tsrec_str $host] \
+                   user [tsrec_str $user] \
+                   root [tsrec_bool [expr {$user == "root"}]] \
+                   command [tsrec_str $command] \
+                   args [tsrec_str $arguments] \
+                   cwd [tsrec_str $cwd] \
+                   start [tsrec_str [tsrec_time $start_ms]] \
+                   end [tsrec_str [tsrec_time $end_ms]] \
+                   exit $exit_json \
+                   timed_out [tsrec_bool $timed_out] \
+                   background [tsrec_bool $background] \
+                   interactive [tsrec_bool $interactive] \
+                   framework [tsrec_bool $framework]]
+   set poll [lindex $tsrec(poll_stack) end]
+   if {$poll != ""} {
+      dict incr tsrec(poll,$poll) commands
+      lappend pairs poll $poll
+   }
+   lappend pairs diagnostic [tsrec_bool [expr {$tsrec(diagnostic) > 0}]] \
+                 output [tsrec_output $output]
+   tsrec_line "command" $pairs
 }
 
 ## @brief Note a spawned session; called by open_remote_spawn_process before it returns
@@ -696,4 +737,126 @@ proc tsrec_spawn_closed {spawn_id} {
    lassign $tsrec(open,$spawn_id) host user command arguments cwd background start_ms
    unset tsrec(open,$spawn_id)
    tsrec_command $host $user $command $arguments $cwd $start_ms [clock milliseconds] "" 0 $background 1 ""
+}
+
+## @brief Open a poll context for the calling wait helper
+#
+# Called by a wait helper once it knows its effective timeout. The context
+# closes by itself when the helper returns, whichever way it leaves: a trace
+# on a variable in the helper's frame fires when the frame goes away.
+# Commands spawned while the context is open carry its id.
+# @param condition what the helper waits for, e.g. "job 1234 running"
+# @param timeout the effective timeout in seconds, after ts_scale_timeout
+# @return nothing
+proc tsrec_poll_begin {condition timeout} {
+   global tsrec CHECK_CUR_PROC_NAME
+   if {!$tsrec(enabled) || $tsrec(check) == ""} {
+      return
+   }
+   set id [incr tsrec(poll_next)]
+   set function $tsrec(function)
+   if {$tsrec(context) == "cleanup_check"} {
+      set function "cleanup_check"
+   } elseif {$function == "" && [info exists CHECK_CUR_PROC_NAME]} {
+      set function $CHECK_CUR_PROC_NAME
+   }
+   set tsrec(poll,$id) [dict create parent [lindex $tsrec(poll_stack) end] \
+                                    function $function \
+                                    helper [lindex [info level -1] 0] \
+                                    framework [tsrec_in_framework $function] \
+                                    condition $condition \
+                                    timeout $timeout \
+                                    start [clock milliseconds] \
+                                    commands 0 \
+                                    error 0 \
+                                    timeout_error 0]
+   lappend tsrec(poll_stack) $id
+   uplevel 1 [list set tsrec_poll_guard $id]
+   uplevel 1 [list trace add variable tsrec_poll_guard unset [list tsrec_poll_end $id]]
+}
+
+## @brief Tell whether the effective timeout of a poll context has run out
+#
+# The helpers count whole seconds, so a deadline counts as reached up to one
+# second early. A timeout below 1 means the helper waits without a deadline.
+# @param id the poll context id
+# @param now_ms the time to check, in milliseconds
+# @return 1 if the deadline is reached, 0 otherwise
+proc tsrec_poll_due {id now_ms} {
+   global tsrec
+   set timeout_ms [expr {[dict get $tsrec(poll,$id) timeout] * 1000}]
+   if {$timeout_ms < 1000} {
+      return 0
+   }
+   set slack [expr {min(1000, $timeout_ms / 2)}]
+   return [expr {$now_ms - [dict get $tsrec(poll,$id) start] >= $timeout_ms - $slack}]
+}
+
+## @brief Close a poll context and record it; variable trace installed by tsrec_poll_begin
+#
+# The outcome is timeout if a timeout error was raised inside the context or
+# the deadline was reached silently (a helper called without error check),
+# error if any other error was raised, met otherwise.
+# @param id the poll context id
+# @param args the arguments of the variable trace (name1 name2 op), unused
+# @return nothing
+proc tsrec_poll_end {id args} {
+   global tsrec
+   if {![info exists tsrec(poll,$id)]} {
+      return
+   }
+   set end_ms [clock milliseconds]
+   set index [lsearch -exact $tsrec(poll_stack) $id]
+   if {$index >= 0} {
+      set tsrec(poll_stack) [lrange $tsrec(poll_stack) 0 [expr {$index - 1}]]
+   }
+   set poll $tsrec(poll,$id)
+   if {[dict get $poll timeout_error]} {
+      set outcome "timeout"
+   } elseif {[dict get $poll error]} {
+      set outcome "error"
+   } elseif {[tsrec_poll_due $id $end_ms]} {
+      set outcome "timeout"
+   } else {
+      set outcome "met"
+   }
+   unset tsrec(poll,$id)
+   if {!$tsrec(enabled)} {
+      return
+   }
+   set parent [dict get $poll parent]
+   if {$parent == ""} {
+      set parent "null"
+   }
+   tsrec_line "poll" [list id $id \
+                           parent $parent \
+                           function [tsrec_str [dict get $poll function]] \
+                           helper [tsrec_str [dict get $poll helper]] \
+                           framework [tsrec_bool [dict get $poll framework]] \
+                           condition [tsrec_str [dict get $poll condition]] \
+                           timeout [tsrec_num_or_str [dict get $poll timeout]] \
+                           start [tsrec_str [tsrec_time [dict get $poll start]]] \
+                           end [tsrec_str [tsrec_time $end_ms]] \
+                           outcome [tsrec_str $outcome] \
+                           commands [dict get $poll commands]]
+}
+
+## @brief Run a script whose commands only explain a failure
+#
+# Wait helpers wrap the commands they run after a timeout to show the state
+# of the cluster; those commands are recorded with diagnostic set, so a
+# report does not list them as steps of the scenario.
+# @param script the script, evaluated in the caller's frame
+# @return the result of the script, with its return code
+proc tsrec_diagnostic {script} {
+   global tsrec
+   set counted [expr {[info exists tsrec(diagnostic)] && $tsrec(enabled)}]
+   if {$counted} {
+      incr tsrec(diagnostic)
+   }
+   set code [catch {uplevel 1 $script} result options]
+   if {$counted} {
+      incr tsrec(diagnostic) -1
+   }
+   return -options $options $result
 }

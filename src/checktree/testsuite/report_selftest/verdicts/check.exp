@@ -36,17 +36,19 @@ global check_test_cases
 
 set check_name            "report_selftest_verdicts"
 set check_category        "TESTSUITE REPORT_SELFTEST"
-set check_description(0)  "report self test: passed, unsupported, failed and Tcl error functions"
+set check_description(0)  "report self test: passed, unsupported, failed and Tcl error functions, poll contexts"
 set check_needs           ""
 
 set check_functions {}
 lappend check_functions "report_selftest_pass"
 lappend check_functions "report_selftest_config"
 lappend check_functions "report_selftest_fail"
+lappend check_functions "report_selftest_poll"
 lappend check_functions "report_selftest_tcl_error"
 
 set check_test_cases(report_selftest_pass) {{SELF-01 covers}}
 set check_test_cases(report_selftest_fail) {{SELF-02 covers} {SELF-03 prepares}}
+set check_test_cases(report_selftest_poll) {{SELF-05 covers}}
 
 ## @brief Pass
 # @return nothing
@@ -64,6 +66,25 @@ proc report_selftest_config {} {
 # @return nothing
 proc report_selftest_fail {} {
    ts_log_severe "report self test: deliberate failure"
+}
+
+## @brief Wait on a held job: one met, one silent and one failing poll context
+#
+# wait_for_jobpending is met at once; wait_for_jobstart without error check
+# runs into its timeout silently; with error check it raises a timeout error
+# and runs its diagnostic commands.
+# @return nothing
+proc report_selftest_poll {} {
+   get_current_cluster_config_array ts_config
+
+   set job_id [submit_job "-o /dev/null -e /dev/null -h -b y sleep 2000"]
+   if {$job_id <= 0} {
+      return
+   }
+   wait_for_jobpending $job_id "sleep" 30
+   wait_for_jobstart $job_id "sleep" 3 0
+   wait_for_jobstart $job_id "sleep" 3
+   delete_job $job_id
 }
 
 ## @brief Raise a Tcl error

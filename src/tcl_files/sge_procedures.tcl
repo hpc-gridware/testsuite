@@ -3816,6 +3816,7 @@ proc wait_for_load_from_all_queues {{seconds 60} {raise_error 1} {test_for_unkno
       set seconds [expr $seconds + 60]
    }
    set seconds [ts_scale_timeout $seconds]
+   tsrec_poll_begin "all queues report load" $seconds
 
    set time [clock seconds]
 
@@ -3905,6 +3906,7 @@ proc wait_for_load_from_all_queues {{seconds 60} {raise_error 1} {test_for_unkno
 #  @return 0 if no online usage was reported within timeout seconds, 1 if online usage was reported
 proc wait_for_online_usage {job_id {mytimeout 60} {usage_name "cpu"} {ja_task_id 1}} {
    set mytimeout [ts_scale_timeout $mytimeout]
+   tsrec_poll_begin "online usage $usage_name of job $job_id.$ja_task_id reported" $mytimeout
 
    # we can't use the index "usage    1" directly in TCL-arrays because of
    # the spaces, have to use it in a variable
@@ -4011,6 +4013,7 @@ proc get_online_usage {job_id name {ja_task_id 1} {with_fractional 0}} {
 proc wait_for_connected_scheduler { {seconds 90} {raise_error 1} } {
    get_current_cluster_config_array ts_config
    set seconds [ts_scale_timeout $seconds]
+   tsrec_poll_begin "scheduler connected to qmaster" $seconds
    set mytimeout [clock seconds]
    incr mytimeout $seconds
    set error_text ""
@@ -4072,6 +4075,7 @@ proc wait_for_job_state {jobid state wait_timeout {raise_error 1}} {
    get_current_cluster_config_array ts_config
 
    set wait_timeout [ts_scale_timeout $wait_timeout]
+   tsrec_poll_begin "job $jobid in state $state" $wait_timeout
    set my_timeout [expr [clock seconds] + $wait_timeout]
    ts_log_fine "waiting for job $jobid to become job state ${state} ..."
    while {1} {
@@ -4117,6 +4121,7 @@ proc wait_for_queue_state {queue state wait_timeout} {
    get_current_cluster_config_array ts_config
 
    set wait_timeout [ts_scale_timeout $wait_timeout]
+   tsrec_poll_begin "queue $queue in state $state" $wait_timeout
    ts_log_fine "waiting for queue $queue to get in \"${state}\" state "
    set my_timeout [expr [clock seconds] + $wait_timeout]
    while {1} {
@@ -4135,7 +4140,9 @@ proc wait_for_queue_state {queue state wait_timeout} {
          }
       }
       if {[clock seconds] > $my_timeout} {
-         set qstat_output [start_sge_bin "qstat" "-f -q $queue"]
+         tsrec_diagnostic {
+            set qstat_output [start_sge_bin "qstat" "-f -q $queue"]
+         }
          ts_log_severe "timeout waiting for queue $queue to get in \"${state}\" state\n$qstat_output"
          return -1
       }
@@ -4312,6 +4319,7 @@ proc shutdown_execd {host_list {soft 0} {timeout 120} {wait_for_unknown_load 1}}
 proc wait_for_unknown_load { seconds queue_array { do_error_check 1 } } {
    get_current_cluster_config_array ts_config
    set seconds [ts_scale_timeout $seconds]
+   tsrec_poll_begin "queues $queue_array report unknown load" $seconds
    set time [clock seconds]
 
 
@@ -4435,6 +4443,7 @@ proc wait_for_end_of_all_jobs {{seconds 60} {raise_error 1} {check_spool_dir 1}}
    get_current_cluster_config_array ts_config
 
    set seconds [ts_scale_timeout $seconds]
+   tsrec_poll_begin "all jobs finished" $seconds
    set time [clock seconds]
    set opts "-s pr -u '*'"
    ts_log_fine "waiting for end of all jobs (qstat $opts)"
@@ -7181,6 +7190,7 @@ proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
    get_current_cluster_config_array ts_config
 
    set seconds [ts_scale_timeout $seconds]
+   tsrec_poll_begin "job $jobid running" $seconds
 
    if {[is_job_id $jobid] != 1} {
       if {$do_errorcheck == 1} {
@@ -7207,8 +7217,10 @@ proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
       set runtime [expr [clock seconds] - $time]
       if {$runtime >= $seconds} {
          if {$do_errorcheck == 1} {
-            set qstat_output [start_sge_bin "qstat" "-f -g t -u '*'"]
-            set qstat_wp_output [start_sge_bin "qalter" "-w p $jobid"]
+            tsrec_diagnostic {
+               set qstat_output [start_sge_bin "qstat" "-f -g t -u '*'"]
+               set qstat_wp_output [start_sge_bin "qalter" "-w p $jobid"]
+            }
             ts_log_severe "timeout waiting for job $jobid \"$jobname\" to start\n$qstat_output\n$qstat_wp_output"
          }
          return -1
@@ -7272,6 +7284,7 @@ proc wait_for_jobstart {jobid jobname seconds {do_errorcheck 1} {do_tsm 0}} {
 #*******************************
 proc wait_for_end_of_transfer { jobid seconds } {
    set seconds [ts_scale_timeout $seconds]
+   tsrec_poll_begin "job $jobid out of transfer state" $seconds
    ts_log_fine "Waiting for job $jobid to finish transfer state"
 
    set result 0
@@ -7371,6 +7384,7 @@ proc wait_for_jobpending {jobid jobname seconds {or_running 0}} {
   get_current_cluster_config_array ts_config
 
   set seconds [ts_scale_timeout $seconds]
+  tsrec_poll_begin [expr {$or_running ? "job $jobid pending or running" : "job $jobid pending"}] $seconds
   ts_log_fine "Waiting for job $jobid ($jobname) to get in pending state"
 
   if {[is_job_id $jobid] != 1} {
@@ -7596,6 +7610,7 @@ proc wait_for_jobend {jobid jobname seconds {runcheck 1} {wait_for_end 0} {raise
    get_current_cluster_config_array ts_config
 
    set seconds [ts_scale_timeout $seconds]
+   tsrec_poll_begin "job $jobid finished" $seconds
 
    if {$runcheck == 1} {
       if {[is_job_running $jobid $jobname] != 1} {
@@ -9995,6 +10010,7 @@ proc get_detached_settings {{output_var result} {on_host ""} {as_user ""} {raise
 proc wait_for_event_client { evc_name {to_go_away 0}} {
    set my_timeout [clock seconds]
    incr my_timeout 60
+   tsrec_poll_begin [expr {$to_go_away ? "event client $evc_name gone" : "event client $evc_name registered"}] 60
    while {[clock seconds] < $my_timeout} {
       set back [get_event_client_list "" "" 1 result]
       if {$back == 0} {
@@ -10071,6 +10087,7 @@ proc wait_for_job_end {job_id {timeout 60} {raise_error 1}} {
 
    # we wait until now + timeout
    set timeout [ts_scale_timeout $timeout]
+   tsrec_poll_begin "job $job_id gone from qmaster" $timeout
    set my_timeout [expr [clock seconds] + $timeout]
 
    # if the job is still in qmaster, wait until it leaves qmaster
@@ -11786,6 +11803,7 @@ proc wait_for_load_values {variables {hosts {}} {timeout 120}} {
    get_current_cluster_config_array ts_config
 
    set timeout [ts_scale_timeout $timeout]
+   tsrec_poll_begin "load values $variables reported" $timeout
 
    # optional parameter hosts - if not given: all
    if {[llength $hosts] == 0} {
@@ -11833,6 +11851,7 @@ proc wait_for_load_values_trashed {variables {hosts {}} {timeout 120}} {
    get_current_cluster_config_array ts_config
 
    set timeout [ts_scale_timeout $timeout]
+   tsrec_poll_begin "load values $variables gone" $timeout
 
    # optional parameter hosts - if not given: all
    if {[llength $hosts] == 0} {
