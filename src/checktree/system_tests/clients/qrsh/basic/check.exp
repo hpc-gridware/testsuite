@@ -419,8 +419,8 @@ proc replace_automount_prefix {path} {
       } output]
 
    if {$error != 0} {
-      ts_log_severe "error opening $ts_config(product_root)/$ts_config(cell)/"
-                    "common/sge_aliases file:\n$output"
+      set aliases_file "$ts_config(product_root)/$ts_config(cell)/common/sge_aliases"
+      ts_log_severe "error opening $aliases_file:\n$output"
    } else {
       while {[gets $f line] >= 0 && $do_loop == 1} {
          # Search first non-blank character, if it is a '#' then skip line,
