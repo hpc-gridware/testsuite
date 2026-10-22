@@ -1,0 +1,356 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2937: for a user who is not a manager, drmaa_exit() takes about 30 seconds, and the
+# qmaster logs
+#
+#    denied: "<user>" must be manager to initiate TRIGGER operation
+#
+# while for a manager it returns at once. japi_exit() shuts the session's event client down
+# by sending a GDI TRIGGER request for the SGE_EV_LIST target. The permission check for
+# TRIGGER requests requires manager rights for every target but the cluster queue list, so
+# the request is rejected for an ordinary user, the event client is never told to shut down,
+# and the session waits for its event client thread to notice on its own.
+#
+# This check times drmaa_init() and drmaa_exit() for a manager and for a user who is not
+# one, each with and without the SGE_JAPI_EDTIME workaround, and reports the six numbers as
+# a table. It also counts the denials the qmaster logs while each run is in progress.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_2937"
+set check_category       "BUG DRMAA VERIFIED"
+set check_description(0) "drmaa_exit() takes about 30 seconds for a user who is not a manager"
+
+set check_needs          "init_core_system"
+
+set check_setup_function "issue_2937_setup"
+set check_cleanup_function "issue_2937_cleanup"
+
+set check_functions {}
+lappend check_functions "issue_2937_exit_time"
+lappend check_functions "issue_2937_foreign_clients_are_protected"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2937_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global issue_2937_host issue_2937_manager issue_2937_user issue_2937_messages
+   global issue_2937_timeout issue_2937_fast_seconds
+
+   # the exit the check waits for takes about 30 seconds while the defect is there, and the
+   # event delivery interval it waits for is a product default, so the timeout has to carry
+   # it with room to spare rather than the check shortening the interval
+   set issue_2937_timeout 180
+
+   # what counts as "returns at once" - a manager needs milliseconds, the workaround about a
+   # second, and the defect produces about 30 seconds, so the boundary is not critical
+   set issue_2937_fast_seconds 5.0
+
+   set issue_2937_host [host_conf_get_suited_hosts]
+   set issue_2937_messages "[get_spool_dir $ts_config(master_host) qmaster]/messages"
+
+   # the two users the check compares: the testsuite user, who is always a manager, and the
+   # first foreign system user, who is not
+   set issue_2937_manager $CHECK_USER
+   set issue_2937_user $CHECK_FIRST_FOREIGN_SYSTEM_USER
+
+   return 0
+}
+
+proc issue_2937_cleanup {} {
+   global issue_2937_host issue_2937_manager issue_2937_user issue_2937_messages
+   global issue_2937_timeout issue_2937_fast_seconds
+
+   unset -nocomplain issue_2937_host issue_2937_manager issue_2937_user issue_2937_messages
+   unset -nocomplain issue_2937_timeout issue_2937_fast_seconds
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief count the lines of the qmaster messages file
+#
+# The denials are counted in the window of one run, so the check needs to know where the
+# file ended before it.
+#
+# @return the number of lines the file has
+proc issue_2937_messages_lines {} {
+   global CHECK_USER issue_2937_messages
+   get_current_cluster_config_array ts_config
+
+   get_file_content $ts_config(master_host) $CHECK_USER $issue_2937_messages lines
+
+   return $lines(0)
+}
+
+## @brief count the qmaster messages after a given line which contain a text
+#
+# @param from      the line the run started at, from issue_2937_messages_lines
+# @param pattern   the text to look for
+# @param text_var  name of a variable the first matching line is returned in
+# @return the number of matching lines
+proc issue_2937_count_messages {from pattern text_var} {
+   global CHECK_USER issue_2937_messages
+   get_current_cluster_config_array ts_config
+   upvar $text_var text
+
+   set text ""
+   set found 0
+
+   get_file_content $ts_config(master_host) $CHECK_USER $issue_2937_messages lines
+   for {set i [expr {$from + 1}]} {$i <= $lines(0)} {incr i} {
+      if {[string match "*$pattern*" $lines($i)]} {
+         incr found
+         if {$text == ""} {
+            set text [string trim $lines($i)]
+         }
+      }
+   }
+
+   return $found
+}
+
+## @brief read the event client list
+#
+# @param min_id  the lowest id to return, 0 for all of them
+# @return a list of {id name host} entries
+proc issue_2937_event_clients {{min_id 0}} {
+   set clients {}
+
+   set output [start_sge_bin "qconf" "-secl" "" "" prg_exit_state]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "cannot read the event client list:\n$output"
+      return {}
+   }
+
+   foreach line [split $output "\n"] {
+      if {[regexp {^ *([0-9]+) +([^ ]+) +([^ ]+)} $line match id name host]} {
+         if {$id >= $min_id} {
+            lappend clients [list $id $name $host]
+         }
+      }
+   }
+
+   return $clients
+}
+
+## @brief run the probe once and return what drmaa_init() and drmaa_exit() took
+#
+# @param user      the user to run as
+# @param edtime    the value for SGE_JAPI_EDTIME, or "" to leave it unset
+# @param init_var  name of the variable the init time is returned in
+# @param exit_var  name of the variable the exit time is returned in
+# @return 1 if the run delivered both times, 0 if it did not
+proc issue_2937_run {user edtime init_var exit_var} {
+   global issue_2937_host issue_2937_timeout
+   upvar $init_var init
+   upvar $exit_var exit_time
+
+   set init ""
+   set exit_time ""
+
+   unset -nocomplain myenv
+   set what "as $user"
+   if {$edtime != ""} {
+      set myenv(SGE_JAPI_EDTIME) $edtime
+      append what " with SGE_JAPI_EDTIME=$edtime"
+   }
+
+   set before [issue_2937_messages_lines]
+   ts_log_fine "running test_drmaa_cs2937 $what on $issue_2937_host"
+   set output [start_test_bin "test_drmaa_cs2937" "" $issue_2937_host $user \
+                              prg_exit_state $issue_2937_timeout myenv]
+   set denials [issue_2937_count_messages $before \
+                   "must be manager to initiate TRIGGER operation" denial]
+
+   if {$prg_exit_state != 0} {
+      ts_log_severe "test_drmaa_cs2937 $what failed ($prg_exit_state):\n$output"
+      return 0
+   }
+   if {![regexp {RESULT init=([0-9.]+) run=[0-9.]+ exit=([0-9.]+)} $output match init exit_time]} {
+      ts_log_severe "cannot read the result of test_drmaa_cs2937 $what:\n$output"
+      return 0
+   }
+
+   ts_log_fine "=== $what: init $init s, exit $exit_time s, $denials TRIGGER denial(s) in the\
+                qmaster messages file"
+
+   if {$denials > 0} {
+      ts_log_severe "the qmaster refused the shutdown of the session's event client $denials\
+                     time(s) while the probe ran $what: \"$denial\". Closing a session asks for\
+                     a GDI TRIGGER request for the SGE_EV_LIST target, and the owner of an event\
+                     client has to be able to shut it down without being a manager"
+   }
+
+   return 1
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief compare the time drmaa_exit() takes for a manager and for an ordinary user
+proc issue_2937_exit_time {} {
+   global issue_2937_manager issue_2937_user issue_2937_fast_seconds
+
+   set col_init "init"
+   set col_exit "exit"
+   set col_work "exit with workaround"
+   set columns [list $col_init $col_exit $col_work]
+   set rows {"manager" "non-manager"}
+
+   foreach row $rows user [list $issue_2937_manager $issue_2937_user] {
+      if {[issue_2937_run $user "" init exit_time]} {
+         set data($col_init,$row) [format "%.3f s" $init]
+         set data($col_exit,$row) [format "%.3f s" $exit_time]
+         set seconds($row) $exit_time
+         set init_seconds($row) $init
+      }
+
+      # SGE_JAPI_EDTIME is the event delivery interval the session waits for when the
+      # shutdown of its event client is denied, so a low value shortens the exit without
+      # changing what the qmaster does
+      if {[issue_2937_run $user 1 init exit_time]} {
+         set data($col_work,$row) [format "%.3f s" $exit_time]
+         set workaround($row) $exit_time
+      }
+   }
+
+   ts_log_fine "\n[print_xy_array $columns $rows data "n/a"]"
+
+   foreach row $rows {
+      if {![info exists seconds($row)]} {
+         return
+      }
+      if {$init_seconds($row) > $issue_2937_fast_seconds} {
+         ts_log_severe "drmaa_init() took $init_seconds($row) s for the $row - it is expected to\
+                        return at once, and the comparison of the exit times says little when it\
+                        does not"
+      }
+   }
+
+   # the premise: for a manager the session closes at once
+   if {$seconds(manager) > $issue_2937_fast_seconds} {
+      ts_log_severe "drmaa_exit() took $seconds(manager) s for the manager\
+                     $issue_2937_manager, where it is expected to return at once - without that\
+                     the delay of a user who is not a manager cannot be attributed to the\
+                     permission check"
+   } elseif {$seconds(non-manager) > $issue_2937_fast_seconds} {
+      # the defect
+      ts_log_severe "drmaa_exit() took $seconds(non-manager) s for $issue_2937_user, who is not a\
+                     manager, while it took $seconds(manager) s for the manager\
+                     $issue_2937_manager. The session asks the qmaster to shut its event client\
+                     down with a GDI TRIGGER request for the SGE_EV_LIST target, which is denied\
+                     for anyone but a manager, so the session waits for its event client thread\
+                     instead of being able to stop it"
+   }
+
+   if {[info exists workaround(non-manager)]} {
+      ts_log_fine "SGE_JAPI_EDTIME=1 brings the exit of $issue_2937_user down to\
+                   $workaround(non-manager) s - the workaround shortens the wait, it does not\
+                   stop the request from being denied"
+   }
+}
+
+## @brief require that a user who is not a manager can still shut down nothing but its own
+##        event client
+#
+# The counterpart of the check above: the owner of an event client may shut it down, and that
+# is all. The scheduler is nobody's own client, shutting all of them down at once is a manager
+# operation, and so is shutting down a client which belongs to someone else. All three go
+# through the same GDI TRIGGER request for the SGE_EV_LIST target.
+proc issue_2937_foreign_clients_are_protected {} {
+   global issue_2937_user
+
+   # the scheduler, by its event client id and by qconf -ks, which sends the same request.
+   # Both reach sge_gdi_shutdown_event_client(), which used to cancel the scheduler thread
+   # before the event master had a chance to refuse the request - the refusal arrived, the
+   # thread was gone anyway, and the event client entry outlived it by a moment, so the
+   # messages file is what the check reads rather than the listing alone.
+   set before [issue_2937_messages_lines]
+
+   foreach args {"-kec 1" "-ks"} {
+      set output [start_sge_bin "qconf" $args "" $issue_2937_user prg_exit_state]
+      if {$prg_exit_state == 0} {
+         ts_log_severe "qconf $args succeeded for $issue_2937_user, who is not a manager -\
+                        stopping the scheduler has to stay a manager operation:\n$output"
+      } else {
+         ts_log_fine "qconf $args is refused for $issue_2937_user: [string trim $output]"
+      }
+   }
+
+   # all dynamic event clients at once
+   set output [start_sge_bin "qconf" "-kec all" "" $issue_2937_user prg_exit_state]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "qconf -kec all succeeded for $issue_2937_user, who is not a manager - it\
+                     would shut down the event clients of other users:\n$output"
+   } else {
+      ts_log_fine "qconf -kec all is refused for $issue_2937_user: [string trim $output]"
+   }
+
+   # the scheduler thread has to be running still, whatever the answers were
+   set stopped [issue_2937_count_messages $before "scheduler thread terminated" line]
+   if {$stopped > 0} {
+      ts_log_severe "$issue_2937_user, who is not a manager, stopped the scheduler thread:\
+                     \"$line\". A refused request must not get as far as\
+                     sge_scheduler_terminate()"
+   }
+
+   set scheduler_found 0
+   foreach entry [issue_2937_event_clients] {
+      if {[lindex $entry 0] == 1} {
+         set scheduler_found 1
+      }
+   }
+   if {!$scheduler_found} {
+      ts_log_severe "the scheduler is no longer registered as an event client after\
+                     $issue_2937_user tried to shut it down"
+   }
+
+   # and a client which belongs to someone else - the qmaster's own mirror clients do. A client
+   # of a session which has ended in the meantime is skipped: it is read from the listing and
+   # may be gone by the time the shutdown is tried, which says nothing about the permission.
+   foreach entry [issue_2937_event_clients 2] {
+      set id [lindex $entry 0]
+      set name [lindex $entry 1]
+
+      set output [start_sge_bin "qconf" "-kec $id" "" $issue_2937_user prg_exit_state]
+      if {$prg_exit_state == 0} {
+         ts_log_severe "qconf -kec $id succeeded for $issue_2937_user, who neither is a manager\
+                        nor owns the event client $name:\n$output"
+      } else {
+         ts_log_fine "qconf -kec $id ($name) is refused for $issue_2937_user:\
+                      [string trim $output]"
+      }
+   }
+}
