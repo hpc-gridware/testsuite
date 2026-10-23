@@ -49,6 +49,32 @@ set check_root_access_needs   "no"
 set check_functions           ""
 lappend check_functions       "issue_1161_run"   ;# functions to call (in order)
 
+## @brief Hand "qconf -mc" a complex entry that is not one and expect a refusal
+#
+# Issuezilla 1161: the client dereferenced name and shortcut without checking
+# them, so a text whose entry carried neither made qconf die. What the vi
+# command leaves behind is still exactly that text - the trailing newline of the
+# insert puts "complex1161" alone on line 1 and pushes the header comment down,
+# so the first element has neither a shortcut nor a type. The assertion is that
+# qconf refuses it with a reason instead of crashing.
+#
+# Which of the two possible refusals is printed depends on the release, so the
+# expectation does too:
+#
+#  - up to 9.1 the client checked name, shortcut and urgency inside the pairwise
+#    duplicate loop, and that loop never runs for the first element because it
+#    has no predecessor to compare against. The missing shortcut was skipped and
+#    the type check in centry_elem_validate() reported first.
+#  - from 9.2 on the write procedure's qconf_ce_verify_list() (CS-2823) checks
+#    every element once before the request is sent, so the missing shortcut is
+#    found first and the type is never reached. The same change closed the hole
+#    the old loop left: a text holding exactly one entry was never checked.
+#
+# Both refusals are correct for this doubly invalid text, and neither writes
+# anything, so the version distinction records what each line does rather than
+# accepting either on both.
+#
+# @return none - the check reports through ts_log_severe
 proc issue_1161_run {} {
    global ts_config
 
@@ -56,7 +82,11 @@ proc issue_1161_run {} {
    lappend vi_commands "1Gicomplex1161\n[format "%c" 27]"
 
    # localize messages
-   set INVALID [translate_macro MSG_SGETEXT_UNKNOWN_ATTR_TYPE_U 0]
+   if {[is_version_in_range "9.2.0"]} {
+      set INVALID [translate_macro MSG_CENTRY_NULL_SHORTCUT_S "complex1161"]
+   } else {
+      set INVALID [translate_macro MSG_SGETEXT_UNKNOWN_ATTR_TYPE_U 0]
+   }
 
    # add by handling vi
    set master_arch [resolve_arch $ts_config(master_host)]
