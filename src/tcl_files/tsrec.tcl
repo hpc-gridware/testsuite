@@ -604,14 +604,15 @@ proc tsrec_in_proc {name} {
 #
 # True around a check (the cleanup baseline before the setup, the post-check
 # cleanup checks) and inside the framework procedures a check function calls
-# indirectly: the error mail of the logging and the result marker.
+# indirectly: the error mail of the logging, the result marker, and the
+# lookups of message texts (translate) and host names (resolve_host).
 # @param function the function the record is attributed to
 # @return 1 for framework activity, 0 otherwise
 proc tsrec_in_framework {function} {
    if {$function == "main" || $function == "cleanup_check"} {
       return 1
    }
-   foreach name {ts_private_log_send_mail mail_report send_mail save_result} {
+   foreach name {ts_private_log_send_mail mail_report send_mail save_result translate resolve_host} {
       if {[tsrec_in_proc $name]} {
          return 1
       }

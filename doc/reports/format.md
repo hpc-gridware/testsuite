@@ -8,7 +8,7 @@ The reporting chain has three separate steps:
 2. **Merge**: one or more report directories of the same run are combined into
    one result, taking the verdict of the last attempt per unit.
 3. **Render**: the merged result plus an optional test-case catalog become
-   Markdown reports and a zip.
+   Markdown reports and a zip (section 4).
 
 This document fixes the three data formats that connect the steps: the
 **record stream** (written by the Tcl framework and by C/C++ module tests),
@@ -207,7 +207,9 @@ Function verdicts:
 - `framework` marks commands the testsuite framework runs, not the check
   itself: around a check, the cleanup baseline before the setup (`function`
   is `main`) and the post-check cleanup checks (`cleanup_check`); inside a
-  check function, the error mail of the logging and the result marker.
+  check function, the error mail of the logging, the result marker, and the
+  lookups of message texts (`translate`, running `infotext`) and of host
+  names (`resolve_host`, running `gethostbyname`).
 - `interactive` marks a session a check drives itself through
   `open_remote_spawn_process`; it has no `exit` (null) and no `output`.
 - `user` is the user the command really ran as, after the testsuite mapped
@@ -496,7 +498,88 @@ ID list, or a criterion that maps an unknown ID.
 - Ranges in the specification (`STR-01 to STR-09`) are expanded by the
   parser; `test_ids` always lists single IDs.
 
-## 4. Examples
+## 4. Render
+
+Written by `src/scripts/ts_report_render.py`, from a merged result and an
+optional catalog:
+
+```
+ts_report_render.py merged.json [--catalog catalog.json] --audience internal|external -o <dir> [--zip]
+```
+
+The output directory must not exist or must be empty, so that pages of an
+earlier render (an internal one in particular) cannot end up in a new report.
+`--zip` also writes `<dir>.zip` with the directory as its top level. Exit
+status: 0 rendered, 2 invalid input or output directory not empty. Render
+does not gate on the verdicts; merge does.
+
+Pages:
+
+| page | content |
+|---|---|
+| `index.md` | run verdict, milestones with their criteria, all units, outside cases, provenance |
+| `units/<check>-L<level>.md` | one unit: verdict, errors, functions with their test cases, trace |
+| `cases/<id>.md` | one catalog case: verdict, the specification text, the functions that execute it with their trace |
+| `milestones/<id>.md` | the criteria of a milestone in a table, then the cases grouped by criterion, then the unmapped cases of the milestone |
+
+Without a catalog only `index.md` (with a table of the recorded test IDs) and
+the unit pages are written. `<check>` is the check path below its
+`checktree` directory, with `/` replaced by `.`.
+
+**Audience.** `--audience` has no default.
+
+| | external | internal |
+|---|---|---|
+| verdicts | final verdict per unit and case | the same, plus every attempt with its class and errors |
+| passed only on retry after an assertion-like failure | not shown | listed first in `index.md` |
+| framework and diagnostic commands | hidden | shown, tagged `[framework]` / `[diagnostic]` |
+| poll contexts | one line, with the distinct commands and their count | one line, then every command inside it |
+| command path | base name | full path |
+| output excerpts | for failed or timed-out commands | for every command |
+| check path, invocations, warnings | not shown | shown |
+
+The external report states that each verdict is the result of the final
+execution of the test in the run; it does not claim a first-attempt pass.
+
+**Trace.** The deciding attempt's events, in stream order, split into the
+check setup, the level setup, one section per check function, the level
+cleanup, the check cleanup and the cleanup checks; what runs between two
+functions belongs to the one before. Each command is one line,
+`<time> <user>@<host>$ <command> <args>` (`#` for root, `&` for a background
+command). A poll context, nested ones included, becomes one line
+(`<helper>: <condition>: met after 6 s (timeout 60 s)`). Consecutive
+identical commands outside a context collapse to
+`(repeated Nx over T)`. Errors appear as `!! <level> (<origin>): <message>`.
+
+**Test-case verdict.** From every function that names the case with
+`covers`, the worst of:
+
+| verdict | rule |
+|---|---|
+| `failed` | the function failed, raised a Tcl error or was interrupted, or the unit failed as a whole: a cleanup check found something, it was interrupted, or an error or a failed phase lies outside the check functions |
+| `not_run` | the function did not run |
+| `unsupported`, `skipped` | the function or its unit |
+| `passed` | otherwise |
+
+A case named only with `prepares` is *preconditions verified only*; a case no
+function names is *not covered by this run*; a `site` or `later` case is
+listed as not covered by the testsuite. A function that passed in a unit that
+failed only through another function keeps its cases passed.
+
+**Criterion verdict.**
+
+| verdict | rule |
+|---|---|
+| `passed` | `test_ids`: every mapped case passed; `run`: no unit of the run is `failed`, `cleanup_failed`, `interrupted` or `not_run` |
+| `failed` | a mapped case failed or did not run; `run`: otherwise |
+| `open` | a mapped case was not decided by this run, or the criterion has no test IDs yet |
+| `manual` | `manual`: verified by the customer, no verdict |
+
+**Consistency.** A test ID recorded by a check but missing in the catalog,
+and a `site` or `later` case named by a check, are reported as warnings
+(on stderr and in the internal report).
+
+## 5. Examples
 
 `examples/` holds one run (`20261022-140000`) of one unit in two attempts:
 
@@ -505,7 +588,11 @@ ID list, or a criterion that maps an unknown ID.
 - `merged.json`: the unit passes, `retried` and `attention` are set (`ts_report_merge.py examples`, with `merged_at` and `inputs` set to fixed values);
 - `catalog.json`: excerpt of the pim-rbac 0.39 catalog with one product case, one site case and four criteria (`test_ids`, a description not yet mapped, `run`, `manual`).
 
-## 5. Decisions
+`ts_report_render.py examples/merged.json --catalog examples/catalog.json --audience external -o <dir>`
+renders them: STR-03 passes, M3-AC-04 is open (its other cases did not run),
+M3-AC-08 passes with the run.
+
+## 6. Decisions
 
 Accepted with the format on 2026-10-22:
 
