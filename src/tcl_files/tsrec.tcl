@@ -221,8 +221,8 @@ proc tsrec_init {} {
    set tsrec(next_origin) ""
    set tsrec(in_start_remote_prog) 0
    set tsrec(last_real_user) ""
-   set tsrec(poll_stack) {}
-   set tsrec(poll_next) 0
+   set tsrec(context_stack) {}
+   set tsrec(context_next) 0
    set tsrec(diagnostic) 0
    set tsrec(enabled) 1
 
@@ -484,7 +484,11 @@ proc tsrec_error {level_name message {origin "assertion"}} {
       # raised while a connection to a host was being set up
       set origin "connection"
    }
-   set poll [lindex $tsrec(poll_stack) end]
+   set poll [tsrec_innermost poll]
+   set step [tsrec_innermost step]
+   if {$step != ""} {
+      dict set tsrec(step,$step) error 1
+   }
    if {$poll != ""} {
       # raised inside a wait helper: a timeout there points at load
       if {$origin == "assertion" && ([string match -nocase "*timeout*" $message] || [tsrec_poll_due $poll [clock milliseconds]])} {
@@ -512,6 +516,9 @@ proc tsrec_error {level_name message {origin "assertion"}} {
                    message [tsrec_str $message]]
    if {$poll != ""} {
       lappend pairs poll $poll
+   }
+   if {$step != ""} {
+      lappend pairs step $step
    }
    if {$tsrec(check) != ""} {
       set pairs [concat [list check [tsrec_str $tsrec(check)]] $pairs]
@@ -692,10 +699,16 @@ proc tsrec_command {host user command arguments cwd start_ms end_ms exit_status 
                    background [tsrec_bool $background] \
                    interactive [tsrec_bool $interactive] \
                    framework [tsrec_bool $framework]]
-   set poll [lindex $tsrec(poll_stack) end]
-   if {$poll != ""} {
-      dict incr tsrec(poll,$poll) commands
-      lappend pairs poll $poll
+   # the innermost context of either kind counts the command as its own
+   set inner [lindex $tsrec(context_stack) end]
+   foreach kind {poll step} {
+      if {$inner != "" && [info exists tsrec($kind,$inner)]} {
+         dict incr tsrec($kind,$inner) commands
+      }
+      set id [tsrec_innermost $kind]
+      if {$id != ""} {
+         lappend pairs $kind $id
+      }
    }
    lappend pairs diagnostic [tsrec_bool [expr {$tsrec(diagnostic) > 0}]] \
                  output [tsrec_output $output]
@@ -740,6 +753,107 @@ proc tsrec_spawn_closed {spawn_id} {
    tsrec_command $host $user $command $arguments $cwd $start_ms [clock milliseconds] "" 0 $background 1 ""
 }
 
+## @brief The innermost open context of a kind
+# @param kind poll or step
+# @return its id, or "" if no context of that kind is open
+proc tsrec_innermost {kind} {
+   global tsrec
+   for {set i [expr {[llength $tsrec(context_stack)] - 1}]} {$i >= 0} {incr i -1} {
+      set id [lindex $tsrec(context_stack) $i]
+      if {[info exists tsrec($kind,$id)]} {
+         return $id
+      }
+   }
+   return ""
+}
+
+## @brief The function a context opened now is attributed to
+# @return the check function, the phase, or cleanup_check
+proc tsrec_context_function {} {
+   global tsrec CHECK_CUR_PROC_NAME
+   if {$tsrec(context) == "cleanup_check"} {
+      return "cleanup_check"
+   }
+   if {$tsrec(function) == "" && [info exists CHECK_CUR_PROC_NAME]} {
+      return $CHECK_CUR_PROC_NAME
+   }
+   return $tsrec(function)
+}
+
+## @brief Remove a context and every context opened inside it from the stack
+# @param id the context id
+# @return nothing
+proc tsrec_context_pop {id} {
+   global tsrec
+   set index [lsearch -exact $tsrec(context_stack) $id]
+   if {$index >= 0} {
+      set tsrec(context_stack) [lrange $tsrec(context_stack) 0 [expr {$index - 1}]]
+   }
+}
+
+## @brief Open a step context for the calling cluster-control helper
+#
+# A step is one action of a check carried out by a helper, e.g. stopping the
+# qmaster, that spawns several commands of its own (pid files, process
+# lists, the stop command). It closes by itself when the helper returns, like
+# a poll context, and nests with poll contexts on one stack; commands and
+# errors inside carry its id as step.
+# @param description what the step does, e.g. "stop qmaster on host-0012"
+# @return nothing
+proc tsrec_step_begin {description} {
+   global tsrec
+   if {!$tsrec(enabled) || $tsrec(check) == ""} {
+      return
+   }
+   set id [incr tsrec(context_next)]
+   set function [tsrec_context_function]
+   set tsrec(step,$id) [dict create parent [lindex $tsrec(context_stack) end] \
+                                    function $function \
+                                    helper [lindex [info level -1] 0] \
+                                    framework [tsrec_in_framework $function] \
+                                    description $description \
+                                    start [clock milliseconds] \
+                                    commands 0 \
+                                    error 0]
+   lappend tsrec(context_stack) $id
+   uplevel 1 [list set tsrec_step_guard $id]
+   uplevel 1 [list trace add variable tsrec_step_guard unset [list tsrec_step_end $id]]
+}
+
+## @brief Close a step context and record it; variable trace installed by tsrec_step_begin
+#
+# The outcome is error if an error was raised inside the step, ok otherwise.
+# @param id the step context id
+# @param args the arguments of the variable trace (name1 name2 op), unused
+# @return nothing
+proc tsrec_step_end {id args} {
+   global tsrec
+   if {![info exists tsrec(step,$id)]} {
+      return
+   }
+   set end_ms [clock milliseconds]
+   tsrec_context_pop $id
+   set step $tsrec(step,$id)
+   unset tsrec(step,$id)
+   if {!$tsrec(enabled)} {
+      return
+   }
+   set parent [dict get $step parent]
+   if {$parent == ""} {
+      set parent "null"
+   }
+   tsrec_line "step" [list id $id \
+                           parent $parent \
+                           function [tsrec_str [dict get $step function]] \
+                           helper [tsrec_str [dict get $step helper]] \
+                           framework [tsrec_bool [dict get $step framework]] \
+                           description [tsrec_str [dict get $step description]] \
+                           start [tsrec_str [tsrec_time [dict get $step start]]] \
+                           end [tsrec_str [tsrec_time $end_ms]] \
+                           outcome [tsrec_str [expr {[dict get $step error] ? "error" : "ok"}]] \
+                           commands [dict get $step commands]]
+}
+
 ## @brief Open a poll context for the calling wait helper
 #
 # Called by a wait helper once it knows its effective timeout. The context
@@ -750,18 +864,13 @@ proc tsrec_spawn_closed {spawn_id} {
 # @param timeout the effective timeout in seconds, after ts_scale_timeout
 # @return nothing
 proc tsrec_poll_begin {condition timeout} {
-   global tsrec CHECK_CUR_PROC_NAME
+   global tsrec
    if {!$tsrec(enabled) || $tsrec(check) == ""} {
       return
    }
-   set id [incr tsrec(poll_next)]
-   set function $tsrec(function)
-   if {$tsrec(context) == "cleanup_check"} {
-      set function "cleanup_check"
-   } elseif {$function == "" && [info exists CHECK_CUR_PROC_NAME]} {
-      set function $CHECK_CUR_PROC_NAME
-   }
-   set tsrec(poll,$id) [dict create parent [lindex $tsrec(poll_stack) end] \
+   set id [incr tsrec(context_next)]
+   set function [tsrec_context_function]
+   set tsrec(poll,$id) [dict create parent [lindex $tsrec(context_stack) end] \
                                     function $function \
                                     helper [lindex [info level -1] 0] \
                                     framework [tsrec_in_framework $function] \
@@ -771,7 +880,7 @@ proc tsrec_poll_begin {condition timeout} {
                                     commands 0 \
                                     error 0 \
                                     timeout_error 0]
-   lappend tsrec(poll_stack) $id
+   lappend tsrec(context_stack) $id
    uplevel 1 [list set tsrec_poll_guard $id]
    uplevel 1 [list trace add variable tsrec_poll_guard unset [list tsrec_poll_end $id]]
 }
@@ -807,10 +916,7 @@ proc tsrec_poll_end {id args} {
       return
    }
    set end_ms [clock milliseconds]
-   set index [lsearch -exact $tsrec(poll_stack) $id]
-   if {$index >= 0} {
-      set tsrec(poll_stack) [lrange $tsrec(poll_stack) 0 [expr {$index - 1}]]
-   }
+   tsrec_context_pop $id
    set poll $tsrec(poll,$id)
    if {[dict get $poll timeout_error]} {
       set outcome "timeout"

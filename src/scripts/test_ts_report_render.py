@@ -240,6 +240,32 @@ class RenderTest(unittest.TestCase):
         self.assertIn("/inst/bin/lx-amd64/qconf -sq", internal[0])
         self.assertTrue(any("| output" in l for l in internal))
 
+    def test_step_context_collapses(self):
+        events = [{"type": "function_start", "function": "f1"},
+                  command("-km", step=1),
+                  command("-f /pid", command="/bin/test", step=1),
+                  command("-weo pid", command="/bin/ps", poll=2, step=1),
+                  {"type": "poll", "id": 2, "parent": 1, "helper": "wait_till_qmaster_is_down",
+                   "condition": "qmaster gone", "outcome": "met", "commands": 1,
+                   "start": "2026-10-22T15:57:01.000+02:00", "end": "2026-10-22T15:57:02.000+02:00"},
+                  {"type": "step", "id": 1, "parent": None, "helper": "shutdown_qmaster",
+                   "framework": False, "description": "stop qmaster on host-0012", "outcome": "ok",
+                   "commands": 2, "start": "2026-10-22T15:57:00.000+02:00",
+                   "end": "2026-10-22T15:57:04.000+02:00"},
+                  command("-sq")]
+        trace = render.Trace(events)
+        external = render.TraceText(False).lines(trace.function_items("f1"))
+        self.assertEqual(len(external), 2)
+        self.assertIn("shutdown_qmaster: stop qmaster on host-0012: ok after 4.0 s (2 commands)",
+                      external[0])
+        self.assertIn("qconf -sq", external[1])
+        internal = render.TraceText(True).lines(trace.function_items("f1"))
+        self.assertTrue(any("wait_till_qmaster_is_down: qmaster gone: met" in l for l in internal))
+        self.assertEqual(sum("$" in l for l in internal), 4)
+        events[5]["outcome"] = "error"
+        external = render.TraceText(False).lines(render.Trace(events).function_items("f1"))
+        self.assertIn("ps -weo pid", external[1])
+
     def test_background_commands_in_start_order(self):
         events = [{"type": "function_start", "function": "f1"},
                   command("-km", start="2026-10-22T15:57:10.000+02:00",
@@ -280,8 +306,12 @@ class RenderTest(unittest.TestCase):
         data = merged(unit("passed", [("f1", "passed", [("A-01", "covers")])]))
         pages = self.report(data).pages()
         self.assertEqual(sorted(pages), ["cases/A-01.md", "cases/A-02.md", "cases/S-01.md",
-                                         "cases/U-01.md", "index.md", "milestones/M1.md",
-                                         "units/functional.sharetree-L0.md"])
+                                         "cases/U-01.md", "guide.md", "index.md",
+                                         "milestones/M1.md", "units/functional.sharetree-L0.md"])
+        self.assertIn("[How to read this report](guide.md)", pages["index.md"])
+        self.assertIn("[How to read this report](../guide.md)", pages["cases/A-01.md"])
+        self.assertIn("| prepares |", pages["guide.md"])
+        self.assertNotIn("## Internal report", pages["guide.md"])
         milestone = pages["milestones/M1.md"]
         self.assertIn("| [M1-AC-01](#m1-ac-01) | both pass | [A-01](../cases/A-01.md), "
                       "[A-02](../cases/A-02.md) | **open** |", milestone)
@@ -290,7 +320,11 @@ class RenderTest(unittest.TestCase):
         self.assertIn("Test cases outside the testsuite", pages["index.md"])
         self.assertIn("No test of this run names this case.", pages["cases/A-02.md"])
         without = self.report(data, with_catalog=False).pages()
-        self.assertEqual(sorted(without), ["index.md", "units/functional.sharetree-L0.md"])
+        self.assertEqual(sorted(without), ["guide.md", "index.md",
+                                           "units/functional.sharetree-L0.md"])
+        self.assertNotIn("prepares", without["guide.md"])
+        internal = self.report(data, internal=True).pages()
+        self.assertIn("## Internal report", internal["guide.md"])
         self.assertIn("## Test cases", without["index.md"])
 
     def test_examples(self):

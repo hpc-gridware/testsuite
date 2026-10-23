@@ -4125,10 +4125,22 @@ proc soft_execd_shutdown {host_list {timeout 120} {wait_for_unknown_load 1}} {
    return [shutdown_execd $host_list 1 $timeout $wait_for_unknown_load]
 }
 
+## @brief Stop the execds of some hosts
+#
+# Stops each execd with qconf -ke (or sgeexecd/systemd), kills it if that
+# fails, and waits until its queues report unknown load. Recorded as one step
+# of the check in the testsuite report.
+# @param host_list the hosts whose execd is stopped
+# @param soft 1 for a soft stop, which leaves the running jobs alone
+# @param timeout seconds to wait for the unknown load
+# @param wait_for_unknown_load 1 to wait for the queues to report unknown load
+# @return 0 on success, -1 on error
 proc shutdown_execd {host_list {soft 0} {timeout 120} {wait_for_unknown_load 1}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
    global CHECK_INSTALL_RC
+
+   tsrec_step_begin "[expr {$soft ? "soft-stop" : "stop"}] execd on [join $host_list ", "]"
 
    foreach host $host_list {
       set execd_pid($host) [get_execd_pid $host]
@@ -7457,30 +7469,16 @@ proc wait_for_jobend {jobid jobname seconds {runcheck 1} {wait_for_end 0} {raise
 }
 
 
-#****** sge_procedures/startup_qmaster() ***************************************
-#  NAME
-#     startup_qmaster() -- startup qmaster (and scheduler) daemon
+## @brief Start the qmaster, and the scheduler with it
 #
-#  SYNOPSIS
-#     startup_qmaster { {and_scheduler 1}  {env_list ""}  }
-#
-#  FUNCTION
-#     Startup the qmaster daemon on the configured testsuite host. An environ
-#     ment can be set which is used as parameter for the start_remote_prog()
-#     call.
-#
-#  INPUTS
-#     {and_scheduler 1} - optional: also start the schedd daemon
-#     env_list          - optional: use given environment
-#
-#  SEE ALSO
-#     sge_procedures/shutdown_core_system()
-#     sge_procedures/shutdown_all_shadowd()
-#     sge_procedures/shutdown_system_daemon()
-#     sge_procedures/startup_qmaster()
-#     sge_procedures/startup_execd()
-#     sge_procedures/startup_shadowd()
-#*******************************************************************************
+# Starts the qmaster on the configured master host (or on_host), through
+# systemd where the cluster is installed with it. Recorded as one step of
+# the check in the testsuite report.
+# @param and_scheduler 1 to start the scheduler too (it runs inside qmaster)
+# @param env_list optional: name of an environment array for the start
+# @param on_host optional: host to start the qmaster on, default the master host
+# @param start_debug_terminal 1 to start the qmaster in a debug terminal
+# @return 0 on success, -1 on error
 proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""} {start_debug_terminal 0}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
@@ -7489,6 +7487,8 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""} {start_debug_
    global CHECK_DEBUG_LEVEL CHECK_SGE_DEBUG_LEVEL
    global ocs_debug_display master_debug CHECK_DISPLAY_OUTPUT CHECK_SGE_DEBUG_LEVEL ocs_debug_terminal_application
    global CHECK_INSTALL_RC
+
+   tsrec_step_begin "start qmaster[expr {$and_scheduler ? " and scheduler" : ""}] on [expr {$on_host eq "" ? $ts_config(master_host) : $on_host}]"
 
    if {$env_list != ""} {
       upvar $env_list envlist
@@ -8083,40 +8083,22 @@ proc get_pid_from_file {host pid_file} {
    return $dpid
 }
 
-#****** sge_procedures/shutdown_qmaster() **************************************
-#  NAME
-#     shutdown_qmaster() -- ???
+## @brief Stop the qmaster and wait until it is gone
 #
-#  SYNOPSIS
-#     shutdown_qmaster { hostname qmaster_spool_dir }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     hostname          - ???
-#     qmaster_spool_dir - ???
-#
-#  RESULT
-#     ???
-#
-#  EXAMPLE
-#     ???
-#
-#  NOTES
-#     ???
-#
-#  BUGS
-#     ???
-#
-#  SEE ALSO
-#     ???/???
-#*******************************************************************************
+# Stops the qmaster with qconf -km (or systemd) and waits for the process to
+# end, killing it after the timeout. Recorded as one step of the check in the
+# testsuite report.
+# @param hostname the qmaster host, default the master host
+# @param qmaster_spool_dir the qmaster spool directory, default the configured one
+# @param timeout seconds to wait for the qmaster to end
+# @return 0 on success, -1 on error
 proc shutdown_qmaster {{hostname ""} {qmaster_spool_dir ""} {timeout 60}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER CHECK_ADMIN_USER_SYSTEM
    global CHECK_VALGRIND CHECK_VALGRIND_SHUTDOWN_TIMEOUT
    global CHECK_INSTALL_RC
+
+   tsrec_step_begin "stop qmaster on [expr {$hostname eq "" ? $ts_config(master_host) : $hostname}]"
 
    if {$hostname eq ""} {
       set hostname $ts_config(master_host)
@@ -10840,42 +10822,23 @@ proc check_shadowd_settings { shadowd_host } {
 
 
 
-#****** sge_procedures/startup_execd() ***********************************
-#  NAME
-#     startup_execd() -- start execd daemon
+## @brief Start the execd on a host
 #
-#  SYNOPSIS
-#     startup_execd { hostname {envlist ""} {startup_user ""} }
-#
-#  FUNCTION
-#     This procedure will startup the execd on the specified host. If the envlist
-#     variable is set the tcl array specified by name is upvar'ed and used
-#     as parameter for start_remote_prog() in order to setup the user environment
-#     variables which should be set by the startup user. If the startup_user
-#     is set the user specified will be the execd startup user.
-#
-#  INPUTS
-#     hostname          - host where execd should be started
-#     {envlist ""}      - optional: environment array used to set before starting
-#     {startup_user ""} - optional: user who starts the execd
-#
-#  RESULT
-#     0  on success
-#     -1 on error
-#
-#  SEE ALSO
-#     sge_procedures/shutdown_core_system()
-#     sge_procedures/shutdown_all_shadowd()
-#     sge_procedures/shutdown_system_daemon()
-#     sge_procedures/startup_qmaster()
-#     sge_procedures/startup_execd()
-#     sge_procedures/startup_shadowd()
-#*******************************************************************************
+# Starts the execd as the startup user, through systemd where the cluster is
+# installed with it. Recorded as one step of the check in the testsuite
+# report.
+# @param hostname the host to start the execd on
+# @param envlist optional: name of an environment array for the start
+# @param startup_user optional: the user who starts the execd, default root
+#        (or CHECK_USER on an admin-user system)
+# @return 0 on success, -1 on error
 proc startup_execd {hostname {envlist ""} {startup_user ""}} {
    get_current_cluster_config_array ts_config
    global CHECK_ADMIN_USER_SYSTEM CHECK_USER
    global CHECK_VALGRIND CHECK_VALGRIND_HOST CHECK_VALGRIND_LAST_DAEMON_RESTART
    global CHECK_INSTALL_RC
+
+   tsrec_step_begin "start execd on $hostname"
 
    upvar $envlist my_envlist
 

@@ -85,6 +85,7 @@ check's `cleanup` and `check_if_test_cleaned_up`. Those lines therefore carry
 | `function_start` | before a check function | function name, index |
 | `command` | per spawned command | host, user, command, status, times |
 | `poll` | per finished poll context | condition, timeout, outcome, count |
+| `step` | per finished step context | description, outcome, count |
 | `error` | per raised error | level, origin, message |
 | `function_end` | after a check function | verdict, duration |
 | `unit_end` | after the level cleanup | level verdict |
@@ -203,7 +204,8 @@ Function verdicts:
 
 - `function` is the check function, or the phase name while a phase runs.
   Errors raised by the post-check cleanup checks carry `cleanup_check`.
-- `poll` is the id of the enclosing poll context, absent outside one.
+- `poll` is the id of the innermost enclosing poll context, `step` that of the
+  innermost step context; each is absent outside one.
 - `framework` marks commands the testsuite framework runs, not the check
   itself: around a check, the cleanup baseline before the setup (`function`
   is `main`) and the post-check cleanup checks (`cleanup_check`); inside a
@@ -252,6 +254,25 @@ The helpers count whole seconds, so the deadline counts as reached up to one
 second early. A helper that gives up early without raising an error (an
 invalid job id with the error check off) reads as `met`.
 
+#### `step`
+
+```json
+{"type": "step", "t": "...", "id": 4, "parent": null,
+ "function": "qsub_sync_failover", "helper": "shutdown_qmaster",
+ "framework": false, "description": "stop qmaster on host-0012",
+ "start": "...", "end": "...", "outcome": "ok", "commands": 9}
+```
+
+A step context covers one call of a helper that carries out one action of
+a check with commands of its own: `startup_qmaster`, `shutdown_qmaster`,
+`startup_execd` and `shutdown_execd` open one with `tsrec_step_begin` (pid
+files, process lists, the stop or start command). It closes when the helper
+returns. Steps and poll contexts share one id space and one stack: `parent`
+is the enclosing context of either kind, so a wait inside a step and a step
+inside a wait both nest. `commands` counts the commands recorded directly
+inside. `outcome` is `error` if any error was raised inside the step, `ok`
+otherwise.
+
 #### `error`
 
 ```json
@@ -272,7 +293,7 @@ invalid job id with the error check off) reads as `met`.
 | `cleanup` | a post-check cleanup check | assertion |
 
 When the framework cannot tell, it writes `assertion`. An error raised inside
-a poll context carries the context's id in `poll`.
+a poll or step context carries the context's id in `poll` or `step`.
 
 #### `unit_end`
 
@@ -518,6 +539,7 @@ Pages:
 | page | content |
 |---|---|
 | `index.md` | run verdict, milestones with their criteria, all units, outside cases, provenance |
+| `guide.md` | how to read the report: unit, function, case and criterion verdicts, `covers` and `prepares`, the trace notation; every page links to it |
 | `units/<check>-L<level>.md` | one unit: verdict, errors, functions with their test cases, trace |
 | `cases/<id>.md` | one catalog case: verdict, the specification text, the functions that execute it with their trace |
 | `milestones/<id>.md` | the criteria of a milestone in a table, then the cases grouped by criterion, then the unmapped cases of the milestone |
@@ -547,7 +569,10 @@ cleanup, the check cleanup and the cleanup checks; what runs between two
 functions belongs to the one before. Each command is one line,
 `<time> <user>@<host>$ <command> <args>` (`#` for root, `&` for a background
 command). A poll context, nested ones included, becomes one line
-(`<helper>: <condition>: met after 6 s (timeout 60 s)`). Consecutive
+(`<helper>: <condition>: met after 6 s (timeout 60 s)`), and so does a step
+(`<helper>: <description>: ok after 4 s (9 commands)`); externally a poll
+lists its distinct commands below the line, a step none unless it failed,
+then its last command. Consecutive
 identical commands outside a context collapse to
 `(repeated Nx over T)`. Errors appear as `!! <level> (<origin>): <message>`.
 

@@ -228,14 +228,14 @@ class CommandItem:
         return all(first.get(f) == event.get(f) for f in fields)
 
 
-## @brief One poll context in a trace, with everything recorded inside it
+## @brief One poll or step context in a trace, with everything recorded inside it
 class ContextItem:
     ## @brief Create the item of a root context
-    # @param poll_id the id of the root context
-    # @param polls the poll lines by id
-    def __init__(self, poll_id, polls):
-        self.poll_id = poll_id
-        self.poll = polls.get(poll_id)
+    # @param context_id the id of the root context
+    # @param contexts the poll and step lines by id
+    def __init__(self, context_id, contexts):
+        self.context_id = context_id
+        self.line = contexts.get(context_id)
         self.members = []
 
 
@@ -256,21 +256,23 @@ class Trace:
     ## @brief Build the trace from the events of the deciding attempt
     # @param events the unit's events, in stream order
     def __init__(self, events):
-        self.polls = {e.get("id"): e for e in events if e.get("type") == "poll"}
+        self.contexts = {e.get("id"): e for e in events if e.get("type") in ("poll", "step")}
         self.sections = []
         self.results = {}
         self.build(events)
 
-    ## @brief The outermost poll context enclosing a context
-    # @param poll_id a context id
+    ## @brief The outermost context enclosing a context
+    #
+    # Poll and step contexts share one id space and one chain of parents.
+    # @param context_id a context id
     # @return the id of its root context
-    def root(self, poll_id):
+    def root(self, context_id):
         seen = set()
-        while poll_id in self.polls and self.polls[poll_id].get("parent") is not None \
-                and poll_id not in seen:
-            seen.add(poll_id)
-            poll_id = self.polls[poll_id]["parent"]
-        return poll_id
+        while context_id in self.contexts and self.contexts[context_id].get("parent") is not None \
+                and context_id not in seen:
+            seen.add(context_id)
+            context_id = self.contexts[context_id]["parent"]
+        return context_id
 
     ## @brief Assign every event to its section and collapse it into items
     # @param events the unit's events
@@ -318,16 +320,20 @@ class Trace:
             elif kind == "cleanup_check":
                 self.results["Cleanup checks"] = event.get("result")
 
-            if kind in ("command", "error", "poll"):
+            if kind in ("command", "error", "poll", "step"):
                 # the cleanup checks run after the check cleanup, as a section of their own
                 key = "Cleanup checks" if event.get("function") == "cleanup_check" else section
-                poll_id = event.get("id") if kind == "poll" else event.get("poll")
-                if poll_id is not None:
-                    root = self.root(poll_id)
+                if kind in ("poll", "step"):
+                    context_id = event.get("id")
+                else:
+                    context_id = event.get("poll") if event.get("poll") is not None \
+                        else event.get("step")
+                if context_id is not None:
+                    root = self.root(context_id)
                     if root not in contexts:
-                        contexts[root] = ContextItem(root, self.polls)
+                        contexts[root] = ContextItem(root, self.contexts)
                         items.append((key, contexts[root]))
-                    if kind != "poll" or poll_id != root:
+                    if kind not in ("poll", "step") or context_id != root:
                         contexts[root].members.append(event)
                 elif kind == "command":
                     last = items[-1] if items else None
@@ -362,7 +368,7 @@ class Trace:
                 stamp = item.events[0].get("start") or item.events[0].get("t")
             elif isinstance(item, ContextItem):
                 first = item.members[0] if item.members else {}
-                stamp = (item.poll or {}).get("start") or first.get("start") or first.get("t")
+                stamp = (item.line or {}).get("start") or first.get("start") or first.get("t")
             else:
                 stamp = item.event.get("t")
             moment = parse_time(stamp)
@@ -456,11 +462,32 @@ class TraceText:
         lines.extend(indent + "   " + line for line in message[1:])
         return lines
 
-    ## @brief The lines of a poll context
+    ## @brief The head line of a context
+    # @param line the poll or step line
+    # @return e.g. "wait_for_jobstart: job 12 running: met after 6 s (timeout 60 s)"
+    #         or "shutdown_qmaster: stop qmaster on host-0012: ok after 4 s (12 commands)"
+    def context_head(self, line):
+        took = duration_text(seconds(line.get("start"), line.get("end")))
+        if line.get("type") == "step":
+            return "%s: %s: %s after %s (%s command%s)" % (
+                line.get("helper", "step"), line.get("description", ""), line.get("outcome"), took,
+                line.get("commands", 0), "" if line.get("commands") == 1 else "s")
+        head = "%s: %s: %s after %s" % (line.get("helper", "wait"), line.get("condition", ""),
+                                        OUTCOME_TEXT.get(line.get("outcome"), line.get("outcome")),
+                                        took)
+        if line.get("timeout") is not None:
+            head += " (timeout %s s)" % line["timeout"]
+        return head
+
+    ## @brief The lines of a poll or step context
+    #
+    # Externally a poll shows its distinct commands with their count, a step
+    # only its head line: the commands of a step are the helper's mechanics.
+    # Internally every command, nested context and error is listed.
     # @param item the context item
     # @return the lines, empty if the context is hidden
     def context(self, item):
-        poll = item.poll or {}
+        poll = item.line or {}
         commands = [e for e in item.members if e.get("type") == "command" and self.visible(e)]
         if not self.internal and poll.get("framework"):
             return []
@@ -469,17 +496,12 @@ class TraceText:
             return []
         indent = " " * 9
         if poll:
-            took = seconds(poll.get("start"), poll.get("end"))
-            head = "%s %s: %s: %s after %s" % (
-                clock(poll.get("start")), poll.get("helper", "wait"), poll.get("condition", ""),
-                OUTCOME_TEXT.get(poll.get("outcome"), poll.get("outcome")), duration_text(took))
-            if poll.get("timeout") is not None:
-                head += " (timeout %s s)" % poll["timeout"]
-            if self.internal and poll.get("framework"):
-                head = head[:8] + " [framework]" + head[8:]
+            head = "%s %s%s" % (clock(poll.get("start")),
+                                "[framework] " if self.internal and poll.get("framework") else "",
+                                self.context_head(poll))
         else:
             first = item.members[0] if item.members else {}
-            head = "%s poll context %s: did not finish" % (clock(first.get("t")), item.poll_id)
+            head = "%s context %s: did not finish" % (clock(first.get("t")), item.context_id)
         lines = [head]
         if self.internal:
             for event in item.members:
@@ -488,26 +510,31 @@ class TraceText:
                     lines.append("%s   %s" % (clock(event.get("start") or event.get("t")),
                                               self.prompt(event, True)))
                     lines.extend(self.result(event, indent + "     "))
-                elif kind == "poll":
-                    lines.append("%s   %s: %s: %s" % (clock(event.get("end")), event.get("helper"),
-                                                      event.get("condition"),
-                                                      OUTCOME_TEXT.get(event.get("outcome"),
-                                                                       event.get("outcome"))))
+                elif kind in ("poll", "step"):
+                    lines.append("%s   %s" % (clock(event.get("end")), self.context_head(event)))
                 elif kind == "error":
                     lines.extend(self.error(event, indent))
             return lines
-        seen = []
-        counts = {}
-        for event in commands:
-            text = self.prompt(event, False)
-            if text not in counts:
-                seen.append(text)
-                counts[text] = 0
-            counts[text] += 1
-        for text in seen:
-            lines.append(indent + "  " + text + ("  (%dx)" % counts[text] if counts[text] > 1 else ""))
-        if poll.get("outcome") != "met" and commands:
-            lines.extend(self.result(commands[-1], indent + "    "))
+        if poll.get("type") == "step":
+            # a step shows no commands, unless it failed: then its last one,
+            # which is where it went wrong
+            if commands and poll.get("outcome") != "ok":
+                lines.append(indent + "  " + self.prompt(commands[-1], False))
+                lines.extend(self.result(commands[-1], indent + "    "))
+        else:
+            seen = []
+            counts = {}
+            for event in commands:
+                text = self.prompt(event, False)
+                if text not in counts:
+                    seen.append(text)
+                    counts[text] = 0
+                counts[text] += 1
+            for text in seen:
+                lines.append(indent + "  " + text +
+                             ("  (%dx)" % counts[text] if counts[text] > 1 else ""))
+            if poll.get("outcome") != "met" and commands:
+                lines.extend(self.result(commands[-1], indent + "    "))
         for event in item.members:
             if event.get("type") == "error":
                 lines.extend(self.error(event, indent))
@@ -699,11 +726,13 @@ class Report:
             return "[%s](../cases/%s.md)" % (case_id, case_id)
         return case_id
 
-    ## @brief The header lines every page starts with
+    ## @brief The header lines every page starts with: title, link to the guide
     # @param title the page title
     # @return the lines
-    def page_head(self, title):
-        lines = ["# %s" % title, ""]
+    # @param top True for a page in the top directory, False for one in a subdirectory
+    def page_head(self, title, top=False):
+        lines = ["# %s" % title, "",
+                 "[How to read this report](%sguide.md)" % ("" if top else "../"), ""]
         if self.internal:
             lines += ["> **Internal report.** Contains every attempt and the framework commands; "
                       "not for distribution.", ""]
@@ -760,7 +789,7 @@ class Report:
     # @return the page text
     def index(self):
         units = self.merged.get("units", [])
-        lines = self.page_head("Test report %s" % self.merged.get("run_id"))
+        lines = self.page_head("Test report %s" % self.merged.get("run_id"), True)
         if self.internal:
             attention = [u for u in units if u.get("attention")]
             lines += ["## Attention: passed only on retry after an assertion-like failure", ""]
@@ -1001,10 +1030,124 @@ class Report:
                            self.case_rows(unmapped)) + [""]
         return "\n".join(lines)
 
+    ## @brief The guide: how to read the pages, verdicts and traces
+    # @return the page text
+    def guide(self):
+        lines = self.page_head("How to read this report", True)
+        # no link from the guide to itself
+        lines = lines[:2] + lines[4:]
+        lines += ["This report was generated from the records the testsuite writes while it "
+                  "runs. It shows what was executed, on which hosts and as which users, and "
+                  "what came out.", ""]
+        lines += ["## Pages", ""]
+        rows = [["[index.md](index.md)", "The run: overall result, milestones, all executed "
+                 "tests (units), provenance of the software tested."],
+                ["`units/`", "One page per unit: one testsuite check at one run level. It lists "
+                 "the check functions, their verdicts and the commands they ran."]]
+        if self.catalog:
+            rows += [["`cases/`", "One page per test case of the specification: the specified "
+                      "steps and pass criterion, the verdict, and the commands of the check "
+                      "functions that execute it."],
+                     ["`milestones/`", "One page per milestone: its acceptance criteria with "
+                      "their verdicts, then the test cases grouped by criterion."]]
+        lines += table(["Page", "Content"], rows) + [""]
+        lines += ["## Units and check functions", "",
+                  "A *check* is one testsuite test. It runs at one or more *levels* (variants); "
+                  "a check at one level is a *unit*. A unit runs a setup, then its *check "
+                  "functions* one after another, then a cleanup, and finally the testsuite "
+                  "verifies that the cluster was left as it was found (*cleanup checks*).", ""]
+        rows = [["passed", "Every check function passed and the cleanup checks found nothing."],
+                ["failed", "A check function, the setup or the cleanup reported an error."],
+                ["cleanup_failed", "The functions passed, but the cleanup checks found something "
+                 "left behind, e.g. a job still in the cluster."],
+                ["skipped", "The setup found that the unit does not apply to this cluster."],
+                ["unsupported", "The environment cannot run the unit, e.g. a missing host type."],
+                ["interrupted", "The unit started but did not finish."],
+                ["not_run", "The unit was selected but never started."]]
+        lines += ["Unit verdicts:", ""] + table(["Verdict", "Meaning"], rows) + [""]
+        lines += ["Function verdicts are `passed`, `failed`, `unsupported`, `tcl_error` (an error "
+                  "in the test code itself), `not_run` (an earlier function stopped the unit) and "
+                  "`interrupted`.", ""]
+        if self.catalog:
+            lines += ["## Test cases", "",
+                      "A check function names the test cases it executes, each with a "
+                      "*relation*:", ""]
+            rows = [["covers", "The function performs the test case and checks its pass "
+                     "criterion. Its result decides the case."],
+                    ["prepares", "The function verifies only a precondition of the test case "
+                     "(for example that an object can be created that the case then uses). "
+                     "It is listed for reference and does not decide the case."]]
+            lines += table(["Relation", "Meaning"], rows) + [""]
+            rows = [[CASE_TEXT["passed"], "Every function that covers the case passed, and its "
+                     "unit did not fail as a whole."],
+                    [CASE_TEXT["failed"], "A covering function failed, or its unit failed as a "
+                     "whole (setup, cleanup or cleanup checks). A failure of another function in "
+                     "the same unit does not fail the case."],
+                    [CASE_TEXT["not_run"], "A covering function did not run."],
+                    [CASE_TEXT["unsupported"] + ", " + CASE_TEXT["skipped"],
+                     "The covering function or its unit could not run in this environment."],
+                    [CASE_TEXT["prepared_only"], "Only functions that prepare the case ran; "
+                     "the case itself was not executed."],
+                    [CASE_TEXT["not_covered"], "No test of this run executes the case."],
+                    [CASE_TEXT["site"], "The case verifies a control the site operates, not "
+                     "the product."],
+                    [CASE_TEXT["later"], "The case belongs to a later phase than the one "
+                     "delivered."]]
+            lines += ["Test-case verdicts:", ""] + table(["Verdict", "Meaning"], rows) + [""]
+            lines += ["## Acceptance criteria", ""]
+            rows = [["passed", "Every test case mapped to the criterion passed."],
+                    ["failed", "A mapped test case failed or did not run."],
+                    ["open", "Not decided by this run: a mapped test case was not executed, or "
+                     "the criterion has no test cases mapped yet."],
+                    [CRITERION_TEXT["manual"], "The criterion is verified by the customer; the "
+                     "testsuite gives no verdict."]]
+            lines += table(["Verdict", "Meaning"], rows) + [""]
+            lines += ["A criterion mapped to *the whole run* passes when no unit of the run "
+                      "failed, did not finish or did not run.", ""]
+        lines += ["## Traces", "",
+                  "Each unit page shows the commands in the order they started, split into the "
+                  "setup, one section per check function, the cleanup and the cleanup checks. "
+                  "The heading of a section shows its result.", ""]
+        rows = [["`22:09:34 user@host$ qsub ...`", "A command, its start time, the user it ran "
+                 "as and the host it ran on. `#` instead of `$` means it ran as root; a trailing "
+                 "`&` that it ran in the background."],
+                ["`exit status 1`", "The command's exit status, shown when it is not 0. A test "
+                 "often expects a non-zero status, e.g. when it verifies that a request is "
+                 "refused; the verdict says whether the result was the expected one."],
+                ["`\\| text`", "An excerpt of the command's output (at most 4 KiB, beginning and "
+                 "end)."],
+                ["`(interactive session)`", "A session the test drives itself, e.g. `qrsh`; it "
+                 "has no exit status of its own."],
+                ["`wait_for_jobstart: job 12 running: met after 6 s (timeout 60 s)`",
+                 "The test waited for a condition, repeating the commands listed below the line "
+                 "until it held or the timeout passed."],
+                ["`shutdown_qmaster: stop qmaster on host-0012: ok after 4 s (9 commands)`",
+                 "The test carried out one action through a testsuite helper, e.g. stopping or "
+                 "starting a daemon. The commands the helper needs for it (pid files, process "
+                 "lists, the stop command) are summarised in this line."],
+                ["`(repeated 3x over 2 s)`", "The same command ran several times in a row."],
+                ["`!! SEVERE (assertion): ...`", "An error the test raised: its level, where it "
+                 "came from (`assertion`, a timeout, a connection problem, a cleanup check) and "
+                 "the message."]]
+        lines += table(["Line", "Meaning"], rows) + [""]
+        if self.internal:
+            lines += ["## Internal report", "",
+                      "The internal report additionally shows every attempt of a unit with the "
+                      "class of its failure (`assertion`, `infrastructure`, `load`), lists the "
+                      "units that passed only on retry after an assertion-like failure first, "
+                      "and shows the commands the testsuite framework ran around the test "
+                      "(`[framework]`) and to explain a failure (`[diagnostic]`), with every "
+                      "iteration of a wait and the full command paths.", ""]
+        else:
+            lines += ["The commands the testsuite framework itself runs around a test (log "
+                      "mails, result markers, lookups of message texts) are not shown. Each "
+                      "verdict is the result of the final execution of the test in this run.", ""]
+        return "\n".join(lines)
+
     ## @brief All pages of the report
     # @return a dict of relative path -> page text
     def pages(self):
-        pages = {"index.md": self.index()}
+        pages = {"index.md": self.index(), "guide.md": self.guide()}
         for unit in self.merged.get("units", []):
             pages["units/" + unit_file(unit)] = self.unit_page(unit)
         if self.catalog:
