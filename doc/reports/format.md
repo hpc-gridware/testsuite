@@ -187,6 +187,7 @@ Function verdicts:
 | `unsupported` | only `CONFIG` errors: the environment cannot run it |
 | `tcl_error` | the function raised a Tcl error |
 | `not_run` | an earlier function stopped the unit (merge also sets it for units missing entirely) |
+| `interrupted` | set by merge only: the function started but has no `function_end` |
 
 #### `command`
 
@@ -263,7 +264,7 @@ invalid job id with the error check off) reads as `met`.
 |---|---|---|
 | `poll_timeout` | a timeout inside a poll context: the message mentions a timeout or the deadline was reached | load |
 | `command_timeout` | a spawned command that did not finish in time | load |
-| `connection` | host unreachable, ssh or connection failure | infrastructure |
+| `connection` | host unreachable, ssh or connection failure, or the cluster is not ready for a level (qmaster not alive, scheduler not connected, a queue without load value) | infrastructure |
 | `assertion` | any other error raised by the check | assertion |
 | `tcl_error` | a Tcl error in the check | assertion |
 | `cleanup` | a post-check cleanup check | assertion |
@@ -311,8 +312,12 @@ Merge combines `unit_end` with the check-wide lines:
 | `cleanup_failed` | `unit_end` says `passed`, but the check's `cleanup_check` reported `error` |
 | `unsupported` | `unit_end` says `unsupported` |
 | `passed` | otherwise |
-| `interrupted` | `unit_start` without `unit_end` |
+| `interrupted` | `unit_start` without `unit_end`, or the check `setup` passed and the level never started |
 | `not_run` | selected, but no `unit_start` |
+
+A check-wide `setup` that reported `error` or `skip` runs no level, so its
+units have no `unit_start`; merge makes one attempt per listed level, with the
+verdict `failed` or `skipped`.
 
 #### `invocation_end`
 
@@ -355,7 +360,20 @@ report directory, so the stream lands next to the testsuite's own:
 
 ## 2. Merged result
 
-Written by merge as `merged.json`, one per run.
+Written by merge (`src/scripts/ts_report_merge.py`) as `merged.json`, one per
+run:
+
+```
+ts_report_merge.py <run_dir>... [-o merged.json]
+ts_report_merge.py <reports_dir> --run-id <run_id> [-o merged.json]
+```
+
+The arguments are run directories (`<results_dir>/reports/<run_id>`, one per
+runner), single `.jsonl` files, or a reports directory together with
+`--run-id`. Streams of another run id or of an unknown format version are an
+error. Exit status: 0 when every unit `passed`, was `skipped` or
+`unsupported`; 1 when a unit is `failed`, `cleanup_failed`, `interrupted` or
+`not_run`; 2 for invalid input.
 
 ```json
 {"format": "ts-report/merged/1", "run_id": "20261022-140000",
@@ -378,15 +396,33 @@ Written by merge as `merged.json`, one per run.
        "verdict": "passed"}]}]}
 ```
 
+- A unit is keyed by its check path, as recorded, and its level.
 - The unit verdict is the verdict of the attempt with the highest `attempt`;
-  among equal attempts, the latest `unit_end`.
-- `retried` is true when an earlier attempt did not pass.
-- `class` of an earlier failed attempt is the worst class of its errors, with
-  `assertion` > `infrastructure` > `load`.
+  among equal attempts, the latest `unit_end` (an attempt without one counts
+  with its `unit_start`). Equal attempts are the normal case of hand runs: a
+  unit repeated in the menu, or several invocations without
+  `TS_REPORT_ATTEMPT`.
+- `retried` is true when an earlier attempt did not pass, i.e. was `failed`,
+  `cleanup_failed` or `interrupted`. An earlier `skipped` or `unsupported`
+  does not count.
+- `class` of a failed attempt is the worst class of its errors, with
+  `assertion` > `infrastructure` > `load`. A failed attempt without any error
+  line (killed, or a setup that failed silently) is `assertion`.
 - `attention` is true when the unit passed only on retry and an earlier
   attempt has class `assertion`. The internal report lists these first.
-- Only the deciding attempt keeps its `command` and `poll` lines in full; for
-  the others, merge keeps the errors only.
+- `errors` of an attempt include the check-wide ones (setup, cleanup, cleanup
+  checks), because they decide the verdict of every level of the check.
+- Only the deciding attempt keeps its lines in full, as `events` of the unit:
+  the check-wide lines before the first level (cleanup baseline, `setup`), the
+  lines of the unit itself, and the check-wide lines after the last level
+  (`cleanup`, cleanup checks), in stream order. A check that ran several levels
+  therefore has the same setup and cleanup lines in each of its units. For
+  the other attempts, merge keeps the errors only.
+- `name`, `description` and `categories` come from the last `unit_start` of
+  the unit; `functions` lists the declared functions with the verdict and
+  `duration` of the deciding attempt.
+- A unit that was selected but never started has `verdict` `not_run`,
+  `deciding` null and no attempts.
 
 ## 3. Catalog
 
@@ -433,7 +469,7 @@ specification in `gcs-extensions`), read by render.
 
 - `r2-48211-1792663391204.jsonl`: attempt 1 (`phase1`), `sharetree_modify` fails with an assertion;
 - `r1-50332-1792670102117.jsonl`: attempt 3 (`phase3`), the same unit passes;
-- `merged.json`: the unit passes, `retried` and `attention` are set;
+- `merged.json`: the unit passes, `retried` and `attention` are set (`ts_report_merge.py examples`, with `merged_at` and `inputs` set to fixed values);
 - `catalog.json`: excerpt with one product case, one site case and three criteria (`test_ids`, `run`, `manual`).
 
 ## 5. Decisions

@@ -11,6 +11,8 @@
       "invocation_id": "r2-48211-1792663391204",
       "attempt": 1,
       "attempt_label": "phase1",
+      "producer": "testsuite",
+      "start": "2026-10-22T14:05:00.000+02:00",
       "provenance": {
         "ts_host": "ts",
         "ts_user": "ebablick",
@@ -51,6 +53,8 @@
       "invocation_id": "r1-50332-1792670102117",
       "attempt": 3,
       "attempt_label": "phase3",
+      "producer": "testsuite",
+      "start": "2026-10-22T15:57:00.000+02:00",
       "provenance": {
         "ts_host": "ts",
         "ts_user": "ebablick",
@@ -93,6 +97,11 @@
     {
       "check": "functional/sharetree",
       "level": 0,
+      "description": "share tree basics",
+      "categories": [
+        "SYSTEM",
+        "VERIFIED"
+      ],
       "verdict": "passed",
       "retried": true,
       "attention": true,
@@ -104,11 +113,13 @@
         {
           "function": "sharetree_basic",
           "verdict": "passed",
+          "duration": 1.2,
           "test_cases": []
         },
         {
           "function": "sharetree_modify",
           "verdict": "passed",
+          "duration": 10.0,
           "test_cases": [
             {
               "id": "STR-03",
@@ -137,6 +148,336 @@
           "attempt": 3,
           "attempt_label": "phase3",
           "verdict": "passed"
+        }
+      ],
+      "events": [
+        {
+          "type": "phase",
+          "t": "2026-10-22T15:57:01.000+02:00",
+          "check": "functional/sharetree",
+          "levels": [
+            0
+          ],
+          "phase": "setup",
+          "result": "ok",
+          "return": 1
+        },
+        {
+          "type": "unit_start",
+          "t": "2026-10-22T15:57:01.000+02:00",
+          "check": "functional/sharetree",
+          "check_path": "/home/ebablick/Clion/91x-features/ts-reports/testsuite/src/checktree/functional/sharetree",
+          "level": 0,
+          "description": "share tree basics",
+          "categories": [
+            "SYSTEM",
+            "VERIFIED"
+          ],
+          "functions": [
+            "sharetree_basic",
+            "sharetree_modify"
+          ],
+          "test_cases": {
+            "sharetree_modify": [
+              {
+                "id": "STR-03",
+                "relation": "covers"
+              }
+            ]
+          }
+        },
+        {
+          "type": "function_start",
+          "t": "2026-10-22T15:57:03.000+02:00",
+          "function": "sharetree_basic",
+          "index": 1
+        },
+        {
+          "type": "command",
+          "t": "2026-10-22T15:57:04.000+02:00",
+          "function": "sharetree_basic",
+          "host": "host-0012",
+          "user": "ebablick",
+          "root": false,
+          "command": "qconf",
+          "args": "-sstree",
+          "cwd": "/tmp",
+          "start": "2026-10-22T15:57:03.000+02:00",
+          "end": "2026-10-22T15:57:04.000+02:00",
+          "exit": 0,
+          "timed_out": false,
+          "background": false,
+          "interactive": false,
+          "framework": false,
+          "diagnostic": false,
+          "output": {
+            "bytes": 64,
+            "excerpt": "id=0\nname=Root\ntype=0\nshares=1\nchildnodes=1\n",
+            "truncated": false
+          }
+        },
+        {
+          "type": "function_end",
+          "t": "2026-10-22T15:57:04.000+02:00",
+          "function": "sharetree_basic",
+          "verdict": "passed",
+          "duration": 1.2
+        },
+        {
+          "type": "function_start",
+          "t": "2026-10-22T15:57:05.000+02:00",
+          "function": "sharetree_modify",
+          "index": 2
+        },
+        {
+          "type": "command",
+          "t": "2026-10-22T15:57:06.000+02:00",
+          "function": "sharetree_modify",
+          "host": "host-0012",
+          "user": "ebablick",
+          "root": false,
+          "command": "qconf",
+          "args": "-mstnode /soca=200",
+          "cwd": "/tmp",
+          "start": "2026-10-22T15:57:05.000+02:00",
+          "end": "2026-10-22T15:57:06.000+02:00",
+          "exit": 0,
+          "timed_out": false,
+          "background": false,
+          "interactive": false,
+          "framework": false,
+          "diagnostic": false,
+          "output": {
+            "bytes": 40,
+            "excerpt": "modified \"/soca\" in sharetree\n",
+            "truncated": false
+          }
+        },
+        {
+          "type": "command",
+          "t": "2026-10-22T15:57:07.000+02:00",
+          "function": "sharetree_modify",
+          "host": "host-0012",
+          "user": "ebablick",
+          "root": false,
+          "command": "qstat",
+          "args": "-ext -u '*'",
+          "cwd": "/tmp",
+          "start": "2026-10-22T15:57:07.000+02:00",
+          "end": "2026-10-22T15:57:07.000+02:00",
+          "exit": 0,
+          "timed_out": false,
+          "background": false,
+          "interactive": false,
+          "framework": false,
+          "poll": 1,
+          "diagnostic": false,
+          "output": {
+            "bytes": 120,
+            "excerpt": "...",
+            "truncated": false
+          }
+        },
+        {
+          "type": "command",
+          "t": "2026-10-22T15:57:08.000+02:00",
+          "function": "sharetree_modify",
+          "host": "host-0012",
+          "user": "ebablick",
+          "root": false,
+          "command": "qstat",
+          "args": "-ext -u '*'",
+          "cwd": "/tmp",
+          "start": "2026-10-22T15:57:08.000+02:00",
+          "end": "2026-10-22T15:57:08.000+02:00",
+          "exit": 0,
+          "timed_out": false,
+          "background": false,
+          "interactive": false,
+          "framework": false,
+          "poll": 1,
+          "diagnostic": false,
+          "output": {
+            "bytes": 120,
+            "excerpt": "...",
+            "truncated": false
+          }
+        },
+        {
+          "type": "command",
+          "t": "2026-10-22T15:57:09.000+02:00",
+          "function": "sharetree_modify",
+          "host": "host-0012",
+          "user": "ebablick",
+          "root": false,
+          "command": "qstat",
+          "args": "-ext -u '*'",
+          "cwd": "/tmp",
+          "start": "2026-10-22T15:57:09.000+02:00",
+          "end": "2026-10-22T15:57:09.000+02:00",
+          "exit": 0,
+          "timed_out": false,
+          "background": false,
+          "interactive": false,
+          "framework": false,
+          "poll": 1,
+          "diagnostic": false,
+          "output": {
+            "bytes": 120,
+            "excerpt": "...",
+            "truncated": false
+          }
+        },
+        {
+          "type": "command",
+          "t": "2026-10-22T15:57:10.000+02:00",
+          "function": "sharetree_modify",
+          "host": "host-0012",
+          "user": "ebablick",
+          "root": false,
+          "command": "qstat",
+          "args": "-ext -u '*'",
+          "cwd": "/tmp",
+          "start": "2026-10-22T15:57:10.000+02:00",
+          "end": "2026-10-22T15:57:10.000+02:00",
+          "exit": 0,
+          "timed_out": false,
+          "background": false,
+          "interactive": false,
+          "framework": false,
+          "poll": 1,
+          "diagnostic": false,
+          "output": {
+            "bytes": 120,
+            "excerpt": "...",
+            "truncated": false
+          }
+        },
+        {
+          "type": "command",
+          "t": "2026-10-22T15:57:11.000+02:00",
+          "function": "sharetree_modify",
+          "host": "host-0012",
+          "user": "ebablick",
+          "root": false,
+          "command": "qstat",
+          "args": "-ext -u '*'",
+          "cwd": "/tmp",
+          "start": "2026-10-22T15:57:11.000+02:00",
+          "end": "2026-10-22T15:57:11.000+02:00",
+          "exit": 0,
+          "timed_out": false,
+          "background": false,
+          "interactive": false,
+          "framework": false,
+          "poll": 1,
+          "diagnostic": false,
+          "output": {
+            "bytes": 120,
+            "excerpt": "...",
+            "truncated": false
+          }
+        },
+        {
+          "type": "command",
+          "t": "2026-10-22T15:57:12.000+02:00",
+          "function": "sharetree_modify",
+          "host": "host-0012",
+          "user": "ebablick",
+          "root": false,
+          "command": "qstat",
+          "args": "-ext -u '*'",
+          "cwd": "/tmp",
+          "start": "2026-10-22T15:57:12.000+02:00",
+          "end": "2026-10-22T15:57:12.000+02:00",
+          "exit": 0,
+          "timed_out": false,
+          "background": false,
+          "interactive": false,
+          "framework": false,
+          "poll": 1,
+          "diagnostic": false,
+          "output": {
+            "bytes": 120,
+            "excerpt": "...",
+            "truncated": false
+          }
+        },
+        {
+          "type": "command",
+          "t": "2026-10-22T15:57:13.000+02:00",
+          "function": "sharetree_modify",
+          "host": "host-0012",
+          "user": "ebablick",
+          "root": false,
+          "command": "qstat",
+          "args": "-ext -u '*'",
+          "cwd": "/tmp",
+          "start": "2026-10-22T15:57:13.000+02:00",
+          "end": "2026-10-22T15:57:13.000+02:00",
+          "exit": 0,
+          "timed_out": false,
+          "background": false,
+          "interactive": false,
+          "framework": false,
+          "poll": 1,
+          "diagnostic": false,
+          "output": {
+            "bytes": 120,
+            "excerpt": "...",
+            "truncated": false
+          }
+        },
+        {
+          "type": "poll",
+          "t": "2026-10-22T15:57:14.000+02:00",
+          "id": 1,
+          "parent": null,
+          "function": "sharetree_modify",
+          "helper": "wait_for_online_usage",
+          "framework": false,
+          "condition": "usage of job 1234 reported",
+          "timeout": 60,
+          "start": "2026-10-22T15:57:07.000+02:00",
+          "end": "2026-10-22T15:57:14.000+02:00",
+          "outcome": "met",
+          "commands": 7
+        },
+        {
+          "type": "function_end",
+          "t": "2026-10-22T15:57:15.000+02:00",
+          "function": "sharetree_modify",
+          "verdict": "passed",
+          "duration": 10.0
+        },
+        {
+          "type": "unit_end",
+          "t": "2026-10-22T15:57:17.000+02:00",
+          "check": "functional/sharetree",
+          "level": 0,
+          "verdict": "passed",
+          "duration": 16.0
+        },
+        {
+          "type": "phase",
+          "t": "2026-10-22T15:57:17.000+02:00",
+          "check": "functional/sharetree",
+          "levels": [
+            0
+          ],
+          "phase": "cleanup",
+          "result": "ok",
+          "return": 1
+        },
+        {
+          "type": "cleanup_check",
+          "t": "2026-10-22T15:57:17.000+02:00",
+          "check": "functional/sharetree",
+          "levels": [
+            0
+          ],
+          "result": "ok",
+          "messages": []
         }
       ]
     }

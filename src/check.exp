@@ -4650,6 +4650,7 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
 
    # unless we are in install - check if system is running
    set runlevel_error_text ""
+   set runlevel_error_cluster 0
    set do_run_hook 0
 
    #prepare a path name for hudson XML reports
@@ -4662,6 +4663,8 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
        [string compare $check_needs "" ]               != 0 &&
        $check_need_running_system == "yes"} {
 
+      # CS-2936: a cluster that is not ready is infrastructure, not a test failure
+      set runlevel_error_cluster 1
       # If master not available skip scheduler tests ...
       set master_ping_result [ping_daemon $ts_config(master_host) $ts_config(commd_port) "qmaster" 1]
       if {$master_ping_result != 0} {
@@ -4684,6 +4687,7 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
 
          set do_run_hook 1
          if {$runlevel_error_text == ""} {
+            set runlevel_error_cluster 0
             ts_log_fine "check start runlevel hooks ..."
             if {[exec_start_runlevel_hooks 1 0 $path] != 0} {
                append runlevel_error_text "Runlevel hooks returned an error!\n"
@@ -4700,6 +4704,9 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
    set setup_ret 1
    set was_unsupported 0
    if {$runlevel_error_text != ""} {
+      if {$runlevel_error_cluster} {
+         tsrec_set_origin "connection"
+      }
       ts_log_severe "check \"$check_name\" cannot start in runlevel $level ([get_run_level_name $level]):\n$runlevel_error_text"
       if {$CHECK_USE_HUDSON == 1} {
          #We need the skipped reports (can't use falure type or reason otherwise the test is still interpreted as failed)
