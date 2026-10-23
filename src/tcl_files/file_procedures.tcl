@@ -2196,54 +2196,24 @@ proc write_remote_file {host user file array_name {permissions ""}} {
    return $prg_exit_state
 }
 
-#                                                             max. column:     |
-#****** file_procedures/get_binary_path() ******
-#
-#  NAME
-#     get_binary_path -- get host specific binary path
-#
-#  SYNOPSIS
-#     get_binary_path { hostname binary }
-#
-#  FUNCTION
-#     This procedure will parse the host configuration file of the
-#     testsuite. In this file the user can configure his host specific binary
-#     path names.
-#
-#  INPUTS
-#     hostname - hostname where a binary should be found
-#     binary   - binary name (e.g. expect)
-#
-#  RESULT
-#     The full path name of the binary on the given host. The return value
-#     depends on the entries in the testsuite host configuration file.
-#
-#     If there is no entry in the host configuration file the path settings
-#     from the CHECK_USER are used to find out the path of the binary by
-#     doing a which call. If the CHECK_USER settings does also not return
-#     the path the path settings fromt the root user are checked.
-#
-#     The testsuite will generate a configuration warning message that
-#     a host configuration does not contain the path for a binary if the
-#     path has to be resolved by using any users environment.
-#
-#     The path settings from the users's environments are cached. If a
-#     cached entry is returned the testsuite will not report a configuration
-#     warning.
-#
-#     If the binary cannot be found at all the content of the binary argument
-#     is returned.
-#
-#  SEE ALSO
-#     file_procedures/get_dir_names
-#*******************************
-
 # This is the cache for users's binary which calls. The cache is erased
 # when the file is (re-)sourced!
 global cached_binary_path_array
 if {[info exists cached_binary_path_array]} {
    unset cached_binary_path_array
 }
+
+## @brief Get the host-specific path of a binary
+#
+# Takes the path from the testsuite host configuration. Without an entry
+# there, the path is looked up with mywhich.sh in the environment of
+# CHECK_USER and then of root, and a hit is cached; the lookup is reported at
+# FINER level as a missing host configuration entry. A lookup that fails
+# (mywhich.sh exits non-zero) is not taken as a path.
+# @param nodename the host (or node) the binary should be found on
+# @param binary the binary name, e.g. expect
+# @param raise_error 1 to raise a warning if the binary is not found at all
+# @return the full path of the binary, or the binary argument if it is not found
 proc get_binary_path {nodename binary {raise_error 1}} {
    global get_binary_path_recursive_call
    global ts_host_config
@@ -2307,7 +2277,7 @@ proc get_binary_path {nodename binary {raise_error 1}} {
    # Try to find out the path from CHECK_USER user's environment
    set binary_path [start_remote_prog $hostname $CHECK_USER "$ts_config(testsuite_root_dir)/scripts/mywhich.sh" $binary prg_exit_state 60 0 "" "" 1 0]
    set binary_path [string trim $binary_path]
-   if {[is_remote_file $hostname $CHECK_USER $binary_path 0]} {
+   if {$prg_exit_state == 0 && [is_remote_file $hostname $CHECK_USER $binary_path 0]} {
       # We have figured out the path from the user's environment
       # The binary path is not configured in the host configuration, report config warning
       set config_text "No entry for binary \"$binary\" on host \"$hostname\" in host configuration!\n"
@@ -2325,7 +2295,7 @@ proc get_binary_path {nodename binary {raise_error 1}} {
       if {[have_root_passwd] == 0} {
          set binary_path [start_remote_prog $hostname "root" "$ts_config(testsuite_root_dir)/scripts/mywhich.sh" $binary prg_exit_state 60 0 "" "" 1 0]
          set binary_path [string trim $binary_path]
-         if {[is_remote_file $hostname "root" $binary_path 0]} {
+         if {$prg_exit_state == 0 && [is_remote_file $hostname "root" $binary_path 0]} {
             # We have figured out the path from the root user's environment
             # The binary path is not configured in the host configuration, report config warning
             set config_text "No entry for binary \"$binary\" on host \"$hostname\" in host configuration!\n"
