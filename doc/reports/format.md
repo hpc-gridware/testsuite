@@ -426,40 +426,73 @@ error. Exit status: 0 when every unit `passed`, was `skipped` or
 
 ## 3. Catalog
 
-Written by a project-specific parser (for GCS: the parser of the PIM/RBAC
-specification in `gcs-extensions`), read by render.
+Written by a project-specific parser, read by render. For GCS this is
+`spec_catalog.py` in `gcs-extensions/doc/markdown/specification`, which reads
+the acceptance test cases (`19_Test_Cases.md`) and the schedule
+(`21_Schedule.md`) of a specification:
+
+```
+spec_catalog.py <spec_dir> [-o catalog.json]
+```
+
+Without `-o` it only checks the specification. It is strict and fails (exit
+status 1, no catalog) on a test case off the format, a duplicate ID, an
+overview row that disagrees with its case, an unknown milestone, a malformed
+ID list, or a criterion that maps an unknown ID.
 
 ```json
 {"format": "ts-report/catalog/1",
- "source": {"title": "PIM/RBAC specification", "version": "0.39",
+ "source": {"title": "Functional Specification - PIM and RBAC", "version": "0.39",
+            "generated_at": "...",
             "files": [{"path": "19_Test_Cases.md", "sha256": "..."}]},
- "milestones": [{"id": "M1", "title": "Roles and enforcement"}],
+ "milestones": [{"id": "M1", "title": "Roles and enforcement", "date": "T0 + 3 months"}],
  "test_cases": [
    {"id": "STR-03", "title": "Change shares on own node",
-    "section": "ShareTree Tests", "phase": "Phase 1", "milestone": "M3",
+    "section": "ShareTree Tests", "plan_section": "15.7",
+    "phase": "Phase 1", "milestone": "M3", "milestone_text": "M3",
     "see": "UC-4.40", "verifies": "...", "steps": ["...", "..."],
-    "pass": "...", "notes": [], "owner": "product"}],
+    "pass": "...", "notes": [], "owner": "product", "source": "customer",
+    "criteria": ["M3-AC-04"]}],
  "criteria": [
    {"id": "M3-AC-04", "milestone": "M3",
     "criterion": "Administer ShareTree by subtree",
     "focus": "-sstpath, -mstnode, add and delete",
-    "test_ids": ["STR-01", "...", "STR-09", "ADM-09", "ADM-10", "ADM-11"],
-    "mapping": "test_ids"},
+    "mapping": "test_ids",
+    "test_ids": ["STR-01", "...", "STR-09", "ADM-09", "ADM-10", "ADM-11"]},
+   {"id": "M1-AC-03", "milestone": "M1",
+    "criterion": "Evaluate the permission-rule characteristics at the server",
+    "mapping": "test_ids", "mapped_by": "Product automated tests", "test_ids": []},
    {"id": "M3-AC-08", "milestone": "M3",
     "criterion": "Validate the target scope with the automated test suite",
     "mapping": "run"},
    {"id": "M3-AC-10", "milestone": "M3",
     "criterion": "Enable the customer to reproduce tenant-isolation verification",
-    "mapping": "manual"}]}
+    "mapping": "manual"}],
+ "unmapped": ["AUD-13", "..."]}
 ```
 
-- `owner` is `product` or `site`. Site cases appear in the report as not
-  covered by the testsuite.
+- `milestone` is the milestone at which the case is fully delivered, the
+  last one its specification text names (`M1 (rejection), M2 (uniform
+  response)` is `M2`); `milestone_text` keeps the text. It is null for site
+  cases and later phases.
+- `owner` is `product`, `site` (a control the site operates) or `later` (a
+  later phase than the one specified). Site and later cases appear in the
+  report as not covered by the testsuite.
+- `source` is `customer` (from the customer test plan), `added` (added to the
+  acceptance cases by us, marked *Not part of the customer test plan*) or
+  `additional` (section *Additional Test Scenarios*: our own scenarios, not
+  acceptance criteria).
+- `criteria` lists the criteria that map the case; `unmapped` lists the cases
+  no criterion maps. They verify delivered behaviour but do not decide
+  acceptance.
 - `mapping` says how a criterion gets its verdict: `test_ids` (all mapped
   cases passed), `run` (the overall result of the run), or `manual` (no
-  verdict, listed as verified by the customer). Criteria whose specification
-  text names a description instead of IDs get their `test_ids` from the
-  project's own mapping table.
+  verdict, listed as verified by the customer).
+- A criterion whose specification text names a description instead of IDs
+  keeps it in `mapped_by` and gets its `test_ids` from the own mapping table
+  (`| AC ID | Mapped test IDs |`) in *Additional Test Scenarios*. Until that
+  table maps it, `test_ids` is empty, the parser warns, and render cannot
+  decide the criterion.
 - Ranges in the specification (`STR-01 to STR-09`) are expanded by the
   parser; `test_ids` always lists single IDs.
 
@@ -470,7 +503,7 @@ specification in `gcs-extensions`), read by render.
 - `r2-48211-1792663391204.jsonl`: attempt 1 (`phase1`), `sharetree_modify` fails with an assertion;
 - `r1-50332-1792670102117.jsonl`: attempt 3 (`phase3`), the same unit passes;
 - `merged.json`: the unit passes, `retried` and `attention` are set (`ts_report_merge.py examples`, with `merged_at` and `inputs` set to fixed values);
-- `catalog.json`: excerpt with one product case, one site case and three criteria (`test_ids`, `run`, `manual`).
+- `catalog.json`: excerpt of the pim-rbac 0.39 catalog with one product case, one site case and four criteria (`test_ids`, a description not yet mapped, `run`, `manual`).
 
 ## 5. Decisions
 

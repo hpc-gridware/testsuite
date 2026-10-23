@@ -1,23 +1,30 @@
 {
   "format": "ts-report/catalog/1",
   "source": {
-    "title": "PIM/RBAC specification",
+    "title": "Functional Specification - PIM and RBAC",
     "version": "0.39",
+    "generated_at": "2026-10-23T17:50:15.114+02:00",
     "files": [
       {
         "path": "19_Test_Cases.md",
-        "sha256": "<sha256>"
+        "sha256": "fb74bd4f177ea60522bad2b969fc187a7332f58450b4202dd087dd294593e8df"
       },
       {
         "path": "21_Schedule.md",
-        "sha256": "<sha256>"
+        "sha256": "c443c2dd3b6244c29d300089ce52a1886bbdde1002a02813b0efc6e19906f070"
       }
     ]
   },
   "milestones": [
     {
+      "id": "M1",
+      "title": "Roles and enforcement",
+      "date": "T0 + 3 months"
+    },
+    {
       "id": "M3",
-      "title": "Verification and acceptance"
+      "title": "Verification and acceptance",
+      "date": "T0 + 10 months"
     }
   ],
   "test_cases": [
@@ -25,40 +32,62 @@
       "id": "STR-03",
       "title": "Change shares on own node",
       "section": "ShareTree Tests",
+      "plan_section": "15.7",
       "phase": "Phase 1",
       "milestone": "M3",
-      "see": "UC-4.40",
-      "verifies": "a tenant administrator can change shares inside the own subtree",
+      "milestone_text": "M3",
+      "see": "Logical View — Share-Tree Subtree Commands (`qconf -mstnode`)",
+      "verifies": "`MOD` on an own node is granted.",
       "steps": [
-        "As soca_admin01: qconf -mstnode /fks/div01/grp01/soca/fa=200.",
-        "As gcs_admin01: qconf -sstpath /fks/div01/grp01/soca/fa."
+        "As `soca_admin01` on `adm1`: `qconf -mstnode /fks/div01/grp01/soca/fa/fks_div01_soca_fa_age01=30`.",
+        "`qconf -sstpath /fks/div01/grp01/soca`."
       ],
-      "pass": "step 1 succeeds; step 2 shows shares=200.",
+      "pass": "the new value is shown.",
       "notes": [],
-      "owner": "product"
+      "owner": "product",
+      "source": "customer",
+      "criteria": [
+        "M3-AC-04"
+      ]
     },
     {
       "id": "AUD-13",
       "title": "External log forwarding",
       "section": "Audit Tests",
+      "plan_section": "15.8",
       "phase": "Site",
       "milestone": null,
-      "see": "UC-5.20",
-      "verifies": "audit records reach the site SIEM",
+      "milestone_text": "—",
+      "see": "UC-5.20 (Forwarding); UC-5.50 (supported forwarding, Phase 2)",
+      "verifies": "the site's log daemon forwards the audit-log file. GCS makes no statement about the forwarded result in Phase 1.",
       "steps": [
-        "..."
+        "Configure the site forwarding of the audit-log file to the collector.",
+        "Run AUD-01 and AUD-02.",
+        "Search the collector."
       ],
-      "pass": "...",
+      "pass": "both records arrive unchanged.",
       "notes": [],
-      "owner": "site"
+      "owner": "site",
+      "source": "customer",
+      "criteria": []
     }
   ],
   "criteria": [
     {
+      "id": "M1-AC-03",
+      "milestone": "M1",
+      "criterion": "Evaluate the permission-rule characteristics at the server",
+      "focus": "Source, Origin, Operation, Object Type, Object Key, Constraint",
+      "mapping": "test_ids",
+      "mapped_by": "Product automated tests",
+      "test_ids": []
+    },
+    {
       "id": "M3-AC-04",
       "milestone": "M3",
       "criterion": "Administer ShareTree by subtree",
-      "focus": "-sstpath, -mstnode, add and delete",
+      "focus": "`-sstpath`, `-mstnode`, add and delete",
+      "mapping": "test_ids",
       "test_ids": [
         "STR-01",
         "STR-02",
@@ -72,8 +101,7 @@
         "ADM-09",
         "ADM-10",
         "ADM-11"
-      ],
-      "mapping": "test_ids"
+      ]
     },
     {
       "id": "M3-AC-08",
@@ -89,5 +117,8 @@
       "focus": "Documentation, introspection, evidence",
       "mapping": "manual"
     }
+  ],
+  "unmapped": [
+    "AUD-13"
   ]
 }
