@@ -158,7 +158,15 @@ proc issue_1874_run  {} {
 ${line}[format "%c" 27]"
    }
    lappend vi_commands "1Gdddddddddd"
-   set CHANGED_SHARETREE [translate_macro MSG_TREE_CHANGEDSHARETREE]
+   # The setup created the tree with "qconf -Mstree", so this is a modify. Up to
+   # 9.1 the qconf client printed a message of its own; from 9.2 on the write goes
+   # through the stored procedure in sge_qmaster and the answer is the qmaster's
+   # audit line, which names the user and counts the nodes.
+   if {[is_version_in_range "9.2.0"]} {
+      set CHANGED_SHARETREE [translate_macro MSG_STREE_MODSTREE_SSII $CHECK_USER "*" "*" "*"]
+   } else {
+      set CHANGED_SHARETREE [translate_macro MSG_TREE_CHANGEDSHARETREE]
+   }
    set CAN_T_READ [translate_macro MSG_QCONF_CANTREADSHARETREEX_S "*"]
 
    set master_arch [resolve_arch $ts_config(master_host)]

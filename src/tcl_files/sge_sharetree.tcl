@@ -634,31 +634,28 @@ proc stree_buffer_get_node {stree_var node} {
    return $ret
 }
 
-#****** sge_sharetree/stree_buffer_commit() ************************************
-#  NAME
-#     stree_buffer_commit() -- modify sharetree according to sharetree buffer
+## @brief Modify the sharetree in sge_qmaster according to a sharetree buffer
 #
-#  SYNOPSIS
-#     stree_buffer_commit { stree_var }
+# Writes the given in-memory sharetree buffer to a temporary file and hands it
+# to "qconf -Mstree".
 #
-#  FUNCTION
-#     Modifies the sharetree in sge_qmaster (qconf -Mstree) according to
-#     the contents of the given (in memory) sharetree buffer.
+# The success message depends on the release. Up to 9.1 the qconf client printed
+# one message of its own for every outcome. From 9.2 on the write goes through
+# the stored procedure in sge_qmaster, which answers with the qmaster's own audit
+# line - and that line says whether the tree was created or replaced, so there
+# are two success messages where there used to be one. handle_sge_errors() holds
+# one message per return code and treats every code >= 0 as a success, so the
+# second one gets code 1 and is mapped back to 0 below, because this proc
+# promises 0 on success.
 #
-#  INPUTS
-#     stree_var - the sharetree to commit
-#     {on_host ""}    - execute qconf on this host (default: qmaster host)
-#     {as_user ""}    - execute qconf as this user (default: CHECK_USER)
-#     {raise_error 1} - raise error condition in case of errors?
-#
-#  RESULT
-#     0   - on success
-#     < 0 - on error, see sge_procedures/get_sge_error()
-#
-#  SEE ALSO
-#     sge_procedures/get_sge_error()
-#*******************************************************************************
+# @param stree_var     name of the array holding the sharetree to commit
+# @param on_host       host to run qconf on, "" for the qmaster host
+# @param as_user       user to run qconf as, "" for CHECK_USER
+# @param raise_error   1 to report errors, 0 when the error is expected
+# @return 0 on success, < 0 on error, see sge_procedures/get_sge_error()
 proc stree_buffer_commit {stree_var {on_host ""} {as_user ""} {raise_error 1}} {
+   global CHECK_USER
+
    upvar $stree_var stree
 
    set ret 0
@@ -710,10 +707,25 @@ proc stree_buffer_commit {stree_var {on_host ""} {as_user ""} {raise_error 1}} {
    # commit sharetree change
    if {$ret == 0} {
       set result [start_sge_bin "qconf" "-Mstree $tmp_filename" $on_host $as_user]
-      set messages(index) {0}
-      set messages(0) [translate_macro MSG_TREE_CHANGEDSHARETREE]
+      if {[is_version_in_range "9.2.0"]} {
+         # see the note above: the qmaster names the user that asked, and it
+         # distinguishes the first tree from a later one
+         set msg_user $as_user
+         if {$msg_user == ""} {
+            set msg_user $CHECK_USER
+         }
+         set messages(index) "0 1"
+         set messages(0) [translate_macro MSG_STREE_MODSTREE_SSII $msg_user "*" "*" "*"]
+         set messages(1) [translate_macro MSG_STREE_ADDSTREE_SSII $msg_user "*" "*" "*"]
+      } else {
+         set messages(index) "0"
+         set messages(0) [translate_macro MSG_TREE_CHANGEDSHARETREE]
+      }
 
       set ret [handle_sge_errors "stree_buffer_commit" "qconf -Mstree $tmp_filename" $result messages $raise_error]
+      if {$ret > 0} {
+         set ret 0
+      }
    }
 
    return $ret
