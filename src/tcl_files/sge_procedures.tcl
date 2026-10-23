@@ -10368,7 +10368,14 @@ proc set_complex {change_array {raise_error 1} {fast_add 1} {do_reset 0} } {
       ts_log_finer "output of qconf -Mc $tmpfile:\n$result"
 
       # parse output or raise error
-      add_message_to_container messages 4 [translate_macro MSG_CENTRY_NOTCHANGED]
+      # A write that changes nothing is a success, and both lines below say so:
+      # up to 9.1 the client summarised it per type, from 9.2 the qmaster's write
+      # procedure summarises it for every type it writes.
+      if {[is_version_in_range "9.2.0"]} {
+         add_message_to_container messages 4 [translate_macro MSG_QCONF_WRITENOCHANGE]
+      } else {
+         add_message_to_container messages 4 [translate_macro MSG_CENTRY_NOTCHANGED]
+      }
       add_message_to_container messages 3 [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS $CHECK_USER "*" "*" "*"]
       add_message_to_container messages 2 [translate_macro MSG_SGETEXT_REMOVEDFROMLIST_SSSS $CHECK_USER "*" "*" "*"]
       add_message_to_container messages 1 [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS $CHECK_USER "*" "*" "*"]
