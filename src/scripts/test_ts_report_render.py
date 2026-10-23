@@ -240,6 +240,20 @@ class RenderTest(unittest.TestCase):
         self.assertIn("/inst/bin/lx-amd64/qconf -sq", internal[0])
         self.assertTrue(any("| output" in l for l in internal))
 
+    def test_background_commands_in_start_order(self):
+        events = [{"type": "function_start", "function": "f1"},
+                  command("-km", start="2026-10-22T15:57:10.000+02:00",
+                          t="2026-10-22T15:57:11.000+02:00")]
+        # recorded when they end, so after the -km they overlap with
+        for second in ("00", "01"):
+            events.append(command("-sync y", command="/inst/bin/qsub", interactive=True, exit=None,
+                                  output=None, start="2026-10-22T15:57:%s.000+02:00" % second,
+                                  t="2026-10-22T15:57:3%s.000+02:00" % second[1]))
+        lines = render.TraceText(False).lines(render.Trace(events).function_items("f1"))
+        prompts = [l for l in lines if "$" in l]
+        self.assertEqual([p[:8] for p in prompts], ["15:57:00", "15:57:01", "15:57:10"])
+        self.assertFalse(any("repeated" in l for l in lines))
+
     def test_fence_survives_backticks(self):
         block = render.fence(["a ``` b"])
         self.assertEqual(block[0], "````text")

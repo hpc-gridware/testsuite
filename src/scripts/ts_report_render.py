@@ -214,10 +214,15 @@ class CommandItem:
         self.events = [event]
 
     ## @brief Tell whether a command repeats this one exactly
+    #
+    # Background commands and interactive sessions never collapse: each is a
+    # process of its own, overlapping with others.
     # @param event a command line
     # @return True if host, user, command, arguments and result are the same
     def repeats(self, event):
         first = self.events[0]
+        if first.get("background") or first.get("interactive"):
+            return False
         fields = ("host", "user", "root", "command", "args", "exit", "timed_out",
                   "framework", "diagnostic", "background", "interactive")
         return all(first.get(f) == event.get(f) for f in fields)
@@ -338,6 +343,33 @@ class Trace:
             if not self.sections or self.sections[-1][0] != key:
                 self.sections.append((key, []))
             self.sections[-1][1].append(item)
+        # a command is recorded when it ends; show the items in the order they started
+        for _, section_items in self.sections:
+            section_items[:] = sorted(section_items, key=self.start_key(section_items))
+
+    ## @brief A sort key that orders trace items by their start time
+    #
+    # An item without a usable time stamp keeps the time of the item before it,
+    # so it stays where the stream put it.
+    # @param items the items of one section, in stream order
+    # @return a function mapping an item to its key
+    @staticmethod
+    def start_key(items):
+        keys = {}
+        last = None
+        for index, item in enumerate(items):
+            if isinstance(item, CommandItem):
+                stamp = item.events[0].get("start") or item.events[0].get("t")
+            elif isinstance(item, ContextItem):
+                first = item.members[0] if item.members else {}
+                stamp = (item.poll or {}).get("start") or first.get("start") or first.get("t")
+            else:
+                stamp = item.event.get("t")
+            moment = parse_time(stamp)
+            if moment is not None:
+                last = moment
+            keys[id(item)] = (last.timestamp() if last else 0.0, index)
+        return lambda item: keys[id(item)]
 
     ## @brief The title of a section
     # @param key the section key
@@ -914,7 +946,8 @@ class Report:
         rows = []
         for case_id in ids:
             case = self.cases.get(case_id, {})
-            checks = ", ".join(sorted({"`%s`" % e.function.get("function")
+            checks = ", ".join(sorted({"`%s`%s" % (e.function.get("function"),
+                                                   "" if e.relation == "covers" else " (prepares)")
                                        for e in self.executions.get(case_id, [])}))
             rows.append([self.case_link(case_id), cell(case.get("title")),
                          CASE_TEXT[self.case_verdict(case_id)], checks])
