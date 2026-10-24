@@ -5194,12 +5194,38 @@ proc replace_attr_error {result object attribute value target raise_error} {
 }
 
 
+## @brief Error handling for replace_attr_file().
+#
+# Translates the error messages "qconf -Rattr" can return into the container
+# handle_sge_errors() expects, and evaluates the call's output with it. It is
+# separated from replace_attr_file() for the same reason as
+# replace_attr_error(): the qconf call is version independent, the messages are
+# not.
+#
+# @param result      output of the qconf call
+# @param object      object type qconf is modifying
+# @param attribute   attribute of the object being replaced
+# @param tmpfile     file holding the attribute value
+# @param target      target object
+# @param raise_error do ts_log_severe in case of errors
+# @return 0 on success, -1 if the attribute does not exist, -2/-3/-4 if an
+#         advance reservation or a slot reservation refused the change, and
+#         -999 when none of those messages match the output
+# @see handle_sge_errors
+# @see replace_attr_error
 proc replace_attr_file_error {result object attribute tmpfile target raise_error} {
    get_current_cluster_config_array ts_config
 
    # recognize certain error messages and return special return code
+   #
+   # No "error: " prefix on purpose: the message travels back in an answer list,
+   # and the two writers print such a list differently - the client's
+   # answer_list_output() logs it as "error: <text>", the stored write procedure
+   # of CS-2822/CS-2823 prints the text as qmaster sent it. Matching the text
+   # alone recognises both, which is what a testsuite shared between the 9.1 and
+   # 9.2 lines needs.
    set messages(index) -1
-   set messages(-1) "error: [translate_macro MSG_UNKNOWNATTRIBUTENAME_S $attribute ]"
+   set messages(-1) [translate_macro MSG_UNKNOWNATTRIBUTENAME_S $attribute]
 
    lappend messages(index) -2
    set messages(-2) [translate_macro MSG_PARSE_MOD_REJECTED_DUE_TO_AR_SSU "*" "*" "*"]
