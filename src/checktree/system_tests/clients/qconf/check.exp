@@ -2471,7 +2471,12 @@ proc qconf_modify_checkpoint {} {
    set missing "qconf_ckpt_wrong"
    set result [mod_ckpt $missing myarray 1 "" "" 0]
    if {[is_version_in_range "9.2.0"]} {
-      if {$result != 0} {
+      # A positive code is a success too, and here it is the expected one: the
+      # qmaster answers the upsert with its "added" message, which
+      # sge_client_messages maps to 1 for exactly this case (CS-2309+). Only a
+      # negative code is an error, so that is what is asserted - the object is
+      # then read back below, which is the real proof that the write landed.
+      if {$result < 0} {
          ts_log_severe "qconf -Mckpt $missing returned $result - since 9.2 a modify of a name that does not exist adds the object"
       }
       if {[get_ckpt $missing created "" "" 0] != 0} {
