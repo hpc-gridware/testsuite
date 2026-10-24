@@ -105,10 +105,14 @@ proc job_environment_basic_setup {} {
 
    get_config job_environment_basic_config $job_environment_basic_exec_host
 
-   # allow setting LD_LIBRARY_PATH
+   # From 9.1.8 on a submission may set LD_LIBRARY_PATH without a parameter having to allow
+   # it (CS-2764). An older cluster still removes it, so there the parameter is set.
    get_config job_environment_basic_global_config
-   set conf(qmaster_params) "ENABLE_SUBMIT_LIB_PATH=TRUE"
-   set_config conf
+   if {![is_version_in_range "9.1.8"]} {
+      add_or_replace_array_param conf job_environment_basic_global_config "qmaster_params" \
+                                 "ENABLE_SUBMIT_LIB_PATH" "TRUE"
+      set_config conf
+   }
 }
 
 ####### job_environment_basic_cleanup() ##############################################
@@ -818,36 +822,52 @@ proc job_environment_basic_amount_uninherited {} {
 
 proc job_environment_basic_ld_preload {} {
    global ts_config
+   global qsub_output
 
-   # submit a job with LD_PRELOAD set, expect it to be rejected
-   # we submit it with hold, it will not be executed
+   # Two contracts, depending on the release under test.
+   #
+   # From 9.1.8 on, a submission which sets LD_PRELOAD is accepted and keeps the variable: the
+   # job runs as its owner, who may set what they like, and the shepherd drops the loader and
+   # interpreter variables for the administrative procedures which run as another user - see
+   # the check of CS-2764 for that half.
+   #
+   # Before that, the variable was removed at submission time unless the qmaster parameter
+   # ENABLE_SUBMIT_LD_PRELOAD allowed it, and both cases are still tested here so that this
+   # check keeps its meaning on an older cluster. A backport of the change to the 9.0 line
+   # would make the version a per branch list, {"9.0.x 9.1.8" ""}.
+   set keeps_the_variable [is_version_in_range "9.1.8"]
+
    set job_opts "-o /dev/null -j y -h -b y -v LD_PRELOAD=/tmp/my_bad_lib.so"
    set job_args "sleep 100"
-   set job_id [submit_job "$job_opts $job_args" 0]
-   ts_log_fine $qsub_output
    set pattern [translate_macro MSG_REMOVED_ENV_VAR_S "LD_PRELOAD"]
-   if {$job_id <= 0} {
-      ts_log_severe "job should have got submitted, but was rejected:\n$qsub_output"
-   } else {
-      if {[string first $pattern $qsub_output] < 0} {
-         ts_log_severe "LD_PRELOAD was accepted during job submission, but should have been removed:\n$qsub_output"
-      }
-   }
-   delete_job $job_id
 
-   # add ENABLE_SUBMIT_LD_PRELOAD=TRUE to the qmaster params
-   get_config global_conf_backup
-   set conf(qmaster_params) "$global_conf_backup(qmaster_params),ENABLE_SUBMIT_LD_PRELOAD=TRUE"
-   set_config conf
-   # submit a job with LD_PRELOAD set, expect it to be accepted
+   if {!$keeps_the_variable} {
+      # the variable is removed from the submission
+      set job_id [submit_job "$job_opts $job_args" 0]
+      ts_log_fine $qsub_output
+      if {$job_id <= 0} {
+         ts_log_severe "job should have got submitted, but was rejected:\n$qsub_output"
+      } elseif {[string first $pattern $qsub_output] < 0} {
+         ts_log_severe "LD_PRELOAD was accepted during job submission, but should have been\
+                        removed:\n$qsub_output"
+      }
+      delete_job $job_id
+
+      # ... unless the qmaster parameter allows it, which is also what the rest of this
+      # function needs
+      get_config global_conf_backup
+      add_or_replace_array_param conf global_conf_backup "qmaster_params" \
+                                 "ENABLE_SUBMIT_LD_PRELOAD" "TRUE"
+      set_config conf
+   }
+
    set job_id [submit_job "$job_opts $job_args" 0]
    ts_log_fine $qsub_output
    if {$job_id <= 0} {
       ts_log_severe "job should have got submitted, but was rejected:\n$qsub_output"
-   } else {
-      if {[string first $pattern $qsub_output] >= 0} {
-         ts_log_severe "LD_PRELOAD was removed, but should have been accepted:\n$qsub_output"
-      }
+   } elseif {[string first $pattern $qsub_output] >= 0} {
+      ts_log_severe "LD_PRELOAD was removed from the submission, where it has to be\
+                     kept:\n$qsub_output"
    }
    delete_job $job_id
 
@@ -863,8 +883,9 @@ proc job_environment_basic_ld_preload {} {
       ts_log_fine "LD_PRELOAD was set in the environment"
    }
 
-   # restore global config
-   reset_config global_conf_backup
+   if {!$keeps_the_variable} {
+      reset_config global_conf_backup
+   }
 }
 
 proc job_environment_multi_line {} {

@@ -1,0 +1,403 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2764: the loader and interpreter variables of a job submission reach the administrative
+# procedures of a job - prolog, epilog, pe_start and pe_stop - and those procedures can be
+# configured to run as another user, root among them. A submitter can therefore place a
+# library of their own into a root process on every execution host their job touches.
+#
+# The filter which exists today sits at submission time, removes LD_PRELOAD and the
+# LD_LIBRARY_PATH family only, and is commonly turned off with the qmaster parameters
+# ENABLE_SUBMIT_LIB_PATH and ENABLE_SUBMIT_LD_PRELOAD because jobs legitimately need those
+# variables. The job itself is not the problem: it runs as its owner. The procedures are.
+#
+# What the check requires:
+#
+#   - a procedure which runs as another user sees none of the variables the submitter set
+#   - a procedure which runs as the job owner sees all of them, because there is nothing to
+#     protect there
+#   - the job itself sees all of them, whatever the two qmaster parameters say
+#   - a submission which sets them is accepted without a variable being removed
+#
+# Every value carries the marker CS2764MARK. The check looks for the marker rather than for
+# the variable name, because the execution daemon merges its own value into LD_LIBRARY_PATH
+# when SET_LIB_PATH is enabled - what has to disappear from a procedure is the part the
+# submitter supplied, and the marker is that part.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_2764"
+set check_category       "BUG EXECD SECURITY VERIFIED"
+set check_description(0) "loader variables of a submission must not reach a foreign procedure"
+
+set check_needs          "init_core_system"
+
+# the procedures under test run as root
+set check_root_access_needs "yes"
+
+set check_setup_function "issue_2764_setup"
+set check_cleanup_function "issue_2764_cleanup"
+
+set check_functions {}
+lappend check_functions "issue_2764_procedures_as_root"
+lappend check_functions "issue_2764_procedures_as_owner"
+lappend check_functions "issue_2764_pe_procedures_as_root"
+lappend check_functions "issue_2764_submission_is_accepted"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2764_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ACTUAL_TEST_PATH
+   global issue_2764_host issue_2764_queue issue_2764_pe issue_2764_dir
+   global issue_2764_script issue_2764_vars issue_2764_submit_args issue_2764_config_backup
+
+   set issue_2764_queue "cs2764.q"
+   set issue_2764_pe    "cs2764.pe"
+   set issue_2764_script "$CHECK_ACTUAL_TEST_PATH/cs2764_dump_env.sh"
+
+   set issue_2764_host [host_conf_get_suited_hosts]
+
+   # The loader and interpreter variables the issue lists. A procedure which runs as another
+   # user may see none of them with a value of the submitter's.
+   set issue_2764_vars {
+      LD_PRELOAD LD_AUDIT LD_LIBRARY_PATH LD_LIBRARY_PATH_32 LD_LIBRARY_PATH_64
+      LD_ORIGIN_PATH LD_CONFIG LIBPATH SHLIB_PATH DYLD_LIBRARY_PATH
+      DYLD_INSERT_LIBRARIES GCONV_PATH LOCPATH NLSPATH BASH_ENV ENV
+      HSA_TOOLS_LIB ROCM_PATH RDC_LOG
+   }
+
+   # every value carries the marker, and no value points at anything which exists - a library
+   # which cannot be loaded makes the loader warn and carry on, which is all the check needs
+   set issue_2764_submit_args ""
+   foreach var $issue_2764_vars {
+      append issue_2764_submit_args " -v $var=/CS2764MARK/[string tolower $var].so"
+   }
+
+   # Where the dumps go. The directory has to be writable for the job owner and for root, and
+   # it must not be sticky: the check deletes files root wrote, which the sticky bit of a
+   # directory like /tmp would prevent.
+   set issue_2764_dir "$ts_config(product_root)/cs2764_env"
+   remote_file_mkdir $issue_2764_host $issue_2764_dir $CHECK_USER "" mkdir_state
+   if {$mkdir_state != 0} {
+      ts_log_config "cannot create the dump directory $issue_2764_dir"
+      return 99
+   }
+
+   # Nothing has to be configured for the variables to reach the job: a submission keeps
+   # them, and the shepherd drops them for a procedure which runs as another user. The
+   # configuration is read all the same, because the check of the submission sets the two
+   # parameters which used to govern this and the cleanup puts it back.
+   get_config issue_2764_config_backup
+
+   if {[add_queue $issue_2764_queue $issue_2764_host "" 1] < 0} {
+      ts_log_config "cannot add the queue $issue_2764_queue on host $issue_2764_host"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_2764_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global issue_2764_host issue_2764_queue issue_2764_pe issue_2764_dir
+   global issue_2764_script issue_2764_vars issue_2764_submit_args issue_2764_config_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60 0
+
+   if {[info exists issue_2764_queue]} {
+      del_queue $issue_2764_queue $issue_2764_host 0 1
+   }
+   if {[info exists issue_2764_pe]} {
+      del_pe $issue_2764_pe "" "" 0
+   }
+   if {[info exists issue_2764_config_backup]} {
+      reset_config_and_propagate issue_2764_config_backup
+   }
+   if {[info exists issue_2764_dir]} {
+      start_remote_prog $issue_2764_host $CHECK_USER "rm" "-rf $issue_2764_dir"
+   }
+
+   unset -nocomplain issue_2764_host issue_2764_queue issue_2764_pe issue_2764_dir
+   unset -nocomplain issue_2764_script issue_2764_vars issue_2764_submit_args
+   unset -nocomplain issue_2764_config_backup
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief configure the procedures of the test queue
+#
+# @param user  the user to run them as, "" for the job owner
+# @return 1 on success, 0 if the queue cannot be configured
+proc issue_2764_configure_queue {user} {
+   global issue_2764_queue issue_2764_host issue_2764_script issue_2764_dir
+
+   set prefix ""
+   if {$user != ""} {
+      set prefix "$user@"
+   }
+
+   foreach role {prolog epilog} {
+      set qconf($role) "$prefix$issue_2764_script $role $issue_2764_dir"
+   }
+   if {[mod_queue $issue_2764_queue $issue_2764_host qconf 1] < 0} {
+      ts_log_severe "cannot configure the procedures of $issue_2764_queue"
+      return 0
+   }
+
+   return 1
+}
+
+## @brief read one environment dump
+#
+# @param job_id    the job the dump belongs to
+# @param role      job, prolog, epilog, pe_start or pe_stop
+# @param env_var   name of the array the environment is returned in
+# @return 1 if the dump was there, 0 if it was not
+proc issue_2764_read_dump {job_id role env_var} {
+   global CHECK_USER issue_2764_host issue_2764_dir
+   upvar $env_var dump
+
+   unset -nocomplain dump
+   set path "$issue_2764_dir/env.$job_id.$role"
+
+   # the dump is written on the execution host, so give it a moment to appear
+   if {[wait_for_remote_file $issue_2764_host $CHECK_USER $path 30 0] != 0} {
+      return 0
+   }
+
+   get_file_content $issue_2764_host $CHECK_USER $path lines
+   for {set i 1} {$i <= $lines(0)} {incr i} {
+      set line $lines($i)
+      set pos [string first "=" $line]
+      if {$pos > 0} {
+         set name [string range $line 0 [expr {$pos - 1}]]
+         set dump($name) [string range $line [expr {$pos + 1}] end]
+      }
+   }
+
+   return 1
+}
+
+## @brief require that a dump carries the submitter's values, or that it carries none
+#
+# @param job_id    the job the dump belongs to
+# @param role      job, prolog, epilog, pe_start or pe_stop
+# @param expect    "present" or "absent"
+# @param as_user   the user the dump is expected to have been written by, "" to not check
+proc issue_2764_check_dump {job_id role expect as_user} {
+   global issue_2764_vars
+
+   if {![issue_2764_read_dump $job_id $role dump]} {
+      ts_log_severe "job $job_id wrote no environment dump for the $role - the procedure did\
+                     not run, or it could not write to the dump directory"
+      return
+   }
+
+   if {$as_user != "" && [info exists dump(CS2764_RUN_AS_USER)]} {
+      if {$dump(CS2764_RUN_AS_USER) != $as_user} {
+         ts_log_severe "the $role of job $job_id ran as $dump(CS2764_RUN_AS_USER), where\
+                        $as_user was expected - the case the check is about is not the case\
+                        which was tested"
+         return
+      }
+   }
+
+   set with_marker {}
+   set without_marker {}
+   foreach var $issue_2764_vars {
+      if {[info exists dump($var)] && [string first "CS2764MARK" $dump($var)] >= 0} {
+         lappend with_marker $var
+      } else {
+         lappend without_marker $var
+      }
+   }
+
+   if {$expect == "absent"} {
+      if {[llength $with_marker] > 0} {
+         ts_log_severe "the $role of job $job_id runs as $as_user and sees [llength\
+                        $with_marker] of [llength $issue_2764_vars] variables the submitter\
+                        set: [join $with_marker ", "]. A procedure which does not run as the\
+                        job owner must not take loader or interpreter variables from the\
+                        submission"
+      } else {
+         ts_log_fine "=== $role (as $as_user): none of the [llength $issue_2764_vars] submitted\
+                      variables arrived"
+      }
+   } else {
+      if {[llength $without_marker] > 0} {
+         ts_log_severe "the $role of job $job_id is missing [llength $without_marker] of\
+                        [llength $issue_2764_vars] variables the submitter set: [join\
+                        $without_marker ", "]. Where the procedure runs as the job owner, or\
+                        where it is the job itself, there is nothing to protect"
+      } else {
+         ts_log_fine "=== $role (as $as_user): all [llength $issue_2764_vars] submitted\
+                      variables arrived"
+      }
+   }
+}
+
+## @brief submit the dump job and wait for it to end
+#
+# @param extra_args  further submit arguments, e.g. a parallel environment
+# @return the job id, or 0 if the job did not run
+proc issue_2764_submit {{extra_args ""}} {
+   global issue_2764_queue issue_2764_host issue_2764_script issue_2764_dir
+   global issue_2764_submit_args
+
+   set job_args "-o /dev/null -j y -q $issue_2764_queue@$issue_2764_host $extra_args"
+   set job_id [submit_job "$job_args $issue_2764_submit_args $issue_2764_script job\
+                           $issue_2764_dir" 0]
+   if {$job_id <= 0} {
+      ts_log_severe "cannot submit the test job"
+      return 0
+   }
+
+   if {[wait_for_jobstart $job_id "" 60] != 0} {
+      ts_log_severe "job $job_id did not start"
+      delete_job $job_id
+      return 0
+   }
+   wait_for_jobend $job_id "" 120 0
+
+   return $job_id
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief a prolog and an epilog which run as root see nothing of the submission
+proc issue_2764_procedures_as_root {} {
+   if {![issue_2764_configure_queue "root"]} {
+      return
+   }
+
+   set job_id [issue_2764_submit]
+   if {$job_id == 0} {
+      return
+   }
+
+   issue_2764_check_dump $job_id "prolog" "absent" "root"
+   issue_2764_check_dump $job_id "epilog" "absent" "root"
+
+   # and the job itself, which runs as its owner, keeps them
+   global CHECK_USER
+   issue_2764_check_dump $job_id "job" "present" $CHECK_USER
+}
+
+## @brief a prolog and an epilog which run as the job owner keep the submission's variables
+proc issue_2764_procedures_as_owner {} {
+   global CHECK_USER
+
+   if {![issue_2764_configure_queue ""]} {
+      return
+   }
+
+   set job_id [issue_2764_submit]
+   if {$job_id == 0} {
+      return
+   }
+
+   issue_2764_check_dump $job_id "prolog" "present" $CHECK_USER
+   issue_2764_check_dump $job_id "epilog" "present" $CHECK_USER
+}
+
+## @brief pe_start and pe_stop which run as root see nothing of the submission
+proc issue_2764_pe_procedures_as_root {} {
+   global issue_2764_pe issue_2764_queue issue_2764_host issue_2764_script issue_2764_dir
+
+   # the procedures of the queue are not what this case is about
+   if {![issue_2764_configure_queue "root"]} {
+      return
+   }
+
+   set pe(slots)         4
+   set pe(start_proc_args) "root@$issue_2764_script pe_start $issue_2764_dir"
+   set pe(stop_proc_args)  "root@$issue_2764_script pe_stop $issue_2764_dir"
+   if {[add_pe $issue_2764_pe pe 1] < 0} {
+      ts_log_severe "cannot add the parallel environment $issue_2764_pe"
+      return
+   }
+
+   set qconf(pe_list) $issue_2764_pe
+   if {[mod_queue $issue_2764_queue $issue_2764_host qconf 1] < 0} {
+      ts_log_severe "cannot add $issue_2764_pe to $issue_2764_queue"
+      return
+   }
+
+   set job_id [issue_2764_submit "-pe $issue_2764_pe 2"]
+   if {$job_id == 0} {
+      return
+   }
+
+   issue_2764_check_dump $job_id "pe_start" "absent" "root"
+   issue_2764_check_dump $job_id "pe_stop" "absent" "root"
+}
+
+## @brief a submission which sets the variables is accepted, with the filter gone
+proc issue_2764_submission_is_accepted {} {
+   global issue_2764_queue issue_2764_host issue_2764_submit_args issue_2764_config_backup
+   global issue_2764_script issue_2764_dir
+   global qsub_output
+
+   # The product default is a filter which removes the variables, and a cluster may well have
+   # it turned off - the lab cluster does - so the check sets the two parameters to FALSE
+   # rather than relying on the configuration it runs on. Once the filter is gone they have
+   # nothing left to turn off.
+   get_config current_config
+   add_or_replace_array_param conf current_config "qmaster_params" \
+                              "ENABLE_SUBMIT_LIB_PATH" "FALSE"
+   add_or_replace_array_param conf conf "qmaster_params" "ENABLE_SUBMIT_LD_PRELOAD" "FALSE"
+   set_config_and_propagate conf
+
+   set job_args "-o /dev/null -j y -h -q $issue_2764_queue@$issue_2764_host"
+   set job_id [submit_job "$job_args $issue_2764_submit_args $issue_2764_script job\
+                           $issue_2764_dir" 0]
+   if {$job_id <= 0} {
+      ts_log_severe "a submission which sets loader variables was rejected, where it has to be\
+                     accepted - the job runs as its owner, who may set what they like"
+      return
+   }
+
+   set removed [translate_macro MSG_REMOVED_ENV_VAR_S "LD_PRELOAD"]
+   if {[string first $removed $qsub_output] >= 0} {
+      ts_log_severe "the submission of job $job_id had a variable removed:\n$qsub_output"
+   } else {
+      ts_log_fine "=== the submission keeps its variables with the default configuration"
+   }
+
+   delete_job $job_id
+}

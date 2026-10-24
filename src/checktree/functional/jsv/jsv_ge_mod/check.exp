@@ -152,9 +152,13 @@ proc jsv_ge_mod_setup_level {} {
    get_config jsv_org_global_conf
    set global_conf(load_report_time) "00:00:04"
    set global_conf(max_unheard) "00:00:15"
-   # allow setting LD_LIBRARY_PATH
-   # @todo only for Version > 8.0.1p3
-   set global_conf(qmaster_params) "ENABLE_SUBMIT_LIB_PATH=TRUE"
+   # This check submits with -V, which carries the environment of the submitting shell. Up to
+   # 9.1.8 a loader variable in it would be removed at submission time, so there the parameter
+   # which allows it is set; from 9.1.8 on nothing is removed (CS-2764).
+   if {![is_version_in_range "9.1.8"]} {
+      add_or_replace_array_param global_conf global_conf "qmaster_params" \
+                                 "ENABLE_SUBMIT_LIB_PATH" "TRUE"
+   }
    set_config_and_propagate global_conf
 
    # submit one job which can be used for hold_jid test

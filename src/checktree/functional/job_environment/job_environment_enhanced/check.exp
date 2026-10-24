@@ -88,10 +88,9 @@ proc job_environment_enhanced_setup {} {
 
    get_config job_environment_enhanced_config $job_environment_enhanced_exec_host
 
-   # allow setting LD_LIBRARY_PATH
+   # nothing here submits a loader variable, so no qmaster parameter has to allow one -
+   # ENABLE_SUBMIT_LIB_PATH used to be set here and never had an effect on this check
    get_config job_environment_enhanced_global_config
-   set conf(qmaster_params) "ENABLE_SUBMIT_LIB_PATH=TRUE"
-   set_config conf
 
    # Stop first execd
    shutdown_system_daemon $job_environment_enhanced_exec_host "execd"
