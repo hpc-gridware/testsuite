@@ -48,9 +48,10 @@ Hand runs:
 - An interactive menu session is one invocation, so one run id and one file.
   Repeating a unit there gives several attempts with `attempt` 0; merge takes
   the one that ended last.
-- The line wrapper (`<line>[-<feature>] check|test …`) gets a switch
-  `--report [<run_id>]` that sets these variables, so they need not be passed
-  through `ssh`. It is part of the fleet integration, not of the testsuite.
+- The line wrapper (`<line>[-<feature>] check|test …`) has a switch
+  `--report[=<run_id>]` that sets these variables, so they need not be passed
+  through `ssh`. It is part of the fleet tooling, not of the testsuite; so is
+  the fleet run, which names the run and its phases as attempts 1 to 3.
 
 ### 1.2 Why a line stream
 
