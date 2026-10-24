@@ -4783,8 +4783,18 @@ proc qconf_add_rqs {} {
    }
    set rqs_charray($rqs_name_invalid,limit) $rules
    set result [string trim [add_rqs rqs_charray 1 "" "" 0]]
-   if {$result != -4} {
-      ts_log_severe "adding a rqs with invalid filter rule should have failed"
+   # The two lines refuse the same rule and both name the reason, but not at the
+   # same point: up to 9.1 the client parsed and the qmaster's modifier found an
+   # unusable project filter, so the answer is the filter's type. From 9.2 on the
+   # parse itself happens in qmaster, so the "!" that prefixes no name is caught
+   # while the text is still there and the answer quotes the filter.
+   if {[is_version_in_range "9.2.0"]} {
+      set expected -6
+   } else {
+      set expected -4
+   }
+   if {$result != $expected} {
+      ts_log_severe "adding a rqs with invalid filter rule should have failed with $expected, got $result"
    }
 
    # handle case where qmaster crashed - try to restart qmaster

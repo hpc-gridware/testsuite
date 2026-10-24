@@ -134,40 +134,27 @@ proc get_rqs_error {result rqs raise_error} {
    return $ret
 }
 
-#****** sge_resource_quota.61/add_rqs() ******************************************
-#  NAME
-#     add_rqs() -- Add resource quota set(s)
+## @brief Add resource quota sets with "qconf -Arqs" or "qconf -arqs".
 #
-#  SYNOPSIS
-#     add_rqs { change_array {fast_add 1} {on_host ""} {as_user ""}
-#     {raise_error 1} }
+# The array holds one entry per rule set attribute, keyed "<name>,<attribute>",
+# so a single call can add several rule sets at once:
 #
-#  FUNCTION
-#     Calls qconf -arqs/-Arqs to add a new resource quota set
-#
-#  INPUTS
-#     change_array    - array that contains new resource quota set(s)
-#     {fast_add 1}    - add fast with -Arqs or slow from CLI with -arqs
-#     {on_host ""}    - execute qconf on this host, default is master host
-#     {as_user ""}    - execute qconf as this user, default is $CHECK_USER
-#     {raise_error 1} - raise error condition in case of errors
-#
-#     change_array(name,description)  (name = name of the resource quota,
-#                                      description = description of quota)
-#     change_array(name,enabled)      (name = name of the resource quota,
-#                                      enabled = TRUE or FALSE)
-#     change_array(name,limit)        (name = name of the resource quota,
-#                                      limit = TCL list of the limits)
-#
-#  EXAMPLE
-#     set rqs_data(resource_quotas,description) "TS generated quotas by current_version_upgrade test"
+#     set rqs_data(resource_quotas,description) "quotas of the current test"
 #     set rqs_data(resource_quotas,enabled)     "TRUE"
 #     set rqs_data(resource_quotas,limit)       "{to slots=2}"
 #     add_rqs rqs_data
 #
-#  RESULT
-#     0 on success, an error code on error.
-#*******************************************************************************
+# @param change_array  name of the array holding the rule sets to add
+# @param fast_add      1 writes the whole text with -Arqs, 0 edits it with -arqs
+# @param on_host       host to run qconf on, "" picks a suited admin host
+# @param as_user       user to run qconf as, "" means $CHECK_USER
+# @param raise_error   raise an error condition when the call fails
+# @return 0 when the rule sets were added, a negative code for a recognised
+#         refusal (-1 the name exists, -2 an unknown attribute, -3/-4/-5 an
+#         invalid pe/project/user filter, -6 an exclusion that prefixes no
+#         name), and -999 when none of those messages match the output
+# @see handle_sge_errors
+# @see mod_rqs
 proc add_rqs {change_array {fast_add 1} {on_host ""} {as_user ""} {raise_error 1}} {
    global CHECK_USER
    global env
@@ -202,6 +189,12 @@ proc add_rqs {change_array {fast_add 1} {on_host ""} {as_user ""} {raise_error 1
    }
    if {[is_macro_available MSG_RESOURCEQUOTA_INVALIDPEFILTER]} {
       add_message_to_container messages -3 [translate_macro MSG_RESOURCEQUOTA_INVALIDPEFILTER]
+   }
+   # A "!" that prefixes no name is refused while the text is still at hand, so
+   # the answer names the filter and not just the filter's type. The macro does
+   # not exist before 9.2, which is why it is asked for.
+   if {[is_macro_available MSG_RESOURCEQUOTA_EXCLUDE_NONAME_S]} {
+      add_message_to_container messages -6 [translate_macro MSG_RESOURCEQUOTA_EXCLUDE_NONAME_S "*"]
    }
 
    add_message_to_container messages -2 [translate_macro MSG_UNKNOWNATTRIBUTENAME_S "*"]
