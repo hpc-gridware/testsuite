@@ -213,6 +213,8 @@ proc tsrec_init {} {
    set tsrec(run_id) $run_id
    set tsrec(invocation_id) $invocation_id
    set tsrec(dir) $dir
+   set tsrec(attempt) $attempt
+   set tsrec(attempt_label) $label
    set tsrec(check) ""
    set tsrec(level) ""
    set tsrec(function) ""
@@ -640,10 +642,13 @@ proc tsrec_check_start {path} {
 
 ## @brief Encode command output as a JSON object with size and excerpt
 #
-# Keeps the first and the last 2 KiB of longer output.
+# Keeps the first and the last 2 KiB of longer output. The record lines a
+# module test writes to its output are left out: they become a stream of
+# their own (tsrec_module_test_output).
 # @param output the command output
 # @return the JSON object with bytes, excerpt and truncated
 proc tsrec_output {output} {
+   regsub -all -line {^##tsrec .*(\n|$)} $output "" output
    set length [string length $output]
    set truncated 0
    if {$length > 4096} {
@@ -966,4 +971,56 @@ proc tsrec_diagnostic {script} {
       incr tsrec(diagnostic) -1
    }
    return -options $options $result
+}
+
+## @brief The options that make a module test binary record into this run
+#
+# The binary writes its record lines to stdout with the prefix "##tsrec "
+# (clusterscheduler test/common/ocs_module_test.h); tsrec_module_test_output
+# takes them out of its output again. The label must not contain blanks, as
+# the options pass through a remote shell.
+# @return the option list, empty when recording is off
+proc tsrec_module_test_args {} {
+   global tsrec
+   if {!$tsrec(enabled)} {
+      return {}
+   }
+   set label [string map {" " "_"} $tsrec(attempt_label)]
+   return [list "--report=-" "--report-run=$tsrec(run_id)" "--report-attempt=$tsrec(attempt)" \
+                "--report-label=$label"]
+}
+
+## @brief Store the record lines in a module test's output as a stream of its own
+#
+# The stream is named after the invocation id the binary wrote, so it sits
+# next to the testsuite's own streams of the run and merge reads it like any
+# other.
+# @param output the output of the module test binary
+# @return the output without the record lines
+proc tsrec_module_test_output {output} {
+   global tsrec
+   set kept {}
+   set records {}
+   foreach line [split $output "\n"] {
+      set line [string trimright $line "\r"]
+      if {[string match "##tsrec *" $line]} {
+         lappend records [string range $line 8 end]
+      } else {
+         lappend kept $line
+      }
+   }
+   if {$tsrec(enabled) && [llength $records] > 0} {
+      if {![regexp {"invocation_id": "([^"]+)"} [lindex $records 0] -> id]} {
+         set id "$tsrec(invocation_id)-module-[clock milliseconds]"
+      }
+      if {[catch {
+         set fd [open "$tsrec(dir)/$id.jsonl" a]
+         fconfigure $fd -encoding utf-8 -translation lf
+         puts $fd [join $records "\n"]
+         close $fd
+      } msg]} {
+         puts "tsrec: cannot write the module test stream $id: $msg"
+      }
+   }
+   return [join $kept "\n"]
 }

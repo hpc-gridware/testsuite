@@ -302,6 +302,24 @@ class RenderTest(unittest.TestCase):
         for shown in ("Attempts", "Attention", "boom", "a merge warning", "Internal report"):
             self.assertIn(shown, internal)
 
+    def test_module_test_unit(self):
+        events = [{"type": "assertion", "function": "X-01", "id": 1, "label": "one", "result": "ok"},
+                  {"type": "assertion", "function": "X-01", "id": 2, "label": "two", "result": "fail"}]
+        data = merged(unit("failed", [("X-01", "failed", [])], events, check="test_x"))
+        data["invocations"].append({"invocation_id": "ts-9-1", "attempt": 0, "producer": "module_test",
+                                    "provenance": {"ts_host": "host-0013", "binary": "./test_x"}})
+        for internal in (False, True):
+            pages = self.report(data, with_catalog=False, internal=internal).pages()
+            page = next(text for name, text in pages.items() if name.startswith("units/"))
+            self.assertIn("## Checks", page)
+            self.assertIn("| `X-01` | T02 | two | fail |", page)
+            # the provenance describes the testsuite, not the module test
+            self.assertIn("GCS 9.1.8", pages["index.md"])
+            self.assertIn("## Module tests", pages["guide.md"])
+        prompt = render.TraceText(False).prompt(command("--report=- --report-run=r1 user1", command="test_x"),
+                                                 False)
+        self.assertTrue(prompt.endswith("$ test_x user1"), prompt)
+
     def test_pages(self):
         data = merged(unit("passed", [("f1", "passed", [("A-01", "covers")])]))
         pages = self.report(data).pages()

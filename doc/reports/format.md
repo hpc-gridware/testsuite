@@ -292,6 +292,7 @@ otherwise.
 | `assertion` | any other error raised by the check | assertion |
 | `tcl_error` | a Tcl error in the check | assertion |
 | `cleanup` | a post-check cleanup check | assertion |
+| `drift` | a module test whose `CHECK`s no longer match its scenario descriptors | assertion |
 
 When the framework cannot tell, it writes `assertion`. An error raised inside
 a poll or step context carries the context's id in `poll` or `step`.
@@ -364,23 +365,51 @@ testsuite's handler does not know it, a module test writes it. A file without
 
 ### 1.5 Module tests
 
-A C/C++ module test started with `--report <file>` writes the same stream
-with `"producer": "module_test"`. When the testsuite records, the driving
-check (`module_test_generic`, `module_test_cluster`) passes a file in its own
-report directory, so the stream lands next to the testsuite's own:
+A C/C++ module test built on the shared frame (`test/common/ocs_module_test.h`
+in `clusterscheduler`) writes the same stream with `"producer": "module_test"`.
+Its options are removed before the test sees its arguments:
 
-- the unit is the binary (`check` = binary name, `level` = 0);
-- each scenario is a function, with `test_cases` from its descriptor;
+| option | meaning |
+|---|---|
+| `--report=<file>` | append the stream to `<file>` |
+| `--report=-` | write the stream to stdout, each line prefixed with `##tsrec ` |
+| `--report-run=<id>` | run id (default `TS_REPORT_RUN_ID`, else the start time) |
+| `--report-attempt=<n>` | attempt (default `TS_REPORT_ATTEMPT`, else `0`) |
+| `--report-label=<l>` | attempt label (default `TS_REPORT_ATTEMPT_LABEL`, else `interactive`) |
+| `--describe` | print the scenarios as a catalog fragment, run nothing |
+
+When the testsuite records, the driving check (`module_test_generic`) gives
+the binaries listed in `module_tests_with_report` the options
+`--report=- --report-run=… --report-attempt=… --report-label=…`
+(`tsrec_module_test_args`) and takes the prefixed lines out of the output
+again (`tsrec_module_test_output`), writing them as a stream of their own
+into the run directory, named after the binary's invocation id. The binary
+runs on an execution host and possibly as root, so stdout is the one channel
+that needs neither a shared file system nor write access to the results
+directory.
+
+- the unit is the binary (`check` = binary name, `level` = 0), with the
+  category `MODULE`; it has no phases and no cleanup check;
+- each scenario is a function, with `test_cases` from its descriptor; a
+  scenario the environment cannot run (e.g. one needing root) ends
+  `unsupported`;
 - each `CHECK` becomes an `assertion` with its number and label, and an
-  `error` when it fails:
+  `error` with origin `assertion` when it fails:
 
 ```json
 {"type": "assertion", "t": "...", "function": "RSV-04", "id": 5,
  "label": "delete of @admin_hosts refused", "result": "ok"}
 ```
 
-- `--describe` prints the scenario descriptors as a catalog fragment
-  (section 3) without running anything.
+- drift guard: a `CHECK` outside any scenario, a `CHECK` id its scenario does
+  not declare, and a declared id that never ran (in a scenario that is not
+  `unsupported`) each raise an `error` with origin `drift`, so the
+  descriptor cannot quietly diverge from the code;
+- `invocation_end` carries the exit status;
+- `--describe` prints a catalog (section 3) with one test case per scenario
+  (`source` `module_test`, `section` the binary name) and two extra fields,
+  `test_cases` (the catalog cases the scenario relates to) and `checks` (its
+  `CHECK` ids).
 
 ## 2. Merged result
 
@@ -503,9 +532,10 @@ ID list, or a criterion that maps an unknown ID.
   later phase than the one specified). Site and later cases appear in the
   report as not covered by the testsuite.
 - `source` is `customer` (from the customer test plan), `added` (added to the
-  acceptance cases by us, marked *Not part of the customer test plan*) or
+  acceptance cases by us, marked *Not part of the customer test plan*),
   `additional` (section *Additional Test Scenarios*: our own scenarios, not
-  acceptance criteria).
+  acceptance criteria) or `module_test` (a scenario of a module test, from its
+  `--describe`, section 1.5).
 - `criteria` lists the criteria that map the case; `unmapped` lists the cases
   no criterion maps. They verify delivered behaviour but do not decide
   acceptance.
@@ -541,7 +571,7 @@ Pages:
 |---|---|
 | `index.md` | run verdict, milestones with their criteria, all units, outside cases, provenance |
 | `guide.md` | how to read the report: unit, function, case and criterion verdicts, `covers` and `prepares`, the trace notation; every page links to it |
-| `units/<check>-L<level>.md` | one unit: verdict, errors, functions with their test cases, trace |
+| `units/<check>-L<level>.md` | one unit: verdict, errors, functions with their test cases, the checks of a module test, trace |
 | `cases/<id>.md` | one catalog case: verdict, the specification text, the functions that execute it with their trace |
 | `milestones/<id>.md` | the criteria of a milestone in a table, then the cases grouped by criterion, then the unmapped cases of the milestone |
 

@@ -40,6 +40,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 import sys
 import zipfile
 
@@ -73,6 +74,9 @@ CRITERION_TEXT = {
 
 # poll outcomes as the trace states them
 OUTCOME_TEXT = {"met": "met", "timeout": "timed out", "error": "ended with an error"}
+
+# the options a module test gets to write its records (format.md, section 1.5)
+REPORT_OPTIONS = re.compile(r"(^|\s)--report(-run|-attempt|-label)?=\S+")
 
 
 ## @brief Error in the input or the output directory that makes rendering impossible
@@ -148,6 +152,13 @@ def check_name(check):
     marker = "/checktree/"
     index = check.rfind(marker)
     return check[index + len(marker):] if index >= 0 else check
+
+
+## @brief A function or scenario name for a page, or what stands for none
+# @param name the name, "" or None for an event outside the functions
+# @return the Markdown text
+def function_label(name):
+    return "`%s`" % cell(name) if name else "outside the functions"
 
 
 ## @brief The page name of a unit
@@ -417,6 +428,9 @@ class TraceText:
         if not full:
             command = os.path.basename(command)
         args = (event.get("args") or "").strip()
+        if not full:
+            # the options that make a module test record are plumbing of the report itself
+            args = REPORT_OPTIONS.sub("", args).strip()
         text = "%s@%s%s %s%s" % (event.get("user", "?"), event.get("host", "?"),
                                  "#" if event.get("root") else "$", command,
                                  " " + args if args else "")
@@ -754,7 +768,10 @@ class Report:
         lines = ["## Provenance", ""]
         if not invocations:
             return lines + ["No invocation recorded.", ""]
-        prov = invocations[-1].get("provenance") or {}
+        # a module test's invocation knows only its host and binary, so the
+        # table describes the last testsuite invocation when there is one
+        own = [i for i in invocations if i.get("producer") != "module_test"] or invocations
+        prov = own[-1].get("provenance") or {}
         build = prov.get("build") or {}
         cluster = prov.get("cluster") or {}
         rows = [["Product", cell("%s %s" % (prov.get("product", ""), prov.get("product_version", "")))],
@@ -773,7 +790,7 @@ class Report:
             rows.append(["Specification", cell("%s, version %s" % (src.get("title", ""),
                                                                   src.get("version", "")))])
         lines += table(["", ""], rows) + [""]
-        distinct = {json.dumps(i.get("provenance"), sort_keys=True) for i in invocations}
+        distinct = {json.dumps(i.get("provenance"), sort_keys=True) for i in own}
         if len(distinct) > 1:
             lines += ["The invocations of this run differ in their provenance; the table shows "
                       "the last one.", ""]
@@ -887,6 +904,11 @@ class Report:
                              duration_text(function.get("duration")), ids])
             lines += ["## Functions", ""] + table(["Function", "Verdict", "Duration", "Test cases"],
                                                   rows) + [""]
+        checks = [e for e in unit.get("events") or [] if e.get("type") == "assertion"]
+        if checks:
+            rows = [[function_label(e.get("function")), "T%02d" % e.get("id", 0), cell(e.get("label")),
+                     cell(e.get("result"))] for e in checks]
+            lines += ["## Checks", ""] + table(["Scenario", "Check", "Asserts", "Result"], rows) + [""]
         if self.internal and unit.get("attempts"):
             lines += ["## Attempts", ""]
             rows = []
@@ -902,7 +924,7 @@ class Report:
                       and e.get("level") != "CONFIG"]
             if errors:
                 lines += ["## Errors", ""]
-                lines += ["- `%s`: %s" % (cell(e.get("function")), cell(summary(e.get("message"))))
+                lines += ["- %s: %s" % (function_label(e.get("function")), cell(summary(e.get("message"))))
                           for e in errors] + [""]
         if trace.sections:
             lines += ["## Trace", ""]
@@ -1068,6 +1090,16 @@ class Report:
         lines += ["Function verdicts are `passed`, `failed`, `unsupported`, `tcl_error` (an error "
                   "in the test code itself), `not_run` (an earlier function stopped the unit) and "
                   "`interrupted`.", ""]
+        lines += ["## Module tests", "",
+                  "A *module test* is a test program of the product's source tree that tests "
+                  "one component directly, without a cluster. The testsuite runs it from a "
+                  "check (`module_test_generic`), and the program reports itself as a unit of "
+                  "its own, named after the program. Its *scenarios* take the place of check "
+                  "functions, and each scenario runs numbered *checks* (`T01`, `T02`, ...), "
+                  "listed with their result on the unit page. A check that the program runs "
+                  "but its scenario does not declare, or a declared check that never runs, is "
+                  "reported as an error of origin `drift`: the description of the scenario no "
+                  "longer matches the code.", ""]
         if self.catalog:
             lines += ["## Test cases", "",
                       "A check function names the test cases it executes, each with a "

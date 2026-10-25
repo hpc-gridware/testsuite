@@ -255,6 +255,34 @@ class MergeTest(unittest.TestCase):
         _, units = self.merged()
         self.assertEqual(units[(CHECK, 0)]["verdict"], "unsupported")
 
+    def test_module_test_stream(self):
+        # the lines ocs_module_test.h writes: no phases, scenarios as functions,
+        # one assertion per CHECK, a drift error for an undeclared CHECK
+        stream = StreamBuilder("ts-9-1")
+        stream.lines[0]["producer"] = "module_test"
+        stream.add("selection", source="command_line", units=[{"check": "test_x", "level": 0}])
+        stream.add("unit_start", check="test_x", check_path="./test_x", level=0,
+                   functions=["X-01", "X-02"], test_cases={"X-02": [{"id": "A-01", "relation": "covers"}]})
+        stream.add("function_start", function="X-01", index=1)
+        stream.add("assertion", function="X-01", id=1, label="one", result="ok")
+        stream.add("function_end", function="X-01", verdict="passed", duration=0.1)
+        stream.add("function_start", function="X-02", index=2)
+        stream.add("assertion", function="X-02", id=2, label="two", result="ok")
+        stream.add("error", function="X-02", level="SEVERE", origin="drift",
+                   message="CHECK 2 is not declared by scenario X-02")
+        stream.add("function_end", function="X-02", verdict="failed", duration=0.1)
+        stream.add("unit_end", check="test_x", level=0, verdict="failed", duration=0.2)
+        stream.add("invocation_end", exit=1).write(self.run)
+        result, units = self.merged()
+        entry = units[("test_x", 0)]
+        self.assertEqual(entry["verdict"], "failed")
+        self.assertEqual([(f["function"], f["verdict"]) for f in entry["functions"]],
+                         [("X-01", "passed"), ("X-02", "failed")])
+        self.assertEqual(entry["functions"][1]["test_cases"], [{"id": "A-01", "relation": "covers"}])
+        self.assertEqual(entry["attempts"][0]["class"], "assertion")
+        self.assertEqual(len([e for e in entry["events"] if e["type"] == "assertion"]), 2)
+        self.assertEqual(result["invocations"][0]["producer"], "module_test")
+
     def test_killed_invocation(self):
         builder = StreamBuilder("r1")
         builder.add("selection", source="command_line",
