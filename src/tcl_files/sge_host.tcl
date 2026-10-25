@@ -287,41 +287,31 @@ proc set_exechost { change_array {host global} {fast_add 1} {on_host ""} {as_use
    return $ret
 }
 
-#****** sge_host/set_exechost_error() ***************************************
-#  NAME
-#     set_exechost_error() -- error handling for set_exechost
+## @brief Error handling for set_exechost().
 #
-#  SYNOPSIS
-#     set_exechost_error { result host tmpfile raise_error }
+# Translates the messages "qconf -Me" can answer with into the container
+# handle_sge_errors() expects, and returns its verdict.
 #
-#  FUNCTION
-#     Does the error handling for set_exechost.
-#     Translates possible error messages of qconf -Me,
-#     builds the datastructure required for the handle_sge_errors
-#     function call.
+# The messages name the object they are about, so the container has to be built
+# from the very array that was written - which is why the array is taken by name
+# and linked with upvar. Without that link the proc saw a scalar, both lookups
+# below fell through to "unknown", the pattern for an unknown project could
+# never match the answer, and a refused write came back as the generic -999
+# instead of -1.
 #
-#     The error handling function has been intentionally separated from
-#     set_exechost. While the qconf call and parsing the result is
-#     version independent, the error messages (macros) usually are version
-#     dependent.
-#
-#  INPUTS
-#     result      - qconf output
-#     tmpfile     - temp file for qconf -Me
-#     old_values  - array with values for which qconf -Me has been called
-#     raise_error - do add_proc_error in case of errors
-#
-#  RESULT
-#     Returncode for set_exechost function:
-#      -1: "something" does not exist
-#     -99: other error
-#
-#  SEE ALSO
-#     sge_calendar/get_calendar
-#     sge_procedures/handle_sge_errors
-#*******************************************************************************
-proc set_exechost_error {result old_values tmpfile  raise_error} {
+# @param result       the output of the qconf call
+# @param change_array name of the array that was written, as set_exechost()
+#                     assembled it
+# @param tmpfile      the file that was handed to "qconf -Me", for the message
+# @param raise_error  1 to report errors, 0 when the error is expected
+# @return 0 when nothing matched an error, -1 for an unknown project, -2 when an
+#         advance reservation refused the change, -3 for a negative value of a
+#         consumable, -4 and -5 for inconsistent RSMAP amounts and too many
+#         implicit ids, and -999 when none of the messages match
+proc set_exechost_error {result change_array tmpfile raise_error} {
    global ts_config
+
+   upvar $change_array old_values
 
    # build up needed vars
    if {[info exists old_values(projects)]} {
@@ -339,8 +329,9 @@ proc set_exechost_error {result old_values tmpfile  raise_error} {
 
    # The macro is (project, attribute, object kind, object name) - see
    # verify_project_list() in sge_userprj_qmaster.cc. The first two used to be
-   # passed the other way round here, so this entry never matched and an
-   # unknown project came back as the generic -999 instead of -1.
+   # passed the other way round here; correcting that was not enough on its own,
+   # because the array was not linked with upvar either, so the first and the
+   # last argument were the literal "unknown".
    add_message_to_container messages -1 [translate_macro MSG_SGETEXT_UNKNOWNPROJECT_SSSS $project $attributes $elem $host]
    add_message_to_container messages -2 [translate_macro MSG_QUEUE_MODCMPLXDENYDUETOAR_SS "*" "*"]
    add_message_to_container messages -3 [translate_macro MSG_CPLX_ATTRIBISNEG_S "*"]
