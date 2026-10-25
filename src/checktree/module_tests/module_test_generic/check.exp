@@ -92,7 +92,7 @@ global generic_module_tests
 set generic_module_tests {}
 lappend generic_module_tests {test_qmaster_timed_event "" 0 ""}
 lappend generic_module_tests {test_commlib_issue "" 0 ""}
-lappend generic_module_tests {test_comm_xml_parse "9.2.0" 0 ""}
+lappend generic_module_tests {test_comm_xml_parse "9.1.4" 0 ""}
 lappend generic_module_tests {test_common_category "" 0 ""}
 lappend generic_module_tests {test_cull_hash "" 0 ""}
 lappend generic_module_tests {test_cull_list "" 0 ""}
@@ -107,8 +107,8 @@ lappend generic_module_tests {test_sgeobj_range "" 0 ""}
 lappend generic_module_tests {test_sgeobj_resource_quota "" 0 ""}
 lappend generic_module_tests {test_sgeobj_schedd_conf "" 0 ""}
 lappend generic_module_tests {test_sgeobj_utility "" 0 ""}
-lappend generic_module_tests {test_sgeobj_ulong "9.2.0" 0 ""}
-lappend generic_module_tests {test_sgeobj_var "9.2.0" 0 ""}
+lappend generic_module_tests {test_sgeobj_ulong "9.1.4" 0 ""}
+lappend generic_module_tests {test_sgeobj_var "9.1.4" 0 ""}
 lappend generic_module_tests {test_sgeobj_hgroup "9.2.0" 0 ""}
 lappend generic_module_tests {test_sgeobj_manop "9.2.0" 0 ""}
 lappend generic_module_tests {test_sgeobj_role "9.2.0" 0 ""}
@@ -134,7 +134,7 @@ lappend generic_module_tests {test_uti_dstring "" 0 ""}
 lappend generic_module_tests {test_uti_uidgid "" 0 ""}
 lappend generic_module_tests {test_uti_authinfo "9.2.0" 0 ""}
 lappend generic_module_tests {test_uti_parse_num "9.2.0" 0 ""}
-lappend generic_module_tests {test_uti_peopen "9.2.0" 0 ""}
+lappend generic_module_tests {test_uti_peopen "9.1.3" 0 ""}
 lappend generic_module_tests {test_uti_threads "" 0 ""}
 lappend generic_module_tests {test_uti_thread_local "" 0 ""}
 lappend generic_module_tests {test_uti_time "" 0 ""}
