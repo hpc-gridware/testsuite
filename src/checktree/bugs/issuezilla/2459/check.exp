@@ -91,7 +91,13 @@ proc issue_2459_cleanup {} {
 # Up to 9.1 the installer is started with -csp, so that the CSP entries are checked
 # as well. CSP was removed in 9.2.0: the -csp option is gone, and the CSP entries of
 # an old config file are accepted and ignored. From 9.2.0 on the test therefore runs
-# without -csp and fails if one of the CSP entries is reported.
+# without -csp and requires that every CSP entry is answered with the obsolescence
+# notice instead of being reported as invalid.
+#
+# That notice names the entry it is about, so it has to be taken out of the output
+# before the remaining lines are classified by entry name - otherwise the notice
+# itself reads like a complaint about the entry and the check contradicts the very
+# behaviour it is there to pin.
 #
 # @return nothing, a failure is reported with ts_log_warning or ts_log_severe
 proc issue_2459_parse_autoinstall {} {
@@ -112,8 +118,16 @@ proc issue_2459_parse_autoinstall {} {
    ts_log_fine "inst_sge $inst_sge_options"
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER  "./inst_sge" $inst_sge_options exit_val $my_timeout 0 $ts_config(product_root)]
 
+   set ignored_entries {}
    set lines [split $output "\n"]
    foreach line $lines {
+      # the obsolescence notice is collected separately, see the header above
+      if {[string match "*belongs to a feature that has been*" $line]} {
+         if {[regexp {>([A-Z_]+)<} $line match entry]} {
+            lappend ignored_entries $entry
+         }
+         continue
+      }
       switch -glob $line {
          "*SGE_ROOT*" {
                set found_install_entries(SGE_ROOT) 1
@@ -218,8 +232,12 @@ proc issue_2459_parse_autoinstall {} {
    if {[is_version_in_range "9.2.0"]} {
       foreach index {CSP_RECREATE CSP_COPY_CERTS CSP_COUNTRY_CODE} {
          if {[info exists found_install_entries($index)]} {
-            ts_log_severe "the obsolete configuration entry $index was reported\
-                           instead of being ignored:\n$output"
+            ts_log_severe "the obsolete configuration entry $index was reported as\
+                           invalid instead of being ignored:\n$output"
+         }
+         if {[lsearch -exact $ignored_entries $index] < 0} {
+            ts_log_severe "the obsolete configuration entry $index was dropped without\
+                           the notice that it belongs to a removed feature:\n$output"
          }
       }
    }
