@@ -49,12 +49,13 @@ set check_root_access_needs   "yes"
 set check_functions           ""
 lappend check_functions       "issue_1104_run"          ;# functions to call (in order)
 
-# This test saves the local configuration on the master host and removes it.
-# Then it tries to restart the sge_qmaster daemon. The qmaster should start
-# without local_conf,
-# but writing a Warning to the messages file.
-# After restart the local configuration will be added again.
-
+## @brief Check that sge_qmaster starts without a local configuration.
+#
+# Saves the local configuration of the master host, removes it, restarts
+# sge_qmaster - which has to come up and only warn in its messages file - and
+# adds the configuration back from a file afterwards.
+#
+# @return nothing; problems are reported with ts_log_severe
 proc issue_1104_run {} {
    global ts_config orig_config CHECK_USER
 
@@ -67,7 +68,12 @@ proc issue_1104_run {} {
 
    set NOTDEFINED [translate_macro MSG_ANSWER_CONFIGXNOTDEFINED_S "*"]
 
-   if {![string match $NOTDEFINED [string trim $result]]} {
+   # Matched unanchored on purpose. The text and the exit code of the read are
+   # the same as before, but the client now renders the answer list through
+   # answer_list_output(), which prefixes "error: ". A pattern anchored at the
+   # start of the line stopped matching for that reason alone, and matching the
+   # text alone recognises the output of both releases.
+   if {![string match "*$NOTDEFINED*" [string trim $result]]} {
       ts_log_severe "could not delete local configuration for host $ts_config(master_host)"
    }
 

@@ -147,76 +147,29 @@ proc vdep_set_sched_conf_defaults {change_array} {
 }
 
 #                                                             max. column:     |
-#****** sge_procedures/set_schedd_config() ******
+## @brief Change the scheduler configuration.
 #
-#  NAME
-#     set_schedd_config -- change scheduler configuration
+# Applies every entry of the given array to the scheduler configuration, either
+# by writing a complete file with "qconf -Msconf" (the default) or by driving
+# the editor of "qconf -msconf".
 #
-#  SYNOPSIS
-#     set_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {raise_error 1} }
+# The editor path has to recognise the success message, and that message
+# changed with the release. Up to 9.1 the qconf client printed its own
+# "changed scheduler configuration"; from 9.2 on the write goes through the
+# stored procedure in sge_qmaster, which answers with its own audit line
+# naming the user, the object and the list. The old message is not printed by
+# the product any more - its macro is still defined, but no code uses it - so
+# expecting it would wait for a line that never comes.
 #
-#  FUNCTION
-#     Set the scheduler configuration corresponding to the content of the
-#     change_array.
-#
-#  INPUTS
-#     change_array - name of an array variable that will be set by
-#                    set_schedd_config
-#     {fast_add 1} - 0: modify the attribute using qconf -mckpt,
-#                  - 1: modify the attribute using qconf -Mckpt, faster
-#     {on_host ""}    - execute qconf on this host, default is master host
-#     {as_user ""}    - execute qconf as this user, default is $CHECK_USER
-#     {raise_error 1} - raise an error condition on error (default), or just
-#                       output the error message to stdout
-#  RESULT
-#     -1 : timeout
-#      0 : ok
-#
-#  EXAMPLE
-#     get_schedd_config myconfig
-#     set myconfig(schedule_interval) "0:0:10"
-#     set_schedd_config myconfig
-#
-#  NOTES
-#     The array should be build like follows:
-#
-#     set change_array(algorithm) default
-#     set change_array(schedule_interval) 0:0:15
-#     ....
-#     (every value that is set will be changed)
-#
-#     Here the possible change_array values with some typical settings:
-#
-#     algorithm                   "default"
-#     schedule_interval           "0:0:15"
-#     maxujobs                    "0"
-#     queue_sort_method           "share"
-#     user_sort                   "false"
-#     job_load_adjustments        "np_load_avg=0.50"
-#     load_adjustment_decay_time  "0:7:30"
-#     load_formula                "np_load_avg"
-#     schedd_job_info             "true"
-#
-#
-#     In case of a SGEEE - System:
-#
-#     reprioritize_interval       "00:01:00"
-#     halftime                    "168"
-#     usage_weight_list           "cpu=0.34,mem=0.33,io=0.33"
-#     compensation_factor         "5"
-#     weight_user                 "0"
-#     weight_project              "0"
-#     weight_jobclass             "0"
-#     weight_department           "0"
-#     weight_job                  "0"
-#     weight_tickets_functional   "0"
-#     weight_tickets_share        "0"
-#     weight_tickets_deadline     "10000"
-#
-#
-#  SEE ALSO
-#     sge_procedures/get_schedd_config()
-#*******************************
+# @param change_array name of the array holding the attributes to change
+# @param fast_add     1 to write the whole file with "qconf -Msconf", 0 to
+#                     drive the editor of "qconf -msconf"
+# @param on_host      host to run qconf on, "" for a suited admin host
+# @param as_user      user to run qconf as, "" for CHECK_USER
+# @param raise_error  1 to report errors, 0 to only return them
+# @return 0 on success, -1 on timeout, -2 for a value that is not a uint32_t,
+#         -3 for a value that has to be positive, and whatever
+#         set_schedd_config_error() returns on the "qconf -Msconf" path
 
 proc set_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {raise_error 1}} {
   global env
@@ -246,7 +199,13 @@ proc set_schedd_config { change_array {fast_add 1} {on_host ""} {as_user ""} {ra
    } else {
 
       set vi_commands [build_vi_command chgar]
-      set CHANGED_SCHEDD_CONFIG [translate_macro MSG_SCHEDD_CHANGEDSCHEDULERCONFIGURATION ]
+      # see the note above: from 9.2 on the qmaster answers the write, and its
+      # line names the user and the host, which are of no interest here
+      if {[is_version_in_range "9.2.0"]} {
+         set CHANGED_SCHEDD_CONFIG [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS "*" "*" "scheduler" "scheduler configuration"]
+      } else {
+         set CHANGED_SCHEDD_CONFIG [translate_macro MSG_SCHEDD_CHANGEDSCHEDULERCONFIGURATION]
+      }
       set NOTULONG [translate_macro MSG_OBJECT_VALUENOTULONG_S "*" ]
       set ADDNOTULONG [translate_macro MSG_MUST_BE_POSITIVE_VALUE_S "*"]
       set master_arch [resolve_arch $ts_config(master_host)]
