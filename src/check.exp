@@ -325,6 +325,8 @@ if {[catch {set CHECK_USER [set env(USER)] }] != 0} {
 
 global CHECK_GROUP                 ;# group of user who start test
 global CHECK_ACT_LEVEL             ;# actual check level ( value from 0 up to xxx )
+# set before the tcl files are sourced: a slow ts_source logs, and logging reads it
+set CHECK_ACT_LEVEL "0"
 global CHECK_CUR_PREPARATION_PROCEDURE
 set CHECK_CUR_PREPARATION_PROCEDURE ""
 global CHECK_MAIL_OUTPUT_FILE
