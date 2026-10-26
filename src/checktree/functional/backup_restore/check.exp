@@ -133,14 +133,19 @@ proc backup_restore_list_common {context} {
 
 ## @brief require that the restore brought back every file of the common directory
 #
-# The files which are not expected back are the ones the cluster writes while it runs: the
-# scheduler's run log and schedule, the monitoring data the dbwriter consumes and the log of
-# a shadow daemon. Everything else was configuration before the backup and has to be
-# configuration again afterwards.
+# The entries which are not expected back are the ones that are not configuration. The
+# cluster writes some of them while it runs - the scheduler's run log and schedule, the
+# monitoring data the dbwriter consumes and the log of a shadow daemon - and the installer
+# writes install_logs, one log file per install or uninstall action per host (MoveLog() in
+# inst_common.sh). Three places of the product agree that the latter is no part of a
+# backup: the backup and the restore each take "certs" and no other directory of common/,
+# and the upgrade path in util/upgrade_modules/save_config.sh picks the configuration files
+# of common/ one by one without it. Everything else was configuration before the backup and
+# has to be configuration again afterwards.
 proc backup_restore_check_common_restored {} {
    global backup_restore_common_before
 
-   set not_backed_up {schedd_runlog schedule monitoring.jsonl reporting}
+   set not_backed_up {schedd_runlog schedule monitoring.jsonl reporting install_logs}
 
    set after [backup_restore_list_common "after the restore"]
    set lost {}
@@ -158,8 +163,8 @@ proc backup_restore_check_common_restored {} {
    if {[llength $lost] > 0} {
       ts_log_severe "the restored cell directory is missing [llength $lost] file(s) which were\
                      there before the backup: [join $lost ", "] - inst_sge -bup and -rst take\
-                     the files of the common directory from fixed lists, so a file which is\
-                     not in them is dropped without a message"
+                     the files of the common directory from whitelists, so a configuration\
+                     file which is not in them is dropped without a message"
    }
 }
 
