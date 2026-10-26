@@ -107,6 +107,17 @@ proc issue_1473_cleanup {} {
    modify_complex_from_file $complex_backup
 }
 
+## @brief replace the complex configuration with the contents of a file
+#
+# Runs "qconf -Mc" on the master host, measures how long it takes and checks
+# every output line against the messages a successful load may print.
+# Any other line is reported as an error.
+#
+# @param filename   complex file to load with "qconf -Mc"
+# @param time_var   name of a variable in the caller's scope that receives the
+#                   duration of the qconf call in seconds, -1 if the file is missing
+# @param do_error_check 1 to also require that all 200 test entries were changed
+# @return nothing
 proc modify_complex_from_file {filename {time_var dummy} {do_error_check 0}} {
    global ts_config CHECK_USER
 
@@ -137,13 +148,14 @@ proc modify_complex_from_file {filename {time_var dummy} {do_error_check 0}} {
       # command that succeeded - which is what happened in the full run of
       # 2026-08-07, where it was the ONLY real defect.
       #
-      # The message is NEW: it does not exist before 9.2.0, and this check has no
-      # check_version_range, so it also runs against 9.0.x and 9.1.x. Guard the
-      # lookup - translate_macro on a macro the version under test does not know
-      # fails, which would break the check on every older release instead of
+      # The message is NEW: it exists from 9.2.0 on and, since the backport, from
+      # 9.1.8 on V91_BRANCH; 9.0.x does not have it. This check has no
+      # check_version_range, so it also runs against those older releases. Guard
+      # the lookup - translate_macro on a macro the version under test does not
+      # know fails, which would break the check on every older release instead of
       # fixing it here. An empty pattern never matches, so the guard is enough.
       set MSG_CENTRY_KEPT_BUILTIN_S ""
-      if {[is_version_in_range "9.2.0"]} {
+      if {[is_version_in_range "9.1.8"]} {
          set MSG_CENTRY_KEPT_BUILTIN_S [translate_macro MSG_CENTRY_KEPT_BUILTIN_S "*"]
       }
       set output_list [split $output "\n"]
