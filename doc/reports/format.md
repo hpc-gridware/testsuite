@@ -576,7 +576,7 @@ Pages:
 
 | page | content |
 |---|---|
-| `index.md` | run verdict, milestones with their criteria, all units, outside cases, provenance |
+| `index.md` | run verdict, milestones with their criteria, the units grouped by verdict (failed, cleanup_failed, interrupted, not_run, then for the internal audience the units that passed only on retry, then skipped, unsupported, passed; a group of more than 10 units split by the first directory of the check path; failing groups with the first error, internally also the attempts), outside cases, provenance |
 | `guide.md` | how to read the report: unit, function, case and criterion verdicts, `covers` and `prepares`, the trace notation; every page links to it |
 | `units/<check>-L<level>.md` | one unit: verdict, errors, functions with their test cases, the checks of a module test, trace |
 | `cases/<id>.md` | one catalog case: verdict, the specification text, the functions that execute it with their trace |
@@ -591,7 +591,7 @@ the unit pages are written. `<check>` is the check path below its
 | | external | internal |
 |---|---|---|
 | verdicts | final verdict per unit and case | the same, plus every attempt with its class and errors |
-| passed only on retry after an assertion-like failure | not shown | listed first in `index.md` |
+| passed only on retry after an assertion-like failure | not shown | listed in `index.md` after the failing groups |
 | framework and diagnostic commands | hidden | shown, tagged `[framework]` / `[diagnostic]` |
 | poll contexts | one line, with the distinct commands and their count | one line, then every command inside it |
 | command path | base name | full path |

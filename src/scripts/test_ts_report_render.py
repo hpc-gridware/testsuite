@@ -285,6 +285,32 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(block[0], "````text")
         self.assertEqual(block[-1], "````")
 
+    def test_index_groups_by_verdict(self):
+        failed = unit("failed", [("f1", "failed", [])], check="/ts/checktree/bugs/b1")
+        failed["attempts"][0].update(attempt_label="phase1",
+                                     errors=[{"function": "f1", "message": "qconf said no"}])
+        not_run = unit("not_run", [], check="/ts/checktree/bugs/b2")
+        not_run["attempts"] = []
+        passed = [unit("passed", [("f1", "passed", [])],
+                       check="/ts/checktree/%s/p%d" % ("functional" if i < 6 else "object", i))
+                  for i in range(11)]
+        data = merged(*(passed + [not_run, failed]))
+        internal = self.report(data, with_catalog=False, internal=True).index()
+        order = [internal.index(h) for h in ("### Failed (1)", "### Not run (1)",
+                                             "### Attention", "### Passed (11)")]
+        self.assertEqual(order, sorted(order))
+        self.assertIn("**Result:** failed (1 failed, 1 not_run, 11 passed)", internal)
+        # more than GROUP_SPLIT units are split by area, fewer are not
+        self.assertIn("#### functional (6)", internal)
+        self.assertIn("#### object (5)", internal)
+        self.assertNotIn("#### bugs", internal)
+        self.assertIn("| phase1 failed | qconf said no |\n", internal)
+        self.assertIn("| none | selected, never started |", internal)
+        external = self.report(data, with_catalog=False).index()
+        self.assertIn("| [bugs/b1](units/bugs.b1-L0.md) | 0 | qconf said no |", external)
+        self.assertNotIn("Attempts", external)
+        self.assertNotIn("Attention", external)
+
     def test_external_hides_internal_parts(self):
         data = merged(unit("passed", [("f1", "passed", [("A-01", "covers")])]))
         data["units"][0].update(retried=True, attention=True)

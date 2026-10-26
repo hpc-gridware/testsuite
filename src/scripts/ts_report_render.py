@@ -49,6 +49,24 @@ AUDIENCES = ("internal", "external")
 # unit verdicts that count as "did not pass", as in ts_report_merge.py
 FAILING = ("failed", "cleanup_failed", "interrupted", "not_run")
 
+# the order the index lists the unit verdicts in, the critical ones first
+VERDICT_ORDER = ("failed", "cleanup_failed", "interrupted", "not_run",
+                 "skipped", "unsupported", "passed")
+
+# the heading of a verdict group in the index
+VERDICT_HEADING = {
+    "failed": "Failed",
+    "cleanup_failed": "Cleanup failed",
+    "interrupted": "Interrupted",
+    "not_run": "Not run",
+    "skipped": "Skipped",
+    "unsupported": "Unsupported",
+    "passed": "Passed",
+}
+
+# a verdict group with more units than this is split by area
+GROUP_SPLIT = 10
+
 # test-case verdicts from the executions that cover a case, worst last
 CASE_RANK = {"passed": 0, "skipped": 1, "unsupported": 2, "not_run": 3, "failed": 4}
 
@@ -802,32 +820,134 @@ class Report:
                 ["Invocation", "Attempt", "Label", "Start", "Host"], rows) + [""]
         return lines
 
+    ## @brief The verdicts present in a run, in index order
+    # @param counts dict verdict -> number of units
+    # @return the verdicts, the known ones in VERDICT_ORDER, unknown ones after
+    def verdict_order(self, counts):
+        known = [v for v in VERDICT_ORDER if v in counts]
+        return known + sorted(v for v in counts if v not in VERDICT_ORDER)
+
+    ## @brief The internal list of units that passed only on retry
+    # @param units the merged units
+    # @return the lines
+    def attention(self, units):
+        attention = [u for u in units if u.get("attention")]
+        lines = ["### Attention: passed only on retry after an assertion-like failure", ""]
+        if not attention:
+            return lines + ["None.", ""]
+        lines += ["Analyse each before a handover: explain it as a test problem or file "
+                  "it as a product defect.", ""]
+        for unit in attention:
+            first = next((a for a in unit.get("attempts", [])
+                          if a.get("class") == "assertion"), {})
+            message = next((e.get("message") for e in first.get("errors", [])), "")
+            lines.append("- [%s level %s](units/%s): attempt %s (%s): %s" % (
+                check_name(unit["check"]), unit["level"], unit_file(unit),
+                first.get("attempt"), first.get("attempt_label"), cell(summary(message))))
+        return lines + [""]
+
+    ## @brief What made a unit fail, for the index
+    # @param unit the merged unit
+    # @return the first error of the deciding attempt, or what stands for none
+    def first_error(self, unit):
+        attempts = unit.get("attempts") or []
+        if attempts:
+            message = next((e.get("message") for e in attempts[-1].get("errors", [])
+                            if e.get("message")), "")
+            if message:
+                return cell(summary(message, 120))
+        if unit.get("verdict") == "not_run":
+            return "selected, never started"
+        if unit.get("verdict") == "interrupted":
+            return "started, did not finish"
+        return ""
+
+    ## @brief The area of a unit: the first directory of its check path
+    # @param unit the merged unit
+    # @return the area; the units of module test programs, named after the
+    #         program, share one
+    def area(self, unit):
+        name = check_name(unit["check"])
+        return name.split("/")[0] if "/" in name else "module test programs"
+
+    ## @brief The table of some units of one verdict
+    #
+    # The test-case column is left out when no unit of the table names a test
+    # case.
+    # @param units the units, all of one verdict
+    # @param failing True for a verdict in FAILING, which gets the error columns
+    # @return the lines
+    def unit_table(self, units, failing):
+        header = ["Check", "Level"]
+        if failing:
+            header += ["Attempts", "Error"] if self.internal else ["Error"]
+        rows = []
+        for unit in units:
+            ids = sorted({c.get("id") for f in unit.get("functions", [])
+                          for c in f.get("test_cases") or []})
+            links = ", ".join(self.case_link(i).replace("../", "") for i in ids)
+            row = ["[%s](units/%s)" % (cell(check_name(unit["check"])), unit_file(unit)),
+                   cell(unit["level"])]
+            if failing:
+                if self.internal:
+                    row.append(", ".join("%s %s" % (a.get("attempt_label"), a.get("verdict"))
+                                         for a in unit.get("attempts") or []) or "none")
+                row.append(self.first_error(unit))
+            row.append(links)
+            rows.append(row)
+        # a run without test IDs gets no column that is empty in every row
+        if any(row[-1] for row in rows):
+            header.append("Test cases")
+        else:
+            rows = [row[:-1] for row in rows]
+        return table(header, rows) + [""]
+
+    ## @brief The units of the run, grouped by verdict, the critical ones first
+    #
+    # A group with more than GROUP_SPLIT units is split by area. The internal
+    # audience gets the units that passed only on retry after the failing
+    # groups, before the groups that passed or did not apply.
+    # @param units the merged units
+    # @return the lines
+    def unit_groups(self, units):
+        lines = ["## Units", ""]
+        groups = {}
+        for unit in units:
+            groups.setdefault(unit.get("verdict"), []).append(unit)
+        if not groups:
+            lines += ["None.", ""]
+        order = self.verdict_order(groups)
+        for verdict in order:
+            if self.internal and verdict not in FAILING:
+                if verdict == next(v for v in order if v not in FAILING):
+                    lines += self.attention(units)
+            group = groups[verdict]
+            failing = verdict in FAILING
+            lines += ["### %s (%d)" % (VERDICT_HEADING.get(verdict, verdict), len(group)), ""]
+            if len(group) <= GROUP_SPLIT:
+                lines += self.unit_table(group, failing)
+                continue
+            areas = {}
+            for unit in group:
+                areas.setdefault(self.area(unit), []).append(unit)
+            for area in sorted(areas):
+                lines += ["#### %s (%d)" % (area, len(areas[area])), ""]
+                lines += self.unit_table(areas[area], failing)
+        if self.internal and all(v in FAILING for v in order):
+            lines += self.attention(units)
+        return lines
+
     ## @brief The index page
     # @return the page text
     def index(self):
         units = self.merged.get("units", [])
         lines = self.page_head("Test report %s" % self.merged.get("run_id"), True)
-        if self.internal:
-            attention = [u for u in units if u.get("attention")]
-            lines += ["## Attention: passed only on retry after an assertion-like failure", ""]
-            if attention:
-                lines += ["Analyse each before a handover: explain it as a test problem or file "
-                          "it as a product defect.", ""]
-                for unit in attention:
-                    first = next((a for a in unit.get("attempts", [])
-                                  if a.get("class") == "assertion"), {})
-                    message = next((e.get("message") for e in first.get("errors", [])), "")
-                    lines.append("- [%s level %s](units/%s): attempt %s (%s): %s" % (
-                        check_name(unit["check"]), unit["level"], unit_file(unit),
-                        first.get("attempt"), first.get("attempt_label"), cell(summary(message))))
-                lines.append("")
-            else:
-                lines += ["None.", ""]
         lines += self.verdict_statement()
         counts = {}
         for unit in units:
             counts[unit.get("verdict")] = counts.get(unit.get("verdict"), 0) + 1
-        counted = ", ".join("%d %s" % (counts[v], v) for v in sorted(counts)) or "no units"
+        counted = ", ".join("%d %s" % (counts[v], v) for v in self.verdict_order(counts)) \
+            or "no units"
         lines += ["**Result:** %s (%s)" % ("passed" if self.run_verdict() == "passed" else "failed",
                                           counted), ""]
         if self.catalog:
@@ -842,15 +962,7 @@ class Report:
                              ", ".join("%d %s" % (verdicts.count(v), CRITERION_TEXT[v])
                                        for v in CRITERION_TEXT if v in verdicts)])
             lines += table(["Milestone", "Title", "Date", "Acceptance criteria"], rows) + [""]
-        lines += ["## Units", ""]
-        rows = []
-        for unit in units:
-            ids = sorted({c.get("id") for f in unit.get("functions", [])
-                          for c in f.get("test_cases") or []})
-            links = ", ".join(self.case_link(i).replace("../", "") for i in ids)
-            rows.append(["[%s](units/%s)" % (cell(check_name(unit["check"])), unit_file(unit)),
-                         cell(unit["level"]), cell(unit.get("verdict")), links])
-        lines += table(["Check", "Level", "Verdict", "Test cases"], rows) + [""]
+        lines += self.unit_groups(units)
         if not self.catalog and self.executions:
             lines += ["## Test cases", ""]
             rows = []
@@ -1063,7 +1175,8 @@ class Report:
                   "what came out.", ""]
         lines += ["## Pages", ""]
         rows = [["[index.md](index.md)", "The run: overall result, milestones, all executed "
-                 "tests (units), provenance of the software tested."],
+                 "tests (units) grouped by verdict with the failing ones first, provenance of "
+                 "the software tested."],
                 ["`units/`", "One page per unit: one testsuite check at one run level. It lists "
                  "the check functions, their verdicts and the commands they ran."]]
         if self.catalog:
