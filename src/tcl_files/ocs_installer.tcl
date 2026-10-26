@@ -84,6 +84,7 @@ proc installer_set_file_permissions_on_fileserver {} {
 # failing reinstall is intentionally NOT propagated into the
 # upgrade_config verdict.
 #
+# @return nothing
 proc installer_reinstall_fresh_cluster {} {
    global check_errno check_errstr
    global check_name check_functions
@@ -167,7 +168,12 @@ proc installer_reinstall_fresh_cluster {} {
    set saved_reinit_on_tcl_error $check_reinit_on_tcl_error
    set check_reinit_on_tcl_error 0
 
+   # the INSTALL checks are recorded as units of their own, see tsrec_save_unit
+   set saved_tsrec [tsrec_save_unit]
+
    menu_item_install_cluster
+
+   tsrec_restore_unit $saved_tsrec
 
    set check_reinit_on_tcl_error $saved_reinit_on_tcl_error
    set CHECK_NO_DESCEND $saved_no_descend

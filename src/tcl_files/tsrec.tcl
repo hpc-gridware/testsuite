@@ -95,6 +95,19 @@ proc tsrec_num_or_str {value} {
    return [tsrec_str $value]
 }
 
+## @brief Encode a run level as a JSON number, an unset one as null
+#
+# The level of the current unit is empty outside a unit. Written raw, an empty
+# level makes the record invalid JSON, and the merger skips the line.
+# @param value the level
+# @return the JSON number or null
+proc tsrec_level {value} {
+   if {[string is integer -strict $value]} {
+      return $value
+   }
+   return "null"
+}
+
 ## @brief Encode a Tcl boolean as a JSON boolean
 # @param value a Tcl boolean
 # @return true or false
@@ -411,7 +424,7 @@ proc tsrec_level_phase {phase ret} {
       return
    }
    tsrec_line "phase" [list check [tsrec_str $tsrec(check)] \
-                                level $tsrec(level) \
+                                level [tsrec_level $tsrec(level)] \
                                 phase [tsrec_str $phase] \
                                 result [tsrec_str [tsrec_phase_result $ret]] \
                                 return [tsrec_num_or_str $ret]]
@@ -552,7 +565,7 @@ proc tsrec_unit_end {verdict duration_s} {
       return
    }
    tsrec_line "unit_end" [list check [tsrec_str $tsrec(check)] \
-                                   level $tsrec(level) \
+                                   level [tsrec_level $tsrec(level)] \
                                    verdict [tsrec_str $verdict] \
                                    duration [format "%.3f" $duration_s]]
    set tsrec(level) ""
@@ -638,6 +651,39 @@ proc tsrec_check_start {path} {
       return
    }
    set tsrec(check) [tsrec_check_path $path]
+}
+
+## @brief Save the recording state of the current unit before a nested run
+#
+# A check that reinstalls the cluster runs the INSTALL checks as units of
+# their own, through the same global state. Their ends clear the check, the
+# level and the context, so the records the outer unit writes afterwards
+# would name no check and no level. The caller saves the state here and
+# hands it back to tsrec_restore_unit once the nested run is over.
+# @return the saved state, "" if recording is off
+proc tsrec_save_unit {} {
+   global tsrec
+   if {!$tsrec(enabled)} {
+      return ""
+   }
+   set state {}
+   foreach key {check level function context cleanup_messages next_origin} {
+      lappend state $key $tsrec($key)
+   }
+   return $state
+}
+
+## @brief Restore the recording state saved by tsrec_save_unit
+# @param state the value tsrec_save_unit returned
+# @return nothing
+proc tsrec_restore_unit {state} {
+   global tsrec
+   if {!$tsrec(enabled) || $state == ""} {
+      return
+   }
+   foreach {key value} $state {
+      set tsrec($key) $value
+   }
 }
 
 ## @brief Encode command output as a JSON object with size and excerpt

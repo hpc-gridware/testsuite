@@ -283,6 +283,40 @@ class MergeTest(unittest.TestCase):
         self.assertEqual(len([e for e in entry["events"] if e["type"] == "assertion"]), 2)
         self.assertEqual(result["invocations"][0]["producer"], "module_test")
 
+    def test_nested_check(self):
+        # a reinstall inside a function runs an INSTALL check through run_test
+        builder = StreamBuilder("r1")
+        builder.add("selection", source="run_test", units=[{"check": CHECK, "level": 0}])
+        builder.add("phase", check=CHECK, levels=[0], phase="setup", result="ok")
+        builder.add("unit_start", check=CHECK, name="c", level=0, functions=["f1", "f2"])
+        builder.add("function_start", function="f1", index=1)
+        builder.check(OTHER, {0: [("install", "passed", [])]})
+        builder.add("function_end", function="f1", verdict="passed", duration=1.0)
+        builder.add("function_start", function="f2", index=2)
+        builder.add("function_end", function="f2", verdict="passed", duration=1.0)
+        builder.add("unit_end", check=CHECK, level=0, verdict="passed", duration=3.0)
+        builder.add("phase", check=CHECK, levels=[0], phase="cleanup", result="ok")
+        builder.add("cleanup_check", check=CHECK, levels=[0], result="ok", messages=[])
+        builder.end().write(self.run)
+        result, units = self.merged()
+        self.assertEqual(units[(CHECK, 0)]["verdict"], "passed")
+        self.assertEqual([f["verdict"] for f in units[(CHECK, 0)]["functions"]], ["passed", "passed"])
+        self.assertEqual(units[(OTHER, 0)]["verdict"], "passed")
+        self.assertEqual(result["warnings"], [])
+
+    def test_killed_inside_nested_check(self):
+        builder = StreamBuilder("r1")
+        builder.add("selection", source="run_test", units=[{"check": CHECK, "level": 0}])
+        builder.add("phase", check=CHECK, levels=[0], phase="setup", result="ok")
+        builder.add("unit_start", check=CHECK, name="c", level=0, functions=["f1"])
+        builder.add("function_start", function="f1", index=1)
+        builder.add("selection", source="run_test", units=[{"check": OTHER, "level": 0}])
+        builder.unit(OTHER, 0, [("install", None, [])], verdict="")
+        builder.write(self.run)
+        _, units = self.merged()
+        self.assertEqual(units[(CHECK, 0)]["verdict"], "interrupted")
+        self.assertEqual(units[(OTHER, 0)]["verdict"], "interrupted")
+
     def test_killed_invocation(self):
         builder = StreamBuilder("r1")
         builder.add("selection", source="command_line",

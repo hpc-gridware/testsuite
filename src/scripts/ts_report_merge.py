@@ -361,6 +361,12 @@ class Block:
 # lines after its last unit (cleanup, cleanup checks) form its suffix. A
 # check-wide setup that failed or was skipped has no units; each of its
 # levels becomes an attempt of its own.
+#
+# A check can run other checks while one of its units is open: a reinstall
+# runs the INSTALL checks through run_test. Their lines arrive between the
+# outer unit's start and end, so a check starting while a unit is open is
+# nested. The open unit and its check are put aside until the nested check
+# has finished with its cleanup checks, and then continue where they were.
 # @param stream the stream
 # @return (attempts, selected): all attempts, and the selected unit keys
 def split_stream(stream):
@@ -368,6 +374,15 @@ def split_stream(stream):
     selected = []
     block = Block(None)
     unit = None
+    outer = []
+
+    ## @brief Put the open unit and its check aside for a nested check
+    # @return nothing
+    def nest():
+        nonlocal block, unit
+        outer.append((block, unit))
+        block = Block(None)
+        unit = None
 
     def finish(next_check):
         nonlocal block, unit
@@ -390,7 +405,9 @@ def split_stream(stream):
                 selected.append((item.get("check"), item.get("level")))
             if line.get("source") == "run_test":
                 checks = [item.get("check") for item in line.get("units", [])]
-                if block.attempts or block.phases or block.check is not None:
+                if unit is not None:
+                    nest()
+                elif block.attempts or block.phases or block.check is not None:
                     finish(None)
                 block.check = checks[0] if checks else None
             continue
@@ -398,7 +415,9 @@ def split_stream(stream):
             continue
         check = line.get("check")
         if kind == "unit_start":
-            if block.check not in (None, check) or "cleanup" in block.phases:
+            if unit is not None:
+                nest()
+            elif block.check not in (None, check) or "cleanup" in block.phases:
                 finish(check)
             block.check = check
             unit = Attempt(stream, check, line.get("level"))
@@ -422,7 +441,13 @@ def split_stream(stream):
         if kind == "cleanup_check":
             block.cleanup_check = line
             finish(None)
+            if outer:
+                block, unit = outer.pop()
     finish(None)
+    # a stream that ends inside a nested check leaves the outer units open
+    while outer:
+        block, unit = outer.pop()
+        finish(None)
     return attempts, selected
 
 

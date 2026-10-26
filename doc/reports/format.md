@@ -72,6 +72,13 @@ order: `invocation`, then any number of `selection` lines, then per check
 `cleanup_check`; finally `invocation_end`. A `selection` line may also appear
 between checks.
 
+A check may run other checks while one of its units is open: a reinstall
+(`installer_reinstall_fresh_cluster`) runs the INSTALL checks through
+`run_test`. Their lines, from `selection` to `cleanup_check`, then stand
+between the outer `unit_start` and `unit_end`; the recorder keeps the outer
+unit's state across them, and merge treats a check that starts inside an open
+unit as nested and resumes the outer unit after it.
+
 Setup, cleanup and the cleanup check belong to the **check**, not to a level:
 the framework runs the check's `setup`, then every selected level, then the
 check's `cleanup` and `check_if_test_cleaned_up`. Those lines therefore carry
