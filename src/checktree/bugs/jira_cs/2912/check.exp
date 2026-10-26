@@ -139,6 +139,9 @@ proc issue_2912_save_complex {filename} {
 # naming a complex entry means that the qmaster sees a difference in a field which the file
 # format does not carry, and which an administrator can therefore not get rid of.
 #
+# Which message reports the unchanged write depends on the release, so it is asked for
+# instead of written down here, see get_write_no_change_message().
+#
 # @param filename the complex file on the master host
 # @param when names the phase of the test, for the error message
 # @return 1 when nothing was changed, else 0
@@ -149,7 +152,7 @@ proc issue_2912_complex_unchanged {filename when} {
       return 0
    }
 
-   set not_changed [translate_macro MSG_CENTRY_NOTCHANGED]
+   set not_changed [get_write_no_change_message]
    if {[string match "*$not_changed*" $output]} {
       ts_log_fine "the complex configuration is unchanged $when"
       return 1

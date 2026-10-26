@@ -95,7 +95,7 @@ proc ce_get_messages {msg_var action obj_name {on_host ""} {as_user ""}} {
    add_message_to_container messages 1 [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS "*" "*" "*" "*"]
    add_message_to_container messages 2 [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS "*" "*" "*" "*"]
    add_message_to_container messages 3 [translate_macro MSG_SGETEXT_REMOVEDFROMLIST_SSSS "*" "*" "*" "*"]
-   add_message_to_container messages 4 [translate_macro MSG_CENTRY_NOTCHANGED]
+   add_message_to_container messages 4 [get_write_no_change_message]
 
    add_message_to_container messages -1 [translate_macro MSG_CENTRYREFINHOST_SS "*" "*"]
    add_message_to_container messages -2 [translate_macro MSG_CENTRYREFINQUEUE_SS "*" "*"]

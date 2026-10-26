@@ -10087,6 +10087,31 @@ proc add_message_to_container {msg_cont msg_code msg {msg_desc ""}} {
    return 0
 }
 
+## @brief return the message with which a write that changed nothing answers
+#
+# A write that stores exactly what is already stored is a success and says so instead
+# of answering nothing - the exit code is 0 either way, so the message is the only
+# thing that separates "there was nothing to do" from a write that silently did not
+# happen. Up to 9.1 the qconf client printed that summary, and only for the one object
+# type that compared at all (MSG_CENTRY_NOTCHANGED). From 9.2 on the write is carried
+# out by the stored procedure in sge_qmaster, which summarises it for every type it
+# writes (MSG_QCONF_WRITENOCHANGE).
+#
+# The version under test is asked whether it knows the new macro rather than compared
+# against a release number: the testsuite is one branch for 9.1 and 9.2 and fixes get
+# backported, so a "from 9.2 on" condition is wrong the moment something is backported
+# and nothing says so. translate_macro on a macro the version does not know fails,
+# hence the guard. The macro of the predecessor is still defined in 9.2, which does not
+# disturb the decision because it is the fallback and never the probe.
+#
+# @return the translated no-change message of the version under test
+proc get_write_no_change_message {} {
+   if {[is_macro_available MSG_QCONF_WRITENOCHANGE]} {
+      return [translate_macro MSG_QCONF_WRITENOCHANGE]
+   }
+   return [translate_macro MSG_CENTRY_NOTCHANGED]
+}
+
 if {[info procs lassign] == ""} {
     proc lassign {values args} {
         uplevel 1 [list foreach $args [linsert $values end {}] break]
@@ -10394,14 +10419,9 @@ proc set_complex {change_array {raise_error 1} {fast_add 1} {do_reset 0} } {
       ts_log_finer "output of qconf -Mc $tmpfile:\n$result"
 
       # parse output or raise error
-      # A write that changes nothing is a success, and both lines below say so:
-      # up to 9.1 the client summarised it per type, from 9.2 the qmaster's write
-      # procedure summarises it for every type it writes.
-      if {[is_version_in_range "9.2.0"]} {
-         add_message_to_container messages 4 [translate_macro MSG_QCONF_WRITENOCHANGE]
-      } else {
-         add_message_to_container messages 4 [translate_macro MSG_CENTRY_NOTCHANGED]
-      }
+      # A write that changes nothing is a success; which message says so depends on
+      # the release, see get_write_no_change_message().
+      add_message_to_container messages 4 [get_write_no_change_message]
       add_message_to_container messages 3 [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS $CHECK_USER "*" "*" "*"]
       add_message_to_container messages 2 [translate_macro MSG_SGETEXT_REMOVEDFROMLIST_SSSS $CHECK_USER "*" "*" "*"]
       add_message_to_container messages 1 [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS $CHECK_USER "*" "*" "*"]
@@ -10441,7 +10461,7 @@ proc set_complex {change_array {raise_error 1} {fast_add 1} {do_reset 0} } {
       set ADDED    [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS $CHECK_USER "*" "*" "*"]
       set REMOVED  [translate_macro MSG_SGETEXT_REMOVEDFROMLIST_SSSS $CHECK_USER "*" "*" "*"]
       set STILLREF [translate_macro MSG_CENTRYREFINQUEUE_SS "*" "*"]
-      set NOT_MODIFIED [translate_macro MSG_CENTRY_NOTCHANGED]
+      set NOT_MODIFIED [get_write_no_change_message]
 
       set NULL_URGENCY [translate_macro MSG_CENTRY_NULL_URGENCY]
 
