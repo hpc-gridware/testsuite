@@ -288,7 +288,7 @@ proc qselect_U {} {
    if {[llength $queue_list] != [llength $ts_config(execd_nodes)]} {
       ts_log_severe "expected to see all queue instances of all.q queue, but got\n$queue_list"
    }
-   if {[string first $queue_list "qsel@"] >= 0} {
+   if {[string first "qsel@" $queue_list] >= 0} {
       ts_log_severe "expected not to see any qinstance of qsel queue, but got\n$queue_list"
    }
 }

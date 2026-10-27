@@ -228,18 +228,24 @@ proc qrstat_option_u {} {
    delete_all_ars
 }
 
+## @brief Check that qrstat -explain shows a message
+#
+# Searches the whole output: the line the message lands on depends on how many
+# lines the AR summary takes. string first, not string match, because the
+# message may contain glob characters. (The previous test compared the result
+# of string match, 0 or 1, with < 0 and therefore never failed.)
+# @param message the text expected in the output
+# @return nothing
 proc parse_explain_option {message} {
    set output [start_sge_bin "qrstat" "-explain"]
    if {$prg_exit_state != 0} {
       ts_log_severe "exit state is not 0"
       return
    }
-   set output [string trim $output]
-   set output [split $output "\n"]
 
-   if {[string match "*$message*" [lindex $output 3]] < 0} {
-      ts_log_severe "message was not found in qrstat -explain output"
-   } 
+   if {[string first $message $output] < 0} {
+      ts_log_severe "message \"$message\" was not found in qrstat -explain output:\n$output"
+   }
 }
 
 proc qrstat_option_explain {} {
