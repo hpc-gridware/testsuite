@@ -211,7 +211,7 @@ set check_description(51) "test_sgeobj_rsmap"
 set check_description(52) "test_cull_no_transfer"
 set check_description(53) "test_sched_request_amount"
 set check_description(54) "test_sgeobj_request_parse"
-set check_description(53) "test_sgeobj_Matcher"
+set check_description(55) "test_sgeobj_Matcher"
 
 set check_functions {}
 lappend check_functions "generic_module_tests_run"
