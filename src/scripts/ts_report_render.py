@@ -46,12 +46,15 @@ import zipfile
 
 AUDIENCES = ("internal", "external")
 
+# the format versions read; merged/2 added the verdict not_implemented
+FORMAT_VERSIONS = {"merged": (1, 2), "catalog": (1,)}
+
 # unit verdicts that count as "did not pass", as in ts_report_merge.py
 FAILING = ("failed", "cleanup_failed", "interrupted", "not_run")
 
 # the order the index lists the unit verdicts in, the critical ones first
 VERDICT_ORDER = ("failed", "cleanup_failed", "interrupted", "not_run",
-                 "skipped", "unsupported", "passed")
+                 "not_implemented", "skipped", "unsupported", "passed")
 
 # the heading of a verdict group in the index
 VERDICT_HEADING = {
@@ -59,6 +62,7 @@ VERDICT_HEADING = {
     "cleanup_failed": "Cleanup failed",
     "interrupted": "Interrupted",
     "not_run": "Not run",
+    "not_implemented": "Not implemented",
     "skipped": "Skipped",
     "unsupported": "Unsupported",
     "passed": "Passed",
@@ -68,7 +72,8 @@ VERDICT_HEADING = {
 GROUP_SPLIT = 10
 
 # test-case verdicts from the executions that cover a case, worst last
-CASE_RANK = {"passed": 0, "skipped": 1, "unsupported": 2, "not_run": 3, "failed": 4}
+CASE_RANK = {"passed": 0, "skipped": 1, "unsupported": 2, "not_implemented": 3,
+             "not_run": 4, "failed": 5}
 
 # what a case verdict says in the report
 CASE_TEXT = {
@@ -77,6 +82,7 @@ CASE_TEXT = {
     "not_run": "not run",
     "skipped": "skipped",
     "unsupported": "unsupported environment",
+    "not_implemented": "not implemented yet",
     "prepared_only": "preconditions verified only",
     "not_covered": "not covered by this run",
     "site": "site control, not covered by the testsuite",
@@ -112,10 +118,11 @@ def load(path, kind):
             data = json.load(fd)
     except ValueError as error:
         raise InputError("%s: not valid JSON: %s" % (path, error))
-    expected = "ts-report/%s/1" % kind
-    if not isinstance(data, dict) or data.get("format") != expected:
+    expected = ["ts-report/%s/%d" % (kind, v) for v in FORMAT_VERSIONS[kind]]
+    if not isinstance(data, dict) or data.get("format") not in expected:
         raise InputError("%s: format is %r, expected %s" %
-                         (path, data.get("format") if isinstance(data, dict) else None, expected))
+                         (path, data.get("format") if isinstance(data, dict) else None,
+                          " or ".join(expected)))
     return data
 
 
@@ -637,8 +644,8 @@ def execution_verdict(unit, function):
         return "not_run"
     if unit_wide_failure(unit):
         return "failed"
-    if verdict == "unsupported":
-        return "unsupported"
+    if verdict in ("unsupported", "not_implemented"):
+        return verdict
     return "passed" if verdict == "passed" else "not_run"
 
 
@@ -713,12 +720,17 @@ class Report:
         return "prepared_only" if executions else "not_covered"
 
     ## @brief The overall result of the run, for criteria mapped to the run
-    # @return passed or failed
+    #
+    # A run without failures that still has stubs is open: what passed is not
+    # all the specification asks for.
+    # @return passed, failed or open
     def run_verdict(self):
         units = self.merged.get("units", [])
-        if units and not any(u.get("verdict") in FAILING for u in units):
-            return "passed"
-        return "failed"
+        if not units or any(u.get("verdict") in FAILING for u in units):
+            return "failed"
+        if any(u.get("verdict") == "not_implemented" for u in units):
+            return "open"
+        return "passed"
 
     ## @brief The verdict of an acceptance criterion
     # @param criterion the catalog criterion
@@ -742,13 +754,22 @@ class Report:
     # @param criterion the catalog criterion
     # @return the explanation, or ""
     def open_reason(self, criterion):
+        if criterion.get("mapping") == "run":
+            return "the run has tests not implemented yet" if self.run_verdict() == "open" else ""
         if criterion.get("mapping") != "test_ids":
             return ""
         ids = criterion.get("test_ids") or []
         if not ids:
             return "no test IDs mapped yet (%s)" % criterion.get("mapped_by", "description")
-        missing = [i for i in ids if self.case_verdict(i) not in ("passed", "failed", "not_run")]
-        return "not decided by this run: %s" % ", ".join(missing) if missing else ""
+        stubs = [i for i in ids if self.case_verdict(i) == "not_implemented"]
+        missing = [i for i in ids if i not in stubs and
+                   self.case_verdict(i) not in ("passed", "failed", "not_run")]
+        reasons = []
+        if stubs:
+            reasons.append("not implemented: %s" % ", ".join(stubs))
+        if missing:
+            reasons.append("not decided by this run: %s" % ", ".join(missing))
+        return "; ".join(reasons)
 
     ## @brief Link to a case page from a page in a subdirectory
     # @param case_id the test ID
@@ -873,14 +894,17 @@ class Report:
     ## @brief The table of some units of one verdict
     #
     # The test-case column is left out when no unit of the table names a test
-    # case.
+    # case. Stubs get the reason their functions gave.
     # @param units the units, all of one verdict
     # @param failing True for a verdict in FAILING, which gets the error columns
     # @return the lines
     def unit_table(self, units, failing):
         header = ["Check", "Level"]
+        stubs = bool(units) and units[0].get("verdict") == "not_implemented"
         if failing:
             header += ["Attempts", "Error"] if self.internal else ["Error"]
+        elif stubs:
+            header.append("Missing")
         rows = []
         for unit in units:
             ids = sorted({c.get("id") for f in unit.get("functions", [])
@@ -893,6 +917,10 @@ class Report:
                     row.append(", ".join("%s %s" % (a.get("attempt_label"), a.get("verdict"))
                                          for a in unit.get("attempts") or []) or "none")
                 row.append(self.first_error(unit))
+            elif stubs:
+                reasons = sorted({f.get("reason") for f in unit.get("functions", [])
+                                  if f.get("reason")})
+                row.append(cell(summary("; ".join(reasons), 120)))
             row.append(links)
             rows.append(row)
         # a run without test IDs gets no column that is empty in every row
@@ -948,8 +976,9 @@ class Report:
             counts[unit.get("verdict")] = counts.get(unit.get("verdict"), 0) + 1
         counted = ", ".join("%d %s" % (counts[v], v) for v in self.verdict_order(counts)) \
             or "no units"
-        lines += ["**Result:** %s (%s)" % ("passed" if self.run_verdict() == "passed" else "failed",
-                                          counted), ""]
+        result = {"passed": "passed", "failed": "failed",
+                  "open": "open, tests not implemented yet"}[self.run_verdict()]
+        lines += ["**Result:** %s (%s)" % (result, counted), ""]
         if self.catalog:
             lines += ["## Milestones", ""]
             rows = []
@@ -1012,7 +1041,10 @@ class Report:
             for function in functions:
                 ids = ", ".join("%s (%s)" % (self.case_link(c.get("id")), c.get("relation", "covers"))
                                 for c in function.get("test_cases") or [])
-                rows.append(["`%s`" % cell(function.get("function")), cell(function.get("verdict")),
+                verdict = cell(function.get("verdict"))
+                if function.get("reason"):
+                    verdict += ": %s" % cell(function.get("reason"))
+                rows.append(["`%s`" % cell(function.get("function")), verdict,
                              duration_text(function.get("duration")), ids])
             lines += ["## Functions", ""] + table(["Function", "Verdict", "Duration", "Test cases"],
                                                   rows) + [""]
@@ -1093,7 +1125,9 @@ class Report:
             return "\n".join(lines)
         rows = [["[%s](../units/%s)" % (cell(check_name(e.unit["check"])), unit_file(e.unit)),
                  cell(e.unit["level"]), "`%s`" % cell(e.function.get("function")), e.relation,
-                 CASE_TEXT[e.verdict]] for e in executions]
+                 CASE_TEXT[e.verdict] + (": %s" % cell(e.function.get("reason"))
+                                         if e.verdict == "not_implemented" and e.function.get("reason")
+                                         else "")] for e in executions]
         lines += table(["Check", "Level", "Function", "Relation", "Verdict"], rows) + [""]
         if any(e.relation == "prepares" for e in executions):
             lines += ["A function that *prepares* the case verifies a precondition only and does "
@@ -1146,7 +1180,7 @@ class Report:
         lines += table(["AC", "Criterion", "Test cases", "Verdict"], rows) + [""]
         lines += ["An acceptance criterion passes when every mapped test case passed; a failed "
                   "or not run case fails it. It is open when a mapped case was not decided by "
-                  "this run.", ""]
+                  "this run or its test is not implemented yet.", ""]
         for criterion in criteria:
             verdict = self.criterion_verdict(criterion)
             lines += ["## %s" % criterion["id"], "", "**%s**" % criterion.get("criterion", ""), ""]
@@ -1213,14 +1247,18 @@ class Report:
                 ["failed", "A check function, the setup or the cleanup reported an error."],
                 ["cleanup_failed", "The functions passed, but the cleanup checks found something "
                  "left behind, e.g. a job still in the cluster."],
+                ["not_implemented", "The unit is a placeholder for tests not written yet: "
+                 "every check function names the test cases it will execute and what is still "
+                 "missing. It shows the progress against the specification."],
                 ["skipped", "The setup found that the unit does not apply to this cluster."],
                 ["unsupported", "The environment cannot run the unit, e.g. a missing host type."],
                 ["interrupted", "The unit started but did not finish."],
                 ["not_run", "The unit was selected but never started."]]
         lines += ["Unit verdicts:", ""] + table(["Verdict", "Meaning"], rows) + [""]
-        lines += ["Function verdicts are `passed`, `failed`, `unsupported`, `tcl_error` (an error "
-                  "in the test code itself), `not_run` (an earlier function stopped the unit) and "
-                  "`interrupted`.", ""]
+        lines += ["Function verdicts are `passed`, `failed`, `unsupported`, `not_implemented` (a "
+                  "placeholder, with what is missing), `tcl_error` (an error in the test code "
+                  "itself), `not_run` (an earlier function stopped the unit) and `interrupted`.",
+                  ""]
         lines += ["## Module tests", "",
                   "A *module test* is a test program of the product's source tree that tests "
                   "one component directly, without a cluster. The testsuite runs it from a "
@@ -1249,6 +1287,8 @@ class Report:
                     [CASE_TEXT["not_run"], "A covering function did not run."],
                     [CASE_TEXT["unsupported"] + ", " + CASE_TEXT["skipped"],
                      "The covering function or its unit could not run in this environment."],
+                    [CASE_TEXT["not_implemented"], "The covering function is a placeholder: "
+                     "the test of the case is not written yet."],
                     [CASE_TEXT["prepared_only"], "Only functions that prepare the case ran; "
                      "the case itself was not executed."],
                     [CASE_TEXT["not_covered"], "No test of this run executes the case."],
@@ -1260,13 +1300,14 @@ class Report:
             lines += ["## Acceptance criteria", ""]
             rows = [["passed", "Every test case mapped to the criterion passed."],
                     ["failed", "A mapped test case failed or did not run."],
-                    ["open", "Not decided by this run: a mapped test case was not executed, or "
-                     "the criterion has no test cases mapped yet."],
+                    ["open", "Not decided by this run: a mapped test case was not executed or "
+                     "is not implemented yet, or the criterion has no test cases mapped yet."],
                     [CRITERION_TEXT["manual"], "The criterion is verified by the customer; the "
                      "testsuite gives no verdict."]]
             lines += table(["Verdict", "Meaning"], rows) + [""]
             lines += ["A criterion mapped to *the whole run* passes when no unit of the run "
-                      "failed, did not finish or did not run.", ""]
+                      "failed, did not finish or did not run, and stays open while a unit is "
+                      "not implemented yet.", ""]
         lines += ["## Traces", "",
                   "Each unit page shows the commands in the order they started, split into the "
                   "setup, one section per check function, the cleanup and the cleanup checks. "

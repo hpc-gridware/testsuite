@@ -39,7 +39,7 @@ import os
 import sys
 
 RECORD_FORMAT = ("record", 1)
-MERGED_FORMAT = "ts-report/merged/1"
+MERGED_FORMAT = "ts-report/merged/2"
 
 # unit verdicts that count as "did not pass"
 FAILING = ("failed", "cleanup_failed", "interrupted", "not_run")
@@ -294,6 +294,8 @@ class Attempt:
             return "unsupported"
         if self.block.cleanup_check is not None and self.block.cleanup_check.get("result") == "error":
             return "cleanup_failed"
+        if verdict == "not_implemented":
+            return "not_implemented"
         return "passed"
 
     ## @brief The failure class of this attempt
@@ -325,6 +327,8 @@ class Attempt:
             if name in ended:
                 entry["verdict"] = ended[name].get("verdict")
                 entry["duration"] = ended[name].get("duration")
+                if ended[name].get("reason"):
+                    entry["reason"] = ended[name].get("reason")
             elif name in started:
                 entry["verdict"] = "interrupted"
             else:

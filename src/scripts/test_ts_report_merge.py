@@ -255,6 +255,29 @@ class MergeTest(unittest.TestCase):
         _, units = self.merged()
         self.assertEqual(units[(CHECK, 0)]["verdict"], "unsupported")
 
+    ## @brief A stub unit keeps its verdict and reason, and the run still exits 0
+    def test_not_implemented(self):
+        stream = StreamBuilder("r1").check(CHECK, {0: [("f1", "not_implemented", [])]},
+                                           unit_verdicts={0: "not_implemented"})
+        for line in stream.lines:
+            if line["type"] == "function_end":
+                line["reason"] = "needs the role enforcement"
+        stream.end().write(self.run)
+        _, units = self.merged()
+        unit = units[(CHECK, 0)]
+        self.assertEqual(unit["verdict"], "not_implemented")
+        self.assertEqual(unit["functions"][0]["verdict"], "not_implemented")
+        self.assertEqual(unit["functions"][0]["reason"], "needs the role enforcement")
+        self.assertFalse(unit["retried"])
+        self.assertEqual(self.run_main([self.run, "-o", "-"]), 0)
+
+    ## @brief A cleanup check that found something outranks a stub
+    def test_not_implemented_cleanup_failed(self):
+        StreamBuilder("r1").check(CHECK, {0: [("f1", "not_implemented", [])]}, cleanup_check="error",
+                                  unit_verdicts={0: "not_implemented"}).end().write(self.run)
+        _, units = self.merged()
+        self.assertEqual(units[(CHECK, 0)]["verdict"], "cleanup_failed")
+
     def test_module_test_stream(self):
         # the lines ocs_module_test.h writes: no phases, scenarios as functions,
         # one assertion per CHECK, a drift error for an undeclared CHECK
@@ -381,7 +404,7 @@ class MergeTest(unittest.TestCase):
         self.assertEqual(self.run_main([self.run, "-o", out]), 0)
         with open(out, encoding="utf-8") as fd:
             written = json.load(fd)
-        self.assertEqual(written["format"], "ts-report/merged/1")
+        self.assertEqual(written["format"], "ts-report/merged/2")
         self.assertEqual(written["units"][0]["functions"][0]["test_cases"],
                          [{"id": "STR-03", "relation": "covers"}])
 

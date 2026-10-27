@@ -239,6 +239,9 @@ proc tsrec_init {} {
    set tsrec(context_stack) {}
    set tsrec(context_next) 0
    set tsrec(diagnostic) 0
+   set tsrec(stub) ""
+   set tsrec(level_functions) 0
+   set tsrec(level_stubs) 0
    set tsrec(enabled) 1
 
    # provenance
@@ -382,6 +385,8 @@ proc tsrec_unit_start {path level} {
    }
    set tsrec(check) [tsrec_check_path $path]
    set tsrec(level) $level
+   set tsrec(level_functions) 0
+   set tsrec(level_stubs) 0
    set description ""
    if {[info exists check_description($level)]} {
       set description $check_description($level)
@@ -440,10 +445,14 @@ proc tsrec_function_start {function index} {
       return
    }
    set tsrec(function) $function
+   set tsrec(stub) ""
    tsrec_line "function_start" [list function [tsrec_str $function] index $index]
 }
 
 ## @brief Record the end of a check function and derive its verdict
+#
+# A function that raised no error but called ts_not_implemented ends
+# not_implemented, with the reason it gave.
 # @param function the function name
 # @param duration_ms the function's run time in milliseconds
 # @param tcl_failed 1 if the function raised a Tcl error
@@ -469,13 +478,45 @@ proc tsrec_function_end {function duration_ms tcl_failed} {
       set verdict "failed"
    } elseif {$config > 0} {
       set verdict "unsupported"
+   } elseif {$tsrec(stub) != ""} {
+      set verdict "not_implemented"
    } else {
       set verdict "passed"
    }
-   tsrec_line "function_end" [list function [tsrec_str $function] \
-                                       verdict [tsrec_str $verdict] \
-                                       duration [format "%.3f" [expr {$duration_ms / 1000.0}]]]
+   set pairs [list function [tsrec_str $function] \
+                   verdict [tsrec_str $verdict] \
+                   duration [format "%.3f" [expr {$duration_ms / 1000.0}]]]
+   if {$verdict == "not_implemented"} {
+      lappend pairs reason [tsrec_str $tsrec(stub)]
+      incr tsrec(level_stubs)
+   }
+   incr tsrec(level_functions)
+   tsrec_line "function_end" $pairs
    set tsrec(function) ""
+   set tsrec(stub) ""
+}
+
+## @brief Mark the running check function as a stub of a test not written yet
+#
+# For a test case of a specification whose test does not exist yet: the check
+# function names the case in check_test_cases, calls this and returns. The
+# report shows the function, and the unit when all its functions are stubs,
+# as not_implemented, so the progress against the specification is visible.
+# For the testsuite itself the function passed: no error is raised, so a
+# fleet run does not repeat it and the ledger records it as passed.
+# @param reason what is missing, e.g. "needs the role enforcement in qmaster"
+# @return nothing
+proc ts_not_implemented {reason} {
+   global tsrec CHECK_CUR_PROC_NAME
+   set function ""
+   if {[info exists CHECK_CUR_PROC_NAME]} {
+      set function $CHECK_CUR_PROC_NAME
+   }
+   ts_log_fine "NOT IMPLEMENTED: $function: $reason"
+   if {!$tsrec(enabled) || $tsrec(function) == ""} {
+      return
+   }
+   set tsrec(stub) $reason
 }
 
 ## @brief Record an error raised through the testsuite logging
@@ -556,6 +597,9 @@ proc tsrec_set_origin {origin} {
 }
 
 ## @brief Record the end of the current unit
+#
+# A passed level whose functions all ended not_implemented is recorded as
+# not_implemented.
 # @param verdict passed, failed, unsupported or skipped
 # @param duration_s the unit's run time in seconds
 # @return nothing
@@ -563,6 +607,10 @@ proc tsrec_unit_end {verdict duration_s} {
    global tsrec
    if {!$tsrec(enabled)} {
       return
+   }
+   if {$verdict == "passed" && $tsrec(level_functions) > 0 && \
+       $tsrec(level_stubs) == $tsrec(level_functions)} {
+      set verdict "not_implemented"
    }
    tsrec_line "unit_end" [list check [tsrec_str $tsrec(check)] \
                                    level [tsrec_level $tsrec(level)] \
@@ -667,7 +715,8 @@ proc tsrec_save_unit {} {
       return ""
    }
    set state {}
-   foreach key {check level function context cleanup_messages next_origin} {
+   foreach key {check level function context cleanup_messages next_origin \
+                stub level_functions level_stubs} {
       lappend state $key $tsrec($key)
    }
    return $state

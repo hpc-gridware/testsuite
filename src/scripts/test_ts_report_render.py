@@ -77,7 +77,7 @@ def unit(verdict, functions, events=None, check=CHECK):
 # @param units the units
 # @return the merged result
 def merged(*units):
-    return {"format": "ts-report/merged/1", "run_id": "run-1", "merged_at": "x", "inputs": [],
+    return {"format": "ts-report/merged/2", "run_id": "run-1", "merged_at": "x", "inputs": [],
             "invocations": [{"invocation_id": "ts-1-1", "attempt": 0, "attempt_label": "interactive",
                              "provenance": {"ts_host": "ts", "product": "GCS",
                                             "product_version": "9.1.8"}}],
@@ -396,6 +396,40 @@ class RenderTest(unittest.TestCase):
         unit_page = report.pages()["units/functional.sharetree-L0.md"]
         self.assertIn("wait_for_online_usage: usage of job 1234 reported: met after 7.0 s", unit_page)
 
+    ## @brief Stubs: their cases and criteria stay open, the run is open, not passed
+    def test_not_implemented(self):
+        done = unit("passed", [("f1", "passed", [("A-01", "covers")])])
+        stub = unit("not_implemented", [("f2", "not_implemented", [("A-02", "covers")])],
+                    check="/ts/checktree/functional/stub")
+        stub["functions"][0]["reason"] = "needs the role enforcement"
+        for internal in (False, True):
+            report = self.report(merged(done, stub), internal=internal)
+            self.assertEqual(report.case_verdict("A-02"), "not_implemented")
+            criteria = {c["id"]: c for c in report.catalog["criteria"]}
+            self.assertEqual(report.criterion_verdict(criteria["M1-AC-01"]), "open")
+            self.assertEqual(report.open_reason(criteria["M1-AC-01"]), "not implemented: A-02")
+            self.assertEqual(report.run_verdict(), "open")
+            self.assertEqual(report.criterion_verdict(criteria["M1-AC-03"]), "open")
+            index = report.index()
+            self.assertIn("**Result:** open, tests not implemented yet", index)
+            self.assertIn("### Not implemented (1)", index)
+            self.assertIn("needs the role enforcement", index)
+            # stubs come after the failing groups and before the passed ones
+            self.assertLess(index.index("### Not implemented"), index.index("### Passed"))
+            page = report.case_page(report.cases["A-02"])
+            self.assertIn("not implemented yet: needs the role enforcement", page)
+        # a stub never hides a failure of the run
+        failed = unit("failed", [("f3", "failed", [])], check="/ts/checktree/functional/bad")
+        self.assertEqual(self.report(merged(done, stub, failed)).run_verdict(), "failed")
+
+    ## @brief A merged result of format version 1 is still read
+    def test_reads_merged_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = os.path.join(tmp, "merged.json")
+            with open(source, "w", encoding="utf-8") as fd:
+                json.dump(dict(merged(), format="ts-report/merged/1"), fd)
+            self.assertEqual(render.load(source, "merged")["format"], "ts-report/merged/1")
+
     def test_main(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = os.path.join(tmp, "merged.json")
@@ -410,7 +444,7 @@ class RenderTest(unittest.TestCase):
                 # a second render must not mix with the first
                 self.assertEqual(render.main([source, "--audience", "internal", "-o", out]), 2)
                 broken = copy.deepcopy(merged())
-                broken["format"] = "ts-report/merged/2"
+                broken["format"] = "ts-report/merged/3"
                 with open(source, "w", encoding="utf-8") as fd:
                     json.dump(broken, fd)
                 self.assertEqual(render.main([source, "--audience", "external", "-o",

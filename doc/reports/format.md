@@ -17,8 +17,12 @@ the **merged result** (written by merge, read by render) and the **catalog**
 `examples/`.
 
 All files are UTF-8 JSON. Every top-level object carries
-`"format": "ts-report/<kind>/1"`; a reader rejects a kind or major version it
-does not know. Times are ISO 8601 with milliseconds and an offset
+`"format": "ts-report/<kind>/<major>"`; a reader rejects a kind or major version it
+does not know. The record stream and the catalog are at version 1, the merged
+result at version 2, which added the verdict `not_implemented`; render reads
+merged results of version 1 and 2. The record stream stayed at 1: a merge that
+does not know `not_implemented` takes such a unit as `passed`, which is what
+the testsuite itself says about it. Times are ISO 8601 with milliseconds and an offset
 (`2026-10-22T14:03:11.204+02:00`); durations are seconds as numbers.
 
 ## 1. Record stream
@@ -167,6 +171,16 @@ selects.
   absent when the check declares none. `relation` is `covers` (the function
   verifies the case) or `prepares` (it verifies a precondition only).
 
+**Stubs.** A test case of a specification whose test is not written yet gets
+a check function that names the case in `check_test_cases`, calls
+`ts_not_implemented <reason>` and returns. Its `function_end` says
+`not_implemented` and carries the `reason`; a level whose functions all did
+so ends `not_implemented`. To the testsuite the function passed: it raises no
+error, so a fleet run does not repeat it and the ledger records it as passed.
+The report shows it in both audiences, with a count in the result line, so a
+stub cannot stay unseen. A stub carries the categories of the real test (e.g.
+`RBAC VERIFIED`), so a run of that category selects it.
+
 #### `phase`
 
 ```json
@@ -194,6 +208,7 @@ Function verdicts:
 | `passed` | no error raised |
 | `failed` | at least one `SEVERE` or `WARNING` error |
 | `unsupported` | only `CONFIG` errors: the environment cannot run it |
+| `not_implemented` | no error, and the function called `ts_not_implemented`; `reason` says what is missing |
 | `tcl_error` | the function raised a Tcl error |
 | `not_run` | an earlier function stopped the unit (merge also sets it for units missing entirely) |
 | `interrupted` | set by merge only: the function started but has no `function_end` |
@@ -319,6 +334,7 @@ precedence:
 | `skipped` | the level setup returned 99 |
 | `failed` | a function `failed` or `tcl_error`, or a setup phase `error` |
 | `unsupported` | every function `unsupported` |
+| `not_implemented` | otherwise `passed`, and every function `not_implemented` |
 | `passed` | otherwise |
 
 #### `cleanup_check`
@@ -343,6 +359,7 @@ Merge combines `unit_end` with the check-wide lines:
 | `failed` | `unit_end` says `failed`, or the check `setup` or `cleanup` phase reported `error` |
 | `cleanup_failed` | `unit_end` says `passed`, but the check's `cleanup_check` reported `error` |
 | `unsupported` | `unit_end` says `unsupported` |
+| `not_implemented` | `unit_end` says `not_implemented` and the cleanup checks found nothing |
 | `passed` | otherwise |
 | `interrupted` | `unit_start` without `unit_end`, or the check `setup` passed and the level never started |
 | `not_run` | selected, but no `unit_start` |
@@ -431,12 +448,12 @@ ts_report_merge.py <reports_dir> --run-id <run_id> [-o merged.json]
 The arguments are run directories (`<results_dir>/reports/<run_id>`, one per
 runner), single `.jsonl` files, or a reports directory together with
 `--run-id`. Streams of another run id or of an unknown format version are an
-error. Exit status: 0 when every unit `passed`, was `skipped` or
-`unsupported`; 1 when a unit is `failed`, `cleanup_failed`, `interrupted` or
+error. Exit status: 0 when every unit `passed`, was `skipped`,
+`unsupported` or `not_implemented`; 1 when a unit is `failed`, `cleanup_failed`, `interrupted` or
 `not_run`; 2 for invalid input.
 
 ```json
-{"format": "ts-report/merged/1", "run_id": "20261022-140000",
+{"format": "ts-report/merged/2", "run_id": "20261022-140000",
  "merged_at": "...", "inputs": ["/.../r1/results/reports/20261022-140000", "..."],
  "invocations": [{"invocation_id": "...", "attempt": 1,
                   "attempt_label": "phase1", "provenance": {"...": "..."}}],
@@ -457,14 +474,16 @@ error. Exit status: 0 when every unit `passed`, was `skipped` or
 ```
 
 - A unit is keyed by its check path, as recorded, and its level.
+- A function entry carries the `reason` of its `function_end` when it is
+  `not_implemented`.
 - The unit verdict is the verdict of the attempt with the highest `attempt`;
   among equal attempts, the latest `unit_end` (an attempt without one counts
   with its `unit_start`). Equal attempts are the normal case of hand runs: a
   unit repeated in the menu, or several invocations without
   `TS_REPORT_ATTEMPT`.
 - `retried` is true when an earlier attempt did not pass, i.e. was `failed`,
-  `cleanup_failed` or `interrupted`. An earlier `skipped` or `unsupported`
-  does not count.
+  `cleanup_failed` or `interrupted`. An earlier `skipped`, `unsupported` or
+  `not_implemented` does not count.
 - `class` of a failed attempt is the worst class of its errors, with
   `assertion` > `infrastructure` > `load`. A failed attempt without any error
   line (killed, or a setup that failed silently) is `assertion`.
@@ -576,7 +595,7 @@ Pages:
 
 | page | content |
 |---|---|
-| `index.md` | run verdict, milestones with their criteria, the units grouped by verdict (failed, cleanup_failed, interrupted, not_run, then for the internal audience the units that passed only on retry, then skipped, unsupported, passed; a group of more than 10 units split by the first directory of the check path; failing groups with the first error, internally also the attempts), outside cases, provenance |
+| `index.md` | run verdict, milestones with their criteria, the units grouped by verdict (failed, cleanup_failed, interrupted, not_run, then for the internal audience the units that passed only on retry, then not_implemented with what is missing, then skipped, unsupported, passed; a group of more than 10 units split by the first directory of the check path; failing groups with the first error, internally also the attempts), outside cases, provenance |
 | `guide.md` | how to read the report: unit, function, case and criterion verdicts, `covers` and `prepares`, the trace notation; every page links to it |
 | `units/<check>-L<level>.md` | one unit: verdict, errors, functions with their test cases, the checks of a module test, trace |
 | `cases/<id>.md` | one catalog case: verdict, the specification text, the functions that execute it with their trace |
@@ -621,6 +640,7 @@ identical commands outside a context collapse to
 |---|---|
 | `failed` | the function failed, raised a Tcl error or was interrupted, or the unit failed as a whole: a cleanup check found something, it was interrupted, or an error or a failed phase lies outside the check functions |
 | `not_run` | the function did not run |
+| `not_implemented` | the function is a stub |
 | `unsupported`, `skipped` | the function or its unit |
 | `passed` | otherwise |
 
@@ -633,9 +653,9 @@ failed only through another function keeps its cases passed.
 
 | verdict | rule |
 |---|---|
-| `passed` | `test_ids`: every mapped case passed; `run`: no unit of the run is `failed`, `cleanup_failed`, `interrupted` or `not_run` |
-| `failed` | a mapped case failed or did not run; `run`: otherwise |
-| `open` | a mapped case was not decided by this run, or the criterion has no test IDs yet |
+| `passed` | `test_ids`: every mapped case passed; `run`: no unit of the run is `failed`, `cleanup_failed`, `interrupted`, `not_run` or `not_implemented` |
+| `failed` | a mapped case failed or did not run; `run`: a unit is `failed`, `cleanup_failed`, `interrupted` or `not_run` |
+| `open` | a mapped case was not decided by this run or is `not_implemented` (the reason names it), or the criterion has no test IDs yet; `run`: no unit failed, but one is `not_implemented` |
 | `manual` | `manual`: verified by the customer, no verdict |
 
 **Consistency.** A test ID recorded by a check but missing in the catalog,
@@ -663,3 +683,9 @@ Accepted with the format on 2026-10-22:
 2. Output excerpt of at most 4 KiB per command.
 3. `unsupported` for functions with only `CONFIG` errors.
 4. `failed` takes precedence over `cleanup_failed`.
+
+Added on 2026-10-27:
+
+5. `not_implemented` for stubs of test cases not written yet, shown in the
+   external report too, so the partner sees the progress against the
+   specification; to the testsuite, ctest and the ledger a stub passed.
