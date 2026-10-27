@@ -310,6 +310,10 @@ class Attempt:
         return max(classes, key=lambda name: CLASS_RANK[name])
 
     ## @brief The verdicts of the check functions
+    #
+    # The functions a setup_level line lists replace the declared ones: a
+    # check can choose its functions per level in its level setup, and only
+    # those are scheduled at this level.
     # @param functions the functions the unit declares
     # @param test_cases the test cases per function
     # @return list of function entries
@@ -317,7 +321,10 @@ class Attempt:
         started = set()
         ended = {}
         for line in self.events:
-            if line.get("type") == "function_start":
+            if line.get("type") == "phase" and line.get("phase") == "setup_level" \
+                    and "functions" in line:
+                functions = line["functions"]
+            elif line.get("type") == "function_start":
                 started.add(line.get("function"))
             elif line.get("type") == "function_end":
                 ended[line.get("function")] = line

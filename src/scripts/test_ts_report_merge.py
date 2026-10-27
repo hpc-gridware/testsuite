@@ -278,6 +278,40 @@ class MergeTest(unittest.TestCase):
         _, units = self.merged()
         self.assertEqual(units[(CHECK, 0)]["verdict"], "cleanup_failed")
 
+    ## @brief A level setup that chooses the functions decides what is scheduled
+    #
+    # The qconf check declares 64 functions and runs a part of them per level;
+    # only the setup_level line knows which. Without its list the functions of
+    # the other levels are not_run; a stream from before the list keeps that.
+    def test_functions_chosen_in_level_setup(self):
+        for listed, expected in ((True, [("f2", "passed")]),
+                                 (False, [("f1", "not_run"), ("f2", "passed"), ("f3", "not_run")])):
+            with self.subTest(listed=listed):
+                for name in os.listdir(self.run):
+                    os.remove(os.path.join(self.run, name))
+                stream = StreamBuilder("r1")
+                stream.add("selection", source="run_test", units=[{"check": CHECK, "level": 1}])
+                stream.add("phase", check=CHECK, levels=[1], phase="setup", result="ok")
+                stream.add("unit_start", check=CHECK, name="sharetree", level=1,
+                           functions=["f1", "f2", "f3"],
+                           test_cases={"f1": [{"id": "STR-03", "relation": "covers"}],
+                                       "f2": [{"id": "STR-03", "relation": "covers"}]})
+                phase = {"check": CHECK, "level": 1, "phase": "setup_level", "result": "ok", "return": 1}
+                if listed:
+                    phase["functions"] = ["f2"]
+                stream.add("phase", **phase)
+                stream.add("function_start", function="f2", index=1)
+                stream.add("function_end", function="f2", verdict="passed", duration=1.0)
+                stream.add("unit_end", check=CHECK, level=1, verdict="passed", duration=2.0)
+                stream.add("phase", check=CHECK, levels=[1], phase="cleanup", result="ok")
+                stream.add("cleanup_check", check=CHECK, levels=[1], result="ok", messages=[])
+                stream.end().write(self.run)
+                _, units = self.merged()
+                unit = units[(CHECK, 1)]
+                self.assertEqual(unit["verdict"], "passed")
+                self.assertEqual([(f["function"], f["verdict"]) for f in unit["functions"]], expected)
+                self.assertEqual(unit["functions"][0]["test_cases"][0]["id"], "STR-03")
+
     def test_module_test_stream(self):
         # the lines ocs_module_test.h writes: no phases, scenarios as functions,
         # one assertion per CHECK, a drift error for an undeclared CHECK

@@ -193,6 +193,12 @@ stub cannot stay unseen. A stub carries the categories of the real test (e.g.
 returned 99) or `error`. A check-wide `setup` error makes every listed unit
 `failed`.
 
+A `setup_level` line also carries `functions`, the check functions as they
+stand after the level setup. A check may choose its functions per level there
+(`system_tests/clients/qconf` does), while `unit_start` records the list the
+check declared before; merge takes the `setup_level` list where there is one.
+Streams from before this field keep the `unit_start` list.
+
 #### `function_start` / `function_end`
 
 ```json
@@ -498,8 +504,9 @@ error. Exit status: 0 when every unit `passed`, was `skipped`,
   therefore has the same setup and cleanup lines in each of its units. For
   the other attempts, merge keeps the errors only.
 - `name`, `description` and `categories` come from the last `unit_start` of
-  the unit; `functions` lists the declared functions with the verdict and
-  `duration` of the deciding attempt.
+  the unit; `functions` lists the functions scheduled at that level (the
+  `setup_level` list, else the declared ones) with the verdict and `duration`
+  of the deciding attempt.
 - A unit that was selected but never started has `verdict` `not_run`,
   `deciding` null and no attempts.
 

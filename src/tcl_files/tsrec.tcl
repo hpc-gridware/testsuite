@@ -420,19 +420,28 @@ proc tsrec_unit_start {path level} {
 }
 
 ## @brief Record a level phase (setup_level or cleanup_level) of the current unit
+#
+# A setup_level line also carries the check functions as they stand after the
+# level setup. A check may choose its functions per level there (e.g. the qconf
+# check), while unit_start can only record the list the check declared before;
+# without this line every function of another level would count as not run.
 # @param phase setup_level or cleanup_level
 # @param ret the return value of the phase procedure
 # @return nothing
 proc tsrec_level_phase {phase ret} {
-   global tsrec
+   global tsrec check_functions
    if {!$tsrec(enabled)} {
       return
    }
-   tsrec_line "phase" [list check [tsrec_str $tsrec(check)] \
-                                level [tsrec_level $tsrec(level)] \
-                                phase [tsrec_str $phase] \
-                                result [tsrec_str [tsrec_phase_result $ret]] \
-                                return [tsrec_num_or_str $ret]]
+   set pairs [list check [tsrec_str $tsrec(check)] \
+                   level [tsrec_level $tsrec(level)] \
+                   phase [tsrec_str $phase] \
+                   result [tsrec_str [tsrec_phase_result $ret]] \
+                   return [tsrec_num_or_str $ret]]
+   if {$phase == "setup_level" && [info exists check_functions]} {
+      lappend pairs functions [tsrec_str_list $check_functions]
+   }
+   tsrec_line "phase" $pairs
 }
 
 ## @brief Record the start of a check function
