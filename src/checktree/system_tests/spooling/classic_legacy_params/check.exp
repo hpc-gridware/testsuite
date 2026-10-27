@@ -51,6 +51,11 @@ set check_needs           "init_core_system"
 set check_functions ""
 lappend check_functions "classic_legacy_spooling_params_check"
 
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(classic_legacy_spooling_params_check) {{MIG-05 covers}}
+
 ## @brief Assert that classic spooling rejects the legacy two-argument params.
 #
 # Runs spoolinit with a legacy "<common_dir>;<spool_dir>" classic spooling

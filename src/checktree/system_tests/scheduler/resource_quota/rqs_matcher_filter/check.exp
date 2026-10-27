@@ -70,6 +70,14 @@ lappend check_functions "rqs_mf_plain_limits"
 lappend check_functions "rqs_mf_without_rule_both_run"
 lappend check_functions "rqs_mf_refusals"
 
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(rqs_mf_prefixed_limits)       {{HGM-04 covers}}
+set check_test_cases(rqs_mf_plain_limits)          {{HGM-04 covers}}
+set check_test_cases(rqs_mf_without_rule_both_run) {{HGM-04 covers}}
+set check_test_cases(rqs_mf_refusals)              {{HGM-04 covers}}
+
 global rqs_mf_host rqs_mf_rqs_name rqs_mf_queue
 set rqs_mf_host     ""
 set rqs_mf_rqs_name "rqs_matcher_filter_test"

@@ -599,7 +599,7 @@ Pages:
 | `guide.md` | how to read the report: unit, function, case and criterion verdicts, `covers` and `prepares`, the trace notation; every page links to it |
 | `units/<check>-L<level>.md` | one unit: verdict, errors, functions with their test cases, the checks of a module test, trace |
 | `cases/<id>.md` | one catalog case: verdict, the specification text, the functions that execute it with their trace |
-| `milestones/<id>.md` | the criteria of a milestone in a table, then the cases grouped by criterion, then the unmapped cases of the milestone, then apart from them the additional test scenarios of the milestone (source `additional`), which enter no verdict |
+| `milestones/<id>.md` | the criteria of a milestone in a table, then the cases grouped by criterion, then the unmapped cases of the milestone, then apart from them the additional test scenarios of the milestone (source `additional`) that no criterion maps, which enter no verdict; an additional scenario mapped by a criterion of a milestone of our own, such as the preparation M0, is listed with that criterion like any case |
 
 Without a catalog only `index.md` (with a table of the recorded test IDs) and
 the unit pages are written. `<check>` is the check path below its

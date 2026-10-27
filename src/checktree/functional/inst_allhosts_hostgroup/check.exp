@@ -90,6 +90,13 @@ lappend check_functions "setup_check_messages_files"
 lappend check_functions "setup_and_check_users"
 lappend check_functions "setup_sge_aliases_file"
 
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(inst_allhosts_hostgroup_create)          {{MIG-06 covers}}
+set check_test_cases(inst_allhosts_hostgroup_legacy_template) {{MIG-06 covers}}
+set check_test_cases(inst_allhosts_hostgroup_default)         {{MIG-06 covers}}
+
 # -------- local test procedures: initialization------------------------------
 
 ## @brief check whether the test can run

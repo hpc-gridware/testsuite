@@ -1094,7 +1094,9 @@ class Report:
         criteria = ", ".join("[%s](../milestones/%s.md#%s)" % (c, c.split("-")[0], c.lower())
                              for c in case.get("criteria") or []) or "none"
         additional = case.get("source") == "additional"
-        if additional:
+        # an additional scenario decides acceptance only through a criterion of
+        # our own milestone, the preparation (M0)
+        if additional and not case.get("criteria"):
             criteria = "none, an additional test scenario"
         rows = [["Verdict", "**%s**" % CASE_TEXT[verdict]],
                 ["Section", cell("%s (%s)" % (case.get("section", ""), case.get("plan_section", "")))
@@ -1110,8 +1112,10 @@ class Report:
         if additional:
             origin = ("From the additional test scenarios of %s, version %s: verified by the "
                       "testsuite, not part of the agreed test plan and no acceptance "
-                      "criterion." % (source.get("title", "the specification"),
-                                      source.get("version", "?")))
+                      "criterion of it." % (source.get("title", "the specification"),
+                                            source.get("version", "?")))
+            if case.get("criteria"):
+                origin += " A criterion of a milestone outside the agreed plan maps it."
         lines += ["## Specification", "", origin, "",
                   "**Verifies:** %s" % case.get("verifies", ""), ""]
         lines += ["%d. %s" % (n, step) for n, step in enumerate(case.get("steps") or [], 1)] + [""]

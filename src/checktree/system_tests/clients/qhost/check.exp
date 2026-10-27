@@ -69,6 +69,19 @@ lappend check_functions "test_issue132_F"
 lappend check_functions "test_issue245"
 lappend check_functions "qhost_l_with_multiple_attributes"
 
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(qhost_issue1306)                  {{PRC-11 covers}}
+set check_test_cases(test_issue132)                    {{PRC-11 covers}}
+set check_test_cases(test_issue132_h)                  {{PRC-11 covers}}
+set check_test_cases(test_issue132_j)                  {{PRC-11 covers}}
+set check_test_cases(test_issue132_u)                  {{PRC-11 covers}}
+set check_test_cases(test_issue132_l)                  {{PRC-11 covers}}
+set check_test_cases(test_issue132_F)                  {{PRC-11 covers}}
+set check_test_cases(test_issue245)                    {{PRC-11 covers}}
+set check_test_cases(qhost_l_with_multiple_attributes) {{PRC-11 covers}}
+
 # -------- local test procedures: initialization------------------------------
 
 proc qhost_setup {} {

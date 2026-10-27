@@ -325,6 +325,26 @@ class RenderTest(unittest.TestCase):
         self.assertIn("not part of the agreed test plan", pages["cases/X-01.md"])
         self.assertIn("preconditions verified only", pages["cases/A-01.md"])
 
+    def test_additional_scenario_of_own_milestone(self):
+        # a scenario of the preparation is decided by a criterion of M0, our
+        # own milestone, and is listed with that criterion, not apart
+        cat = catalog()
+        cat["milestones"].insert(0, {"id": "M0", "title": "Preparation", "date": "before T0"})
+        cat["test_cases"].append(dict(cat["test_cases"][-1], id="X-02", phase="Preparation",
+                                      milestone="M0", milestone_text="M0", criteria=["M0-AC-01"]))
+        cat["criteria"].insert(0, {"id": "M0-AC-01", "milestone": "M0", "criterion": "prepared",
+                                   "mapping": "test_ids", "test_ids": ["X-02"]})
+        data = merged(unit("passed", [("f1", "passed", [("X-02", "covers")])]))
+        report = render.Report(data, cat, False)
+        pages = report.pages()
+        self.assertEqual(report.criterion_verdict(cat["criteria"][0]), "passed")
+        self.assertLess(pages["index.md"].index("[M0]"), pages["index.md"].index("[M1]"))
+        self.assertNotIn("## Additional test scenarios", pages["milestones/M0.md"])
+        self.assertIn("[X-02](../cases/X-02.md)", pages["milestones/M0.md"])
+        self.assertIn("[M0-AC-01](../milestones/M0.md#m0-ac-01)", pages["cases/X-02.md"])
+        self.assertIn("outside the agreed plan maps it", pages["cases/X-02.md"])
+        self.assertNotIn("none, an additional test scenario", pages["cases/X-02.md"])
+
     def test_external_hides_internal_parts(self):
         data = merged(unit("passed", [("f1", "passed", [("A-01", "covers")])]))
         data["units"][0].update(retried=True, attention=True)

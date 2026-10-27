@@ -141,6 +141,71 @@ lappend check_functions "qconf_delete_admin_user"       ;# deleting manager or o
 
 lappend check_functions "qconf_issue_2960"
 
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(qconf_se)                             {{PRC-05 covers}}
+set check_test_cases(qconf_sel)                            {{PRC-05 covers}}
+set check_test_cases(qconf_scal_check)                     {{PRC-05 covers}}
+set check_test_cases(qconf_scall_check)                    {{PRC-05 covers}}
+set check_test_cases(qconf_sconfl_check)                   {{PRC-05 covers}}
+set check_test_cases(qconf_sds_check)                      {{PRC-05 covers}}
+set check_test_cases(qconf_secl_check)                     {{PRC-05 covers}}
+set check_test_cases(qconf_sep_check)                      {{PRC-05 covers}}
+set check_test_cases(qconf_sm_check)                       {{PRC-05 covers}}
+set check_test_cases(qconf_so_check)                       {{PRC-05 covers}}
+set check_test_cases(qconf_ss_check)                       {{PRC-05 covers}}
+set check_test_cases(qconf_sss_check)                      {{PRC-05 covers}}
+set check_test_cases(qconf_sul_check)                      {{PRC-05 covers}}
+set check_test_cases(qconf_sprjl_check)                    {{PRC-05 covers}}
+set check_test_cases(qconf_backslash_space_output_check)   {{PRC-05 covers}}
+set check_test_cases(qconf_backslash_comma_output_check)   {{PRC-05 covers}}
+set check_test_cases(qconf_shgrp_tree_check)               {{PRC-05 covers}}
+set check_test_cases(qconf_shgrp_resolved_check)           {{PRC-05 covers}}
+set check_test_cases(qconf_auser)                          {{PRC-06 covers}}
+set check_test_cases(qconf_duser)                          {{PRC-06 covers}}
+set check_test_cases(qconf_Auser)                          {{PRC-06 covers}}
+set check_test_cases(qconf_muser)                          {{PRC-06 covers}}
+set check_test_cases(qconf_Muser)                          {{PRC-06 covers}}
+set check_test_cases(qconf_mcal_check)                     {{PRC-06 covers}}
+set check_test_cases(qconf_mcal_event_check)               {{PRC-06 covers}}
+set check_test_cases(qconf_Mcal_batch_check)               {{PRC-06 covers}}
+set check_test_cases(qconf_add_delete_manager)             {{PRC-06 covers}}
+set check_test_cases(qconf_add_show_mod_del_queue)         {{PRC-06 covers}}
+set check_test_cases(qconf_add_show_delete_stnode)         {{PRC-06 covers}}
+set check_test_cases(qconf_create_modify_sharetree)        {{PRC-06 covers}}
+set check_test_cases(qconf_del_sharetree)                  {{PRC-06 covers}}
+set check_test_cases(qconf_add_delete_modify_calendar)     {{PRC-06 covers}}
+set check_test_cases(qconf_add_delete_modify_replace_attr) {{PRC-06 covers}}
+set check_test_cases(qconf_modify_checkpoint)              {{PRC-06 covers}}
+set check_test_cases(qconf_add_project)                    {{PRC-06 covers}}
+set check_test_cases(qconf_modify_exechost)                {{PRC-06 covers}}
+set check_test_cases(qconf_modify_project)                 {{PRC-06 covers}}
+set check_test_cases(qconf_modify_userlist)                {{PRC-06 covers}}
+set check_test_cases(qconf_modify_sched_conf)              {{PRC-06 covers}}
+set check_test_cases(qconf_issue_2023)                     {{PRC-06 covers}}
+set check_test_cases(qconf_brief_exercise)                 {{PRC-06 covers}}
+set check_test_cases(qconf_backslash_default_space_check)  {{PRC-06 covers}}
+set check_test_cases(qconf_backslash_default_comma_check)  {{PRC-06 covers}}
+set check_test_cases(qconf_backslash_custom_space_check)   {{PRC-06 covers}}
+set check_test_cases(qconf_backslash_custom_comma_check)   {{PRC-06 covers}}
+set check_test_cases(qconf_issue1767)                      {{PRC-06 covers}}
+set check_test_cases(qconf_modify_hostgroup)               {{PRC-06 covers}}
+set check_test_cases(qconf_purge_queue)                    {{PRC-06 covers}}
+set check_test_cases(qconf_add_rqs)                        {{PRC-06 covers}}
+set check_test_cases(qconf_modify_rqs)                     {{PRC-06 covers}}
+set check_test_cases(qconf_modifyreplace_rqs)              {{PRC-06 covers}}
+set check_test_cases(qconf_remove_rqs)                     {{PRC-06 covers}}
+set check_test_cases(qconf_dynamic_limit)                  {{PRC-06 covers}}
+set check_test_cases(qconf_rqs_Xattr)                      {{PRC-06 covers}}
+set check_test_cases(qconf_issue_2383)                     {{PRC-06 covers}}
+set check_test_cases(qconf_issue_2445)                     {{PRC-06 covers}}
+set check_test_cases(qconf_segfault)                       {{PRC-07 covers}}
+set check_test_cases(qconf_event_client)                   {{PRC-07 covers}}
+set check_test_cases(qconf_de_check)                       {{PRC-07 covers}}
+set check_test_cases(qconf_rqs_rattr_qmaster_dump)         {{PRC-07 covers}}
+set check_test_cases(qconf_delete_admin_user)              {{PRC-07 covers}}
+
 # ---------------------------------------------------------------------------
 # Level split -- measured, not guessed (2026-08-05)
 #

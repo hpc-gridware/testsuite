@@ -61,6 +61,16 @@ lappend check_functions "qselect_q"
 lappend check_functions "qselect_qs"
 lappend check_functions "qselect_U"
 
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(qselect_plain) {{PRC-02 covers}}
+set check_test_cases(qselect_l)     {{PRC-02 covers}}
+set check_test_cases(qselect_pe)    {{PRC-02 covers}}
+set check_test_cases(qselect_q)     {{PRC-02 covers}}
+set check_test_cases(qselect_qs)    {{PRC-02 covers}}
+set check_test_cases(qselect_U)     {{PRC-02 covers}}
+
 # -------- local test procedures: initialization------------------------------
 
 proc qselect_setup {} {

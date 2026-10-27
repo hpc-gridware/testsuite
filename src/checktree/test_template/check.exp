@@ -64,6 +64,20 @@
 #
 # 7) set check_need_running_system != "yes" if you shutdown the qmaster in the setup(level)
 #    procedures. This will skip the qmaster alive test before starting test procedures.
+#
+# 8) optionally name the test cases of a specification that the check functions
+#    execute in check_test_cases(<function>), a list of {<test ID> <relation>}:
+#       covers    the function verifies the test case
+#       prepares  the function verifies only a precondition of the test case
+#    The test IDs are those of the test-case catalog of the specification
+#    (e.g. pim-rbac/19_Test_Cases.md in gcs-extensions). The test report joins
+#    them with the catalog, so the case and milestone pages show which function
+#    verified which case and with which verdict. A function that names no case
+#    is reported as usual, without a case.
+#    A case whose test is not written yet gets a stub: a function that names the
+#    case and only calls ts_not_implemented "<what is missing>". It passes for the
+#    testsuite and is reported as "not implemented" until the real test replaces it.
+#    See testsuite/doc/reports/format.md.
 
 
 # define global variable in this namespace
@@ -75,6 +89,7 @@ global check_functions
 global check_root_access_needs
 global check_need_running_system
 global check_version_range
+global check_test_cases
 
 #set check_root_access_needs "yes"
 #set check_need_running_system "no"
@@ -99,6 +114,11 @@ set check_cleanup_function __TESTSUITE_TEST_NAME_cleanup
 # define test's procedure order
 set check_functions {}
 lappend check_functions "__TESTSUITE_TEST_NAME_test"
+
+# the test cases of a specification each function performs (covers) or verifies
+# a precondition of (prepares), see 8) above; one entry per function, e.g. a
+# function that verifies ABC-01 and the setup ABC-02 relies on:
+#set check_test_cases(__TESTSUITE_TEST_NAME_test) {{ABC-01 covers} {ABC-02 prepares}}
 
 # -------- local test procedures: initialization------------------------------
 

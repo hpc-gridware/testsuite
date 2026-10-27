@@ -72,6 +72,30 @@ lappend check_functions "qstat_s_hu_plain_xml_comparison" ;# Compare the two qst
 lappend check_functions "qstat_u_valid_plain_xml_comparison" ;# Compare the two qstat -u $CHECK_USER commands
 lappend check_functions "qstat_u_invalid_plain_xml_comparison" ;# Compare the two qstat -u wrong_user commands
 lappend check_functions "qstat_U_valid_plain_xml_comparison" ;# Compare the two qstat -U $CHECK_USER commands
+
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(qstat_profile)                        {{PRC-01 covers}}
+set check_test_cases(check_core_queues)                    {{PRC-01 covers}}
+set check_test_cases(qstat_help)                           {{PRC-01 covers}}
+set check_test_cases(qstat_issue1800)                      {{PRC-01 covers}}
+set check_test_cases(qstat_option_l)                       {{PRC-01 covers}}
+set check_test_cases(qstat_option_q)                       {{PRC-01 covers}}
+set check_test_cases(qstat_option_pe)                      {{PRC-01 covers}}
+set check_test_cases(qstat_option_U)                       {{PRC-01 covers}}
+set check_test_cases(qstat_option_s)                       {{PRC-01 covers}}
+set check_test_cases(qstat_plain_xml_comparison)           {{PRC-01 covers}}
+set check_test_cases(qstat_ne_plain_xml_comparison)        {{PRC-01 covers}}
+set check_test_cases(qstat_s_p_plain_xml_comparison)       {{PRC-01 covers}}
+set check_test_cases(qstat_s_r_plain_xml_comparison)       {{PRC-01 covers}}
+set check_test_cases(qstat_s_s_plain_xml_comparison)       {{PRC-01 covers}}
+set check_test_cases(qstat_s_hs_plain_xml_comparison)      {{PRC-01 covers}}
+set check_test_cases(qstat_s_hu_plain_xml_comparison)      {{PRC-01 covers}}
+set check_test_cases(qstat_u_valid_plain_xml_comparison)   {{PRC-01 covers}}
+set check_test_cases(qstat_u_invalid_plain_xml_comparison) {{PRC-01 covers}}
+set check_test_cases(qstat_U_valid_plain_xml_comparison)   {{PRC-01 covers}}
+
 #lappend check_functions "qstat_urg_plain_xml_comparison"  ;# Compare the two qstat -urg commands
 #lappend check_functions "qstat_pri_plain_xml_comparison"  ;# Compare the two qstat -pri commands
 #lappend check_functions "qstat_explain_plain_xml_comparison"  ;# Compare the two qstat -explain E commands

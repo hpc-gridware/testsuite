@@ -62,6 +62,15 @@ lappend check_functions "qquota_help"                   ;# print this help
 lappend check_functions "qquota_option_l"
 lappend check_functions "qquota_option_u"
 lappend check_functions "qquota_memory_limit"   ;# CS-2348
+
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(qquota_help)         {{PRC-03 covers}}
+set check_test_cases(qquota_option_l)     {{PRC-03 covers}}
+set check_test_cases(qquota_option_u)     {{PRC-03 covers}}
+set check_test_cases(qquota_memory_limit) {{PRC-03 covers}}
+
 #lappend check_functions "qquota_option_pe"
 #lappend check_functions "qquota_option_P"
 #lappend check_functions "qquota_option_q"
