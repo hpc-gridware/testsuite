@@ -96,7 +96,8 @@ def catalog():
     return {"format": "ts-report/catalog/1", "source": {"title": "Spec", "version": "1.0"},
             "milestones": [{"id": "M1", "title": "First", "date": "T0"}],
             "test_cases": [case("A-01", criteria=["M1-AC-01"]), case("A-02", criteria=["M1-AC-01"]),
-                           case("S-01", owner="site"), case("U-01")],
+                           case("S-01", owner="site"), case("U-01"),
+                           dict(case("X-01"), source="additional")],
             "criteria": [{"id": "M1-AC-01", "milestone": "M1", "criterion": "both pass",
                           "mapping": "test_ids", "test_ids": ["A-01", "A-02"]},
                          {"id": "M1-AC-02", "milestone": "M1", "criterion": "described",
@@ -105,7 +106,7 @@ def catalog():
                           "mapping": "run"},
                          {"id": "M1-AC-04", "milestone": "M1", "criterion": "by hand",
                           "mapping": "manual"}],
-            "unmapped": ["S-01", "U-01"]}
+            "unmapped": ["S-01", "U-01", "X-01"]}
 
 
 ## @brief Tests of the render step
@@ -311,6 +312,19 @@ class RenderTest(unittest.TestCase):
         self.assertNotIn("Attempts", external)
         self.assertNotIn("Attention", external)
 
+    def test_additional_scenarios_stay_apart(self):
+        data = merged(unit("passed", [("f1", "passed", [("X-01", "covers"), ("A-01", "prepares")])]))
+        pages = self.report(data).pages()
+        milestone = pages["milestones/M1.md"]
+        verified, additional = (milestone.index("## Verified, not acceptance-relevant"),
+                                milestone.index("## Additional test scenarios"))
+        self.assertLess(verified, additional)
+        self.assertNotIn("X-01", milestone[verified:additional])
+        self.assertIn("[X-01](../cases/X-01.md)", milestone[additional:])
+        self.assertIn("none, an additional test scenario", pages["cases/X-01.md"])
+        self.assertIn("not part of the agreed test plan", pages["cases/X-01.md"])
+        self.assertIn("preconditions verified only", pages["cases/A-01.md"])
+
     def test_external_hides_internal_parts(self):
         data = merged(unit("passed", [("f1", "passed", [("A-01", "covers")])]))
         data["units"][0].update(retried=True, attention=True)
@@ -350,7 +364,7 @@ class RenderTest(unittest.TestCase):
         data = merged(unit("passed", [("f1", "passed", [("A-01", "covers")])]))
         pages = self.report(data).pages()
         self.assertEqual(sorted(pages), ["cases/A-01.md", "cases/A-02.md", "cases/S-01.md",
-                                         "cases/U-01.md", "guide.md", "index.md",
+                                         "cases/U-01.md", "cases/X-01.md", "guide.md", "index.md",
                                          "milestones/M1.md", "units/functional.sharetree-L0.md"])
         self.assertIn("[How to read this report](guide.md)", pages["index.md"])
         self.assertIn("[How to read this report](../guide.md)", pages["cases/A-01.md"])

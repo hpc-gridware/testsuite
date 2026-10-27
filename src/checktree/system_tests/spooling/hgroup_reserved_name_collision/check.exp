@@ -54,6 +54,11 @@ set check_cleanup_function "hgroup_reserved_name_collision_cleanup"
 set check_functions ""
 lappend check_functions "hgroup_reserved_name_collision_check"
 
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(hgroup_reserved_name_collision_check) {{MIG-02 covers}}
+
 ## @brief Hand back a clean cluster after level 1 has loaded a foreign backup.
 #
 # Level 1 has to LOAD its backup - proving that look-alike names upgrade normally

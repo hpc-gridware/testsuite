@@ -1061,6 +1061,9 @@ class Report:
         lines = self.page_head("%s — %s" % (case["id"], case.get("title", "")))
         criteria = ", ".join("[%s](../milestones/%s.md#%s)" % (c, c.split("-")[0], c.lower())
                              for c in case.get("criteria") or []) or "none"
+        additional = case.get("source") == "additional"
+        if additional:
+            criteria = "none, an additional test scenario"
         rows = [["Verdict", "**%s**" % CASE_TEXT[verdict]],
                 ["Section", cell("%s (%s)" % (case.get("section", ""), case.get("plan_section", "")))
                  if case.get("plan_section") else cell(case.get("section"))],
@@ -1070,9 +1073,14 @@ class Report:
                 ["Acceptance criteria", criteria]]
         lines += table(["", ""], rows) + [""]
         source = self.catalog.get("source") or {}
-        lines += ["## Specification", "",
-                  "From %s, version %s." % (source.get("title", "the specification"),
-                                            source.get("version", "?")), "",
+        origin = "From %s, version %s." % (source.get("title", "the specification"),
+                                           source.get("version", "?"))
+        if additional:
+            origin = ("From the additional test scenarios of %s, version %s: verified by the "
+                      "testsuite, not part of the agreed test plan and no acceptance "
+                      "criterion." % (source.get("title", "the specification"),
+                                      source.get("version", "?")))
+        lines += ["## Specification", "", origin, "",
                   "**Verifies:** %s" % case.get("verifies", ""), ""]
         lines += ["%d. %s" % (n, step) for n, step in enumerate(case.get("steps") or [], 1)] + [""]
         lines += ["**Pass:** %s" % case.get("pass", ""), ""]
@@ -1157,11 +1165,21 @@ class Report:
                                self.case_rows(criterion["test_ids"])) + [""]
         unmapped = [i for i in self.catalog.get("unmapped", [])
                     if self.cases.get(i, {}).get("milestone") == mid]
+        # our own scenarios are listed apart: they are no part of the agreed plan
+        additional = [i for i in unmapped if self.cases[i].get("source") == "additional"]
+        unmapped = [i for i in unmapped if i not in additional]
         if unmapped:
             lines += ["## Verified, not acceptance-relevant", "",
                       "Test cases of this milestone that no acceptance criterion maps.", ""]
             lines += table(["Test case", "Title", "Verdict", "Functions"],
                            self.case_rows(unmapped)) + [""]
+        if additional:
+            lines += ["## Additional test scenarios", "",
+                      "Scenarios the testsuite verifies beyond the agreed test plan: the objects "
+                      "and mechanisms the acceptance test cases rely on. They are no acceptance "
+                      "criteria and do not enter the verdicts above.", ""]
+            lines += table(["Test case", "Title", "Verdict", "Functions"],
+                           self.case_rows(additional)) + [""]
         return "\n".join(lines)
 
     ## @brief The guide: how to read the pages, verdicts and traces

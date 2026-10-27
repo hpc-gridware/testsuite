@@ -46,6 +46,11 @@ set check_cleanup_function  "manop_userset_perm_cleanup"
 set check_functions ""
 lappend check_functions "manop_userset_perm_test"
 
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(manop_userset_perm_test) {{RSV-02 covers} {ADM-04 prepares} {ADM-05 prepares}}
+
 ## @brief Make the first foreign user an operator (but NOT a manager).
 proc manop_userset_perm_setup {} {
    global CHECK_FIRST_FOREIGN_SYSTEM_USER manop_perm_operator manop_perm_victim

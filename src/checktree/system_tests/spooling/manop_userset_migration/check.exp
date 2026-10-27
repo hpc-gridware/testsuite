@@ -93,6 +93,11 @@ set check_cleanup_function "manop_userset_migration_cleanup"
 set check_functions ""
 lappend check_functions "manop_userset_migration_check"
 
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(manop_userset_migration_check) {{MIG-03 covers}}
+
 ## @brief true if $path exists on $host (as $user).
 proc manop_remote_exists {host user path} {
    start_remote_prog $host $user "test" "-e $path" prg_exit_state

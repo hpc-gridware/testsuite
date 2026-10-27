@@ -80,6 +80,11 @@ set check_cleanup_function  "hgroup_reserved_migration_cleanup"
 set check_functions ""
 lappend check_functions "hgroup_reserved_migration_check"
 
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(hgroup_reserved_migration_check) {{MIG-01 covers}}
+
 # The pre-9.2 fixture to upgrade from. 9.1.0 is the newest stored backup that
 # still carries flat admin_hosts/submit_hosts files.
 global hgroup_migration_from_version
