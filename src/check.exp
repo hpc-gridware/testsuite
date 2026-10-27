@@ -9313,6 +9313,11 @@ if {[info exists do_one_test_list]} {
    set report_units {}
    foreach entry $do_one_test_list {
       lassign $entry report_path report_level report_kind
+      # a directory without a check.exp selects the checks below it, which
+      # record themselves when run_test starts them; it is no unit of its own
+      if {[file isdirectory $report_path] && ![file isfile [file join $report_path check.exp]]} {
+         continue
+      }
       if {$report_kind == "level"} {
          lappend report_units [list $report_path $report_level]
       }
