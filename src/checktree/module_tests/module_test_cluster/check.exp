@@ -112,6 +112,15 @@ lappend cluster_module_tests {test_spool_flatfile_read_error "9.2.0"}
 # needed here.
 lappend cluster_module_tests {test_qmaster_procedure_mod "9.2.0"}
 
+# The binaries built on the shared module test frame (clusterscheduler
+# test/common/ocs_module_test.h), as in module_test_generic. When the testsuite
+# records a run, they get the report options and their records become a stream
+# of their own, so each scenario and CHECK shows up in the test report and a
+# scenario can name the catalog case it covers. The others get no extra
+# arguments.
+global cluster_module_tests_with_report
+set cluster_module_tests_with_report {test_qmaster_hgroup_cache}
+
 set check_description(0) "test_sgeobj_eval_expression (needs SGE_ROOT)"
 set check_description(1) "test_spool_flatfile (needs SGE_ROOT)"
 set check_description(2) "test_qmaster_hgroup_reserved (needs a running qmaster)"
@@ -127,7 +136,7 @@ lappend check_functions "cluster_module_tests_run"
 # @return none; reports failures through ts_log_severe
 proc cluster_module_tests_run {} {
    global ts_config CHECK_USER CHECK_ACT_LEVEL
-   global cluster_module_tests
+   global cluster_module_tests cluster_module_tests_with_report
 
    set index $CHECK_ACT_LEVEL
    if {$index >= [llength $cluster_module_tests]} {
@@ -167,7 +176,12 @@ proc cluster_module_tests_run {} {
    ts_log_fine "$module_test on $host, arch [resolve_arch $host]"
 
    set time_in_sec 600
-   set output [start_test_bin $module_test "" $host $CHECK_USER ret $time_in_sec]
+   set test_args ""
+   if {[lsearch -exact $cluster_module_tests_with_report $module_test] >= 0} {
+      set test_args [tsrec_module_test_args]
+   }
+   set output [start_test_bin $module_test $test_args $host $CHECK_USER ret $time_in_sec]
+   set output [tsrec_module_test_output $output]
 
    # a cluster module test that reports "no cluster" must not pass silently
    if {$ret == 99} {
