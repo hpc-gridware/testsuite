@@ -120,6 +120,7 @@ lappend generic_module_tests {test_sched_load_formula "" 0 ""}
 lappend generic_module_tests {test_procedure_qquota_json "9.2.0" 0 ""}
 lappend generic_module_tests {test_procedure_qquota_plain "9.2.0" 0 ""}
 lappend generic_module_tests {test_procedure_qrstat_json "9.2.0" 0 ""}
+lappend generic_module_tests {test_procedure_qconf_missing_argument "9.2.0" 0 ""}
 lappend generic_module_tests {test_procedure_qstat_summary "9.2.0" 0 ""}
 lappend generic_module_tests {test_uti_bitfield "" 0 ""}
 lappend generic_module_tests {test_uti_deadlock "" 0 ""}
