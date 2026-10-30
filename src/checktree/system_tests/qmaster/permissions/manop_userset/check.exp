@@ -22,9 +22,10 @@
 # "operator" access lists (usersets). The access list interface (-au/-du/-mu/-Mu/-Au)
 # operates on them like any other access list, but changing them must require
 # MANAGER rights - the same requirement the (retired) -am/-dm/-ao/-do path always
-# enforced. Modifying an ordinary access list only requires OPERATOR rights, so
-# without a dedicated guard an operator could promote users to manager via
-# "qconf -au user manager". This check verifies that guard.
+# enforced. Up to 9.1 modifying an ordinary access list only requires OPERATOR
+# rights, so without a dedicated guard an operator could promote users to manager
+# via "qconf -au user manager". This check verifies that guard. From 9.2 on every
+# access list requires MANAGER rights (CS-2973), and the check holds as it is.
 #
 # There was no equivalent test for the old manager/operator lists, which is why the
 # gap was possible in the first place.

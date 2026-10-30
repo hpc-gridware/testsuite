@@ -4932,7 +4932,7 @@ proc qconf_modify_rqs {} {
    lappend rules "to slots=10"
    set new_rqs_charray($rqs_name_fast,limit) "$rules"
    set ret [mod_rqs new_rqs_charray "$rqs_name_fast" 1 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER 0]
-   if {$ret != -210 && $ret != -212} {
+   if {$ret != -210 && $ret != -212 && $ret != -214} {
       ts_log_severe "qconf -Mrqs should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
    set non_cluster_host [host_conf_get_non_cluster_host]
@@ -5016,7 +5016,7 @@ proc qconf_modifyreplace_rqs {} {
    # - as non admin user
    # - from non admin host
    set ret [mod_rqs old_rqs_config "" 1 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER 0]
-   if {$ret != -210 && $ret != -212} {
+   if {$ret != -210 && $ret != -212 && $ret != -214} {
       ts_log_severe "qconf -Mrqs should have failed for user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
    }
    set non_cluster_host [host_conf_get_non_cluster_host]
