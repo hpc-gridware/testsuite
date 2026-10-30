@@ -3040,6 +3040,10 @@ proc qconf_del_sharetree {} {
    # now there may be no sharetree, make sure the correct error message is
    # returned by qconf -sstree
    set msg [translate_macro MSG_OBJ_NOSTREEELEM]
+   # since 9.2 every error is printed with the "error: " prefix (CS-2971)
+   if {[is_version_in_range "9.2.0"]} {
+      set msg "[translate_macro MSG_LOG_ERROR]$msg"
+   }
    set output [string trim [start_sge_bin "qconf" "-sstree"]]
    if {![string match $msg $output]} {
       ts_log_severe "qconf -sstree should have output\n$msg\nbut got\n$output"
@@ -5419,6 +5423,10 @@ proc qconf_delete_admin_user {} {
 
       set user [lindex $command 1]
       set msg [translate_macro MSG_SGETEXT_MAY_NOT_REMOVE_USER_FROM_LIST_SS $user "*"]
+      # since 9.2 every error is printed with the "error: " prefix (CS-2971)
+      if {[is_version_in_range "9.2.0"]} {
+         set msg "[translate_macro MSG_LOG_ERROR]$msg"
+      }
 
       # start the command
       set output [string trim [start_sge_bin "qconf" $command]]

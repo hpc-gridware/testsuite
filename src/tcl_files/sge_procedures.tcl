@@ -5218,12 +5218,10 @@ proc replace_attr_file_error {result object attribute tmpfile target raise_error
 
    # recognize certain error messages and return special return code
    #
-   # No "error: " prefix on purpose: the message travels back in an answer list,
-   # and the two writers print such a list differently - the client's
-   # answer_list_output() logs it as "error: <text>", the stored write procedure
-   # of CS-2822/CS-2823 prints the text as qmaster sent it. Matching the text
-   # alone recognises both, which is what a testsuite shared between the 9.1 and
-   # 9.2 lines needs.
+   # No "error: " prefix in the pattern: the text alone identifies the message.
+   # The writers printed it differently - 9.1 and the 9.0 line with the prefix,
+   # the stored write procedure of 9.2 without it until CS-2971 - so the text is
+   # what a testsuite shared between the lines can rely on.
    set messages(index) -1
    set messages(-1) [translate_macro MSG_UNKNOWNATTRIBUTENAME_S $attribute]
 
@@ -10010,13 +10008,10 @@ proc sge_client_messages {msg_var action obj_type obj_name {on_host ""} {as_user
          set NO_ULONG [translate_macro MSG_OBJECT_VALUENOTULONG_S "*"]
          add_message_to_container messages -4 $NO_ULONG
 
-         # No "error: " prefix on purpose: the message travels back in an answer
-         # list, and the two writers print such a list differently - the client's
-         # answer_list_output() logs it as "error: <text>", the stored write
-         # procedure of CS-2822/CS-2823 prints the text as qmaster sent it, and
-         # since CS-2823 the editor of every converted object parses in qmaster.
-         # Matching the text alone recognises both, which is what a testsuite
-         # shared between the 9.1 and 9.2 lines needs.
+         # No "error: " prefix in the pattern: the text alone identifies the message.
+         # The writers printed it differently - 9.1 and the 9.0 line with the prefix,
+         # the stored write procedure of 9.2 without it until CS-2971 - so the text is
+         # what a testsuite shared between the lines can rely on.
          set NO_ATTR [translate_macro MSG_UNKNOWNATTRIBUTENAME_S \"*\" ]
          add_message_to_container messages -5 $NO_ATTR
 
