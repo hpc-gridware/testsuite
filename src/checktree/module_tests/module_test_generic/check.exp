@@ -147,6 +147,10 @@ lappend generic_module_tests {test_cull_no_transfer "9.2.0" 0 ""}
 lappend generic_module_tests {test_sched_request_amount "9.1.6" 0 ""}
 lappend generic_module_tests {test_sgeobj_request_parse "9.1.6" 0 ""}
 lappend generic_module_tests {test_sgeobj_Matcher "9.2.0" 1 ""}
+lappend generic_module_tests {test_cull_sort "9.2.0" 0 ""}
+lappend generic_module_tests {test_cull_access "9.2.0" 0 ""}
+lappend generic_module_tests {test_cull_lookup "9.2.0" 0 ""}
+lappend generic_module_tests {test_cull_db "9.2.0" 0 ""}
 
 # The binaries built on the shared module test frame (clusterscheduler
 # test/common/ocs_module_test.h). When the testsuite records a run, they get
@@ -213,6 +217,10 @@ set check_description(52) "test_cull_no_transfer"
 set check_description(53) "test_sched_request_amount"
 set check_description(54) "test_sgeobj_request_parse"
 set check_description(55) "test_sgeobj_Matcher"
+set check_description(56) "test_cull_sort"
+set check_description(57) "test_cull_access"
+set check_description(58) "test_cull_lookup"
+set check_description(59) "test_cull_db"
 
 set check_functions {}
 lappend check_functions "generic_module_tests_run"
