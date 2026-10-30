@@ -1200,60 +1200,37 @@ proc ts_private_log_do_logging {level message raise_error function} {
    flush $ts_log_logfile
 }
 
-#****** logging/ts_private_log_send_mail() *************************************
-#  NAME
-#     ts_private_log_send_mail() -- send a message by mail
+## @brief Send a logging message by mail
 #
-#  SYNOPSIS
-#     ts_private_log_send_mail {level message raise_error function}
+# Receiver and CC are taken from the testsuite configuration. The mail adds
+# the runlevel, check name and preparation procedure, the product version, a
+# stack trace up to the caller of the logging function, and the testsuite
+# configuration.
 #
-#  FUNCTION
-#     Sends a message by mail.
-#     Receiver / CC is taken from the testsuite configuration.
-#     The mail contains additional information like
-#     - runlevel, check_name, check_function
-#     - a stack trace up to the caller of the logging function
-#     - the testsuite configuration
+# Nothing is mailed, and nothing is composed, when mails are switched off
+# (disable_mail, jenkins_mode, hudson_reports) or before check.exp has read the
+# configuration, see ts_log_mail_ready: until then the mail path cannot work - the configuration
+# accessors may not be sourced yet, and the temporary directory the remote
+# calls of get_version_info() need resolves to "/" (CS-2953). The message is
+# still printed and logged by ts_private_do_log().
 #
-#  INPUTS
-#     level       - logging level
-#     message     - message to output
-#     raise_error - raise an error condition?
-#     function    - name of the function having called logging
-#
-#  EXAMPLE
-#     ts_log_severe "multi line message\nsecond line\nthird line\nlast line"
-#     generates the following mail content:
-#
-#     Date            : Mon Jan 14 11:59:44 MET 2008
-#     check_name      : enhanced_setup
-#     category        : SEVERE
-#     runlevel        : short (level: 0)
-#     check host      : oin
-#     product version : system not running
-#     --------------------------------------------------------------------------------
-#     multi line message
-#     second line
-#     third line
-#     last line
-#     --------------------------------------------------------------------------------
-#
-#
-#     Stack Trace:
-#     ============
-#      0: toplevel
-#      1: ts_log_test
-#
-#
-#     Testsuite configuration (ts_config):
-#     ====================================
-#     Testsuite configuration setup:                                               "1.14"
-#     ...
-#*******************************************************************************
+# @param level       logging level
+# @param message     message to send
+# @param raise_error whether the message raises an error condition
+# @param function    name of the function that called the logging
+# @return none
 global ts_private_do_log_recursive
 set ts_private_do_log_recursive 0
+# CS-2953: set by check.exp once setup2 has read the configuration; kept when
+# this file is sourced again after that
+global ts_log_mail_ready
+if {![info exists ts_log_mail_ready]} {
+   set ts_log_mail_ready 0
+}
 proc ts_private_log_send_mail {level message raise_error function} {
    global ts_log_config
+   global ts_log_mail_ready
+   global DISABLE_MAIL CHECK_USE_HUDSON
    global CHECK_CUR_PROC_NAME check_name
    global CHECK_ACT_LEVEL
    global CHECK_SEND_ERROR_MAILS
@@ -1264,6 +1241,13 @@ proc ts_private_log_send_mail {level message raise_error function} {
 
    # shall we send mail at all, and for this level?
    if {!$CHECK_SEND_ERROR_MAILS || $level > $ts_log_config(mail)} {
+      return
+   }
+
+   # not before the configuration is read, see the head of this procedure, and
+   # not when mails are switched off: mail_report() would drop the mail, but
+   # composing it already reaches out to the cluster (CS-2953)
+   if {!$ts_log_mail_ready || $DISABLE_MAIL == 1 || $CHECK_USE_HUDSON == 1} {
       return
    }
 

@@ -9287,6 +9287,10 @@ if {$do_bootstrap} {
 
 setup2
 
+# CS-2953: the configuration is read, logging may mail from here on
+global ts_log_mail_ready
+set ts_log_mail_ready 1
+
 # set the DISPLAY environment variable
 if {$CHECK_SET_USER_ENV_DISPLAY == 1} {
    user_config_set_env "DISPLAY" "CHECK_DISPLAY_OUTPUT"
