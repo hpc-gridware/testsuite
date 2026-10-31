@@ -432,6 +432,10 @@ proc qacct_issue2189 {} {
             if {[lsearch $non_exist_queues $qname] == -1} {
                set queue_info [start_sge_bin qconf "-sq $qname"]
                set msg_if_not_exist [translate_macro MSG_CQUEUE_NOQMATCHING_S "$qname"]
+               # since 9.2 every error is printed with the "error: " prefix (CS-2971)
+               if {[is_version_in_range "9.2.0"]} {
+                  set msg_if_not_exist "[translate_macro MSG_LOG_ERROR]$msg_if_not_exist"
+               }
                if { [string match "$msg_if_not_exist" [string trim "$queue_info"]] == 1 } {
                   # queue doesn't exists, count it and add it to the list of non-existing queues
                   incr ignored_jobs 1

@@ -82,9 +82,16 @@ proc issue_1359_run {} {
 
    del_sharetree
 
+   # what -Astree/-Mstree print: since 9.2 every error carries the "error: "
+   # prefix (CS-2971); the editor switches above only look for the text
+   set INVALID_OUT $INVALID
+   if {[is_version_in_range "9.2.0"]} {
+      set INVALID_OUT "[translate_macro MSG_LOG_ERROR]$INVALID"
+   }
+
    ts_log_fine "Creating dangling child reference in sharetree with -Astree"
    set result [start_sge_bin "qconf" "-Astree $tmp_file" $ts_config(master_host)]
-   if {[string compare [string trim $result] $INVALID] != 0} {
+   if {[string compare [string trim $result] $INVALID_OUT] != 0} {
       ts_log_severe "qconf allowed dangling child reference in sharetree: $result"
    }
 
@@ -92,7 +99,7 @@ proc issue_1359_run {} {
 
    ts_log_fine "Creating dangling child reference in sharetree with -Mstree"
    set result [start_sge_bin "qconf" "-Mstree $tmp_file" $ts_config(master_host)]
-   if {[string compare [string trim $result] $INVALID] != 0} {
+   if {[string compare [string trim $result] $INVALID_OUT] != 0} {
       ts_log_severe "qconf allowed dangling child reference in sharetree: $result"
    }
 }

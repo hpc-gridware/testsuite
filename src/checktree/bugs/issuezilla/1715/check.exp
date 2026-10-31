@@ -66,6 +66,10 @@ proc issue_1715_run {} {
    ts_log_fine $INVALIDHOST
    set output [string trim $output]
    set INVALIDHOST [string trim $INVALIDHOST]
+   # since 9.2 every error is printed with the "error: " prefix (CS-2971)
+   if {[is_version_in_range "9.2.0"]} {
+      set INVALIDHOST "[translate_macro MSG_LOG_ERROR]$INVALIDHOST"
+   }
    ts_log_fine "$output compared to $INVALIDHOST"
    
    if {[string match $output $INVALIDHOST] == 0} {
