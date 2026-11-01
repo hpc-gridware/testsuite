@@ -4590,6 +4590,43 @@ proc unlock_testsuite {} {
     ts_log_fine "testsuite unlocked!"
 }
 
+## @brief Check that the cluster is ready to run a check
+#
+# Pings sge_qmaster, waits for the scheduler event client and waits until every
+# queue reports load, i.e. until every sge_execd is connected. Runs before the
+# setup function of a check and before each of its runlevels: a check, setup
+# function or runlevel that restarts sge_qmaster leaves the execds disconnected
+# for up to a minute, and whatever runs next would find them gone.
+#
+# @param master_alive_var name of a variable in the caller that is set to 1 if
+#        sge_qmaster answered the ping, otherwise to 0
+# @return empty string if the cluster is ready, otherwise the error text
+proc check_cluster_ready {master_alive_var} {
+   get_current_cluster_config_array ts_config
+   upvar $master_alive_var master_alive
+
+   set error_text ""
+   set master_alive 0
+   if {[ping_daemon $ts_config(master_host) $ts_config(commd_port) "qmaster" 1] != 0} {
+      append error_text "qmaster on host \"$ts_config(master_host)\" on port\
+                         $ts_config(commd_port) is not alive!\n"
+      return $error_text
+   }
+   set master_alive 1
+
+   ts_log_fine "checking connected scheduler event client ..."
+   if {[wait_for_connected_scheduler 90 0] != 0} {
+      append error_text "Timeout waiting for scheduler event client status information!\n"
+      return $error_text
+   }
+
+   ts_log_fine "check execd load values of queues ..."
+   if {[wait_for_load_from_all_queues 60] == -1} {
+      append error_text "Not all queues report a load value!\n"
+   }
+
+   return $error_text
+}
 
 ## @brief Run one level of a check: level setup, the check functions, level cleanup
 #
@@ -4672,26 +4709,8 @@ proc run_test_level {path state_to_run level {do_save 1} {warnings 0}} {
 
       # CS-2936: a cluster that is not ready is infrastructure, not a test failure
       set runlevel_error_cluster 1
-      # If master not available skip scheduler tests ...
-      set master_ping_result [ping_daemon $ts_config(master_host) $ts_config(commd_port) "qmaster" 1]
-      if {$master_ping_result != 0} {
-         # qmaster not alive
-         append runlevel_error_text "qmaster on host \"$ts_config(master_host)\" on port $ts_config(commd_port) is not alive!\n"
-      } else {
-         if {$runlevel_error_text == ""} {
-            ts_log_fine "checking connected scheduler event client ..."
-            if {[wait_for_connected_scheduler 90 0] != 0} {
-               append runlevel_error_text "Timeout waiting for scheduler event client status information!\n"
-            }
-         }
-
-         if {$runlevel_error_text == ""} {
-            ts_log_fine "check execd load values of queues ..."
-            if {[wait_for_load_from_all_queues 60] == -1} {
-               append runlevel_error_text "Not all queues report a load value!\n"
-            }
-         }
-
+      append runlevel_error_text [check_cluster_ready master_alive]
+      if {$master_alive} {
          set do_run_hook 1
          if {$runlevel_error_text == ""} {
             set runlevel_error_cluster 0
@@ -5299,9 +5318,23 @@ proc run_test {path state_to_run {run_single_test "all"} { send_mail_report 1 } 
       }
    }
 
-   # start a setup function for this check - should it exist
+   # the setup function needs connected execds just as the runlevels do,
+   # e.g. to propagate a configuration change after the previous check
+   # restarted sge_qmaster
    set CHECK_ACT_LEVEL 0
-   set setup_ret [execute_test_preparation_procedure $check_setup_function "setup" nr_warnings]
+   set setup_error_text ""
+   if {$check_name != "init_core_system" && $check_needs != "" &&
+       $check_need_running_system == "yes"} {
+      set setup_error_text [check_cluster_ready master_alive]
+   }
+   if {$setup_error_text != ""} {
+      tsrec_set_origin "connection"
+      ts_log_severe "check \"$check_name\" cannot run its setup function:\n$setup_error_text"
+      set setup_ret 0
+   } else {
+      # start a setup function for this check - should it exist
+      set setup_ret [execute_test_preparation_procedure $check_setup_function "setup" nr_warnings]
+   }
    tsrec_check_phase $path $report_levels "setup" $setup_ret
    if {$setup_ret == 0} {
       set immediate_return -1
