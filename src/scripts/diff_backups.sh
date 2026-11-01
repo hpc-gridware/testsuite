@@ -36,15 +36,27 @@ ret=0
 # stands for, so a real membership change is still a difference while a reshuffle
 # is not (CS-2598).
 #
-# Only 'hostlist' is normalised. Other attributes that read like sets are left
-# alone on purpose: widening this would start hiding differences nobody has
-# looked at yet.
+# The pe_list of a queue is a set as well: which parallel environments a queue
+# offers does not depend on their order, and the order in a backup depends on
+# how the list was last modified. Only a pe_list without host specific values
+# is sorted - its line has no '['. Sorting the words of a line with overrides
+# would tear the [host=...] groups apart.
+#
+# starter_method takes NONE in any case, a configuration written as "none" and
+# one written as "NONE" are the same, so its value is compared in lower case.
+#
+# Other attributes that read like sets are left alone on purpose: widening this
+# would start hiding differences nobody has looked at yet.
 #
 # Plain POSIX awk, no asort() - that is a gawk extension and these scripts run on
 # every test host.
 normalize_lists() {
    awk '
-      $1 == "hostlist" && NF > 2 {
+      $1 == "starter_method" && NF > 1 {
+         print $1 " " tolower(substr($0, index($0, $2)))
+         next
+      }
+      ($1 == "hostlist" || ($1 == "pe_list" && index($0, "[") == 0)) && NF > 2 {
          n = NF - 1
          for (i = 1; i <= n; i++) {
             a[i] = $(i + 1)
