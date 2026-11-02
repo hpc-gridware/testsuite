@@ -279,3 +279,47 @@ proc perf_generate_reports {{output_formats {"txt" "pdf"}} {ignore_functions {"s
       set output [start_remote_prog $pprof_host $pprof_user $pprof_path $pprof_args prg_exit_state 60]
    }
 }
+
+## @brief Sum the thread profiling summaries of the qmaster messages file.
+#
+# The qmaster threads switched on with the qmaster_params PROF_SIGNAL,
+# PROF_SCHEDULER, PROF_LISTENER, PROF_WORKER, PROF_DELIVER (event master) and
+# PROF_TEVENT (timer) write a summary about once a minute, one line per
+# profiling level, e.g.
+#
+#   ...|worker|...|PROF(6): gdi            : wc =  1.230s, utime =  0.180s, stime =  0.070s, utilization =   2%
+#
+# Each summary covers the time since the previous one, so the summaries written
+# during a phase add up to what the threads did in it, give or take the minute
+# before the first one. The reader and mirror threads have no switch and never
+# write a summary.
+#
+# @param text lines of the messages file, as read from it; lines without a
+#             summary are ignored
+#
+# @return a dict: thread name -> profiling level -> dict with wc, utime and
+#         stime in seconds, summed over all summaries of all threads of that
+#         name; the level "total" is the sum of the others
+proc perf_parse_prof_summary {text} {
+   set result [dict create]
+   foreach line [split $text "\n"] {
+      set fields [split $line "|"]
+      if {[llength $fields] < 6} {
+         continue
+      }
+      set thread [string trim [lindex $fields 1]]
+      set message [join [lrange $fields 5 end] "|"]
+      if {![regexp {PROF\([0-9]+\):\s*(\S+)\s*:\s*wc\s*=\s*([0-9.]+)s,\s*utime\s*=\s*([0-9.]+)s,\s*stime\s*=\s*([0-9.]+)s} \
+               $message match level wc utime stime]} {
+         continue
+      }
+      foreach {key value} [list wc $wc utime $utime stime $stime] {
+         set old 0.0
+         if {[dict exists $result $thread $level $key]} {
+            set old [dict get $result $thread $level $key]
+         }
+         dict set result $thread $level $key [expr {$old + $value}]
+      }
+   }
+   return $result
+}
