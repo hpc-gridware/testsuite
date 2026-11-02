@@ -353,6 +353,10 @@ proc auto_add_hosts_remove_host {} {
 # A host which was added automatically is a full execution host, so a job which requests it runs
 # there. The queue instance has to leave the unknown state first: before the first load report of
 # the new execution daemon arrives, the scheduler does not dispatch a job to it.
+#
+# qrsh returns as soon as the command has finished, before the qmaster has processed the end of
+# the job. The job has to be gone before the host is removed: a queue instance with a slot in use
+# is only marked orphaned when the host leaves the host group, and then still references the host.
 proc auto_add_hosts_run_job {} {
    global auto_add_hosts_host auto_add_hosts_queue
 
@@ -371,6 +375,8 @@ proc auto_add_hosts_run_job {} {
       ts_log_fine "a job ran on the automatically added host, qrsh reported\
                    \"[string trim $output]\""
    }
+
+   wait_for_end_of_all_jobs 60
 }
 
 ## @brief verify that a host which added itself is configured as expected
