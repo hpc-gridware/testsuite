@@ -59,6 +59,11 @@ set check_functions ""
 lappend check_functions "scheduler_config_check"
 lappend check_functions "test_sched_conf_attributes"
 
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(test_sched_conf_attributes) {{CLN-02 covers}}
+
 # -------- local test procedures -----------------------------------------------
 global queue_name 
 

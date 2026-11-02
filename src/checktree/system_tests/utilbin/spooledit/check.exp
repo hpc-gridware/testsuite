@@ -61,6 +61,12 @@ set check_functions {}
 lappend check_functions "spooledit_list"
 lappend check_functions "spooledit_dump"
 
+# the test cases of the RBAC specification each function performs (covers)
+# or verifies a precondition of (prepares), see doc/reports/format.md
+global check_test_cases
+set check_test_cases(spooledit_list) {{CLN-01 covers}}
+set check_test_cases(spooledit_dump) {{CLN-01 covers}}
+
 # -------- local test procedures: initialization------------------------------
 #
 # Currently we don't need setup/cleanup
