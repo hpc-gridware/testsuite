@@ -6781,6 +6781,22 @@ proc get_user_input { what } {
    return $myinput
 }
 
+## @brief Shut the cluster down and leave a clean state behind
+#
+# Stops all daemons of the cluster and of the additional clusters. With the
+# install_rc option the systemd units (rc scripts, smf services) of the
+# cluster hosts are removed as well. Used by menu item 9 and by the kill
+# command line option, with or without check / check_all.
+#
+# @return nothing
+proc shutdown_cluster_and_init_system {} {
+   global CHECK_INSTALL_RC
+
+   shutdown_core_system 0 1
+   if {$CHECK_INSTALL_RC} {
+      remove_cluster_hosts_from_init_system
+   }
+}
 
 #****** check/restart_debug_daemons() ******************************************
 #  NAME
@@ -6967,10 +6983,7 @@ proc menu {} {
                puts "need root access ..."
                set_root_passwd
             }
-            shutdown_core_system 0 1
-            if {$CHECK_INSTALL_RC} {
-               remove_cluster_hosts_from_init_system
-            }
+            shutdown_cluster_and_init_system
             testsuite_shutdown 0
          }
          "11" {
@@ -8393,7 +8406,8 @@ for {set i 0} {$i < $argc} {incr i} {
       puts ""
       puts "install               just install core system and exit"
       puts ""
-      puts "kill                  shutdown cluster"
+      puts "kill                  shutdown cluster, after the tests when combined with check or"
+      puts "                      check_all; with install_rc also remove the systemd services"
       puts ""
       puts "start                 startup cluster"
       puts ""
@@ -9613,7 +9627,7 @@ if {$do_one_test} {
 
    if {$do_kill} {
       set check_name "command line"
-      shutdown_core_system 0 1
+      shutdown_cluster_and_init_system
    }
 
    set exit_value [print_errors]
@@ -9668,7 +9682,7 @@ if { $do_kill } {
    }
    set check_name "command line"
 
-   shutdown_core_system 0 1
+   shutdown_cluster_and_init_system
 
    set exit_value [print_errors]
    testsuite_shutdown $exit_value
