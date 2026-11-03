@@ -1,0 +1,130 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3003: the sgeexecd start script silenced its own error messages and the output of sge_execd.
+#
+# An execution daemon started on a host which is not part of the cluster is refused by the
+# qmaster. It keeps running and retries, so the start script still succeeds, but it has to say
+# why the execution daemon could not register and that it keeps trying.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name            "cs3003"
+set check_category        "BUG EXECD VERIFIED"
+set check_description(0)  "the sgeexecd start script reports why an execution daemon on a host\
+                           outside the cluster cannot register at the qmaster"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs3003_setup
+set check_cleanup_function cs3003_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs3003_refused_registration"
+
+# -------- local test procedures: initialization------------------------------
+
+proc cs3003_setup {} {
+   global cs3003_host cs3003_execd_started cs3003_messages_file
+
+   set cs3003_execd_started 0
+   set cs3003_messages_file ""
+
+   # a host which is not part of the cluster: the qmaster refuses the registration of its
+   # execution daemon, as it is no admin host
+   set cs3003_host [host_conf_get_non_cluster_host 0]
+   if {$cs3003_host == ""} {
+      ts_log_config "no non-cluster host is configured, cannot start an execution daemon outside\
+                     the cluster"
+      return 99
+   }
+   set cs3003_host [resolve_host $cs3003_host 0]
+}
+
+proc cs3003_cleanup {} {
+   global cs3003_host cs3003_execd_started cs3003_messages_file
+
+   # the refused execution daemon keeps running and retries - do not leave it behind, nor the
+   # temporary messages file it wrote until then
+   if {$cs3003_execd_started} {
+      shutdown_system_daemon $cs3003_host "execd"
+   }
+   if {$cs3003_messages_file != ""} {
+      start_remote_prog $cs3003_host "root" "rm" "-f $cs3003_messages_file"
+   }
+
+   unset -nocomplain cs3003_host cs3003_execd_started cs3003_messages_file
+}
+
+# -------- test procedures ---------------------------------------------------
+
+proc cs3003_refused_registration {} {
+   get_current_cluster_config_array ts_config
+   global cs3003_host cs3003_execd_started cs3003_messages_file
+
+   set sgeexecd "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd"
+   set output [start_remote_prog $cs3003_host "root" $sgeexecd "start" prg_exit_state 120]
+   set cs3003_execd_started 1
+   ts_log_fine "$sgeexecd start on host $cs3003_host exited with $prg_exit_state:\n$output"
+
+   # the execution daemon is running and keeps trying, so the start itself succeeds
+   if {$prg_exit_state != 0} {
+      ts_log_severe "$sgeexecd start on host $cs3003_host exited with $prg_exit_state, expected\
+                     0:\n$output"
+      return
+   }
+
+   # the reason the qmaster gave, as sge_execd logged it
+   set cant_register [translate_macro MSG_COM_CANTREGISTER_SS "*" "*"]
+   set no_admin_host [translate_macro MSG_SGETEXT_NOADMINHOST_S "*"]
+   if {![string match "*$cant_register*" $output] || ![string match "*$no_admin_host*" $output]} {
+      ts_log_severe "$sgeexecd start on host $cs3003_host does not report why sge_execd could not\
+                     register, expected \"$cant_register\" with \"$no_admin_host\":\n$output"
+   }
+
+   # the hint that the execution daemon keeps trying, and where its messages are
+   if {![regexp {keeps trying to register, see (/tmp/execd_messages\.[0-9]+)} $output \
+           match cs3003_messages_file]} {
+      ts_log_severe "$sgeexecd start on host $cs3003_host does not say that sge_execd keeps\
+                     trying to register:\n$output"
+      return
+   }
+
+   # the messages file it points to has to exist and hold the reason
+   set content [start_remote_prog $cs3003_host "root" "cat" $cs3003_messages_file]
+   if {$prg_exit_state != 0 || ![string match "*$cant_register*" $content]} {
+      ts_log_severe "the messages file $cs3003_messages_file on host $cs3003_host does not hold\
+                     the reason:\n$content"
+   }
+}
