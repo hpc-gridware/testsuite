@@ -1,0 +1,234 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3013: the subject of the administrator mail for a failed job carries the mail_tag of the
+# global configuration, followed by one space. The default NONE - which the installer writes
+# in upper case - means no tag, and so does a configuration without mail_tag. Before the fix
+# the tag was compared case-sensitively with "none", so the default landed in the subject as
+# "NONE GCS ...", and an empty tag left a leading space.
+#
+# The mails are captured with the capturing mailer of the testsuite (ocs_mail.tcl), which
+# hands over the subject, the recipients and the body exactly as the execd passed them. One
+# job per mail_tag value fails with a working directory that does not exist, a failure the
+# execd reports to the administrator every time it happens.
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "cs_3013"
+set check_category       "BUG EXECD MAIL VERIFIED"
+set check_description(0) "the mail_tag prefixes the administrator mail subject only when it is set"
+set check_needs          "init_core_system"
+
+set check_setup_function cs_3013_setup
+set check_cleanup_function cs_3013_cleanup
+
+set check_functions {}
+lappend check_functions "cs_3013_mail_tag"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+## @brief Capture the mails and address the administrator mail to a dummy recipient
+#
+# @return 0 on success, 99 when the mails cannot be captured
+proc cs_3013_setup {} {
+   global cs_3013_host cs_3013_recipient
+
+   set cs_3013_host [host_conf_get_suited_hosts]
+   set cs_3013_recipient "cs3013@localhost"
+
+   # the capture keeps the global configuration as it was before and restores it in the
+   # cleanup, the administrator mail address and the mail tag included
+   if {[ocs_mail_capture_enable] == ""} {
+      ts_log_config "cannot capture the mails of the cluster"
+      return 99
+   }
+   set conf(administrator_mail) $cs_3013_recipient
+   set_config_and_propagate conf
+
+   return 0
+}
+
+## @brief Delete the jobs and restore the mailer configuration
+#
+# @return nothing
+proc cs_3013_cleanup {} {
+   global cs_3013_host cs_3013_recipient
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 120
+   ocs_mail_capture_disable
+
+   unset -nocomplain cs_3013_host cs_3013_recipient
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief Set the mail_tag of the global configuration, or remove it
+#
+# @param tag the value to set; "" removes mail_tag from the configuration, so that the
+#            built-in default applies
+# @return 0 on success, -1 on error
+proc cs_3013_set_mail_tag {tag} {
+   if {$tag != ""} {
+      set conf(mail_tag) $tag
+      set_config_and_propagate conf
+   } else {
+      # removing an attribute needs the whole configuration, written without it
+      if {[get_config conf] != 0} {
+         return -1
+      }
+      unset -nocomplain conf(mail_tag)
+      set_config_and_propagate conf global 1
+   }
+
+   # set_config_and_propagate returns no status - read the configuration back instead
+   if {[get_config current] != 0} {
+      return -1
+   }
+   if {$tag == ""} {
+      if {[info exists current(mail_tag)]} {
+         ts_log_severe "mail_tag is still in the global configuration: $current(mail_tag)"
+         return -1
+      }
+   } elseif {![info exists current(mail_tag)] || $current(mail_tag) != $tag} {
+      ts_log_severe "mail_tag is not \"$tag\" in the global configuration"
+      return -1
+   }
+   return 0
+}
+
+## @brief Let one job fail and return the subject of the administrator mail it causes
+#
+# @param name     what is tested, for the messages
+# @param job_var  name of the variable the job id is returned in
+# @return the subject, or "" if no single mail for the job arrived
+proc cs_3013_failed_job_subject {name job_var} {
+   get_current_cluster_config_array ts_config
+   global cs_3013_host cs_3013_recipient
+   upvar $job_var job_id
+
+   ocs_mail_capture_clear
+
+   # a working directory that does not exist fails the job before it starts (failure code
+   # 28), and the execd sends an administrator mail every time
+   set sleeper "$ts_config(product_root)/examples/jobs/sleeper.sh 1"
+   set job_id [submit_job "-q all.q@$cs_3013_host -wd /no/such/cs3013_dir $sleeper"]
+   if {$job_id <= 0} {
+      ts_log_severe "$name: cannot submit the test job"
+      return ""
+   }
+
+   set count [ocs_mail_capture_get mails 1 120 0]
+   delete_job $job_id 1
+   if {$count < 1} {
+      ts_log_severe "$name: no administrator mail arrived for the failed job $job_id"
+      return ""
+   }
+
+   set subjects {}
+   foreach mail $mails {
+      set subject [dict get $mail subject]
+      if {[string match "*Job $job_id failed" $subject]} {
+         lappend subjects $subject
+         if {[lsearch -exact [dict get $mail recipients] $cs_3013_recipient] < 0} {
+            ts_log_severe "$name: the mail for job $job_id is not addressed to\
+                           $cs_3013_recipient: [dict get $mail recipients]"
+         }
+         if {[lindex [dict get $mail argv] 0] != "-s"} {
+            ts_log_severe "$name: the mailer did not get the subject with -s: [dict get $mail argv]"
+         }
+      }
+   }
+   if {[llength $subjects] != 1} {
+      ts_log_severe "$name: expected one administrator mail for job $job_id, got\
+                     [llength $subjects]:\n[join $subjects "\n"]"
+      return ""
+   }
+   return [lindex $subjects 0]
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief The subject carries the mail_tag only when it is set, followed by one space
+#
+# Unset, NONE and none must give a subject which starts with the product name, without a
+# leading space; a real tag must stand in front of exactly that subject, separated by one
+# space.
+#
+# @return nothing
+proc cs_3013_mail_tag {} {
+   set product ""
+   foreach {name tag} {"unset" "" "NONE" "NONE" "none" "none"} {
+      if {[cs_3013_set_mail_tag $tag] != 0} {
+         ts_log_severe "$name: cannot set the mail_tag"
+         return
+      }
+      set subject [cs_3013_failed_job_subject $name job_id]
+      if {$subject == ""} {
+         return
+      }
+      ts_log_fine "$name: \"$subject\""
+
+      # "<product> <version> (<build>): Job <id> failed", nothing in front of it
+      if {![regexp "^(\\S+ \\S+ \\(\[^)\]*\\)): Job $job_id failed\$" $subject -> this_product]} {
+         ts_log_severe "mail_tag $name: the subject does not start with the product name:\
+                        \"$subject\""
+         return
+      }
+      if {[string match -nocase "none*" $subject]} {
+         ts_log_severe "mail_tag $name: the default tag is in the subject: \"$subject\""
+         return
+      }
+      if {$product == ""} {
+         set product $this_product
+      } elseif {$this_product != $product} {
+         ts_log_severe "mail_tag $name: the subject names \"$this_product\" instead of \"$product\""
+         return
+      }
+   }
+
+   set tag {[TS3013]}
+   if {[cs_3013_set_mail_tag $tag] != 0} {
+      ts_log_severe "cannot set the mail_tag to $tag"
+      return
+   }
+   set subject [cs_3013_failed_job_subject "tag" job_id]
+   if {$subject == ""} {
+      return
+   }
+   ts_log_fine "tag: \"$subject\""
+   set expected "$tag $product: Job $job_id failed"
+   if {$subject != $expected} {
+      ts_log_severe "mail_tag $tag: expected the subject \"$expected\", got \"$subject\""
+   }
+}

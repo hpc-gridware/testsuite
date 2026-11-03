@@ -3283,14 +3283,17 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
                   set search_sec 1
                }
 
-               if {[string match "*$host*\|I\|*using \"$expected_value($host)\" for $name*" $line]} {
+               # the value is matched literally: a mail_tag like [HPC-US] would otherwise be a
+               # character class
+               set glob_value [string map {\\ \\\\ * \\* ? \\? [ \\[ ] \\]} $expected_value($host)]
+               if {[string match "*$host*\|I\|*using \"$glob_value\" for $name*" $line]} {
                   # this will match all string based configuration values
                   # or all values in 9.0.* because also there numbers are quoted
                   ts_log_fine "$host: Found config string: $name = \"$expected_value($host)\""
                   set is_host_ok($host) 1
                   # send CTRL-C to end tail
                   ts_send $spawn_id "\003"
-               } elseif {[string match "*$host*\|I\|*using $expected_value($host) for $name*" $line]} {
+               } elseif {[string match "*$host*\|I\|*using $glob_value for $name*" $line]} {
                   # beginning with v9.1.0 this will match number based configuration values that are not quoted anymore
                   ts_log_fine "$host: Found config value: $name = $expected_value($host)"
                   set is_host_ok($host) 1
