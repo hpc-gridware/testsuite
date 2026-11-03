@@ -519,6 +519,8 @@ proc throughput_cleanup {} {
    unset -nocomplain prot_time_stamp use_fake_topology throughput_timestamp_factor
 }
 
+## @brief Set up the scenario of the current run level of the throughput test
+# @return nothing
 proc throughput_setup_level {} {
    get_current_cluster_config_array ts_config
    global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
@@ -623,8 +625,14 @@ proc throughput_setup_level {} {
          if {[is_version_in_range "9.0.2"]} {
             if {[bootstrap_file_read throughput_bootstrap_backup]} {
                global throughput_host_info
-               set reader_threads [expr $throughput_host_info($ts_config(master_host),num_proc) - 6]
-               if {$reader_threads > $throughput_bootstrap_backup(reader_threads)} {
+               set num_proc $throughput_host_info($ts_config(master_host),num_proc)
+               set reader_threads [expr $num_proc - 6]
+               # reader_threads auto (9.2) starts half the CPUs, at least 4 and at most 32
+               set configured $throughput_bootstrap_backup(reader_threads)
+               if {![string is integer -strict $configured]} {
+                  set configured [expr {min(max($num_proc / 2, 4), 32)}]
+               }
+               if {$reader_threads > $configured} {
                   set bootstrap(reader_threads) $reader_threads
                   bootstrap_file_write
                }

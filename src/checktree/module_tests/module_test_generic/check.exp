@@ -153,6 +153,7 @@ lappend generic_module_tests {test_cull_lookup "9.2.0" 0 ""}
 lappend generic_module_tests {test_cull_db "9.2.0" 0 ""}
 lappend generic_module_tests {test_cull_select_pack "9.2.0" 0 ""}
 lappend generic_module_tests {test_uti_lock_held "9.2.0" 0 ""}
+lappend generic_module_tests {test_uti_cpus "9.2.0" 0 ""}
 
 # The binaries built on the shared module test frame (clusterscheduler
 # test/common/ocs_module_test.h). When the testsuite records a run, they get
@@ -161,7 +162,8 @@ lappend generic_module_tests {test_uti_lock_held "9.2.0" 0 ""}
 # extra arguments: some read their own.
 global module_tests_with_report
 set module_tests_with_report {test_comm_xml_parse test_sgeobj_rsmap test_sgeobj_ulong test_sgeobj_var
-                              test_uti_peopen test_cull_select_pack test_uti_lock_held}
+                              test_uti_peopen test_cull_select_pack test_uti_lock_held
+                              test_uti_cpus}
 
 set check_description(0) "test_qmaster_timed_event"
 set check_description(1) "test_commlib_issue"
@@ -226,6 +228,7 @@ set check_description(59) "test_cull_lookup"
 set check_description(60) "test_cull_db"
 set check_description(61) "test_cull_select_pack"
 set check_description(62) "test_uti_lock_held"
+set check_description(63) "test_uti_cpus"
 
 set check_functions {}
 lappend check_functions "generic_module_tests_run"

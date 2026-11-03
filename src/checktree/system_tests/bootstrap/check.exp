@@ -464,6 +464,38 @@ proc bootstrap_parsing_security_params {} {
 }
 
 ##
+# @brief reader_threads auto gives half the CPUs the reader may use, at least 4, at most 32.
+#
+# The expectation comes from nproc on the host the test binary runs on, which honours the
+# CPU affinity as the binary does. nproc does not see a cgroup CPU quota; a test host
+# runs without one. The CPU count is read on Linux only, elsewhere the case is skipped.
+#
+# @return nothing, a failed case is reported with ts_log_severe
+proc bootstrap_parsing_reader_threads_auto {} {
+   global CHECK_USER bootstrap_parsing_host
+
+   if {![string match "lx-*" [resolve_arch $bootstrap_parsing_host]]} {
+      ts_log_fine "reader_threads auto is only checked on Linux hosts"
+      return
+   }
+   set output [start_remote_prog $bootstrap_parsing_host $CHECK_USER "nproc" "" prg_exit_state]
+   set cpus [string trim $output]
+   if {$prg_exit_state != 0 || ![string is integer -strict $cpus]} {
+      ts_log_severe "nproc failed on $bootstrap_parsing_host:\n$output"
+      return
+   }
+   set readers [expr {min(max($cpus / 2, 4), 32)}]
+
+   foreach value {auto AUTO} {
+      set replace(reader_threads) "reader_threads $value"
+      set expect(reader_threads) $readers
+      bootstrap_parsing_expect replace expect "reader_threads $value on $cpus CPUs"
+      array unset replace
+      array unset expect
+   }
+}
+
+##
 # @brief The thread counts fall back to a default and are held below a maximum.
 #
 # None of them is required and none of them is refused: a count which cannot be used
@@ -486,6 +518,19 @@ proc bootstrap_parsing_thread_counts {} {
          array unset replace
          array unset expect
       }
+   }
+
+   # Only reader_threads knows auto, since 9.2. The other pools read it as a count which
+   # cannot be used and take their default.
+   if {[is_version_in_range "9.2.0"]} {
+      foreach attribute {listener_threads worker_threads} {
+         set replace($attribute) "$attribute auto"
+         set expect($attribute) 4
+         bootstrap_parsing_expect replace expect "$attribute auto"
+         array unset replace
+         array unset expect
+      }
+      bootstrap_parsing_reader_threads_auto
    }
 
    # the scheduler is the one thread there can only be one of
