@@ -781,12 +781,18 @@ proc throughput_setup_level {} {
 
    # setup global configuration
    get_config stored_configuration
-   set myconfig(loglevel)         "log_warning"
 
    # need to use sharetree reserved usage for sharetree test
-   add_or_replace_array_param myconfig stored_configuration "execd_params" "SHARETREE_RESERVED_USAGE" "true"
-   add_or_replace_array_param myconfig myconfig             "execd_params" "SIMULATE_JOBS" "true"
-   add_or_replace_array_param myconfig myconfig             "execd_params" "PDC_INTERVAL" "NEVER"
+   add_or_replace_array_param execd_config stored_configuration "execd_params" \
+                              "SHARETREE_RESERVED_USAGE" "true"
+   add_or_replace_array_param execd_config execd_config "execd_params" "SIMULATE_JOBS" "true"
+   add_or_replace_array_param execd_config execd_config "execd_params" "PDC_INTERVAL" "NEVER"
+   # wait until every sge_execd simulates jobs, before the first job is submitted,
+   # and before the loglevel is lowered: set_config_and_propagate waits for the info messages
+   # sge_execd writes when it gets the new configuration
+   set_config_and_propagate execd_config
+
+   set myconfig(loglevel)         "log_warning"
 
    # switch on monitoring
    # @todo why in the setup_level_function and not in the setup function?
@@ -921,7 +927,9 @@ proc throughput_cleanup_level {} {
 
    # reset configurations
    reset_schedd_config
-   reset_config stored_configuration
+   # wait until every sge_execd has the restored configuration: an sge_execd which still has
+   # SIMULATE_JOBS=true starts the job of the next check as simulated job, which never ends
+   reset_config_and_propagate stored_configuration
 
    # remove pe
    if {$parallel_jobs || $reservation} {
