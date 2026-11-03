@@ -1,0 +1,139 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3005: merge_configuration() resets every execd_params value to its default before it parses
+# the new execd_params, except the PDC_INTERVAL. Once "PDC_INTERVAL=NEVER" had been set, removing
+# it again left the PDC disabled until sge_execd was restarted: jobs got no online usage from the
+# PDC, and the limits which need it (h_cpu, h_vmem) were not enforced by sge_execd.
+#
+# The check sets PDC_INTERVAL=NEVER in the local configuration of one host, removes it again
+# without restarting sge_execd, and requires the next job on that host to report vmem - a value
+# only the PDC delivers.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+global check_root_access_needs
+
+set check_version_range "9.1.8"
+
+set check_root_access_needs "yes"
+
+set check_name           "issue_3005"
+set check_category       "BUG EXECD VERIFIED"
+set check_description(0) "removing PDC_INTERVAL=NEVER enables the PDC again without a restart"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_3005_setup
+set check_cleanup_function issue_3005_cleanup
+
+set check_functions {}
+lappend check_functions "issue_3005_pdc_enabled_again"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_3005_setup {} {
+   global issue_3005_host issue_3005_job_id issue_3005_host_backup issue_3005_execd_params
+
+   set issue_3005_job_id 0
+
+   set issue_3005_host [host_conf_get_suited_hosts]
+
+   if {[get_config issue_3005_host_backup $issue_3005_host] != 0} {
+      ts_log_config "cannot read the local configuration of host $issue_3005_host"
+      return 99
+   }
+
+   # execd_params of the local configuration replace the global ones - start from the global
+   # ones and let the PDC deliver the usage, so that vmem is reported with and without systemd
+   if {[get_config global_config] != 0} {
+      ts_log_config "cannot read the global configuration of the cluster"
+      return 99
+   }
+   add_or_replace_array_param params global_config "execd_params" "USAGE_COLLECTION" "PDC"
+   set issue_3005_execd_params $params(execd_params)
+
+   return 0
+}
+
+proc issue_3005_cleanup {} {
+   global issue_3005_host issue_3005_job_id issue_3005_host_backup issue_3005_execd_params
+
+   if {[info exists issue_3005_job_id] && $issue_3005_job_id > 0} {
+      delete_job $issue_3005_job_id 1
+   }
+
+   if {[info exists issue_3005_host_backup]} {
+      reset_config_and_propagate issue_3005_host_backup $issue_3005_host
+   }
+
+   # with the defect the PDC of the host stays disabled until sge_execd is restarted - restart it,
+   # so that the checks running next get their usage
+   if {[info exists issue_3005_host]} {
+      shutdown_execd $issue_3005_host 1 120 0
+      startup_execd $issue_3005_host
+      wait_for_load_from_all_queues 60
+   }
+
+   unset -nocomplain issue_3005_host issue_3005_job_id issue_3005_host_backup
+   unset -nocomplain issue_3005_execd_params
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief require PDC usage of a job after PDC_INTERVAL=NEVER has been removed again
+proc issue_3005_pdc_enabled_again {} {
+   global issue_3005_host issue_3005_job_id issue_3005_execd_params
+
+   # disable the PDC in the local configuration of the host,
+   # set_config_and_propagate reports its errors itself
+   set conf(execd_params) "$issue_3005_execd_params,PDC_INTERVAL=NEVER"
+   set_config_and_propagate conf $issue_3005_host
+
+   # and enable it again, sge_execd keeps running
+   set conf(execd_params) $issue_3005_execd_params
+   set_config_and_propagate conf $issue_3005_host
+
+   set issue_3005_job_id [submit_job "-l h=$issue_3005_host -o /dev/null -j y -b y\
+                                      /bin/sleep 300"]
+   if {$issue_3005_job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $issue_3005_job_id "" 60] != 0} {
+      return
+   }
+
+   if {![wait_for_online_usage $issue_3005_job_id 60 "vmem"]} {
+      ts_log_severe "job $issue_3005_job_id reports no vmem usage - removing PDC_INTERVAL=NEVER\
+                     from execd_params did not enable the PDC of host $issue_3005_host again"
+   }
+
+   delete_job $issue_3005_job_id 1
+   set issue_3005_job_id 0
+}
