@@ -59,8 +59,9 @@ lappend check_functions "issue_2899_register_event_client"
 proc issue_2899_setup {} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
-   global issue_2899_qevent issue_2899_messages issue_2899_warnings
+   global issue_2899_qevent issue_2899_messages issue_2899_warnings issue_2899_ec_id
 
+   set issue_2899_ec_id ""
    set issue_2899_qevent [get_test_or_source_path "qevent" $ts_config(master_host)]
    if {![is_remote_file $ts_config(master_host) $CHECK_USER $issue_2899_qevent]} {
       ts_log_config "the qevent test binary does not exist as\
@@ -79,9 +80,15 @@ proc issue_2899_setup {} {
 }
 
 proc issue_2899_cleanup {} {
-   global issue_2899_qevent issue_2899_messages issue_2899_warnings
+   global issue_2899_qevent issue_2899_messages issue_2899_warnings issue_2899_ec_id
 
-   unset -nocomplain issue_2899_qevent issue_2899_messages issue_2899_warnings
+   # a qevent which did not deregister stays registered until the acknowledge timeout of at least
+   # 600 s - do not leave it behind for the following checks
+   if {$issue_2899_ec_id != "" && [lsearch -exact [issue_2899_qevent_ids] $issue_2899_ec_id] >= 0} {
+      del_event_client_list "id" $issue_2899_ec_id "" "" 0
+   }
+
+   unset -nocomplain issue_2899_qevent issue_2899_messages issue_2899_warnings issue_2899_ec_id
 }
 
 # ---------------------------------------------------------------------------
@@ -107,6 +114,22 @@ proc issue_2899_read_messages {lines_var} {
    return $lines(0)
 }
 
+## @brief which event clients named qevent are registered?
+#
+# @return the ids of the registered event clients named qevent
+proc issue_2899_qevent_ids {} {
+   set ids {}
+   if {[get_event_client_list "" "" 1 result] == 0} {
+      foreach elem $result {
+         if {[string trim [lindex $elem 1]] == "qevent"} {
+            lappend ids [string trim [lindex $elem 0]]
+         }
+      }
+   }
+
+   return $ids
+}
+
 # ---------------------------------------------------------------------------
 # checks
 # ---------------------------------------------------------------------------
@@ -118,7 +141,7 @@ proc issue_2899_read_messages {lines_var} {
 # warnings about an unbalanced transaction.
 proc issue_2899_register_event_client {} {
    get_current_cluster_config_array ts_config
-   global CHECK_USER issue_2899_qevent issue_2899_warnings
+   global CHECK_USER issue_2899_qevent issue_2899_warnings issue_2899_ec_id
 
    set first_line [issue_2899_read_messages before]
    if {$first_line < 0} {
@@ -126,14 +149,49 @@ proc issue_2899_register_event_client {} {
    }
    incr first_line
 
+   # a qevent of an earlier run may still be registered, it is removed only by the acknowledge
+   # timeout - so wait for the id of the qevent started here, not for the name
+   set ids_before [issue_2899_qevent_ids]
+
    set sid [open_remote_spawn_process $ts_config(master_host) $CHECK_USER $issue_2899_qevent "-ts"]
    if {[llength $sid] < 2} {
       ts_log_severe "cannot start $issue_2899_qevent on host $ts_config(master_host)"
       return
    }
-   wait_for_event_client "qevent"
+
+   set end [expr {[clock seconds] + 60}]
+   while {$issue_2899_ec_id == "" && [clock seconds] < $end} {
+      foreach id [issue_2899_qevent_ids] {
+         if {[lsearch -exact $ids_before $id] < 0} {
+            set issue_2899_ec_id $id
+            break
+         }
+      }
+      if {$issue_2899_ec_id == ""} {
+         after 1000
+      }
+   }
+   if {$issue_2899_ec_id == ""} {
+      ts_log_severe "qevent did not register at the qmaster within 60 seconds"
+      close_spawn_process $sid
+      return
+   }
+   ts_log_fine "qevent registered as event client $issue_2899_ec_id"
+
+   # stop qevent with CTRL-C, it then deregisters - close_spawn_process alone does not always
+   # deliver the CTRL-C, and a qevent ending without deregistering stays registered
+   ts_send [lindex $sid 1] "\003" $ts_config(master_host)
    close_spawn_process $sid
-   wait_for_event_client "qevent" 1
+
+   set end [expr {[clock seconds] + 60}]
+   while {[lsearch -exact [issue_2899_qevent_ids] $issue_2899_ec_id] >= 0} {
+      if {[clock seconds] >= $end} {
+         ts_log_severe "qevent (event client $issue_2899_ec_id) did not deregister within 60\
+                        seconds after CTRL-C"
+         break
+      }
+      after 1000
+   }
 
    set last_line [issue_2899_read_messages after]
    if {$last_line < 0} {
