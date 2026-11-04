@@ -1,0 +1,237 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3020: set OOMPolicy=kill on the job scope, so that a memory cgroup OOM kill ends the whole
+# job.
+#
+# On a host with systemd, sge_shepherd sets MemoryMax of the job scope from h_rss / h_vmem. Job
+# scopes are delegated, and for delegated units systemd defaults OOMPolicy to continue: when the
+# OOM killer kills a process of the job, the job keeps running and ends with its own exit status.
+# With OOMPolicy=kill the whole job is killed, and the accounting record shows exit status 137 and
+# failed 100.
+#
+# The job script starts a child which writes more memory than MemoryMax allows, survives the OOM
+# kill of its child and exits with 0. The job is submitted with SGE_DEBUG_MEMORY_SWAP_MAX=0 in its
+# environment, which makes sge_shepherd set MemorySwapMax=0 on the job scope - otherwise the
+# memory above MemoryMax is swapped out on a host with swap space, and no OOM kill happens.
+#
+# OOMPolicy can be set on scopes since systemd 252, and it needs cgroup v2.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name            "cs3020"
+set check_category        "BUG EXECD SYSTEMD VERIFIED"
+set check_description(0)  "a memory cgroup OOM kill ends the whole job"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs3020_setup
+set check_cleanup_function cs3020_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs3020_oom_kill_ends_job"
+lappend check_functions "cs3020_old_systemd_job_starts"
+
+# -------- local test procedures: initialization------------------------------
+
+proc cs3020_setup {} {
+   get_current_cluster_config_array ts_config
+   global cs3020_host cs3020_old_host
+
+   # a host where OOMPolicy can be set on the job scope: cgroup v2 and systemd >= 252
+   # a host where it cannot: cgroup v2 and an older systemd
+   set cs3020_host ""
+   set cs3020_old_host ""
+   foreach host $ts_config(execd_nodes) {
+      set version [systemd_get_version $host]
+      if {$version < 0 || [systemd_get_cgroup_version $host] != 2} {
+         continue
+      }
+      if {$version >= 252} {
+         if {$cs3020_host == ""} {
+            set cs3020_host $host
+         }
+      } elseif {$cs3020_old_host == ""} {
+         set cs3020_old_host $host
+      }
+   }
+   if {$cs3020_host == ""} {
+      ts_log_config "no execution host with cgroup v2 and systemd 252 or newer"
+      return 99
+   }
+
+   if {[ocs_mail_capture_enable] == ""} {
+      ts_log_config "cannot capture the mails of the cluster"
+      return 99
+   }
+
+   return 0
+}
+
+proc cs3020_cleanup {} {
+   global cs3020_host cs3020_old_host
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+   ocs_mail_capture_disable
+
+   unset -nocomplain cs3020_host cs3020_old_host
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief submit the job whose child exceeds MemoryMax of the job scope
+#
+# @param host the host the job shall run on
+# @return the job id, or a value <= 0 on error
+proc cs3020_submit_job {host} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH
+
+   set work "$ts_config(product_root)/examples/jobsbin/[resolve_arch $host]/work"
+   set job_args "-m a -M cs3020@localhost -l h=$host,h_rss=100M -v SGE_DEBUG_MEMORY_SWAP_MAX=0"
+   append job_args " -o /dev/null -j y $CHECK_ACTUAL_TEST_PATH/cs3020_job.sh 15 $work 300 5"
+
+   return [submit_job $job_args]
+}
+
+## @brief check a property of the scope of a running job
+#
+# @param host the host the job is running on
+# @param scope the job scope
+# @param property the property, e.g. OOMPolicy
+# @param expected the expected value
+# @param what what the property is good for, for the error message
+proc cs3020_check_scope_property {host scope property expected what} {
+   set value [systemd_get_property $host $scope $property]
+   if {$value != $expected} {
+      ts_log_severe "$property of the job scope $scope on host $host is \"$value\", expected\
+                     \"$expected\" - $what"
+   } else {
+      ts_log_fine "$property of the job scope $scope on host $host is $expected"
+   }
+}
+
+## @brief the OOM killer kills the whole job
+#
+# A child of the job is killed by the OOM killer. With OOMPolicy=kill the job script is killed as
+# well, the job ends with exit status 137 and failed 100, and the -m a mail is sent. Before the
+# fix the job script survived and exited with 0.
+proc cs3020_oom_kill_ends_job {} {
+   global cs3020_host
+
+   ocs_mail_capture_clear
+
+   set job_id [cs3020_submit_job $cs3020_host]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $job_id "" 60] != 0} {
+      return
+   }
+
+   # the job script sleeps before its child allocates the memory - look at the job scope
+   set scope [systemd_get_job_scope $job_id]
+   cs3020_check_scope_property $cs3020_host $scope "MemoryMax" [transform_unit "100M"] \
+      "the job requested h_rss=100M"
+   cs3020_check_scope_property $cs3020_host $scope "MemorySwapMax" 0 \
+      "the instrumentation SGE_DEBUG_MEMORY_SWAP_MAX=0 did not work"
+   cs3020_check_scope_property $cs3020_host $scope "OOMPolicy" "kill" \
+      "an OOM kill does not end the whole job"
+
+   if {[wait_for_job_end $job_id 120] != 0} {
+      return
+   }
+   if {[get_qacct $job_id qacct_info] != 0} {
+      return
+   }
+   # failed is the number followed by its description, e.g. "100 : assumedly after job"
+   regexp {[0-9]+} $qacct_info(failed) failed
+   if {$qacct_info(exit_status) != 137 || $failed != 100} {
+      ts_log_severe "the job was not killed as a whole after the OOM kill of its child:\
+                     exit_status $qacct_info(exit_status), failed $qacct_info(failed),\
+                     expected exit_status 137, failed 100"
+   }
+
+   # the job was aborted, so the -m a mail is sent
+   set aborted [translate_macro MSG_MAIL_ACTION_ABORT]
+   if {[ocs_mail_capture_get mails 1 60] <= 0} {
+      return
+   }
+   set found 0
+   set subjects {}
+   foreach mail $mails {
+      set subject [dict get $mail subject]
+      lappend subjects $subject
+      if {[string match "*Job $job_id (*) $aborted" $subject]} {
+         set found 1
+      }
+   }
+   if {!$found} {
+      ts_log_severe "no mail about job $job_id being aborted, the mails have the subjects:\n\
+                     [join $subjects "\n"]"
+   }
+}
+
+## @brief on an older systemd the job starts and runs as before
+#
+# systemd before 252 does not know OOMPolicy for scopes. sge_shepherd must not set it there, or
+# the job scope cannot be created. The OOM killer kills only the child, the job script ends with
+# its own exit status.
+proc cs3020_old_systemd_job_starts {} {
+   global cs3020_old_host
+
+   if {$cs3020_old_host == ""} {
+      ts_log_info "no execution host with cgroup v2 and a systemd older than 252, skipping"
+      return
+   }
+
+   set job_id [cs3020_submit_job $cs3020_old_host]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_job_end $job_id 120] != 0} {
+      return
+   }
+   if {[get_qacct $job_id qacct_info] != 0} {
+      return
+   }
+   # failed is the number followed by its description, e.g. "100 : assumedly after job"
+   regexp {[0-9]+} $qacct_info(failed) failed
+   if {$qacct_info(exit_status) != 0 || $failed != 0} {
+      ts_log_severe "the job on host $cs3020_old_host did not end with its own exit status:\
+                     exit_status $qacct_info(exit_status), failed $qacct_info(failed),\
+                     expected exit_status 0, failed 0"
+   }
+}

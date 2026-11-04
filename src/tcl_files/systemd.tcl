@@ -309,6 +309,31 @@ proc systemd_get_cgroup_version {host} {
 }
 
 ###
+# @brief Get the version of systemd on a host.
+#
+# Parses the first line of `systemctl --version`, e.g. "systemd 255 (255.4-1ubuntu8.18)".
+#
+# @param host The host to check.
+# @returns The major version of systemd, e.g. 255, or -1 if the host does not run systemd or the
+#          version cannot be determined.
+proc systemd_get_version {host} {
+   global CHECK_USER
+
+   if {![host_has_systemd $host]} {
+      return -1
+   }
+
+   set output [start_remote_prog $host $CHECK_USER "systemctl" "--version" prg_exit_state 60 0 \
+                  "" "" 1 0]
+   if {$prg_exit_state != 0 || ![regexp {systemd\s+([0-9]+)} $output match version]} {
+      ts_log_fine "cannot determine the systemd version of host $host:\n$output"
+      return -1
+   }
+
+   return $version
+}
+
+###
 # @brief Get the name of the toplevel systemd slice for OCS jobs.
 #
 # Returns the default toplevel slice name used by testsuite: `ocs<commd_port>`.
