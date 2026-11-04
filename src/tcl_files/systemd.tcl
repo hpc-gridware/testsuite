@@ -502,6 +502,61 @@ proc systemd_check_cleanup_job_slices {host} {
 }
 
 ###
+# @brief Check and reset leftover failed systemd units of the cluster.
+#
+# A job scope which systemd ended as failed, e.g. after an OOM kill with
+# OOMPolicy=kill, stays loaded in the failed state until it is reset. Its cgroup
+# directory is gone already, so systemd_check_cleanup_job_slices() cannot see it.
+# A later job with the same job id (e.g. after a re-installation) cannot start
+# its scope then.
+#
+# Failed scopes and slices of this cluster (`ocs<port>.*`, `ocs<port>-*`) are
+# reported as error, and they are reset with `systemctl reset-failed`, so that
+# they do not break the following tests.
+#
+# @param host The host to check for leftover failed units.
+# @returns 1 if no failed unit was found, 0 otherwise.
+#
+proc systemd_check_cleanup_failed_units {host} {
+   set slice_name [systemd_get_slice_name]
+
+   ts_log_fine "checking for failed systemd units of the cluster on host $host"
+
+   set output [start_remote_prog $host "root" "systemctl" \
+                  "list-units --all --state=failed --plain --no-legend --no-pager\
+                   '${slice_name}.*' '${slice_name}-*'"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "cannot list the failed systemd units on host $host:\n$output"
+      return 0
+   }
+
+   set units {}
+   foreach line [split $output "\n"] {
+      set unit [lindex [string trim $line] 0]
+      if {$unit != ""} {
+         lappend units $unit
+      }
+   }
+   if {[llength $units] == 0} {
+      ts_log_fine "no failed systemd units found on host $host"
+      return 1
+   }
+
+   set msg "Found and reset leftover failed systemd units on host $host:"
+   foreach unit $units {
+      set result [start_remote_prog $host "root" "systemctl" "--no-pager show -p Result --value $unit"]
+      append msg "\n   $unit (Result=[string trim $result])"
+   }
+   set output [start_remote_prog $host "root" "systemctl" "reset-failed $units"]
+   if {$prg_exit_state != 0} {
+      append msg "\nError during reset-failed:\n$output"
+   }
+   ts_log_severe $msg
+
+   return 0
+}
+
+###
 # @brief Wait until no per job systemd slice is left on the given hosts.
 #
 # The slice of a tightly integrated parallel job is removed by the execd once the

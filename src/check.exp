@@ -5742,13 +5742,17 @@ proc check_if_test_cleaned_up {{test_failed 0}} {
       set ret 0
    }
 
-   # check if all systemd slices (of pe jobs) have been cleaned up, and repair if not
+   # check if all systemd slices (of pe jobs) have been cleaned up, and no failed
+   # job scopes are left over, and repair if not
    if {[ge_has_feature "systemd"]} {
       set have_a_systemd_host 0
       foreach host $ts_config(execd_nodes) {
          if {[host_has_systemd $host]} {
             set have_a_systemd_host 1
             if {![systemd_check_cleanup_job_slices $host]} {
+               set ret 0
+            }
+            if {![systemd_check_cleanup_failed_units $host]} {
                set ret 0
             }
          }

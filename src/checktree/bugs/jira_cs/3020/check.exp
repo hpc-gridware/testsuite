@@ -48,7 +48,10 @@ set check_version_range "9.1.8"
 
 # define test's name and run level descriptions
 set check_name            "cs3020"
-set check_category        "BUG EXECD SYSTEMD VERIFIED"
+# not VERIFIED: the OOM kill leaves the job scope in the failed state, and sge_execd does not reset
+# failed job scopes yet (CS-3021). The framework reports the failed scope as error after the check,
+# and a later job with the same job id could not start its scope. Add VERIFIED with CS-3021.
+set check_category        "BUG EXECD SYSTEMD"
 set check_description(0)  "a memory cgroup OOM kill ends the whole job"
 
 # define test's dependencies
