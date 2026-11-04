@@ -1,0 +1,196 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3030: sge_shepherd reported exit status 129 for a qrsh task whose qrsh_starter was killed.
+#
+# qrsh_starter writes the exit status of the command of a qrsh task into a file in TMPDIR. When
+# qrsh_starter is killed, the file is missing. sge_shepherd then took the default exit code 1 as
+# a wait status, which is signal 1 (SIGHUP), and reported exit status 129. Now it reports the exit
+# status of qrsh_starter itself, 137 when it was killed with SIGKILL.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name            "cs3030"
+set check_category        "BUG SHEPHERD PARALLEL VERIFIED"
+set check_description(0)  "a qrsh task whose qrsh_starter was killed with SIGKILL ends with exit\
+                           status 137"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs3030_setup
+set check_cleanup_function cs3030_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs3030_killed_qrsh_starter"
+
+# -------- local test procedures: initialization------------------------------
+
+proc cs3030_setup {} {
+   get_current_cluster_config_array ts_config
+   global cs3030_host
+
+   # the job gets 2 slots on one host
+   set cs3030_host ""
+   foreach host $ts_config(execd_nodes) {
+      if {[node_get_processors $host] >= 2} {
+         set cs3030_host $host
+         break
+      }
+   }
+   if {$cs3030_host == ""} {
+      ts_log_config "no execution host with at least 2 processors"
+      return 99
+   }
+
+   set pe(slots)               10
+   set pe(allocation_rule)     "\$pe_slots"
+   set pe(control_slaves)      "TRUE"
+   set pe(job_is_first_task)   "TRUE"
+   add_pe "cs3030.pe" pe
+
+   set queue_conf(slots)   2
+   set queue_conf(pe_list) "cs3030.pe"
+   add_queue "cs3030.q" $cs3030_host queue_conf
+
+   return 0
+}
+
+proc cs3030_cleanup {} {
+   global cs3030_host
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   del_queue "cs3030.q" "" 1 1
+   del_pe "cs3030.pe"
+
+   unset -nocomplain cs3030_host
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief get the children of a process
+#
+# @param host the host the process runs on
+# @param pid the pid of the process
+# @return the list of the pids of its children
+proc cs3030_get_children {host pid} {
+   get_ps_info 0 $host ps_info
+
+   set children {}
+   for {set i 0} {$i < $ps_info(proc_count)} {incr i} {
+      if {$ps_info(ppid,$i) == $pid} {
+         lappend children $ps_info(pid,$i)
+      }
+   }
+
+   return $children
+}
+
+## @brief kill the qrsh_starter of a pe task, the pe task ends with exit status 137
+#
+# The job starts a task with qrsh -inherit. The check kills its qrsh_starter with SIGKILL, so
+# qrsh_starter cannot write the exit status of the command. The accounting record of the pe task
+# shows exit status 137 and failed 100, before the fix it showed exit status 129.
+proc cs3030_killed_qrsh_starter {} {
+   get_current_cluster_config_array ts_config
+   global cs3030_host CHECK_ACTUAL_TEST_PATH CHECK_USER
+
+   set qrsh "$ts_config(product_root)/bin/[resolve_arch $cs3030_host]/qrsh"
+   set job_id [submit_job "-pe cs3030.pe 2 -q cs3030.q -o /dev/null -j y\
+                           $CHECK_ACTUAL_TEST_PATH/cs3030_job.sh $qrsh"]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $job_id "" 60] != 0} {
+      return
+   }
+
+   # sge_shepherd writes the pid of its child, qrsh_starter, into the job_pid file of the pe
+   # task, the pe task is the first one started on the host
+   set pe_task_id "1.[resolve_host $cs3030_host 0]"
+   set job_pid_file "[get_spool_dir $cs3030_host execd]/active_jobs/${job_id}.1/$pe_task_id/job_pid"
+
+   # qrsh_starter starts the command in a process group of its own, the command keeps the output
+   # of the pe task open - kill it together with qrsh_starter, as the OOM kill of a job scope does
+   set starter_pid ""
+   set children {}
+   set timeout [expr [clock seconds] + 60]
+   while {[clock seconds] < $timeout} {
+      if {$starter_pid == "" && [is_remote_file $cs3030_host $CHECK_USER $job_pid_file]} {
+         get_file_content $cs3030_host $CHECK_USER $job_pid_file job_pid
+         if {$job_pid(0) > 0} {
+            set starter_pid [string trim $job_pid(1)]
+         }
+      }
+      if {$starter_pid != ""} {
+         set children [cs3030_get_children $cs3030_host $starter_pid]
+         if {[llength $children] > 0} {
+            break
+         }
+      }
+      after 1000
+   }
+   if {$starter_pid == "" || [llength $children] == 0} {
+      ts_log_severe "found no qrsh_starter with a child for pe task $pe_task_id of job $job_id on\
+                     host $cs3030_host, qrsh_starter pid \"$starter_pid\""
+      return
+   }
+   set kill_list $starter_pid
+   foreach child $children {
+      lappend kill_list "-$child"
+   }
+   ts_log_fine "killing qrsh_starter $starter_pid of job $job_id on host $cs3030_host and the\
+                process groups of its children: $kill_list"
+   set output [start_remote_prog $cs3030_host $CHECK_USER "kill" "-9 -- $kill_list"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "kill -9 -- $kill_list on host $cs3030_host failed:\n$output"
+      return
+   }
+
+   if {[wait_for_job_end $job_id 120] != 0} {
+      return
+   }
+
+   if {[get_qacct "$job_id $pe_task_id" qacct_info] != 0} {
+      return
+   }
+   # failed is the number followed by its description, e.g. "100 : assumedly after job"
+   regexp {[0-9]+} $qacct_info(failed) failed
+   if {$qacct_info(exit_status) != 137 || $failed != 100} {
+      ts_log_severe "the accounting record of pe task $pe_task_id of job $job_id has exit_status\
+                     $qacct_info(exit_status), failed $qacct_info(failed), expected exit_status\
+                     137, failed 100"
+   }
+}
