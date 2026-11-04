@@ -1,0 +1,207 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3017: sge_execd checked the limits of a parallel job against a different value than
+# sge_shepherd applied. Now sge_execd computes the limit of each task once, and sge_shepherd applies
+# it as it is:
+#
+#   - the job script of a loosely integrated parallel job gets the limit multiplied by its slots on
+#     the master host - before the fix it got h_rss of a single slot, while sge_execd compared the
+#     rss of the job against the limit of all slots
+#   - a task of a tightly integrated parallel job without master_forks_slaves /
+#     daemon_forks_slaves gets the limit of a single slot - before the fix sge_shepherd multiplied
+#     h_cpu by the slots of the job on the host
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name            "cs3017"
+set check_category        "BUG EXECD LIMITS PARALLEL VERIFIED"
+set check_description(0)  "sge_execd and sge_shepherd apply the same limit to each task of a\
+                           parallel job"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs3017_setup
+set check_cleanup_function cs3017_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs3017_loose_master_gets_all_slots"
+lappend check_functions "cs3017_tight_task_gets_one_slot"
+
+# -------- local test procedures: initialization------------------------------
+
+proc cs3017_setup {} {
+   get_current_cluster_config_array ts_config
+   global cs3017_host cs3017_work
+
+   # the jobs get 2 slots on one host
+   set cs3017_host ""
+   foreach host $ts_config(execd_nodes) {
+      if {[node_get_processors $host] >= 2} {
+         set cs3017_host $host
+         break
+      }
+   }
+   if {$cs3017_host == ""} {
+      ts_log_config "no execution host with at least 2 processors"
+      return 99
+   }
+   set cs3017_work "$ts_config(product_root)/examples/jobsbin/[resolve_arch $cs3017_host]/work"
+
+   set pe(slots)               10
+   set pe(allocation_rule)     "\$pe_slots"
+   set pe(control_slaves)      "FALSE"
+   set pe(job_is_first_task)   "TRUE"
+   add_pe "cs3017_loose.pe" pe
+
+   set pe(control_slaves)      "TRUE"
+   set pe(master_forks_slaves) "FALSE"
+   set pe(daemon_forks_slaves) "FALSE"
+   add_pe "cs3017_tight.pe" pe
+
+   set queue_conf(slots)   2
+   set queue_conf(pe_list) "cs3017_loose.pe cs3017_tight.pe"
+   add_queue "cs3017.q" $cs3017_host queue_conf
+}
+
+proc cs3017_cleanup {} {
+   global cs3017_host cs3017_work
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   del_queue "cs3017.q" "" 1 1
+   del_pe "cs3017_loose.pe"
+   del_pe "cs3017_tight.pe"
+
+   unset -nocomplain cs3017_host cs3017_work
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief set limits in cs3017.q and submit a job with 2 slots into it
+#
+# @param pe the parallel environment
+# @param limits name of an array with the limits of a single slot, e.g. limits(h_rss)
+# @param job_cmd the command the job runs, with its arguments
+# @return the job id, or a value <= 0 on error
+proc cs3017_submit_job {pe limits job_cmd} {
+   upvar $limits queue_conf
+
+   if {[mod_queue "cs3017.q" "" queue_conf] < 0} {
+      return -1
+   }
+
+   return [submit_job "-pe $pe 2 -q cs3017.q -o /dev/null -j y -b y $job_cmd"]
+}
+
+## @brief get a limit from the sge_shepherd config file of the master task of a running job
+#
+# @param job_id the job id
+# @param limit_name the name of the limit, e.g. h_rss
+# @return the limit as written into the config file, "" on error
+proc cs3017_get_config_limit {job_id limit_name} {
+   global cs3017_host CHECK_USER
+
+   set config_file "[get_spool_dir $cs3017_host execd]/active_jobs/${job_id}.1/config"
+   set config [start_remote_prog $cs3017_host $CHECK_USER "cat" $config_file]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "cannot read the config file $config_file on host $cs3017_host:\n$config"
+      return ""
+   }
+   foreach line [split $config "\n"] {
+      set line [string trim $line]
+      if {[string match "$limit_name=*" $line]} {
+         return [string range $line [string length "$limit_name="] end]
+      }
+   }
+
+   ts_log_severe "the config file $config_file on host $cs3017_host has no $limit_name:\n$config"
+   return ""
+}
+
+## @brief the job script of a loosely integrated job gets the limit of all its slots
+#
+# The job script starts the processes of both slots. Before the fix sge_shepherd got h_rss of a
+# single slot, on a host with systemd this became MemoryMax of the job, while sge_execd compared
+# the rss of the job against the limit of both slots.
+proc cs3017_loose_master_gets_all_slots {} {
+   set limits(h_rss) "100M"
+   set job_id [cs3017_submit_job "cs3017_loose.pe" limits "/bin/sleep 600"]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $job_id "" 60] != 0} {
+      return
+   }
+
+   set h_rss [cs3017_get_config_limit $job_id "h_rss"]
+   if {$h_rss == ""} {
+      # cs3017_get_config_limit already reported the error
+      delete_job $job_id 1
+      return
+   }
+   if {[transform_unit $h_rss] != [transform_unit "200M"]} {
+      ts_log_severe "the job script of the loosely integrated pe got h_rss=$h_rss, expected the\
+                     limit of its 2 slots, 200M"
+   }
+
+   delete_job $job_id 1
+}
+
+## @brief a task of a tightly integrated job gets the limit of a single slot
+#
+# The master task uses 7 seconds of CPU time, more than the 4 seconds of a single slot, but less
+# than the 8 seconds of both slots. Before the fix sge_shepherd multiplied h_cpu by the 2 slots of
+# the job on the host, and the job ran to its end.
+proc cs3017_tight_task_gets_one_slot {} {
+   global cs3017_work
+
+   set limits(h_cpu) "0:0:4"
+   set job_id [cs3017_submit_job "cs3017_tight.pe" limits "$cs3017_work -w 7"]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_job_end $job_id 120] != 0} {
+      return
+   }
+   if {[get_qacct $job_id qacct_info] != 0} {
+      return
+   }
+
+   if {$qacct_info(exit_status) == 0 && $qacct_info(failed) == 0} {
+      ts_log_severe "the master task of the tightly integrated pe was not killed, although its\
+                     CPU time exceeded the limit of a single slot: cpu $qacct_info(cpu)"
+   }
+}

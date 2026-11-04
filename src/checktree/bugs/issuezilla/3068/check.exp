@@ -27,27 +27,34 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2024 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
 
+# Issue 3068: h_vmem requested as a consumable of type JOB set the virtual memory limit of a
+# parallel job wrongly.
+#
+# The queue limits are limits per slot. The job script of a loosely integrated parallel job starts
+# the processes of all its slots, so it gets the limit of all its slots on the master host. A
+# limit the job requests as a consumable of type JOB is the limit of the whole job and is not
+# multiplied.
+
 # define global variable in this namespace
-global check_name 
+global check_name
 global check_category
-global check_description 
+global check_description
 global check_needs
-global check_functions 
-global check_errno 
-global check_errstr 
+global check_functions
 global check_root_access_needs
 
-set check_root_access_needs "yes"
+set check_root_access_needs "no"
 
 # define test's name and run level descriptions
 set check_name            "issue_3068"
-set check_category        "COMPATIBILITY SYSTEM L10N VERIFIED"
-set check_description(0)  "h_vmem setting as JOB consumable fails to set the virtual memory limit of a job"
+set check_category        "BUG EXECD LIMITS PARALLEL VERIFIED"
+set check_description(0)  "h_vmem setting as JOB consumable fails to set the virtual memory limit\
+                           of a job"
 
 # define test's dependencies
 set check_needs "init_core_system"
@@ -57,167 +64,116 @@ set check_setup_function "issue_3068_setup"
 set check_cleanup_function "issue_3068_cleanup"
 
 # define test's procedure order
-set check_functions ""
-lappend check_functions "issue_3068_check"
+set check_functions {}
+lappend check_functions "issue_3068_not_consumable"
+lappend check_functions "issue_3068_job_consumable"
+
+# -------- local test procedures: initialization------------------------------
 
 proc issue_3068_setup {} {
-   global ts_config
-   global test_pe
-   global queue_name
-   global target_system
-   global CHECK_OUTPUT
-   global issue_3068_complex_backup
-   
-   #
-   # Select target system to run dummy job. Requirement is
-   # a Solaris box where we can get process limits fairly 
-   # easily.
-   #
-   set  target_system [host_conf_get_suited_hosts 1 {} {sol-amd64 sol-sparc64} {} 0 1]
+   get_current_cluster_config_array ts_config
+   global issue_3068_host issue_3068_complex_backup
 
-   if {$target_system == {} } {
-      ts_log_info "Do cleanup because no Solaris host was found!"
-      return 99 
-   }
-
-   get_complex issue_3068_complex_backup
-   #
-   # Create parallel environment.
-   #
-   set test_pe "my_pe"
-   set this_pe(slots) 100
-   add_pe $test_pe this_pe
-   #
-   # Create test queue
-   #
-   set queue_name "test.q"
-   set this_q(qname) $queue_name
-   set this_q(slots) 1000
-   set this_q(pe_list) $test_pe 
-   add_queue $queue_name $ts_config(execd_hosts) this_q
-
-   return 0
-}
-# -------- local test procedures -----------------------------------------------
-
-#
-# This is the test plan: 
-#
-# o first clean up any leftovers from previous (possibly failed tests)
-# o create test queue
-# o create test PE and assign with test queue
-# o set complex h_vmem with consumable NO
-# o create dummy job using test PE with 2 slots and request h_vmem limit
-#   of 1G
-# o obtain job process id
-# o run plimit() command to obtain dummy job's process limit and compare
-#   with expexcted value. For the first iteration we expect a resource
-#   limit scaled up by nslots (~>2G)
-# o set complex h_vmem with consumable JOB
-# o create another dummy and get process limit
-# o now, we expect the job resource limit NOT scaled up (~>1GB) 
-#
-proc issue_3068_check {} {
-   global ts_config
-   global test_pe
-   global target_system
-   global issue_3068_complex_backup
-   #
-   # Setup consumable h_vmem.
-   #
-   set iteration 1
-   set test_complex(h_vmem) "h_vmem MEMORY <= YES NO 0 0"
-   set_complex test_complex
-   set return_code [ iterate $iteration ]
-   if { $return_code != 0 } {
-      ts_log_severe "Test failed in iteration (1) with h_vmem attribute NO"
-      return -1
-   }
-   #
-   #
-   #
-   delete_all_jobs
-   wait_for_end_of_all_jobs 100
-   #
-   #
-   #
-   set iteration 2
-   set test_complex(h_vmem) "h_vmem MEMORY <= YES JOB 0 0"
-   set_complex test_complex
-   set return_code [ iterate $iteration ]
-   if { $return_code != 0 } {
-      ts_log_severe "Test failed in iteration (2) with h_vmem attribute JOB"
-      return -1
-   }
-
-   return 0
-}
-
-proc iterate { iteration } {
-   global ts_config
-   global test_pe
-   global target_system
-
-   set one_gig_giga_units "1G"
-   set one_gig_kilo_units 1048576 
-   set two_gig_kilo_units 2097152
-   set job_args "-pe $test_pe 2 -N Sleeper -hard -l hostname=$target_system,h_vmem=$one_gig_giga_units $ts_config(product_root)/examples/jobs/sleeper.sh 600"
-   set job_id [ submit_job $job_args ]
-   wait_for_jobstart $job_id "Sleeper" 30 0 0
-   #
-   # Get shepherd's PID from pid file.
-   #
-   set execd_spool_dir [ get_execd_spool_dir $target_system ]
-   set pid_file $execd_spool_dir/$target_system/active_jobs/$job_id.1/job_pid
-   set job_pid [ get_pid_from_file $target_system $pid_file ]
-   #
-   # OK, now we've got the real job PID. Issue plimit command
-   # to obtain active process limits.
-   #
-   set plimit_binary [ get_binary_path $target_system "plimit" ]
-   set result [start_remote_prog $target_system "root" $plimit_binary "$job_pid" prg_exit_state 60 0 "" "" 1 0]
-   #
-   # Process plimit output.
-   #
-   set vmemory 0
-   set helper [ split $result "\n" ]
-   foreach line $helper {
-      set resource [ lindex $line 0 ]
-      if { $resource == "vmemory(kbytes)" } {
-         set vmemory [ lindex $line 1 ]
+   # the job gets 2 slots on one host
+   set issue_3068_host ""
+   foreach host $ts_config(execd_nodes) {
+      if {[node_get_processors $host] >= 2} {
+         set issue_3068_host $host
          break
       }
    }
-   #
-   # Dispatch on iteration.
-   #
-   if { $iteration == 1 } {
-      set limit $two_gig_kilo_units
-   } elseif { $iteration == 2 } {
-      set limit $one_gig_kilo_units
-   }
-   if { $vmemory == $limit } {
-      ts_log_fine "$resource: $vmemory as expected. SUCCESS!!"
-      return 0
-   } else {
-      ts_log_severe "$resource: $vmemory not expected. FAILURE!!"
-      return -1
+   if {$issue_3068_host == ""} {
+      ts_log_config "no execution host with at least 2 processors"
+      return 99
    }
 
+   get_complex issue_3068_complex_backup
+
+   set pe(slots)             10
+   set pe(allocation_rule)   "\$pe_slots"
+   set pe(control_slaves)    "FALSE"
+   set pe(job_is_first_task) "TRUE"
+   add_pe "issue_3068.pe" pe
+
+   set queue_conf(slots)   2
+   set queue_conf(pe_list) "issue_3068.pe"
+   add_queue "issue_3068.q" $issue_3068_host queue_conf
 }
 
-proc issue_3068_cleanup  {} {
-   global ts_config
-   global queue_name
-   global test_pe
-   global issue_3068_complex_backup
+proc issue_3068_cleanup {} {
+   global issue_3068_host issue_3068_complex_backup
 
    delete_all_jobs
-   wait_for_end_of_all_jobs 100
+   wait_for_end_of_all_jobs 60
 
-   del_queue $queue_name $ts_config(master_host) 1
-   del_pe $test_pe
+   del_queue "issue_3068.q" "" 1 1
+   del_pe "issue_3068.pe"
 
-   reset_complex issue_3068_complex_backup
-   unset issue_3068_complex_backup
+   if {[info exists issue_3068_complex_backup]} {
+      reset_complex issue_3068_complex_backup
+   }
+
+   unset -nocomplain issue_3068_host issue_3068_complex_backup
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief check the virtual memory limit of a 2 slot job requesting h_vmem=1G
+#
+# Sets the consumable attribute of the h_vmem complex, runs a job and compares the hard limit of
+# the address space of its job script with the expected value.
+#
+# @param consumable the consumable attribute of h_vmem, NO or JOB
+# @param expected the expected hard limit, e.g. 2G
+proc issue_3068_check_vmem_limit {consumable expected} {
+   global issue_3068_host CHECK_USER
+
+   set test_complex(h_vmem) "h_vmem MEMORY <= YES $consumable 0 0"
+   if {[set_complex test_complex] < 0} {
+      return
+   }
+
+   set job_args "-pe issue_3068.pe 2 -q issue_3068.q -l h_vmem=1G -o /dev/null -j y -b y"
+   append job_args " /bin/sleep 600"
+   set job_id [submit_job $job_args]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $job_id "" 60] != 0} {
+      delete_job $job_id 1
+      return
+   }
+
+   set pid_file "[get_spool_dir $issue_3068_host execd]/active_jobs/${job_id}.1/job_pid"
+   set pid [string trim [start_remote_prog $issue_3068_host $CHECK_USER "cat" $pid_file]]
+   if {$prg_exit_state != 0 || ![string is integer -strict $pid]} {
+      ts_log_severe "cannot read the pid of job $job_id from $pid_file on host\
+                     $issue_3068_host:\n$pid"
+      delete_job $job_id 1
+      return
+   }
+
+   set limits [start_remote_prog $issue_3068_host $CHECK_USER "cat" "/proc/$pid/limits"]
+   if {$prg_exit_state != 0 ||
+       ![regexp {Max address space\s+\S+\s+(\S+)} $limits match hard_limit]} {
+      ts_log_severe "cannot read the limits of job $job_id (pid $pid) on host\
+                     $issue_3068_host:\n$limits"
+   } elseif {$hard_limit != [transform_unit $expected]} {
+      ts_log_severe "h_vmem as consumable $consumable: the job script has a virtual memory limit\
+                     of $hard_limit, expected $expected"
+   } else {
+      ts_log_fine "h_vmem as consumable $consumable: virtual memory limit $expected as expected"
+   }
+
+   delete_job $job_id 1
+}
+
+## @brief h_vmem is not a consumable: the job script gets the limit of both slots
+proc issue_3068_not_consumable {} {
+   issue_3068_check_vmem_limit "NO" "2G"
+}
+
+## @brief h_vmem is a consumable of type JOB: the job script gets the requested limit
+proc issue_3068_job_consumable {} {
+   issue_3068_check_vmem_limit "JOB" "1G"
 }

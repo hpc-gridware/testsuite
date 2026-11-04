@@ -46,17 +46,13 @@ set check_cleanup_function x_forks_slaves_cleanup
 set check_functions {}
 lappend check_functions "x_forks_slaves_basic"
 lappend check_functions "x_forks_slaves_issue_619"
+lappend check_functions "x_forks_slaves_limit_combinations"
 
 # @todo extend the test
 # add further check_functions, e.g.
 # create a real job using the work binary to burn cpu and/or use memory
 # - use different limits which are monitored by the sge_execd
 # - use different limits which are monitored by the sge_qmaster (IIRC we have this)
-# add runlevels:
-# - both false
-# - one true, one false
-# - one false, one true
-# - both true
 
 # -------- local test procedures: initialization------------------------------
 
@@ -87,9 +83,13 @@ proc x_forks_slaves_setup {} {
    add_pe "test4.pe" pe
    set pe(allocation_rule) "1"
    add_pe "test1.pe" pe
+   # the settings of master_forks_slaves and daemon_forks_slaves are changed by
+   # x_forks_slaves_limit_combinations
+   set pe(allocation_rule) "4"
+   add_pe "combination4.pe" pe
 
    set q(slots) 10
-   set q(pe_list) "test1.pe test4.pe"
+   set q(pe_list) "test1.pe test4.pe combination4.pe"
    add_queue "test.q" $x_forks_slaves_hosts q
 }
 
@@ -110,8 +110,24 @@ proc x_forks_slaves_cleanup {} {
    del_queue "test.q" "" 1 1
    del_pe "test1.pe"
    del_pe "test4.pe"
+   del_pe "combination4.pe"
 
    unset -nocomplain x_forks_slaves_hosts
+}
+
+## @brief get the active jobs directory of the task of a job on a host
+#
+# @param job_id the job id
+# @param host the host
+# @param host_type "master" for the master task, "slave" for the first slave task on the host
+# @return the path of the directory
+proc x_forks_slaves_get_task_dir {job_id host host_type} {
+   set task_dir "[get_spool_dir $host "execd"]/active_jobs/${job_id}.1"
+   if {$host_type == "slave"} {
+      append task_dir "/1.$host"
+   }
+
+   return $task_dir
 }
 
 proc x_forks_slaves_check_limits {job_id host host_type limit} {
@@ -119,12 +135,7 @@ proc x_forks_slaves_check_limits {job_id host host_type limit} {
    global CHECK_USER
 
    # figure out path to config file
-   set spool_dir [get_spool_dir $host "execd"]
-   set config_file "$spool_dir/active_jobs/${job_id}.1"
-   if {$host_type == "slave"} {
-      append config_file "/1.$host"
-   }
-   append config_file "/config"
+   set config_file "[x_forks_slaves_get_task_dir $job_id $host $host_type]/config"
    ts_log_fine "checking limits in config file $config_file on host $host"
 
    # read config file and check limits
@@ -136,7 +147,7 @@ proc x_forks_slaves_check_limits {job_id host host_type limit} {
    set found 0
    foreach line [split $config "\n"] {
       set line [string trim $line]
-      if {[regexp "^$limit_name" $line]} {
+      if {[regexp "^${limit_name}=" $line]} {
          set found 1
          set value [lindex [split $line "="] 1]
          if {[transform_unit $value] != [transform_unit $limit_value]} {
@@ -149,6 +160,41 @@ proc x_forks_slaves_check_limits {job_id host host_type limit} {
 
    if {!$found} {
       ts_log_severe "limit $limit_name not found on $host_type host $host"
+   }
+}
+
+## @brief check the virtual memory limit sge_shepherd applied to the process of a task
+#
+# sge_shepherd applies the h_vmem limit of the config file as it is - before 9.1.8 it multiplied it
+# once more by the slots of the job on the host.
+#
+# @param job_id the job id
+# @param host the host
+# @param host_type "master" for the master task, "slave" for the first slave task on the host
+# @param expected the expected hard limit, e.g. 4G
+proc x_forks_slaves_check_applied_vmem {job_id host host_type expected} {
+   global CHECK_USER
+
+   set pid_file "[x_forks_slaves_get_task_dir $job_id $host $host_type]/job_pid"
+   set pid [string trim [start_remote_prog $host $CHECK_USER "cat" $pid_file]]
+   if {$prg_exit_state != 0 || ![string is integer -strict $pid]} {
+      ts_log_severe "cannot read the pid of the $host_type task from $pid_file on host $host:\n$pid"
+      return
+   }
+
+   set limits [start_remote_prog $host $CHECK_USER "cat" "/proc/$pid/limits"]
+   if {$prg_exit_state != 0 ||
+       ![regexp {Max address space\s+\S+\s+(\S+)} $limits match hard_limit]} {
+      ts_log_severe "cannot read the limits of the $host_type task (pid $pid) on host\
+                     $host:\n$limits"
+      return
+   }
+
+   if {$hard_limit != [transform_unit $expected]} {
+      ts_log_severe "the $host_type task on host $host has a virtual memory limit of $hard_limit,\
+                     expected $expected"
+   } else {
+      ts_log_fine "the $host_type task on host $host has a virtual memory limit of $expected"
    }
 }
 
@@ -283,7 +329,7 @@ proc x_forks_slaves_basic {} {
 
    # submit a job requesting our pe, spawning our 2 hosts, requesting limits
    set output_file [get_tmp_file_name]
-   set job_opts "-pe test4.pe 8 -l h_rss=1G -scope master -l h=$master_host"
+   set job_opts "-pe test4.pe 8 -l h_rss=1G,h_vmem=1G -scope master -l h=$master_host"
    append job_opts " -o $output_file -e $output_file"
 
    set job_script "$ts_config(testsuite_root_dir)/scripts/pe_job.sh"
@@ -302,6 +348,15 @@ proc x_forks_slaves_basic {} {
    # check the limits
    x_forks_slaves_check_limits $job_id $master_host "master" "h_rss=4G"
    x_forks_slaves_check_limits $job_id $slave_host "slave" "h_rss=4G"
+   x_forks_slaves_check_limits $job_id $master_host "master" "h_vmem=4G"
+   x_forks_slaves_check_limits $job_id $slave_host "slave" "h_vmem=4G"
+
+   # the process gets the limit of the config file - before 9.1.8 sge_shepherd multiplied it once
+   # more by the 4 slots on the host
+   if {[is_version_in_range "9.1.8"]} {
+      x_forks_slaves_check_applied_vmem $job_id $master_host "master" "4G"
+      x_forks_slaves_check_applied_vmem $job_id $slave_host "slave" "4G"
+   }
 
    # check how many slave tasks we can start
    x_forks_slaves_check_qrsh_inherit $job_id $master_host "master" 0
@@ -379,3 +434,67 @@ proc x_forks_slaves_issue_619 {} {
    delete_job $job_id
 }
 
+## @brief check the limits of the tasks for every setting of master_forks_slaves and
+#         daemon_forks_slaves
+#
+# The job gets 4 slots on the master host and 4 slots on the slave host and requests h_vmem=1G
+# per slot. The task which starts the processes of all slots on its host gets the limit of the
+# 4 slots, every other task the limit of a single slot:
+# - the master task with master_forks_slaves TRUE
+# - the slave task with daemon_forks_slaves TRUE
+# The limit in the config file is applied to the process as it is.
+# Before 9.1.8 sge_shepherd multiplied it once more by the 4 slots on the host, and with
+# daemon_forks_slaves the master task got the limit of the 4 slots as well.
+proc x_forks_slaves_limit_combinations {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global x_forks_slaves_hosts
+
+   if {![is_version_in_range "9.1.8"]} {
+      ts_log_info "the limits of the tasks are only as expected since 9.1.8"
+      return
+   }
+
+   set master_host [lindex $x_forks_slaves_hosts 0]
+   set slave_host [lindex $x_forks_slaves_hosts 1]
+
+   set job_script "$ts_config(testsuite_root_dir)/scripts/pe_job.sh"
+   set task_script "$ts_config(testsuite_root_dir)/scripts/pe_task.sh"
+
+   # master_forks_slaves daemon_forks_slaves expected_master expected_slave
+   set combinations {
+      {"FALSE" "FALSE" "1G" "1G"}
+      {"TRUE"  "FALSE" "4G" "1G"}
+      {"FALSE" "TRUE"  "1G" "4G"}
+   }
+   foreach combination $combinations {
+      lassign $combination master_forks daemon_forks expected_master expected_slave
+      ts_log_fine "master_forks_slaves $master_forks, daemon_forks_slaves $daemon_forks"
+
+      set pe(master_forks_slaves) $master_forks
+      set pe(daemon_forks_slaves) $daemon_forks
+      if {[mod_pe "combination4.pe" pe] < 0} {
+         return
+      }
+
+      set output_file [get_tmp_file_name]
+      set job_opts "-pe combination4.pe 8 -l h_vmem=1G -scope master -l h=$master_host"
+      append job_opts " -o $output_file -e $output_file"
+      set job_id [submit_job "$job_opts $job_script $task_script 1 6000"]
+      if {$job_id <= 0} {
+         return
+      }
+
+      # wait for the job to be running and give some time for the tasks to be started
+      wait_for_jobstart $job_id "" 10
+      after 5000
+
+      x_forks_slaves_check_limits $job_id $master_host "master" "h_vmem=$expected_master"
+      x_forks_slaves_check_limits $job_id $slave_host "slave" "h_vmem=$expected_slave"
+      x_forks_slaves_check_applied_vmem $job_id $master_host "master" $expected_master
+      x_forks_slaves_check_applied_vmem $job_id $slave_host "slave" $expected_slave
+
+      ts_log_fine [start_remote_prog $master_host $CHECK_USER "cat" $output_file]
+      delete_job $job_id 1
+   }
+}
