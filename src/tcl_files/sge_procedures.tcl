@@ -3284,8 +3284,12 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
                }
 
                # the value is matched literally: a mail_tag like [HPC-US] would otherwise be a
-               # character class
-               set glob_value [string map {\\ \\\\ * \\* ? \\? [ \\[ ] \\]} $expected_value($host)]
+               # character class. Only the wildcard for an emptied entry stays a pattern.
+               if {$name == "*"} {
+                  set glob_value $expected_value($host)
+               } else {
+                  set glob_value [string map {\\ \\\\ * \\* ? \\? [ \\[ ] \\]} $expected_value($host)]
+               }
                if {[string match "*$host*\|I\|*using \"$glob_value\" for $name*" $line]} {
                   # this will match all string based configuration values
                   # or all values in 9.0.* because also there numbers are quoted
