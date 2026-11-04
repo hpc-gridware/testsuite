@@ -7695,6 +7695,7 @@ proc source_tcl_files {} {
    ts_source $libdir/ocs_installer
    ts_source $libdir/ocs_jsv
    ts_source $libdir/ocs_mail
+   ts_source $libdir/ocs_module_test
    ts_source $libdir/ocs_perf
    ts_source $libdir/parser
    ts_source $libdir/parser_xml

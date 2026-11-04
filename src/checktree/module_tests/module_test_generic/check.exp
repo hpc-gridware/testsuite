@@ -73,7 +73,10 @@ set check_needs           "init_core_system"
 #
 # The index IS the level, so entries must never be reordered or deleted -- that
 # would silently repoint every level below. To retire a binary, keep its slot
-# and let the run function skip it.
+# and let the run function skip it. The one exception so far: on 2026-11-04 the
+# CULL, uti and sgeobj binaries moved into module_test_cull, module_test_uti and
+# module_test_sgeobj and this list was renumbered compactly, as only levels 0-99
+# run (CS-2996).
 #
 # Version and feature gating is NOT expressed with check_version_range(N): the
 # level always exists, and the run function skips the binary with ts_log_info
@@ -81,7 +84,8 @@ set check_needs           "init_core_system"
 # across versions, which a conditional lappend would not.
 #
 # Binaries that need a running cluster do NOT belong here -- check_needs is "".
-# They live in module_test_cluster.
+# They live in module_test_cluster. The binaries of libs/cull, libs/uti and
+# libs/sgeobj live in module_test_cull, module_test_uti and module_test_sgeobj.
 # ---------------------------------------------------------------------------
 
 # {binary min_version needs_gcs max_version}
@@ -94,267 +98,43 @@ lappend generic_module_tests {test_qmaster_timed_event "" 0 ""}
 lappend generic_module_tests {test_commlib_issue "" 0 ""}
 lappend generic_module_tests {test_comm_xml_parse "9.1.4" 0 ""}
 lappend generic_module_tests {test_common_category "" 0 ""}
-lappend generic_module_tests {test_cull_hash "" 0 ""}
-lappend generic_module_tests {test_cull_list "" 0 ""}
-lappend generic_module_tests {test_cull_observe "" 0 ""}
-lappend generic_module_tests {test_cull_pack "" 0 ""}
-lappend generic_module_tests {test_cull_enumeration "" 0 ""}
 lappend generic_module_tests {test_qmaster_calendar "" 0 ""}
-lappend generic_module_tests {test_sgeobj_attr "" 0 ""}
-lappend generic_module_tests {test_sgeobj_object "" 0 ""}
-lappend generic_module_tests {test_sgeobj_fgl "" 0 ""}
-lappend generic_module_tests {test_sgeobj_range "" 0 ""}
-lappend generic_module_tests {test_sgeobj_resource_quota "" 0 ""}
-lappend generic_module_tests {test_sgeobj_schedd_conf "" 0 ""}
-lappend generic_module_tests {test_sgeobj_utility "" 0 ""}
-lappend generic_module_tests {test_sgeobj_ulong "9.1.4" 0 ""}
-lappend generic_module_tests {test_sgeobj_var "9.1.4" 0 ""}
-lappend generic_module_tests {test_sgeobj_hgroup "9.2.0" 0 ""}
-lappend generic_module_tests {test_sgeobj_manop "9.2.0" 0 ""}
-lappend generic_module_tests {test_sgeobj_role "9.2.0" 0 ""}
-lappend generic_module_tests {test_sgeobj_RequestLimits "9.1.0" 1 ""}
-lappend generic_module_tests {test_RequestLimits "" 1 "9.1.0"}
-lappend generic_module_tests {test_sgeobj_Session "" 1 ""}
 lappend generic_module_tests {test_sched_resource_utilization "" 0 ""}
 lappend generic_module_tests {test_sched_load_formula "" 0 ""}
 lappend generic_module_tests {test_procedure_qquota_json "9.2.0" 0 ""}
 lappend generic_module_tests {test_procedure_qquota_plain "9.2.0" 0 ""}
 lappend generic_module_tests {test_procedure_qrstat_json "9.2.0" 0 ""}
 lappend generic_module_tests {test_procedure_qstat_summary "9.2.0" 0 ""}
-lappend generic_module_tests {test_uti_bitfield "" 0 ""}
-lappend generic_module_tests {test_uti_deadlock "" 0 ""}
-lappend generic_module_tests {test_uti_lock_fifo "" 0 ""}
-lappend generic_module_tests {test_uti_lock_multiple "" 0 ""}
-lappend generic_module_tests {test_uti_lock_simple "" 0 ""}
-lappend generic_module_tests {test_uti_err "" 0 ""}
-lappend generic_module_tests {test_uti_sl "" 0 ""}
-lappend generic_module_tests {test_uti_tq "" 0 ""}
-lappend generic_module_tests {test_uti_string "" 0 ""}
-lappend generic_module_tests {test_uti_dstring "" 0 ""}
-lappend generic_module_tests {test_uti_uidgid "" 0 ""}
-lappend generic_module_tests {test_uti_authinfo "9.2.0" 0 ""}
-lappend generic_module_tests {test_uti_parse_num "9.2.0" 0 ""}
-lappend generic_module_tests {test_uti_peopen "9.1.3" 0 ""}
-lappend generic_module_tests {test_uti_threads "" 0 ""}
-lappend generic_module_tests {test_uti_thread_local "" 0 ""}
-lappend generic_module_tests {test_uti_time "" 0 ""}
-lappend generic_module_tests {test_uti_os_fds "" 0 ""}
-lappend generic_module_tests {test_uti_Encoder "9.1.0" 0 ""}
 lappend generic_module_tests {test_qmaster_rusage "9.1.5" 0 ""}
-lappend generic_module_tests {test_sgeobj_rsmap "9.0.14 9.1.6" 0 ""}
-lappend generic_module_tests {test_cull_no_transfer "9.2.0" 0 ""}
 lappend generic_module_tests {test_sched_request_amount "9.1.6" 0 ""}
-lappend generic_module_tests {test_sgeobj_request_parse "9.1.6" 0 ""}
-lappend generic_module_tests {test_sgeobj_Matcher "9.2.0" 1 ""}
 lappend generic_module_tests {test_procedure_qconf_missing_argument "9.2.0" 0 ""}
-lappend generic_module_tests {test_cull_sort "9.2.0" 0 ""}
-lappend generic_module_tests {test_cull_access "9.2.0" 0 ""}
-lappend generic_module_tests {test_cull_lookup "9.2.0" 0 ""}
-lappend generic_module_tests {test_cull_db "9.2.0" 0 ""}
-lappend generic_module_tests {test_cull_select_pack "9.2.0" 0 ""}
-lappend generic_module_tests {test_uti_lock_held "9.2.0" 0 ""}
-lappend generic_module_tests {test_uti_cpus "9.2.0" 0 ""}
-lappend generic_module_tests {test_uti_format_text "9.2.0" 0 ""}
-lappend generic_module_tests {test_cull_owner "9.2.0" 0 ""}
-lappend generic_module_tests {test_cull_pack_format "9.2.0" 0 ""}
 
-# The binaries built on the shared module test frame (clusterscheduler
-# test/common/ocs_module_test.h). When the testsuite records a run, they get
-# the report options and their records become a stream of their own, so each
-# scenario and CHECK shows up in the test report. Any other binary gets no
-# extra arguments: some read their own.
-global module_tests_with_report
-set module_tests_with_report {test_comm_xml_parse test_sgeobj_rsmap test_sgeobj_ulong test_sgeobj_var
-                              test_uti_peopen test_cull_select_pack test_uti_lock_held
-                              test_uti_cpus test_uti_format_text test_cull_owner test_cull_pack_format}
-
+# the description of a level is the name of its binary, one literal line per
+# entry of generic_module_tests in the same order: tools that list the supported
+# levels (gcs-testscan) read these lines without running the Tcl
 set check_description(0) "test_qmaster_timed_event"
 set check_description(1) "test_commlib_issue"
 set check_description(2) "test_comm_xml_parse"
 set check_description(3) "test_common_category"
-set check_description(4) "test_cull_hash"
-set check_description(5) "test_cull_list"
-set check_description(6) "test_cull_observe"
-set check_description(7) "test_cull_pack"
-set check_description(8) "test_cull_enumeration"
-set check_description(9) "test_qmaster_calendar"
-set check_description(10) "test_sgeobj_attr"
-set check_description(11) "test_sgeobj_object"
-set check_description(12) "test_sgeobj_fgl"
-set check_description(13) "test_sgeobj_range"
-set check_description(14) "test_sgeobj_resource_quota"
-set check_description(15) "test_sgeobj_schedd_conf"
-set check_description(16) "test_sgeobj_utility"
-set check_description(17) "test_sgeobj_ulong"
-set check_description(18) "test_sgeobj_var"
-set check_description(19) "test_sgeobj_hgroup"
-set check_description(20) "test_sgeobj_manop"
-set check_description(21) "test_sgeobj_role"
-set check_description(22) "test_sgeobj_RequestLimits"
-set check_description(23) "test_RequestLimits"
-set check_description(24) "test_sgeobj_Session"
-set check_description(25) "test_sched_resource_utilization"
-set check_description(26) "test_sched_load_formula"
-set check_description(27) "test_procedure_qquota_json"
-set check_description(28) "test_procedure_qquota_plain"
-set check_description(29) "test_procedure_qrstat_json"
-set check_description(30) "test_procedure_qstat_summary"
-set check_description(31) "test_uti_bitfield"
-set check_description(32) "test_uti_deadlock"
-set check_description(33) "test_uti_lock_fifo"
-set check_description(34) "test_uti_lock_multiple"
-set check_description(35) "test_uti_lock_simple"
-set check_description(36) "test_uti_err"
-set check_description(37) "test_uti_sl"
-set check_description(38) "test_uti_tq"
-set check_description(39) "test_uti_string"
-set check_description(40) "test_uti_dstring"
-set check_description(41) "test_uti_uidgid"
-set check_description(42) "test_uti_authinfo"
-set check_description(43) "test_uti_parse_num"
-set check_description(44) "test_uti_peopen"
-set check_description(45) "test_uti_threads"
-set check_description(46) "test_uti_thread_local"
-set check_description(47) "test_uti_time"
-set check_description(48) "test_uti_os_fds"
-set check_description(49) "test_uti_Encoder"
-set check_description(50) "test_qmaster_rusage"
-set check_description(51) "test_sgeobj_rsmap"
-set check_description(52) "test_cull_no_transfer"
-set check_description(53) "test_sched_request_amount"
-set check_description(54) "test_sgeobj_request_parse"
-set check_description(55) "test_sgeobj_Matcher"
-set check_description(56) "test_procedure_qconf_missing_argument"
-set check_description(57) "test_cull_sort"
-set check_description(58) "test_cull_access"
-set check_description(59) "test_cull_lookup"
-set check_description(60) "test_cull_db"
-set check_description(61) "test_cull_select_pack"
-set check_description(62) "test_uti_lock_held"
-set check_description(63) "test_uti_cpus"
-set check_description(64) "test_uti_format_text"
-set check_description(65) "test_cull_owner"
-set check_description(66) "test_cull_pack_format"
+set check_description(4) "test_qmaster_calendar"
+set check_description(5) "test_sched_resource_utilization"
+set check_description(6) "test_sched_load_formula"
+set check_description(7) "test_procedure_qquota_json"
+set check_description(8) "test_procedure_qquota_plain"
+set check_description(9) "test_procedure_qrstat_json"
+set check_description(10) "test_procedure_qstat_summary"
+set check_description(11) "test_qmaster_rusage"
+set check_description(12) "test_sched_request_amount"
+set check_description(13) "test_procedure_qconf_missing_argument"
 
 set check_functions {}
 lappend check_functions "generic_module_tests_run"
 
 
-#****** check.60/generic_module_tests_cleanup() ********************************
-#  NAME
-#     generic_module_tests_cleanup() -- cleanup for module tests
-#
-#  SYNOPSIS
-#     generic_module_tests_cleanup { }
-#
-#  FUNCTION
-#     Used to delete files created by module tests
-#*******************************************************************************
-proc generic_module_tests_cleanup {} {
-   global CHECK_USER
-   set exec_host [gethostname]
-   set home_dir_path [get_home_dir_path $CHECK_USER $exec_host]
-   set cull_pack_file_path "$home_dir_path/test_cull_pack.txt"
-   ts_log_fine "checking if file \"$cull_pack_file_path\" exists ..."
-   if {[is_remote_file $exec_host $CHECK_USER $cull_pack_file_path]} {
-      delete_remote_file $exec_host $CHECK_USER $cull_pack_file_path
-   }
-}
-
-
 ## @brief Run the one module test binary this level selects.
-#
-# The level picks the binary; it always runs on the suited host. A binary whose
-# version or feature requirement the cluster does not meet is skipped via
-# ts_log_info (a configuration issue, not a failure).
 #
 # @return none; reports failures through ts_log_severe
 proc generic_module_tests_run {} {
-   global ts_config CHECK_USER CHECK_ACT_LEVEL
-   global generic_module_tests module_tests_with_report
-
-   set index $CHECK_ACT_LEVEL
-
-   if {$index >= [llength $generic_module_tests]} {
-      ts_log_info "level $CHECK_ACT_LEVEL has no module test assigned"
-      return
-   }
-
-   lassign [lindex $generic_module_tests $index] module_test min_version needs_gcs max_version
-
-   # ------------------------------------------------------------------------
-   # ts_log_info, NEVER ts_log_config, in a check function.
-   #
-   # ts_log_config records -3 in check_errno($CHECK_CUR_PROC_NAME), and the
-   # framework turns any -3 into "level unsupported"
-   # (private_check_error_run_test_level, check.exp). check_errno is keyed by
-   # FUNCTION NAME and is not cleared between levels, and every level of this
-   # check runs the same function -- so a single ts_log_config here marks every
-   # FOLLOWING level unsupported too, including the ones that ran and passed.
-   #
-   # Observed 2026-08-04: level 23 skips test_RequestLimits on 9.2 (replaced by
-   # test_sgeobj_RequestLimits). With ts_log_config, levels 24..149 all reported
-   # UNSUPPORTED although their binaries ran and passed.
-   #
-   # The framework only sanctions ts_log_config in a setup function that then
-   # returns 99 (check.exp: "setup_ret == 99 ... this means there was no
-   # ts_log_config"). If a level should report "unsupported" rather than simply
-   # be logged as skipped, add a check_setup_level_function that does both --
-   # do not call ts_log_config from here.
-   # ------------------------------------------------------------------------
-   if {$min_version ne "" && ![is_version_in_range $min_version]} {
-      ts_log_info "$module_test needs version $min_version or newer - skipped"
-      return
-   }
-   if {$max_version ne "" && [is_version_in_range $max_version]} {
-      ts_log_info "$module_test was replaced in $max_version - skipped"
-      return
-   }
-   if {$needs_gcs && ![ge_has_feature "gcs"]} {
-      ts_log_info "$module_test needs the gcs feature set - skipped"
-      return
-   }
-
-   set hosts [host_conf_get_suited_hosts]
-   ts_log_fine "$module_test on: $hosts"
-
-   set error_text ""
-   foreach host $hosts {
-      ts_log_frame
-      ts_log_fine "host $host, arch [resolve_arch $host]"
-
-      # some tests (especially thread related ones) can take very long
-      set time_in_sec 600
-
-      # test_uti_peopen (CS-2333) exercises the root-only user-switch path of
-      # sge_peopen*; it must run as root and is told which non-root user to
-      # switch to (argv[1]), otherwise it only skips.
-      set test_user $CHECK_USER
-      set test_args ""
-      if {$module_test eq "test_uti_peopen"} {
-         global CHECK_FIRST_FOREIGN_SYSTEM_USER
-         set test_user "root"
-         set test_args $CHECK_FIRST_FOREIGN_SYSTEM_USER
-      }
-
-      # appended, not prepended: a binary of a line not yet on the frame reads
-      # its own arguments by position (test_uti_peopen: argv[1] is the user)
-      if {[lsearch -exact $module_tests_with_report $module_test] >= 0} {
-         set test_args [concat $test_args [tsrec_module_test_args]]
-      }
-
-      set output [start_test_bin $module_test $test_args $host $test_user ret $time_in_sec]
-      set output [tsrec_module_test_output $output]
-      if {$ret == 0} {
-         ts_log_fine "   => $module_test ok"
-         ts_log_fine $output
-      } else {
-         ts_log_fine "   => $module_test failed"
-         append error_text "module test $module_test failed on $host:\n$output\n\n"
-      }
-   }
-
-   if {$error_text ne ""} {
-      ts_log_severe $error_text
-   }
+   global generic_module_tests
+   ocs_module_test_run_level $generic_module_tests
 }

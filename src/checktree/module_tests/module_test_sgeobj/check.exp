@@ -1,0 +1,100 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# define global variable in this namespace
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+
+set check_root_access_needs "yes"
+
+set check_name            "module_test_sgeobj"
+set check_category        "MODULE TESTBIN VERIFIED SGEOBJ"
+# start_test_bin runs the binary from the INSTALLED $SGE_ROOT/testbin, so the
+# product has to be installed (see module_test_generic)
+set check_needs           "init_core_system"
+
+# ---------------------------------------------------------------------------
+# The module tests of libs/sgeobj, one level per binary, laid out like
+# module_test_generic (see there): the level is the index into the list, in the
+# short band 0-99, entries are appended and never reordered or deleted.
+# Version and feature gating is done by the run function, not by the level.
+# ---------------------------------------------------------------------------
+
+# {binary min_version needs_gcs max_version}
+# check.exp is sourced from inside a proc, so the list is declared global here.
+global sgeobj_module_tests
+set sgeobj_module_tests {}
+lappend sgeobj_module_tests {test_sgeobj_attr "" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_object "" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_fgl "" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_range "" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_resource_quota "" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_schedd_conf "" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_utility "" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_ulong "9.1.4" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_var "9.1.4" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_hgroup "9.2.0" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_manop "9.2.0" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_role "9.2.0" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_RequestLimits "9.1.0" 1 ""}
+lappend sgeobj_module_tests {test_RequestLimits "" 1 "9.1.0"}
+lappend sgeobj_module_tests {test_sgeobj_Session "" 1 ""}
+lappend sgeobj_module_tests {test_sgeobj_rsmap "9.0.14 9.1.6" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_request_parse "9.1.6" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_Matcher "9.2.0" 1 ""}
+
+# the description of a level is the name of its binary, one literal line per
+# entry of sgeobj_module_tests in the same order: tools that list the supported
+# levels (gcs-testscan) read these lines without running the Tcl
+set check_description(0) "test_sgeobj_attr"
+set check_description(1) "test_sgeobj_object"
+set check_description(2) "test_sgeobj_fgl"
+set check_description(3) "test_sgeobj_range"
+set check_description(4) "test_sgeobj_resource_quota"
+set check_description(5) "test_sgeobj_schedd_conf"
+set check_description(6) "test_sgeobj_utility"
+set check_description(7) "test_sgeobj_ulong"
+set check_description(8) "test_sgeobj_var"
+set check_description(9) "test_sgeobj_hgroup"
+set check_description(10) "test_sgeobj_manop"
+set check_description(11) "test_sgeobj_role"
+set check_description(12) "test_sgeobj_RequestLimits"
+set check_description(13) "test_RequestLimits"
+set check_description(14) "test_sgeobj_Session"
+set check_description(15) "test_sgeobj_rsmap"
+set check_description(16) "test_sgeobj_request_parse"
+set check_description(17) "test_sgeobj_Matcher"
+
+set check_functions {}
+lappend check_functions "sgeobj_module_tests_run"
+
+
+## @brief Run the one sgeobj module test binary this level selects
+#
+# @return none; reports failures through ts_log_severe
+proc sgeobj_module_tests_run {} {
+   global sgeobj_module_tests
+   ocs_module_test_run_level $sgeobj_module_tests
+}
