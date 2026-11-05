@@ -1,0 +1,417 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# When the memory cgroup OOM killer ends a job, sge_execd reports it in the accounting record:
+# deleted_by is oom-killer@<hostname>, and sge_execd logs the OOM kill in its messages file.
+#
+# On a host with systemd, sge_shepherd sets MemoryMax of the job scope from h_rss / h_vmem and
+# OOMPolicy=kill. When a process of the job exceeds MemoryMax, the OOM killer kills the whole job
+# scope, and the scope unit is left in the failed state with Result=oom-kill. sge_execd reads
+# Result of the scope after the job has ended.
+#
+# The job script starts a child which writes more memory than MemoryMax allows. The jobs are
+# submitted with SGE_DEBUG_MEMORY_SWAP_MAX=0 in their environment, which makes sge_shepherd set
+# MemorySwapMax=0 on the job scope - otherwise the memory above MemoryMax is swapped out on a host
+# with swap space, and no OOM kill happens.
+#
+# OOMPolicy can be set on scopes since systemd 252, and it needs cgroup v2. On other hosts an OOM
+# kill is not reported.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name            "systemd_deleted_by"
+# not VERIFIED: the OOM kills leave the job scopes in the failed state, and sge_execd does not
+# reset failed job scopes yet (CS-3021). The framework reports the failed scopes as error after the
+# check, and a later job with the same job id could not start its scope. Add VERIFIED with CS-3021.
+set check_category        "ACCOUNTING EXECD SYSTEMD"
+set check_description(0)  "the accounting record of a job ended by the OOM killer shows\
+                           deleted_by oom-killer@<hostname>"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function systemd_deleted_by_setup
+set check_cleanup_function systemd_deleted_by_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "systemd_deleted_by_oom_kill_job"
+lappend check_functions "systemd_deleted_by_oom_kill_pe_task"
+lappend check_functions "systemd_deleted_by_qdel_oom_kill_pe_task"
+lappend check_functions "systemd_deleted_by_no_oom_kill"
+lappend check_functions "systemd_deleted_by_old_systemd"
+
+# -------- local test procedures: initialization------------------------------
+
+proc systemd_deleted_by_setup {} {
+   get_current_cluster_config_array ts_config
+   global systemd_deleted_by_host systemd_deleted_by_old_host
+
+   # a host where OOMPolicy can be set on the job scope: cgroup v2 and systemd >= 252, with 2
+   # processors for the parallel job
+   # a host where it cannot: cgroup v2 and an older systemd
+   set systemd_deleted_by_host ""
+   set systemd_deleted_by_old_host ""
+   foreach host $ts_config(execd_nodes) {
+      set version [systemd_get_version $host]
+      if {$version < 0 || [systemd_get_cgroup_version $host] != 2} {
+         continue
+      }
+      if {$version >= 252} {
+         if {$systemd_deleted_by_host == "" && [node_get_processors $host] >= 2} {
+            set systemd_deleted_by_host $host
+         }
+      } elseif {$systemd_deleted_by_old_host == ""} {
+         set systemd_deleted_by_old_host $host
+      }
+   }
+   if {$systemd_deleted_by_host == ""} {
+      ts_log_config "no execution host with cgroup v2, systemd 252 or newer and 2 processors"
+      return 99
+   }
+
+   set pe(slots)               10
+   set pe(allocation_rule)     "\$pe_slots"
+   set pe(control_slaves)      "TRUE"
+   set pe(job_is_first_task)   "TRUE"
+   set pe(master_forks_slaves) "FALSE"
+   set pe(daemon_forks_slaves) "FALSE"
+   add_pe "deleted_by.pe" pe
+
+   set queue_conf(slots)   2
+   set queue_conf(pe_list) "deleted_by.pe"
+   set queue_conf(notify)  "00:00:10"
+   add_queue "deleted_by.q" $systemd_deleted_by_host queue_conf
+
+   return 0
+}
+
+proc systemd_deleted_by_cleanup {} {
+   global systemd_deleted_by_host systemd_deleted_by_old_host
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   del_queue "deleted_by.q" "" 1 1
+   del_pe "deleted_by.pe"
+
+   unset -nocomplain systemd_deleted_by_host systemd_deleted_by_old_host
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief submit a job whose child writes more memory than h_rss allows
+#
+# @param host the host the job shall run on
+# @param mb the memory in MB the child writes
+# @param pe_args "" for a sequential job, or e.g. "-pe deleted_by.pe 2 -q deleted_by.q" for a job
+#               which starts its child as a task of a tightly integrated parallel job
+# @param sleep_after the seconds the job script sleeps after its child has ended
+# @return the job id, or a value <= 0 on error
+proc systemd_deleted_by_submit_job {host mb {pe_args ""} {sleep_after 5}} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH
+
+   set arch [resolve_arch $host]
+   set work "$ts_config(product_root)/examples/jobsbin/$arch/work"
+   set job_args "-l h=$host,h_rss=100M -v SGE_DEBUG_MEMORY_SWAP_MAX=0 -o /dev/null -j y"
+   if {$pe_args != ""} {
+      append job_args " $pe_args"
+   }
+   append job_args " $CHECK_ACTUAL_TEST_PATH/oom_job.sh 5 $work $mb $sleep_after"
+   if {$pe_args != ""} {
+      append job_args " $ts_config(product_root)/bin/$arch/qrsh"
+   }
+
+   return [submit_job $job_args]
+}
+
+## @brief check deleted_by of an accounting record
+#
+# @param qacct_var name of the array filled by get_qacct
+# @param expected the expected deleted_by, "" if the record shall have none
+# @param what the record, for the error messages, e.g. "job 4"
+proc systemd_deleted_by_check_deleted_by {qacct_var expected what} {
+   upvar $qacct_var qacct_info
+
+   if {[info exists qacct_info(deleted_by)]} {
+      set deleted_by $qacct_info(deleted_by)
+   } else {
+      set deleted_by ""
+   }
+
+   if {$expected == ""} {
+      if {$deleted_by != ""} {
+         ts_log_severe "the accounting record of $what has deleted_by \"$deleted_by\",\
+                        expected none"
+      }
+      return
+   }
+
+   # the host part may be the short or the long host name
+   set parts [split $deleted_by "@"]
+   set expected_parts [split $expected "@"]
+   if {[llength $parts] != 2 || [lindex $parts 0] != [lindex $expected_parts 0] ||
+       [resolve_host [lindex $parts 1] 0] != [resolve_host [lindex $expected_parts 1] 0]} {
+      ts_log_severe "the accounting record of $what has deleted_by \"$deleted_by\",\
+                     expected \"$expected\""
+   } else {
+      ts_log_fine "the accounting record of $what has deleted_by \"$deleted_by\""
+   }
+}
+
+## @brief check exit_status and failed of an accounting record
+#
+# @param qacct_var name of the array filled by get_qacct
+# @param exit_status the expected exit status
+# @param failed the expected failed code
+# @param what the record, for the error messages, e.g. "job 4"
+proc systemd_deleted_by_check_exit {qacct_var exit_status failed what} {
+   upvar $qacct_var qacct_info
+
+   # failed is the number followed by its description, e.g. "100 : assumedly after job"
+   regexp {[0-9]+} $qacct_info(failed) qacct_failed
+   if {$qacct_info(exit_status) != $exit_status || $qacct_failed != $failed} {
+      ts_log_severe "the accounting record of $what has exit_status $qacct_info(exit_status),\
+                     failed $qacct_info(failed), expected exit_status $exit_status, failed $failed"
+   }
+}
+
+## @brief check that sge_execd logged the OOM kill of a job scope
+#
+# @param host the host the job ran on
+# @param scope the job scope which was OOM killed
+proc systemd_deleted_by_check_messages {host scope} {
+   global CHECK_USER
+
+   set messages_file "[get_spool_dir $host execd]/messages"
+   get_file_content $host $CHECK_USER $messages_file messages
+   set message [translate_macro MSG_EXECD_OOMKILLED_SS "*" $scope]
+   if {$message == ""} {
+      # translate_macro already reported the error
+      return
+   }
+   set pattern "*$message*"
+   for {set i 1} {$i <= $messages(0)} {incr i} {
+      if {[string match $pattern $messages($i)]} {
+         ts_log_fine "sge_execd logged the OOM kill:\n$messages($i)"
+         return
+      }
+   }
+
+   ts_log_severe "sge_execd on host $host did not log the OOM kill of the job scope $scope in\
+                  $messages_file"
+}
+
+## @brief the OOM kill of a job is reported in its accounting record
+#
+# A child of the job is killed by the OOM killer, with OOMPolicy=kill the whole job is killed. The
+# accounting record shows exit status 137, failed 100 and deleted_by oom-killer@<hostname>.
+proc systemd_deleted_by_oom_kill_job {} {
+   global systemd_deleted_by_host
+
+   set job_id [systemd_deleted_by_submit_job $systemd_deleted_by_host 300]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_job_end $job_id 120] != 0} {
+      return
+   }
+   if {[get_qacct $job_id qacct_info] != 0} {
+      return
+   }
+
+   systemd_deleted_by_check_exit qacct_info 137 100 "job $job_id"
+   systemd_deleted_by_check_deleted_by qacct_info "oom-killer@$systemd_deleted_by_host" \
+      "job $job_id"
+   systemd_deleted_by_check_messages $systemd_deleted_by_host [systemd_get_job_scope $job_id]
+}
+
+## @brief the OOM kill of a pe task is reported for the pe task and for the job
+#
+# The child of the job script runs as a task of a tightly integrated parallel job, in its own pe
+# task scope. The OOM killer kills the pe task. As the pe task failed, sge_qmaster deletes the
+# job, and the master task is killed as well. Both accounting records show
+# deleted_by oom-killer@<hostname>: sge_qmaster passes the cause of the pe task on to the job.
+proc systemd_deleted_by_oom_kill_pe_task {} {
+   global systemd_deleted_by_host
+
+   # the job script sleeps long enough for sge_qmaster to delete the job
+   set job_id [systemd_deleted_by_submit_job $systemd_deleted_by_host 300 \
+                  "-pe deleted_by.pe 2 -q deleted_by.q" 60]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_job_end $job_id 180] != 0} {
+      return
+   }
+
+   # wait for both accounting records, sge_qmaster writes the record of the master task
+   # after the one of the pe task
+   if {[get_qacct $job_id qacct_info "" "" 1 2] != 0 || [llength $qacct_info(exit_status)] != 2} {
+      return
+   }
+
+   # the pe task is the first one started on the host
+   set pe_task_id "1.[resolve_host $systemd_deleted_by_host 0]"
+   if {[get_qacct "$job_id $pe_task_id" qacct_info] != 0} {
+      return
+   }
+   systemd_deleted_by_check_exit qacct_info 137 100 "pe task $pe_task_id of job $job_id"
+   systemd_deleted_by_check_deleted_by qacct_info "oom-killer@$systemd_deleted_by_host" \
+      "pe task $pe_task_id of job $job_id"
+   systemd_deleted_by_check_messages $systemd_deleted_by_host \
+      [systemd_get_job_scope $job_id 0 $pe_task_id]
+
+   if {[get_qacct "$job_id NONE" qacct_info] != 0} {
+      return
+   }
+   systemd_deleted_by_check_exit qacct_info 137 100 "master task of job $job_id"
+   systemd_deleted_by_check_deleted_by qacct_info "oom-killer@$systemd_deleted_by_host" \
+      "master task of job $job_id"
+}
+
+## @brief a pe task which the OOM killer ended itself keeps this cause
+#
+# The job is deleted with qdel, which is recorded as the one who deleted the job. Its pe task
+# writes more memory than allowed when it gets the notify signal, and the OOM killer ends it
+# during the notify time. The record of the pe task shows deleted_by oom-killer@<hostname>, the
+# record of the master task shows the qdel user.
+proc systemd_deleted_by_qdel_oom_kill_pe_task {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH CHECK_USER
+   global systemd_deleted_by_host
+
+   set host $systemd_deleted_by_host
+   set arch [resolve_arch $host]
+   set script "$CHECK_ACTUAL_TEST_PATH/notify_oom_job.sh"
+   set job_args "-notify -l h=$host,h_rss=100M -v SGE_DEBUG_MEMORY_SWAP_MAX=0 -o /dev/null -j y"
+   append job_args " -pe deleted_by.pe 2 -q deleted_by.q $script master"
+   append job_args " $ts_config(product_root)/examples/jobsbin/$arch/work"
+   append job_args " $ts_config(product_root)/bin/$arch/qrsh $script"
+   set job_id [submit_job $job_args]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $job_id "" 60] != 0} {
+      return
+   }
+
+   # wait for the pe task, it is the first one started on the host
+   set pe_task_id "1.[resolve_host $host 0]"
+   set active 0
+   for {set i 0} {$i < 60} {incr i} {
+      if {[systemd_is_job_active $host $job_id 0 $pe_task_id]} {
+         set active 1
+         break
+      }
+      sleep_for_seconds 1
+   }
+   if {!$active} {
+      ts_log_severe "pe task $pe_task_id of job $job_id did not start"
+      delete_job $job_id 1
+      return
+   }
+
+   start_sge_bin "qdel" $job_id $host
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qdel of job $job_id failed"
+      return
+   }
+   if {[wait_for_job_end $job_id 120] != 0} {
+      return
+   }
+
+   if {[get_qacct $job_id qacct_info "" "" 1 2] != 0 || [llength $qacct_info(exit_status)] != 2} {
+      return
+   }
+
+   if {[get_qacct "$job_id $pe_task_id" qacct_info] != 0} {
+      return
+   }
+   set what "pe task $pe_task_id of job $job_id"
+   systemd_deleted_by_check_exit qacct_info 137 100 $what
+   systemd_deleted_by_check_deleted_by qacct_info "oom-killer@$host" $what
+   systemd_deleted_by_check_messages $host [systemd_get_job_scope $job_id 0 $pe_task_id]
+
+   if {[get_qacct "$job_id NONE" qacct_info] != 0} {
+      return
+   }
+   systemd_deleted_by_check_deleted_by qacct_info "$CHECK_USER@$host" "master task of job $job_id"
+}
+
+## @brief a job which stays below its memory limit has no deleted_by
+proc systemd_deleted_by_no_oom_kill {} {
+   global systemd_deleted_by_host
+
+   set job_id [systemd_deleted_by_submit_job $systemd_deleted_by_host 10]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_job_end $job_id 120] != 0} {
+      return
+   }
+   if {[get_qacct $job_id qacct_info] != 0} {
+      return
+   }
+
+   systemd_deleted_by_check_exit qacct_info 0 0 "job $job_id"
+   systemd_deleted_by_check_deleted_by qacct_info "" "job $job_id"
+}
+
+## @brief on an older systemd an OOM kill is not reported
+#
+# systemd before 252 does not know OOMPolicy for scopes. The OOM killer kills only the child, the
+# job script ends with its own exit status, and the scope ends successfully.
+proc systemd_deleted_by_old_systemd {} {
+   global systemd_deleted_by_old_host
+
+   if {$systemd_deleted_by_old_host == ""} {
+      ts_log_info "no execution host with cgroup v2 and a systemd older than 252, skipping"
+      return
+   }
+
+   set job_id [systemd_deleted_by_submit_job $systemd_deleted_by_old_host 300]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_job_end $job_id 120] != 0} {
+      return
+   }
+   if {[get_qacct $job_id qacct_info] != 0} {
+      return
+   }
+
+   set what "job $job_id on host $systemd_deleted_by_old_host"
+   systemd_deleted_by_check_exit qacct_info 0 0 $what
+   systemd_deleted_by_check_deleted_by qacct_info "" $what
+}

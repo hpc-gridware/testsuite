@@ -130,7 +130,12 @@ proc systemd_get_job_scope {job_id {task_id 0} {pe_task_id ""}} {
 
    if {$pe_task_id ne ""} {
       # add pe task id if given
-      append scope ".$pe_task_id"
+      # like the C++ code: array jobs separate it with ".", sequential jobs with "-"
+      if {$task_id != 0} {
+         append scope ".$pe_task_id"
+      } else {
+         append scope "-$pe_task_id"
+      }
    }
 
    append scope ".scope"
