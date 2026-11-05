@@ -65,7 +65,7 @@ global LSB_lockfile_test_saved_slot_count
 
 proc LSB_lockfile_test {} {
    global LSB_lockfile_test_test_hosts check_description
-   global ts_config CHECK_ACT_LEVEL CHECK_USER
+   global ts_config CHECK_ACT_LEVEL CHECK_USER CHECK_INSTALL_RC
 
    set prod_type_var "SGE_ROOT"
    set my_timeout 500
@@ -86,6 +86,14 @@ proc LSB_lockfile_test {} {
                       continue
                    }
                    set found_linux 1
+                   # the rc-script starts sge_execd outside of its systemd unit,
+                   # hand it back to systemd at the end
+                   set execd_under_systemd 0
+                   if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] &&
+                       [host_has_systemd $exec_host] &&
+                       [systemd_is_service_active $exec_host "execd"]} {
+                      set execd_under_systemd 1
+                   }
                    ts_log_fine "try to stop sge_execd as user $CHECK_USER ..."
                    set output [start_remote_prog $exec_host $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "stop" "exit_val" $my_timeout]
                    if {$exit_val != 1} {
@@ -171,6 +179,22 @@ proc LSB_lockfile_test {} {
                    ts_log_fine $output
 
                    ts_log_fine "ok"
+
+                   if {$execd_under_systemd} {
+                      ts_log_fine "restarting sge_execd via systemd ..."
+                      set sgeexecd "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd"
+                      set output [start_remote_prog $exec_host "root" $sgeexecd "stop" \
+                                  "exit_val" $my_timeout]
+                      if {$exit_val != 0} {
+                         ts_log_severe "failed - cannot stop sge_execd on host $exec_host:\n$output"
+                         return
+                      }
+                      if {![systemd_start_service $exec_host "execd"]} {
+                         return
+                      }
+                      wait_for_load_from_all_queues
+                      ts_log_fine "ok"
+                   }
                 }
          }
 
