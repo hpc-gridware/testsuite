@@ -1,0 +1,203 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3031: when an array task finishes between a scheduling run and the processing of its ticket
+# order, the qmaster logged "unable to find task <t> of job <j>" as an error, sent a second
+# JATASK DEL event for the already deleted task and returned -2, which dropped the remaining
+# orders and reinitialized the scheduler. The event mirrors rejected the second DEL, and qevent
+# aborted: its reduced job view lacked JB_ja_a_h_ids, which job_is_enrolled() reads in the DEL
+# branch of its mirror.
+#
+# The check runs qevent -ts while many short array jobs finish and expects that qevent survives
+# and the qmaster neither logs the task as an error nor reinitializes the scheduler. It is a race:
+# before the fix it hit within a minute on a cluster with five execution hosts.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_3031"
+set check_category       "BUG EVENTCLIENT VERIFIED"
+set check_description(0) "a ticket order for a just finished array task is ignored, qevent survives"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_3031_setup
+set check_cleanup_function issue_3031_cleanup
+
+set check_functions {}
+lappend check_functions "issue_3031_finished_array_tasks"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+## @brief find the qevent test binary and the qmaster messages file
+#
+# @return 0 on success, 99 when the qevent test binary does not exist
+proc issue_3031_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global issue_3031_qevent issue_3031_messages issue_3031_sid
+
+   set issue_3031_sid {}
+   set issue_3031_qevent [get_test_or_source_path "qevent" $ts_config(master_host)]
+   if {![is_remote_file $ts_config(master_host) $CHECK_USER $issue_3031_qevent]} {
+      ts_log_config "the qevent test binary does not exist as\
+                     $issue_3031_qevent on host $ts_config(master_host)"
+      return 99
+   }
+   set issue_3031_messages [get_qmaster_messages_file]
+
+   return 0
+}
+
+## @brief stop qevent if it still runs and remove the jobs of the check
+#
+# @return none
+proc issue_3031_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global issue_3031_qevent issue_3031_messages issue_3031_sid
+
+   if {[llength $issue_3031_sid] >= 2} {
+      ts_send [lindex $issue_3031_sid 1] "\003" $ts_config(master_host)
+      close_spawn_process $issue_3031_sid
+   }
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   unset -nocomplain issue_3031_qevent issue_3031_messages issue_3031_sid
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief how many lines does the qmaster messages file have?
+#
+# @param lines_var name of an array which gets the content of the file
+# @return the number of lines, -1 when the file could not be read
+proc issue_3031_read_messages {lines_var} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER issue_3031_messages
+   upvar $lines_var lines
+
+   unset -nocomplain lines
+   get_file_content $ts_config(master_host) $CHECK_USER $issue_3031_messages lines
+   if {![info exists lines(0)]} {
+      ts_log_severe "cannot read the qmaster messages file $issue_3031_messages"
+      return -1
+   }
+
+   return $lines(0)
+}
+
+## @brief does the spawned qevent still run?
+#
+# Reads what qevent printed until it has been quiet for some seconds.
+#
+# @param sp_id spawn id of qevent
+# @return 1 when qevent still runs, 0 when it has ended
+proc issue_3031_qevent_alive {sp_id} {
+   set alive 1
+   set timeout 5
+   expect {
+      -i $sp_id eof {
+         set alive 0
+      }
+      -i $sp_id timeout {
+      }
+      -i $sp_id -re {.+} {
+         exp_continue
+      }
+   }
+
+   return $alive
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief many short array tasks finish while qevent -ts watches them
+#
+# Ticket orders computed for tasks that finish before the orders are processed must be ignored
+# without an error, without a second JATASK DEL event and without a reinit of the scheduler.
+proc issue_3031_finished_array_tasks {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER issue_3031_qevent issue_3031_sid
+
+   set first_line [issue_3031_read_messages before]
+   if {$first_line < 0} {
+      return
+   }
+   incr first_line
+
+   set issue_3031_sid [open_remote_spawn_process $ts_config(master_host) $CHECK_USER \
+                                                 $issue_3031_qevent "-ts"]
+   if {[llength $issue_3031_sid] < 2} {
+      ts_log_severe "cannot start $issue_3031_qevent on host $ts_config(master_host)"
+      set issue_3031_sid {}
+      return
+   }
+   set sp_id [lindex $issue_3031_sid 1]
+   # give qevent the time to register and get its total update
+   after 5000
+
+   set jobs 60
+   for {set i 0} {$i < $jobs} {incr i} {
+      if {[submit_job "-b y -t 1-10 /bin/sleep 1"] <= 0} {
+         return
+      }
+   }
+   if {[wait_for_end_of_all_jobs 300] != 0} {
+      ts_log_severe "the $jobs array jobs did not finish"
+      return
+   }
+
+   if {![issue_3031_qevent_alive $sp_id]} {
+      ts_log_severe "qevent -ts ended while the array tasks finished"
+      close_spawn_process $issue_3031_sid
+      set issue_3031_sid {}
+   }
+
+   set last_line [issue_3031_read_messages after]
+   if {$last_line < 0} {
+      return
+   }
+   set found {}
+   for {set i $first_line} {$i <= $last_line} {incr i} {
+      if {[string match "*|E|unable to find task *" $after($i)] ||
+          [string match "*reinitialization of \"scheduler\"*" $after($i)]} {
+         lappend found $after($i)
+      }
+   }
+   if {[llength $found] > 0} {
+      ts_log_severe "the qmaster treated ticket orders for finished array tasks as errors:\n\
+                     [join [lrange $found 0 9] "\n"]"
+   }
+}
