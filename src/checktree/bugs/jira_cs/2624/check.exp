@@ -359,12 +359,17 @@ proc issue_2624_mark_messages {} {
 # seconds - longer than the cleanup waits for the end of all jobs. The load reports do not show
 # this: the qmaster did not mark any host unknown while it was stopped.
 #
-# A host which was not rejected, e.g. without munge, is not waited for.
+# With TLS the qmaster does not reject anything: the TLS connections of all execds break while the
+# qmaster is suspended, and every execd registers again once it reconnects. A job dispatched
+# before that is lost the same way, so with TLS every execd is waited for.
+#
+# A host which was not rejected, e.g. without munge or TLS, is not waited for.
 #
 # @param timeout how long to wait, in seconds
 # @return 1 when no rejected execd is left, 0 on timeout
 ##
 proc issue_2624_wait_for_execd_registration {{timeout 120}} {
+   get_current_cluster_config_array ts_config
    global CHECK_USER issue_2624_master issue_2624_messages_file issue_2624_messages_lines
 
    set pattern "execd/\[0-9\]+: incorrect authentication information|execd on \[^ \]+ registered"
@@ -385,6 +390,15 @@ proc issue_2624_wait_for_execd_registration {{timeout 120}} {
             dict set rejected $host $line_nr
          } elseif {[regexp {execd on ([^ ]+) registered} $line all host]} {
             dict set registered $host $line_nr
+         }
+      }
+
+      if {[config_has_product_feature "tls"]} {
+         foreach host $ts_config(execd_nodes) {
+            set host [resolve_host $host 0]
+            if {![dict exists $rejected $host]} {
+               dict set rejected $host $issue_2624_messages_lines
+            }
          }
       }
 
