@@ -45,10 +45,7 @@ set check_version_range "9.1.8"
 
 # define test's name and run level descriptions
 set check_name            "systemd_job_scope"
-# not VERIFIED yet: without the fix of CS-3021 the OOM kill leaves the job scope in the failed
-# state. The framework reports the failed scope as error after the check, and a later job with
-# the same job id cannot start. Add VERIFIED when CS-3021 is in all branches the testsuite runs on.
-set check_category        "EXECD SYSTEMD"
+set check_category        "EXECD SYSTEMD VERIFIED"
 set check_description(0)  "SGE_JOB_SCOPE contains the name of the systemd scope of a job"
 
 # define test's dependencies

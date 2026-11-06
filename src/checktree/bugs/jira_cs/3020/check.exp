@@ -48,10 +48,7 @@ set check_version_range "9.1.8"
 
 # define test's name and run level descriptions
 set check_name            "cs3020"
-# not VERIFIED yet: without the fix of CS-3021 the OOM kills leave the job scopes in the failed
-# state. The framework reports the failed scopes as error after the check, and a later job with
-# the same job id cannot start. Add VERIFIED when CS-3021 is in all branches the testsuite runs on.
-set check_category        "BUG EXECD SYSTEMD"
+set check_category        "BUG EXECD SYSTEMD VERIFIED"
 set check_description(0)  "a memory cgroup OOM kill ends the whole job"
 
 # define test's dependencies
