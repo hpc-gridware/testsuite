@@ -1,0 +1,158 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3018: sge_execd checks the hard memory limits against the current usage instead of the
+# peak usage.
+#
+# sge_execd polls the usage of a job every PDC_INTERVAL seconds. A job which exceeds h_rss only
+# between two polls was not killed, although on a systemd host the kernel records the peak usage
+# of the job scope, and the accounting reported a maxrss above h_rss. sge_execd now compares
+# maxrss with h_rss.
+#
+# The job is started without a MemoryMax on its scope (execd_params MEMORY_MAX_FACTOR=0), so the
+# kernel does not stop it. A child allocates 200M and frees it right away, the job keeps running.
+# The check runs on the hosts where the kernel records the peak usage: cgroup v1, or cgroup v2
+# with memory.peak (Linux 5.19 and newer).
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name            "cs3018"
+set check_category        "BUG EXECD SYSTEMD VERIFIED"
+set check_description(0)  "a job which exceeds h_rss between two polls is killed by sge_execd"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs3018_setup
+set check_cleanup_function cs3018_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs3018_peak_exceeds_h_rss"
+
+# -------- local test procedures: initialization------------------------------
+
+proc cs3018_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global cs3018_hosts cs3018_backups
+
+   # the hosts with systemd where the kernel records the peak memory usage of a scope
+   set cs3018_hosts {}
+   foreach host $ts_config(execd_nodes) {
+      if {[systemd_get_version $host] < 0} {
+         continue
+      }
+      if {[systemd_get_cgroup_version $host] == 1} {
+         lappend cs3018_hosts $host
+      } else {
+         start_remote_prog $host $CHECK_USER "test" "-f /sys/fs/cgroup/system.slice/memory.peak"
+         if {$prg_exit_state == 0} {
+            lappend cs3018_hosts $host
+         }
+      }
+   }
+   if {[llength $cs3018_hosts] == 0} {
+      ts_log_config "no execution host with systemd where the kernel records the peak memory\
+                     usage"
+      return 99
+   }
+
+   # no MemoryMax on the job scopes
+   set cs3018_backups [dict create]
+   foreach host $cs3018_hosts {
+      get_config backup $host
+      dict set cs3018_backups $host [array get backup]
+      add_or_replace_array_param conf backup "execd_params" "MEMORY_MAX_FACTOR" "0"
+      set_config_and_propagate conf $host
+      unset backup conf
+   }
+
+   return 0
+}
+
+proc cs3018_cleanup {} {
+   global cs3018_hosts cs3018_backups
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   foreach host [dict keys $cs3018_backups] {
+      array set backup [dict get $cs3018_backups $host]
+      reset_config_and_propagate backup $host
+      unset backup
+   }
+
+   unset -nocomplain cs3018_hosts cs3018_backups
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief a job which exceeds h_rss for a moment is killed by sge_execd
+#
+# Before the fix the job ran to its end, with a maxrss above h_rss in the accounting.
+proc cs3018_peak_exceeds_h_rss {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH
+   global cs3018_hosts
+
+   foreach host $cs3018_hosts {
+      set work "$ts_config(product_root)/examples/jobsbin/[resolve_arch $host]/work"
+      set job_args "-l h=$host,h_rss=100M -o /dev/null -j y"
+      append job_args " $CHECK_ACTUAL_TEST_PATH/cs3018_job.sh $work 200 60"
+      set job_id [submit_job $job_args]
+      if {$job_id <= 0} {
+         continue
+      }
+      if {[wait_for_job_end $job_id 120] != 0} {
+         continue
+      }
+      if {[get_qacct $job_id qacct_info] != 0} {
+         continue
+      }
+
+      if {![info exists qacct_info(deleted_by)] ||
+          ![string match "execd@*" $qacct_info(deleted_by)]} {
+         if {[info exists qacct_info(deleted_by)]} {
+            set deleted_by $qacct_info(deleted_by)
+         } else {
+            set deleted_by "none"
+         }
+         ts_log_severe "job $job_id on host $host exceeded h_rss=100M with maxrss\
+                        $qacct_info(maxrss), but was not killed by sge_execd: exit_status\
+                        $qacct_info(exit_status), deleted_by $deleted_by"
+      } else {
+         ts_log_fine "job $job_id on host $host was killed by sge_execd, maxrss\
+                      $qacct_info(maxrss), deleted_by \"$qacct_info(deleted_by)\""
+      }
+   }
+}
