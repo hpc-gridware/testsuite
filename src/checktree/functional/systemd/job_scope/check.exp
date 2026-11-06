@@ -1,0 +1,254 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# On a host where the jobs run under systemd control, the environment variable SGE_JOB_SCOPE of a
+# job, a pe task and the epilog contains the name of the systemd scope of the job or pe task.
+#
+# The job script and the epilog write SGE_JOB_SCOPE and what systemctl says about the scope to
+# files in a temporary directory: the job its ActiveState, the epilog its Result. The epilog of a
+# job which was ended by the memory cgroup OOM killer finds Result=oom-kill, the scope is kept
+# until the epilog has ended.
+#
+# The OOM kill needs OOMPolicy=kill on the scope, which needs cgroup v2 and systemd 252 or newer.
+# The job is submitted with SGE_DEBUG_MEMORY_SWAP_MAX=0 in its environment, which makes
+# sge_shepherd set MemorySwapMax=0 on the job scope - otherwise the memory above MemoryMax is
+# swapped out on a host with swap space, and no OOM kill happens.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name            "systemd_job_scope"
+# not VERIFIED yet: without the fix of CS-3021 the OOM kill leaves the job scope in the failed
+# state. The framework reports the failed scope as error after the check, and a later job with
+# the same job id cannot start. Add VERIFIED when CS-3021 is in all branches the testsuite runs on.
+set check_category        "EXECD SYSTEMD"
+set check_description(0)  "SGE_JOB_SCOPE contains the name of the systemd scope of a job"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function systemd_job_scope_setup
+set check_cleanup_function systemd_job_scope_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "systemd_job_scope_job"
+lappend check_functions "systemd_job_scope_oom_kill"
+lappend check_functions "systemd_job_scope_pe_task"
+
+# -------- local test procedures: initialization------------------------------
+
+proc systemd_job_scope_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH CHECK_USER
+   global systemd_job_scope_host systemd_job_scope_dir
+
+   # a host where OOMPolicy can be set on the job scope: cgroup v2 and systemd >= 252, with 2
+   # processors for the parallel job
+   set systemd_job_scope_host ""
+   foreach host $ts_config(execd_nodes) {
+      if {[systemd_get_version $host] >= 252 && [systemd_get_cgroup_version $host] == 2 &&
+          [node_get_processors $host] >= 2} {
+         set systemd_job_scope_host $host
+         break
+      }
+   }
+   if {$systemd_job_scope_host == ""} {
+      ts_log_config "no execution host with cgroup v2, systemd 252 or newer and 2 processors"
+      return 99
+   }
+
+   set systemd_job_scope_dir [get_tmp_directory_name]
+   remote_file_mkdir $ts_config(master_host) $systemd_job_scope_dir
+   wait_for_remote_dir $systemd_job_scope_host $CHECK_USER $systemd_job_scope_dir
+
+   set pe(slots)               10
+   set pe(allocation_rule)     "\$pe_slots"
+   set pe(control_slaves)      "TRUE"
+   set pe(job_is_first_task)   "TRUE"
+   set pe(master_forks_slaves) "FALSE"
+   set pe(daemon_forks_slaves) "FALSE"
+   add_pe "job_scope.pe" pe
+
+   set queue_conf(slots)   2
+   set queue_conf(pe_list) "job_scope.pe"
+   set queue_conf(epilog)  "$CHECK_ACTUAL_TEST_PATH/epilog.sh $systemd_job_scope_dir"
+   add_queue "job_scope.q" $systemd_job_scope_host queue_conf
+
+   return 0
+}
+
+proc systemd_job_scope_cleanup {} {
+   global systemd_job_scope_host systemd_job_scope_dir
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   del_queue "job_scope.q" "" 1 1
+   del_pe "job_scope.pe"
+
+   unset -nocomplain systemd_job_scope_host systemd_job_scope_dir
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief submit a job to the queue with the epilog
+#
+# @param script_args the arguments of job.sh after the directory, e.g. "job"
+# @param job_args further qsub options
+# @return the job id, or a value <= 0 on error
+proc systemd_job_scope_submit {script_args {job_args ""}} {
+   global CHECK_ACTUAL_TEST_PATH
+   global systemd_job_scope_dir
+
+   set qsub_args "-q job_scope.q -o /dev/null -j y $job_args"
+   append qsub_args " $CHECK_ACTUAL_TEST_PATH/job.sh $systemd_job_scope_dir $script_args"
+
+   return [submit_job $qsub_args]
+}
+
+## @brief read the key=value lines a job or the epilog has written
+#
+# @param name the name of the file, e.g. "epilog.25"
+# @param values_var the array to fill with the values
+# @return 1 if the file was found, 0 otherwise
+proc systemd_job_scope_read {name values_var} {
+   global CHECK_USER
+   global systemd_job_scope_host systemd_job_scope_dir
+   upvar $values_var values
+
+   unset -nocomplain values
+   set file "$systemd_job_scope_dir/$name"
+   if {[wait_for_remote_file $systemd_job_scope_host $CHECK_USER $file 60] != 0} {
+      return 0
+   }
+   get_file_content $systemd_job_scope_host $CHECK_USER $file lines
+   for {set i 1} {$i <= $lines(0)} {incr i} {
+      if {[regexp {^([a-z]+)=(.*)$} $lines($i) -> key value]} {
+         set values($key) [string trim $value]
+      }
+   }
+
+   return 1
+}
+
+## @brief check a value a job or the epilog has written
+#
+# @param values_var the array filled by systemd_job_scope_read
+# @param key the key, e.g. "scope"
+# @param expected the expected value
+# @param what who wrote the value, for the error message
+proc systemd_job_scope_check {values_var key expected what} {
+   upvar $values_var values
+
+   if {![info exists values($key)]} {
+      ts_log_severe "$what did not write $key"
+   } elseif {$values($key) != $expected} {
+      ts_log_severe "$what wrote $key \"$values($key)\", expected \"$expected\""
+   } else {
+      ts_log_fine "$what wrote $key \"$expected\""
+   }
+}
+
+## @brief the job and its epilog get the name of the job scope
+proc systemd_job_scope_job {} {
+   set job_id [systemd_job_scope_submit "job"]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_job_end $job_id 60] != 0} {
+      return
+   }
+
+   set scope [systemd_get_job_scope $job_id]
+   if {[systemd_job_scope_read "job.$job_id" values]} {
+      systemd_job_scope_check values "scope" $scope "job $job_id"
+      systemd_job_scope_check values "active" "active" "job $job_id"
+   }
+   if {[systemd_job_scope_read "epilog.$job_id" values]} {
+      systemd_job_scope_check values "scope" $scope "the epilog of job $job_id"
+   }
+}
+
+## @brief the epilog of a job which was ended by the OOM killer finds Result=oom-kill
+proc systemd_job_scope_oom_kill {} {
+   get_current_cluster_config_array ts_config
+   global systemd_job_scope_host
+
+   set work "$ts_config(product_root)/examples/jobsbin/[resolve_arch $systemd_job_scope_host]/work"
+   set job_id [systemd_job_scope_submit "oom $work" \
+                  "-l h_rss=100M -v SGE_DEBUG_MEMORY_SWAP_MAX=0"]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_job_end $job_id 60] != 0} {
+      return
+   }
+
+   if {[systemd_job_scope_read "epilog.$job_id" values]} {
+      systemd_job_scope_check values "scope" [systemd_get_job_scope $job_id] \
+         "the epilog of job $job_id"
+      systemd_job_scope_check values "result" "oom-kill" "the epilog of job $job_id"
+   }
+}
+
+## @brief the master task and the pe task of a tightly integrated job get their own scopes
+proc systemd_job_scope_pe_task {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH
+   global systemd_job_scope_host
+
+   set qrsh "$ts_config(product_root)/bin/[resolve_arch $systemd_job_scope_host]/qrsh"
+   set job_id [systemd_job_scope_submit "master $qrsh $CHECK_ACTUAL_TEST_PATH/job.sh" \
+                  "-pe job_scope.pe 2"]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_job_end $job_id 60] != 0} {
+      return
+   }
+
+   # the master task runs in the master scope, the pe task is the first one started on the host
+   set master_scope "ocs$ts_config(commd_port).$job_id.master.scope"
+   set pe_task_id "1.[resolve_host $systemd_job_scope_host 0]"
+   set task_scope [systemd_get_job_scope $job_id 0 $pe_task_id]
+   if {[systemd_job_scope_read "master.$job_id" values]} {
+      systemd_job_scope_check values "scope" $master_scope "the master task of job $job_id"
+      systemd_job_scope_check values "active" "active" "the master task of job $job_id"
+   }
+   if {[systemd_job_scope_read "task.$job_id" values]} {
+      systemd_job_scope_check values "scope" $task_scope "pe task $pe_task_id of job $job_id"
+      systemd_job_scope_check values "active" "active" "pe task $pe_task_id of job $job_id"
+   }
+   if {[systemd_job_scope_read "epilog.$job_id" values]} {
+      systemd_job_scope_check values "scope" $master_scope "the epilog of job $job_id"
+   }
+}
