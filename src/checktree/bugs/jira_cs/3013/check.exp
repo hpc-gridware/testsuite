@@ -199,8 +199,10 @@ proc cs_3013_mail_tag {} {
       }
       ts_log_fine "$name: \"$subject\""
 
-      # "<product> <version> (<build>): Job <id> failed", nothing in front of it
-      if {![regexp "^(\\S+ \\S+ \\(\[^)\]*\\)): Job $job_id failed\$" $subject -> this_product]} {
+      # "<product> <version> (<build>): Job <id> failed", nothing in front of it; a build without
+      # a build id has no "(<build>)"
+      set pattern "^(\\S+ \\S+( \\(\[^)\]*\\))?): Job $job_id failed\$"
+      if {![regexp $pattern $subject -> this_product]} {
          ts_log_severe "mail_tag $name: the subject does not start with the product name:\
                         \"$subject\""
          return
