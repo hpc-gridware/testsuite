@@ -1,0 +1,248 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# sge_execd logs which features of the systemd integration are not available on its host.
+#
+# Some features depend on the systemd version and the cgroup version of the host, e.g.
+# OOMPolicy=kill on the job scope needs systemd 252 and cgroup v2. sge_execd logs one message per
+# feature which is not available, at startup and when ENABLE_SYSTEMD is switched on again. It
+# logs nothing for an available feature, nor while ENABLE_SYSTEMD is switched off, nor when the
+# configuration changes without changing the result.
+#
+# The messages expected on a host are derived from its systemd and cgroup version, so the check
+# tests something on hosts which lack a feature. On a host which has all of them, it checks that
+# nothing is logged.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name            "systemd_features"
+set check_category        "EXECD SYSTEMD VERIFIED"
+set check_description(0)  "sge_execd logs which systemd features are not available on its host"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function systemd_features_setup
+set check_cleanup_function systemd_features_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "systemd_features_startup"
+lappend check_functions "systemd_features_config_change"
+
+# -------- local test procedures: initialization------------------------------
+
+proc systemd_features_setup {} {
+   get_current_cluster_config_array ts_config
+   global systemd_features_hosts systemd_features_config_host systemd_features_backup
+
+   # the execution hosts with systemd
+   set systemd_features_hosts {}
+   foreach host $ts_config(execd_nodes) {
+      if {[systemd_get_version $host] >= 0} {
+         lappend systemd_features_hosts $host
+      }
+   }
+   if {[llength $systemd_features_hosts] == 0} {
+      ts_log_config "no execution host with systemd"
+      return 99
+   }
+
+   # the host to switch ENABLE_SYSTEMD on: the one which lacks the most features
+   set systemd_features_config_host ""
+   set max 0
+   foreach host $systemd_features_hosts {
+      set num 0
+      foreach feature [systemd_features_get $host] {
+         if {[lindex $feature 0]} {
+            incr num
+         }
+      }
+      if {$num > $max} {
+         set max $num
+         set systemd_features_config_host $host
+      }
+   }
+   if {$systemd_features_config_host != ""} {
+      get_config systemd_features_backup $systemd_features_config_host
+   }
+
+   return 0
+}
+
+proc systemd_features_cleanup {} {
+   global systemd_features_hosts systemd_features_config_host systemd_features_backup
+
+   if {$systemd_features_config_host != ""} {
+      reset_config_and_propagate systemd_features_backup $systemd_features_config_host
+   }
+
+   unset -nocomplain systemd_features_hosts systemd_features_config_host systemd_features_backup
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief the features with a version requirement, and whether a host lacks them
+#
+# @param host the execution host
+# @return a list with one element per feature: {missing macro arg ...}, missing is 1 if the host
+#         lacks the feature, the macro and its arguments form the message logged then
+proc systemd_features_get {host} {
+   set sv [systemd_get_version $host]
+   set cv [systemd_get_cgroup_version $host]
+
+   set features {}
+   lappend features [list [expr {!($sv >= 252 && $cv == 2)}] MSG_EXECD_SYSTEMD_NO_OOMPOLICY_II \
+                        $sv $cv]
+   lappend features [list [expr {$cv != 2}] MSG_EXECD_SYSTEMD_NO_MEMORYHIGH_I $cv]
+   lappend features [list [expr {$cv != 2}] MSG_EXECD_SYSTEMD_NO_ALLOWEDCPUS_I $cv]
+   lappend features [list [expr {!($sv >= 250 && $cv == 2)}] MSG_EXECD_SYSTEMD_NO_FREEZE_II \
+                        $sv $cv]
+
+   return $features
+}
+
+## @brief count how often sge_execd has logged the message of each feature
+#
+# @param host the execution host
+# @return a dict with the number of messages per macro
+proc systemd_features_count {host} {
+   global CHECK_USER
+
+   set counts [dict create]
+   set messages_file "[get_spool_dir $host execd]/messages"
+   get_file_content $host $CHECK_USER $messages_file messages
+   foreach feature [systemd_features_get $host] {
+      set macro [lindex $feature 1]
+      # any arguments, a message with wrong ones is found as well
+      if {[llength $feature] == 4} {
+         set message [translate_macro $macro "*" "*"]
+      } else {
+         set message [translate_macro $macro "*"]
+      }
+      dict set counts $macro 0
+      if {$message == ""} {
+         # translate_macro already reported the error
+         continue
+      }
+      for {set i 1} {$i <= $messages(0)} {incr i} {
+         if {[string match "*|I|$message" $messages($i)]} {
+            dict incr counts $macro
+         }
+      }
+   }
+
+   return $counts
+}
+
+## @brief check the number of messages sge_execd has logged since an earlier count
+#
+# @param host the execution host
+# @param before the dict returned by systemd_features_count before
+# @param increment how many messages a missing feature has gained since then, 0 or 1
+# @param what what happened since then, for the messages
+# @param timeout how long to wait for the messages in seconds
+proc systemd_features_check {host before increment what {timeout 60}} {
+   set end [expr {[clock seconds] + $timeout}]
+   while {1} {
+      set after [systemd_features_count $host]
+      set errors {}
+      foreach feature [systemd_features_get $host] {
+         set missing [lindex $feature 0]
+         set macro [lindex $feature 1]
+         set expected [expr {$missing ? [dict get $before $macro] + $increment : 0}]
+         set found [dict get $after $macro]
+         if {$found != $expected} {
+            lappend errors "$macro: $found messages, expected $expected"
+         }
+      }
+      if {[llength $errors] == 0 || [clock seconds] >= $end} {
+         break
+      }
+      sleep_for_seconds 1
+   }
+
+   if {[llength $errors] > 0} {
+      ts_log_severe "sge_execd on host $host, $what:\n[join $errors "\n"]"
+   } else {
+      ts_log_fine "sge_execd on host $host logged the expected messages, $what"
+   }
+}
+
+## @brief sge_execd logs the missing features at startup
+proc systemd_features_startup {} {
+   global systemd_features_hosts
+
+   foreach host $systemd_features_hosts {
+      set before($host) [systemd_features_count $host]
+   }
+
+   soft_execd_shutdown $systemd_features_hosts
+   foreach host $systemd_features_hosts {
+      startup_execd $host
+   }
+   wait_for_load_from_all_queues 60
+
+   foreach host $systemd_features_hosts {
+      systemd_features_check $host $before($host) 1 "after the restart"
+   }
+}
+
+## @brief sge_execd logs the missing features again only when ENABLE_SYSTEMD is switched on again
+proc systemd_features_config_change {} {
+   global systemd_features_config_host systemd_features_backup
+
+   set host $systemd_features_config_host
+   if {$host == ""} {
+      ts_log_info "all execution hosts have all systemd features, nothing to check"
+      return
+   }
+
+   # switched off: nothing is logged
+   set before [systemd_features_count $host]
+   add_or_replace_array_param conf systemd_features_backup "execd_params" "ENABLE_SYSTEMD" "FALSE"
+   set_config_and_propagate conf $host
+   sleep_for_seconds 2
+   systemd_features_check $host $before 0 "after switching ENABLE_SYSTEMD off" 0
+
+   # switched on again: the missing features are logged again
+   add_or_replace_array_param conf systemd_features_backup "execd_params" "ENABLE_SYSTEMD" "TRUE"
+   set_config_and_propagate conf $host
+   systemd_features_check $host $before 1 "after switching ENABLE_SYSTEMD on again"
+
+   # another change of the configuration: nothing is logged
+   set before [systemd_features_count $host]
+   add_or_replace_array_param conf conf "execd_params" "SYSTEMD_TIMEOUT" "00:00:03"
+   set_config_and_propagate conf $host
+   sleep_for_seconds 2
+   systemd_features_check $host $before 0 "after changing SYSTEMD_TIMEOUT" 0
+}
