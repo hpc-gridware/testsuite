@@ -123,6 +123,8 @@ proc cs3030_get_children {host pid} {
 # The job starts a task with qrsh -inherit. The check kills its qrsh_starter with SIGKILL, so
 # qrsh_starter cannot write the exit status of the command. The accounting record of the pe task
 # shows exit status 137 and failed 100, before the fix it showed exit status 129.
+#
+# @return nothing, a failure is reported with ts_log_severe
 proc cs3030_killed_qrsh_starter {} {
    get_current_cluster_config_array ts_config
    global cs3030_host CHECK_ACTUAL_TEST_PATH CHECK_USER
@@ -173,9 +175,11 @@ proc cs3030_killed_qrsh_starter {} {
    }
    ts_log_fine "killing qrsh_starter $starter_pid of job $job_id on host $cs3030_host and the\
                 process groups of its children: $kill_list"
-   set output [start_remote_prog $cs3030_host $CHECK_USER "kill" "-9 -- $kill_list"]
+   # /bin/kill, not the shell builtin: the kill builtin of dash rejects the "--" that ends the
+   # options before the negative process group ids
+   set output [start_remote_prog $cs3030_host $CHECK_USER "/bin/kill" "-9 -- $kill_list"]
    if {$prg_exit_state != 0} {
-      ts_log_severe "kill -9 -- $kill_list on host $cs3030_host failed:\n$output"
+      ts_log_severe "/bin/kill -9 -- $kill_list on host $cs3030_host failed:\n$output"
       return
    }
 
