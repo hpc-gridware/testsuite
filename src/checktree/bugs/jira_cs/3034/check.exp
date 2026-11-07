@@ -1,0 +1,111 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3034: while qrsh waits for the shepherd to connect, it polls qmaster for the job state
+# every few seconds. Before the fix, a qrsh with a command exited as soon as the poll showed
+# the job running, assuming it had already finished - although the shepherd had not
+# connected yet. qrsh returned 0 without running the command, and the job failed with 100.
+#
+# A prolog which sleeps longer than the polling interval of an immediate qrsh job (3 to 5 s,
+# doubled after each poll) keeps the job running without a connection for several polls.
+
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "cs_3034"
+set check_category       "BUG INTERACTIVE VERIFIED"
+set check_description(0) "qrsh waits for the shepherd while the job runs a long prolog"
+set check_needs          "init_core_system"
+
+set check_setup_function cs_3034_setup
+set check_cleanup_function cs_3034_cleanup
+
+set check_functions {}
+lappend check_functions "cs_3034_slow_prolog"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+## @brief Create a queue whose prolog sleeps longer than several qrsh polling intervals
+#
+# @return 0 on success, 99 when the queue cannot be created
+proc cs_3034_setup {} {
+   global cs_3034_host cs_3034_queue cs_3034_prolog_sec
+
+   set cs_3034_host [host_conf_get_suited_hosts]
+   set cs_3034_queue "cs3034.q"
+   set cs_3034_prolog_sec 15
+
+   set q(slots) 1
+   set q(prolog) "/bin/sleep $cs_3034_prolog_sec"
+   if {[add_queue $cs_3034_queue $cs_3034_host q] < 0} {
+      ts_log_config "cannot create the queue $cs_3034_queue"
+      return 99
+   }
+   return 0
+}
+
+## @brief Delete the jobs and the queue
+#
+# @return nothing
+proc cs_3034_cleanup {} {
+   global cs_3034_host cs_3034_queue cs_3034_prolog_sec
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   del_queue $cs_3034_queue "" 1 1
+
+   unset -nocomplain cs_3034_host cs_3034_queue cs_3034_prolog_sec
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief An immediate qrsh runs its command although the prolog delays the shepherd
+#
+# @return nothing
+proc cs_3034_slow_prolog {} {
+   global cs_3034_host cs_3034_queue cs_3034_prolog_sec
+
+   set marker "cs3034_command_ran"
+   set start [clock seconds]
+   set output [start_sge_bin "qrsh" "-q $cs_3034_queue echo $marker" $cs_3034_host "" \
+                  prg_exit_state 120]
+   set duration [expr [clock seconds] - $start]
+   ts_log_fine "qrsh returned $prg_exit_state after $duration s: $output"
+
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qrsh failed with exit status $prg_exit_state: $output"
+   } elseif {[string first $marker $output] < 0} {
+      ts_log_severe "qrsh returned after $duration s without running the command, the prolog\
+                     sleeps $cs_3034_prolog_sec s: \"$output\""
+   }
+
+   # the job may still be ending when qrsh returns
+   wait_for_end_of_all_jobs
+}
