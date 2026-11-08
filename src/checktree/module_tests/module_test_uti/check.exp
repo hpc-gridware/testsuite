@@ -69,6 +69,7 @@ lappend uti_module_tests {test_uti_lock_held "9.2.0" 0 ""}
 lappend uti_module_tests {test_uti_cpus "9.2.0" 0 ""}
 lappend uti_module_tests {test_uti_format_text "9.2.0" 0 ""}
 lappend uti_module_tests {test_uti_cpp_features "9.2.0" 0 ""}
+lappend uti_module_tests {test_uti_exception "9.2.0" 0 ""}
 
 # the description of a level is the name of its binary, one literal line per
 # entry of uti_module_tests in the same order: tools that list the supported
@@ -96,6 +97,7 @@ set check_description(19) "test_uti_lock_held"
 set check_description(20) "test_uti_cpus"
 set check_description(21) "test_uti_format_text"
 set check_description(22) "test_uti_cpp_features"
+set check_description(23) "test_uti_exception"
 
 set check_functions {}
 lappend check_functions "uti_module_tests_run"

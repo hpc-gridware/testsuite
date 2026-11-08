@@ -64,6 +64,7 @@ lappend sgeobj_module_tests {test_sgeobj_Session "" 1 ""}
 lappend sgeobj_module_tests {test_sgeobj_rsmap "9.0.14 9.1.6" 0 ""}
 lappend sgeobj_module_tests {test_sgeobj_request_parse "9.1.6" 0 ""}
 lappend sgeobj_module_tests {test_sgeobj_Matcher "9.2.0" 1 ""}
+lappend sgeobj_module_tests {test_sgeobj_AnswerException "9.2.0" 0 ""}
 
 # the description of a level is the name of its binary, one literal line per
 # entry of sgeobj_module_tests in the same order: tools that list the supported
@@ -86,6 +87,7 @@ set check_description(14) "test_sgeobj_Session"
 set check_description(15) "test_sgeobj_rsmap"
 set check_description(16) "test_sgeobj_request_parse"
 set check_description(17) "test_sgeobj_Matcher"
+set check_description(18) "test_sgeobj_AnswerException"
 
 set check_functions {}
 lappend check_functions "sgeobj_module_tests_run"
