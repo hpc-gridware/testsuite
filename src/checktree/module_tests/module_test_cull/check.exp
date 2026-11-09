@@ -63,6 +63,10 @@ lappend cull_module_tests {test_cull_pack_format "9.2.0" 0 ""}
 lappend cull_module_tests {test_cull_lazy "9.2.0" 0 ""}
 lappend cull_module_tests {test_cull_descr "9.2.0" 0 ""}
 lappend cull_module_tests {test_cull_plugin "9.2.0" 0 ""}
+lappend cull_module_tests {test_tom_traits "9.2.0" 0 ""}
+lappend cull_module_tests {test_tom_handles "9.2.0" 0 ""}
+lappend cull_module_tests {test_tom_list "9.2.0" 0 ""}
+lappend cull_module_tests {test_tom_legacy "9.2.0" 0 ""}
 
 # the description of a level is the name of its binary, one literal line per
 # entry of cull_module_tests in the same order: tools that list the supported
@@ -83,6 +87,10 @@ set check_description(12) "test_cull_pack_format"
 set check_description(13) "test_cull_lazy"
 set check_description(14) "test_cull_descr"
 set check_description(15) "test_cull_plugin"
+set check_description(16) "test_tom_traits"
+set check_description(17) "test_tom_handles"
+set check_description(18) "test_tom_list"
+set check_description(19) "test_tom_legacy"
 
 set check_functions {}
 lappend check_functions "cull_module_tests_run"
