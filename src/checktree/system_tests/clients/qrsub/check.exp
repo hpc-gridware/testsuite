@@ -67,6 +67,7 @@ lappend check_functions "check_option_ckpt"
 lappend check_functions "check_option_d"
 lappend check_functions "check_option_e"
 lappend check_functions "check_option_help"
+lappend check_functions "check_option_help_texts"
 lappend check_functions "check_option_he"
 lappend check_functions "check_option_l"
 lappend check_functions "check_option_m"
@@ -415,6 +416,53 @@ proc check_option_help {} {
    
    delete_all_ars
    ts_log_fine "test check_option_help OK"
+}
+
+## @brief qrsub -help describes the options for an AR, not for a job
+#
+# The usage texts of -N, -P, -pe, -q, -u and -w are specific to qrsub, and -dept,
+# which qrsub does not support, is not listed.
+proc check_option_help_texts {} {
+   if {![is_version_in_range "9.1.8"]} {
+      ts_log_fine "the qrsub specific help texts are available from version 9.1.8 on"
+      return
+   }
+
+   set output [start_sge_bin "qrsub" "-help"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qrsub -help failed with exit code $prg_exit_state:\n$output"
+      return
+   }
+
+   foreach {option macro} {
+      "-N"  MSG_GDI_UTEXT_N_qrsub_OPT
+      "-P"  MSG_GDI_UTEXT_P_qrsub_OPT
+      "-pe" MSG_GDI_UTEXT_pe_qrsub_OPT
+      "-q"  MSG_GDI_UTEXT_q_qrsub_OPT
+      "-u"  MSG_GDI_UTEXT_u_qrsub_OPT
+      "-w"  MSG_GDI_UTEXT_w_OPT_EV
+   } {
+      set text [translate_macro $macro]
+      set found 0
+      foreach line [split $output "\n"] {
+         if {[string match "*\\\[$option *\\\]*" $line] && [string match "*$text*" $line]} {
+            set found 1
+            break
+         }
+      }
+      if {!$found} {
+         ts_log_severe "qrsub -help does not describe $option with \"$text\":\n$output"
+      }
+   }
+
+   if {[string first "\[-dept " $output] >= 0} {
+      ts_log_severe "qrsub -help lists -dept, which qrsub does not support:\n$output"
+   }
+
+   # the attachment of the job oriented -u text must not show up
+   if {[string first "job_task_list" $output] >= 0} {
+      ts_log_severe "qrsub -help describes -u for jobs:\n$output"
+   }
 }
 
 proc check_option_he {} {
