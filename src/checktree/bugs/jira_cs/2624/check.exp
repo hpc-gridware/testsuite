@@ -349,8 +349,7 @@ proc issue_2624_mark_messages {} {
    return 1
 }
 
-###
-# @brief wait until every execd the qmaster rejected after the resume has registered again
+## @brief wait until every execd the qmaster rejected after the resume has registered again
 #
 # The munge credentials of the execds expire while the qmaster is suspended. After the resume the
 # qmaster rejects their requests with "incorrect authentication information" until an execd has
@@ -365,9 +364,11 @@ proc issue_2624_mark_messages {} {
 #
 # A host which was not rejected, e.g. without munge or TLS, is not waited for.
 #
+# Host names are compared in their short form: the qmaster logs them as it resolved them, which is
+# the long form in a domain, while execd_nodes may hold either.
+#
 # @param timeout how long to wait, in seconds
 # @return 1 when no rejected execd is left, 0 on timeout
-##
 proc issue_2624_wait_for_execd_registration {{timeout 120}} {
    get_current_cluster_config_array ts_config
    global CHECK_USER issue_2624_master issue_2624_messages_file issue_2624_messages_lines
@@ -387,9 +388,9 @@ proc issue_2624_wait_for_execd_registration {{timeout 120}} {
             continue
          }
          if {[regexp {from ([^/]+)/execd/[0-9]+: incorrect authentication} $line all host]} {
-            dict set rejected $host $line_nr
+            dict set rejected [resolve_host $host 0] $line_nr
          } elseif {[regexp {execd on ([^ ]+) registered} $line all host]} {
-            dict set registered $host $line_nr
+            dict set registered [resolve_host $host 0] $line_nr
          }
       }
 
