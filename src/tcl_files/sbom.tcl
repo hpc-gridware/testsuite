@@ -102,6 +102,9 @@ proc sbom_find_cyclonedx {host_var binary_var} {
 # The outcome is recorded as a task of its own in the report, named <component>_sbom_validate,
 # or sbom_validate for the core system.
 #
+# A required SBOM is waited for up to 60 seconds: it is written by the install on the compile
+# host, and the validating host sees it over NFS, possibly not yet when the install returns.
+#
 # @param[in] sbom_file  absolute path of the SBOM
 # @param[in] report_var name of the report array of the calling step
 # @param[in] component  the product the SBOM belongs to, e.g. drmaaj - empty for the core system
@@ -126,7 +129,14 @@ proc sbom_validate {sbom_file report_var {component ""} {required 1}} {
    set task_nr [report_create_task report $task_name $host]
    report_task_add_message report $task_nr "validating $sbom_file with $binary"
 
-   if {![is_remote_file $host $CHECK_USER $sbom_file 1]} {
+   # the install on the compile host wrote the file, this host reads it over NFS and may not see
+   # it yet, so a required SBOM is waited for; one that may be missing is only looked for
+   if {$required} {
+      set exists [expr {[wait_for_remote_file $host $CHECK_USER $sbom_file 60 0] == 0}]
+   } else {
+      set exists [is_remote_file $host $CHECK_USER $sbom_file 1]
+   }
+   if {!$exists} {
       if {$required} {
          report_task_add_message report $task_nr "the SBOM $sbom_file does not exist"
          report_finish_task report $task_nr -1
