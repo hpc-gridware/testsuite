@@ -92,6 +92,7 @@ lappend check_functions "reporting_reporting_accounting_test"
 lappend check_functions "reporting_queue_state_test"
 lappend check_functions "reporting_ar_error_state_test"
 lappend check_functions "reporting_ar_warning_state_test"
+lappend check_functions "reporting_ar_project_test"
 lappend check_functions "reporting_no_comment_in_json"
 lappend check_functions "reporting_complex_change_test"
 lappend check_functions "reporting_deleted_by_test"
@@ -1690,3 +1691,42 @@ proc reporting_no_comment_in_json {} {
    }
 }
 
+## @brief the ar_attribute record of an AR with a project, the JSONL format has ar_project
+proc reporting_ar_project_test {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACT_LEVEL
+   global reporting_file reporting_format_config
+
+   if {![is_version_in_range "9.1.8"]} {
+      ts_log_fine "qrsub -P is available from version 9.1.8 on"
+      return
+   }
+
+   delete_all_ars
+   set project "reporting_prj"
+   add_project $project
+
+   # activate reporting and set short reporting flush time
+   set new_config(reporting_params) "reporting=true flush_time=00:00:1 $reporting_format_config"
+   set_config new_config
+
+   # tail -f reporting file
+   init_logfile_wait $ts_config(master_host) $reporting_file 1
+
+   set ar_id [submit_ar "-P $project -q reporting -d 3600"]
+   if {$ar_id > 0} {
+      if {$CHECK_ACT_LEVEL == 0} {
+         # the colon separated format does not carry the project, its fields stay the same
+         reporting_wait_for_ar_attr $ar_id "sge"
+      } else {
+         set pattern "\"type\":\"ar_attribute\",\"ar_submission_time\":*,\"ar_number\":${ar_id},"
+         append pattern "\"ar_account\":\"sge\",\"ar_project\":\"$project\",\"ar_start_time\":*"
+         reporting_wait_for_pattern $pattern
+      }
+      delete_ar $ar_id
+   }
+
+   # shutdown tail -f
+   close_logfile_wait
+   del_project $project
+}

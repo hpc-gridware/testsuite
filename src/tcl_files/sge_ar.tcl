@@ -373,6 +373,7 @@ proc parse_qrstat {ar_id {output qrstat_info} {plain_output qrstat_output} {host
    set match_text(submission_time)   submission_time*
    set match_text(group)             group*
    set match_text(account)           account*
+   set match_text(project)           project*
    set match_text(resource_list)     resource_list*
    set match_text($attribute_name)   "$attribute_name*"
    set match_text(granted_parallel_environment)   granted_parallel_environment*

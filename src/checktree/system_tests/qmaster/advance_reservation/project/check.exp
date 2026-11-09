@@ -1,0 +1,231 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# qrsub -P: an AR requests a project, it reserves queues which allow only certain projects,
+# qrstat shows the project, and the project survives a qmaster restart.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name            "ar_project"
+set check_category        "AR RESERVATION QMASTER VERIFIED"
+set check_description(0)  "qrsub -P reserves queues for the given project"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function ar_project_setup
+set check_cleanup_function ar_project_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "ar_project_reserve"
+lappend check_functions "ar_project_reject"
+lappend check_functions "ar_project_job_in_ar"
+lappend check_functions "ar_project_spooling"
+
+# -------- local test procedures: initialization------------------------------
+
+proc ar_project_setup {} {
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global ar_project_queue ar_project_project ar_project_other_project
+   global ar_project_noaccess_project ar_project_acl ar_project_global_backup
+
+   set ar_project_queue "ar_project.q"
+   set ar_project_project "ar_project_prj"
+   set ar_project_other_project "ar_project_other_prj"
+   set ar_project_noaccess_project "ar_project_noaccess_prj"
+   set ar_project_acl "ar_project_acl"
+
+   get_config ar_project_global_backup
+
+   add_project $ar_project_project
+   add_project $ar_project_other_project
+
+   # a project which only a foreign user may use
+   add_access_list $CHECK_FIRST_FOREIGN_SYSTEM_USER $ar_project_acl
+   set prj(acl) $ar_project_acl
+   add_project $ar_project_noaccess_project prj
+
+   # the queue is accessible only for jobs and ARs of the project
+   set q(slots) 2
+   set q(projects) $ar_project_project
+   add_queue $ar_project_queue [host_conf_get_suited_hosts] q
+}
+
+proc ar_project_cleanup {} {
+   global ar_project_queue ar_project_project ar_project_other_project
+   global ar_project_noaccess_project ar_project_acl ar_project_global_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   delete_all_ars
+
+   del_queue $ar_project_queue "" 1 1
+   reset_config ar_project_global_backup
+
+   del_project $ar_project_project
+   del_project $ar_project_other_project
+   del_project $ar_project_noaccess_project
+   del_access_list $ar_project_acl
+
+   unset -nocomplain ar_project_queue ar_project_project ar_project_other_project
+   unset -nocomplain ar_project_noaccess_project ar_project_acl ar_project_global_backup
+}
+
+# -------- local test procedures ---------------------------------------------
+
+## @brief Verify the project which qrstat -ar shows for an AR.
+#
+# @param ar_id the AR to look at
+# @param expected the expected project, "" if the AR has no project
+# @param context a description of the situation for the error message
+proc ar_project_check_qrstat {ar_id expected context} {
+   if {[parse_qrstat $ar_id info] != 0} {
+      ts_log_severe "$context: qrstat -ar $ar_id failed"
+      return
+   }
+   if {[info exists info(project)]} {
+      set shown $info(project)
+   } else {
+      set shown ""
+   }
+   if {$shown != $expected} {
+      ts_log_severe "$context: qrstat -ar $ar_id shows the project \"$shown\",\
+                     expected \"$expected\""
+   }
+}
+
+## @brief Submit an AR which has to be rejected with a certain error message.
+#
+# @param name a description of the case for the log
+# @param options the qrsub options
+# @param expected_message the error message qrsub has to print, "" for any error
+proc ar_project_reject_one {name options expected_message} {
+   set output [start_sge_bin "qrsub" $options]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "$name: qrsub $options was accepted, it should have been rejected"
+      delete_all_ars
+      return
+   }
+   if {$expected_message != "" && ![string match "*$expected_message*" $output]} {
+      ts_log_severe "$name: qrsub $options was rejected, but not with the expected\
+                     error.\nexpected: $expected_message\ngot: $output"
+      return
+   }
+   ts_log_fine "$name: as expected - rejected with \"[string trim $output]\""
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief an AR with -P reserves a queue which allows only that project
+proc ar_project_reserve {} {
+   global ar_project_queue ar_project_project ar_project_other_project
+
+   # the queue requires the project
+   set ar_id [submit_ar "-P $ar_project_project -q $ar_project_queue -d 600"]
+   if {$ar_id > 0} {
+      ar_project_check_qrstat $ar_id $ar_project_project "AR with -P"
+
+      set output [start_sge_bin "qrstat" "-xml -ar $ar_id"]
+      if {![string match "*<project>$ar_project_project</project>*" $output]} {
+         ts_log_severe "qrstat -xml -ar $ar_id does not show the project:\n$output"
+      }
+      delete_all_ars
+   }
+
+   # without a project or with another project the queue cannot be reserved
+   ar_project_reject_one "no project" "-q $ar_project_queue -d 600" ""
+   ar_project_reject_one "other project" \
+                         "-P $ar_project_other_project -q $ar_project_queue -d 600" ""
+
+   # an AR without a project is still possible in queues without a projects list
+   set ar_id [submit_ar "-d 600"]
+   if {$ar_id > 0} {
+      ar_project_check_qrstat $ar_id "" "AR without -P"
+      delete_all_ars
+   }
+}
+
+## @brief qmaster verifies the requested project like the project of a job
+proc ar_project_reject {} {
+   global CHECK_USER
+   global ar_project_project ar_project_noaccess_project
+
+   ar_project_reject_one "unknown project" "-P no_such_project -d 600" \
+                         [translate_macro MSG_AR_PRJUNKNOWN_S "no_such_project"]
+   ar_project_reject_one "no access" "-P $ar_project_noaccess_project -d 600" \
+         [translate_macro MSG_AR_NOACCESS2PRJ4USER_SS $ar_project_noaccess_project $CHECK_USER]
+
+   # the xprojects of the global configuration exclude the project
+   set conf(xprojects) $ar_project_project
+   set_config conf
+   ar_project_reject_one "global xprojects" "-P $ar_project_project -d 600" \
+                         [translate_macro MSG_AR_PRJNOTALLOWED_S $ar_project_project]
+   set conf(xprojects) "NONE"
+   set_config conf
+}
+
+## @brief a job of the project runs in the AR
+proc ar_project_job_in_ar {} {
+   global ar_project_queue ar_project_project
+
+   set ar_id [submit_ar "-P $ar_project_project -q $ar_project_queue -d 600"]
+   if {$ar_id <= 0} {
+      # error raised in submit_ar
+      return
+   }
+
+   set job_id [submit_job "-ar $ar_id -P $ar_project_project -b y sleep 600"]
+   if {$job_id > 0} {
+      trigger_scheduling
+      if {[wait_for_jobstart $job_id "" 60] == 0} {
+         ts_log_fine "job $job_id of project $ar_project_project started in AR $ar_id"
+      }
+      delete_job $job_id 1
+   }
+   delete_all_ars
+}
+
+## @brief the project of an AR is spooled and is still there after a qmaster restart
+proc ar_project_spooling {} {
+   global ar_project_queue ar_project_project
+
+   set ar_id [submit_ar "-P $ar_project_project -q $ar_project_queue -d 3600"]
+   if {$ar_id <= 0} {
+      # error raised in submit_ar
+      return
+   }
+
+   shutdown_and_restart_qmaster
+   ar_project_check_qrstat $ar_id $ar_project_project "AR after a qmaster restart"
+   delete_all_ars
+}
