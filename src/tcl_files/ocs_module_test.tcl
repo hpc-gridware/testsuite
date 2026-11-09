@@ -34,7 +34,8 @@ set module_tests_with_report {test_comm_xml_parse test_sgeobj_rsmap test_sgeobj_
                               test_uti_peopen test_cull_select_pack test_uti_lock_held
                               test_uti_cpus test_uti_format_text test_cull_owner test_cull_pack_format
                               test_cull_lazy test_cull_descr test_cull_plugin
-                              test_uti_cpp_features test_uti_exception test_sgeobj_AnswerException}
+                              test_uti_cpp_features test_uti_exception test_sgeobj_AnswerException
+                              test_sgeobj_unique_keys}
 
 ## @brief Run the one module test binary the current level selects from a list
 #
