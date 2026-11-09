@@ -1,0 +1,201 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# qstat -j combined with -u shows only the jobs of the given users.
+# Without -u, version 9.1 shows the jobs of all users, from version 9.2 on qstat -j
+# has the default -u $user like plain qstat.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name            "qstat_j_user"
+set check_category        "QSTAT VERIFIED"
+set check_description(0)  "qstat -j shows only the jobs of the users given with -u"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function qstat_j_user_setup
+set check_cleanup_function qstat_j_user_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "qstat_j_user_default"
+lappend check_functions "qstat_j_user_selection"
+lappend check_functions "qstat_j_user_job_id"
+lappend check_functions "qstat_j_user_formats"
+
+# -------- local test procedures: initialization------------------------------
+
+proc qstat_j_user_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global qstat_j_user_own_job qstat_j_user_foreign_job
+
+   # one held job of the check user and one of a foreign user, both stay pending
+   set job_args "-h -o /dev/null -j y -N qju $ts_config(product_root)/examples/jobs/sleeper.sh 1000"
+   set qstat_j_user_own_job [submit_job $job_args]
+   set qstat_j_user_foreign_job [submit_job $job_args 1 60 "" $CHECK_FIRST_FOREIGN_SYSTEM_USER]
+   if {$qstat_j_user_own_job <= 0 || $qstat_j_user_foreign_job <= 0} {
+      ts_log_config "cannot submit the jobs of $CHECK_USER and $CHECK_FIRST_FOREIGN_SYSTEM_USER"
+      return 99
+   }
+}
+
+proc qstat_j_user_cleanup {} {
+   global qstat_j_user_own_job qstat_j_user_foreign_job
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   unset -nocomplain qstat_j_user_own_job qstat_j_user_foreign_job
+}
+
+# -------- helper procedures -------------------------------------------------
+
+## @brief Call qstat -j as the check user and return the jobs of this check it shows.
+#
+# @param qstat_args the qstat arguments
+# @param format the output format: plain, xml or json
+# @return the sorted list of the job ids of this check found in the output
+proc qstat_j_user_shown_jobs {qstat_args {format "plain"}} {
+   global qstat_j_user_own_job qstat_j_user_foreign_job
+
+   switch -- $format {
+      "plain" {
+         set pattern {job_number:\s+([0-9]+)}
+      }
+      "xml" {
+         append qstat_args " -xml"
+         set pattern {<JB_job_number>([0-9]+)</JB_job_number>}
+      }
+      "json" {
+         append qstat_args " -fmt json"
+         set pattern {"job_number"\s*:\s*([0-9]+)}
+      }
+   }
+   set output [start_sge_bin "qstat" $qstat_args]
+   ts_log_fine "qstat $qstat_args:\n$output"
+
+   set jobs {}
+   foreach {match job_id} [regexp -all -inline $pattern $output] {
+      if {$job_id == $qstat_j_user_own_job || $job_id == $qstat_j_user_foreign_job} {
+         lappend jobs $job_id
+      }
+   }
+   return [lsort -integer -unique $jobs]
+}
+
+## @brief Compare the jobs qstat -j shows with the expected ones.
+#
+# @param qstat_args the qstat arguments
+# @param expected the job ids which have to be shown
+# @param format the output format: plain, xml or json
+proc qstat_j_user_expect {qstat_args expected {format "plain"}} {
+   set shown [qstat_j_user_shown_jobs $qstat_args $format]
+   set expected [lsort -integer $expected]
+   if {$shown != $expected} {
+      ts_log_severe "qstat $qstat_args ($format) shows the jobs \"$shown\", expected \"$expected\""
+   }
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief qstat -j without -u: all users in 9.1, the default -u $user from 9.2 on
+proc qstat_j_user_default {} {
+   global qstat_j_user_own_job qstat_j_user_foreign_job
+
+   if {[is_version_in_range "9.2.0"]} {
+      set expected [list $qstat_j_user_own_job]
+   } else {
+      set expected [list $qstat_j_user_own_job $qstat_j_user_foreign_job]
+   }
+   qstat_j_user_expect "-j '*'" $expected
+   qstat_j_user_expect "-j qju" $expected
+}
+
+## @brief the users given with -u select the jobs qstat -j shows
+proc qstat_j_user_selection {} {
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global qstat_j_user_own_job qstat_j_user_foreign_job
+
+   set own $qstat_j_user_own_job
+   set foreign $qstat_j_user_foreign_job
+
+   qstat_j_user_expect "-u '*' -j '*'" [list $own $foreign]
+   qstat_j_user_expect "-u $CHECK_USER -j '*'" [list $own]
+   qstat_j_user_expect "-u '\$user' -j '*'" [list $own]
+   qstat_j_user_expect "-u $CHECK_FIRST_FOREIGN_SYSTEM_USER -j '*'" [list $foreign]
+   qstat_j_user_expect "-u $CHECK_USER,$CHECK_FIRST_FOREIGN_SYSTEM_USER -j '*'" [list $own $foreign]
+
+   # a wildcard pattern for the user name
+   set user_pattern "$CHECK_FIRST_FOREIGN_SYSTEM_USER*"
+   if {[string match $user_pattern $CHECK_USER]} {
+      ts_log_info "the pattern $user_pattern matches $CHECK_USER as well, skipping the pattern test"
+   } else {
+      qstat_j_user_expect "-u '$user_pattern' -j '*'" [list $foreign]
+   }
+
+   # a user without jobs
+   qstat_j_user_expect "-u nosuchuser -j '*'" {}
+}
+
+## @brief a job given by its id is shown only if its owner is selected
+proc qstat_j_user_job_id {} {
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global qstat_j_user_own_job qstat_j_user_foreign_job
+
+   set foreign $qstat_j_user_foreign_job
+
+   qstat_j_user_expect "-u $CHECK_USER -j $foreign" {}
+   qstat_j_user_expect "-u $CHECK_FIRST_FOREIGN_SYSTEM_USER -j $foreign" [list $foreign]
+   qstat_j_user_expect "-u '*' -j $foreign" [list $foreign]
+   qstat_j_user_expect "-u $CHECK_USER -j $qstat_j_user_own_job,$foreign" [list $qstat_j_user_own_job]
+}
+
+## @brief the XML output and, from version 9.2 on, the JSON output are filtered as well
+proc qstat_j_user_formats {} {
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global qstat_j_user_own_job qstat_j_user_foreign_job
+
+   set own $qstat_j_user_own_job
+   set foreign $qstat_j_user_foreign_job
+
+   set formats {xml}
+   if {[is_version_in_range "9.2.0"]} {
+      lappend formats "json"
+   }
+   foreach format $formats {
+      qstat_j_user_expect "-u $CHECK_USER -j '*'" [list $own] $format
+      qstat_j_user_expect "-u $CHECK_FIRST_FOREIGN_SYSTEM_USER -j '*'" [list $foreign] $format
+      qstat_j_user_expect "-u '*' -j '*'" [list $own $foreign] $format
+   }
+}
