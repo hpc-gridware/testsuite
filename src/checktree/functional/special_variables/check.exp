@@ -1,0 +1,430 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# The special variables like $sge_root, $host or $job_id in the scripts and methods of the
+# configuration, the queue, the parallel environment and the checkpointing environment are
+# expanded when the script is started.
+#
+# The helper scripts are copied to a directory in the product root, so that every script can be
+# configured with a path starting with $sge_root. Each script appends a line with its path and
+# its arguments to a file in the out directory next to it, which the check functions compare
+# with the expected values.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name            "special_variables"
+set check_category        "EXECD QMASTER VERIFIED"
+set check_description(0)  "special variables in scripts and methods are expanded"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function special_variables_setup
+set check_cleanup_function special_variables_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "special_variables_config_prolog_epilog"
+lappend check_functions "special_variables_queue_prolog_epilog"
+lappend check_functions "special_variables_pe"
+lappend check_functions "special_variables_ctrl_methods"
+lappend check_functions "special_variables_ckpt"
+lappend check_functions "special_variables_starter_method"
+lappend check_functions "special_variables_load_sensor"
+lappend check_functions "special_variables_config_verify"
+
+# -------- local test procedures: initialization------------------------------
+
+proc special_variables_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ACTUAL_TEST_PATH
+   global sv_host sv_dir sv_global_backup sv_host_backup
+
+   set sv_host [host_conf_get_suited_hosts 1]
+
+   # the helper scripts in the product root, so that their path can start with $sge_root
+   set sv_dir "testsuite_special_variables"
+   set dir "$ts_config(product_root)/$sv_dir"
+   start_remote_prog $ts_config(master_host) $CHECK_USER "rm" "-rf $dir"
+   start_remote_prog $ts_config(master_host) $CHECK_USER "mkdir" "-p $dir/out"
+   start_remote_prog $ts_config(master_host) $CHECK_USER "chmod" "1777 $dir/out"
+   foreach script {sv_record.sh sv_starter.sh sv_loadsensor.sh} {
+      start_remote_prog $ts_config(master_host) $CHECK_USER "cp" \
+                        "$CHECK_ACTUAL_TEST_PATH/$script $dir/$script"
+      if {$prg_exit_state != 0} {
+         ts_log_severe "cannot copy $script to $dir"
+         return 99
+      }
+      wait_for_remote_file $sv_host $CHECK_USER "$dir/$script"
+   }
+
+   get_config sv_global_backup
+   get_config sv_host_backup $sv_host
+
+   set pe(slots)           10
+   set pe(allocation_rule) "\$pe_slots"
+   add_pe "sv.pe" pe
+
+   set ckpt(interface) "application-level"
+   set ckpt(when)      "m"
+   set ckpt(ckpt_dir)  "/tmp"
+   add_ckpt "sv.ckpt" ckpt
+
+   set queue(slots)            10
+   set queue(pe_list)          "sv.pe"
+   set queue(ckpt_list)        "sv.ckpt"
+   set queue(min_cpu_interval) "00:00:05"
+   add_queue "sv.q" $sv_host queue
+
+   return 0
+}
+
+proc special_variables_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global sv_host sv_dir sv_global_backup sv_host_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   del_queue "sv.q" "" 1 1
+   del_ckpt "sv.ckpt"
+   del_pe "sv.pe"
+
+   if {[info exists sv_global_backup]} {
+      reset_config sv_global_backup
+   }
+   if {[info exists sv_host_backup]} {
+      reset_config_and_propagate sv_host_backup $sv_host
+   }
+
+   if {[info exists sv_dir]} {
+      start_remote_prog $ts_config(master_host) $CHECK_USER "rm" \
+                        "-rf $ts_config(product_root)/$sv_dir"
+   }
+
+   unset -nocomplain sv_host sv_dir sv_global_backup sv_host_backup
+}
+
+# -------- helper procedures -------------------------------------------------
+
+## @brief The command line of sv_record.sh with a path starting with $sge_root.
+#
+# @param out the name of the output file in the out directory
+# @param tag the tag of the record
+# @param vars the special variables to pass as arguments, e.g. {sge_root host}
+# @return the command line, e.g. "$sge_root/<dir>/sv_record.sh $sge_root/<dir>/out/<out> <tag> ..."
+proc sv_record_command {out tag vars} {
+   global sv_dir
+
+   set cmd "\$sge_root/$sv_dir/sv_record.sh \$sge_root/$sv_dir/out/$out $tag"
+   foreach var $vars {
+      append cmd " \$$var"
+   }
+   return $cmd
+}
+
+## @brief Waits for a record in an output file and compares it with the expected values.
+#
+# @param out the name of the output file in the out directory
+# @param tag the tag of the record
+# @param script the expected path of the script
+# @param expected the expected arguments; "<host>" matches the test host, "<pid>" a number
+# @return 1 if the record was found and matches, 0 otherwise
+proc sv_check_record {out tag script expected} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER sv_host sv_dir
+
+   set file "$ts_config(product_root)/$sv_dir/out/$out"
+   if {[wait_for_remote_file $sv_host $CHECK_USER $file 90 0] != 0} {
+      ts_log_severe "$tag: $file was not written, the script was not started"
+      return 0
+   }
+
+   # the record is appended after the file was created, wait for it
+   set record ""
+   set end [expr [clock seconds] + 60]
+   while {$record == "" && [clock seconds] < $end} {
+      get_file_content $sv_host $CHECK_USER $file lines
+      for {set i 1} {$i <= $lines(0)} {incr i} {
+         if {[lindex $lines($i) 0] == $tag} {
+            set record $lines($i)
+            break
+         }
+      }
+      if {$record == ""} {
+         sleep_for_seconds 1
+      }
+   }
+   if {$record == ""} {
+      ts_log_severe "$tag: no record in $file"
+      return 0
+   }
+
+   set actual [lrange $record 1 end]
+   set wanted [concat [list $script] $expected]
+   ts_log_fine "$tag: $actual"
+   if {[llength $actual] != [llength $wanted]} {
+      ts_log_severe "$tag: got \"$actual\", expected \"$wanted\""
+      return 0
+   }
+   foreach a $actual w $wanted {
+      if {$w == "<host>"} {
+         set ok [expr {[resolve_host $a 0] == [resolve_host $sv_host 0]}]
+      } elseif {$w == "<pid>"} {
+         set ok [string is digit -strict $a]
+      } else {
+         set ok [expr {$a == $w}]
+      }
+      if {!$ok} {
+         ts_log_severe "$tag: got \"$actual\", expected \"$wanted\""
+         return 0
+      }
+   }
+   return 1
+}
+
+## @brief Submits a job to sv.q and waits for it to start.
+#
+# @param args additional qsub arguments
+# @param duration the run time of the job in seconds
+# @return the job id, or 0 on error
+proc sv_submit_job {args duration} {
+   get_current_cluster_config_array ts_config
+
+   set job_id [submit_job "-q sv.q -N svjob -o /dev/null -j y $args\
+                           $ts_config(product_root)/examples/jobs/sleeper.sh $duration"]
+   if {$job_id <= 0} {
+      return 0
+   }
+   if {[wait_for_jobstart $job_id "" 60] != 0} {
+      return 0
+   }
+   return $job_id
+}
+
+## @brief The expected values of the job related special variables.
+#
+# @param job_id the job id
+# @return the values of $sge_root, $sge_cell, $host, $job_owner and $job_id
+proc sv_job_values {job_id} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   return [list $ts_config(product_root) $ts_config(cell) "<host>" $CHECK_USER $job_id]
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief prolog and epilog of the cluster configuration, with a path starting with $sge_root
+proc special_variables_config_prolog_epilog {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER sv_dir
+
+   set vars {sge_root sge_cell host job_owner job_id ja_task_id job_name queue}
+   set conf(prolog) [sv_record_command config.txt prolog $vars]
+   set conf(epilog) [sv_record_command config.txt epilog $vars]
+   # the job must not start before sge_execd knows the prolog and epilog
+   set_config_and_propagate conf
+
+   set job_id [sv_submit_job "" 5]
+   if {$job_id > 0} {
+      wait_for_job_end $job_id 60
+      set script "$ts_config(product_root)/$sv_dir/sv_record.sh"
+      set expected [concat [sv_job_values $job_id] [list 0 svjob sv.q]]
+      sv_check_record config.txt prolog $script $expected
+      sv_check_record config.txt epilog $script $expected
+   }
+
+   set conf(prolog) "none"
+   set conf(epilog) "none"
+   set_config_and_propagate conf
+}
+
+## @brief prolog and epilog of the queue, as user@ with a path starting with $sge_root
+proc special_variables_queue_prolog_epilog {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER sv_dir
+
+   set vars {sge_root sge_cell host job_owner job_id ja_task_id job_name queue}
+   set queue(prolog) "$CHECK_USER@[sv_record_command queue.txt prolog $vars]"
+   set queue(epilog) "$CHECK_USER@[sv_record_command queue.txt epilog $vars]"
+   mod_queue "sv.q" "" queue
+
+   set job_id [sv_submit_job "-t 2" 5]
+   if {$job_id > 0} {
+      wait_for_job_end $job_id 60
+      set script "$ts_config(product_root)/$sv_dir/sv_record.sh"
+      set expected [concat [sv_job_values $job_id] [list 2 svjob sv.q]]
+      sv_check_record queue.txt prolog $script $expected
+      sv_check_record queue.txt epilog $script $expected
+   }
+
+   set queue(prolog) "NONE"
+   set queue(epilog) "NONE"
+   mod_queue "sv.q" "" queue
+}
+
+## @brief start_proc_args and stop_proc_args of the parallel environment
+proc special_variables_pe {} {
+   get_current_cluster_config_array ts_config
+   global sv_dir
+
+   set vars {sge_root sge_cell host job_owner job_id job_name pe pe_slots queue}
+   set pe(start_proc_args) [sv_record_command pe.txt pe_start $vars]
+   set pe(stop_proc_args)  [sv_record_command pe.txt pe_stop $vars]
+   mod_pe "sv.pe" pe
+
+   set job_id [sv_submit_job "-pe sv.pe 2" 5]
+   if {$job_id > 0} {
+      wait_for_job_end $job_id 60
+      set script "$ts_config(product_root)/$sv_dir/sv_record.sh"
+      set expected [concat [sv_job_values $job_id] [list svjob sv.pe 2 sv.q]]
+      sv_check_record pe.txt pe_start $script $expected
+      sv_check_record pe.txt pe_stop $script $expected
+   }
+
+   set pe(start_proc_args) "NONE"
+   set pe(stop_proc_args)  "NONE"
+   mod_pe "sv.pe" pe
+}
+
+## @brief suspend_method, resume_method and terminate_method of the queue
+proc special_variables_ctrl_methods {} {
+   get_current_cluster_config_array ts_config
+   global sv_dir
+
+   set vars {sge_root sge_cell host job_owner job_id job_name queue job_pid}
+   set queue(suspend_method)   [sv_record_command ctrl.txt suspend $vars]
+   set queue(resume_method)    [sv_record_command ctrl.txt resume $vars]
+   set queue(terminate_method) [sv_record_command ctrl.txt terminate $vars]
+   mod_queue "sv.q" "" queue
+
+   set job_id [sv_submit_job "" 300]
+   if {$job_id > 0} {
+      set script "$ts_config(product_root)/$sv_dir/sv_record.sh"
+      set expected [concat [sv_job_values $job_id] [list svjob sv.q "<pid>"]]
+
+      suspend_job $job_id
+      sv_check_record ctrl.txt suspend $script $expected
+      unsuspend_job $job_id
+      sv_check_record ctrl.txt resume $script $expected
+      # the terminate_method kills the job
+      delete_job $job_id
+      sv_check_record ctrl.txt terminate $script $expected
+      wait_for_job_end $job_id 60
+   }
+
+   set queue(suspend_method)   "NONE"
+   set queue(resume_method)    "NONE"
+   set queue(terminate_method) "NONE"
+   mod_queue "sv.q" "" queue
+}
+
+## @brief ckpt_command and clean_command of the checkpointing environment
+proc special_variables_ckpt {} {
+   get_current_cluster_config_array ts_config
+   global sv_dir
+
+   set vars {sge_root sge_cell host job_owner job_id job_name queue job_pid ckpt_dir ckpt_signal}
+   set ckpt(ckpt_command)  [sv_record_command ckpt.txt ckpt $vars]
+   set ckpt(clean_command) [sv_record_command ckpt.txt clean $vars]
+   mod_ckpt "sv.ckpt" ckpt
+
+   # the queue's min_cpu_interval of 5 seconds triggers the ckpt_command
+   set job_id [sv_submit_job "-ckpt sv.ckpt" 15]
+   if {$job_id > 0} {
+      wait_for_job_end $job_id 60
+      set script "$ts_config(product_root)/$sv_dir/sv_record.sh"
+      set expected [concat [sv_job_values $job_id] [list svjob sv.q "<pid>" /tmp none]]
+      sv_check_record ckpt.txt ckpt $script $expected
+      sv_check_record ckpt.txt clean $script $expected
+   }
+
+   set ckpt(ckpt_command)  "none"
+   set ckpt(clean_command) "none"
+   mod_ckpt "sv.ckpt" ckpt
+}
+
+## @brief starter_method of the queue with a path starting with $sge_root
+proc special_variables_starter_method {} {
+   get_current_cluster_config_array ts_config
+   global sv_dir
+
+   set queue(starter_method) "\$sge_root/$sv_dir/sv_starter.sh"
+   mod_queue "sv.q" "" queue
+
+   set job_id [sv_submit_job "" 5]
+   if {$job_id > 0} {
+      wait_for_job_end $job_id 60
+      if {[get_qacct $job_id qacct_info] == 0 && $qacct_info(exit_status) != 0} {
+         ts_log_severe "job $job_id with the starter_method failed: exit_status\
+                        $qacct_info(exit_status), failed $qacct_info(failed)"
+      }
+      sv_check_record starter.txt starter "$ts_config(product_root)/$sv_dir/sv_starter.sh" {}
+   }
+
+   set queue(starter_method) "NONE"
+   mod_queue "sv.q" "" queue
+}
+
+## @brief load_sensor of the host configuration with a path containing $sge_root and $sge_cell
+proc special_variables_load_sensor {} {
+   get_current_cluster_config_array ts_config
+   global sv_host sv_host_backup sv_dir
+
+   set conf(load_sensor) "\$sge_root/\$sge_cell/../$sv_dir/sv_loadsensor.sh"
+   set_config_and_propagate conf $sv_host
+
+   set script "$ts_config(product_root)/$ts_config(cell)/../$sv_dir/sv_loadsensor.sh"
+   sv_check_record load_sensor.txt load_sensor $script {}
+
+   reset_config_and_propagate sv_host_backup $sv_host
+}
+
+## @brief qmaster rejects a path which is not absolute or contains an unknown variable
+proc special_variables_config_verify {} {
+   global sv_dir
+
+   foreach name {load_sensor prolog epilog} {
+      foreach value [list "\$sge_root" \
+                          "\$sge_cell/$sv_dir/sv_record.sh" \
+                          "\$sge_root/$sv_dir/\$unknown/sv_record.sh" \
+                          "\$sge_rootx/$sv_dir/sv_record.sh"] {
+         set conf($name) $value
+         if {[set_config conf global 0 0] >= 0} {
+            ts_log_severe "the configuration accepts $name \"$value\""
+         }
+         unset conf
+      }
+   }
+}

@@ -2980,6 +2980,9 @@ proc set_config {change_array {host global} {do_add 0} {raise_error 1} {do_reset
       add_message_to_container messages -2 [translate_macro_if_possible MSG_WARN_CHANGENOTEFFECTEDUNTILRESTARTOFEXECHOSTS "execd_spool_dir"]
       add_message_to_container messages -3 [translate_macro MSG_CONFIG_CONF_GIDRANGELESSTHANNOTALLOWED_I "*"]
       add_message_to_container messages -4 [translate_macro MSG_PARSE_EDITFAILED]
+      if {[is_version_in_range "9.1.8"]} {
+         add_message_to_container messages -5 [translate_macro MSG_CONF_PATHMUSTSTARTWITHSLASHORSGEROOT_S "*"]
+      }
       if {$do_add} {
          add_message_to_container messages 0 [translate_macro MSG_SGETEXT_MODIFIEDINLIST_SSSS $CHECK_USER "*" "*" "*"]
          add_message_to_container messages 1 [translate_macro MSG_SGETEXT_ADDEDTOLIST_SSSS $CHECK_USER "*" "*" "*"]
