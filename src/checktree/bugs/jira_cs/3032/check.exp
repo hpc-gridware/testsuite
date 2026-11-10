@@ -1,0 +1,161 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3032: since CS-2859 a mirror client whose callbacks keep failing asks for a new registration,
+# which the event master answers with a total update. The qmaster mirror threads, which feed the
+# listener and the reader data store, never registered again: they are busy until they release
+# that state with ec_commit(), which is refused while a registration is pending, and they waited
+# for the next event without a timeout. From then on they received no events, and every read
+# request of a user who had written since then was parked for good - qstat hung.
+#
+# The mirrors are pushed out of sync with the qmaster_params test parameter
+# __TEST_MIRROR_CALLBACK_ERROR=<n>: whenever its value changes, every qmaster internal mirror
+# (scheduler, listener, reader) fails its next n callbacks and does not apply those events.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_3032"
+set check_category       "BUG EVENTCLIENT VERIFIED"
+set check_description(0) "qmaster mirror threads register again after a resync request (CS-3032)"
+
+set check_needs          "init_core_system"
+set check_root_access_needs "no"
+
+set check_setup_function issue_3032_setup
+set check_cleanup_function issue_3032_cleanup
+
+set check_functions {}
+lappend check_functions "issue_3032_mirrors_register_again"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_3032_setup {} {
+   get_current_cluster_config_array ts_config
+   global issue_3032_config_backup issue_3032_acl
+
+   # translate_macro parses the source code for the message texts this check matches on
+   if {$ts_config(source_dir) == "none"} {
+      ts_log_config "source directory is set to \"none\" - cannot translate the mirror messages"
+      return 99
+   }
+
+   set issue_3032_acl "issue_3032"
+   get_config issue_3032_config_backup
+
+   return 0
+}
+
+proc issue_3032_cleanup {} {
+   global issue_3032_config_backup issue_3032_acl
+
+   reset_config issue_3032_config_backup
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   del_access_list $issue_3032_acl "" "" 0
+
+   unset -nocomplain issue_3032_config_backup issue_3032_acl
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief every qmaster internal mirror resyncs, and reads and scheduling work afterwards
+#
+# Changes of a userset reach all three mirrors - the listener mirror subscribes to little more
+# than hosts, users and usersets - so they produce the failing callbacks. Each mirror has to ask
+# for a new registration, and the listener and the reader mirror have to actually register again,
+# which the event master logs. The symptom of the bug is checked as well: a user who submits a
+# job must get an answer from qstat, and the job must run.
+proc issue_3032_mirrors_register_again {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER issue_3032_acl
+
+   set nr_failures 10
+
+   set expected_lines {}
+   # scheduler (1), listener (2) and reader mirror (3) ask for a new registration
+   foreach ec_id {1 2 3} {
+      lappend expected_lines [translate_macro MSG_MIRROR_RESYNC_UUU $ec_id "*" "*"]
+   }
+   # the listener and the reader mirror register again
+   foreach ec_name {mirror-2 mirror-3} {
+      lappend expected_lines [translate_macro MSG_EVE_CLIENTREREGISTERED_SSSU $ec_name "*" "*" "*"]
+   }
+
+   init_logfile_wait $ts_config(master_host) [get_qmaster_messages_file]
+
+   get_config old_config
+   add_or_replace_array_param new_config old_config "qmaster_params" \
+                              "__TEST_MIRROR_CALLBACK_ERROR" $nr_failures
+   if {[set_config new_config] < 0} {
+      close_logfile_wait
+      return
+   }
+
+   # more userset events than callbacks are failed on purpose
+   for {set i 0} {$i < [expr $nr_failures + 5]} {incr i} {
+      set output [start_sge_bin "qconf" "-au issue_3032_user_$i $issue_3032_acl"]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "qconf -au failed:\n$output"
+         close_logfile_wait
+         return
+      }
+   }
+
+   logfile_wait "" 120 1 0 logfile_wait_error $expected_lines
+   if {$logfile_wait_error != 0} {
+      ts_log_severe "not every qmaster mirror asked for a new registration and registered again\
+                     within 120 seconds (logfile_wait returned $logfile_wait_error), expected\
+                     all of these messages in the qmaster messages file:\n[join $expected_lines \n]"
+      return
+   }
+   ts_log_fine "all qmaster mirrors asked for a new registration,\
+                listener and reader registered again"
+
+   # the user has written, so the read request has to wait for the reader data store
+   set job_id [submit_job "-b y /bin/sleep 5" 1 60 "" $CHECK_USER]
+   if {$job_id <= 0} {
+      return
+   }
+   set output [start_sge_bin "qstat" "" "" $CHECK_USER prg_exit_state 60]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qstat as user $CHECK_USER did not answer after the mirrors were resynced\
+                     (exit state $prg_exit_state):\n$output"
+      return
+   }
+   ts_log_fine "qstat answered:\n$output"
+
+   if {[wait_for_jobstart $job_id "" 60] != 0} {
+      return
+   }
+   wait_for_jobend $job_id "" 60 0
+}
