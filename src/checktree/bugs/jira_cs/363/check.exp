@@ -1,0 +1,120 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-363: High overhead of executing a job within sge_execd.
+#
+# sge_execd reaped a finished job only in its next cyclic pass, which an idle sge_execd runs
+# once a second. The wallclock of a job, which sge_execd computes at reap time, came out up to
+# one second too high. sge_execd now wakes up when a child process exits.
+#
+# The check submits short jobs one after the other, so that sge_execd is idle when a job ends.
+# Without the fix a sleep 0 job had a wallclock of about one second, with the fix it is below
+# 0.3 seconds.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name            "cs363"
+set check_category        "BUG EXECD VERIFIED"
+set check_description(0)  "sge_execd reaps a finished job without waiting for its next cyclic pass"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs363_setup
+set check_cleanup_function cs363_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs363_short_job_wallclock"
+
+# -------- local test procedures: initialization------------------------------
+
+proc cs363_setup {} {
+   global cs363_jobs_per_host cs363_max_wallclock
+
+   # jobs submitted to each execution host, one after the other
+   set cs363_jobs_per_host 10
+   # a sleep 0 job has a wallclock of about 0.15 seconds with the fix
+   set cs363_max_wallclock 0.5
+
+   return 0
+}
+
+proc cs363_cleanup {} {
+   global cs363_jobs_per_host cs363_max_wallclock
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   unset -nocomplain cs363_jobs_per_host cs363_max_wallclock
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief a job which ends on an idle sge_execd has a wallclock close to its run time
+#
+# Before the fix the wallclock of a sleep 0 job was up to one second above its run time.
+proc cs363_short_job_wallclock {} {
+   get_current_cluster_config_array ts_config
+   global cs363_jobs_per_host cs363_max_wallclock
+
+   foreach host $ts_config(execd_nodes) {
+      set wallclocks {}
+      set too_high {}
+      for {set i 0} {$i < $cs363_jobs_per_host} {incr i} {
+         set job_id [submit_job "-l h=$host -o /dev/null -j y -b y /bin/sleep 0"]
+         if {$job_id <= 0} {
+            return
+         }
+         if {[wait_for_job_end $job_id 60] != 0} {
+            return
+         }
+         if {[get_qacct $job_id qacct_info] != 0} {
+            return
+         }
+         set wallclock $qacct_info(wallclock)
+         lappend wallclocks $wallclock
+         if {$wallclock > $cs363_max_wallclock} {
+            lappend too_high "$job_id: $wallclock"
+         }
+         unset qacct_info
+      }
+
+      if {[llength $too_high] > 0} {
+         ts_log_severe "on host $host [llength $too_high] of $cs363_jobs_per_host sleep 0 jobs\
+                        have a wallclock above $cs363_max_wallclock seconds:\
+                        [join $too_high ", "]"
+      } else {
+         ts_log_fine "host $host, wallclock of the sleep 0 jobs: $wallclocks"
+      }
+   }
+}
