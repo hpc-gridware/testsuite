@@ -458,6 +458,15 @@ proc drmaa_check_single_threaded_part_03 { } {
          drmaa_test $host $st_test $ts_config(testsuite_root_dir)/scripts/suspendable_sleeper.sh
       }
 
+      # drmaa_job_ps() right after drmaa_synchronize() reports the job as done, also when the
+      # data store of the qmaster reader threads lags behind because of qstat load
+      if {[drmaa_level_runs "base"] && [is_version_in_range "9.1.8"]} {
+         set load_ids [drmaa_start_qstat_load]
+         drmaa_test $host "ST_SUBMIT_SYNC_JOB_PS" \
+                    $ts_config(testsuite_root_dir)/scripts/suspendable_sleeper.sh
+         drmaa_stop_qstat_load $load_ids
+      }
+
       # -- tests with a <sleeper_job> argument repeatedly
       if {[drmaa_level_runs "session"]} {
          set test_scenario {}
@@ -476,6 +485,39 @@ proc drmaa_check_single_threaded_part_03 { } {
          }
       }
    }
+}
+
+## @brief Start a qstat and qhost load on all exec hosts.
+#
+# The load keeps the qmaster reader threads busy, so that their data store lags behind
+# the main data store, and a GDI request answered by a reader thread returns outdated data.
+#
+# @param duration the maximum run time of the load in seconds
+# @return the spawn ids of the load processes, to be passed to drmaa_stop_qstat_load
+proc drmaa_start_qstat_load {{duration 600}} {
+   global CHECK_USER CHECK_ACTUAL_TEST_PATH
+   get_current_cluster_config_array ts_config
+
+   set id_list {}
+   foreach host $ts_config(execd_nodes) {
+      lappend id_list [open_remote_spawn_process $host $CHECK_USER \
+                       $CHECK_ACTUAL_TEST_PATH/qstat_load.sh "$duration 4"]
+   }
+   ts_log_fine "started qstat load on $ts_config(execd_nodes)"
+
+   # give the load some time to build up
+   sleep_for_seconds 5
+   return $id_list
+}
+
+## @brief Stop the load started with drmaa_start_qstat_load.
+#
+# @param id_list the spawn ids returned by drmaa_start_qstat_load
+proc drmaa_stop_qstat_load {id_list} {
+   foreach id $id_list {
+      close_spawn_process $id
+   }
+   ts_log_fine "stopped qstat load"
 }
 
 #****** check.60/drmaa_check_single_threaded_part_04() *************************
