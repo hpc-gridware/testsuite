@@ -1,0 +1,244 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2757: a consumable which has no capacity configured anywhere, its value coming only from a
+# reported load value, was rejected as an unknown resource as soon as max_reservation > 0. With
+# resource reservation enabled every job is scheduled based on time, which skips the early return
+# in ri_time_by_slots(); the capacity lookup then failed with DISPATCH_MISSING_ATTR, the request
+# was never tagged as matched, and the queue layer reported it as unknown.
+#
+# virtual_free is made consumable without a capacity, so that it is satisfied from the load value
+# only. Run level 0 is the control without resource reservation, run level 1 enables it.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_2757"
+set check_category       "BUG SCHEDULER VERIFIED"
+set check_description(0) "a consumable satisfied from a load value is scheduled (CS-2757)"
+set check_description(1) "a consumable satisfied from a load value is scheduled,\
+                          with resource reservation (CS-2757)"
+
+set check_needs          "init_core_system"
+set check_root_access_needs "no"
+
+set check_setup_function issue_2757_setup
+set check_cleanup_function issue_2757_cleanup
+set check_setup_level_function issue_2757_setup_level
+set check_cleanup_level_function issue_2757_cleanup_level
+
+set check_functions {}
+lappend check_functions "issue_2757_load_value_consumable"
+lappend check_functions "issue_2757_unknown_resource"
+lappend check_functions "issue_2757_capacity_is_booked"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_2757_setup {} {
+   get_current_cluster_config_array ts_config
+   global issue_2757_complex_backup issue_2757_host issue_2757_host_backup
+
+   # translate_macro parses the source code for the scheduler message this check matches on
+   if {$ts_config(source_dir) == "none"} {
+      ts_log_config "source directory is set to \"none\" - cannot translate the scheduler message"
+      return 99
+   }
+
+   set issue_2757_host [host_conf_get_suited_hosts 1]
+   get_exechost issue_2757_host_backup $issue_2757_host
+
+   get_complex issue_2757_complex_backup
+   #                         shortcut type   relop requestable consumable default urgency
+   # consumable, but no capacity anywhere: satisfied from the reported load value only
+   set complex(virtual_free) "vf      MEMORY <=    YES         YES        0       0"
+   # consumable, no capacity and no load value: it exists nowhere
+   set complex(issue_2757)   "i2757   INT    <=    YES         YES        0       0"
+   if {[set_complex complex] < 0} {
+      ts_log_config "cannot define the complexes needed by this check"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_2757_cleanup {} {
+   global issue_2757_complex_backup issue_2757_host issue_2757_host_backup
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   # the host first, it references the complexes
+   set_exechost issue_2757_host_backup $issue_2757_host
+   reset_complex issue_2757_complex_backup
+
+   unset -nocomplain issue_2757_complex_backup issue_2757_host issue_2757_host_backup
+}
+
+proc issue_2757_setup_level {} {
+   global CHECK_ACT_LEVEL
+
+   if {$CHECK_ACT_LEVEL == 1} {
+      # every job is scheduled based on time from here on, no -R y needed
+      set sched_conf(max_reservation) 10
+   }
+   # so that a job which does not start says why
+   set sched_conf(schedd_job_info) "true"
+   if {[set_schedd_config sched_conf] < 0} {
+      ts_log_config "cannot set the scheduler configuration of run level $CHECK_ACT_LEVEL"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_2757_cleanup_level {} {
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   reset_schedd_config
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief submit a sleeper job with the given resource request
+#
+# @param request what to request with -l, e.g. "virtual_free=1M"
+# @return the job id, or a value <= 0 if the submission failed
+proc issue_2757_submit {request} {
+   get_current_cluster_config_array ts_config
+
+   set job_args "$ts_config(product_root)/examples/jobs/sleeper.sh 60"
+   return [submit_job "-w n -o /dev/null -e /dev/null -l $request $job_args"]
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief a request for a consumable satisfied from a load value starts
+#
+# virtual_free has no capacity on any layer, so the request can only be satisfied from the load
+# value every exec host reports. A small amount fits on every host.
+proc issue_2757_load_value_consumable {} {
+   global CHECK_ACT_LEVEL
+
+   set job_id [issue_2757_submit "virtual_free=1M"]
+   if {$job_id <= 0} {
+      return
+   }
+
+   if {[wait_for_jobstart $job_id "" 60 0] != 0} {
+      ts_log_severe "job $job_id requesting virtual_free=1M did not start at run level\
+                     $CHECK_ACT_LEVEL. virtual_free is consumable without a capacity and is\
+                     satisfied from the reported load value:\n[start_sge_bin qstat "-j $job_id"]"
+      delete_job $job_id
+      return
+   }
+   ts_log_fine "job $job_id requesting virtual_free=1M started"
+
+   delete_job $job_id 1
+}
+
+## @brief a request for a consumable which exists nowhere is still rejected as unknown
+#
+# The complex issue_2757 is consumable, but has neither a capacity nor a load value on any host,
+# so the job must stay pending and the scheduler must name the resource as unknown.
+proc issue_2757_unknown_resource {} {
+   global CHECK_ACT_LEVEL
+
+   set job_id [issue_2757_submit "issue_2757=1"]
+   if {$job_id <= 0} {
+      return
+   }
+
+   set expected [translate_macro MSG_SCHEDD_JOBREQUESTSUNKNOWNRESOURCE_S "issue_2757"]
+   set found 0
+   set end_time [expr [clock seconds] + 60]
+   while {[clock seconds] < $end_time} {
+      trigger_scheduling
+      sleep_for_seconds 5
+      set output [start_sge_bin "qstat" "-j $job_id"]
+      if {[string first $expected $output] >= 0} {
+         set found 1
+         break
+      }
+   }
+
+   if {!$found} {
+      ts_log_severe "job $job_id requesting issue_2757=1, which exists nowhere, was not reported\
+                     as requesting an unknown resource at run level $CHECK_ACT_LEVEL, expected\
+                     \"$expected\" in:\n$output"
+   } elseif {[is_job_running $job_id ""] == 1} {
+      ts_log_severe "job $job_id requesting issue_2757=1, which exists nowhere, was started at\
+                     run level $CHECK_ACT_LEVEL"
+   } else {
+      ts_log_fine "job $job_id stays pending: $expected"
+   }
+
+   delete_job $job_id 1
+}
+
+## @brief a consumable with a configured capacity is still booked
+#
+# With a capacity for virtual_free on the exec host, a running job has to reduce the remaining
+# amount the host reports. qhost reports the more restrictive of the remaining capacity and the
+# load value, so the capacity is kept small enough that what remains is below the free memory.
+proc issue_2757_capacity_is_booked {} {
+   global CHECK_ACT_LEVEL issue_2757_host issue_2757_host_backup
+
+   add_or_replace_array_param eh issue_2757_host_backup "complex_values" "virtual_free" "2G"
+   if {[set_exechost eh $issue_2757_host] < 0} {
+      return
+   }
+
+   set job_id [issue_2757_submit "virtual_free=1G,h=$issue_2757_host"]
+   if {$job_id > 0} {
+      if {[wait_for_jobstart $job_id "" 60 0] != 0} {
+         ts_log_severe "job $job_id requesting virtual_free=1G did not start at run level\
+                        $CHECK_ACT_LEVEL although host $issue_2757_host has a virtual_free\
+                        capacity of 2G:\n[start_sge_bin qstat "-j $job_id"]"
+      } else {
+         set output [start_sge_bin "qhost" "-F virtual_free -h $issue_2757_host"]
+         if {![regexp {hc:virtual_free=([0-9.]+)G} $output -> remaining]} {
+            ts_log_severe "qhost does not report the virtual_free capacity of host\
+                           $issue_2757_host:\n$output"
+         } elseif {$remaining != 1} {
+            ts_log_severe "host $issue_2757_host reports hc:virtual_free=${remaining}G with a job\
+                           requesting 1G running, expected 1G of the 2G capacity"
+         } else {
+            ts_log_fine "the running job booked 1G of virtual_free: ${remaining}G remain"
+         }
+      }
+      delete_job $job_id 1
+   }
+
+   set_exechost issue_2757_host_backup $issue_2757_host
+}
