@@ -111,6 +111,10 @@ lappend cluster_module_tests {test_spool_flatfile_read_error "9.2.0"}
 # malformed request is reported by the binary itself; no extra liveness probe is
 # needed here.
 lappend cluster_module_tests {test_qmaster_procedure_mod "9.2.0"}
+# CS-3052: the filter that keeps a spool's second object with a taken key out of
+# the master list. Host keys compare as the hash table does, which reads
+# ignore_fqdn and default_domain from the bootstrap file, so it needs SGE_ROOT.
+lappend cluster_module_tests {test_spool_duplicates "9.2.0"}
 
 # The binaries built on the shared module test frame (clusterscheduler
 # test/common/ocs_module_test.h), as in module_test_generic. When the testsuite
@@ -119,7 +123,7 @@ lappend cluster_module_tests {test_qmaster_procedure_mod "9.2.0"}
 # scenario can name the catalog case it covers. The others get no extra
 # arguments.
 global cluster_module_tests_with_report
-set cluster_module_tests_with_report {test_qmaster_hgroup_cache}
+set cluster_module_tests_with_report {test_qmaster_hgroup_cache test_spool_duplicates}
 
 set check_description(0) "test_sgeobj_eval_expression (needs SGE_ROOT)"
 set check_description(1) "test_spool_flatfile (needs SGE_ROOT)"
@@ -127,6 +131,7 @@ set check_description(2) "test_qmaster_hgroup_reserved (needs a running qmaster)
 set check_description(3) "test_qmaster_hgroup_cache (needs a running qmaster)"
 set check_description(4) "test_spool_flatfile_read_error (needs SGE_ROOT)"
 set check_description(5) "test_qmaster_procedure_mod (needs a running qmaster)"
+set check_description(6) "test_spool_duplicates (needs SGE_ROOT)"
 
 set check_functions {}
 lappend check_functions "cluster_module_tests_run"
