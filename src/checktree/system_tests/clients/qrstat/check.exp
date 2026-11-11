@@ -282,7 +282,10 @@ proc qrstat_option_explain {} {
    parse_explain_option $msg; #qrstat -explain output
    unsuspend_queue $qrstat_queue
 
-   start_sge_bin "qconf" "-ke $qrstat_host"
+   # wait until the execd is gone, a restart while it is still shutting down has no effect
+   if {[soft_execd_shutdown $qrstat_host] != 0} {
+      return
+   }
    set msg [translate_macro MSG_AR_RESERVEDQUEUEHASERROR_SS $queue $qunknown]
    set check_values(state)   "E"
    set check_values(message) "$msg"
