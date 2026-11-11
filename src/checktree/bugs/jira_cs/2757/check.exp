@@ -226,15 +226,16 @@ proc issue_2757_capacity_is_booked {} {
                         $CHECK_ACT_LEVEL although host $issue_2757_host has a virtual_free\
                         capacity of 2G:\n[start_sge_bin qstat "-j $job_id"]"
       } else {
+         # qhost prints the value either with a unit ("1.000G") or in bytes ("1073741824")
          set output [start_sge_bin "qhost" "-F virtual_free -h $issue_2757_host"]
-         if {![regexp {hc:virtual_free=([0-9.]+)G} $output -> remaining]} {
+         if {![regexp {hc:virtual_free=([0-9.]+[kKmMgGtT]?)} $output -> remaining]} {
             ts_log_severe "qhost does not report the virtual_free capacity of host\
                            $issue_2757_host:\n$output"
-         } elseif {$remaining != 1} {
-            ts_log_severe "host $issue_2757_host reports hc:virtual_free=${remaining}G with a job\
+         } elseif {[sge_mem_to_bytes $remaining] != [sge_mem_to_bytes "1G"]} {
+            ts_log_severe "host $issue_2757_host reports hc:virtual_free=$remaining with a job\
                            requesting 1G running, expected 1G of the 2G capacity"
          } else {
-            ts_log_fine "the running job booked 1G of virtual_free: ${remaining}G remain"
+            ts_log_fine "the running job booked 1G of virtual_free: $remaining remain"
          }
       }
       delete_job $job_id 1
