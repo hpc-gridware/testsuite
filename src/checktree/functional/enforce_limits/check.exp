@@ -229,14 +229,19 @@ proc enforce_limits_cleanup {} {
    unset -nocomplain tight_slots tight_masterq tight_master_node tight_slaveq tight_slave_node loose_slots loose_masterq loose_master_node loose_slaveq loose_slave_node el_base_path org_global_conf
 }
 
-# 50) submit a sleeper job
-#    - PE with N slots
-#    - master queue has to be defined
-#    - "qrsh -inherit" job which spawns pe_tasks and then waits
-#    - each pe task should sleep 60 seconds
-# 51) Wait till all tasks are running
-# 52) Wait till all tasks (job) are terminated
-# 53) Check accounting entry that job run only a bit more than 30 sec and not 60 sec
+## @brief Check that sge_execd enforces h_rt on a tightly integrated parallel job
+#
+# Submits a job with N slots in the tight PE whose master task starts "qrsh -inherit"
+# tasks sleeping 60 seconds each, waits for its end and checks in the accounting that
+# it ran about the 30 seconds of the queue's h_rt, not 60.
+#
+# The limit is enforced with millisecond precision, so the run time lands within a few
+# milliseconds of 30 seconds on either side. ru_wallclock is truncated to whole seconds
+# and turns 29.999 into 29, therefore the precise wallclock is compared, with a
+# tolerance of 3 percent on both bounds. Classic accounting has no wallclock field,
+# there ru_wallclock is used.
+#
+# @return nothing, a failure is reported with ts_log_severe
 proc enforce_limits_tight_execd_limit_enforcement {} {
    global ts_config CHECK_USER
    global tight_slots
@@ -257,11 +262,17 @@ proc enforce_limits_tight_execd_limit_enforcement {} {
 
    # check accounting entry
    if {[get_qacct $job_id] == 0} {
-      set wallclock $qacct_info(ru_wallclock)
+      if {[info exists qacct_info(wallclock)]} {
+         set wallclock $qacct_info(wallclock)
+      } else {
+         set wallclock $qacct_info(ru_wallclock)
+      }
 
-      # if the job was running 60 seconds and more that the limit enforcement failed
-      if {$wallclock < 30 || $wallclock > 40} {
-         ts_log_severe "wallclock limit seems not to be enforced in execd for tight PE job $job_id"
+      # a job running 60 seconds or more was not stopped by the limit enforcement
+      set min_wallclock [expr {30 * 0.97}]
+      set max_wallclock [expr {40 * 1.03}]
+      if {$wallclock < $min_wallclock || $wallclock > $max_wallclock} {
+         ts_log_severe "wallclock limit seems not to be enforced in execd for tight PE job $job_id: wallclock $wallclock, expected $min_wallclock to $max_wallclock"
       }
    } else {
       ts_log_severe "field exit_status is missing in qacct output"
