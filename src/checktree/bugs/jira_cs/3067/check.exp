@@ -1,0 +1,283 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3067: a rescheduled task of a tightly integrated parallel job hangs in state Rt when it is
+# dispatched to a host where the slave container of its previous run still exists.
+#
+# qmod -r only kills the master task. The pe task on a slave host keeps running until that host
+# notices the lost connection to the master task. The reschedule unknown list entry, which keeps
+# the scheduler away from the slave host, is removed with the first slave report after the
+# reschedule, even if a pe task still runs in the slave container. If the scheduler then places
+# the master task of the new run on that host, the execd drops the delivery as a duplicate of the
+# job it already knows, and the job never starts.
+#
+# In the wild this is a race of about two seconds between the first slave report and the report
+# of the pe task exit. The check makes it deterministic: it stops the shepherd of the pe task on
+# the slave host, so that the pe task survives the reschedule, and continues it once the
+# scheduler had the chance to dispatch the new run.
+#
+#    host A: master task of the first run
+#    host B: pe task of the first run, master task of the second run (-masterq)
+#    host C: pe task of the second run
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_3067"
+set check_category       "BUG EXECUTION VERIFIED"
+set check_description(0) "a rescheduled tightly integrated job starts on the host of a former\
+                          pe task (CS-3067)"
+
+set check_needs          "init_core_system"
+# the shepherd of the pe task is stopped and continued as root
+set check_root_access_needs "yes"
+
+set check_setup_function issue_3067_setup
+set check_cleanup_function issue_3067_cleanup
+
+set check_functions {}
+lappend check_functions "issue_3067_reschedule_to_former_slave_host"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_3067_setup {} {
+   global issue_3067_hosts issue_3067_stopped
+
+   set issue_3067_hosts [host_conf_get_suited_hosts 3]
+   if {[llength $issue_3067_hosts] < 3} {
+      ts_log_config "this check needs 3 exec hosts, got \"$issue_3067_hosts\""
+      return 99
+   }
+   # host and pid of a stopped shepherd, so that cleanup can continue it
+   set issue_3067_stopped {}
+
+   # one slot per host: a job with 2 slots always runs on two hosts
+   set pe(slots)             999
+   set pe(allocation_rule)   "1"
+   set pe(control_slaves)    "TRUE"
+   set pe(job_is_first_task) "FALSE"
+   if {[add_pe "cs3067.pe" pe] < 0} {
+      ts_log_config "cannot add the parallel environment cs3067.pe"
+      return 99
+   }
+
+   set queue(pe_list) "cs3067.pe"
+   set queue(slots)   2
+   set queue(rerun)   "TRUE"
+   if {[add_queue "cs3067.q" $issue_3067_hosts queue] < 0} {
+      ts_log_config "cannot add the queue cs3067.q"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_3067_cleanup {} {
+   global issue_3067_hosts issue_3067_stopped
+
+   issue_3067_continue_shepherd
+
+   # with the bug, the job can only be removed with qdel -f
+   delete_all_jobs 1 1
+   wait_for_end_of_all_jobs
+
+   del_queue "cs3067.q" "" 1 1
+   del_pe "cs3067.pe"
+
+   unset -nocomplain issue_3067_hosts issue_3067_stopped
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief get the states of a job's queue instance lines from qstat -g t
+#
+# @param job_id the job id
+# @return the list of states, e.g. {Rr Rr}, empty if qstat does not show the job
+proc issue_3067_job_states {job_id} {
+   set states {}
+   set output [start_sge_bin "qstat" "-g t"]
+   foreach line [split $output "\n"] {
+      if {[lindex $line 0] == $job_id} {
+         lappend states [lindex $line 4]
+      }
+   }
+   return $states
+}
+
+## @brief continue the shepherd that issue_3067 stopped, if any
+#
+# Called from the check and from cleanup, so that a failing check does not leave a stopped
+# process behind.
+proc issue_3067_continue_shepherd {} {
+   global issue_3067_stopped
+
+   if {[llength $issue_3067_stopped] == 2} {
+      lassign $issue_3067_stopped host pid
+      ts_log_fine "continuing the shepherd $pid on host $host"
+      start_remote_prog $host "root" "kill" "-CONT $pid"
+      set issue_3067_stopped {}
+   }
+}
+
+## @brief is the job script of a job running on a host?
+#
+# qstat can show a job as running while its master task never started, so the check looks for
+# the job script process on the master host.
+#
+# @param host   the host to look at
+# @param job_id the job id
+# @return 1 if the job script runs, 0 if not
+proc issue_3067_job_script_runs {host job_id} {
+   global CHECK_USER
+
+   # the bracket keeps the pattern from matching the command line of the remote shell, the
+   # anchor after the job id keeps job 4 from matching job 41
+   set pattern "\[j\]ob_scripts/${job_id}( |\$)"
+   set output [start_remote_prog $host $CHECK_USER "pgrep" "-f '$pattern'"]
+   if {[string trim $output] != ""} {
+      return 1
+   }
+   return 0
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief a rescheduled tightly integrated job starts on a host where its pe task ran before
+proc issue_3067_reschedule_to_former_slave_host {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER prg_exit_state issue_3067_hosts issue_3067_stopped
+
+   lassign $issue_3067_hosts host_a host_b host_c
+
+   # first run: master task on host A, pe task on host B
+   set job_script "$ts_config(testsuite_root_dir)/scripts/pe_job.sh"
+   set job_args "$ts_config(testsuite_root_dir)/scripts/pe_task.sh 1 300"
+   set sge_args "-pe cs3067.pe 2 -masterq cs3067.q@$host_a -q cs3067.q@$host_a,cs3067.q@$host_b"
+   append sge_args " -o /dev/null -j y"
+   set job_id [submit_job "$sge_args $job_script $job_args"]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $job_id "" 60] != 0} {
+      delete_job $job_id 1
+      return
+   }
+
+   # wait for the shepherd of the pe task on host B
+   set pid ""
+   set end_time [expr [clock seconds] + 60]
+   while {[clock seconds] < $end_time} {
+      set pattern "\[s\]ge_shepherd-${job_id}( |\$)"
+      set output [start_remote_prog $host_b $CHECK_USER "pgrep" "-f '$pattern'"]
+      set pids [string trim $output]
+      if {[llength $pids] == 1} {
+         set pid $pids
+         break
+      }
+      sleep_for_seconds 1
+   }
+   if {$pid == ""} {
+      ts_log_severe "found no single shepherd of the pe task of job $job_id on host $host_b:\
+                     \"$pids\""
+      delete_job $job_id 1
+      return
+   }
+
+   # keep the pe task alive across the reschedule: its shepherd would kill it as soon as the
+   # connection to the master task is lost
+   start_remote_prog $host_b "root" "kill" "-STOP $pid"
+   if {$prg_exit_state != 0} {
+      ts_log_severe "cannot stop the shepherd $pid on host $host_b"
+      delete_job $job_id 1
+      return
+   }
+   set issue_3067_stopped [list $host_b $pid]
+   ts_log_fine "stopped the shepherd $pid of the pe task of job $job_id on host $host_b"
+
+   # second run: master task on host B, pe task on host C
+   set qalter_args "-masterq cs3067.q@$host_b -q cs3067.q@$host_b,cs3067.q@$host_c $job_id"
+   set output [start_sge_bin "qalter" $qalter_args]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qalter $qalter_args failed:\n$output"
+      return
+   }
+   set output [start_sge_bin "qmod" "-r $job_id"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qmod -r $job_id failed:\n$output"
+      return
+   }
+
+   # give the scheduler the chance to dispatch the second run while the pe task of the first
+   # run is still alive on host B
+   set end_time [expr [clock seconds] + 60]
+   while {[clock seconds] < $end_time} {
+      trigger_scheduling
+      sleep_for_seconds 5
+      set states [issue_3067_job_states $job_id]
+      if {[string first "q" $states] < 0} {
+         break
+      }
+   }
+   ts_log_fine "job $job_id while the pe task of the first run is alive: $states"
+
+   issue_3067_continue_shepherd
+
+   # the second run has to start, with the job script running on host B
+   set running 0
+   set end_time [expr [clock seconds] + 180]
+   while {[clock seconds] < $end_time} {
+      trigger_scheduling
+      sleep_for_seconds 5
+      set states [issue_3067_job_states $job_id]
+      if {[string first "t" $states] < 0 && [string first "d" $states] < 0 &&
+          [string first "r" $states] >= 0 && [issue_3067_job_script_runs $host_b $job_id]} {
+         set running 1
+         break
+      }
+   }
+
+   if {!$running} {
+      set spool_dir [get_execd_spool_dir $host_b]
+      set active_jobs [start_remote_prog $host_b $CHECK_USER "ls" "$spool_dir/$host_b/active_jobs"]
+      ts_log_severe "the rescheduled job $job_id did not start on host $host_b, where its pe task\
+                     ran before: states \"$states\", active jobs on host $host_b:\
+                     [string trim $active_jobs]\n[start_sge_bin qstat "-g t"]"
+   } else {
+      ts_log_fine "the rescheduled job $job_id runs on host $host_b"
+   }
+
+   # with the bug, the job can only be removed with qdel -f
+   start_sge_bin "qdel" "-f $job_id"
+   wait_for_end_of_all_jobs
+}
