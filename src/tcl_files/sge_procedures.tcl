@@ -6458,31 +6458,20 @@ proc get_extended_job_info {jobid {variable job_info} {do_replace_NA 1} {do_grou
    return 0
 }
 
-#****** sge_procedures/get_qstat_j_info() **************************************
-#  NAME
-#     get_qstat_j_info() -- get qstat -j information
+## @brief Run qstat -j for a job and parse its output into an array
 #
-#  SYNOPSIS
-#     get_qstat_j_info { jobid {variable qstat_j_info} }
+# Since 9.2, qstat -j shows only the jobs of the users given with -u, by default the calling user (CS-2253).
+# The testsuite asks for jobs of any user, also of a user other than the one running qstat, and a wait loop
+# that does not see a job would take it for ended. So from 9.2 on -u "*" is added unless the caller gives -u;
+# older versions show every job and are called as before.
 #
-#  FUNCTION
-#     This procedure starts qstat -j for the given job id and returns
-#     information in an tcl array.
-#
-#  INPUTS
-#     jobid                   - job id of job
-#     {my_variable qstat_j_info} - array to store information
-#     {add_switch ""}         - additional switch for qstat -j
-#     {host ""}               - host on which to execute qstat -j (default: any host)
-#     {user ""}               - user who shall execute qstat -j (default: CHECK_USER)
-#
-#  RESULT
-#     1 on success
-#     0 on failure (qstat exit code was not 0)
-#
-#  SEE ALSO
-#     parser/parse_qstat_j()
-#*******************************************************************************
+# @param jobid the job id
+# @param my_variable name of the array that receives the information, qstat_j_info by default
+# @param add_switch further switches for qstat
+# @param host the host to run qstat on, any host by default
+# @param user the user to run qstat as, CHECK_USER by default
+# @return 1 if qstat succeeded, 0 if its exit code was not 0
+# @see parse_qstat_j
 proc get_qstat_j_info {jobid {my_variable qstat_j_info} {add_switch ""} {host ""} {user ""}} {
    get_current_cluster_config_array ts_config
    upvar $my_variable jobinfo
@@ -6491,6 +6480,9 @@ proc get_qstat_j_info {jobid {my_variable qstat_j_info} {add_switch ""} {host ""
       unset jobinfo
    }
 
+   if {[is_version_in_range "9.2.0"] && ![regexp {(^|\s)-u(\s|$)} $add_switch]} {
+      set add_switch "-u \"*\" $add_switch"
+   }
    set result [start_sge_bin "qstat" "$add_switch -j $jobid" $host $user]
    set jobinfo(output) $result
    if {$prg_exit_state == 0} {
