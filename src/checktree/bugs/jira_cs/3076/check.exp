@@ -1,0 +1,251 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3076: after qmod -r, the old master task of a rescheduled parallel job keeps running when the
+# first report from its host does not contain the report of the job.
+#
+# qmod -r does not signal the old master task. It adds an entry for the job to the reschedule
+# unknown list of the host, and the kill is sent when the next job report of the job arrives
+# from that host. The entry is removed at the end of every report message from the host, also of
+# a message that does not contain a report of the job. For a parallel job it is the only entry
+# on the master host, so the kill is lost.
+#
+# The check makes the first message after the reschedule one without the report of the job: it
+# kills a second job on the same host right after qmod -r. The execd reaps it at once and sends a
+# flush message, which contains only the report of that job. A long load_report_time makes it
+# unlikely that a periodic report, which contains all jobs, arrives in between.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_3076"
+set check_category       "BUG RESCHEDULE VERIFIED"
+set check_description(0) "qmod -r kills the old master task of a parallel job, also when the\
+                          first report from its host does not contain the job (CS-3076)"
+
+set check_needs          "init_core_system"
+set check_root_access_needs "no"
+
+set check_setup_function issue_3076_setup
+set check_cleanup_function issue_3076_cleanup
+
+set check_functions {}
+lappend check_functions "issue_3076_kill_after_flush_report"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_3076_setup {} {
+   global issue_3076_host issue_3076_backup
+
+   set issue_3076_host [host_conf_get_suited_hosts]
+
+   # few periodic reports: the flush message of the trigger job has to come first
+   get_config issue_3076_backup
+   set conf(load_report_time) "0:1:0"
+   set_config_and_propagate conf
+
+   set pe(slots)           999
+   set pe(allocation_rule) "\$pe_slots"
+   if {[add_pe "cs3076.pe" pe] < 0} {
+      ts_log_config "cannot add the parallel environment cs3076.pe"
+      return 99
+   }
+
+   # the parallel job and the trigger job run on the same host
+   set queue(pe_list) "cs3076.pe"
+   set queue(slots)   2
+   set queue(rerun)   "TRUE"
+   if {[add_queue "cs3076.q" $issue_3076_host queue] < 0} {
+      ts_log_config "cannot add the queue cs3076.q"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_3076_cleanup {} {
+   global issue_3076_host issue_3076_backup
+
+   delete_all_jobs 1 1
+   wait_for_end_of_all_jobs
+
+   del_queue "cs3076.q" "" 1 1
+   del_pe "cs3076.pe"
+
+   reset_config_and_propagate issue_3076_backup
+
+   unset -nocomplain issue_3076_host issue_3076_backup
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief find the single process on a host whose command line matches a pattern
+#
+# Uses get_ps_info instead of pgrep, which is not available on all architectures.
+#
+# @param host    the host to look at
+# @param pattern regular expression for the command line
+# @return the pid, or an empty string if no process or more than one process matches
+proc issue_3076_find_pid {host pattern} {
+   get_ps_info 0 $host ps_info
+   set pids {}
+   for {set i 0} {$i < $ps_info(proc_count)} {incr i} {
+      if {[regexp -- $pattern $ps_info(command,$i)]} {
+         lappend pids $ps_info(pid,$i)
+      }
+   }
+   if {[llength $pids] != 1} {
+      return ""
+   }
+   return [lindex $pids 0]
+}
+
+## @brief wait for the single process on a host whose command line matches a pattern
+#
+# @param host    the host to look at
+# @param pattern regular expression for the command line
+# @return the pid, or an empty string if no single process matched within 60 seconds
+proc issue_3076_wait_for_pid {host pattern} {
+   set end_time [expr [clock seconds] + 60]
+   while {[clock seconds] < $end_time} {
+      set pid [issue_3076_find_pid $host $pattern]
+      if {$pid != ""} {
+         return $pid
+      }
+      sleep_for_seconds 1
+   }
+   return ""
+}
+
+## @brief is a process running on a host?
+#
+# @param host the host
+# @param pid  the process id
+# @return 1 if the process runs, 0 if not
+proc issue_3076_pid_runs {host pid} {
+   get_ps_info $pid $host ps_info
+   if {$ps_info($pid,error) == 0} {
+      return 1
+   }
+   return 0
+}
+
+## @brief get the load_report_time in seconds
+#
+# @return the global load_report_time in seconds
+proc issue_3076_load_report_time {} {
+   get_config global_config
+   set seconds 0
+   foreach part [split $global_config(load_report_time) ":"] {
+      scan $part "%d" value
+      set seconds [expr $seconds * 60 + $value]
+   }
+   return $seconds
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief qmod -r kills the old master task although the first report does not contain the job
+proc issue_3076_kill_after_flush_report {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER prg_exit_state issue_3076_host
+
+   set host $issue_3076_host
+
+   # the parallel job: its master task is the only one on the host
+   set job_script "$ts_config(testsuite_root_dir)/scripts/sleeper.sh"
+   set job_id [submit_job "-pe cs3076.pe 1 -q cs3076.q -o /dev/null -j y $job_script 600"]
+   if {$job_id <= 0} {
+      return
+   }
+   # the trigger job: its exit makes the execd send a message with only its own report
+   set trigger_id [submit_job "-q cs3076.q -o /dev/null -j y -b y /bin/sleep 3076"]
+   if {$trigger_id <= 0} {
+      return
+   }
+   foreach id [list $job_id $trigger_id] {
+      if {[wait_for_jobstart $id "" 60] != 0} {
+         return
+      }
+   }
+
+   # the anchor after the job id keeps job 4 from matching job 41
+   set pid [issue_3076_wait_for_pid $host "job_scripts/${job_id}( |\$)"]
+   if {$pid == ""} {
+      ts_log_severe "found no single job script process of job $job_id on host $host"
+      return
+   }
+   ts_log_fine "job $job_id runs with job script pid $pid on host $host"
+   set trigger_pid [issue_3076_wait_for_pid $host "^(/bin/)?sleep 3076\$"]
+   if {$trigger_pid == ""} {
+      ts_log_severe "found no single process of the trigger job $trigger_id on host $host"
+      return
+   }
+
+   # reschedule the parallel job, then make the trigger job exit at once
+   set output [start_sge_bin "qmod" "-r $job_id"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qmod -r $job_id failed:\n$output"
+      return
+   }
+   start_remote_prog $host $CHECK_USER "/bin/kill" "$trigger_pid"
+   if {$prg_exit_state != 0} {
+      ts_log_severe "cannot kill the trigger job $trigger_id (pid $trigger_pid) on host $host"
+      return
+   }
+
+   # with the next full report from the host, qmaster has to kill the old master task
+   set timeout [expr 2 * [issue_3076_load_report_time] + 30]
+   set killed 0
+   set end_time [expr [clock seconds] + $timeout]
+   while {[clock seconds] < $end_time} {
+      if {![issue_3076_pid_runs $host $pid]} {
+         set killed 1
+         break
+      }
+      sleep_for_seconds 2
+   }
+
+   if {!$killed} {
+      set qstat_output [start_sge_bin "qstat" "-g t"]
+      ts_log_severe "the old master task of the rescheduled job $job_id (job script pid $pid) still\
+                     runs on host $host $timeout seconds after qmod -r\n$qstat_output"
+   } else {
+      ts_log_fine "the old master task of the rescheduled job $job_id was killed"
+   }
+
+   # with the bug, the job can only be removed with qdel -f
+   start_sge_bin "qdel" "-f $job_id"
+   wait_for_end_of_all_jobs
+}
