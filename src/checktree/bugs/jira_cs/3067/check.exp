@@ -143,9 +143,30 @@ proc issue_3067_continue_shepherd {} {
    if {[llength $issue_3067_stopped] == 2} {
       lassign $issue_3067_stopped host pid
       ts_log_fine "continuing the shepherd $pid on host $host"
-      start_remote_prog $host "root" "kill" "-CONT $pid"
+      start_remote_prog $host "root" "/bin/kill" "-CONT $pid"
       set issue_3067_stopped {}
    }
+}
+
+## @brief find the single process on a host whose command line matches a pattern
+#
+# Uses get_ps_info instead of pgrep, which is not available on all architectures.
+#
+# @param host    the host to look at
+# @param pattern regular expression for the command line
+# @return the pid, or an empty string if no process or more than one process matches
+proc issue_3067_find_pid {host pattern} {
+   get_ps_info 0 $host ps_info
+   set pids {}
+   for {set i 0} {$i < $ps_info(proc_count)} {incr i} {
+      if {[regexp -- $pattern $ps_info(command,$i)]} {
+         lappend pids $ps_info(pid,$i)
+      }
+   }
+   if {[llength $pids] != 1} {
+      return ""
+   }
+   return [lindex $pids 0]
 }
 
 ## @brief is the job script of a job running on a host?
@@ -157,13 +178,8 @@ proc issue_3067_continue_shepherd {} {
 # @param job_id the job id
 # @return 1 if the job script runs, 0 if not
 proc issue_3067_job_script_runs {host job_id} {
-   global CHECK_USER
-
-   # the bracket keeps the pattern from matching the command line of the remote shell, the
-   # anchor after the job id keeps job 4 from matching job 41
-   set pattern "\[j\]ob_scripts/${job_id}( |\$)"
-   set output [start_remote_prog $host $CHECK_USER "pgrep" "-f '$pattern'"]
-   if {[string trim $output] != ""} {
+   # the anchor after the job id keeps job 4 from matching job 41
+   if {[issue_3067_find_pid $host "job_scripts/${job_id}( |\$)"] != ""} {
       return 1
    }
    return 0
@@ -198,25 +214,21 @@ proc issue_3067_reschedule_to_former_slave_host {} {
    set pid ""
    set end_time [expr [clock seconds] + 60]
    while {[clock seconds] < $end_time} {
-      set pattern "\[s\]ge_shepherd-${job_id}( |\$)"
-      set output [start_remote_prog $host_b $CHECK_USER "pgrep" "-f '$pattern'"]
-      set pids [string trim $output]
-      if {[llength $pids] == 1} {
-         set pid $pids
+      set pid [issue_3067_find_pid $host_b "sge_shepherd-${job_id}( |\$)"]
+      if {$pid != ""} {
          break
       }
       sleep_for_seconds 1
    }
    if {$pid == ""} {
-      ts_log_severe "found no single shepherd of the pe task of job $job_id on host $host_b:\
-                     \"$pids\""
+      ts_log_severe "found no single shepherd of the pe task of job $job_id on host $host_b"
       delete_job $job_id 1
       return
    }
 
    # keep the pe task alive across the reschedule: its shepherd would kill it as soon as the
    # connection to the master task is lost
-   start_remote_prog $host_b "root" "kill" "-STOP $pid"
+   start_remote_prog $host_b "root" "/bin/kill" "-STOP $pid"
    if {$prg_exit_state != 0} {
       ts_log_severe "cannot stop the shepherd $pid on host $host_b"
       delete_job $job_id 1
