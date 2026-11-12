@@ -49,7 +49,7 @@ global cull_module_tests
 set cull_module_tests {}
 lappend cull_module_tests {test_cull_hash "" 0 ""}
 lappend cull_module_tests {test_cull_list "" 0 ""}
-lappend cull_module_tests {test_cull_observe "" 0 ""}
+lappend cull_module_tests {test_cull_observe "" 0 "9.2.0"}
 lappend cull_module_tests {test_cull_pack "" 0 ""}
 lappend cull_module_tests {test_cull_enumeration "" 0 ""}
 lappend cull_module_tests {test_cull_no_transfer "9.2.0" 0 ""}
