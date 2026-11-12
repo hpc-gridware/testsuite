@@ -3529,10 +3529,15 @@ proc private_test_host_conf_get_suited_host {} {
 global host_conf_java_cache
 unset -nocomplain host_conf_java_cache
 
-# detect java installations on cluster hosts as well as compile hosts
-# no need to call this function explicitly, it is called implicitly by
+##
+# @brief detect the java installations on all hosts used by the testsuite
+#
+# Searches the cluster hosts, the non cluster hosts, the compile hosts and the hosts required by
+# the additional checktrees, e.g. the dbwriter host of checktree_arco.
+# There is no need to call this function explicitly, it is called implicitly by
 # - host_conf_get_java
 # - host_conf_get_java_host
+##
 proc host_conf_detect_java {} {
    global host_conf_java_cache
 
@@ -3543,8 +3548,13 @@ proc host_conf_detect_java {} {
    set host_conf_java_cache(hosts) {}
 
    # get a list of all hosts which might be used by this testsuite
-   # this includes non cluster hosts and compile hosts
+   # this includes non cluster hosts, compile hosts and the hosts required by additional checktrees
    set host_list [host_conf_get_cluster_hosts 1 1]
+   foreach host [checktree_get_required_hosts] {
+      if {$host != "" && $host != "none" && [lsearch -exact $host_list $host] < 0} {
+         lappend host_list $host
+      }
+   }
 
    # search java on every host
    foreach host $host_list {
