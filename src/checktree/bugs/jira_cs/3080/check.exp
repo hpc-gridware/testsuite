@@ -1,0 +1,481 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3080: after qmod -r, the new run of a job has to wait until the old run is gone.
+#
+# qmod -r does not signal the old run. sge_qmaster sends the kill when the next report of the job
+# arrives from its host, which can take up to one load_report_time. Until the old run has exited,
+# the new run must not start on another host. The deferral must not block the job when the host
+# of the old run is unknown, or after a restart of sge_qmaster.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_3080"
+set check_category       "BUG RESCHEDULE VERIFIED"
+set check_description(0) "after qmod -r, the new run of a job starts only after the old run is\
+                          gone, also when the host is unknown or sge_qmaster restarts (CS-3080)"
+
+set check_needs          "init_core_system"
+set check_root_access_needs "yes"
+
+set check_setup_function issue_3080_setup
+set check_cleanup_function issue_3080_cleanup
+
+set check_functions {}
+lappend check_functions "issue_3080_deferred_start"
+lappend check_functions "issue_3080_delete_deferred"
+lappend check_functions "issue_3080_host_already_unknown"
+lappend check_functions "issue_3080_host_becomes_unknown"
+lappend check_functions "issue_3080_qmaster_restart"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_3080_setup {} {
+   global issue_3080_hosts issue_3080_backup issue_3080_stopped_execds issue_3080_frozen_execd
+
+   set issue_3080_hosts [host_conf_get_suited_hosts 2]
+   if {[llength $issue_3080_hosts] < 2} {
+      ts_log_config "the check needs 2 execution hosts"
+      return 99
+   }
+   set issue_3080_stopped_execds {}
+   set issue_3080_frozen_execd ""
+
+   # few periodic reports: the old run lives up to one load_report_time after qmod -r
+   # stay well below max_unheard (1 minute in the testsuite): sge_qmaster does not deliver a job
+   # to a host it has not heard from for max_unheard
+   get_config issue_3080_backup
+   set conf(load_report_time) "0:0:30"
+   set_config_and_propagate conf
+
+   set queue(slots) 1
+   set queue(rerun) "TRUE"
+   if {[add_queue "cs3080.q" $issue_3080_hosts queue] < 0} {
+      ts_log_config "cannot add the queue cs3080.q"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_3080_cleanup {} {
+   global issue_3080_hosts issue_3080_backup issue_3080_stopped_execds issue_3080_frozen_execd
+
+   issue_3080_thaw_execd
+   issue_3080_start_execds
+
+   delete_all_jobs 1 1
+   wait_for_end_of_all_jobs
+
+   del_queue "cs3080.q" "" 1 1
+
+   reset_config_and_propagate issue_3080_backup
+
+   unset -nocomplain issue_3080_hosts issue_3080_backup issue_3080_stopped_execds
+   unset -nocomplain issue_3080_frozen_execd
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief continue the execd which a check has frozen with SIGSTOP
+proc issue_3080_thaw_execd {} {
+   global issue_3080_frozen_execd
+
+   if {$issue_3080_frozen_execd != ""} {
+      lassign $issue_3080_frozen_execd host execd_pid
+      start_remote_prog $host "root" "/bin/kill" "-CONT $execd_pid"
+      set issue_3080_frozen_execd ""
+   }
+}
+
+## @brief start the execds which a check has stopped
+proc issue_3080_start_execds {} {
+   global issue_3080_stopped_execds
+
+   if {[llength $issue_3080_stopped_execds] > 0} {
+      foreach host $issue_3080_stopped_execds {
+         startup_execd $host
+      }
+      set issue_3080_stopped_execds {}
+      wait_for_load_from_all_queues 60
+   }
+}
+
+## @brief stop the execd of a host and leave its jobs running
+#
+# @param host the host
+# @return 0 on success, -1 on error
+proc issue_3080_stop_execd {host} {
+   global issue_3080_stopped_execds
+
+   lappend issue_3080_stopped_execds $host
+   return [soft_execd_shutdown $host]
+}
+
+## @brief find the job script processes of a job on a host
+#
+# Uses get_ps_info instead of pgrep, which is not available on all architectures.
+#
+# @param host   the host to look at
+# @param job_id the job id
+# @return the list of pids, empty if no job script process of the job runs
+proc issue_3080_find_job_pids {host job_id} {
+   get_ps_info 0 $host ps_info
+   set pids {}
+   for {set i 0} {$i < $ps_info(proc_count)} {incr i} {
+      # the anchor after the job id keeps job 4 from matching job 41
+      if {[regexp -- "job_scripts/${job_id}( |\$)" $ps_info(command,$i)]} {
+         lappend pids $ps_info(pid,$i)
+      }
+   }
+   return $pids
+}
+
+## @brief does the old run of a job still run on a host?
+#
+# While the old run is on the host, the reschedule unknown list keeps the new run away from it.
+#
+# @param host   the host of the old run
+# @param job_id the job id
+# @return 1 if a job script process of the job runs on the host, 0 if not
+proc issue_3080_old_run_runs {host job_id} {
+   if {[llength [issue_3080_find_job_pids $host $job_id]] > 0} {
+      return 1
+   }
+   return 0
+}
+
+## @brief get the host on which sge_qmaster sees a job running
+#
+# @param job_id the job id
+# @return the host name, or an empty string if the job does not run
+proc issue_3080_running_host {job_id} {
+   set output [start_sge_bin "qstat" "-s r -g t -u '*'"]
+   foreach line [split $output "\n"] {
+      if {[regexp "^\\s*${job_id}\\s.*\\scs3080\\.q@(\\S+)\\s" $line match host]} {
+         return [resolve_host $host 0]
+      }
+   }
+   return ""
+}
+
+## @brief submit a job and wait for it to run
+#
+# @param job_id_var name of the variable which gets the job id
+# @param host_var   name of the variable which gets the host of the job
+# @return 1 on success, 0 on error
+proc issue_3080_start_job {job_id_var host_var} {
+   get_current_cluster_config_array ts_config
+   upvar $job_id_var job_id $host_var host
+
+   set job_script "$ts_config(testsuite_root_dir)/scripts/sleeper.sh"
+   set job_id [submit_job "-q cs3080.q -o /dev/null -j y $job_script 600"]
+   if {$job_id <= 0} {
+      return 0
+   }
+   if {[wait_for_jobstart $job_id "" 60] != 0} {
+      return 0
+   }
+   set host [issue_3080_running_host $job_id]
+   if {$host == ""} {
+      ts_log_severe "cannot find the host of job $job_id"
+      return 0
+   }
+   set end_time [expr [clock seconds] + 60]
+   while {![issue_3080_old_run_runs $host $job_id] && [clock seconds] < $end_time} {
+      sleep_for_seconds 1
+   }
+   set pids [issue_3080_find_job_pids $host $job_id]
+   if {[llength $pids] == 0} {
+      ts_log_severe "found no job script process of job $job_id on host $host"
+      return 0
+   }
+   ts_log_fine "job $job_id runs with job script pid(s) $pids on host $host"
+   return 1
+}
+
+## @brief reschedule a job with qmod -r
+#
+# @param job_id the job id
+# @return 1 on success, 0 on error
+proc issue_3080_reschedule {job_id} {
+   global prg_exit_state
+
+   set output [start_sge_bin "qmod" "-r $job_id"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qmod -r $job_id failed:\n$output"
+      return 0
+   }
+   return 1
+}
+
+## @brief wait until the new run of a rescheduled job runs
+#
+# @param job_id  the job id
+# @param timeout seconds to wait
+# @return the host of the new run, or an empty string after the timeout
+proc issue_3080_wait_for_new_run {job_id timeout} {
+   set end_time [expr [clock seconds] + $timeout]
+   while {[clock seconds] < $end_time} {
+      set host [issue_3080_running_host $job_id]
+      if {$host != ""} {
+         return $host
+      }
+      sleep_for_seconds 2
+   }
+   return ""
+}
+
+## @brief wait until the old run of a job is gone from a host
+#
+# @param host    the host of the old run
+# @param job_id  the job id
+# @param timeout seconds to wait
+# @return 1 if the old run is gone, 0 if it still runs after the timeout
+proc issue_3080_wait_for_old_run_gone {host job_id timeout} {
+   set end_time [expr [clock seconds] + $timeout]
+   while {[clock seconds] < $end_time} {
+      if {![issue_3080_old_run_runs $host $job_id]} {
+         return 1
+      }
+      sleep_for_seconds 2
+   }
+   return 0
+}
+
+## @brief get the load_report_time in seconds
+#
+# @return the global load_report_time in seconds
+proc issue_3080_load_report_time {} {
+   get_config global_config
+   set seconds 0
+   foreach part [split $global_config(load_report_time) ":"] {
+      scan $part "%d" value
+      set seconds [expr $seconds * 60 + $value]
+   }
+   return $seconds
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief the new run starts only after the old run is gone
+proc issue_3080_deferred_start {} {
+   global issue_3080_frozen_execd
+
+   if {![issue_3080_start_job job_id host]} {
+      return
+   }
+   set execd_pid [get_execd_pid $host]
+   if {$execd_pid == 0} {
+      ts_log_severe "cannot find the execd of host $host"
+      return
+   }
+   if {![issue_3080_reschedule $job_id]} {
+      return
+   }
+
+   # the old run is killed with the next report of the job: freeze the execd, it must not
+   # report before the scheduler had the chance to start the new run
+   start_remote_prog $host "root" "/bin/kill" "-STOP $execd_pid"
+   set issue_3080_frozen_execd [list $host $execd_pid]
+   set thaw_time [expr [clock seconds] + 30]
+
+   set timeout [expr 2 * [issue_3080_load_report_time] + 90]
+   set end_time [expr [clock seconds] + $timeout]
+   set new_host ""
+   while {[clock seconds] < $end_time} {
+      if {$issue_3080_frozen_execd != "" && [clock seconds] >= $thaw_time} {
+         issue_3080_thaw_execd
+      }
+      # first look for the new run, then for the old one: a new run found next to a living old
+      # run is an overlap for sure
+      set new_host [issue_3080_running_host $job_id]
+      set old_runs [issue_3080_old_run_runs $host $job_id]
+      if {$new_host != ""} {
+         if {$old_runs} {
+            set qstat_output [start_sge_bin "qstat" "-g t"]
+            ts_log_severe "the new run of job $job_id started on host $new_host while the old run\
+                           still runs on host $host\n$qstat_output"
+            issue_3080_thaw_execd
+            delete_job $job_id 1
+            return
+         }
+         break
+      }
+      sleep_for_seconds 1
+   }
+   issue_3080_thaw_execd
+
+   if {$new_host == ""} {
+      ts_log_severe "the new run of job $job_id did not start within $timeout seconds after qmod -r"
+   } else {
+      ts_log_fine "the new run of job $job_id started on host $new_host after the old run was gone"
+   }
+
+   delete_job $job_id 1
+}
+
+## @brief a task deleted while its new run waits for the old run goes away
+proc issue_3080_delete_deferred {} {
+   global issue_3080_frozen_execd prg_exit_state
+
+   if {![issue_3080_start_job job_id host]} {
+      return
+   }
+   set execd_pid [get_execd_pid $host]
+   if {$execd_pid == 0} {
+      ts_log_severe "cannot find the execd of host $host"
+      delete_job $job_id 1
+      return
+   }
+
+   # keep the old run: the new run waits for it while the job is deleted
+   start_remote_prog $host "root" "/bin/kill" "-STOP $execd_pid"
+   set issue_3080_frozen_execd [list $host $execd_pid]
+   if {[issue_3080_reschedule $job_id]} {
+      start_sge_bin "qdel" "$job_id"
+      set end_time [expr [clock seconds] + 60]
+      set gone 0
+      while {[clock seconds] < $end_time} {
+         start_sge_bin "qstat" "-j $job_id"
+         if {$prg_exit_state != 0} {
+            set gone 1
+            break
+         }
+         sleep_for_seconds 2
+      }
+      if {!$gone} {
+         set qstat_output [start_sge_bin "qstat" "-j $job_id"]
+         ts_log_severe "job $job_id, deleted while its new run waited for the old run, still\
+                        exists 60 seconds after qdel\n$qstat_output"
+      }
+   }
+   issue_3080_thaw_execd
+
+   # once the host reports again, the old run is killed
+   set timeout [expr 2 * [issue_3080_load_report_time] + 60]
+   if {![issue_3080_wait_for_old_run_gone $host $job_id $timeout]} {
+      ts_log_severe "the old run of the deleted job $job_id still runs on host $host"
+   }
+}
+
+## @brief qmod -r of a job on an unknown host starts the new run at once
+proc issue_3080_host_already_unknown {} {
+   if {![issue_3080_start_job job_id host]} {
+      return
+   }
+   if {[issue_3080_stop_execd $host] != 0} {
+      return
+   }
+   if {![issue_3080_reschedule $job_id]} {
+      return
+   }
+
+   # the host of the old run does not report, waiting for its kill would block the job
+   set new_host [issue_3080_wait_for_new_run $job_id 60]
+   if {$new_host == ""} {
+      ts_log_severe "the new run of job $job_id did not start within 60 seconds after qmod -r,\
+                     although the host $host of the old run is unknown"
+   } else {
+      ts_log_fine "the new run of job $job_id started on host $new_host"
+   }
+
+   # once the host is back, the old run is killed
+   issue_3080_start_execds
+   set timeout [expr 2 * [issue_3080_load_report_time] + 60]
+   if {![issue_3080_wait_for_old_run_gone $host $job_id $timeout]} {
+      ts_log_severe "the old run of job $job_id still runs on host $host\
+                     $timeout seconds after its execd was started again"
+   }
+
+   delete_job $job_id 1
+}
+
+## @brief the new run starts when the host of the old run becomes unknown
+proc issue_3080_host_becomes_unknown {} {
+   if {![issue_3080_start_job job_id host]} {
+      return
+   }
+   if {![issue_3080_reschedule $job_id]} {
+      return
+   }
+   if {[issue_3080_stop_execd $host] != 0} {
+      return
+   }
+
+   set new_host [issue_3080_wait_for_new_run $job_id 60]
+   if {$new_host == ""} {
+      ts_log_severe "the new run of job $job_id did not start within 60 seconds after the host\
+                     $host of the old run became unknown"
+   } else {
+      ts_log_fine "the new run of job $job_id started on host $new_host"
+   }
+
+   issue_3080_start_execds
+   set timeout [expr 2 * [issue_3080_load_report_time] + 60]
+   if {![issue_3080_wait_for_old_run_gone $host $job_id $timeout]} {
+      ts_log_severe "the old run of job $job_id still runs on host $host\
+                     $timeout seconds after its execd was started again"
+   }
+
+   delete_job $job_id 1
+}
+
+## @brief a restart of sge_qmaster does not block a deferred job
+proc issue_3080_qmaster_restart {} {
+   if {![issue_3080_start_job job_id host]} {
+      return
+   }
+   if {![issue_3080_reschedule $job_id]} {
+      return
+   }
+
+   shutdown_and_restart_qmaster
+
+   # nothing clears the deferral of the new run after the restart, it must not survive it
+   set timeout [expr 2 * [issue_3080_load_report_time] + 120]
+   set new_host [issue_3080_wait_for_new_run $job_id $timeout]
+   if {$new_host == ""} {
+      set qstat_output [start_sge_bin "qstat" "-j $job_id"]
+      ts_log_severe "the new run of job $job_id did not start within $timeout seconds after the\
+                     restart of sge_qmaster\n$qstat_output"
+   } else {
+      ts_log_fine "the new run of job $job_id started on host $new_host"
+   }
+   # the old run is not killed after the restart, its reports are taken as reports of the new run
+   # (CS-3081), it is killed once the job is deleted
+
+   delete_job $job_id 1
+}
