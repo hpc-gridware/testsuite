@@ -191,7 +191,10 @@ proc issue_3080_old_run_runs {host job_id} {
 # @param job_id the job id
 # @return the host name, or an empty string if the job does not run
 proc issue_3080_running_host {job_id} {
-   set output [start_sge_bin "qstat" "-s r -g t -u '*'"]
+   # widen the queue name column: qstat cuts it to 30 characters, which leaves a truncated host name of a
+   # fully qualified domain, e.g. host-0008.lab.bablick for host-0008.lab.bablick.de
+   set myenv(SGE_LONG_QNAMES) 100
+   set output [start_sge_bin "qstat" "-s r -g t -u '*'" "" "" prg_exit_state 60 "" "bin" output_lines myenv]
    foreach line [split $output "\n"] {
       if {[regexp "^\\s*${job_id}\\s.*\\scs3080\\.q@(\\S+)\\s" $line match host]} {
          return [resolve_host $host 0]
