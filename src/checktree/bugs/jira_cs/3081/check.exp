@@ -1,0 +1,244 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3081: after qmod -r and a restart of sge_qmaster, the old run of the job has to be killed.
+#
+# The reschedule unknown list of the host of the old run makes sure that the old run is killed.
+# With berkeleydb or postgres spooling the list is lost when sge_qmaster restarts. The reports of
+# the old run must then not be taken as reports of the new run, sge_qmaster has to kill the old run.
+# With classic spooling the list survives the restart and kills the old run, the check passes as
+# well.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_3081"
+set check_category       "BUG RESCHEDULE VERIFIED"
+set check_description(0) "after qmod -r and a restart of sge_qmaster, the old run of a job is\
+                          killed and does not affect the new run (CS-3081)"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_3081_setup
+set check_cleanup_function issue_3081_cleanup
+
+set check_functions {}
+lappend check_functions "issue_3081_qmaster_restart"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_3081_setup {} {
+   global issue_3081_hosts issue_3081_backup
+
+   set issue_3081_hosts [host_conf_get_suited_hosts 2]
+   if {[llength $issue_3081_hosts] < 2} {
+      ts_log_config "the check needs 2 execution hosts"
+      return 99
+   }
+
+   # few periodic reports: the old run lives up to one load_report_time after qmod -r
+   # stay well below max_unheard (1 minute in the testsuite): sge_qmaster does not deliver a job
+   # to a host it has not heard from for max_unheard
+   get_config issue_3081_backup
+   set conf(load_report_time) "0:0:30"
+   set_config_and_propagate conf
+
+   set queue(slots) 1
+   set queue(rerun) "TRUE"
+   if {[add_queue "cs3081.q" $issue_3081_hosts queue] < 0} {
+      ts_log_config "cannot add the queue cs3081.q"
+      return 99
+   }
+
+   return 0
+}
+
+proc issue_3081_cleanup {} {
+   global issue_3081_hosts issue_3081_backup
+
+   delete_all_jobs 1 1
+   wait_for_end_of_all_jobs
+
+   del_queue "cs3081.q" "" 1 1
+
+   reset_config_and_propagate issue_3081_backup
+
+   unset -nocomplain issue_3081_hosts issue_3081_backup
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief find the job script processes of a job on a host
+#
+# Uses get_ps_info instead of pgrep, which is not available on all architectures.
+#
+# @param host   the host to look at
+# @param job_id the job id
+# @return the list of pids, empty if no job script process of the job runs
+proc issue_3081_find_job_pids {host job_id} {
+   get_ps_info 0 $host ps_info
+   set pids {}
+   for {set i 0} {$i < $ps_info(proc_count)} {incr i} {
+      # the anchor after the job id keeps job 4 from matching job 41
+      if {[regexp -- "job_scripts/${job_id}( |\$)" $ps_info(command,$i)]} {
+         lappend pids $ps_info(pid,$i)
+      }
+   }
+   return $pids
+}
+
+## @brief get the host on which sge_qmaster sees a job running
+#
+# @param job_id the job id
+# @return the host name, or an empty string if the job does not run
+proc issue_3081_running_host {job_id} {
+   set output [start_sge_bin "qstat" "-s r -g t -u '*'"]
+   foreach line [split $output "\n"] {
+      if {[regexp "^\\s*${job_id}\\s.*\\scs3081\\.q@(\\S+)\\s" $line match host]} {
+         return [resolve_host $host 0]
+      }
+   }
+   return ""
+}
+
+## @brief get the load_report_time in seconds
+#
+# @return the global load_report_time in seconds
+proc issue_3081_load_report_time {} {
+   get_config global_config
+   set seconds 0
+   foreach part [split $global_config(load_report_time) ":"] {
+      scan $part "%d" value
+      set seconds [expr $seconds * 60 + $value]
+   }
+   return $seconds
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief the old run is killed after qmod -r and a restart of sge_qmaster
+proc issue_3081_qmaster_restart {} {
+   get_current_cluster_config_array ts_config
+   global prg_exit_state
+
+   # start the job and wait for its job script on the host of the first run
+   set job_script "$ts_config(testsuite_root_dir)/scripts/sleeper.sh"
+   set job_id [submit_job "-q cs3081.q -o /dev/null -j y $job_script 600"]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobstart $job_id "" 60] != 0} {
+      return
+   }
+   set old_host [issue_3081_running_host $job_id]
+   if {$old_host == ""} {
+      ts_log_severe "cannot find the host of job $job_id"
+      return
+   }
+   set end_time [expr [clock seconds] + 60]
+   while {[llength [issue_3081_find_job_pids $old_host $job_id]] == 0} {
+      if {[clock seconds] >= $end_time} {
+         ts_log_severe "found no job script process of job $job_id on host $old_host"
+         return
+      }
+      sleep_for_seconds 1
+   }
+
+   # the new run must start on the other host: on the host of the old run it could not be told
+   # apart from the old run
+   if {[disable_queue "cs3081.q@$old_host"] != 0} {
+      ts_log_severe "cannot disable the queue cs3081.q@$old_host"
+      return
+   }
+   set output [start_sge_bin "qmod" "-r $job_id"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qmod -r $job_id failed:\n$output"
+      return
+   }
+
+   # with berkeleydb or postgres spooling the restart loses the reschedule unknown list
+   shutdown_and_restart_qmaster
+
+   # the old run has to be killed with the first report of the job after the restart
+   set timeout [expr 2 * [issue_3081_load_report_time] + 120]
+   set end_time [expr [clock seconds] + $timeout]
+   set old_run_gone 0
+   while {[clock seconds] < $end_time} {
+      if {[llength [issue_3081_find_job_pids $old_host $job_id]] == 0} {
+         set old_run_gone 1
+         break
+      }
+      sleep_for_seconds 2
+   }
+   if {!$old_run_gone} {
+      set qstat_output [start_sge_bin "qstat" "-j $job_id"]
+      ts_log_severe "the old run of job $job_id still runs on host $old_host $timeout seconds\
+                     after the restart of sge_qmaster\n$qstat_output"
+      delete_job $job_id 1
+      return
+   }
+
+   # the new run starts on the other host and is not ended by the exit of the old run
+   set new_host ""
+   set end_time [expr [clock seconds] + 120]
+   while {$new_host == "" && [clock seconds] < $end_time} {
+      set new_host [issue_3081_running_host $job_id]
+      if {$new_host == ""} {
+         sleep_for_seconds 2
+      }
+   }
+   if {$new_host == ""} {
+      set qstat_output [start_sge_bin "qstat" "-j $job_id"]
+      ts_log_severe "the new run of job $job_id did not start within 120 seconds after the old run\
+                     was gone\n$qstat_output"
+   } elseif {$new_host == $old_host} {
+      ts_log_severe "the new run of job $job_id runs on host $old_host, its queue is disabled"
+   } else {
+      # give a report of the old run the time to arrive and to be taken for the new run
+      sleep_for_seconds [expr [issue_3081_load_report_time] + 10]
+      set running_host [issue_3081_running_host $job_id]
+      if {$running_host != $new_host} {
+         ts_log_severe "the new run of job $job_id on host $new_host was ended by the old run,\
+                        sge_qmaster sees it running on \"$running_host\""
+      } elseif {[llength [issue_3081_find_job_pids $new_host $job_id]] == 0} {
+         ts_log_severe "the new run of job $job_id is shown on host $new_host, but has no job\
+                        script process there"
+      } else {
+         ts_log_fine "the old run of job $job_id was killed on host $old_host, the new run runs on\
+                      host $new_host"
+      }
+   }
+
+   delete_job $job_id 1
+}
