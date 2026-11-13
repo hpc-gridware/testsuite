@@ -79,6 +79,7 @@ lappend cull_module_tests {test_tom_ops_sort "9.2.0" 0 ""}
 lappend cull_module_tests {test_tom_ops_pack "9.2.0" 0 ""}
 lappend cull_module_tests {test_tom_ops_dump "9.2.0" 0 ""}
 lappend cull_module_tests {test_tom_ops_rest "9.2.0" 0 ""}
+lappend cull_module_tests {test_tom_ops_free "9.2.0" 0 ""}
 
 # the description of a level is the name of its binary, one literal line per
 # entry of cull_module_tests in the same order: tools that list the supported
@@ -115,6 +116,7 @@ set check_description(28) "test_tom_ops_sort"
 set check_description(29) "test_tom_ops_pack"
 set check_description(30) "test_tom_ops_dump"
 set check_description(31) "test_tom_ops_rest"
+set check_description(32) "test_tom_ops_free"
 
 set check_functions {}
 lappend check_functions "cull_module_tests_run"
