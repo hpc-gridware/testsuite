@@ -1,0 +1,144 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3073: continue an incomplete TLS handshake from the commlib select loop.
+#
+# The daemon waited for the TLS handshake of an accepted connection for up to one second
+# and handled no other connection meanwhile. Several idle connections delayed the daemon
+# by one second each. The handshake now runs step by step from the commlib poll loop.
+#
+# The check holds several idle TCP connections to sge_qmaster open and runs qstat meanwhile.
+# Without the fix qstat took about one second per idle connection.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name            "cs3073"
+set check_category        "BUG SECURITY TLS VERIFIED"
+set check_description(0)  "idle TCP connections without TLS handshake do not delay sge_qmaster"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs3073_setup
+set check_cleanup_function cs3073_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs3073_idle_connections"
+
+# -------- local test procedures: initialization------------------------------
+
+proc cs3073_setup {} {
+   global cs3073_connections cs3073_idle_seconds cs3073_max_delay_seconds
+
+   if {![config_has_product_feature "tls"]} {
+      ts_log_config "the check requires product feature tls"
+      return 99
+   }
+
+   # number of idle connections the helper opens
+   set cs3073_connections 5
+   # how long the helper holds the idle connections open
+   set cs3073_idle_seconds 60
+   # without the fix each idle connection delayed sge_qmaster by one second
+   set cs3073_max_delay_seconds 2.0
+
+   return 0
+}
+
+proc cs3073_cleanup {} {
+   global cs3073_connections cs3073_idle_seconds cs3073_max_delay_seconds
+
+   unset -nocomplain cs3073_connections cs3073_idle_seconds cs3073_max_delay_seconds
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief qstat is not delayed while idle TCP connections to sge_qmaster are open
+#
+# Before the fix sge_qmaster spent one second on each idle connection before it handled qstat.
+proc cs3073_idle_connections {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_ACTUAL_TEST_PATH
+   global cs3073_connections cs3073_idle_seconds cs3073_max_delay_seconds
+
+   set host [host_conf_get_suited_hosts]
+
+   # qstat itself needs some time, measure it without idle connections first
+   set start [clock milliseconds]
+   set output [start_sge_bin "qstat" "" $host]
+   set baseline [expr ([clock milliseconds] - $start) / 1000.0]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qstat failed without idle connections:\n$output"
+      return
+   }
+   ts_log_fine "qstat took $baseline seconds without idle connections"
+
+   set script "$CHECK_ACTUAL_TEST_PATH/idle_connect.sh"
+   set args "$ts_config(master_host) $ts_config(commd_port)"
+   append args " $cs3073_connections $cs3073_idle_seconds"
+   set sp_id [open_remote_spawn_process $host $CHECK_USER $script $args]
+   set spawn_id [lindex $sp_id 1]
+
+   set connected 0
+   set timeout 30
+   expect {
+      -i $spawn_id "idle connections established" {
+         set connected 1
+      }
+      -i $spawn_id timeout {
+         ts_log_severe "the helper on host $host did not connect to sge_qmaster"
+      }
+      -i $spawn_id eof {
+         ts_log_severe "the helper on host $host exited before it connected to sge_qmaster"
+      }
+   }
+
+   if {$connected} {
+      ts_log_fine "$cs3073_connections idle connections from host $host are open, running qstat"
+      set start [clock milliseconds]
+      set output [start_sge_bin "qstat" "" $host]
+      set duration [expr ([clock milliseconds] - $start) / 1000.0]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "qstat failed after $duration seconds while idle connections were\
+                        open:\n$output"
+      } elseif {$duration > $baseline + $cs3073_max_delay_seconds} {
+         ts_log_severe "qstat took $duration seconds while $cs3073_connections idle connections\
+                        were open, $baseline seconds without them"
+      } else {
+         ts_log_fine "qstat took $duration seconds while $cs3073_connections idle connections\
+                      were open"
+      }
+   }
+
+   close_spawn_process $sp_id
+}
