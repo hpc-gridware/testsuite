@@ -60,6 +60,7 @@ lappend check_functions "issue_3080_qmaster_restart"
 
 proc issue_3080_setup {} {
    global issue_3080_hosts issue_3080_backup issue_3080_stopped_execds issue_3080_frozen_execd
+   global issue_3080_queue_added
 
    set issue_3080_hosts [host_conf_get_suited_hosts 2]
    if {[llength $issue_3080_hosts] < 2} {
@@ -82,25 +83,35 @@ proc issue_3080_setup {} {
       ts_log_config "cannot add the queue cs3080.q"
       return 99
    }
+   set issue_3080_queue_added 1
 
    return 0
 }
 
 proc issue_3080_cleanup {} {
    global issue_3080_hosts issue_3080_backup issue_3080_stopped_execds issue_3080_frozen_execd
+   global issue_3080_queue_added
 
-   issue_3080_thaw_execd
-   issue_3080_start_execds
+   # the setup may not have run or may have failed, e.g. when the cluster was not ready
+   if {[info exists issue_3080_frozen_execd]} {
+      issue_3080_thaw_execd
+   }
+   if {[info exists issue_3080_stopped_execds]} {
+      issue_3080_start_execds
+   }
 
    delete_all_jobs 1 1
    wait_for_end_of_all_jobs
 
-   del_queue "cs3080.q" "" 1 1
-
-   reset_config_and_propagate issue_3080_backup
+   if {[info exists issue_3080_queue_added]} {
+      del_queue "cs3080.q" "" 1 1
+   }
+   if {[info exists issue_3080_backup]} {
+      reset_config_and_propagate issue_3080_backup
+   }
 
    unset -nocomplain issue_3080_hosts issue_3080_backup issue_3080_stopped_execds
-   unset -nocomplain issue_3080_frozen_execd
+   unset -nocomplain issue_3080_frozen_execd issue_3080_queue_added
 }
 
 # ---------------------------------------------------------------------------
