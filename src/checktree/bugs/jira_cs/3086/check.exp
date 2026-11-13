@@ -1,0 +1,182 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3086: sge_qmaster has to deliver a job to a host whose load_report_time is longer than
+# max_unheard.
+#
+# An idle sge_execd contacts sge_qmaster only once per load_report_time. sge_qmaster takes a host
+# as unknown only after 3 load report intervals. Before the fix:
+# - the job delivery refused a host it had not heard from for max_unheard,
+# - commlib forgot the last message of an sge_execd max_unheard + 60 seconds after it,
+# - sge_qmaster set a host to unknown after max_unheard (seconds compared with microseconds).
+# A job sent to an idle host with a long load_report_time was not delivered or not dispatched.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range "9.1.8"
+
+set check_name           "issue_3086"
+set check_category       "BUG QMASTER VERIFIED"
+set check_description(0) "a job is delivered to an idle host whose load_report_time is longer than\
+                          max_unheard (CS-3086)"
+
+set check_needs          "init_core_system"
+
+set check_setup_function issue_3086_setup
+set check_cleanup_function issue_3086_cleanup
+
+set check_functions {}
+lappend check_functions "issue_3086_deliver_to_idle_host"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_3086_setup {} {
+   global issue_3086_host issue_3086_backup issue_3086_global_backup issue_3086_queue_added
+   global issue_3086_load_report_time
+
+   set issue_3086_host [host_conf_get_suited_hosts]
+
+   # short intervals keep the check short:
+   # - max_unheard 10 seconds: before the fix, commlib forgot the last message of an sge_execd
+   #   after max_unheard + 60 seconds
+   # - load_report_time 3 minutes: the time between two load reports is well beyond that
+   # the other hosts report less often than max_unheard, the check sends no job to them
+   get_config issue_3086_global_backup
+   set global_conf(max_unheard) "00:00:10"
+   # set_config_and_propagate returns no value, it reports its errors itself
+   set_config_and_propagate global_conf
+
+   # set_config_and_propagate needs the format hh:mm:ss
+   set issue_3086_load_report_time 180
+   get_config issue_3086_backup $issue_3086_host
+   set conf(load_report_time) "00:03:00"
+   set_config_and_propagate conf $issue_3086_host
+
+   set queue(slots) 1
+   if {[add_queue "cs3086.q" $issue_3086_host queue] < 0} {
+      ts_log_config "cannot add the queue cs3086.q"
+      # the cleanup function is not called when the setup returns 99
+      issue_3086_cleanup
+      return 99
+   }
+   set issue_3086_queue_added 1
+
+   return 0
+}
+
+proc issue_3086_cleanup {} {
+   global issue_3086_host issue_3086_backup issue_3086_global_backup issue_3086_queue_added
+   global issue_3086_load_report_time
+
+   delete_all_jobs 1 1
+   wait_for_end_of_all_jobs
+
+   # the setup may not have run or may have failed, e.g. when the cluster was not ready
+   if {[info exists issue_3086_queue_added]} {
+      del_queue "cs3086.q" "" 1 1
+   }
+   if {[info exists issue_3086_backup]} {
+      reset_config_and_propagate issue_3086_backup $issue_3086_host
+      # the sge_execd keeps the time of its next load report when load_report_time is lowered
+      # (CS-3095), a restart makes it report with the global load_report_time at once
+      issue_3086_restart_execd $issue_3086_host
+   }
+   if {[info exists issue_3086_global_backup]} {
+      reset_config_and_propagate issue_3086_global_backup
+   }
+
+   unset -nocomplain issue_3086_host issue_3086_backup issue_3086_global_backup
+   unset -nocomplain issue_3086_queue_added issue_3086_load_report_time
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief restart the sge_execd of a host and wait for its first load report
+#
+# The sge_execd sends a load report when it starts, the next one load_report_time later.
+#
+# @param host the host
+# @return 0 on success, -1 on error
+proc issue_3086_restart_execd {host} {
+   if {[soft_execd_shutdown $host] != 0} {
+      return -1
+   }
+   if {[startup_execd $host] != 0} {
+      return -1
+   }
+   return [wait_for_load_from_all_queues 60]
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief a job is delivered to an idle host which has not reported for max_unheard + 60 seconds
+proc issue_3086_deliver_to_idle_host {} {
+   global issue_3086_host issue_3086_load_report_time
+
+   # the first load report after the start is the last message of the sge_execd until the next
+   # load report, load_report_time later
+   if {[issue_3086_restart_execd $issue_3086_host] != 0} {
+      return
+   }
+   set start_time [clock seconds]
+
+   # wait until the last message is older than max_unheard + 60 seconds (+ 10 seconds for the
+   # cleanup of the commlib endpoint list), but submit well before the next load report
+   set wait_time 110
+   if {$wait_time + 30 >= $issue_3086_load_report_time} {
+      ts_log_severe "the load_report_time of $issue_3086_load_report_time seconds is too short"
+      return
+   }
+   ts_log_fine "waiting $wait_time seconds without a message from the sge_execd"
+   sleep_for_seconds $wait_time
+
+   set job_id [submit_job "-q cs3086.q@$issue_3086_host -o /dev/null -j y -b y /bin/true"]
+   if {$job_id <= 0} {
+      return
+   }
+   # without the fix the job is delivered only after the next load report, the job has to end
+   # 10 seconds before it is due
+   # wait_for_job_end scales its timeout with the timeout_factor, the elapsed time is checked below
+   set deadline [expr $start_time + $issue_3086_load_report_time - 10]
+   if {[wait_for_job_end $job_id [expr $deadline - [clock seconds]] 0] != 0} {
+      set qstat_output [start_sge_bin "qstat" "-f -q cs3086.q -explain a"]
+      ts_log_severe "job $job_id was not delivered to host $issue_3086_host, which was idle for\
+                     [expr [clock seconds] - $start_time] seconds:\n$qstat_output"
+      return
+   }
+   set elapsed [expr [clock seconds] - $start_time]
+   if {[clock seconds] > $deadline} {
+      ts_log_severe "job $job_id ended $elapsed seconds after the last load report of host\
+                     $issue_3086_host, it was delivered only with the next load report"
+   }
+}
