@@ -1,0 +1,132 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3100: qstat -j -fmt xml without job ids printed no scheduling messages.
+# For XML output, the qstat model reduces the messages of the scheduler to the jobs that were named.
+# Without named jobs the job list is not fetched, so every message was removed and the XML document
+# held an empty element, while the plain output showed the messages. The XML view also set the text
+# of a message once per job id instead of once per message. Now the messages are reduced only when
+# jobs were named, and each message gets its summary text once.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.2.0"
+
+# define test's name and run level descriptions
+set check_name            "cs3100"
+set check_category        "BUG QSTAT VERIFIED"
+set check_description(0)  "qstat -j -fmt xml without job ids shows the scheduling messages, in the\
+                           client and in the server context"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs3100_setup
+set check_cleanup_function cs3100_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs3100_xml_reasons"
+
+# -------- local test procedures: initialization------------------------------
+
+## @brief switch on the scheduling information of the scheduler
+# @return nothing
+proc cs3100_setup {} {
+   set conf(schedd_job_info) "true"
+   set_schedd_config conf
+}
+
+## @brief delete the jobs and reset the scheduler configuration
+# @return nothing
+proc cs3100_cleanup {} {
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+   reset_schedd_config
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief the XML output of qstat -j without job ids holds the messages the plain output shows
+# Two jobs ask for an architecture no host has, so the scheduler reports both under one message.
+# Once the plain output names both jobs, the XML output of the client and of the server context
+# must name both jobs and hold the summary text the plain output prints above them.
+# @return nothing, a failure is reported with ts_log_severe
+proc cs3100_xml_reasons {} {
+   get_current_cluster_config_array ts_config
+
+   set job_ids {}
+   foreach i {1 2} {
+      set job_id [submit_job "-w n -l arch=cs3100-no-such-arch -o /dev/null -j y -b y /bin/true"]
+      if {$job_id <= 0} {
+         return
+      }
+      lappend job_ids $job_id
+   }
+
+   # wait until the scheduler has reported both jobs
+   set plain ""
+   set end [expr [clock seconds] + 60]
+   while {[clock seconds] < $end} {
+      trigger_scheduling
+      set plain [start_sge_bin "qstat" "-j"]
+      if {[string first [lindex $job_ids 0] $plain] >= 0 && [string first [lindex $job_ids 1] $plain] >= 0} {
+         break
+      }
+      after 1000
+   }
+   set summary [string trim [lindex [split [string trim $plain] "\n"] 0]]
+   if {[string first [lindex $job_ids 1] $plain] < 0 || $summary == ""} {
+      ts_log_severe "the plain output of qstat -j does not name the jobs $job_ids:\n$plain"
+      return
+   }
+   ts_log_fine "plain output:\n$plain"
+
+   foreach ectx {client server} {
+      set xml [start_sge_bin "qstat" "-j -fmt xml -ectx $ectx"]
+      ts_log_fine "xml output ($ectx context):\n$xml"
+      foreach job_id $job_ids {
+         if {![regexp "<ULNG_value>$job_id</ULNG_value>" $xml]} {
+            ts_log_severe "the xml output of qstat -j in the $ectx context does not name job $job_id:\n$xml"
+            return
+         }
+      }
+      set count 0
+      foreach {all message} [regexp -all -inline -- {<MES_message>([^<]*)</MES_message>} $xml] {
+         if {$message == $summary} {
+            incr count
+         }
+      }
+      # the scheduler may report the same message more than once, the plain view merges them
+      if {$count == 0} {
+         ts_log_severe "the xml output of qstat -j in the $ectx context does not hold the message\
+                        \"$summary\":\n$xml"
+      }
+   }
+}
