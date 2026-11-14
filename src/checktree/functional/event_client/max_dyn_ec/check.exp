@@ -210,18 +210,14 @@ proc max_dyn_ec_get_max_dyn_ec_from_logfile_wait {expected_max_dyn_ec_clients} {
    return $max_dyn
 }
 
-#****** max_dyn_ec/max_dyn_ec_massive_qsub_sync() *************************************************
-#  NAME
-#     max_dyn_ec_massive_qsub_sync() -- test high number of event clients (qsub -sync y)
+## @brief Test a high number of event clients (qsub -sync y)
 #
-#  SYNOPSIS
-#     max_dyn_ec_massive_qsub_sync {}
-#
-#  FUNCTION
-#     Submits a high number of qsub -sync y jobs.
-#     Will report unexpected output (e.g. error messages from qsub) as error.
-#     TODO: check qmaster messages file
-#*******************************************************************************
+# Submits a high number of qsub -sync y jobs from every execution host.
+# Output of the submit scripts that is not expected (e.g. error messages from qsub)
+# is reported as error. Anything a remote session prints before the start mark of the
+# remote prog shell script (shell prompt, command echo) is ignored.
+# TODO: check qmaster messages file
+# @return nothing
 proc max_dyn_ec_massive_qsub_sync {} {
    get_current_cluster_config_array ts_config
    global CHECK_USER
@@ -283,6 +279,7 @@ proc max_dyn_ec_massive_qsub_sync {} {
       set spawn_id [lindex $id 1]
       lappend spawn_list $spawn_id
       set spawn_map($spawn_id) $host
+      set spawn_started($spawn_id) 0
    }
 
    set submitted 0
@@ -311,6 +308,17 @@ proc max_dyn_ec_massive_qsub_sync {} {
          set host $spawn_map($spawn_id)
          foreach line [split $expect_out(0,string) "\n"] {
             set line [string trim $line]
+            # Skip everything before the start mark: the shell prompt and the echoed
+            # command line, which the terminal may wrap at any position.
+            if {!$spawn_started($spawn_id)} {
+               if {[string first "_start_mark_:" $line] >= 0} {
+                  set spawn_started($spawn_id) 1
+                  if {[string first "_start_mark_:(0)" $line] < 0} {
+                     append unexpected_output "\n$host: $line"
+                  }
+               }
+               continue
+            }
             if {$line != ""} {
                switch -glob -- $line {
                   "Your job * has been submitted" {
@@ -328,10 +336,8 @@ proc max_dyn_ec_massive_qsub_sync {} {
                         set spawn_list [lreplace $spawn_list $pos $pos]
                      }
                   }
-                  "*_qsub_sync.sh_*_*.sh" -
-                  "*_start_mark_:(0)*" -
                   "script done. (_END_OF_FILE_)" -
-                  "_exit_status_:(*)" {
+                  "_exit_status_:(*)*" {
                      # ignore
                   }
                   default {
