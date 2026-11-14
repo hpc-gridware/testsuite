@@ -105,7 +105,8 @@ proc issue_3086_cleanup {} {
       reset_config_and_propagate issue_3086_backup $issue_3086_host
       # the sge_execd keeps the time of its next load report when load_report_time is lowered
       # (CS-3095), a restart makes it report with the global load_report_time at once
-      issue_3086_restart_execd $issue_3086_host
+      # the restored load_report_time is shorter, the one of the check is the upper bound
+      issue_3086_restart_execd $issue_3086_host $issue_3086_load_report_time
    }
    if {[info exists issue_3086_global_backup]} {
       reset_config_and_propagate issue_3086_global_backup
@@ -122,11 +123,15 @@ proc issue_3086_cleanup {} {
 ## @brief restart the sge_execd of a host and wait for its first load report
 #
 # The sge_execd sends a load report when it starts, the next one load_report_time later.
+# A sge_execd stopped by systemd does not tell sge_qmaster, which sets the host unknown only
+# after 3 load report intervals, so the wait for the unknown load has to cover them.
 #
 # @param host the host
+# @param load_report_time the load_report_time of the host in seconds, as sge_qmaster knows it
 # @return 0 on success, -1 on error
-proc issue_3086_restart_execd {host} {
-   if {[soft_execd_shutdown $host] != 0} {
+proc issue_3086_restart_execd {host load_report_time} {
+   set timeout [max 120 [expr 3 * $load_report_time + 30]]
+   if {[soft_execd_shutdown $host $timeout] != 0} {
       return -1
    }
    if {[startup_execd $host] != 0} {
@@ -145,7 +150,7 @@ proc issue_3086_deliver_to_idle_host {} {
 
    # the first load report after the start is the last message of the sge_execd until the next
    # load report, load_report_time later
-   if {[issue_3086_restart_execd $issue_3086_host] != 0} {
+   if {[issue_3086_restart_execd $issue_3086_host $issue_3086_load_report_time] != 0} {
       return
    }
    set start_time [clock seconds]
