@@ -1,0 +1,154 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3099: sge_qmaster read a job field from a pe task when it checked an array dependency.
+#
+# When an array task finishes, sge_qmaster releases the tasks of jobs that depend on it with
+# -hold_jid_ad. To decide whether the finished task counts as finished, it walked the task list
+# of the array task and read JB_ja_tasks from every element. The task list holds pe tasks, and
+# after a pe task has finished, the container of their past usage. A pe task has no field
+# JB_ja_tasks, so the getter aborted and sge_qmaster went down. Now the status of the array
+# task alone decides.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.2.0"
+
+# define test's name and run level descriptions
+set check_name            "cs3099"
+set check_category        "BUG QMASTER PARALLEL VERIFIED"
+set check_description(0)  "an array task of a tightly integrated parallel job with a finished pe\
+                           task releases its -hold_jid_ad successor, sge_qmaster keeps running"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs3099_setup
+set check_cleanup_function cs3099_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs3099_successor_of_pe_array_task"
+
+# -------- local test procedures: initialization------------------------------
+
+## @brief create a tightly integrated parallel environment and a queue with 2 slots on one host
+#
+# @return 0 on success, 99 if no execution host has at least 2 processors
+proc cs3099_setup {} {
+   get_current_cluster_config_array ts_config
+   global cs3099_host
+
+   set cs3099_host ""
+   foreach host $ts_config(execd_nodes) {
+      if {[node_get_processors $host] >= 2} {
+         set cs3099_host $host
+         break
+      }
+   }
+   if {$cs3099_host == ""} {
+      ts_log_config "no execution host with at least 2 processors"
+      return 99
+   }
+
+   set pe(slots)               10
+   set pe(allocation_rule)     "\$pe_slots"
+   set pe(control_slaves)      "TRUE"
+   set pe(job_is_first_task)   "TRUE"
+   add_pe "cs3099.pe" pe
+
+   set queue_conf(slots)   2
+   set queue_conf(pe_list) "cs3099.pe"
+   add_queue "cs3099.q" $cs3099_host queue_conf
+
+   return 0
+}
+
+## @brief delete the jobs, the queue and the parallel environment of the check
+#
+# @return nothing
+proc cs3099_cleanup {} {
+   global cs3099_host
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   del_queue "cs3099.q" "" 1 1
+   del_pe "cs3099.pe"
+
+   unset -nocomplain cs3099_host
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief the successor of an array task with a finished pe task is released
+#
+# The predecessor is an array job of one task in a tightly integrated parallel environment that
+# runs one pe task with qrsh -inherit. It is submitted on hold, so that the successor can declare
+# its dependency with -hold_jid_ad before the predecessor runs. When the array task finishes, its
+# task list holds the container of the past usage of the pe task, and sge_qmaster checks the
+# dependency of the successor. Before the fix sge_qmaster aborted there; now the successor is
+# released and runs.
+#
+# @return nothing, a failure is reported with ts_log_severe
+proc cs3099_successor_of_pe_array_task {} {
+   get_current_cluster_config_array ts_config
+   global cs3099_host CHECK_ACTUAL_TEST_PATH
+
+   set qrsh "$ts_config(product_root)/bin/[resolve_arch $cs3099_host]/qrsh"
+   set pred_id [submit_job "-h -t 1-1 -pe cs3099.pe 2 -q cs3099.q -o /dev/null -j y\
+                            $CHECK_ACTUAL_TEST_PATH/cs3099_job.sh $qrsh"]
+   if {$pred_id <= 0} {
+      return
+   }
+   set succ_id [submit_job "-t 1-1 -hold_jid_ad $pred_id -o /dev/null -j y\
+                            $ts_config(product_root)/examples/jobs/sleeper.sh 1"]
+   if {$succ_id <= 0} {
+      return
+   }
+   release_job $pred_id
+
+   # the array task finishes, sge_qmaster checks the dependency of the successor
+   if {[wait_for_job_end $pred_id 120] != 0} {
+      ts_log_severe "the predecessor $pred_id did not end, sge_qmaster may have gone down while it\
+                     checked the dependency of the successor $succ_id"
+      return
+   }
+   if {[wait_for_job_end $succ_id 120] != 0} {
+      ts_log_severe "the successor $succ_id of array job $pred_id was not released or did not end"
+      return
+   }
+
+   # the array task ran a pe task: the accounting has the record of the pe task besides the one
+   # of the array task, so the dependency was checked on a task list that was not empty
+   if {[get_qacct $pred_id qacct_info "" "" 1 2] != 0} {
+      ts_log_severe "the accounting of array job $pred_id has no record of a pe task, the check\
+                     did not run the path of CS-3099"
+   }
+}
