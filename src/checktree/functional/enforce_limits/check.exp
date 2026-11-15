@@ -483,8 +483,8 @@ proc enforce_limits_loose_qmaster_limit_enforcement_all_queue {} {
 # 52) Terminate execution host where master task is running
 # 53) Start execution host again
 # 54) Wait till all tasks (job) is terminated
-# 55) Check that job was terminated before the regular job runtime ended
-# 56) Make sure that job was terminated by execd
+# 55) Check that the job end was reported at most 75 seconds after the execd restart
+# 56) Make sure that job was terminated by execd (failed 100, not the regular job end)
 proc enforce_limits_tight_execd_limit_enforcement_after_stop_start {} {
    global ts_config CHECK_USER
    global tight_slots
@@ -501,25 +501,28 @@ proc enforce_limits_tight_execd_limit_enforcement_after_stop_start {} {
    wait_for_jobstart $job_id "qrexec.sh" 100 1 1
    wait_for_end_of_transfer $job_id 60
 
-   set start [clock seconds]
-
    # shutdown master execds
-   # TODO: Test runs not for 62_BRANCH, and shutdown_system daemon does not shutdown execd fast enough
-   #       AND execd reconnect might take up to 60 seconds. The wait_for_unknown_load 15 call is not guaranteed
    soft_execd_shutdown $tight_master_node
    wait_for_unknown_load 15 $tight_masterq
 
    # startup master
    startup_execd $tight_master_node
+   set restart [clock seconds]
 
-   # wait for termination of job
+   # The restarted sge_execd kills the job when h_rt is exceeded, but the shepherds of the job
+   # were started by the previous sge_execd. They are no children of the restarted one, which
+   # notices their end only when it polls the shepherds it adopted at startup, once a minute.
+   # The job end is therefore reported up to 60 seconds after the restart, plus some seconds
+   # for the report to the qmaster. The time for the shutdown and the restart is not counted,
+   # it differs between qconf -ke and a stop via systemd.
    wait_for_job_end $job_id 100
    set end [clock seconds]
 
-   # so we give it 70 seconds plus 15 seconds for the execd startup
-   set start_end [expr $end - $start]
-   if {$start_end > 85} {
-      ts_log_severe "runtime should be in the range of 35-85 but it is $start_end"
+   set restart_end [expr $end - $restart]
+   if {$restart_end > 75} {
+      ts_log_severe "job $job_id ended $restart_end seconds after the restart of the sge_execd,\
+                     expected at most 75 seconds (60 seconds poll interval for adopted shepherds\
+                     plus 15 seconds for the job end report)"
    }
 
    # check accounting entry
