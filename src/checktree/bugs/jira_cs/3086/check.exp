@@ -103,10 +103,6 @@ proc issue_3086_cleanup {} {
    }
    if {[info exists issue_3086_backup]} {
       reset_config_and_propagate issue_3086_backup $issue_3086_host
-      # the sge_execd keeps the time of its next load report when load_report_time is lowered
-      # (CS-3095), a restart makes it report with the global load_report_time at once
-      # the restored load_report_time is shorter, the one of the check is the upper bound
-      issue_3086_restart_execd $issue_3086_host $issue_3086_load_report_time
    }
    if {[info exists issue_3086_global_backup]} {
       reset_config_and_propagate issue_3086_global_backup

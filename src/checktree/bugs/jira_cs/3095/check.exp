@@ -1,0 +1,193 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3095: sge_execd has to use a lowered load_report_time at once.
+#
+# sge_execd scheduled its next load report with the load_report_time valid when it sent the
+# last one, a configuration change did not reschedule it. sge_qmaster uses a new
+# load_report_time at once and sets a host unknown after MAX(3 * load_report_time, max_unheard)
+# without a message. When load_report_time was lowered, the host became unknown until the
+# report scheduled with the old interval arrived.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_need_running_system
+global check_version_range
+
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name           "issue_3095"
+set check_category       "BUG EXECD VERIFIED"
+set check_description(0) "a host does not become unknown when its load_report_time is lowered\
+                          (CS-3095)"
+
+# define test's dependencies
+set check_needs          "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function issue_3095_setup
+set check_cleanup_function issue_3095_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "issue_3095_lowered_load_report_time"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_3095_setup {} {
+   global issue_3095_host issue_3095_backup issue_3095_global_backup issue_3095_queue_added
+   global issue_3095_global_load_report_time
+
+   set issue_3095_host [host_conf_get_suited_hosts]
+
+   # the check lowers the load_report_time of the host from 10 minutes to 15 seconds, the host
+   # becomes unknown after max_unheard = 2 minutes without a message
+   # the last report with the long interval follows the change to it within the global
+   # load_report_time, which has to be well below max_unheard
+   get_config issue_3095_global_backup
+   set issue_3095_global_load_report_time \
+      [issue_3095_seconds $issue_3095_global_backup(load_report_time)]
+   if {$issue_3095_global_load_report_time > 60} {
+      ts_log_config "the global load_report_time of $issue_3095_global_load_report_time seconds is\
+                     too long for this check, it has to be 60 seconds at most"
+      return 99
+   }
+   set global_conf(max_unheard) "00:02:00"
+   # set_config_and_propagate returns no value, it reports its errors itself
+   set_config_and_propagate global_conf
+
+   get_config issue_3095_backup $issue_3095_host
+
+   set queue(slots) 1
+   if {[add_queue "cs3095.q" $issue_3095_host queue] < 0} {
+      ts_log_config "cannot add the queue cs3095.q"
+      # the cleanup function is not called when the setup returns 99
+      issue_3095_cleanup
+      return 99
+   }
+   set issue_3095_queue_added 1
+
+   return 0
+}
+
+proc issue_3095_cleanup {} {
+   global issue_3095_host issue_3095_backup issue_3095_global_backup issue_3095_queue_added
+   global issue_3095_global_load_report_time
+
+   # the setup may not have run or may have failed, e.g. when the cluster was not ready
+   if {[info exists issue_3095_queue_added]} {
+      del_queue "cs3095.q" "" 1 1
+   }
+   if {[info exists issue_3095_backup]} {
+      reset_config_and_propagate issue_3095_backup $issue_3095_host
+   }
+   if {[info exists issue_3095_global_backup]} {
+      reset_config_and_propagate issue_3095_global_backup
+   }
+
+   unset -nocomplain issue_3095_host issue_3095_backup issue_3095_global_backup
+   unset -nocomplain issue_3095_queue_added issue_3095_global_load_report_time
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief convert a time value of the configuration to seconds
+#
+# @param value the time as hh:mm:ss or as seconds
+# @return the time in seconds
+proc issue_3095_seconds {value} {
+   if {[scan $value "%d:%d:%d" hours minutes seconds] == 3} {
+      return [expr {$hours * 3600 + $minutes * 60 + $seconds}]
+   }
+   return [expr {int($value)}]
+}
+
+## @brief set the local configuration of the test host and measure how long it takes to reach
+#         the sge_execd
+#
+# @param config_var name of the array with the configuration values to set
+# @return the time set_config_and_propagate took, in seconds with millisecond resolution
+proc issue_3095_set_config_and_measure {config_var} {
+   global issue_3095_host
+   upvar $config_var config
+
+   set start [clock milliseconds]
+   set_config_and_propagate config $issue_3095_host
+   set duration [format "%.3f" [expr {([clock milliseconds] - $start) / 1000.0}]]
+   ts_log_fine "load_report_time $config(load_report_time) reached the sge_execd on host\
+                $issue_3095_host after $duration seconds"
+   return $duration
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief the host stays known when its load_report_time is lowered from 10 minutes to 15 seconds
+proc issue_3095_lowered_load_report_time {} {
+   global issue_3095_host issue_3095_global_load_report_time
+
+   # with a load_report_time of 10 minutes the sge_execd sends one more report within the global
+   # load_report_time, the next one 10 minutes later
+   set conf(load_report_time) "00:10:00"
+   issue_3095_set_config_and_measure conf
+   set wait_time [expr {$issue_3095_global_load_report_time + 5}]
+   ts_log_fine "waiting $wait_time seconds for the last load report with the global load_report_time"
+   sleep_for_seconds $wait_time
+
+   # lower the load_report_time: sge_qmaster sets the host unknown after max_unheard (2 minutes)
+   # without a message, without the fix the sge_execd sent its next report only 10 minutes after
+   # the last one
+   # sge_qmaster notifies the sge_execd about the change, without the notification the sge_execd
+   # fetched the configuration only with its next report, 10 minutes after the last one
+   set conf(load_report_time) "00:00:15"
+   set duration [issue_3095_set_config_and_measure conf]
+   if {$duration > 30.0} {
+      ts_log_severe "the lowered load_report_time reached the sge_execd on host $issue_3095_host\
+                     only after $duration seconds, sge_qmaster did not notify it"
+   }
+   set start_time [clock seconds]
+
+   # sge_qmaster checks for unknown hosts every 15 seconds, the last report was sent at most
+   # the wait time above before the change
+   set end_time [expr {$start_time + 150}]
+   while {[clock seconds] < $end_time} {
+      set state [get_queue_state "cs3095.q@$issue_3095_host"]
+      if {[string first "u" $state] >= 0} {
+         set qstat_output [start_sge_bin "qstat" "-f -q cs3095.q"]
+         ts_log_severe "host $issue_3095_host became unknown [expr {[clock seconds] - $start_time}]\
+                        seconds after its load_report_time was lowered to 15 seconds:\n$qstat_output"
+         return
+      }
+      sleep_for_seconds 5
+   }
+   ts_log_fine "host $issue_3095_host stayed known for 150 seconds after its load_report_time was\
+                lowered"
+}
