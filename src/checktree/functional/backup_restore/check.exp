@@ -57,6 +57,9 @@ proc backup_restore_setup {} {
    global ts_config CHECK_USER CHECK_ACTUAL_TEST_PATH
    global test_ar backup_restore_config
    global backup_restore_created_files backup_restore_common_before
+   global backup_restore_job_id_before
+
+   set backup_restore_job_id_before 0
 
    # The files a site puts into the cell directory by hand are what this check lost without
    # a message: the backup and the restore take the files of common/ from fixed lists, and
@@ -168,6 +171,57 @@ proc backup_restore_check_common_restored {} {
    }
 }
 
+## @brief submit and delete a job before the backup, for the check of the job ids after the restore
+#
+# sge_qmaster writes the job and AR sequence numbers to the files jobseqnum and arseqnum in its
+# spool directory every 15 seconds. The backup has to contain them, else the restored
+# sge_qmaster numbers jobs and ARs from 1 again (CS-3101).
+#
+# @return nothing, the job id is stored in backup_restore_job_id_before
+proc backup_restore_submit_job_before_backup {} {
+   global backup_restore_job_id_before
+
+   set job_id [submit_job "-h -o /dev/null -j y -b y /bin/true"]
+   if {$job_id <= 0} {
+      return
+   }
+   delete_job $job_id 1
+   set backup_restore_job_id_before $job_id
+
+   # let sge_qmaster write the sequence number files
+   sleep_for_seconds 20
+}
+
+## @brief check that the job and AR ids continue after the restore (CS-3101)
+#
+# @param job_id the id of a job submitted after the restore
+# @return nothing
+proc backup_restore_check_ids_continue {job_id} {
+   global test_ar backup_restore_job_id_before
+
+   # the backup did not contain arseqnum with any spooling method, and not jobseqnum with
+   # postgres spooling, before CS-3101
+   if {![is_version_in_range "9.1.8"]} {
+      return
+   }
+
+   if {$backup_restore_job_id_before > 0 && $job_id <= $backup_restore_job_id_before} {
+      ts_log_severe "the job id $job_id after the restore is not higher than the job id\
+                     $backup_restore_job_id_before before the backup, the job sequence number\
+                     was not restored"
+   }
+
+   set ar_id [submit_ar "-d 600"]
+   if {$ar_id <= 0} {
+      return
+   }
+   if {$ar_id <= $test_ar} {
+      ts_log_severe "the AR id $ar_id after the restore is not higher than the AR id $test_ar\
+                     before the backup, the AR sequence number was not restored"
+   }
+   delete_ar $ar_id
+}
+
 proc backup_restore_do_backup_restore {} {
    global ts_config CHECK_USER
 
@@ -186,6 +240,8 @@ proc backup_restore_do_backup_restore {} {
    # @todo It is backed up and restored, but do we still need it?
    set st_file "$ts_config(product_root)/$ts_config(cell)/common/st.enabled"
    set st_file_before [is_remote_file $ts_config(master_host) $CHECK_USER $st_file]
+
+   backup_restore_submit_job_before_backup
 
    # Backup Database
    set id [open_remote_spawn_process $remote_host $CHECK_USER "./inst_sge" "-bup" 0 $ts_config(product_root)]
@@ -406,6 +462,7 @@ proc backup_restore_check_cluster {} {
       wait_for_jobstart $job_id "" 60
       wait_for_job_end $job_id
       get_qacct $job_id
+      backup_restore_check_ids_continue $job_id
    }
 
    # check if rqs exists
@@ -494,6 +551,6 @@ proc backup_restore_cleanup {} {
       }
       unset backup_restore_created_files
    }
-   unset -nocomplain backup_restore_common_before
+   unset -nocomplain backup_restore_common_before backup_restore_job_id_before
 }
 
