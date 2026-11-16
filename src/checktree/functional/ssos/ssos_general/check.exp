@@ -441,14 +441,15 @@ proc ssos_test_sequence_number_obeyance {host} {
    lappend r_job_list $b_job_2
    lappend r_job_list $c_job_1
    lappend r_job_list $a_job
+   # wait_for_jobstart also accepts the transfer state "t": wait for the states to settle
    foreach job $r_job_list {
-      get_job_state $job 0 task_info
-      if {$task_info(0,state) != "r"} {
+      if {[wait_for_job_state $job "r" 60 0] == -1} {
+         get_job_state $job 0 task_info
          append error_text "Job $job not in running state! State is \"$task_info(0,state)\"\n"
       }
    }
-   get_job_state $c_job_2 0 task_info
-   if {$task_info(0,state) != "S"} {
+   if {[wait_for_job_state $c_job_2 "S" 60 0] == -1} {
+      get_job_state $c_job_2 0 task_info
       append error_text "Job $c_job_2 not in suspend state! State is \"$task_info(0,state)\"\n"
    }
    if {$error_text == ""} {
@@ -469,16 +470,15 @@ proc ssos_test_sequence_number_obeyance {host} {
       # ts_log_fine [format_array qstat_xml_output]
    }
 
+   # delete the jobs also on error, the following tests need the queues empty
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
    if {$error_text != ""} {
       ts_log_severe "Scenario 3:\n$error_text"
-      return
    } else {
       ts_log_fine "Scenario 3 successfully completed"
    }
-   set error_text ""
-
-   delete_all_jobs
-   wait_for_end_of_all_jobs
 }
 
 
