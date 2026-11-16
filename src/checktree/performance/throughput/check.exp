@@ -1958,6 +1958,602 @@ proc throughput_chart_html {text name} {
 }
 
 ###
+# @brief the offset of the time zone of a test run from UTC
+#
+# The qmaster messages file has the local time of the run, without a time zone. A report can be
+# generated later and elsewhere, the time zone of the run is in its test date, e.g.
+# "Sun Mar 15 08:54:30 UTC 2026".
+#
+# @param test_date the test date of the run, test_config(test_date)
+# @return the offset in seconds (local time - UTC), "" if the test date cannot be parsed
+##
+proc throughput_utc_offset {test_date} {
+   if {[catch {clock scan $test_date -format "%a %b %d %H:%M:%S %Z %Y"} seconds] ||
+       [catch {clock scan "[join [lrange $test_date 1 3] " "] [lindex $test_date 5]" \
+                     -format "%b %d %H:%M:%S %Y" -gmt 1} wall_clock]} {
+      return ""
+   }
+   return [expr {$wall_clock - $seconds}]
+}
+
+###
+# @brief parse a time stamp of the qmaster messages file
+#
+# @param value a time stamp like "2026-11-16 15:51:28.679683"
+# @param utc_offset the offset of the time zone of the run from UTC in seconds, see
+#        throughput_utc_offset(), "": the local time zone
+# @return unix time in seconds, with the fraction, "" if the time stamp cannot be parsed
+##
+proc throughput_parse_timestamp {value {utc_offset ""}} {
+   set parts [split [string trim $value] "."]
+   set date_time [lindex $parts 0]
+   if {$utc_offset != ""} {
+      if {[catch {clock scan $date_time -format "%Y-%m-%d %H:%M:%S" -gmt 1} seconds]} {
+         return ""
+      }
+      set seconds [expr {$seconds - $utc_offset}]
+   } elseif {[catch {clock scan $date_time -format "%Y-%m-%d %H:%M:%S"} seconds]} {
+      if {[catch {clock scan $date_time} seconds]} {
+         return ""
+      }
+   }
+   if {[llength $parts] > 1 && [string is digit -strict [lindex $parts 1]]} {
+      return [expr {$seconds + double("0.[lindex $parts 1]")}]
+   }
+   return $seconds
+}
+
+###
+# @brief read the thread monitoring of sge_qmaster from its messages file
+#
+# With MONITOR_TIME in qmaster_params every thread of sge_qmaster writes a line while it is
+# active, e.g.
+#    2026-11-16 15:51:31.634685|      reader|00|host|P|reader: runs: 0.18r/s (EXECD (l:0.00,
+#    j:0.00,c:0.00,p:0.00,a:0.00)/s GDI (a:0.00,g:0.18,m:0.00,d:0.00,c:0.00,t:0.00,p:0.00)/s
+#    OTHER (ql:0,rql:0,wrql:0)) out: 0.18m/s APT: 0.0001s/m idle: 100.00% wait: 0.00% time: 5.42s
+# The line ends an interval of "time" seconds. An idle thread writes rarely, its interval can
+# start long before the test. Intervals are clipped to the test.
+#
+# @param messages_file the copy of the messages file in the report directory
+# @param test_start begin of the test (unix time in seconds)
+# @param test_end end of the test (unix time in seconds)
+# @param utc_offset the offset of the time zone of the run from UTC, see throughput_utc_offset()
+# @param mon_var name of an array which gets
+#        - threads: thread names like "reader-00", sorted by thread type and number
+#        - THREAD,count: the number of intervals of the thread
+#        - THREAD,I,start and THREAD,I,end: interval I, seconds since the test start
+#        - THREAD,I,busy, THREAD,I,wait, THREAD,I,idle: percentage of the interval
+#        - THREAD,I,c,KEY: counter KEY, e.g. GDI.g (GDI get requests/s) or OTHER.ql (length of
+#          the writer queue)
+#        - THREAD,keys: the counter keys of the thread
+# @return the number of intervals read
+##
+proc throughput_read_thread_monitoring {messages_file test_start test_end utc_offset mon_var} {
+   global CHECK_USER
+   upvar $mon_var mon
+
+   unset -nocomplain mon
+   set mon(threads) {}
+
+   if {![file isfile $messages_file]} {
+      ts_log_fine "no qmaster messages file $messages_file, no thread charts"
+      return 0
+   }
+   get_file_content [gethostname] $CHECK_USER $messages_file content
+
+   set total 0
+   for {set i 1} {$i <= $content(0)} {incr i} {
+      set line $content($i)
+      if {[string first "|P|" $line] < 0 || [string first " runs: " $line] < 0} {
+         continue
+      }
+      set tokens [split $line "|"]
+      if {[llength $tokens] < 6} {
+         continue
+      }
+      # the message of the event master thread contains a "|"
+      set type [string trim [lindex $tokens 1]]
+      set message [join [lrange $tokens 5 end] "|"]
+      if {![string match "$type: runs:*" $message]} {
+         continue
+      }
+      if {![regexp {idle: ([0-9.]+)%} $message -> idle] ||
+          ![regexp {time: ([0-9.]+)s} $message -> length]} {
+         continue
+      }
+      if {![regexp {wait: ([0-9.]+)%} $message -> wait]} {
+         set wait 0.0
+      }
+      set end [throughput_parse_timestamp [lindex $tokens 0] $utc_offset]
+      if {$end == ""} {
+         continue
+      }
+      set start [expr {$end - $length}]
+      if {$end <= $test_start || $start >= $test_end} {
+         continue
+      }
+      set start [expr {max($start, $test_start) - $test_start}]
+      set end [expr {min($end, $test_end) - $test_start}]
+
+      set thread "$type-[string trim [lindex $tokens 2]]"
+      if {![info exists mon($thread,count)]} {
+         lappend mon(threads) $thread
+         set mon($thread,count) 0
+         set mon($thread,keys) {}
+      }
+      set n $mon($thread,count)
+      set mon($thread,$n,start) $start
+      set mon($thread,$n,end) $end
+      set mon($thread,$n,idle) $idle
+      set mon($thread,$n,wait) $wait
+      set mon($thread,$n,busy) [expr {max(0.0, 100.0 - $idle - $wait)}]
+
+      # the counters are in the parentheses after runs, some of them in groups like "GDI (...)"
+      if {[regexp {r/s \((.*)\) out:} $message -> inner]} {
+         set counters {}
+         foreach {group prefix values} [regexp -all -inline {([A-Za-z]+) \(([^)]*)\)} $inner] {
+            foreach {pair key value} [regexp -all -inline {([a-z]+):\s*([0-9.]+)} $values] {
+               lappend counters "$prefix.$key" $value
+            }
+         }
+         regsub -all {[A-Za-z]+ \([^)]*\)} $inner "" rest
+         foreach {pair key value} [regexp -all -inline {([a-z]+):\s*([0-9.]+)} $rest] {
+            lappend counters $key $value
+         }
+         foreach {key value} $counters {
+            set mon($thread,$n,c,$key) $value
+            if {[lsearch -exact $mon($thread,keys) $key] < 0} {
+               lappend mon($thread,keys) $key
+            }
+         }
+      }
+      incr mon($thread,count)
+      incr total
+   }
+
+   # sort by thread type, then by thread number
+   set order {listener reader worker event-master timer scheduler mirror}
+   set sorted {}
+   foreach type $order {
+      foreach thread [lsort [lsearch -all -inline -glob $mon(threads) "$type-*"]] {
+         lappend sorted $thread
+      }
+   }
+   foreach thread [lsort $mon(threads)] {
+      if {[lsearch -exact $sorted $thread] < 0} {
+         lappend sorted $thread
+      }
+   }
+   set mon(threads) $sorted
+
+   ts_log_fine "read $total monitoring intervals of [llength $mon(threads)] sge_qmaster threads"
+   return $total
+}
+
+###
+# @brief the title of a thread monitoring counter in a chart
+#
+# @param key a counter key, see throughput_read_thread_monitoring()
+# @return the title
+##
+proc throughput_thread_counter_title {key} {
+   set titles {
+      EXECD.l "load reports" EXECD.j "job reports" EXECD.c "configuration reports"
+      EXECD.p "process reports" EXECD.a "acknowledgement reports"
+      GDI.a "GDI add" GDI.g "GDI get" GDI.m "GDI modify" GDI.d "GDI delete" GDI.c "GDI copy"
+      GDI.t "GDI trigger" GDI.p "GDI permission"
+      in.g "incoming GDI" in.a "incoming acknowledgements" in.e "event client exits"
+      in.r "incoming reports"
+      mod "event client modifications" ack "event acknowledgements" events "new events"
+      added "delivered events" skipt "skipped events" executed "executed timer events"
+      OTHER.ql "writer queue" OTHER.rql "reader queue" OTHER.wrql "waiting readers"
+      clients "connected event clients" blocked "blocked event clients"
+      busy "busy event clients" pending "pending timer events"
+   }
+   if {[dict exists $titles $key]} {
+      return [dict get $titles $key]
+   }
+   return $key
+}
+
+###
+# @brief the colour of a thread monitoring counter in a chart
+#
+# A counter has the same colour in all charts. Counters shown in the same chart have different
+# colours.
+#
+# @param key a counter key, see throughput_read_thread_monitoring()
+# @return the colour as gnuplot rgb value, "" for an unknown counter (gnuplot's default colour)
+##
+proc throughput_thread_counter_color {key} {
+   set colors {
+      GDI.a "#3366FF" GDI.g "#00CC66" GDI.m "#FF9900" GDI.d "#FF3333" GDI.c "#00CCCC"
+      GDI.t "#CC33FF" GDI.p "#996633"
+      EXECD.l "#FFDD00" EXECD.j "#FF66CC" EXECD.c "#AAAAAA" EXECD.p "#99CC00"
+      EXECD.a "#CC9966"
+      in.g "#3366FF" in.r "#FF66CC" in.a "#CC9966" in.e "#AAAAAA"
+      mod "#3366FF" ack "#00CC66" events "#FFDD00" added "#FF9900" skipt "#CC33FF"
+      executed "#3366FF"
+   }
+   if {[dict exists $colors $key]} {
+      return [dict get $colors $key]
+   }
+   return ""
+}
+
+###
+# @brief whether a thread monitoring counter is a rate (per second) or a current value
+#
+# @param key a counter key, see throughput_read_thread_monitoring()
+# @return 1 for a rate, 0 for a current value like a queue length
+##
+proc throughput_thread_counter_is_rate {key} {
+   return [expr {[lsearch -exact {OTHER.ql OTHER.rql OTHER.wrql clients blocked busy pending} \
+                                 $key] < 0}]
+}
+
+###
+# @brief fill the rows of a stacked bar chart with the intervals of one thread
+#
+# @param mon_var the array of throughput_read_thread_monitoring()
+# @param thread the thread
+# @param series list of the values to stack, "busy", "wait", "idle" or "c,KEY"
+# @param rows_var name of the rows array for create_gnuplot_xy_gif()
+##
+proc throughput_thread_rows {mon_var thread series rows_var} {
+   upvar $mon_var mon
+   upvar $rows_var rows
+
+   set row 0
+   foreach value $series {
+      for {set i 0} {$i < $mon($thread,count)} {incr i} {
+         set start $mon($thread,$i,start)
+         set end $mon($thread,$i,end)
+         set rows($row,$i,x) [expr {($start + $end) / 2.0}]
+         set rows($row,$i,w) [expr {$end - $start}]
+         if {[info exists mon($thread,$i,$value)]} {
+            set rows($row,$i,y) $mon($thread,$i,$value)
+         } else {
+            set rows($row,$i,y) 0
+         }
+      }
+      set rows($row,show) 1
+      incr row
+   }
+}
+
+###
+# @brief fill the rows of a stacked bar chart with the summary of a group of threads
+#
+# The test is divided into slots of slot_length seconds. A value of a thread is distributed over
+# the slots its interval overlaps. A percentage is averaged over all threads which have data in a
+# slot, a rate is summed up.
+#
+# @param mon_var the array of throughput_read_thread_monitoring()
+# @param threads the threads of the group
+# @param series list of the values to stack, "busy", "wait", "idle" or "c,KEY"
+# @param average 1: average of the threads (percentages), 0: sum of the threads (rates)
+# @param slot_length length of a slot in seconds
+# @param rows_var name of the rows array for create_gnuplot_xy_gif()
+##
+proc throughput_thread_group_rows {mon_var threads series average slot_length rows_var} {
+   upvar $mon_var mon
+   upvar $rows_var rows
+
+   set num_slots 0
+   foreach thread $threads {
+      for {set i 0} {$i < $mon($thread,count)} {incr i} {
+         set first [expr {int($mon($thread,$i,start) / $slot_length)}]
+         set last [expr {int(ceil($mon($thread,$i,end) / $slot_length)) - 1}]
+         set num_slots [expr {max($num_slots, $last + 1)}]
+         for {set slot $first} {$slot <= $last} {incr slot} {
+            set overlap [expr {min($mon($thread,$i,end), ($slot + 1) * $slot_length) -
+                               max($mon($thread,$i,start), $slot * $slot_length)}]
+            if {$overlap <= 0} {
+               continue
+            }
+            if {![info exists weight($slot)]} {
+               set weight($slot) 0.0
+            }
+            set weight($slot) [expr {$weight($slot) + $overlap}]
+            foreach value $series {
+               if {[info exists mon($thread,$i,$value)]} {
+                  if {![info exists sum($slot,$value)]} {
+                     set sum($slot,$value) 0.0
+                  }
+                  set sum($slot,$value) [expr {$sum($slot,$value) +
+                                               $overlap * $mon($thread,$i,$value)}]
+               }
+            }
+         }
+      }
+   }
+
+   set row 0
+   foreach value $series {
+      set n 0
+      for {set slot 0} {$slot < $num_slots} {incr slot} {
+         if {![info exists weight($slot)]} {
+            continue
+         }
+         set rows($row,$n,x) [expr {($slot + 0.5) * $slot_length}]
+         set rows($row,$n,w) $slot_length
+         if {![info exists sum($slot,$value)]} {
+            set rows($row,$n,y) 0
+         } elseif {$average} {
+            set rows($row,$n,y) [expr {$sum($slot,$value) / $weight($slot)}]
+         } else {
+            set rows($row,$n,y) [expr {$sum($slot,$value) / $slot_length}]
+         }
+         incr n
+      }
+      set rows($row,show) 1
+      incr row
+   }
+}
+
+###
+# @brief create the charts of the sge_qmaster threads
+#
+# Per thread type (listener, reader, worker, ...) a chart of the thread states (busy, wait, idle)
+# and, where the threads count requests, a chart of the requests per second. A type with several
+# threads gets summary charts: the states averaged and the requests summed up over its threads.
+# The queue lengths of the reader and worker threads and the values of the event master and timer
+# threads which are no rates get charts of their own.
+# The charts of the single threads go into the page thread_charts.html.
+#
+# @param mon_var the array of throughput_read_thread_monitoring()
+# @param output_dir the report directory
+# @param page_title title of the page with the charts of the single threads
+# @return html with the charts of the thread types, "" if there is no thread monitoring
+##
+proc throughput_create_thread_charts {mon_var output_dir page_title} {
+   upvar $mon_var mon
+
+   if {[llength $mon(threads)] == 0} {
+      return ""
+   }
+
+   # the summary slots: the usual interval length, MONITOR_TIME
+   set lengths {}
+   foreach thread $mon(threads) {
+      for {set i 0} {$i < $mon($thread,count)} {incr i} {
+         lappend lengths [expr {$mon($thread,$i,end) - $mon($thread,$i,start)}]
+      }
+   }
+   set lengths [lsort -real $lengths]
+   set slot_length [expr {max(1, round([lindex $lengths [expr {[llength $lengths] / 2}]]))}]
+
+   set states {busy wait idle}
+   set state_colors {busy "red" wait "#FFD700" idle "#2E8B57"}
+
+   # thread types in the order of the threads, and the rate counters per thread and per type
+   set types {}
+   foreach thread $mon(threads) {
+      set type [join [lrange [split $thread "-"] 0 end-1] "-"]
+      if {[lsearch -exact $types $type] < 0} {
+         lappend types $type
+         set type_threads($type) {}
+         set type_rates($type) {}
+      }
+      lappend type_threads($type) $thread
+      set thread_rates($thread) {}
+      foreach key $mon($thread,keys) {
+         if {![throughput_thread_counter_is_rate $key]} {
+            continue
+         }
+         for {set i 0} {$i < $mon($thread,count)} {incr i} {
+            if {[info exists mon($thread,$i,c,$key)] && $mon($thread,$i,c,$key) > 0} {
+               lappend thread_rates($thread) "c,$key"
+               if {[lsearch -exact $type_rates($type) "c,$key"] < 0} {
+                  lappend type_rates($type) "c,$key"
+               }
+               break
+            }
+         }
+      }
+   }
+
+   set plot_data(xlabel) "time\[s\]"
+   set plot_data(stacked) 1
+   set state_html ""
+   set request_html ""
+   set thread_state_html ""
+   set thread_request_html ""
+
+   foreach type $types {
+      set threads $type_threads($type)
+      set multiple [expr {[llength $threads] > 1}]
+
+      # thread states of the type: a summary, or the chart of its only thread
+      set name "threads_states_$type"
+      unset -nocomplain rows
+      if {$multiple} {
+         set plot_data(title) "$type threads ([llength $threads]) - average thread state"
+         throughput_thread_group_rows mon $threads $states 1 $slot_length rows
+      } else {
+         set plot_data(title) "[lindex $threads 0] - thread state"
+         throughput_thread_rows mon [lindex $threads 0] $states rows
+      }
+      set plot_data(ylabel) "\[%\]"
+      set plot_data(yrange) "0:100"
+      set plot_data(output_file) "$output_dir/$name.gif"
+      set row 0
+      foreach state $states {
+         set rows($row,title) $state
+         set rows($row,color) [dict get $state_colors $state]
+         incr row
+      }
+      create_gnuplot_xy_gif plot_data rows
+      append state_html [throughput_chart_html "$type thread state" $name]
+
+      # requests of the type
+      if {[llength $type_rates($type)] > 0} {
+         set name "threads_requests_$type"
+         unset -nocomplain rows
+         if {$multiple} {
+            set plot_data(title) "$type threads ([llength $threads]) - requests of all threads"
+            throughput_thread_group_rows mon $threads $type_rates($type) 0 $slot_length rows
+         } else {
+            set plot_data(title) "[lindex $threads 0] - requests"
+            throughput_thread_rows mon [lindex $threads 0] $type_rates($type) rows
+         }
+         set plot_data(ylabel) "requests/s"
+         unset -nocomplain plot_data(yrange)
+         set plot_data(output_file) "$output_dir/$name.gif"
+         set row 0
+         foreach value $type_rates($type) {
+            set key [string range $value 2 end]
+            set rows($row,title) [throughput_thread_counter_title $key]
+            set color [throughput_thread_counter_color $key]
+            if {$color != ""} {
+               set rows($row,color) $color
+            }
+            incr row
+         }
+         create_gnuplot_xy_gif plot_data rows
+         append request_html [throughput_chart_html "$type requests" $name]
+      }
+
+      # the single threads of a type with several threads
+      if {$multiple} {
+         foreach thread $threads {
+            set name "thread_states_$thread"
+            unset -nocomplain rows
+            throughput_thread_rows mon $thread $states rows
+            set plot_data(title) "$thread - thread state"
+            set plot_data(ylabel) "\[%\]"
+            set plot_data(yrange) "0:100"
+            set plot_data(output_file) "$output_dir/$name.gif"
+            set row 0
+            foreach state $states {
+               set rows($row,title) $state
+               set rows($row,color) [dict get $state_colors $state]
+               incr row
+            }
+            create_gnuplot_xy_gif plot_data rows
+            append thread_state_html [throughput_chart_html "$thread thread state" $name]
+
+            if {[llength $thread_rates($thread)] > 0} {
+               set name "thread_requests_$thread"
+               unset -nocomplain rows
+               throughput_thread_rows mon $thread $thread_rates($thread) rows
+               set plot_data(title) "$thread - requests"
+               set plot_data(ylabel) "requests/s"
+               unset -nocomplain plot_data(yrange)
+               set plot_data(output_file) "$output_dir/$name.gif"
+               set row 0
+               foreach value $thread_rates($thread) {
+                  set key [string range $value 2 end]
+                  set rows($row,title) [throughput_thread_counter_title $key]
+                  set color [throughput_thread_counter_color $key]
+                  if {$color != ""} {
+                     set rows($row,color) $color
+                  }
+                  incr row
+               }
+               create_gnuplot_xy_gif plot_data rows
+               append thread_request_html [throughput_chart_html "$thread requests" $name]
+            }
+         }
+      }
+   }
+
+   # values which are no rates: the queue lengths reported by the reader and worker threads (all
+   # of them report the same queues), the event master's clients, the timer's pending events
+   set queue_html ""
+   unset -nocomplain plot_data(stacked) plot_data(yrange)
+   foreach {name title keys thread_types} {
+      threads_queues "request queues of the reader and worker threads"
+         {OTHER.ql OTHER.rql OTHER.wrql} {reader worker}
+      threads_event_clients "event clients of the event master thread"
+         {clients blocked busy} {event-master}
+      threads_timer "pending events of the timer thread" {pending} {timer}
+   } {
+      set samples {}
+      foreach type $thread_types {
+         if {![info exists type_threads($type)]} {
+            continue
+         }
+         foreach thread $type_threads($type) {
+            for {set i 0} {$i < $mon($thread,count)} {incr i} {
+               if {[info exists mon($thread,$i,c,[lindex $keys 0])]} {
+                  set sample [list $mon($thread,$i,end)]
+                  foreach key $keys {
+                     if {[info exists mon($thread,$i,c,$key)]} {
+                        lappend sample $mon($thread,$i,c,$key)
+                     } else {
+                        lappend sample 0
+                     }
+                  }
+                  lappend samples $sample
+               }
+            }
+         }
+      }
+      if {[llength $samples] == 0} {
+         continue
+      }
+      unset -nocomplain rows
+      set samples [lsort -real -index 0 $samples]
+      set row 0
+      foreach key $keys {
+         set n 0
+         foreach sample $samples {
+            set rows($row,$n,x) [lindex $sample 0]
+            set rows($row,$n,y) [lindex $sample [expr {$row + 1}]]
+            incr n
+         }
+         set rows($row,title) [throughput_thread_counter_title $key]
+         set rows($row,drawmode) "steps"
+         set rows($row,show) 1
+         incr row
+      }
+      set plot_data(title) $title
+      set plot_data(ylabel) "number"
+      set plot_data(output_file) "$output_dir/$name.gif"
+      create_gnuplot_xy_gif plot_data rows
+      append queue_html [throughput_chart_html $title $name]
+   }
+
+   # the page with the charts of the single threads
+   set link ""
+   if {$thread_state_html != ""} {
+      set content ""
+      append content [create_html_text "Thread states" 0 "" "h2"]
+      append content $thread_state_html
+      if {$thread_request_html != ""} {
+         append content [create_html_text "Requests" 0 "" "h2"]
+         append content $thread_request_html
+      }
+      generate_html_file $output_dir/thread_charts.html $page_title $content
+      set link [create_html_link "Charts of the single threads" "thread_charts.html"]
+   }
+
+   set html ""
+   append html [create_html_text "sge_qmaster threads" 0 "" "h2"]
+   set text "Thread state: busy, waiting for a lock (wait), or idle, per monitoring interval of a"
+   append text " thread. For several threads of a type: the average over the threads, in slots of"
+   append text " $slot_length seconds. Requests: requests per second, summed up over the threads"
+   append text " of a type."
+   append html [create_html_text $text]
+   if {$link != ""} {
+      append html [create_html_text $link]
+   }
+   append html [create_html_text "Thread states" 0 "" "h3"]
+   append html $state_html
+   if {$request_html != ""} {
+      append html [create_html_text "Requests" 0 "" "h3"]
+      append html $request_html
+   }
+   if {$queue_html != ""} {
+      append html [create_html_text "Queue lengths and clients" 0 "" "h3"]
+      append html $queue_html
+   }
+   return $html
+}
+
+###
 # @brief store the current system status in the results array
 #
 # The main loop calls this for every chunk of output it reads, which can be more than a thousand
@@ -3112,6 +3708,14 @@ proc analyse_dump_data_file {file {force 0}} {
    if {$test_config(throughput_sharetree) == 1 || $test_config(functional_policy) == 1 }  {
       append content [throughput_chart_html "Running project jobs" "project_jobs"]
    }
+   # the sge_qmaster threads, from the monitoring in the qmaster messages file
+   set test_start $results(0,test_run_time)
+   set test_end $results([expr {$results(count) - 1}],test_run_time)
+   set utc_offset [throughput_utc_offset $test_config(test_date)]
+   throughput_read_thread_monitoring "$output_dir/qmaster_messages" $test_start $test_end \
+                                     $utc_offset thread_monitoring
+   append content [throughput_create_thread_charts thread_monitoring $output_dir \
+                       "$test_config(gridengine_version) from $test_config(test_date)"]
    generate_html_file $output_dir/all_charts.html "$test_config(gridengine_version) from $test_config(test_date)" $content
 
    ts_log_fine "preparing data for charts"

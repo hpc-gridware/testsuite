@@ -580,15 +580,26 @@ proc print_xy_array {columns rows data_array {empty_cell ""} {column_len_var ""}
 # data row of the chart gets two columns, x and y, as the rows of one chart do not need to have
 # the same x values. A shorter row has empty cells after its last value.
 #
+# A stacked bar chart (data(stacked) set to 1) draws the rows as bars on top of each other, the
+# first row at the bottom, each bar with a dark outline. All rows have the same x values, the CSV
+# file has one x column, an optional width column and one column per row, with the values of the
+# rows, not the sums.
+#
 # gnuplot has to be in the path of the local host or of one of the cluster hosts.
 #
 # @param data_array_name name of an array with the chart settings:
 #        - output_file: the chart file (gif format, png if gnuplot cannot write gif)
 #        - xlabel, ylabel: the labels of the x and the y axis
 #        - title: the title of the chart
+#        - stacked: optional, 1 for a stacked bar chart
+#        - yrange: optional, the range of the y axis in gnuplot syntax, e.g. "0:100"
 # @param row_array_name name of an array with the data rows:
 #        - ROW,COUNTER,x and ROW,COUNTER,y: x and y value of data ROW at position COUNTER
-#        - ROW,drawmode: how to draw data ROW ("lines", "linespoints", "points", ...)
+#        - ROW,COUNTER,w: stacked bar chart only, optional: the width of the bar at position
+#          COUNTER, taken from the first row shown; without it gnuplot chooses the widths
+#        - ROW,drawmode: how to draw data ROW ("lines", "linespoints", "points", ...), not used
+#          for a stacked bar chart
+#        - ROW,color: optional, the color of data ROW, e.g. "red" or "#FF0000"
 #        - ROW,title: the title of data ROW
 #        - ROW,show: 1 if data ROW is part of the chart, 0 if not
 # @return the chart file, a placeholder image if gnuplot failed
@@ -668,25 +679,57 @@ proc create_gnuplot_xy_gif {data_array_name row_array_name} {
       incr datarows 1
    }
 
+   set stacked [expr {[info exists data(stacked)] && $data(stacked)}]
+   set with_width [expr {$stacked && [llength $plot_rows] > 0 &&
+                         [info exists rows([lindex $plot_rows 0],0,w)]}]
+
    # write the CSV file: a header line, then one line per position
    set csv_file "[file rootname $data(output_file)].csv"
    set csv [open $csv_file w]
    set fields {}
-   foreach row $plot_rows {
+   if {$stacked} {
+      # x of the first row, the width, the values of all rows
       lappend fields [csv_quote [gnuplot_text_to_plain $data(xlabel)]]
-      lappend fields [csv_quote [gnuplot_text_to_plain $title($row)]]
-   }
-   puts $csv [join $fields ","]
-   for {set counter 0} {$counter < $max_points} {incr counter} {
-      set fields {}
+      if {$with_width} {
+         lappend fields "width"
+      }
       foreach row $plot_rows {
-         if {$counter < $num_points($row)} {
-            lappend fields $rows($row,$counter,x) $rows($row,$counter,y)
-         } else {
-            lappend fields "" ""
-         }
+         lappend fields [csv_quote [gnuplot_text_to_plain $title($row)]]
       }
       puts $csv [join $fields ","]
+      set first_row [lindex $plot_rows 0]
+      for {set counter 0} {$counter < $num_points($first_row)} {incr counter} {
+         set fields [list $rows($first_row,$counter,x)]
+         if {$with_width} {
+            lappend fields $rows($first_row,$counter,w)
+         }
+         foreach row $plot_rows {
+            if {[info exists rows($row,$counter,y)]} {
+               lappend fields $rows($row,$counter,y)
+            } else {
+               lappend fields 0
+            }
+         }
+         puts $csv [join $fields ","]
+      }
+   } else {
+      # x and y of each row
+      foreach row $plot_rows {
+         lappend fields [csv_quote [gnuplot_text_to_plain $data(xlabel)]]
+         lappend fields [csv_quote [gnuplot_text_to_plain $title($row)]]
+      }
+      puts $csv [join $fields ","]
+      for {set counter 0} {$counter < $max_points} {incr counter} {
+         set fields {}
+         foreach row $plot_rows {
+            if {$counter < $num_points($row)} {
+               lappend fields $rows($row,$counter,x) $rows($row,$counter,y)
+            } else {
+               lappend fields "" ""
+            }
+         }
+         puts $csv [join $fields ","]
+      }
    }
    close $csv
    if {!$use_local_host} {
@@ -721,20 +764,56 @@ proc create_gnuplot_xy_gif {data_array_name row_array_name} {
    puts $cmd_file "set title \"$data(title)\""
 #   puts $cmd_file "set pointsize 1.5"
    puts $cmd_file "set datafile separator \",\""
-
-   # the columns of a row are 2 * i + 1 (x) and 2 * i + 2 (y), the header line is skipped
-   puts -nonewline $cmd_file "plot "
-   set i 0
-   foreach row $plot_rows {
-      if {$i > 0} {
-         puts -nonewline $cmd_file ", "
-      }
-      set x_col [expr {2 * $i + 1}]
-      set y_col [expr {2 * $i + 2}]
-      puts -nonewline $cmd_file "'$csv_file' skip 1 using $x_col:$y_col title \"$title($row)\""
-      puts -nonewline $cmd_file " with $drawmode($row)"
-      incr i
+   if {[info exists data(yrange)]} {
+      puts $cmd_file "set yrange \[$data(yrange)\]"
    }
+
+   set plot_items {}
+   if {$stacked} {
+      # each bar shows the sum of its row and the rows below it, the highest sum is drawn first,
+      # so that the bars below it remain visible
+      # a thin dark outline separates the bars and the rows in a bar
+      # the legend below the chart, a legend in it would cover the highest bars
+      puts $cmd_file "set style fill solid 1.0 border lc rgb \"#404040\""
+      puts $cmd_file "set key outside below horizontal"
+      if {![info exists data(yrange)]} {
+         puts $cmd_file "set yrange \[0:*\]"
+      }
+      set first_y_col [expr {$with_width ? 3 : 2}]
+      set i 0
+      set sum ""
+      foreach row $plot_rows {
+         if {$sum != ""} {
+            append sum "+"
+         }
+         append sum "\$[expr {$first_y_col + $i}]"
+         set item "'$csv_file' skip 1 using 1:($sum)"
+         if {$with_width} {
+            append item ":2"
+         }
+         append item " title \"$title($row)\" with boxes"
+         if {[info exists rows($row,color)]} {
+            append item " lc rgb \"$rows($row,color)\""
+         }
+         set plot_items [linsert $plot_items 0 $item]
+         incr i
+      }
+   } else {
+      # the columns of a row are 2 * i + 1 (x) and 2 * i + 2 (y), the header line is skipped
+      set i 0
+      foreach row $plot_rows {
+         set x_col [expr {2 * $i + 1}]
+         set y_col [expr {2 * $i + 2}]
+         set item "'$csv_file' skip 1 using $x_col:$y_col title \"$title($row)\""
+         append item " with $drawmode($row)"
+         if {[info exists rows($row,color)]} {
+            append item " lc rgb \"$rows($row,color)\""
+         }
+         lappend plot_items $item
+         incr i
+      }
+   }
+   puts $cmd_file "plot [join $plot_items {, }]"
    close $cmd_file
    if {!$use_local_host} {
       wait_for_remote_file $local_host $CHECK_USER $command_file
