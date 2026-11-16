@@ -9602,6 +9602,19 @@ if {$do_one_test} {
          set ONLY_ONE_LEVEL $do_one_test_level
          set CHECK_ENABLED_RUNLEVELS $saved_enabled_runlevels
          set _what "level"
+
+         # run_test skips a level whose runlevel class is not enabled, and the check would be
+         # reported as ok without having run
+         if {![is_level_enabled $do_one_test_level]} {
+            set _class [expr {$do_one_test_level / 100}]
+            set _class_name [lindex {short medium long day week} $_class]
+            puts "check $do_one_test_name $do_one_test_level: runlevel class $_class\
+                  ($_class_name) is not enabled, enabled are \"$CHECK_ENABLED_RUNLEVELS\",\
+                  use \"check_all $do_one_test_name $_class\" to run it"
+            set at_least_one_failed 1
+            puts "### check-result failed $do_one_test_name $do_one_test_level"
+            continue
+         }
       }
 
       if {[llength $do_one_test_list] > 1} {
