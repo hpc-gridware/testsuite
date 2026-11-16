@@ -1,0 +1,335 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3087: the accounting records of a tightly integrated parallel job which ran into its h_rt
+# limit have to show the limit.
+#
+# The job script starts one task per granted host with qrsh -inherit and waits for them. At h_rt
+# the sge_execd on every host kills what runs there. Which one dies first decides the accounting
+# record of the job:
+#    - the job script: failed 100, exit_status 137
+#    - a task: the job script ends by itself with exit_status 1, failed 0; sge_qmaster deletes
+#      the job because the task failed, but the job script is gone before the kill arrives
+#
+# With a requested h_rt the outcome is decided by a race: sge_qmaster passes the lowest h_rt of
+# all queues the job got to every host (JAT_wallclock_limit), all sge_execds kill at the same time.
+# The check runs several jobs at once, with the master task on either host, and logs the outcome
+# of each.
+# A task is killed first when h_rt is requested for the slave tasks only (-scope slave): only the
+# sge_execd of the host without the master task enforces it.
+#
+# Every accounting record of the job has to name an sge_execd which enforced the limit in
+# deleted_by. When a task is killed first, the record of the job has failed 0 and the exit status
+# of the job script, deleted_by is what shows the limit.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range {"9.1.8" "9.2.0"}
+
+# define test's name and run level descriptions
+set check_name           "issue_3087"
+set check_category       "BUG ACCOUNTING EXECD PARALLEL VERIFIED"
+set check_description(0) "the accounting records of a tightly integrated parallel job which ran\
+                          into its h_rt limit show the limit (CS-3087)"
+
+# define test's dependencies
+set check_needs          "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function issue_3087_setup
+set check_cleanup_function issue_3087_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "issue_3087_task_records"
+lappend check_functions "issue_3087_accounting_summary"
+lappend check_functions "issue_3087_task_killed_first"
+lappend check_functions "issue_3087_task_killed_first_summary"
+
+# ---------------------------------------------------------------------------
+# setup / cleanup
+# ---------------------------------------------------------------------------
+
+proc issue_3087_setup {} {
+   global issue_3087_hosts issue_3087_jobs
+
+   set hosts [host_conf_get_suited_hosts 2]
+   if {[llength $hosts] < 2} {
+      ts_log_config "the check needs 2 execution hosts"
+      return 99
+   }
+   set issue_3087_hosts $hosts
+
+   # the number of jobs which run at once
+   set issue_3087_jobs 3
+
+   set pe(slots)              10
+   # one slot per host, $round_robin may place both slots of a job on one host when several jobs
+   # are scheduled at once
+   set pe(allocation_rule)    "1"
+   set pe(control_slaves)     "TRUE"
+   set pe(job_is_first_task)  "FALSE"
+   set pe(accounting_summary) "FALSE"
+   add_pe "3087.pe" pe
+
+   # each job gets one slot on each host, and another one on the host of its master task
+   set queue_conf(slots)   [expr {2 * $issue_3087_jobs}]
+   set queue_conf(pe_list) "3087.pe"
+   add_queue "3087.q" $hosts queue_conf
+
+   return 0
+}
+
+proc issue_3087_cleanup {} {
+   global issue_3087_hosts issue_3087_jobs
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   del_queue "3087.q" "" 1 1
+   del_pe "3087.pe"
+
+   unset -nocomplain issue_3087_hosts issue_3087_jobs
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief set accounting_summary of the pe 3087.pe
+#
+# @param value TRUE or FALSE
+proc issue_3087_set_accounting_summary {value} {
+   set pe(accounting_summary) $value
+   mod_pe "3087.pe" pe
+}
+
+## @brief run jobs until their h_rt limit ends them
+#
+# The master tasks of the jobs run on both hosts in turn, each job script starts one task on each
+# host.
+#
+# @param scope global: the job requests h_rt, slave: only the slave tasks request it
+# @return the list of job ids, empty on error
+proc issue_3087_run_jobs {scope} {
+   get_current_cluster_config_array ts_config
+   global CHECK_ACTUAL_TEST_PATH
+   global issue_3087_hosts issue_3087_jobs
+
+   set job_ids {}
+   for {set i 0} {$i < $issue_3087_jobs} {incr i} {
+      set master_host [lindex $issue_3087_hosts [expr {$i % 2}]]
+      set qrsh "$ts_config(product_root)/bin/[resolve_arch $master_host]/qrsh"
+      set args "-pe 3087.pe 2 -scope master -q [get_queue_instance 3087.q $master_host]"
+      append args " -scope slave -q 3087.q -scope $scope -l h_rt=15"
+      append args " -o /dev/null -j y $CHECK_ACTUAL_TEST_PATH/job.sh $qrsh 600"
+      set job_id [submit_job $args]
+      if {$job_id <= 0} {
+         delete_all_jobs
+         return {}
+      }
+      lappend job_ids $job_id
+   }
+
+   foreach job_id $job_ids {
+      if {[wait_for_job_end $job_id 180] != 0} {
+         delete_all_jobs
+         return {}
+      }
+   }
+
+   return $job_ids
+}
+
+## @brief get the accounting records of a job
+#
+# @param job_id the job
+# @param amount the number of records to wait for
+# @param records_var name of a dict which is filled with one dict per record, by pe_taskid
+#                    (NONE for the master task), each with the qacct fields of the record
+# @return 0 on success, < 0 on error
+proc issue_3087_get_records {job_id amount records_var} {
+   upvar $records_var records
+
+   set records [dict create]
+   set ret [get_qacct $job_id qacct_info "" "" 1 $amount 0 1 qacct_output]
+   if {$ret != 0} {
+      return $ret
+   }
+
+   set record [dict create]
+   foreach line [split "$qacct_output\n=====" "\n"] {
+      if {[string match "=====*" $line]} {
+         if {[dict exists $record pe_taskid]} {
+            dict set records [dict get $record pe_taskid] $record
+         }
+         set record [dict create]
+      } elseif {[regexp {^(\S+)\s+(.*\S)\s*$} $line -> name value]} {
+         dict set record $name $value
+      }
+   }
+
+   foreach pe_task_id [dict keys $records] {
+      set record [dict get $records $pe_task_id]
+      foreach name {hostname failed exit_status deleted_by} {
+         if {![dict exists $record $name]} {
+            dict set record $name ""
+         }
+      }
+      ts_log_fine "job $job_id pe_taskid $pe_task_id: host [dict get $record hostname],\
+                   failed [dict get $record failed], exit_status [dict get $record exit_status],\
+                   deleted_by [dict get $record deleted_by]"
+   }
+
+   if {[dict size $records] != $amount} {
+      ts_log_severe "expected $amount accounting records of job $job_id, got [dict size $records]"
+      return -1
+   }
+
+   return 0
+}
+
+## @brief check that an accounting record names an sge_execd which enforced the limit
+#
+# @param records dict of the records, see issue_3087_get_records
+# @param pe_task_id the record to check, NONE for the master task
+# @param hosts the hosts whose sge_execd may have enforced the limit
+# @param what the record, for the error messages
+proc issue_3087_check_record {records pe_task_id hosts what} {
+   set record [dict get $records $pe_task_id]
+
+   set deleted_by ""
+   if {[dict exists $record deleted_by]} {
+      set deleted_by [dict get $record deleted_by]
+   }
+   set expected {}
+   foreach host $hosts {
+      lappend expected "execd@$host"
+   }
+   set ok 0
+   set parts [split $deleted_by "@"]
+   if {[llength $parts] == 2 && [lindex $parts 0] == "execd"} {
+      foreach host $hosts {
+         if {[resolve_host [lindex $parts 1] 0] == [resolve_host $host 0]} {
+            set ok 1
+         }
+      }
+   }
+   if {!$ok} {
+      ts_log_severe "the accounting record of $what has deleted_by \"$deleted_by\", expected\
+                     [join $expected { or }]"
+   }
+}
+
+## @brief check all accounting records of a job
+#
+# @param job_id the job
+# @param amount the number of records, 3 with accounting_summary FALSE, 1 with TRUE
+# @param scope global: the job requested h_rt, slave: only the slave tasks requested it
+proc issue_3087_check_job {job_id amount scope} {
+   global issue_3087_hosts
+
+   if {[issue_3087_get_records $job_id $amount records] != 0} {
+      return
+   }
+
+   # exit_status 137: the job script was killed first, else a task
+   set exit_status [dict get [dict get $records NONE] exit_status]
+   set master_host [dict get [dict get $records NONE] hostname]
+   if {$exit_status == 137} {
+      ts_log_fine "job $job_id, master task on $master_host: the job script was killed first"
+   } else {
+      ts_log_fine "job $job_id, master task on $master_host: a task was killed first, the job\
+                   script exited with $exit_status"
+   }
+
+   # with h_rt for the slave tasks only, the sge_execd of the other host kills a task, and the job
+   # script ends by itself
+   set hosts $issue_3087_hosts
+   if {$scope == "slave"} {
+      if {$exit_status == 137} {
+         ts_log_severe "job $job_id: the job script was killed, but only its slave tasks requested\
+                        h_rt"
+      }
+      set hosts {}
+      foreach host $issue_3087_hosts {
+         if {[resolve_host $host 0] != [resolve_host $master_host 0]} {
+            lappend hosts $host
+         }
+      }
+   }
+
+   foreach pe_task_id [lsort [dict keys $records]] {
+      if {$pe_task_id == "NONE"} {
+         set what "job $job_id"
+      } else {
+         set what "pe task $pe_task_id of job $job_id"
+      }
+      issue_3087_check_record $records $pe_task_id $hosts $what
+   }
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief the records of the job and of its tasks show the limit
+proc issue_3087_task_records {} {
+   issue_3087_set_accounting_summary "FALSE"
+
+   foreach job_id [issue_3087_run_jobs "global"] {
+      issue_3087_check_job $job_id 3 "global"
+   }
+}
+
+## @brief with accounting_summary the record of the job shows the limit
+proc issue_3087_accounting_summary {} {
+   issue_3087_set_accounting_summary "TRUE"
+
+   foreach job_id [issue_3087_run_jobs "global"] {
+      issue_3087_check_job $job_id 1 "global"
+   }
+}
+
+## @brief a task is killed first, the records of the job and of its tasks show the limit
+proc issue_3087_task_killed_first {} {
+   issue_3087_set_accounting_summary "FALSE"
+
+   foreach job_id [issue_3087_run_jobs "slave"] {
+      issue_3087_check_job $job_id 3 "slave"
+   }
+}
+
+## @brief a task is killed first, with accounting_summary the record of the job shows the limit
+proc issue_3087_task_killed_first_summary {} {
+   issue_3087_set_accounting_summary "TRUE"
+
+   foreach job_id [issue_3087_run_jobs "slave"] {
+      issue_3087_check_job $job_id 1 "slave"
+   }
+}
