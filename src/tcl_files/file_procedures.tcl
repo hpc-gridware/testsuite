@@ -572,52 +572,49 @@ proc print_xy_array {columns rows data_array {empty_cell ""} {column_len_var ""}
 }
 
 
-#****** file_procedures/create_gnuplot_xy_gif() ********************************
-#  NAME
-#     create_gnuplot_xy_gif() -- create xy chart with gnuplot application
+###
+# @brief create an xy chart with gnuplot
 #
-#  SYNOPSIS
-#     create_gnuplot_xy_gif { data_array_name row_array_name }
+# The data of the chart is written into a CSV file next to the chart, with the name of the chart
+# file and the extension .csv. gnuplot reads it, and it can be opened in a spreadsheet. Each
+# data row of the chart gets two columns, x and y, as the rows of one chart do not need to have
+# the same x values. A shorter row has empty cells after its last value.
 #
-#  FUNCTION
-#     This procedure works only if the gnuplot binary is in the local user path.
+# gnuplot has to be in the path of the local host or of one of the cluster hosts.
 #
-#  INPUTS
-#     data_array_name(output_file) - chart output file (gif format)
-#     data_array_name(xlabel)      - chart label for x axis
-#     data_array_name(ylabel)      - chart label for y axis
-#     data_array_name(title)       - chart title
+# @param data_array_name name of an array with the chart settings:
+#        - output_file: the chart file (gif format, png if gnuplot cannot write gif)
+#        - xlabel, ylabel: the labels of the x and the y axis
+#        - title: the title of the chart
+# @param row_array_name name of an array with the data rows:
+#        - ROW,COUNTER,x and ROW,COUNTER,y: x and y value of data ROW at position COUNTER
+#        - ROW,drawmode: how to draw data ROW ("lines", "linespoints", "points", ...)
+#        - ROW,title: the title of data ROW
+#        - ROW,show: 1 if data ROW is part of the chart, 0 if not
+# @return the chart file, a placeholder image if gnuplot failed
 #
-#     row_array_name(ROW,COUNTER,x) - x value for data ROW, position COUNTER
-#     row_array_name(ROW,COUNTER,y) - y value for data ROW, position COUNTER
-#     row_array_name(ROW,drawmode)  - drawmode for data ROW
-#                                     (="lines", "linespoints", "points", ...)
-#     row_array_name(ROW,title)     - title for data ROW
-#     row_array_name(ROW,show)      - show data ROW ( 0=don't show, 1=show row)
+# @example
+#    for {set i 0} {$i < 300} {incr i 1} {
+#       set x [expr ($i / 100.00)]
+#       set dr1(0,$i,y) [expr (sin($x))]
+#       set dr1(0,$i,x) $x
+#       set dr1(1,$i,y) [expr (cos($x))]
+#       set dr1(1,$i,x) $x
+#    }
+#    set dr1(0,drawmode) "lines"  ;# or linespoints
+#    set dr1(0,title) "sin(x)"
+#    set dr1(0,show) 1
+#    set dr1(1,drawmode) "lines"
+#    set dr1(1,title) "cos(x)"
+#    set dr1(1,show) 1
 #
-#  EXAMPLE
-#     for { set i 0 } { $i < 300 } { incr i 1 }  {
-#        set x [ expr ( $i / 100.00 ) ]
-#        set dr1(0,$i,y) [expr ( sin($x) )]
-#        set dr1(0,$i,x) $x
-#        set dr1(1,$i,y) [expr ( cos($x) )]
-#        set dr1(1,$i,x) $x
-#     }
-#     set dr1(0,drawmode) "lines"  ;# or linespoints
-#     set dr1(0,title) "sin(x)"
-#     set dr1(0,show) 1
-#     set dr1(1,drawmode) "lines"
-#     set dr1(1,title) "cos(x)"
-#     set dr1(1,show) 1
-#
-#     set test(output_file) [get_tmp_file_name]
-#     set test(xlabel) "x"
-#     set test(ylabel) "y"
-#     set test(title)  "sin(x) and cos(x)"
-#     create_gnuplot_xy_gif test dr1
-#
-#*******************************************************************************
-proc create_gnuplot_xy_gif { data_array_name row_array_name } {
+#    set test(output_file) [get_tmp_file_name]
+#    set test(xlabel) "x"
+#    set test(ylabel) "y"
+#    set test(title)  "sin(x) and cos(x)"
+#    create_gnuplot_xy_gif test dr1
+##
+proc create_gnuplot_xy_gif {data_array_name row_array_name} {
    global CHECK_USER
    get_current_cluster_config_array ts_config
 
@@ -639,51 +636,62 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
       set use_local_host 0
    }
 
-   # generate data files
-   set file_name_list ""
-   set drawmode_list ""
-   set title_list ""
-
+   # the rows to show which have data, rows without data are not plotted
+   set plot_rows {}
+   set max_points 0
    set datarows 0
-   set row_index {}
    while {[info exists rows($datarows,show)]} {
       if {$rows($datarows,show)} {
-         lappend row_index $datarows
+         set points 0
+         while {[info exists rows($datarows,$points,x)] &&
+                [info exists rows($datarows,$points,y)]} {
+            incr points
+         }
+         if {$points > 0} {
+            lappend plot_rows $datarows
+            set num_points($datarows) $points
+            if {$points > $max_points} {
+               set max_points $points
+            }
+            if {[info exists rows($datarows,drawmode)]} {
+               set drawmode($datarows) $rows($datarows,drawmode)
+            } else {
+               set drawmode($datarows) "linespoints"
+            }
+            if {[info exists rows($datarows,title)]} {
+               set title($datarows) $rows($datarows,title)
+            } else {
+               set title($datarows) "row $datarows"
+            }
+         }
       }
       incr datarows 1
    }
 
-
-   foreach row $row_index {
-      set file_name [get_tmp_file_name "" $row]
-      set file_pointer [open $file_name w]
-
-      set counter 0
-      while { [ info exists rows($row,$counter,x)] && [ info exists rows($row,$counter,y)] } {
-         set x_val $rows($row,$counter,x)
-         set y_val $rows($row,$counter,y)
-         puts $file_pointer "$x_val $y_val"
-         incr counter 1
-      }
-      close $file_pointer
-
-      # try to plot only if there were data points in this file
-      if { $counter > 0 } {
-         lappend file_name_list $file_name
-      }
-
-      if { [ info exists rows($row,drawmode) ] } {
-         lappend drawmode_list $rows($row,drawmode)
-      } else {
-         lappend drawmode_list "linespoints"
-      }
-      if { [ info exists rows($row,title) ] } {
-         lappend title_list $rows($row,title)
-      } else {
-         lappend title_list "row $row"
-      }
+   # write the CSV file: a header line, then one line per position
+   set csv_file "[file rootname $data(output_file)].csv"
+   set csv [open $csv_file w]
+   set fields {}
+   foreach row $plot_rows {
+      lappend fields [csv_quote [gnuplot_text_to_plain $data(xlabel)]]
+      lappend fields [csv_quote [gnuplot_text_to_plain $title($row)]]
    }
-
+   puts $csv [join $fields ","]
+   for {set counter 0} {$counter < $max_points} {incr counter} {
+      set fields {}
+      foreach row $plot_rows {
+         if {$counter < $num_points($row)} {
+            lappend fields $rows($row,$counter,x) $rows($row,$counter,y)
+         } else {
+            lappend fields "" ""
+         }
+      }
+      puts $csv [join $fields ","]
+   }
+   close $csv
+   if {!$use_local_host} {
+      wait_for_remote_file $local_host $CHECK_USER $csv_file
+   }
 
    # check gnuplot supporting gif terminals:
    # @todo CS-1879 do this only once and cache the results
@@ -712,16 +720,20 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
    puts $cmd_file "set ylabel \"$data(ylabel)\""
    puts $cmd_file "set title \"$data(title)\""
 #   puts $cmd_file "set pointsize 1.5"
+   puts $cmd_file "set datafile separator \",\""
 
+   # the columns of a row are 2 * i + 1 (x) and 2 * i + 2 (y), the header line is skipped
    puts -nonewline $cmd_file "plot "
-   for { set i 0 } { $i < [llength $file_name_list] } { incr i 1 } {
-      set filename [lindex $file_name_list $i]
-      set drawmode [lindex $drawmode_list $i]
-      set title    [lindex $title_list $i]
-      if { $i > 0 } {
+   set i 0
+   foreach row $plot_rows {
+      if {$i > 0} {
          puts -nonewline $cmd_file ", "
       }
-      puts -nonewline $cmd_file "'$filename' index 0 title \"$title\" with $drawmode"
+      set x_col [expr {2 * $i + 1}]
+      set y_col [expr {2 * $i + 2}]
+      puts -nonewline $cmd_file "'$csv_file' skip 1 using $x_col:$y_col title \"$title($row)\""
+      puts -nonewline $cmd_file " with $drawmode($row)"
+      incr i
    }
    close $cmd_file
    if {!$use_local_host} {
@@ -738,6 +750,39 @@ proc create_gnuplot_xy_gif { data_array_name row_array_name } {
 }
 
 
+
+###
+# @brief remove the gnuplot escapes from a label or a title
+#
+# A caller of create_gnuplot_xy_gif() may escape the characters which gnuplot's enhanced text
+# mode reads as markup, e.g. "\\_" for a literal "_", see the api/drmaa/latency check. gnuplot
+# reads the double quoted string first ("\\" becomes "\"), then the enhanced text ("\_" becomes
+# "_"). The CSV file gets the text as gnuplot shows it.
+#
+# @param text the label or title as it is written into the gnuplot command file
+# @return the text without gnuplot escapes
+##
+proc gnuplot_text_to_plain {text} {
+   set text [string map [list "\\\\" "\\"] $text]
+   regsub -all {\\([_^{}@&~])} $text {\1} text
+   return $text
+}
+
+###
+# @brief quote a field of a CSV file
+#
+# A field which contains a comma, a double quote or a line break is put into double quotes, a
+# double quote in it is doubled.
+#
+# @param text the field
+# @return the field as it is written into the CSV file
+##
+proc csv_quote {text} {
+   if {[regexp {[,"\n]} $text]} {
+      return "\"[string map {\" \"\"} $text]\""
+   }
+   return $text
+}
 
 #****** file_procedures/tail_directory_name() **********************************
 #  NAME
@@ -1674,30 +1719,22 @@ proc create_html_link {linktext linkref} {
    return $back
 }
 
-#****** file_procedures/create_html_image() ************************************
-#  NAME
-#     create_html_image() -- integrate html image
+###
+# @brief integrate an image into a html document
 #
-#  SYNOPSIS
-#     create_html_image { alternative_text path }
-#
-#  FUNCTION
-#     ???
-#
-#  INPUTS
-#     alternative_text - alternative text of image
-#     path             - path or link to image
-#
-#  RESULT
-#     html output
-#
-#  SEE ALSO
-#     ???/???
-#*******************************************************************************
-proc create_html_image {alternative_text path} {
-   set back ""
-   append back "<center><img SRC=\"$path\" ALT=\"$alternative_text\" NOSAVE></center>"
-   return $back
+# @param alternative_text alternative text of the image
+# @param path path or link to the image
+# @param link optional link: clicking the image opens it, e.g. the CSV file with the data of a
+#        chart, see create_gnuplot_xy_gif()
+# @return html output
+# @see generate_html_file()
+##
+proc create_html_image {alternative_text path {link ""}} {
+   set image "<img SRC=\"$path\" ALT=\"$alternative_text\" NOSAVE>"
+   if {$link != ""} {
+      set image "<a href=\"$link\" title=\"$link\">$image</a>"
+   }
+   return "<center>$image</center>"
 }
 
 #****** file_procedures/create_html_target() ***********************************

@@ -1944,6 +1944,20 @@ proc get_submit_id_from_job_id {job_array_name job_id} {
 }
 
 ###
+# @brief a chart of a report page, as a link to the CSV file with its data
+#
+# create_gnuplot_xy_gif() writes the data of a chart into a CSV file next to it, clicking the
+# chart opens that file, e.g. in a spreadsheet.
+#
+# @param text alternative text of the chart
+# @param name file name of the chart without extension, the chart is <name>.gif
+# @return html output
+##
+proc throughput_chart_html {text name} {
+   return [create_html_image $text "$name.gif" "$name.csv"]
+}
+
+###
 # @brief store the current system status in the results array
 #
 # The main loop calls this for every chunk of output it reads, which can be more than a thousand
@@ -2524,19 +2538,19 @@ proc compare_dump_data_file { file1 file2 } {
    }
 
    set content ""
-   append content [create_html_image "Running jobs" "running_jobs.gif"]
-   append content [create_html_image "Job times" "job_times.gif"]
-   append content [create_html_image "Job distribution" "job_distribution.gif"]
-   append content [create_html_image "Pending jobs" "pending_jobs.gif"]
-   append content [create_html_image "Scheduler times" "schedd_calc_time.gif"]
-   append content [create_html_image "Scheduler orders" "schedd_orders.gif"]
-   append content [create_html_image "Size of daemons" "daemon_size.gif"]
-   append content [create_html_image "CPU load of daemons" "daemon_cpu.gif"]
+   append content [throughput_chart_html "Running jobs" "running_jobs"]
+   append content [throughput_chart_html "Job times" "job_times"]
+   append content [throughput_chart_html "Job distribution" "job_distribution"]
+   append content [throughput_chart_html "Pending jobs" "pending_jobs"]
+   append content [throughput_chart_html "Scheduler times" "schedd_calc_time"]
+   append content [throughput_chart_html "Scheduler orders" "schedd_orders"]
+   append content [throughput_chart_html "Size of daemons" "daemon_size"]
+   append content [throughput_chart_html "CPU load of daemons" "daemon_cpu"]
    if { $qstat1(count) > 0 && $qstat2(count) > 0 } {
-      append content [create_html_image "Qstat performance" "qstat.gif"]
+      append content [throughput_chart_html "Qstat performance" "qstat"]
    }
    if { $qping1(count) > 0 && $qping2(count) > 0 } {
-      append content [create_html_image "Qping information" "qping.gif"]
+      append content [throughput_chart_html "Qping information" "qping"]
    }
    generate_html_file $output_dir/all_charts.html $title $content
 
@@ -3076,27 +3090,27 @@ proc analyse_dump_data_file {file {force 0}} {
    }
 
    set content ""
-   append content [create_html_image "Running jobs" "running_jobs.gif"]
-   append content [create_html_image "Job times" "job_times.gif"]
-   append content [create_html_image "Job distribution" "job_distribution.gif"]
-   append content [create_html_image "Pending jobs" "pending_jobs.gif"]
-   append content [create_html_image "Scheduler times" "schedd_calc_time.gif"]
-   append content [create_html_image "Scheduler orders" "schedd_orders.gif"]
-   append content [create_html_image "Daemon size" "daemon_size.gif"]
-   append content [create_html_image "Daemon CPU load" "daemon_cpu.gif"]
+   append content [throughput_chart_html "Running jobs" "running_jobs"]
+   append content [throughput_chart_html "Job times" "job_times"]
+   append content [throughput_chart_html "Job distribution" "job_distribution"]
+   append content [throughput_chart_html "Pending jobs" "pending_jobs"]
+   append content [throughput_chart_html "Scheduler times" "schedd_calc_time"]
+   append content [throughput_chart_html "Scheduler orders" "schedd_orders"]
+   append content [throughput_chart_html "Daemon size" "daemon_size"]
+   append content [throughput_chart_html "Daemon CPU load" "daemon_cpu"]
    if {$event_data(count) > 0} {
-      append content [create_html_image "Event client update interval" "event_interval.gif"]
-      append content [create_html_image "Event client number of events" "events.gif"]
+      append content [throughput_chart_html "Event client update interval" "event_interval"]
+      append content [throughput_chart_html "Event client number of events" "events"]
    }
    if {$qping_data(count) > 0} {
-      append content [create_html_image "Qping information" "qping.gif"]
+      append content [throughput_chart_html "Qping information" "qping"]
    }
    if {$qstat_data(count) > 0} {
-      append content [create_html_image "Qstat performance" "qstat.gif"]
-      append content [create_html_image "Qstat performance" "qstat_total.gif"]
+      append content [throughput_chart_html "Qstat performance" "qstat"]
+      append content [throughput_chart_html "Qstat performance" "qstat_total"]
    }
    if {$test_config(throughput_sharetree) == 1 || $test_config(functional_policy) == 1 }  {
-      append content [create_html_image "Running project jobs" "project_jobs.gif"]
+      append content [throughput_chart_html "Running project jobs" "project_jobs"]
    }
    generate_html_file $output_dir/all_charts.html "$test_config(gridengine_version) from $test_config(test_date)" $content
 
