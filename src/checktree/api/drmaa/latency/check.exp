@@ -228,8 +228,9 @@ proc drmaa_latency_gp_escape {text} {
 # @param xlabel      x axis label of the chart
 # @param chart_path  full path of the chart file to write
 # @param chart_title title of the chart
-# @param chart_name  file name of the chart, used in the <img> tag. The
-#                    start spread chart is written next to it with "_spread"
+# @param chart_name  file name of the chart, used in the <img> tag, which links
+#                    to the CSV file with the data of the chart. The start
+#                    spread chart is written next to it with "_spread"
 #                    appended to the base name.
 # @return HTML fragment
 proc drmaa_latency_render_section {res_var keys key_label xlabel chart_path chart_title chart_name} {
@@ -406,12 +407,15 @@ proc drmaa_latency_render_section {res_var keys key_label xlabel chart_path char
    }
    set table(ROWS) $row
 
+   # clicking a chart opens the CSV file with its data, create_gnuplot_xy_gif() writes it next to
+   # the chart
    set html [create_html_table table 1]
    if {$have_chart} {
-      append html [create_html_text "<img src=\"$chart_name\" alt=\"$chart_title\">" 1]
+      append html [create_html_image $chart_title $chart_name "[file rootname $chart_name].csv"]
    }
    if {$have_spread_chart} {
-      append html [create_html_text "<img src=\"$spread_chart_name\" alt=\"$spread_title\">" 1]
+      append html [create_html_image $spread_title $spread_chart_name \
+                                     "[file rootname $spread_chart_name].csv"]
    }
    return $html
 }
