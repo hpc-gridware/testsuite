@@ -3144,7 +3144,10 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
 
       foreach conf_host $host_list {
          # Begin watching messages file for changes,
-         # consume the lines output immediately by tail -f
+         # consume the lines output immediately by tail -f.
+         # Wait for a messages file line (with its "|<log level>|" field): the shell echo and the
+         # start mark come before tail has opened the file, and the execd applies a config change
+         # within milliseconds - a change made before tail opened the file would be missed.
          set spool_dir [get_spool_dir $conf_host "execd"]
          set messages_name "$spool_dir/messages"
          ts_log_fine "starting tail -1f $messages_name on host $conf_host ..."
@@ -3158,7 +3161,7 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
             -i $sp_id timeout {
                ts_log_severe "timeout while waiting for tail output on host $conf_host"
             }
-            -i $sp_id "*\n" {
+            -i $sp_id -re {\|[A-Z]\|[^\n]*\n} {
             }
          }
          lappend joined_spawn_list $sp_id
