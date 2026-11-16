@@ -1143,7 +1143,11 @@ proc run_throughput_test {} {
       set expect_bin [get_binary_path $host "expect"]
       set user [lindex $qsub_qstat_users [expr $qsub_qstat_idx % $qsub_qstat_mod]] ; incr qsub_qstat_idx
       ts_log_fine "starting submitter process on host $host as user $user"
-      set id [open_remote_spawn_process $host $user "$expect_bin" "-f $ts_config(testsuite_root_dir)/scripts/submitter.tcl $ts_config(product_root) $host"]
+      # without terminal echo: the echo of every SUBMIT command would be one more line to read
+      set submitter_args "-f $ts_config(testsuite_root_dir)/scripts/submitter.tcl"
+      append submitter_args " $ts_config(product_root) $host"
+      set id [open_remote_spawn_process $host $user "$expect_bin" $submitter_args \
+                 0 "" "" 1 15 0 1 0 0 shell_script_name 1]
       set spawn_id [lindex $id 1]
       lappend spawn_list $spawn_id
       lappend remote_spawn_list $id
@@ -1802,6 +1806,12 @@ proc fill_job_list_from_accounting {job_array_name} {
    get_qacct_multi $first_job_id $last_job_id qacct_info "" "" 1 "jobnumber taskid project start_time end_time"
    set qacct_time [expr [clock seconds] - $start_time]
 
+   # the accounting records by job and task id, a search in the list for every job would take
+   # quadratic time
+   foreach index $qacct_info(index) {
+      set have_record($index) 1
+   }
+
    for {set job 0} {$job < $index_size} {incr job} {
       if {[info exists job_data($job,job_id)]} {
          # $job_data($job,job_id) can be
@@ -1809,15 +1819,11 @@ proc fill_job_list_from_accounting {job_array_name} {
          # - job_id.1-n for an array job
          set job_id [lindex [split $job_data($job,job_id) "."] 0]
          set task_id [lindex [split $job_data($job,job_id) "."] 1]
-         if {$task_id == 1} {
-            set pos [lsearch -glob $qacct_info(index) "$job_id,1"]
-            if {$pos < 0} {
-               set task_id "undefined"
-            }
+         if {$task_id == 1 && ![info exists have_record($job_id,1)]} {
+            set task_id "undefined"
          }
-         set pos [lsearch -glob $qacct_info(index) "$job_id,$task_id"]
-         if {$pos >= 0} {
-            set index [lindex $qacct_info(index) $pos]
+         set index "$job_id,$task_id"
+         if {[info exists have_record($index)]} {
             set job_data($job,project) [string index $qacct_info($index,project) 7]
             set job_data($job,run_start_time) $qacct_info($index,start_time)
             set job_data($job,run_end_time) $qacct_info($index,end_time)
@@ -1928,7 +1934,6 @@ proc fill_sched_from_messages {start_time end_time schedd_data_name} {
 }
 
 proc get_submit_id_from_job_id {job_array_name job_id} {
-   get_current_cluster_config_array ts_config
    upvar $job_array_name jobs
 
    if {[info exists jobs($job_id)] == 0} {
@@ -1938,18 +1943,32 @@ proc get_submit_id_from_job_id {job_array_name job_id} {
    return $jobs($job_id)
 }
 
-proc save_current_system_status { results_array array_name } {
-   get_current_cluster_config_array ts_config
+###
+# @brief store the current system status in the results array
+#
+# The main loop calls this for every chunk of output it reads, which can be more than a thousand
+# times a second. The results keep one entry per second, test_run_time has a resolution of
+# seconds: a call within the second of the last entry overwrites it, so the entry holds the last
+# status of its second.
+#
+# @param results_array name of the results array, results(count) is the number of entries
+# @param array_name name of the array with the current status
+##
+proc save_current_system_status {results_array array_name} {
    global result_names
 
    upvar $array_name data
    upvar $results_array results
 
    set count $results(count)
+   if {$count > 0 && $results([expr {$count - 1}],test_run_time) == $data(test_run_time)} {
+      incr count -1
+   } else {
+      incr results(count) 1
+   }
    foreach name $result_names {
       set results($count,$name) $data($name)
    }
-   incr results(count) 1
 }
 
 proc compare_dump_directory { dir } {
