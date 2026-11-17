@@ -1,0 +1,134 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3113: deleting an advance reservation with core binding does not release the reserved cores.
+# Giving back the booking of an AR marked the bound cores as used once more instead of freeing
+# them. The cores stayed booked on the host until sge_qmaster was restarted, and every later
+# request that needed them was refused on that host.
+# The core stayed booked only where the window of the deleted reservation overlapped another
+# booking on the host; alone, its entries were removed from the resource diagram as empty. So
+# the check holds a reservation without binding on a host, reserves one core of the same host,
+# deletes that reservation and then reserves all cores of the host.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range {"9.1.8" "9.2.0"}
+
+set check_name           "issue_3113"
+set check_category       "BUG AR BINDING VERIFIED"
+set check_description(0) "the cores bound by an advance reservation are free again after\
+                          the reservation was deleted (CS-3113)"
+
+set check_needs          "init_core_system"
+set check_root_access_needs "no"
+
+set check_setup_function issue_3113_setup
+set check_cleanup_function issue_3113_cleanup
+
+set check_functions {}
+lappend check_functions "issue_3113_cores_free_after_qrdel"
+
+# ---------------------------------------------------------------------------
+
+## @brief Selects the test host and counts its cores
+#
+# @return 0 on success, 99 if the host reports no topology
+proc issue_3113_setup {} {
+   global issue_3113_host issue_3113_cores
+
+   set issue_3113_host [host_conf_get_suited_hosts]
+   set topology [host_get_topology $issue_3113_host]
+   if {$topology == "NONE"} {
+      ts_log_config "host $issue_3113_host reports no topology"
+      return 99
+   }
+   set issue_3113_cores [host_topology_count_cores $topology]
+   if {$issue_3113_cores < 1} {
+      ts_log_config "host $issue_3113_host reports no cores in its topology $topology"
+      return 99
+   }
+   ts_log_fine "host $issue_3113_host has $issue_3113_cores cores ($topology)"
+
+   return 0
+}
+
+## @brief Removes the reservations of the check
+proc issue_3113_cleanup {} {
+   global issue_3113_host issue_3113_cores
+
+   delete_all_ars
+
+   unset -nocomplain issue_3113_host issue_3113_cores
+}
+
+## @brief Reserves all cores of a host after a reservation of one of its cores was deleted
+#
+# With the bug the deleted reservation still holds its core, and the reservation of all cores
+# of the host is refused.
+proc issue_3113_cores_free_after_qrdel {} {
+   global issue_3113_host issue_3113_cores
+
+   set host $issue_3113_host
+   set queue "all.q@$host"
+
+   # a reservation without binding, it stays for the whole check: the deleted reservation's
+   # entries in the resource diagram of the host then are not empty and stay
+   set other_ar_id [submit_ar "-q $queue -d 3600"]
+   if {$other_ar_id <= 0} {
+      return
+   }
+
+   # a reservation binding one core of the host
+   set ar_id [submit_ar "-q $queue -bamount 1 -bunit C -d 3600"]
+   if {$ar_id <= 0} {
+      return
+   }
+   array set binding_active {}
+   ar_get_binding_active $ar_id binding_active
+   set short_host [get_short_hostname $host]
+   if {![info exists binding_active($short_host)]} {
+      ts_log_severe "advance reservation $ar_id got no core binding on host $host"
+      delete_ar $ar_id 1
+      return
+   }
+   ts_log_fine "advance reservation $ar_id binds $binding_active($short_host) on host $host"
+
+   if {[delete_ar $ar_id 1] < 0} {
+      return
+   }
+
+   # all cores of the host have to be free again
+   set ar_id [submit_ar "-q $queue -bamount $issue_3113_cores -bunit C -d 3600" "" "" 0]
+   if {$ar_id <= 0} {
+      ts_log_severe "an advance reservation binding all $issue_3113_cores cores of host $host was\
+                     refused after the reservation of one of its cores had been deleted"
+   } else {
+      ts_log_fine "advance reservation $ar_id binds all $issue_3113_cores cores of host $host"
+      delete_ar $ar_id 1
+   }
+   delete_ar $other_ar_id 1
+}
