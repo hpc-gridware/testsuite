@@ -1,0 +1,106 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3122: an invalid option in a -@ options file is dropped silently.
+#
+# The command line parser appended the answers of the options file to an answer
+# list that did not exist yet, so the error was lost, and it stopped parsing:
+# qsub then read the script from stdin ("no input read from stdin") instead of
+# reporting the unknown option. A valid options file must keep working.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.2.0"
+
+# define test's name and run level descriptions
+set check_name            "cs3122"
+set check_category        "BUG CLIENT VERIFIED"
+set check_description(0)  "errors in a -@ options file are reported"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_cleanup_function cs3122_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs3122_invalid_option_in_file"
+lappend check_functions "cs3122_valid_option_in_file"
+
+# -------- local test procedures: initialization------------------------------
+
+## @brief Remove the jobs the check submitted
+#
+# @return none
+proc cs3122_cleanup {} {
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief Write an options file
+#
+# @param content the options, as they would stand on the command line
+# @return the path of the file
+proc cs3122_options_file {content} {
+   set file [get_tmp_file_name]
+   set f [open $file w]
+   puts $f $content
+   close $f
+   return $file
+}
+
+## @brief An unknown option in the options file is reported as such
+#
+# @return none; reports failures through ts_log_severe
+proc cs3122_invalid_option_in_file {} {
+   set file [cs3122_options_file "-no_such_option"]
+   set output [start_sge_bin "qsub" "-@ $file -h -b y /bin/true"]
+   set expected [translate_macro MSG_ANSWER_INVALIDOPTIONARGX_S "-no_such_option"]
+   if {$prg_exit_state == 0} {
+      ts_log_severe "qsub accepted an options file with an unknown option:\n$output"
+   } elseif {![string match "*$expected*" $output]} {
+      ts_log_severe "qsub did not report the unknown option of the options file, expected\
+                     \"$expected\", got:\n$output"
+   } else {
+      ts_log_fine "qsub reported: $output"
+   }
+}
+
+## @brief A valid options file is applied
+#
+# @return none; reports failures through ts_log_severe
+proc cs3122_valid_option_in_file {} {
+   set file [cs3122_options_file "-h"]
+   set output [start_sge_bin "qsub" "-@ $file -b y /bin/true"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qsub refused a valid options file:\n$output"
+   }
+}
