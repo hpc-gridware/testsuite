@@ -1,0 +1,279 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-1184: ocs_get_groups() has to return all supplementary groups of a user.
+#
+# ocs_get_groups() has two variants: one returns the groups of the process (getgroups()), the
+# other the groups of a user (getgrouplist()). On BSD based systems getgrouplist() was reported to
+# return only the groups of /etc/group, the groups of a directory service (LDAP, NIS) are missing.
+#
+# The check runs "test_uti_uidgid -groups" on one host of every architecture. It prints the
+# groups both variants return, in the format of id(1). The groups of both variants have to be the
+# groups id(1) prints on the same host for the same user. The primary group is not compared:
+# whether getgroups() returns it is not specified.
+#
+# id(1) is no independent reference everywhere: on FreeBSD the login gets its groups from
+# initgroups(), which calls getgrouplist() itself. So the groups of "getent group" which list the
+# user as a member have to be returned by both variants as well. This is a lower bound only: a
+# directory service may not enumerate its groups (e.g. sssd without enumerate), and then getent
+# lists fewer groups. Hosts without getent (macOS) skip this comparison.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.1.8"
+
+# define test's name and run level descriptions
+set check_name           "issue_1184"
+set check_category       "BUG SECURITY TESTBIN"
+set check_description(0) "ocs_get_groups() returns the supplementary groups id(1) shows, on\
+                          every architecture (CS-1184)"
+
+# define test's dependencies
+set check_needs          "init_core_system"
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "issue_1184_groups"
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+###
+# @brief parse the groups of a line in the format of id(1)
+#
+# The line looks like "uid=1000(joe) gid=1000(joe) groups=1000(joe),27(sudo)". A group without a
+# name is shown by its id only. The groups may be separated by ", " (ocs_id2dstring()) or ","
+# (id). Fields after the groups, like the SELinux context, are ignored.
+#
+# @param line the line
+# @param result_var name of an array which gets the gid of the primary group in (gid) and the
+#                   groups in (groups), a dict of group id to group name ("" if there is no name)
+# @return 1 if the line could be parsed, 0 if not
+##
+proc issue_1184_parse_id {line result_var} {
+   upvar $result_var result
+
+   if {![regexp {gid=([0-9]+)} $line match result(gid)]} {
+      return 0
+   }
+   if {![regexp {groups=(.*)$} $line match groups]} {
+      return 0
+   }
+   set result(groups) [dict create]
+   # id may print more fields after the groups, e.g. the SELinux context=
+   regsub {\s+[a-z]+=.*$} $groups "" groups
+   set groups [string trim $groups]
+   if {$groups == "NONE"} {
+      return 1
+   }
+   foreach group [split $groups ","] {
+      set group [string trim $group]
+      if {[regexp {^([0-9]+)\((.*)\)$} $group match id name]} {
+         dict set result(groups) $id $name
+      } elseif {[regexp {^([0-9]+)$} $group match id]} {
+         dict set result(groups) $id ""
+      } else {
+         return 0
+      }
+   }
+   return 1
+}
+
+###
+# @brief compare the groups of ocs_get_groups() with the groups of id(1)
+#
+# The primary group is not compared. A group name is compared only if id(1) shows one,
+# ocs_get_groups() returns the id as name if the group cannot be resolved.
+#
+# @param ocs_var name of the array of issue_1184_parse_id() for ocs_get_groups()
+# @param id_var name of the array of issue_1184_parse_id() for id(1)
+# @return the differences, one per line, "" if there is none
+##
+proc issue_1184_compare {ocs_var id_var} {
+   upvar $ocs_var ocs
+   upvar $id_var id
+
+   set primary $id(gid)
+   set differences ""
+   foreach gid [lsort -integer [dict keys $id(groups)]] {
+      if {$gid == $primary} {
+         continue
+      }
+      set name [dict get $id(groups) $gid]
+      if {![dict exists $ocs(groups) $gid]} {
+         if {$name != ""} {
+            append differences "   missing group ${gid}($name)\n"
+         } else {
+            append differences "   missing group $gid\n"
+         }
+      } elseif {$name != "" && [dict get $ocs(groups) $gid] != $name} {
+         set ocs_name [dict get $ocs(groups) $gid]
+         append differences "   group $gid has the name $ocs_name, id shows $name\n"
+      }
+   }
+   foreach gid [lsort -integer [dict keys $ocs(groups)]] {
+      if {$gid != $primary && ![dict exists $id(groups) $gid]} {
+         append differences "   additional group ${gid}([dict get $ocs(groups) $gid])\n"
+      }
+   }
+   return $differences
+}
+
+###
+# @brief the groups of the output of "getent group" which list a user as a member
+#
+# @param output the output of "getent group", lines like "sudo:x:27:joe,ann"
+# @param user the user
+# @return dict of group id to group name
+##
+proc issue_1184_parse_getent {output user} {
+   set groups [dict create]
+   foreach line [split $output "\n"] {
+      set fields [split [string trim $line] ":"]
+      if {[llength $fields] < 4} {
+         continue
+      }
+      lassign $fields name password gid members
+      if {[string is integer -strict $gid] && [lsearch -exact [split $members ","] $user] >= 0} {
+         dict set groups $gid $name
+      }
+   }
+   return $groups
+}
+
+###
+# @brief the groups of "getent group" which are missing in a group list
+#
+# The primary group is not compared.
+#
+# @param groups_var name of the array of issue_1184_parse_id() with the group list
+# @param getent the groups of issue_1184_parse_getent()
+# @return the missing groups, one per line, "" if there is none
+##
+proc issue_1184_compare_getent {groups_var getent} {
+   upvar $groups_var groups
+
+   set differences ""
+   foreach gid [lsort -integer [dict keys $getent]] {
+      if {$gid != $groups(gid) && ![dict exists $groups(groups) $gid]} {
+         append differences "   missing group ${gid}([dict get $getent $gid])\n"
+      }
+   }
+   return $differences
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+###
+# @brief compare the groups of ocs_get_groups() with those of id(1) and of "getent group" on
+#        every architecture
+##
+proc issue_1184_groups {} {
+   global CHECK_USER
+   get_current_cluster_config_array ts_config
+
+   set errors ""
+   foreach host $ts_config(unique_arch_nodes) {
+      set arch [resolve_arch $host]
+
+      # the groups the system shows for the user, Solaris' id shows them with -a only;
+      # LC_ALL=C as the word "groups" is translated
+      set id_args ""
+      if {[string match "sol-*" $arch]} {
+         set id_args "-a"
+      }
+      set output [start_remote_prog $host $CHECK_USER "env" "LC_ALL=C id $id_args"]
+      if {$prg_exit_state != 0} {
+         append errors "$host ($arch): id failed with exit status $prg_exit_state:\n$output\n"
+         continue
+      }
+      set id_line [string trim $output]
+      ts_log_fine "$host ($arch) id: $id_line"
+      if {![issue_1184_parse_id $id_line id]} {
+         append errors "$host ($arch): cannot parse the output of id:\n$output\n"
+         continue
+      }
+
+      # the groups which list the user as a member, the system's own view is checked against them
+      # too, a difference there is not one of ocs_get_groups()
+      set output [start_remote_prog $host $CHECK_USER "getent" "group"]
+      if {$prg_exit_state != 0} {
+         ts_log_fine "$host ($arch): getent group failed with exit status $prg_exit_state,\
+                      the groups are not compared with those of getent"
+         set getent ""
+      } else {
+         set getent [issue_1184_parse_getent $output $CHECK_USER]
+         ts_log_fine "$host ($arch) getent group: $getent"
+         set differences [issue_1184_compare_getent id $getent]
+         if {$differences != ""} {
+            ts_log_info "$host ($arch): id does not show all groups getent group lists for\
+                         $CHECK_USER:\n$differences   id: $id_line"
+         }
+      }
+
+      # the groups of ocs_get_groups()
+      set output [start_test_bin "test_uti_uidgid" "-groups" $host $CHECK_USER]
+      if {$prg_exit_state != 0} {
+         append errors "$host ($arch): test_uti_uidgid -groups failed with exit status\
+                        $prg_exit_state:\n$output\n"
+         continue
+      }
+      foreach variant {getgroups getgrouplist} {
+         if {![regexp -line "^$variant: (.*)$" $output match ocs_line]} {
+            append errors "$host ($arch): test_uti_uidgid printed no $variant groups:\n$output\n"
+            continue
+         }
+         ts_log_fine "$host ($arch) $variant: $ocs_line"
+         unset -nocomplain ocs
+         if {![issue_1184_parse_id $ocs_line ocs]} {
+            append errors "$host ($arch): cannot parse the $variant groups:\n$ocs_line\n"
+            continue
+         }
+         set differences [issue_1184_compare ocs id]
+         if {$differences != ""} {
+            append errors "$host ($arch): the $variant variant of ocs_get_groups() differs\
+                           from id:\n$differences   id:   $id_line\n   $variant: $ocs_line\n"
+         }
+         if {$getent != ""} {
+            set differences [issue_1184_compare_getent ocs $getent]
+            if {$differences != ""} {
+               append errors "$host ($arch): the $variant variant of ocs_get_groups() misses\
+                              groups of getent group:\n$differences   $variant: $ocs_line\n"
+            }
+         }
+      }
+      unset -nocomplain id
+   }
+
+   if {$errors != ""} {
+      ts_log_severe "ocs_get_groups() does not return all groups of the user:\n$errors"
+   }
+}
