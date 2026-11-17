@@ -41,8 +41,9 @@ global check_functions
 global check_version_range
 global issue_2364_job_id
 
-# The unsafe-spool-key guard that caused the regression was introduced in 9.2.0.
-set check_version_range "9.2.0"
+# The unsafe-spool-key guard that caused the regression was introduced in 9.2.0
+# and backported to 9.1.8 (CS-3129).
+set check_version_range "9.1.8"
 
 # define test's name and run level descriptions
 set check_name            "issue_2364"
