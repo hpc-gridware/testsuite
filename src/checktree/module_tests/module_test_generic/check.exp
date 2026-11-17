@@ -108,6 +108,8 @@ lappend generic_module_tests {test_procedure_qstat_summary "9.2.0" 0 ""}
 lappend generic_module_tests {test_qmaster_rusage "9.1.5" 0 ""}
 lappend generic_module_tests {test_sched_request_amount "9.1.6" 0 ""}
 lappend generic_module_tests {test_procedure_qconf_missing_argument "9.2.0" 0 ""}
+# CS-3120: a dot file left behind by a failed rename must not cost a job its tasks
+lappend generic_module_tests {test_spool_classic_job "9.2.0" 0 ""}
 
 # the description of a level is the name of its binary, one literal line per
 # entry of generic_module_tests in the same order: tools that list the supported
@@ -126,6 +128,7 @@ set check_description(10) "test_procedure_qstat_summary"
 set check_description(11) "test_qmaster_rusage"
 set check_description(12) "test_sched_request_amount"
 set check_description(13) "test_procedure_qconf_missing_argument"
+set check_description(14) "test_spool_classic_job"
 
 set check_functions {}
 lappend check_functions "generic_module_tests_run"
