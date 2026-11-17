@@ -68,6 +68,7 @@ lappend sgeobj_module_tests {test_sgeobj_AnswerException "9.2.0" 0 ""}
 lappend sgeobj_module_tests {test_sgeobj_unique_keys "9.2.0" 0 ""}
 lappend sgeobj_module_tests {test_sgeobj_cqueue "9.2.0" 0 ""}
 lappend sgeobj_module_tests {test_sgeobj_job "9.2.0" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_verify_type "9.2.0" 0 ""}
 
 # the description of a level is the name of its binary, one literal line per
 # entry of sgeobj_module_tests in the same order: tools that list the supported
@@ -94,6 +95,7 @@ set check_description(18) "test_sgeobj_AnswerException"
 set check_description(19) "test_sgeobj_unique_keys"
 set check_description(20) "test_sgeobj_cqueue"
 set check_description(21) "test_sgeobj_job"
+set check_description(22) "test_sgeobj_verify_type"
 
 set check_functions {}
 lappend check_functions "sgeobj_module_tests_run"
