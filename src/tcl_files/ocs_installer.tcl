@@ -1688,7 +1688,8 @@ proc installer_check_classic_spool_permissions {} {
    # spool are not misreported.
    set obj_dirs {jobs cqueues qinstances exec_hosts admin_hosts submit_hosts \
                  centry job_scripts pe ckpt usersets calendars hostgroups \
-                 users projects resource_quotas advance_reservations roles}
+                 users projects resource_quotas advance_reservations roles \
+                 zombies}
    set roots {}
    foreach d $obj_dirs {
       lappend roots "$spooldir/$d"
@@ -1780,9 +1781,9 @@ proc installer_test_cluster_after_upgrade {{jobseqnum_before 0}} {
    ts_log_fine "first job after upgrade got id $jid (sequence number before the upgrade: $jobseqnum_before)"
 
    # CS-2352: verify the reused classic spool tree was re-hardened by the upgrade.
-   # 9.2 only -- the hardening was deliberately not backported to 9.1, so a 9.1
-   # cluster keeps the modes it had and this would report a defect that is none.
-   if {[is_version_in_range "9.2.0"]} {
+   # The hardening (CS-2384) is in 9.2.0 and was backported to 9.1.8 (CS-3129);
+   # older clusters keep the modes they had and would report a defect that is none.
+   if {[is_version_in_range "9.1.8"]} {
       set ret [installer_check_classic_spool_permissions]
       if {$ret != 0} {
          return $ret

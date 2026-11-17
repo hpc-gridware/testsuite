@@ -481,10 +481,10 @@ proc backup_restore_check_cluster {} {
    # which reintroduces the backed-up modes (0755 dirs / 0644 files). Verify the
    # restore re-hardened them to owner-only (0700/0600). No-op for non-classic.
    #
-   # 9.2 only: the hardening was deliberately not backported to 9.1, so a 9.1
-   # cluster still comes back with the modes from the backup and the check would
-   # report a defect that is none there.
-   if {[is_version_in_range "9.2.0"]} {
+   # The hardening (CS-2384) is in 9.2.0 and was backported to 9.1.8 (CS-3129);
+   # an older cluster still comes back with the modes from the backup and the
+   # check would report a defect that is none there.
+   if {[is_version_in_range "9.1.8"]} {
       installer_check_classic_spool_permissions
    }
 }
