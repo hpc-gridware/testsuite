@@ -70,9 +70,9 @@ lappend uti_module_tests {test_uti_cpus "9.2.0" 0 ""}
 lappend uti_module_tests {test_uti_format_text "9.2.0" 0 ""}
 lappend uti_module_tests {test_uti_cpp_features "9.2.0" 0 ""}
 lappend uti_module_tests {test_uti_exception "9.2.0" 0 ""}
-# only in the 9.1 line for now (CS-2531, CS-2361 backports); 9.2 has no binary yet
-lappend uti_module_tests {test_uti_os_pids "9.1.8" 0 "9.2.0"}
-lappend uti_module_tests {test_uti_language "9.1.8" 0 "9.2.0"}
+# CS-2531, CS-2361 (written for the 9.1.8 backport, CS-3129)
+lappend uti_module_tests {test_uti_os_pids "9.1.8" 0 ""}
+lappend uti_module_tests {test_uti_language "9.1.8" 0 ""}
 
 # the description of a level is the name of its binary, one literal line per
 # entry of uti_module_tests in the same order: tools that list the supported
