@@ -1,0 +1,79 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3119: qrsub -btype always fails without a message.
+#
+# The parser of qrsub returned an error whenever the binding element of the
+# advance reservation could be created - the check of its result was inverted.
+# qrsub -btype host|slot ended with exit status 1 and no message. Both binding
+# types are requested once; each reservation must be granted.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.2.0"
+
+# define test's name and run level descriptions
+set check_name            "cs3119"
+set check_category        "BUG AR VERIFIED"
+set check_description(0)  "qrsub -btype host and -btype slot are accepted"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_cleanup_function cs3119_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs3119_btype"
+
+# -------- local test procedures: initialization------------------------------
+
+## @brief Remove the reservations the check created
+#
+# @return none
+proc cs3119_cleanup {} {
+   delete_all_ars
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief qrsub accepts both binding types
+#
+# @return none; reports failures through ts_log_severe
+proc cs3119_btype {} {
+   foreach binding_type {host slot} {
+      set ar_id [submit_ar "-btype $binding_type -bamount 1 -d 3600" "" "" 0]
+      if {$ar_id <= 0} {
+         ts_log_severe "qrsub -btype $binding_type -bamount 1 was refused (result $ar_id)"
+      } else {
+         ts_log_fine "qrsub -btype $binding_type granted reservation $ar_id"
+         delete_ar $ar_id
+      }
+   }
+}
