@@ -59,6 +59,29 @@ The unit names contain the commd port, e.g. `journalctl -u ocs8028-qmaster.servi
 
 ## Host prerequisites
 
+### Every host needs the sanitizer runtime of the build compiler
+
+The binaries are linked dynamically against the sanitizer libraries of the compiler that built
+them, e.g. `libasan.so.8` and `libubsan.so.1` for gcc 13. Every host on which the testsuite runs
+a binary needs these libraries: execution, submit and admin hosts, and also the
+`non_cluster_hosts`, on which checks run commands that are expected to fail. Without them, every
+command fails with
+
+```
+error while loading shared libraries: libasan.so.8: cannot open shared object file
+```
+
+Check a host with
+
+```
+ldd $SGE_ROOT/bin/<arch>/qconf | grep -e asan -e ubsan
+```
+
+and install the missing libraries from the distribution, e.g. `apt install libasan8` on Ubuntu
+22.04. That package comes from gcc 12 and works with binaries built with gcc 13. With other
+combinations, `ldd -r` reports symbols that the installed library lacks; if it does, remove the
+host from the configuration of the sanitizer run.
+
 ### Enterprise Linux 8 hosts using NIS: do not use as execution hosts
 
 On Rocky Linux 8 with `nis` in the `passwd` or `group` entries of `/etc/nsswitch.conf`, every job
