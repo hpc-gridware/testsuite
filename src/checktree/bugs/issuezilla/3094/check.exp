@@ -63,6 +63,13 @@ lappend check_functions "issue_3094_test"
 # -------- local test procedures: initialization------------------------------
 
 proc issue_3094_setup {} {
+   global CHECK_IS_SANITIZER_RUN
+   if {$CHECK_IS_SANITIZER_RUN} {
+      ts_log_config "jobs with a virtual memory limit do not work with binaries built with\
+                     sanitizers, see doc/sanitizer_runs.md"
+      return 99
+   }
+
    global ts_config
    global issue_3094_backup issue_3094_host
    global CHECK_ACT_LEVEL

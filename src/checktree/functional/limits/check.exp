@@ -241,6 +241,13 @@ proc limits_rss {} {
 }
 
 proc limits_vmem {} {
+   global CHECK_IS_SANITIZER_RUN
+   if {$CHECK_IS_SANITIZER_RUN} {
+      ts_log_config "jobs with a virtual memory limit do not work with binaries built with\
+                     sanitizers, see doc/sanitizer_runs.md"
+      return
+   }
+
    global CHECK_ACT_LEVEL
 
    # This test does not work with Systemd.

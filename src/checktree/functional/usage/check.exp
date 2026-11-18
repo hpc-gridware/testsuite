@@ -154,6 +154,13 @@ proc usage_setup_level {} {
 }
 
 proc usage_setup {} {
+   global CHECK_IS_SANITIZER_RUN
+   if {$CHECK_IS_SANITIZER_RUN} {
+      ts_log_config "jobs with a virtual memory limit do not work with binaries built with\
+                     sanitizers, see doc/sanitizer_runs.md"
+      return 99
+   }
+
    global ts_config
    global usage_saved_config
 

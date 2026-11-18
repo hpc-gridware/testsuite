@@ -66,6 +66,13 @@ lappend check_functions "resource_reservation_basic"
 # -------- local test procedures: initialization ------------------------------
 
 proc resource_reservation_setup {} {
+   global CHECK_IS_SANITIZER_RUN
+   if {$CHECK_IS_SANITIZER_RUN} {
+      ts_log_config "jobs with a virtual memory limit do not work with binaries built with\
+                     sanitizers, see doc/sanitizer_runs.md"
+      return 99
+   }
+
    global ts_config
    global rr_queue_name rr_cal_queue_name rr_h_vmem_complex rr_host
    global resource_reservation_complex_backup resource_reservation_host_backup

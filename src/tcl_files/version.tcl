@@ -165,6 +165,10 @@ proc clear_version_info {{wait_for_nfs 0}} {
    global g_rel_info
    unset -nocomplain g_rel_info
 
+   # get_version_info detects it again, together with the version
+   global CHECK_IS_SANITIZER_RUN
+   set CHECK_IS_SANITIZER_RUN 0
+
    # When retrieving the version info to fill the cache again,
    # we call qconf -help or inst_sge -v.
    # Make sure at least one of them is available.
@@ -252,6 +256,40 @@ proc parse_version_info {version_string {version_information_array_name ""}} {
    }
 }
 
+## @brief detect whether the binaries of the tested system are built with sanitizers
+#
+# Binaries built with -DENABLE_SANITIZERS=ON import __asan_init, binaries built with
+# -DENABLE_TSAN=ON import __tsan_init. The procedure looks for them in sge_qmaster on the master
+# host and sets the global variable CHECK_IS_SANITIZER_RUN to 1 or 0.
+#
+# Checks use the variable to skip what does not work with sanitized binaries, e.g. jobs with a
+# virtual memory limit: the sanitizer runtime reserves terabytes of virtual address space.
+# See doc/sanitizer_runs.md.
+#
+# get_version_info calls it when it reads the version from the binaries, clear_version_info resets
+# the variable.
+#
+# @return 1 if the binaries are built with sanitizers, 0 otherwise
+proc detect_sanitizer_build {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_IS_SANITIZER_RUN CHECK_USER
+
+   set CHECK_IS_SANITIZER_RUN 0
+   set arch [resolve_arch $ts_config(master_host)]
+   set binary "$ts_config(product_root)/bin/$arch/sge_qmaster"
+   if {[is_remote_file $ts_config(master_host) $CHECK_USER $binary]} {
+      # grep exits with 0 only if it found one of them
+      set output [start_remote_prog $ts_config(master_host) $CHECK_USER "nm" \
+                     "-D $binary | grep -e __asan_init -e __tsan_init"]
+      if {$prg_exit_state == 0} {
+         set CHECK_IS_SANITIZER_RUN 1
+         ts_log_fine "the binaries are built with sanitizers"
+      }
+   }
+
+   return $CHECK_IS_SANITIZER_RUN
+}
+
 ## @brief get the Cluster Scheduler (Grid Engine) version
 #
 # This procedure tries to get the Cluster Scheduler (Grid Engine) version
@@ -324,6 +362,7 @@ proc get_version_info {{version_information_array_name ""} {do_cleanup 0}} {
       }
 
       parse_version_info $CHECK_PRODUCT_VERSION_NUMBER g_rel_info
+      detect_sanitizer_build
    }
 
    # caller requested detailed release info - copy from global cache

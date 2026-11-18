@@ -239,6 +239,11 @@ generate_multiple_run_overview <path_to_data_file> <num_hosts> <num_jobs>
 The number of hosts and jobs has to be specified (e.g., 256 hosts and 50.000 jobs for our reference runs in GCP),
 to filter runs with comparable data.
 
+# Running Testsuite with sanitizer builds
+
+Builds with `-DENABLE_SANITIZERS=ON` need some host settings, see
+[Testsuite runs with sanitizer builds](sanitizer_runs.md).
+
 # Troubleshooting
 
 ## High CPU load when running testsuite and Copilot is installed for vim

@@ -71,6 +71,13 @@ lappend check_functions "issue_3068_job_consumable"
 # -------- local test procedures: initialization------------------------------
 
 proc issue_3068_setup {} {
+   global CHECK_IS_SANITIZER_RUN
+   if {$CHECK_IS_SANITIZER_RUN} {
+      ts_log_config "jobs with a virtual memory limit do not work with binaries built with\
+                     sanitizers, see doc/sanitizer_runs.md"
+      return 99
+   }
+
    get_current_cluster_config_array ts_config
    global issue_3068_host issue_3068_complex_backup
 

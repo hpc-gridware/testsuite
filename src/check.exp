@@ -316,6 +316,8 @@ global CHECK_SETTINGS_VERSION    ;# settings file version number
 set CHECK_SETTINGS_VERSION "undefined"
 global CHECK_PRODUCT_VERSION_NUMBER ;# version string of qstat -help of tested system
 set CHECK_PRODUCT_VERSION_NUMBER "unknown"
+global CHECK_IS_SANITIZER_RUN ;# 1 if the binaries of the tested system are built with sanitizers
+set CHECK_IS_SANITIZER_RUN 0
 global CHECK_PRODUCT_TYPE           ;# "sgeee" or "sge"
 global CHECK_COMMD_PORT            ;# commd port
 global CHECK_USER                  ;# user who start test

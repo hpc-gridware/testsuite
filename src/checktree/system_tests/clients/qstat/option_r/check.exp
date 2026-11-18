@@ -162,6 +162,13 @@ proc qstat_r_sequential {} {
 }
 
 proc qstat_r_parallel {} {
+   global CHECK_IS_SANITIZER_RUN
+   if {$CHECK_IS_SANITIZER_RUN} {
+      ts_log_config "jobs with a virtual memory limit do not work with binaries built with\
+                     sanitizers, see doc/sanitizer_runs.md"
+      return
+   }
+
    get_current_cluster_config_array ts_config
    global CHECK_USER
 
