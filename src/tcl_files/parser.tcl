@@ -1263,6 +1263,42 @@ proc rule_max_vmem { a b } {
    }
 }
 
+##
+# @brief Shorten wide mem and io values in qstat -ext output to their column width
+#
+# qstat -ext prints the mem and io usage with "%-5.5f", the columns are 7 characters wide.
+# A larger value (e.g. 5120.05791, jobs of a sanitizer build) makes the line longer and
+# shifts every following column, which breaks the fixed column parsing in parse_qstat.
+# The value is printed with fewer decimal places so that it fits into the column.
+# A value with more than 7 integer digits is left as it is.
+#
+# @param line      One line of qstat -ext output
+# @param mem_start Position of the first character of the mem column
+# @return The line with the mem and io values fitted into their columns
+##
+proc parse_qstat_fit_usage_columns {line mem_start} {
+   # the io column follows the mem column, each value is followed by one blank
+   foreach start [list $mem_start [expr $mem_start + 8]] {
+      set prefix [string range $line 0 [expr $start - 1]]
+      set rest [string range $line $start end]
+      if {[string index $prefix end] ne " " ||
+          ![regexp {^([0-9]+)\.([0-9]+)( .*)?$} $rest match int_part frac_part tail]} {
+         continue
+      }
+      set width [string length "$int_part.$frac_part"]
+      if {$width <= 7} {
+         continue
+      }
+      set decimals [expr 6 - [string length $int_part]]
+      if {$decimals < 0} {
+         continue
+      }
+      set value [format "%.*f" $decimals "$int_part.$frac_part"]
+      set line "$prefix[format "%-7s" $value]$tail"
+   }
+   return $line
+}
+
 #                                                             max. column:     |
 #****** parser/parse_qstat() ***************************************
 #
@@ -1540,6 +1576,16 @@ proc parse_qstat {input output {jobid ""} {ext 0} {do_replace_NA 1}} {
          set   position(8)  "123 end"           ; set    names(8)    jatask
          set      rules(8)  rule_list
       }
+   }
+
+   if {$ext == 1} {
+      # the mem column starts behind the cpu column
+      set mem_start [expr [lindex $position(8) 1] + 2]
+      set _fitted {}
+      foreach _line [split $in "\n"] {
+         lappend _fitted [parse_qstat_fit_usage_columns $_line $mem_start]
+      }
+      set in [join $_fitted "\n"]
    }
 
    # split text output of qstat to Array (list of lists)
