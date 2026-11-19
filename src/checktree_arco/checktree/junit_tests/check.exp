@@ -27,126 +27,103 @@
 #
 #  All Rights Reserved.
 #
-#  Portions of this software are Copyright (c) 2023-2025 HPC-Gridware GmbH
+#  Portions of this software are Copyright (c) 2023-2026 HPC-Gridware GmbH
 #
 ##########################################################################
 #___INFO__MARK_END__
 
-
-# source version dependent parts of the installation
-global CHECK_ACTUAL_TEST_PATH CHECK_TESTSUITE_INSTALL_MODE
-
 global check_name check_description check_needs check_functions
-global check_root_access_needs check_category
-global check_use_installed_system check
+global check_root_access_needs check_category check_version_range
 
-# This file shows some check spezific things
+# the cleanup function re-installs the dbwriter, which needs root
 set check_root_access_needs    "yes"
 set check_name                 "arco_junit"
-set check_category             "DBWRITER"
-set check_description(0)       "executes the ARCo junit tests"
-set check_needs                "arco_database_install"         ;# dependencies of this check (name of other check)
+set check_category             "DBWRITER VERIFIED"
+set check_description(0)       "runs the junit tests of the dbwriter, then re-creates the database"
+set check_needs                "arco_dbwriter_install"
+# the dbwriter build passes the test configuration to maven since 9.1.8
+set check_version_range        "9.1.8"
 
-set check_setup_function "arco_junit_setup"
-set check_cleanup_function "arco_junit_cleanup"
+set check_setup_function       "arco_junit_setup"
+set check_cleanup_function     "arco_junit_cleanup"
 
-set check_functions            ""                                     ;# functions to call (in order)
-lappend check_functions "arco_junit_check"
+set check_functions            ""
+lappend check_functions        "arco_junit_check"
 
 proc arco_junit_setup {} {
-   # clean the arco database (drop all objects)
-   ts_log_fine "cleaning up database ..."
+   # the tests drop all tables and views of the database, the dbwriter must not use it meanwhile
    shutdown_dbwriter
-   arco_clean_database 1
-   ts_log_fine "cleaning up database ...done"
 }
 
 proc arco_junit_cleanup {} {
-   #nothing to do, dbwriter is started up imediately after it is installed
-   # TODO: need to re-install the arco database
-   #startup_dbwriter
+   # The tests leave the database with their own data. Re-create the database and re-install
+   # the dbwriter like the installation does, this also starts the dbwriter again.
+   if {[arco_database_install] != 0} {
+      ts_log_severe "re-creating the dbwriter database failed"
+      return
+   }
+   if {[arco_dbwriter_install] != 0} {
+      ts_log_severe "re-installing the dbwriter failed"
+   }
 }
 
 proc arco_junit_check {} {
    global CHECK_USER
-   global CHECK_PROTOCOL_DIR arco_config ts_config
+   global CHECK_PROTOCOL_DIR arco_config
 
    array set report {}
    report_create "ARCO_junit_tests" report 1 0
 
-   #  Write the configuration file for the tests
-   #  Use the template from arco_source dir
-   set cmd "sed"
-
-   set cmd_args            ""
-   set db_name             [get_database_name]
-   set db_host             [get_database_host]
-   set write_user          [get_arco_write_user]
-   set write_user_pw       [get_arco_user_pwd]
-   set read_user           [get_arco_read_user]
-   set read_user_pw        [get_arco_user_pwd]
-   set file_name           $CHECK_PROTOCOL_DIR/arco_junit_config.properties
-   set db_tablespace       $arco_config(tablespace)
-   set db_index_tablespace $arco_config(tablespace_index)
+   # write the test configuration from the template of the dbwriter sources
    set identifier          [get_database_type]
-   set jdbc_driver         [get_jdbc_driver]
-   set jdbc_url            [get_jdbc_url $db_name]
-   set db_def              database/$identifier/dbdefinition.xml
-   set db_schema           [get_database_schema]
-   set foreign_key_suffix  [get_foreign_key_suffix]
+   set template            $arco_config(arco_source_dir)/src/test/java/DBWriterTestConfig.properties.template
+   set file_name           $CHECK_PROTOCOL_DIR/arco_junit_config.properties
 
+   set cmd_args ""
    append cmd_args " -e 's%@@IDENTIFIER@@%${identifier}%g'"
-   append cmd_args " -e 's%@@JDBC_DRIVER@@%${jdbc_driver}%g'"
-   append cmd_args " -e 's%@@DB_NAME@@%${db_name}%g'"
-   append cmd_args " -e 's%@@DB_HOST@@%${db_host}%g'"
-   append cmd_args " -e 's%@@JDBC_URL@@%${jdbc_url}%g'"
-   append cmd_args " -e 's%@@JDBC_USER@@%${write_user}%g'"
-   append cmd_args " -e 's%@@JDBC_PASSWORD@@%${write_user_pw}%g'"
-
-   append cmd_args " -e 's%@@READONLY_USER@@%${read_user}%g'"
-   append cmd_args " -e 's%@@READONLY_USER_PWD@@%${read_user_pw}%g'"
-   append cmd_args " -e 's%@@SCHEMA@@%${db_schema}%g'"
-   append cmd_args " -e 's%@@TABLESPACE@@%${db_tablespace}%g'"
-   append cmd_args " -e 's%@@TABLESPACE_INDEX@@%${db_index_tablespace}%g'"
-   append cmd_args " -e 's%@@DB_DEFINITION_FILE@@%${db_def}%g'"
-   append cmd_args " -e 's%@@FOREIGN_KEY_SUFFIX@@%${foreign_key_suffix}%g'"
-
-   append cmd_args " $arco_config(arco_source_dir)/dbwriter/test/DBWriterTestConfig.properties.template"
-   append cmd_args " > $file_name"
+   append cmd_args " -e 's%@@JDBC_DRIVER@@%[get_jdbc_driver]%g'"
+   append cmd_args " -e 's%@@DB_NAME@@%[get_database_name]%g'"
+   append cmd_args " -e 's%@@DB_HOST@@%[get_database_host]%g'"
+   append cmd_args " -e 's%@@JDBC_URL@@%[get_jdbc_url [get_database_name]]%g'"
+   append cmd_args " -e 's%@@JDBC_USER@@%[get_arco_write_user]%g'"
+   append cmd_args " -e 's%@@JDBC_PASSWORD@@%[get_arco_user_pwd]%g'"
+   append cmd_args " -e 's%@@READONLY_USER@@%[get_arco_read_user]%g'"
+   append cmd_args " -e 's%@@READONLY_USER_PWD@@%[get_arco_user_pwd]%g'"
+   append cmd_args " -e 's%@@SCHEMA@@%[get_database_schema]%g'"
+   append cmd_args " -e 's%@@TABLESPACE@@%$arco_config(tablespace)%g'"
+   append cmd_args " -e 's%@@TABLESPACE_INDEX@@%$arco_config(tablespace_index)%g'"
+   append cmd_args " -e 's%@@DB_DEFINITION_FILE@@%database/${identifier}/dbdefinition.xml%g'"
+   append cmd_args " -e 's%@@FOREIGN_KEY_SUFFIX@@%[get_foreign_key_suffix]%g'"
+   append cmd_args " $template > $file_name"
 
    set test_host [host_conf_get_java_compile_host]
 
-   report_add_message report "running build script on test host \"$test_host\""
-   report_add_message report "Creating junit config file $file_name"
-   report_add_message report "$test_host: $cmd $cmd_args"
-
-   ts_log_fine "${test_host}:${CHECK_USER} starting $cmd $cmd_args ..."
-   set output [start_remote_prog $test_host $CHECK_USER $cmd "$cmd_args"]
+   report_add_message report "Creating junit config file $file_name on host $test_host"
+   ts_log_fine "${test_host}:${CHECK_USER} starting sed $cmd_args ..."
+   set output [start_remote_prog $test_host $CHECK_USER "sed" $cmd_args]
    if {$prg_exit_state != 0} {
-      report_add_message report "sed of DBWriterTestConfig.properties.template failed, exit state $prg_exit_state"
+      report_add_message report "sed of $template failed, exit state $prg_exit_state"
       report_add_message report "$output"
       report_finish report -1
-      ts_log_severe "sed of DBWriterTestConfig.properties.template failed"
-      return -1
+      ts_log_severe "sed of $template failed:\n$output"
+      return
    }
 
-   set ant_options "-Ddbwriter.test.config_file=$file_name"
-   append ant_options " -Duse.classpath.from.sge.root=true"
-   # @todo we need to add the path to junit to the classpath, either here or in `arco_build()`
-   append ant_options " -Dsge.root=$ts_config(product_root)"
+   # without a test configuration maven skips the tests
+   set build_options "-Ddbwriter.test.config=$file_name"
+   set jdbc_jar [get_jdbc_driver_path]
+   if {$jdbc_jar ne "NONE"} {
+      append build_options " -Ddbwriter.test.jdbc_jar=$jdbc_jar"
+   }
 
-   ts_log_fine "starting ant test ..."
-   set res [arco_build $test_host "test" report $ant_options 180]
-
-   if {$res != 0} {
+   ts_log_fine "starting the junit tests ..."
+   if {[arco_build $test_host "test" report $build_options 1800] != 0} {
       report_add_message report "ARCo junit tests failed"
       report_finish report -1
-      ts_log_severe "ARCo junit tests failed"
-      return -1
-   } else {
-      report_add_message report "ARCo junit successfully executed"
-      report_finish report 0
-      return 0
+      ts_log_severe "ARCo junit tests failed, see the report"
+      return
    }
-}
 
+   report_add_message report "ARCo junit tests successfully executed"
+   report_finish report 0
+}

@@ -210,34 +210,17 @@ proc arco_compile_clean { compile_hosts a_report } {
 }
 
 
-#****** checktree/arco_build() *************************************************
-#  NAME
-#    arco_build() -- start the arco build script
+##
+# @brief Start the dbwriter build script.
 #
-#  SYNOPSIS
-#    arco_build { compile_hosts target a_report }
-#
-#  FUNCTION
-#     starts the arco build script
-#
-#  INPUTS
-#    compile_hosts -- list of compile hosts
-#    target        -- the ant target
-#    a_report      -- the report object
-#
-#  RESULT
-#     0    -- successful build
-#     else -- failure
-
-#  EXAMPLE
-#
-#  NOTES
-#
-#  BUGS
-#
-#  SEE ALSO
-#*******************************************************************************
-proc arco_build { compile_hosts target a_report { ant_options "" } { arco_build_timeout 120 } } {
+# @param compile_hosts      the host to build on, a list with one host
+# @param target             the build target: dist, clean or test
+# @param a_report           the report object
+# @param build_options      options for the build: with a maven build they are passed to maven,
+#                           with an ant build they go into ANT_OPTS
+# @param arco_build_timeout timeout in seconds
+# @return 0 on success, else a failure
+proc arco_build {compile_hosts target a_report {build_options ""} {arco_build_timeout 120}} {
    get_current_cluster_config_array ts_config
    global CHECK_OUTPUT CHECK_USER
    global CHECK_HTML_DIRECTORY CHECK_PROTOCOL_DIR
@@ -277,11 +260,11 @@ proc arco_build { compile_hosts target a_report { ant_options "" } { arco_build_
    set env(PATH)      "$java_path:\$PATH"
 
    if {[arco_have_maven_build]} {
-      set options "$target $ts_config(package_release)"
+      set options "$target $ts_config(package_release) $build_options"
    } else {
-      append ant_options " -Dsge.root=$ts_config(product_root)"
-      append ant_options " -Dsge.srcdir=$ts_config(source_dir)"
-      set env(ANT_OPTS) "$ant_options"
+      append build_options " -Dsge.root=$ts_config(product_root)"
+      append build_options " -Dsge.srcdir=$ts_config(source_dir)"
+      set env(ANT_OPTS) "$build_options"
       if {[coverage_enabled "emma"]} {
          set options "-emma $target"
       } else {
@@ -1192,3 +1175,879 @@ proc arco_get_package_files {path type} {
    return [checktree_find_package_files $path $type "arco"]
 }
 
+## ----------- installation of the database and the dbwriter --------------------
+# Used by the install checks and by checks which have to restore the database.
+
+proc arco_database_install {} {
+   global arco_config
+
+   if { [get_database_type] == "oracle" } {
+      oracle_init_arco_db
+   } elseif { [get_database_type] == "postgres" } {
+      postgres_init_arco_db
+   } elseif { [get_database_type] == "mysql" } {
+      mysql_init_arco_db
+   }
+}
+
+## ----------- ORACLE ----------------------------------------------------------
+proc oracle_init_arco_db {} {
+
+   global ts_config ts_host_config arco_config CHECK_DEBUG_LEVEL
+
+
+   set id [sqlutil_create]
+   if { $id == "-1" } {
+      ts_log_severe "Can not create sqlutil"
+      return -2
+   }
+   set sp_id [ lindex $id 1 ]
+
+   # connect to the admin database
+   if { [ sqlutil_connect $sp_id 1 ] != 0 } {
+      ts_log_severe "Can not connect to database"
+      close_spawn_process $id
+      return -2
+   }
+
+   set arco_write_user [get_arco_write_user]
+   set sql "SELECT username FROM dba_users WHERE username = '${arco_write_user}'"
+
+   set res [sqlutil_query $sp_id $sql result_array column_names]
+   if { $res < 0 } {
+      ts_log_severe "can not query arco_write_user"
+      close_spawn_process $id
+      return -2
+   } elseif { $res > 0 } {
+      # database does exists => drop it
+      set sql "DROP USER \"$arco_write_user\" CASCADE"
+      if { [ sqlutil_exec $sp_id $sql 120 ] != 0 } {
+         ts_log_severe "Can't drop user $arco_write_user"
+         close_spawn_process $id
+         return -2
+      }
+   }
+
+   set arco_read_user [get_arco_read_user]
+   set sql "SELECT username FROM dba_users WHERE username = '${arco_read_user}'"
+
+   set res [sqlutil_query $sp_id $sql result_array column_names]
+   if { $res < 0 } {
+      ts_log_severe "can not query arco_read_user"
+      close_spawn_process $id
+      return -2
+   } elseif { $res > 0 } {
+      set sql "DROP USER \"$arco_read_user\" CASCADE"
+      if { [ sqlutil_exec $sp_id $sql 120] != 0 } {
+         ts_log_severe "Can't drop user $arco_read_user"
+         close_spawn_process $id
+         return -2
+      }
+   }
+
+   set    sql "CREATE USER ${arco_write_user} PROFILE \"DEFAULT\" IDENTIFIED BY secret"
+   append sql " DEFAULT TABLESPACE \"$arco_config(tablespace)\" TEMPORARY TABLESPACE \"TEMP\" QUOTA UNLIMITED ON \"$arco_config(tablespace)\" "
+   if { [string compare $arco_config(tablespace) $arco_config(tablespace_index)] != 0 } {
+      append sql " QUOTA UNLIMITED ON \"$arco_config(tablespace_index)\" "
+   }
+   append sql " ACCOUNT UNLOCK"
+
+   if { [ sqlutil_exec $sp_id $sql] != 0 } {
+      ts_log_severe "Can't create user $arco_write_user"
+      close_spawn_process $id
+      return -2
+   }
+
+   # Grant priviliges for arco_write_user
+   # from 6.1u4 and 6.2 version we don't need create any synonym privilege for arco_write_user
+   set sql "GRANT CREATE ANY SYNONYM, CREATE TABLE, CREATE VIEW, CREATE SESSION TO ${arco_write_user}"
+
+   if { [ sqlutil_exec $sp_id $sql] != 0 } {
+      ts_log_severe "Can't grant privileges to $arco_write_user"
+      close_spawn_process $id
+      return -2
+   }
+
+   set    sql "CREATE USER ${arco_read_user} PROFILE \"DEFAULT\" IDENTIFIED BY secret"
+   append sql " DEFAULT TABLESPACE \"$arco_config(tablespace)\" TEMPORARY TABLESPACE \"TEMP\" QUOTA 100 M ON \"$arco_config(tablespace)\" "
+   if { [string compare $arco_config(tablespace) $arco_config(tablespace_index)] != 0 } {
+      append sql " QUOTA 100 M ON \"$arco_config(tablespace_index)\" "
+   }
+   append sql " ACCOUNT UNLOCK"
+
+   if { [ sqlutil_exec $sp_id $sql] != 0 } {
+      ts_log_severe "Can't create user $arco_write_user"
+      close_spawn_process $id
+      return -2
+   }
+
+   # Grant priviliges for arco_write_user
+   # from 6.1u4 and 6.2 version we need create synonym privilege for arco_read_user
+   set sql "GRANT CREATE SYNONYM, CREATE SESSION TO ${arco_read_user}"
+   if {[sqlutil_exec $sp_id $sql] != 0} {
+      ts_log_severe "Can't grant privileges to  $arco_read_user"
+      close_spawn_process $id
+      return -2
+   }
+
+   close_spawn_process $id
+   return 0
+}
+
+## ----------- POSTGRES --------------------------------------------------------
+
+proc postgres_init_arco_db {} {
+   global ts_config ts_host_config arco_config
+   global CHECK_DEBUG_LEVEL
+
+   if {[get_dbwriter_status 0] == 0} {
+      shutdown_dbwriter
+   }
+
+   set id [sqlutil_create]
+   if {$id == "-1"} {
+      ts_log_severe "Can not create sqlutil"
+      return -2
+   }
+   set sp_id [lindex $id 1]
+
+   # connect to the admin database
+   if {[sqlutil_connect $sp_id 1] != 0} {
+      ts_log_severe "Can not connect to database"
+      close_spawn_process $id
+      return -2
+   }
+
+   set db_name [get_database_name]
+   set sql "SELECT datname FROM pg_database WHERE datname = '${db_name}'"
+
+   set column_names {}
+   array set result_array {}
+   set res [sqlutil_query $sp_id $sql result_array column_names]
+   if {$res < 0} {
+      ts_log_severe "can not query database name"
+      close_spawn_process $id
+      return -2
+   } elseif {$res > 0} {
+      # database does exists => drop it
+      set sql "DROP DATABASE $db_name"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
+         ts_log_severe "Can't drop database $db_name, may be another user is using this database"
+         close_spawn_process $id
+         return -2
+      }
+   }
+
+   set arco_write_user [get_arco_write_user]
+   set sql "SELECT usename FROM pg_user WHERE usename = '${arco_write_user}'"
+
+   set res [sqlutil_query $sp_id $sql result_array column_names]
+   if {$res < 0} {
+      ts_log_severe "can not query arco_write_user"
+      close_spawn_process $id
+      return -2
+   } elseif {$res > 0} {
+      #revoke priviledges on tablespace so we can drop the user
+      set sql "revoke all on tablespace $arco_config(tablespace) from $arco_write_user"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
+         ts_log_severe "Can't revoke priviledges on $arco_config(tablespace) from $arco_write_user"
+         close_spawn_process $id
+         return -2
+      }
+      # user does exists => drop it
+      set sql "DROP USER $arco_write_user"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
+         ts_log_severe "Can't drop user $arco_write_user"
+         close_spawn_process $id
+         return -2
+      }
+   }
+
+   set arco_read_user [get_arco_read_user]
+   set sql "SELECT usename FROM pg_user WHERE usename = '${arco_read_user}'"
+
+   set res [sqlutil_query $sp_id $sql result_array column_names]
+   if {$res < 0} {
+      ts_log_severe "can not query arco_read_user"
+      close_spawn_process $id
+      return -2
+   } elseif {$res > 0} {
+      set sql "DROP USER $arco_read_user"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
+         ts_log_severe "Can't drop user $arco_read_user"
+         close_spawn_process $id
+         return -2
+      }
+   }
+
+   set sql "CREATE USER $arco_write_user PASSWORD 'secret'"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
+      ts_log_severe "Can't create user $arco_write_user"
+      close_spawn_process $id
+      return -2
+   }
+
+   set sql "GRANT ALL ON TABLESPACE $arco_config(tablespace) TO $arco_write_user"
+   if {[sqlutil_exec $sp_id $sql] != 0} {
+      ts_log_severe "Can't grant privileges to $arco_write_user"
+      close_spawn_process $id
+      return -2
+   }
+
+   if {[string compare "$arco_config(tablespace)" "$arco_config(tablespace_index)"] != 0} {
+      set sql "grant all on tablespace $arco_config(tablespace_index) to $arco_write_user"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
+         ts_log_severe "Can't grant privileges to $arco_write_user"
+         close_spawn_process $id
+         return -2
+      }
+   }
+
+   set sql "CREATE USER $arco_read_user PASSWORD 'secret'"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
+      ts_log_severe "Can't create user $arco_read_user"
+      close_spawn_process $id
+      return -2
+   }
+
+   set sql "CREATE DATABASE $db_name OWNER $arco_write_user"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
+      ts_log_severe "Can't create database $db_name"
+      close_spawn_process $id
+      return -2
+   }
+
+   # connect to the newly created database
+   if {[sqlutil_connect $sp_id 0] != 0} {
+      ts_log_severe "Can not connect to database $db_name"
+      close_spawn_process $id
+      return -2
+   }
+
+   set sql "SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname = '$arco_config(database_schema)'"
+   set res [sqlutil_query $sp_id $sql result_array column_names]
+   if {$res < 0} {
+      ts_log_severe "Can't query schema $arco_config(database_schema)"
+      close_spawn_process $id
+      return -2
+   }
+   if {$res == 0} {
+      # schema doesn't exist, create it
+      set sql "CREATE SCHEMA $arco_config(database_schema)"
+      if {[sqlutil_exec $sp_id $sql] != 0 } {
+         ts_log_severe "Can't create schema $arco_config(database_schema)"
+         close_spawn_process $id
+         return -2
+      }
+
+      # grant usage on schema to arco_read users
+      set sql "GRANT USAGE ON SCHEMA $arco_config(database_schema) TO $arco_read_user"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
+         ts_log_severe "Can't grant usage on $arco_config(database_schema) to $arco_read_user"
+         close_spawn_process $id
+         return -2
+      }
+   }
+
+   if {[string compare $arco_config(database_schema) "public"] != 0} {
+      # connect to the admin database
+      if {[sqlutil_connect $sp_id 1] != 0} {
+         ts_log_severe "Can not connect to database $db_name"
+         close_spawn_process $id
+         return -2
+      }
+
+      # alter the arco_write user's search path
+      set sql "ALTER USER $arco_write_user SET search_path=$arco_config(database_schema), public"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
+         ts_log_severe "Can't alter $arco_write_user search_path"
+         close_spawn_process $id
+         return -2
+      }
+
+      # alter the arco_read user's search path
+      set sql "ALTER USER $arco_read_user SET search_path=$arco_config(database_schema), public"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
+         ts_log_severe "Can't alter $arco_read_user search_path"
+         close_spawn_process $id
+         return -2
+      }
+   }
+
+   close_spawn_process $id
+   return 0
+}
+
+## ----------- MySQL --------------------------------------------------------
+proc mysql_init_arco_db {} {
+
+   global ts_config ts_host_config arco_config
+   global CHECK_DEBUG_LEVEL
+
+   if {[get_dbwriter_status 0] == 0} {
+      shutdown_dbwriter
+   }
+
+   set id [sqlutil_create]
+   if {$id == "-1"} {
+      ts_log_severe "Can't create sqlutil"
+      return -2
+   }
+   set sp_id [lindex $id 1]
+
+   # connect to the admin database
+   if {[sqlutil_connect $sp_id 1] != 0} {
+      ts_log_severe "Can not connect to database"
+      close_spawn_process $id
+      return -2
+   }
+
+   set db_name [get_database_name]
+   set column_names {}
+   array set result_array {}
+
+   # drop database ${db_name} if exists
+   set sql "SELECT schema_name FROM information_schema.schemata where schema_name = '${db_name}'"
+   set res [sqlutil_query $sp_id $sql result_array column_names]
+   if {$res < 0} {
+      ts_log_severe "can not query database name"
+      close_spawn_process $id
+      return -2
+   } elseif {$res > 0} {
+      # database does exists => drop it
+      set sql "DROP DATABASE $db_name"
+      if {[sqlutil_exec $sp_id $sql] != 0} {
+         ts_log_severe "Can't drop database $db_name, may be another user is using this database"
+         close_spawn_process $id
+         return -2
+      }
+   }
+
+   # drop user if exists
+   set arco_write_user [get_arco_write_user]
+   set sql "SELECT user, host FROM mysql.user WHERE user = '${arco_write_user}'"
+   set res [sqlutil_query $sp_id $sql result_array column_names]
+   if {$res < 0} {
+      ts_log_severe "Can't query user $arco_write_user"
+      close_spawn_process $id
+      return -2
+   } elseif {$res > 0} {
+      # user does exists => drop it
+      foreach i [array names result_array] {
+         if {"$result_array($i)" != "${arco_write_user}"} {
+            # revoke user's privileges
+            set sql "REVOKE ALL PRIVILEGES, GRANT OPTION FROM '${arco_write_user}'@'$result_array($i)'"
+            if {[sqlutil_exec $sp_id $sql] != 0} {
+               ts_log_severe "Can't revoke privileges from user '$arco_write_user'@'$result_array($i)'"
+               close_spawn_process $id
+               return -2
+            }
+            # drop user
+            set sql "DROP USER '$arco_write_user'@'$result_array($i)'"
+            if {[sqlutil_exec $sp_id $sql] != 0} {
+               ts_log_severe "Can't drop user '$arco_write_user'@'$result_array($i)'"
+               close_spawn_process $id
+               return -2
+            }
+         }
+      }
+   }
+
+   set arco_read_user [get_arco_read_user]
+   set sql "SELECT user, host FROM mysql.user WHERE user = '${arco_read_user}'"
+
+   set res [sqlutil_query $sp_id $sql result_array column_names]
+   if {$res < 0} {
+      ts_log_severe "Can't query user $arco_read_user"
+      close_spawn_process $id
+      return -2
+   } elseif {$res > 0} {
+      foreach i [array names result_array] {
+         if {"$result_array($i)" != "${arco_read_user}"} {
+            # before dropping the user we have to revoke his privileges
+            set sql "REVOKE SELECT, SHOW VIEW on ${db_name}.* FROM '${arco_read_user}'@'$result_array($i)'"
+            if {[sqlutil_exec $sp_id $sql] != 0} {
+               ts_log_severe "Can't revoke privileges from user '${arco_read_user}'@'$result_array($i)'"
+               close_spawn_process $id
+               return -2
+            }
+            # drop user
+            set sql "DROP USER '$arco_read_user'@'$result_array($i)'"
+            if {[sqlutil_exec $sp_id $sql] != 0} {
+               ts_log_severe "Can't drop user '$arco_read_user'@'$result_array($i)'"
+               close_spawn_process $id
+               return -2
+            }
+         }
+      }
+   }
+
+   set sql "CREATE DATABASE $db_name"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
+      ts_log_severe "Can't create database $db_name"
+      close_spawn_process $id
+      return -2
+   }
+
+   # Note:
+   # In MySQL database user is identified by the host from which he connects and his username
+   # We have to create users: 'username'@'%'
+   #                          'username'@'database_host' [ mandatory if swc_host = database_host ]
+   # The grant statement also creates the user in the database
+
+   # With older MySQL versions the user was implicitly created on a GRANT statement if it did not exist.
+   # With newer MySQL versions this is not the case anymore.
+   # So we have to create the user before granting privileges to it.
+   # This should also work with older versions of MySQL (which we will probably never support again).
+   set sql "CREATE USER '$arco_write_user'@'%' IDENTIFIED BY 'secret'"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
+      ts_log_severe "Can't grant privileges to user '$arco_write_user'@'$host'"
+      close_spawn_process $id
+      return -2
+   }
+
+   set sql "CREATE USER '$arco_read_user'@'%' IDENTIFIED BY 'secret'"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
+      ts_log_severe "Can't grant privileges to user '$arco_write_user'@'$host'"
+      close_spawn_process $id
+      return -2
+   }
+
+   # Grant access to the arco_write_user for all hosts.
+   set sql "GRANT ALL on ${db_name}.* TO '$arco_write_user'@'%' WITH GRANT OPTION"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
+      ts_log_severe "Can't grant privileges to user '$arco_write_user'@'%'"
+      close_spawn_process $id
+      return -2
+   }
+
+   # Grant access to the arco_read_user for all hosts.
+   set sql "GRANT SELECT, SHOW VIEW on ${db_name}.* to '$arco_read_user'@'%'"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
+      ts_log_severe "Can't grant privileges to user '$arco_read_user'@'%'"
+      close_spawn_process $id
+      return -2
+   }
+
+   # Flush privileges to make sure that all changes are applied.
+   set sql "FLUSH PRIVILEGES"
+   if {[sqlutil_exec $sp_id $sql] < 0} {
+      ts_log_severe "Can't flush privileges"
+      close_spawn_process $id
+      return -2
+   }
+
+   # Close connection to sql util.
+   close_spawn_process $id
+
+   return 0
+}
+
+proc arco_dbwriter_install {} {
+   global CHECK_TESTSUITE_INSTALL_MODE
+
+   # If we are doing automatic installation, use it if available (since 9.1.3)
+   if {$CHECK_TESTSUITE_INSTALL_MODE == "automatic" && [is_version_in_range "9.1.3"]} {
+      return [arco_dbwriter_install_auto]
+   }
+   return [arco_dbwriter_install_manual]
+}
+
+# Steps shared by manual and automatic dbwriter installation: stop any
+# running dbwriter, sanity-check the install script, and stage the JDBC
+# driver next to dbwriter.jar on the install host. Returns 0 on success,
+# -1 on a setup failure that should abort the install.
+proc arco_dbwriter_install_prepare {} {
+   global CHECK_USER
+   global ts_config arco_config
+
+   if {[get_dbwriter_status 0] == 0} {
+      shutdown_dbwriter
+   }
+
+   ts_log_fine "install dbwriter on host $arco_config(dbwriter_host) ..."
+
+   if {[file isfile "$ts_config(product_root)/dbwriter/inst_dbwriter"] != 1} {
+      ts_log_severe "dbwriter install script not found"
+      return -1
+   }
+
+   set jdbc_driver [get_jdbc_driver_path]
+   if {$jdbc_driver != "NONE"} {
+      # copy the jdbc driver
+      set args "$jdbc_driver $ts_config(product_root)/dbwriter/lib"
+      start_remote_prog "$arco_config(dbwriter_host)" $CHECK_USER "cp" $args
+      if {$prg_exit_state != 0} {
+         set fs_server [fs_config_get_filesystem_server $ts_config(product_root)]
+         start_remote_prog $fs_server "root" "cp" $args
+         if {$prg_exit_state != 0} {
+            ts_log_severe "copy jdbc driver failed"
+            return -1
+         }
+      }
+   }
+   return 0
+}
+
+proc arco_dbwriter_install_manual {} {
+   global CHECK_USER CHECK_DEBUG_LEVEL CHECK_INSTALL_RC
+   global ts_config arco_config ts_host_config
+
+   set ret [arco_dbwriter_install_prepare]
+   if {$ret != 0} {
+      return $ret
+   }
+
+   set LICENSE_AGREEMENT            [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_LICENSE_AGREEMENT] ]
+   set ANSWER_YES                   [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_ANSWER_YES] ]
+   set HIT_RETURN_TO_CONTINUE       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_HIT_RETURN_TO_CONTINUE] ]
+   set CURRENT_GRID_ROOT_DIRECTORY  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CURRENT_GRID_ROOT_DIRECTORY] "*" "*" ]
+   set GRID_ROOT_DIRECTORY_NOT_SET  [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_GRID_ROOT_DIRECTORY_NOT_SET]]
+   set CELL_NAME_FOR_QMASTER        [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_CELL_NAME_FOR_QMASTER] "*"]
+   set DETECT_CHOOSE_NEW_NAME       [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DETECT_CHOOSE_NEW_NAME] ]
+   set DETECT_REMOVE_OLD_CLUSTER    [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_DETECT_REMOVE_OLD_CLUSTER] ]
+   set REMOVE_OLD_RC_SCRIPT         [translate $ts_config(master_host) 0 1 0 [sge_macro DISTINST_REMOVE_OLD_RC_SCRIPT] ]
+
+   ts_log_fine "inst_dbwriter"
+   set id [open_remote_spawn_process "$arco_config(dbwriter_host)" "root"  "./inst_dbwriter" "" 0 "$ts_config(product_root)/dbwriter"]
+   set sp_id [ lindex $id 1 ]
+
+   log_user 1
+
+    set error_count 0
+    while { $error_count == 0 } {
+       if {$CHECK_DEBUG_LEVEL > 0} {
+         flush stdout
+         if {$CHECK_DEBUG_LEVEL > 1 } {
+            puts "-->testsuite: press RETURN"
+            set anykey [wait_for_enter 1]
+         }
+       }
+       log_user 1
+       set timeout 60
+       expect {
+          flush stdout
+          -i $sp_id full_buffer {
+             ts_log_severe "install_dbwriter - buffer overflow, increment CHECK_EXPECT_MATCH_MAX_BUFFER value"
+             incr error_count 1
+             break
+          }
+          -i $sp_id "More" {
+             ts_send $sp_id " "
+             continue
+          }
+          -i $sp_id $LICENSE_AGREEMENT {
+             ts_send $sp_id "$ANSWER_YES\n"
+             continue
+          }
+          -i $sp_id eof {
+             ts_log_severe "install_dbwriter - unexpected eof"
+             incr error_count 1
+             break
+          }
+          -i $sp_id "coredump" {
+             ts_log_severe "install_dbwriter - coredump"
+             incr error_count 1
+             break
+          }
+          -i $sp_id timeout {
+             ts_log_severe "install_dbwriter - timeout while waiting for output"
+             incr error_count 1
+             break
+          }
+          -i $sp_id "Hit <RETURN> to continue >> " {
+             send_to_spawn_id $sp_id ""
+             continue
+          }
+          -i $sp_id $CURRENT_GRID_ROOT_DIRECTORY {
+             send_to_spawn_id $sp_id $ts_config(product_root)
+             continue
+          }
+
+          # the installer asks for the path instead of confirming it - it does
+          # that when SGE_ROOT is empty in its environment
+          -i $sp_id $GRID_ROOT_DIRECTORY_NOT_SET {
+             ts_log_fine "SGE_ROOT is not set, answering with $ts_config(product_root)"
+             send_to_spawn_id $sp_id $ts_config(product_root)
+             continue
+          }
+          -i $sp_id $CELL_NAME_FOR_QMASTER {
+             send_to_spawn_id $sp_id $ts_config(cell)
+             continue
+          }
+
+          -i $sp_id -- $DETECT_CHOOSE_NEW_NAME {
+             send_to_spawn_id $sp_id "y"
+             continue
+          }
+
+          #Delete detected dbwriter service for chosen cluster_name
+          -i $sp_id -- $DETECT_REMOVE_OLD_CLUSTER {
+             send_to_spawn_id $sp_id "n"
+             continue
+          }
+
+          #Remove conflicting RC files/SMF service
+          -i $sp_id -- $REMOVE_OLD_RC_SCRIPT  {
+             send_to_spawn_id $sp_id "y"
+             continue
+          }
+
+          -i $sp_id "*nter the path to your java installation * >> " {
+             set java_home [arco_get_java_home $arco_config(dbwriter_host)]
+             if {$java_home == ""} {
+               ts_log_severe "didn't find a Java version >= 8 on host $arco_config(dbwriter_host)"
+               incr error_count 1
+               break
+             }
+             send_to_spawn_id $sp_id $java_home
+             continue
+          }
+          -i $sp_id "*nter your database type * >> " {
+             set input [string range [get_database_type] 0 0 ]
+             send_to_spawn_id $sp_id $input
+             continue
+          }
+          -i $sp_id "*nter the name of your * host * >> " {
+             send_to_spawn_id $sp_id [get_database_host]
+             continue
+          }
+          -i $sp_id "*nter the port of your * >> " {
+             send_to_spawn_id $sp_id [get_database_port]
+             continue
+          }
+          -i $sp_id "*nter the name of your * database * >> " {
+             send_to_spawn_id $sp_id [get_database_name]
+             continue
+          }
+          -i $sp_id "*nter the name of the database user * >> " {
+             send_to_spawn_id $sp_id [get_arco_write_user]
+             continue
+          }
+          -i $sp_id "*nter the password of the database user >> " {
+             send_to_spawn_id $sp_id [get_arco_user_pwd]
+             continue
+          }
+          -i $sp_id "*etype the password >> " {
+             send_to_spawn_id $sp_id [get_arco_user_pwd]
+             continue
+          }
+          -i $sp_id "Should the connection to the database be tested? (y/n) * >> " {
+             send_to_spawn_id $sp_id "y"
+             continue
+          }
+          -i $sp_id "Do you want to use the existing dbwriter configuration file? (y/n) * >> " {
+             # Test CS-2323: Repeat the dbwriter installation (menu item 60, arco_database_install, arco_dbwriter_install_manual
+             send_to_spawn_id $sp_id "y"
+             continue
+          }
+          -i $sp_id "Do you want to repeat database connection setup*>> " {
+             ts_log_severe "inst_dbwriter could not setup the database connection"
+             incr error_count 1
+             break
+          }
+          -i $sp_id "Should the database model be upgraded to version * >> " {
+             send_to_spawn_id $sp_id "y"
+             continue
+          }
+          -i $sp_id "*nter the name of this database user * >> " {
+             send_to_spawn_id $sp_id [get_arco_read_user]
+             continue
+          }
+          -i $sp_id "*nter the interval between two dbwriter runs in seconds * >> " {
+             send_to_spawn_id $sp_id $arco_config(arco_dbwriter_interval)
+             continue
+          }
+          -i $sp_id "*nter the path of the dbwriter spool directory *>> " {
+             send_to_spawn_id $sp_id ""
+             continue
+          }
+          -i $sp_id "*nter the file with the derived value rules * >> " {
+             send_to_spawn_id $sp_id ""
+             continue
+          }
+          -i $sp_id "*nter the debug level of the dbwriter * >> " {
+             send_to_spawn_id $sp_id $arco_config(arco_dbwriter_debug_level)
+             continue
+          }
+          -i $sp_id "*nter the name of TABLESPACE for tables * >> " {
+             send_to_spawn_id $sp_id $arco_config(tablespace)
+             continue
+          }
+          -i $sp_id "*nter the name of TABLESPACE for indexes * >> " {
+             send_to_spawn_id $sp_id $arco_config(tablespace_index)
+             continue
+          }
+          -i $sp_id "*nter the name of the database schema * >> " {
+             set input [get_database_schema]
+             send_to_spawn_id $sp_id $input
+             continue
+          }
+          -i $sp_id "Are * settings correct? (y/n) * >> " {
+             send_to_spawn_id $sp_id "y"
+             continue
+          }
+          -i $sp_id "start dbwriter at machine boot (y/n) * >> " {
+             if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $arco_config(dbwriter_host)]} {
+                send_to_spawn_id $sp_id "y"
+             } else {
+                send_to_spawn_id $sp_id "n"
+             }
+             continue
+          }
+          #SMF startup is always disabled in testsuite
+          -i $sp_id -- "NOTE: If you select \"n\" SMF will be not used at all"  {
+             send_to_spawn_id $sp_id "n"
+             continue
+          }
+          -i $sp_id "Installation of dbWriter completed" {
+             break
+          }
+          -i $sp_id "Installation of dbWriter failed" {
+             ts_log_severe "install_dbwriter - FAILED"
+             incr error_count 1
+             break
+          }
+          -i $sp_id "Error:" {
+             ts_log_severe "install_dbwriter - $expect_out(0,string)"
+             break
+          }
+          -i $sp_id "ommand failed*\n" {
+             ts_log_severe "install_dbwriter - $expect_out(0,string)"
+             break
+          }
+          -i $sp_id "_exit_status_:(*)" {
+             set exit_status [get_string_value_between "_exit_status_:(" ")" $expect_out(0,string)]
+             if { $exit_status != 0 } {
+                ts_log_severe "install_dbwriter failed with exist status $exit_status"
+                incr error_count 1
+             }
+             break
+          }
+          -i $sp_id default {
+             ts_log_severe "install_dbwriter - undefined behaviour: $expect_out(buffer)"
+             incr error_count 1
+             break
+          }
+       } ;# end of expect
+    } ;# end of while
+   close_spawn_process $id
+
+   return $error_count
+}
+
+# Build the inst_dbwriter auto-install template content as a Tcl array in
+# the format expected by write_remote_file (index 0 = line count, indices
+# 1..N = lines). Values mirror the choices made by the manual install in
+# arco_dbwriter_install_manual.
+proc arco_dbwriter_build_autoinst_config {array_name} {
+   upvar $array_name data
+   global CHECK_INSTALL_RC
+   global ts_config arco_config
+
+   set db_type [get_database_type]
+
+   # DBWRITER_CALCULATION_FILE: same path the manual install would derive
+   switch -- $db_type {
+      "oracle"      { set calc_subdir "oracle" }
+      "mysql"       { set calc_subdir "mysql" }
+      default       { set calc_subdir "postgres" }
+   }
+
+   # DB_SCHEMA: queryDBSchema in inst_util.sh hard-codes "n/a" for MySQL
+   if {$db_type == "mysql"} {
+      set db_schema "n/a"
+   } else {
+      set db_schema [get_database_schema]
+   }
+
+   set java_home [arco_get_java_home $arco_config(dbwriter_host)]
+   if {$java_home == ""} {
+      ts_log_severe "didn't find a Java version >= 11 on host $arco_config(dbwriter_host)"
+      return -1
+   }
+
+   if {$CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $arco_config(dbwriter_host)]} {
+      set add_to_rc "true"
+   } else {
+      set add_to_rc "false"
+   }
+
+   set lines [list]
+   lappend lines "SGE_ROOT=\"$ts_config(product_root)\""
+   lappend lines "CELL_NAME=\"$ts_config(cell)\""
+   lappend lines "JAVA_HOME=\"$java_home\""
+   lappend lines "DB_TYPE=\"$db_type\""
+   lappend lines "DB_HOST=\"[get_database_host]\""
+   lappend lines "DB_PORT=\"[get_database_port]\""
+   lappend lines "DB_NAME=\"[get_database_name]\""
+   lappend lines "DB_USER=\"[get_arco_write_user]\""
+   lappend lines "DB_PW=\"[get_arco_user_pwd]\""
+   lappend lines "READ_USER=\"[get_arco_read_user]\""
+   if {$db_type == "oracle"} {
+      # Oracle uses READ_USER_PW to create synonyms; same password as DB_USER
+      lappend lines "READ_USER_PW=\"[get_arco_user_pwd]\""
+   } else {
+      lappend lines "READ_USER_PW=\"\""
+   }
+   lappend lines "DB_SCHEMA=\"$db_schema\""
+   lappend lines "TABLESPACE=\"$arco_config(tablespace)\""
+   lappend lines "TABLESPACE_INDEX=\"$arco_config(tablespace_index)\""
+   lappend lines "DBWRITER_INTERVAL=\"$arco_config(arco_dbwriter_interval)\""
+   lappend lines "SPOOL_DIR=\"$ts_config(product_root)/$ts_config(cell)/spool/dbwriter\""
+   lappend lines "DBWRITER_CALCULATION_FILE=\"$ts_config(product_root)/dbwriter/database/$calc_subdir/dbwriter.xml\""
+   lappend lines "DBWRITER_REPORTING_FILE=\"$ts_config(product_root)/$ts_config(cell)/common/reporting.jsonl\""
+   lappend lines "DBWRITER_DEBUG=\"$arco_config(arco_dbwriter_debug_level)\""
+   lappend lines "ADD_TO_RC=\"$add_to_rc\""
+
+   set i 1
+   foreach line $lines {
+      set data($i) $line
+      incr i
+   }
+   set data(0) [llength $lines]
+   return 0
+}
+
+proc arco_dbwriter_install_auto {} {
+   global CHECK_USER
+   global ts_config arco_config
+
+   set ret [arco_dbwriter_install_prepare]
+   if {$ret != 0} {
+      return $ret
+   }
+
+   set conf_file "$ts_config(product_root)/dbwriter/autoinst_dbwriter_$ts_config(cell).conf"
+
+   if {[arco_dbwriter_build_autoinst_config conf_array] != 0} {
+      return -1
+   }
+
+   # We write the file as the admin user,
+   # but inst_dbwriter.sh reading it will be started as root.
+   # Being root will not help on NFS, so make sure everybody can read it.
+   if {[write_remote_file $arco_config(dbwriter_host) $CHECK_USER $conf_file conf_array "644"] != 0} {
+      ts_log_severe "could not write dbwriter auto-installation config $conf_file on $arco_config(dbwriter_host)"
+      return -1
+   }
+
+   ts_log_fine "inst_dbwriter -auto $conf_file"
+   set my_timeout 600
+   set exit_val 0
+   set output [start_remote_prog $arco_config(dbwriter_host) "root" "./inst_dbwriter" "-auto $conf_file" exit_val $my_timeout 0 "$ts_config(product_root)/dbwriter"]
+
+   if {$exit_val != 0} {
+      ts_log_severe "inst_dbwriter -auto failed with exit code $exit_val\n$output"
+      return 1
+   }
+
+   if {[string first "Installation of dbwriter completed" $output] < 0} {
+      ts_log_severe "inst_dbwriter -auto did not report successful completion\n$output"
+      return 1
+   }
+
+   # Keep the autoinstall template for easier debugging.
+   # delete_remote_file $arco_config(dbwriter_host) "root" $conf_file
+   return 0
+}
