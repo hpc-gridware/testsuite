@@ -7641,7 +7641,14 @@ proc startup_qmaster {{and_scheduler 1} {env_list ""} {on_host ""} {start_debug_
       if {$env_list == "" && $CHECK_INSTALL_RC && [ge_has_feature "systemd"] && [host_has_systemd $ts_config(master_host)]} {
          ts_log_fine "   -> via systemd"
          set service_name [systemd_get_service_name "qmaster"]
-         set output [start_remote_prog $start_host $startup_user "systemctl" "start $service_name"]
+         # sge_shadowd runs in the unit of the qmaster: when the qmaster died, the unit is still
+         # active and "systemctl start" would do nothing
+         set action "start"
+         if {[systemd_is_service_active $start_host "qmaster"]} {
+            ts_log_fine "   -> unit $service_name is still active, restarting it"
+            set action "restart"
+         }
+         set output [start_remote_prog $start_host $startup_user "systemctl" "$action $service_name"]
       } else {
          ts_log_fine "   -> starting the sge_qmaster binary"
          set output [start_remote_prog $start_host $startup_user "$ts_config(product_root)/bin/${arch}/sge_qmaster" ";sleep 2" prg_exit_state 60 0 "" envlist]
@@ -10950,7 +10957,15 @@ proc startup_execd {hostname {envlist ""} {startup_user ""}} {
        [systemd_has_service $hostname "execd"]} {
       ts_log_fine "  -> via systemd"
       set service_name [systemd_get_service_name "execd"]
-      set output [start_remote_prog $hostname $startup_user "systemctl" "start $service_name"]
+      # an execd that was just shut down (e.g. with qconf -ke) keeps its unit active until the
+      # process is gone, which takes a while in sanitizer builds (leak check at exit) - in this
+      # time "systemctl start" would do nothing
+      set action "start"
+      if {[systemd_is_service_active $hostname "execd"]} {
+         ts_log_fine "  -> unit $service_name is still active, restarting it"
+         set action "restart"
+      }
+      set output [start_remote_prog $hostname $startup_user "systemctl" "$action $service_name"]
       if {$prg_exit_state != 0} {
          ts_log_severe "starting up sge_execd on host $hostname via systemd failed:\n$output"
       }
