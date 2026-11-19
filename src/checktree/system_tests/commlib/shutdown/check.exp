@@ -90,6 +90,7 @@ proc commlib_shutdown_run {} {
    global ts_config
    global CHECK_USER
    global CHECK_ACT_LEVEL
+   global CHECK_IS_SANITIZER_RUN
 
    set cs_user $CHECK_USER
    if {$ts_config(commd_port) < 1024} {
@@ -326,6 +327,12 @@ proc commlib_shutdown_run {} {
          break
       } else {
          if {$run_counter >= 15} {
+            if {$CHECK_IS_SANITIZER_RUN} {
+               # the instrumented binaries are too slow to get a message between ccm and ccrm,
+               # the check says nothing then, see doc/sanitizer_runs.md
+               ts_log_config "error case did not occur in $run_counter runs (sanitizer build)"
+               break
+            }
             append error_text "max. test retry count reached! Error case did not occur!\n"
             break
          } else {

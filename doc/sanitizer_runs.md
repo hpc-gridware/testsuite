@@ -57,6 +57,18 @@ the installed binaries, it looks for these symbols in `sge_qmaster` and sets the
 
 The unit names contain the commd port, e.g. `journalctl -u ocs8028-qmaster.service`.
 
+To collect the reports of all daemons on a host in files instead, set the log path for the
+units started by systemd, as root, before the daemons are started:
+
+```shell
+mkdir -m 1777 /var/tmp/asan
+systemctl set-environment ASAN_OPTIONS=log_path=/var/tmp/asan/asan
+```
+
+Every process writes its report to `/var/tmp/asan/asan.<pid>`. This also catches reports that
+the journal does not show, e.g. from processes the daemons fork. Remove the setting after the run
+with `systemctl unset-environment ASAN_OPTIONS`.
+
 ## Host prerequisites
 
 ### Every host needs the sanitizer runtime of the build compiler
@@ -82,6 +94,17 @@ and install the missing libraries from the distribution, e.g. `apt install libas
 combinations, `ldd -r` reports symbols that the installed library lacks; if it does, remove the
 host from the configuration of the sanitizer run.
 
+Checks that run commands in a container (e.g. `nat_submit_client`) install the two libraries in
+the container image themselves in sanitizer runs.
+
+### Hosts with little memory
+
+A sanitized program needs several times the memory of a normal build. On hosts with 2 GB of
+memory or less, checks that start many client commands at once can run the host out of memory:
+the kernel's OOM killer then ends the commands, and possibly the execd. The commands exit
+without output, and an execd unit is reported as failed. Look for `Killed process` in the kernel
+log (`journalctl -k`) of the host first.
+
 ### Enterprise Linux 8 hosts using NIS: do not use as execution hosts
 
 On Rocky Linux 8 with `nis` in the `passwd` or `group` entries of `/etc/nsswitch.conf`, every job
@@ -98,6 +121,26 @@ Stream, RHEL) when they use NIS.
 
 Either remove such hosts from the execution hosts of the configuration (`execd_nodes`), or remove
 `nis` from `/etc/nsswitch.conf` on them if NIS is not needed there.
+
+### Ubuntu 24.04 hosts using NIS: do not use as master host
+
+On Ubuntu 24.04 with `nis` in the `hosts`, `passwd` or `group` entries of `/etc/nsswitch.conf`,
+the sanitized `sge_qmaster` crashes with SIGSEGV at address 0 when a name lookup reaches NIS,
+e.g. one or two minutes after a host complex value was set to a host name that is resolved
+through NIS. The qmaster's own signal handler logs a stack trace that ends at the signal frame;
+the sanitizer runtime prints nothing.
+
+`libnss_nis` uses libtirpc. The sanitizer runtime intercepts `xdrstdio_create()`, but glibc 2.39
+no longer provides an implementation to pass the call on to, and libtirpc was not yet loaded when
+the runtime started, so the interceptor calls a null pointer. As on Enterprise Linux 8, this is a
+problem of the sanitizer runtime on this system, not of Cluster Scheduler.
+
+Either use a master host without NIS, or remove `nis` from `/etc/nsswitch.conf` on the master
+host if NIS is not needed there. The core dump shows the crash, as root:
+
+```shell
+coredumpctl info sge_qmaster
+```
 
 ### Ubuntu 24.04 (kernel 6.8): reduce the address randomization
 
@@ -184,6 +227,15 @@ A check that cannot work with sanitized binaries, e.g. because its jobs request 
   `return` instead of `return 99`.
 
 The check or check function is then reported as unsupported instead of failed.
+
+### Checks that behave differently in sanitizer runs
+
+| Check | Behaviour in a sanitizer run |
+|---|---|
+| `system_tests/jemalloc` | Unsupported: builds with sanitizers do not link jemalloc, the sanitizers replace the memory allocator. |
+| `system_tests/commlib/shutdown` | The error case it waits for needs a message between two commlib calls, which the slower sanitized binaries rarely get. When it did not occur in 15 runs, the check reports a configuration problem instead of an error. |
+| `functional/event_client/max_dyn_ec` | Runlevel 1 starts 40 instead of 100 submit clients per host, see [Hosts with little memory](#hosts-with-little-memory). |
+| `functional/job_environment/job_environment_basic` | A sanitized program does not start when another library is loaded before the sanitizer runtime. The LD_PRELOAD test therefore preloads the runtime (found with `ldd`) before `libdrmaa.so`. |
 
 ## Analysing crashes
 

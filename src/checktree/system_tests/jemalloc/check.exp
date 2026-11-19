@@ -48,11 +48,30 @@ set check_name            "jemalloc_test"
 set check_category        "COMPATIBILITY SYSTEM QHOST QQUOTA VERIFIED"
 set check_description(0)  "basic test if compiled with jemalloc"
 
+set check_setup_function "jemalloc_setup"
+
 # define test's procedure order
 set check_functions {}
 lappend check_functions "jemalloc_verify"
 
 # -------- local test procedures: initialization------------------------------
+
+##
+# @brief Skip the check in sanitizer runs.
+#
+# Builds with sanitizers do not link jemalloc, the sanitizers replace the memory allocator.
+#
+# @return 99 in sanitizer runs, else 0
+proc jemalloc_setup {} {
+   global CHECK_IS_SANITIZER_RUN
+
+   if {$CHECK_IS_SANITIZER_RUN} {
+      ts_log_config "binaries built with sanitizers do not use jemalloc, see doc/sanitizer_runs.md"
+      return 99
+   }
+
+   return 0
+}
 
 proc jemalloc_verify {} {
    global ts_config CHECK_USER

@@ -70,7 +70,7 @@ proc max_dyn_ec_setup {} {
 
 proc max_dyn_ec_setup_level {} {
    get_current_cluster_config_array ts_config
-   global CHECK_ACT_LEVEL
+   global CHECK_ACT_LEVEL CHECK_IS_SANITIZER_RUN
    global max_dyn_ec_simhosts max_dyn_ec_jobs_per_host
 
    # set the number of jobs per host
@@ -93,6 +93,11 @@ proc max_dyn_ec_setup_level {} {
       # we use simulated hosts, so we do not have load on the hosts from job execution
       # and can start more submit clients
       set max_dyn_ec_jobs_per_host $num_simulated_hosts
+      if {$CHECK_IS_SANITIZER_RUN} {
+         # a client built with sanitizers needs several times the memory, 100 of them at once
+         # drive small hosts out of memory - stay with the number of runlevel 0
+         set max_dyn_ec_jobs_per_host 40
+      }
 
       # initialize the use of simulated hosts
       if {![simhost_init]} {

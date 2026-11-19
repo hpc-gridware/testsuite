@@ -823,6 +823,7 @@ proc job_environment_basic_amount_uninherited {} {
 proc job_environment_basic_ld_preload {} {
    global ts_config
    global qsub_output
+   global CHECK_IS_SANITIZER_RUN CHECK_USER
 
    # Two contracts, depending on the release under test.
    #
@@ -876,8 +877,19 @@ proc job_environment_basic_ld_preload {} {
    set host [lindex $ts_config(execd_nodes) 0]
    set arch [resolve_arch $host]
    set libdrmaa "$ts_config(product_root)/lib/$arch/libdrmaa.so"
-   set output [start_sge_bin "qrsh" "-l h=$host -v LD_PRELOAD=$libdrmaa env"]
-   if {[string first "LD_PRELOAD=$libdrmaa" $output] < 0} {
+   set preload $libdrmaa
+   if {$CHECK_IS_SANITIZER_RUN} {
+      # a binary built with sanitizers refuses to start when another library is loaded before the
+      # sanitizer runtime, so the runtime has to come first, see doc/sanitizer_runs.md
+      set output [start_remote_prog $host $CHECK_USER "ldd" $libdrmaa]
+      if {![regexp {libasan\.so\S*\s+=>\s+(\S+)} $output whole asan_lib]} {
+         ts_log_severe "cannot find the sanitizer runtime of $libdrmaa on host $host:\n$output"
+         return
+      }
+      set preload "$asan_lib:$libdrmaa"
+   }
+   set output [start_sge_bin "qrsh" "-l h=$host -v LD_PRELOAD=$preload env"]
+   if {[string first "LD_PRELOAD=$preload" $output] < 0} {
       ts_log_severe "LD_PRELOAD was not set in the environment:\n$output"
    } else {
       ts_log_fine "LD_PRELOAD was set in the environment"

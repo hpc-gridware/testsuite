@@ -76,7 +76,7 @@ lappend check_functions       "nat_submit_client_allow_any_submithosts"
 # the check.
 proc nat_submit_client_setup {} {
    get_current_cluster_config_array ts_config
-   global CHECK_USER CHECK_ACTUAL_TEST_PATH
+   global CHECK_USER CHECK_ACTUAL_TEST_PATH CHECK_IS_SANITIZER_RUN
    global nat_submit_client_host nat_submit_client_image
    global nat_submit_client_hostname
    global nat_submit_client_settings nat_submit_client_master_ip
@@ -178,6 +178,10 @@ proc nat_submit_client_setup {} {
    append build_args " --build-arg TS_USER=$CHECK_USER"
    append build_args " --build-arg TS_UID=$uid"
    append build_args " --build-arg TS_GID=$gid"
+   # clients built with sanitizers need the sanitizer runtime, see doc/sanitizer_runs.md
+   if {$CHECK_IS_SANITIZER_RUN} {
+      append build_args " --build-arg 'EXTRA_PACKAGES=libasan8 libubsan1'"
+   }
    append build_args " -f $dockerfile $CHECK_ACTUAL_TEST_PATH"
 
    ts_log_fine "building image $nat_submit_client_image on $nat_submit_client_host"

@@ -13,12 +13,16 @@
 # distribution: util/arch answers lx-* above glibc 2.17, ulx-* at exactly
 # 2.17 and xlx-* below it. Any current base image lands on lx-*, which is
 # what a cluster normally has installed.
+#
+# EXTRA_PACKAGES names further packages to install, e.g. the sanitizer runtime
+# (libasan8 libubsan1) the clients need when they were built with sanitizers.
 
 ARG BASE_IMAGE=ubuntu:24.04
 FROM ${BASE_IMAGE}
 
+ARG EXTRA_PACKAGES=""
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends binutils && \
+    apt-get install -y --no-install-recommends binutils ${EXTRA_PACKAGES} && \
     rm -rf /var/lib/apt/lists/*
 
 ARG TS_USER=sgetest
