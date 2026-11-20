@@ -83,6 +83,8 @@ lappend cull_module_tests {test_tom_ops_free "9.2.0" 0 ""}
 lappend cull_module_tests {test_tom_ops_layout "9.2.0" 0 ""}
 lappend cull_module_tests {test_tom_ops_atomic "9.2.0" 0 ""}
 lappend cull_module_tests {test_tom_model "9.2.0" 0 ""}
+lappend cull_module_tests {test_tom_raw_access "9.2.0" 0 ""}
+lappend cull_module_tests {test_tom_raw_ops "9.2.0" 0 ""}
 
 # the description of a level is the name of its binary, one literal line per
 # entry of cull_module_tests in the same order: tools that list the supported
@@ -123,6 +125,8 @@ set check_description(32) "test_tom_ops_free"
 set check_description(33) "test_tom_ops_layout"
 set check_description(34) "test_tom_ops_atomic"
 set check_description(35) "test_tom_model"
+set check_description(36) "test_tom_raw_access"
+set check_description(37) "test_tom_raw_ops"
 
 set check_functions {}
 lappend check_functions "cull_module_tests_run"
