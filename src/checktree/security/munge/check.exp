@@ -160,11 +160,27 @@ proc munge_fake_gid {} {
    munge_do_fake_submit "SGE_DEBUG_FAKE_GID" "0" 0 "" "" $pattern
 }
 
+## @brief Name of the message macro for a corrected user or group name from the authinfo
+#
+# From 9.2.0 the message is MSG_GDI_AUTHINFO_CORRECTING<WHAT>NAME_SS (the check of the
+# sender moved from the list library to gdi), before it is MSG_CULL_AUTHINFO_CORRECTING<WHAT>NAME_SS.
+# The new name is used when the tested version knows it, so the check runs on 9.0, 9.1 and 9.2.
+#
+# @param what USER or GROUP
+# @return the name of the macro the tested version defines
+proc munge_authinfo_correcting_macro {what} {
+   set macro "MSG_GDI_AUTHINFO_CORRECTING${what}NAME_SS"
+   if {[sge_macro $macro 0] == -1} {
+      set macro "MSG_CULL_AUTHINFO_CORRECTING${what}NAME_SS"
+   }
+   return $macro
+}
+
 proc munge_fake_user {} {
    global CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_FIRST_FOREIGN_SYSTEM_GROUP
    global CHECK_SECOND_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_GROUP
    set group [lindex $CHECK_FIRST_FOREIGN_SYSTEM_GROUP 0]
-   set pattern [translate_macro "MSG_CULL_AUTHINFO_CORRECTINGUSERNAME_SS" $CHECK_SECOND_FOREIGN_SYSTEM_USER $CHECK_FIRST_FOREIGN_SYSTEM_USER]
+   set pattern [translate_macro [munge_authinfo_correcting_macro USER] $CHECK_SECOND_FOREIGN_SYSTEM_USER $CHECK_FIRST_FOREIGN_SYSTEM_USER]
    munge_do_fake_submit "SGE_DEBUG_FAKE_USERNAME" $CHECK_SECOND_FOREIGN_SYSTEM_USER 1 $CHECK_FIRST_FOREIGN_SYSTEM_USER $group $pattern
 }
 
@@ -173,7 +189,7 @@ proc munge_fake_group {} {
    global CHECK_SECOND_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_GROUP
    set fake_group [lindex $CHECK_SECOND_FOREIGN_SYSTEM_GROUP 0]
    set group [lindex $CHECK_FIRST_FOREIGN_SYSTEM_GROUP 0]
-   set pattern [translate_macro "MSG_CULL_AUTHINFO_CORRECTINGGROUPNAME_SS" $fake_group $group]
+   set pattern [translate_macro [munge_authinfo_correcting_macro GROUP] $fake_group $group]
    munge_do_fake_submit "SGE_DEBUG_FAKE_GROUPNAME" $fake_group 1 $CHECK_FIRST_FOREIGN_SYSTEM_USER $group $pattern
 }
 
@@ -215,7 +231,7 @@ proc munge_tight_pe {} {
 
       # now try to fake a different user
       # @todo wait for correcting user name from authinfo
-      set pattern [translate_macro "MSG_CULL_AUTHINFO_CORRECTINGUSERNAME_SS" $CHECK_FIRST_FOREIGN_SYSTEM_USER $CHECK_USER]
+      set pattern [translate_macro [munge_authinfo_correcting_macro USER] $CHECK_FIRST_FOREIGN_SYSTEM_USER $CHECK_USER]
       init_logfile_wait $munge_host [get_execd_messages_file $munge_host]
       set myenv(SGE_DEBUG_FAKE_USERNAME) $CHECK_FIRST_FOREIGN_SYSTEM_USER
       start_sge_bin "qrsh" "-inherit $resolved_host hostname" $munge_host $CHECK_USER prg_exit_state 60 "" "bin" "output_lines" myenv
