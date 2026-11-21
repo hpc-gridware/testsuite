@@ -111,12 +111,16 @@ proc LSB_lockfile_test {} {
                    ts_log_fine $output
                    ts_log_fine "ok"
                    ts_log_fine "try to stop sge_execd as user root ..."
+                   set execd_pid [get_execd_pid $exec_host]
                    set output [start_remote_prog $exec_host "root" "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "stop" "exit_val" $my_timeout ]
                    if {$exit_val != 0} {
                       ts_log_severe "failed - rc-script runs into any other error, tried to stop as user root on host $exec_host"
                       return
                    }
                    ts_log_fine $output
+                   if {![LSB_lockfile_wait_execd_gone $exec_host $execd_pid]} {
+                      return
+                   }
 
                    ts_log_fine "ok"
                    ts_log_fine "checking /var/lock/subsys/sgeexecd file ..."
@@ -150,12 +154,18 @@ proc LSB_lockfile_test {} {
 
                       ts_log_fine "ok"
                       ts_log_fine "try to stop sge_execd as user $CHECK_USER ..."
+                      set execd_pid [get_execd_pid $exec_host]
                       set output [start_remote_prog $exec_host $CHECK_USER "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd" "stop" "exit_val" $my_timeout]
                       if {$exit_val != 0} {
                          ts_log_severe "failed - rc-script runs into any error on host $exec_host, tried to stop as $CHECK_USER"
                          return
                       }
                       ts_log_fine $output
+                      # the rc-script only sends SIGTERM, the start below fails while the
+                      # old sge_execd still holds the port
+                      if {![LSB_lockfile_wait_execd_gone $exec_host $execd_pid]} {
+                         return
+                      }
                    }
 
                    ts_log_fine "ok"
@@ -183,10 +193,14 @@ proc LSB_lockfile_test {} {
                    if {$execd_under_systemd} {
                       ts_log_fine "restarting sge_execd via systemd ..."
                       set sgeexecd "$ts_config(product_root)/$ts_config(cell)/common/sgeexecd"
+                      set execd_pid [get_execd_pid $exec_host]
                       set output [start_remote_prog $exec_host "root" $sgeexecd "stop" \
                                   "exit_val" $my_timeout]
                       if {$exit_val != 0} {
                          ts_log_severe "failed - cannot stop sge_execd on host $exec_host:\n$output"
+                         return
+                      }
+                      if {![LSB_lockfile_wait_execd_gone $exec_host $execd_pid]} {
                          return
                       }
                       if {![systemd_start_service $exec_host "execd"]} {
@@ -207,4 +221,29 @@ proc LSB_lockfile_test {} {
    if {$found_linux == 0} {
       ts_log_config "test not possible, no linux host found in configuration!"
    }
+}
+
+## @brief Wait until a stopped sge_execd has terminated
+#
+# The rc-script only sends SIGTERM to sge_execd and returns at once. A sge_execd started
+# before the old one has terminated cannot bind the execd port and exits again.
+#
+# @param host the execution host
+# @param pid  the pid of the sge_execd before it was stopped
+# @return 1 when the sge_execd has terminated, 0 on timeout (a severe error is logged)
+proc LSB_lockfile_wait_execd_gone {host pid} {
+   if {$pid == 0} {
+      ts_log_severe "no sge_execd pid on host $host"
+      return 0
+   }
+   set end [expr [clock seconds] + [ts_scale_timeout 60]]
+   while {[clock seconds] < $end} {
+      if {[is_pid_with_name_existing $host $pid "sge_execd"] != 0} {
+         ts_log_fine "sge_execd (pid $pid) on host $host has terminated"
+         return 1
+      }
+      after 1000
+   }
+   ts_log_severe "sge_execd (pid $pid) on host $host did not terminate"
+   return 0
 }
