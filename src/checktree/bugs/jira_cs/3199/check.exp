@@ -1,0 +1,123 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3199: when sge_qmaster rejected the request, qconf -secl, -stl and -sep did not free the
+# answer list and exited with 0. A successful qconf -stl exited with 1.
+# The check calls the three options on a host that is neither a submit host nor an admin host,
+# where sge_qmaster rejects the request. In a build with -DENABLE_SANITIZERS=ON, LeakSanitizer
+# writes a report to stderr and changes the exit code if qconf leaks.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range {"9.1.8" "9.2.0"}
+
+set check_name           "issue_3199"
+set check_category       "BUG QCONF VERIFIED"
+set check_description(0) "qconf -secl, -stl and -sep exit with 1 and do not leak memory when\
+                          sge_qmaster rejects the request (CS-3199)"
+
+set check_needs          "init_core_system"
+set check_root_access_needs "no"
+
+set check_setup_function issue_3199_setup
+set check_cleanup_function issue_3199_cleanup
+
+set check_functions {}
+lappend check_functions "issue_3199_rejected"
+lappend check_functions "issue_3199_accepted"
+
+# ---------------------------------------------------------------------------
+
+## @brief Looks up a host that is neither a submit host nor an admin host
+#
+# @return 0 on success, 99 if no such host is configured
+proc issue_3199_setup {} {
+   global issue_3199_non_cluster_host
+
+   set issue_3199_non_cluster_host [host_conf_get_non_cluster_host]
+   if {$issue_3199_non_cluster_host == ""} {
+      # host_conf_get_non_cluster_host has already logged the config error
+      return 99
+   }
+
+   return 0
+}
+
+## @brief Unsets the global variables of the check
+proc issue_3199_cleanup {} {
+   global issue_3199_non_cluster_host
+
+   unset -nocomplain issue_3199_non_cluster_host
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief Runs qconf with one option and checks its exit code and output
+#
+# @param option        the qconf option
+# @param host          the host to run qconf on
+# @param expected_exit the expected exit code
+# @param description   what the call is, for the error messages
+proc issue_3199_run_qconf {option host expected_exit description} {
+   set output [start_sge_bin "qconf" $option $host]
+   set exit_state $prg_exit_state
+   ts_log_fine "qconf $option on host $host exited with $exit_state:\n$output"
+
+   if {$exit_state != $expected_exit} {
+      ts_log_severe "qconf $option $description exited with $exit_state, expected\
+                     $expected_exit:\n$output"
+   }
+   if {[string first "LeakSanitizer" $output] >= 0} {
+      ts_log_severe "qconf $option $description leaks memory:\n$output"
+   }
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief A rejected request makes qconf exit with 1 without leaking memory
+proc issue_3199_rejected {} {
+   global issue_3199_non_cluster_host
+
+   foreach option {"-secl" "-stl" "-sep"} {
+      issue_3199_run_qconf $option $issue_3199_non_cluster_host 1 \
+         "on host $issue_3199_non_cluster_host, which is neither submit nor admin host,"
+   }
+}
+
+## @brief A successful request makes qconf exit with 0
+proc issue_3199_accepted {} {
+   get_current_cluster_config_array ts_config
+
+   foreach option {"-secl" "-stl" "-sep"} {
+      issue_3199_run_qconf $option $ts_config(master_host) 0 \
+         "on the master host $ts_config(master_host)"
+   }
+}
