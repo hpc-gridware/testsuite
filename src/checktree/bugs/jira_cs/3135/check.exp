@@ -1,0 +1,320 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3135: sge_qmaster processed requests which act on objects of another user.
+# - The exit message of an event client removed the event client, whoever sent it.
+# - An acknowledgement of events was processed for any event client, so any user could drop the
+#   events of the event clients of other users before they were delivered.
+# - With Munge authentication, an acknowledgement of a signal (ACK_SIGJOB) from a user who is
+#   neither the admin user nor root was logged, but processed anyway.
+# - sge_string2file() relied on the umask for the mode of the files it writes; with classic
+#   spooling the job scripts in the qmaster spool directory were readable by everybody.
+# The test client test_qmaster_foreign_requests registers an event client as CHECK_USER and
+# sends the messages as CHECK_FIRST_FOREIGN_SYSTEM_USER.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_version_range {"9.1.8" "9.2.0"}
+
+set check_name           "issue_3135"
+set check_category       "BUG EVENTCLIENT SECURITY TESTBIN VERIFIED"
+set check_description(0) "sge_qmaster rejects the exit message, event acknowledgements and signal\
+                          acknowledgements of users who do not own the object, and spools job\
+                          scripts with mode 0600 (CS-3135)"
+
+set check_needs          "init_core_system"
+set check_root_access_needs "no"
+
+set check_setup_function issue_3135_setup
+set check_cleanup_function issue_3135_cleanup
+
+set check_functions {}
+lappend check_functions "issue_3135_foreign_event_client_exit"
+lappend check_functions "issue_3135_foreign_event_ack"
+lappend check_functions "issue_3135_foreign_signal_ack"
+lappend check_functions "issue_3135_job_script_mode"
+
+# ---------------------------------------------------------------------------
+
+## @brief Checks that the test client is installed
+#
+# @return 0 on success, 99 if the test client is not installed
+proc issue_3135_setup {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER issue_3135_host issue_3135_client
+
+   set issue_3135_host $ts_config(master_host)
+   set issue_3135_client [get_test_path "test_qmaster_foreign_requests" $issue_3135_host]
+   if {![is_remote_file $issue_3135_host $CHECK_USER $issue_3135_client]} {
+      ts_log_config "test binary $issue_3135_client is not installed"
+      return 99
+   }
+
+   return 0
+}
+
+## @brief Removes the jobs of the check
+proc issue_3135_cleanup {} {
+   global issue_3135_host issue_3135_client
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   unset -nocomplain issue_3135_host issue_3135_client
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief Registers an event client as CHECK_USER
+#
+# Starts the test client in register mode. It subscribes the job add events and prints
+# "JOB_ADD <job_id>" for every one it receives.
+#
+# @param edtime  the event delivery interval of the event client in seconds
+# @param seconds how long the event client stays registered
+# @param id_var  name of the variable which receives the id of the event client
+# @return the spawn id list of the test client, empty if the event client was not registered
+proc issue_3135_start_event_client {edtime seconds id_var} {
+   global CHECK_USER issue_3135_host issue_3135_client
+   upvar $id_var id
+
+   set id 0
+   set sid [open_remote_spawn_process $issue_3135_host $CHECK_USER $issue_3135_client \
+                                      "register $seconds $edtime"]
+   if {[llength $sid] < 2} {
+      ts_log_severe "cannot start $issue_3135_client on host $issue_3135_host"
+      return {}
+   }
+   set line [issue_3135_wait_for_line $sid "EVENT_CLIENT_ID *" 60]
+   if {$line == ""} {
+      ts_log_severe "the test client did not register an event client"
+      close_spawn_process $sid
+      return {}
+   }
+   set id [lindex $line 1]
+   ts_log_fine "event client $id of user $CHECK_USER is registered"
+
+   return $sid
+}
+
+## @brief Waits for an output line of a test client started in the background
+#
+# @param sid     the spawn id list of the test client
+# @param pattern a string match pattern for the line
+# @param seconds how long to wait
+# @return the first matching line, empty on timeout or when the test client exited
+proc issue_3135_wait_for_line {sid pattern seconds} {
+   set sp_id [lindex $sid 1]
+   set end_time [expr {[timestamp] + $seconds}]
+   while {[timestamp] < $end_time} {
+      set timeout 5
+      expect {
+         -i $sp_id full_buffer {
+            ts_log_severe "expect full_buffer error while reading from the test client"
+            return ""
+         }
+         -i $sp_id timeout {
+         }
+         -i $sp_id eof {
+            ts_log_fine "the test client exited"
+            return ""
+         }
+         -i $sp_id -- "*\n" {
+            foreach line [split $expect_out(0,string) "\n"] {
+               set line [string trim $line]
+               if {$line != ""} {
+                  ts_log_finer "test client: $line"
+                  if {[string match $pattern $line]} {
+                     return $line
+                  }
+               }
+            }
+         }
+      }
+   }
+   return ""
+}
+
+## @brief Runs the test client as CHECK_FIRST_FOREIGN_SYSTEM_USER
+#
+# @param args the arguments of the test client
+# @return 1 if the test client sent the message, 0 otherwise (a severe error is logged)
+proc issue_3135_run_as_foreign_user {args} {
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER issue_3135_host
+
+   set output [start_test_bin "test_qmaster_foreign_requests" $args $issue_3135_host \
+                              $CHECK_FIRST_FOREIGN_SYSTEM_USER]
+   if {$prg_exit_state != 0 || ![string match "*done, rc=0*" $output]} {
+      ts_log_severe "test_qmaster_foreign_requests $args failed as user\
+                     $CHECK_FIRST_FOREIGN_SYSTEM_USER (exit state $prg_exit_state):\n$output"
+      return 0
+   }
+   return 1
+}
+
+## @brief Checks whether an event client is registered
+#
+# @param id the id of the event client
+# @return 1 if qconf -secl lists the event client, 0 otherwise
+proc issue_3135_event_client_exists {id} {
+   global issue_3135_host
+
+   set output [start_sge_bin "qconf" "-secl" $issue_3135_host]
+   foreach line [split $output "\n"] {
+      if {[lindex $line 0] == $id} {
+         return 1
+      }
+   }
+   return 0
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief Another user cannot remove an event client with its exit message
+proc issue_3135_foreign_event_client_exit {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
+
+   set sid [issue_3135_start_event_client 5 120 id]
+   if {$sid == {}} {
+      return
+   }
+
+   init_logfile_wait $ts_config(master_host) [get_qmaster_messages_file]
+   if {[issue_3135_run_as_foreign_user exit $id]} {
+      set pattern [translate_macro MSG_EVE_NOTOWNER_SUU "exit" $id "*"]
+      logfile_wait $pattern 60 1 0
+      if {$logfile_wait_error != 0} {
+         ts_log_severe "sge_qmaster did not log the rejected exit message of event client $id\
+                        sent by user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
+      }
+      # a terminated event client is removed within a few seconds
+      sleep_for_seconds 10 "giving sge_qmaster time to remove a terminated event client"
+      if {![issue_3135_event_client_exists $id]} {
+         ts_log_severe "event client $id of user $CHECK_USER was removed by an exit message of\
+                        user $CHECK_FIRST_FOREIGN_SYSTEM_USER"
+      }
+   } else {
+      close_logfile_wait
+   }
+
+   close_spawn_process $sid
+}
+
+## @brief Another user cannot acknowledge, and thereby drop, the events of an event client
+#
+# The event client has an event delivery interval of 20 seconds. A job add event is created by a
+# submit, and before it is delivered, the other user acknowledges all events of the event client.
+# The event client must still receive the event.
+proc issue_3135_foreign_event_ack {} {
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER
+
+   set sid [issue_3135_start_event_client 20 120 id]
+   if {$sid == {}} {
+      return
+   }
+
+   set job_id [submit_job "-h -o /dev/null -e /dev/null -b y /bin/true"]
+   if {$job_id > 0} {
+      if {[issue_3135_run_as_foreign_user ack_event $id 4294967295]} {
+         set line [issue_3135_wait_for_line $sid "JOB_ADD $job_id" 70]
+         if {$line == ""} {
+            ts_log_severe "event client $id of user $CHECK_USER did not receive the add event of\
+                           job $job_id after user $CHECK_FIRST_FOREIGN_SYSTEM_USER acknowledged\
+                           its events"
+         }
+      }
+      delete_job $job_id
+   }
+
+   close_spawn_process $sid
+}
+
+## @brief With Munge, a signal acknowledgement of another user than the admin user is dropped
+#
+# Before the fix the acknowledgement was logged as coming from a wrong uid, but then passed on to
+# the handling of signal acknowledgements, which logs that it does not come from sge_execd.
+proc issue_3135_foreign_signal_ack {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER
+
+   if {![config_has_product_feature "munge"]} {
+      ts_log_config "the uid of a signal acknowledgement is only checked with munge authentication"
+      return
+   }
+
+   init_logfile_wait $ts_config(master_host) [get_qmaster_messages_file]
+   if {![issue_3135_run_as_foreign_user ack_sigjob 1 1]} {
+      close_logfile_wait
+      return
+   }
+   set pattern [translate_macro MSG_MESSAGE_FROM_DAEMON_WRONG_UID_SSUU "*" "*" "*" "*"]
+   logfile_wait $pattern 60 0 0
+   if {$logfile_wait_error != 0} {
+      ts_log_severe "sge_qmaster did not log the signal acknowledgement of user\
+                     $CHECK_FIRST_FOREIGN_SYSTEM_USER as coming from a wrong uid"
+      close_logfile_wait
+      return
+   }
+   # the acknowledgement must not reach the handling of signal acknowledgements
+   set pattern [translate_macro MSG_COM_ACK_S "*"]
+   logfile_wait $pattern 10 1 0
+   if {$logfile_wait_error == 0} {
+      ts_log_severe "sge_qmaster processed the signal acknowledgement of user\
+                     $CHECK_FIRST_FOREIGN_SYSTEM_USER although it came from a wrong uid"
+   }
+}
+
+## @brief With classic spooling, a job script is spooled with mode 0600
+proc issue_3135_job_script_mode {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+
+   if {$ts_config(spooling_method) != "classic"} {
+      ts_log_config "job scripts are only spooled into files with classic spooling"
+      return
+   }
+
+   set script "$ts_config(product_root)/examples/jobs/sleeper.sh"
+   set job_id [submit_job "-h -o /dev/null -e /dev/null $script 1"]
+   if {$job_id <= 0} {
+      return
+   }
+   set spooled "[get_qmaster_spool_dir]/job_scripts/$job_id"
+   set output [start_remote_prog $ts_config(master_host) $CHECK_USER "stat" "-c %a $spooled"]
+   set mode [string trim $output]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "cannot stat the spooled job script $spooled:\n$output"
+   } elseif {$mode != "600"} {
+      ts_log_severe "the spooled job script $spooled has mode $mode, expected 600"
+   }
+   delete_job $job_id
+}
