@@ -1081,6 +1081,29 @@ proc compile_source_cmake_make_build_dir {compile_hosts report_var} {
    return $error_count
 }
 
+## @brief The number of parallel make jobs on a compile host
+#
+# The processors of the host from the host configuration, capped by the environment
+# variable TS_COMPILE_JOBS_MAX when it holds a positive integer. gcs-ws-build sets it to
+# half the cores of the build host for feature workspaces, so that two workspaces build
+# side by side on one build host.
+#
+# @param host the compile host
+# @return the number of make jobs, at least 1
+proc compile_get_make_jobs {host} {
+   global env
+
+   set jobs [node_get_processors $host]
+   if {[info exists env(TS_COMPILE_JOBS_MAX)] && [string is integer -strict $env(TS_COMPILE_JOBS_MAX)] &&
+       $env(TS_COMPILE_JOBS_MAX) > 0 && $jobs > $env(TS_COMPILE_JOBS_MAX)} {
+      set jobs $env(TS_COMPILE_JOBS_MAX)
+   }
+   if {$jobs < 1} {
+      set jobs 1
+   }
+   return $jobs
+}
+
 proc compile_source_cmake_execute {task_name compile_hosts options_var report_var} {
    global CHECK_USER
 
@@ -1500,7 +1523,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
          } else {
             set options($host,cmd) "make"
          }
-         set num_procs [node_get_processors $host]
+         set num_procs [compile_get_make_jobs $host]
          if {$num_procs > 1} {
             set options($host,args) "-j $num_procs VERBOSE=1 3rdparty"
          } else {
@@ -1521,7 +1544,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
          } else {
             set options($host,cmd) "make"
          }
-         set num_procs [node_get_processors $host]
+         set num_procs [compile_get_make_jobs $host]
          if {$num_procs > 1} {
             set options($host,args) "-j $num_procs VERBOSE=1"
          } else {
@@ -1582,7 +1605,7 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
       # call make install on every host
       unset -nocomplain options
       foreach host $compile_hosts {
-         set num_procs [node_get_processors $host]
+         set num_procs [compile_get_make_jobs $host]
          set arch [resolve_arch $host]
          if {$arch == "sol-amd64" || $arch == "osol-amd64"} {
             set options($host,cmd) "gmake"
