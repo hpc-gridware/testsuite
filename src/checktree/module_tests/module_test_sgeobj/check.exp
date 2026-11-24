@@ -67,7 +67,7 @@ lappend sgeobj_module_tests {test_sgeobj_Matcher "9.2.0" 1 ""}
 lappend sgeobj_module_tests {test_sgeobj_AnswerException "9.2.0" 0 ""}
 lappend sgeobj_module_tests {test_sgeobj_unique_keys "9.2.0" 0 ""}
 lappend sgeobj_module_tests {test_sgeobj_cqueue "9.2.0" 0 ""}
-lappend sgeobj_module_tests {test_sgeobj_job "9.2.0" 0 ""}
+lappend sgeobj_module_tests {test_sgeobj_job "9.1.9" 0 ""}
 lappend sgeobj_module_tests {test_sgeobj_verify_type "9.2.0" 0 ""}
 # CS-3103: the string/list converters and the XML writer, host lookup and master list release on the raw API
 lappend sgeobj_module_tests {test_sgeobj_parse_util "9.2.0" 0 ""}
