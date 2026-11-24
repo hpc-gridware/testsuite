@@ -73,7 +73,7 @@ lappend uti_module_tests {test_uti_exception "9.2.0" 0 ""}
 # CS-2531, CS-2361 (written for the 9.1.8 backport, CS-3129)
 lappend uti_module_tests {test_uti_os_pids "9.1.8" 0 ""}
 lappend uti_module_tests {test_uti_language "9.1.8" 0 ""}
-# CS-3202: sge_rmdir() never follows a symbolic link
+# CS-3202, CS-3203: sge_rmdir() and ocs_mkdir_for_owner() never follow a symbolic link
 lappend uti_module_tests {test_uti_dir_symlink "9.1.9" 0 ""}
 
 # the description of a level is the name of its binary, one literal line per
