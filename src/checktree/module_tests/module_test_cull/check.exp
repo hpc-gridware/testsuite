@@ -106,6 +106,8 @@ lappend cull_module_tests {test_tom_core_pack_format "9.2.0" 0 ""}
 lappend cull_module_tests {test_tom_core_lazy "9.2.0" 0 ""}
 lappend cull_module_tests {test_tom_core_descr "9.2.0" 0 ""}
 lappend cull_module_tests {test_tom_core_plugin "9.2.0" 0 ""}
+# the code examples of the typed object model developer documentation, compiled and run (gcs-extensions)
+lappend cull_module_tests {test_tom_howto "9.2.0" 1 ""}
 
 # the description of a level is the name of its binary, one literal line per
 # entry of cull_module_tests in the same order: tools that list the supported
@@ -165,6 +167,7 @@ set check_description(51) "test_tom_core_pack_format"
 set check_description(52) "test_tom_core_lazy"
 set check_description(53) "test_tom_core_descr"
 set check_description(54) "test_tom_core_plugin"
+set check_description(55) "test_tom_howto"
 
 set check_functions {}
 lappend check_functions "cull_module_tests_run"
