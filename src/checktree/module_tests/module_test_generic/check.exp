@@ -74,7 +74,7 @@ set check_needs           "init_core_system"
 # The index IS the level, so entries must never be reordered or deleted -- that
 # would silently repoint every level below. To retire a binary, keep its slot
 # and let the run function skip it. The one exception so far: on 2026-11-04 the
-# CULL, uti and sgeobj binaries moved into module_test_cull, module_test_uti and
+# The list library, uti and sgeobj binaries moved into module_test_tom, module_test_uti and
 # module_test_sgeobj and this list was renumbered compactly, as only levels 0-99
 # run (CS-2996).
 #
@@ -84,8 +84,8 @@ set check_needs           "init_core_system"
 # across versions, which a conditional lappend would not.
 #
 # Binaries that need a running cluster do NOT belong here -- check_needs is "".
-# They live in module_test_cluster. The binaries of libs/cull, libs/uti and
-# libs/sgeobj live in module_test_cull, module_test_uti and module_test_sgeobj.
+# They live in module_test_cluster. The binaries of libs/cull (9.1) or libs/tom (9.2), libs/uti and
+# libs/sgeobj live in module_test_tom, module_test_uti and module_test_sgeobj.
 # ---------------------------------------------------------------------------
 
 # {binary min_version needs_gcs max_version}

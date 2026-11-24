@@ -19,7 +19,7 @@
 #___INFO__MARK_END_NEW__
 
 ## @file
-# @brief Running module test binaries, one binary per level (module_test_generic, module_test_cull,
+# @brief Running module test binaries, one binary per level (module_test_generic, module_test_tom,
 #        module_test_uti, module_test_sgeobj)
 
 # A library file may be sourced from inside a proc, so the list is declared
@@ -43,7 +43,7 @@ set module_tests_with_report {test_comm_xml_parse test_sgeobj_rsmap test_sgeobj_
 # host. A binary whose version or feature requirement the cluster does not meet
 # is skipped via ts_log_info (a configuration issue, not a failure). Used by the
 # module test checks whose levels are one binary each (module_test_generic,
-# module_test_cull, module_test_uti, module_test_sgeobj).
+# module_test_tom, module_test_uti, module_test_sgeobj).
 #
 # @param module_tests list of {binary min_version needs_gcs max_version}, indexed by level
 # @return none; reports failures through ts_log_severe

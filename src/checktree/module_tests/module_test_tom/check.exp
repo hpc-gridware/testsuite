@@ -30,14 +30,14 @@ global check_root_access_needs
 
 set check_root_access_needs "yes"
 
-set check_name            "module_test_cull"
-set check_category        "MODULE TESTBIN VERIFIED CULL"
+set check_name            "module_test_tom"
+set check_category        "MODULE TESTBIN VERIFIED TOM"
 # start_test_bin runs the binary from the INSTALLED $SGE_ROOT/testbin, so the
 # product has to be installed (see module_test_generic)
 set check_needs           "init_core_system"
 
 # ---------------------------------------------------------------------------
-# The module tests of libs/cull, one level per binary, laid out like
+# The module tests of the list library (libs/cull in 9.1, libs/tom in 9.2), one level per binary, laid out like
 # module_test_generic (see there): the level is the index into the list, in the
 # short band 0-99, entries are appended and never reordered or deleted.
 # Version and feature gating is done by the run function, not by the level.
@@ -45,72 +45,72 @@ set check_needs           "init_core_system"
 
 # {binary min_version needs_gcs max_version}
 # check.exp is sourced from inside a proc, so the list is declared global here.
-global cull_module_tests
-set cull_module_tests {}
-lappend cull_module_tests {test_cull_hash "" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_list "" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_observe "" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_pack "" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_enumeration "" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_no_transfer "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_sort "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_access "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_lookup "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_db "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_select_pack "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_owner "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_pack_format "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_lazy "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_descr "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_cull_plugin "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_traits "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_handles "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_list "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_legacy "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_unique "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_soft_path "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_ops_list "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_ops_own "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_ops_lookup "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_ops_keyed "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_ops_incr "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_ops_select "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_ops_sort "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_ops_pack "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_ops_dump "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_ops_rest "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_ops_free "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_ops_layout "9.2.0" 0 "9.2.0"}
-lappend cull_module_tests {test_tom_ops_atomic "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_model "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_raw_access "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_raw_ops "9.2.0" 0 ""}
+global tom_module_tests
+set tom_module_tests {}
+lappend tom_module_tests {test_cull_hash "" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_list "" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_observe "" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_pack "" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_enumeration "" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_no_transfer "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_sort "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_access "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_lookup "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_db "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_select_pack "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_owner "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_pack_format "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_lazy "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_descr "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_cull_plugin "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_traits "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_handles "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_list "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_legacy "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_unique "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_soft_path "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_ops_list "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_ops_own "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_ops_lookup "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_ops_keyed "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_ops_incr "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_ops_select "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_ops_sort "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_ops_pack "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_ops_dump "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_ops_rest "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_ops_free "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_ops_layout "9.2.0" 0 "9.2.0"}
+lappend tom_module_tests {test_tom_ops_atomic "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_model "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_raw_access "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_raw_ops "9.2.0" 0 ""}
 # CS-3103: the old-vs-new comparison binaries above (test_tom_legacy, test_tom_ops_*) were replaced in 9.2.0 by
 # pure TOM tests; their levels stay, gated by max_version
-lappend cull_module_tests {test_tom_raw_build "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_free "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_raw_build "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_free "9.2.0" 0 ""}
 # CS-3103: the CULL core tests above were renamed in 9.2.0 when the old list library was removed;
 # their levels stay, gated by max_version, and the 9.2 binaries follow
-lappend cull_module_tests {test_tom_core_hash "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_list "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_pack "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_enumeration "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_no_transfer "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_sort "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_access "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_lookup "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_db "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_select_pack "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_owner "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_pack_format "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_lazy "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_descr "9.2.0" 0 ""}
-lappend cull_module_tests {test_tom_core_plugin "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_hash "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_list "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_pack "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_enumeration "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_no_transfer "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_sort "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_access "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_lookup "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_db "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_select_pack "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_owner "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_pack_format "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_lazy "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_descr "9.2.0" 0 ""}
+lappend tom_module_tests {test_tom_core_plugin "9.2.0" 0 ""}
 # the code examples of the typed object model developer documentation, compiled and run (gcs-extensions)
-lappend cull_module_tests {test_tom_howto "9.2.0" 1 ""}
+lappend tom_module_tests {test_tom_howto "9.2.0" 1 ""}
 
 # the description of a level is the name of its binary, one literal line per
-# entry of cull_module_tests in the same order: tools that list the supported
+# entry of tom_module_tests in the same order: tools that list the supported
 # levels (gcs-testscan) read these lines without running the Tcl
 set check_description(0) "test_cull_hash"
 set check_description(1) "test_cull_list"
@@ -170,17 +170,17 @@ set check_description(54) "test_tom_core_plugin"
 set check_description(55) "test_tom_howto"
 
 set check_functions {}
-lappend check_functions "cull_module_tests_run"
+lappend check_functions "tom_module_tests_run"
 
-set check_cleanup_function "cull_module_tests_cleanup"
+set check_cleanup_function "tom_module_tests_cleanup"
 
 
-## @brief Run the one CULL module test binary this level selects
+## @brief Run the one list library module test binary this level selects
 #
 # @return none; reports failures through ts_log_severe
-proc cull_module_tests_run {} {
-   global cull_module_tests
-   ocs_module_test_run_level $cull_module_tests
+proc tom_module_tests_run {} {
+   global tom_module_tests
+   ocs_module_test_run_level $tom_module_tests
 }
 
 ## @brief Delete the file the pack test leaves in the home directory
@@ -188,7 +188,7 @@ proc cull_module_tests_run {} {
 # test_cull_pack (up to 9.1) writes test_cull_pack.txt, test_tom_core_pack (9.2) test_tom_core_pack.txt.
 #
 # @return none
-proc cull_module_tests_cleanup {} {
+proc tom_module_tests_cleanup {} {
    global CHECK_USER
    set exec_host [gethostname]
    set home_dir_path [get_home_dir_path $CHECK_USER $exec_host]
