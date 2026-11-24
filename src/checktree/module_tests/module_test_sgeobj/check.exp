@@ -72,6 +72,8 @@ lappend sgeobj_module_tests {test_sgeobj_verify_type "9.2.0" 0 ""}
 # CS-3103: the string/list converters and the XML writer, host lookup and master list release on the raw API
 lappend sgeobj_module_tests {test_sgeobj_parse_util "9.2.0" 0 ""}
 lappend sgeobj_module_tests {test_sgeobj_obj_misc "9.2.0" 0 ""}
+# CS-3138: text from a JSV script is never used as a printf format
+lappend sgeobj_module_tests {test_sgeobj_jsv "9.2.0" 0 ""}
 
 # the description of a level is the name of its binary, one literal line per
 # entry of sgeobj_module_tests in the same order: tools that list the supported
@@ -101,6 +103,7 @@ set check_description(21) "test_sgeobj_job"
 set check_description(22) "test_sgeobj_verify_type"
 set check_description(23) "test_sgeobj_parse_util"
 set check_description(24) "test_sgeobj_obj_misc"
+set check_description(25) "test_sgeobj_jsv"
 
 set check_functions {}
 lappend check_functions "sgeobj_module_tests_run"
