@@ -519,17 +519,60 @@ proc jsv_ge_add_c_interval {} {
 }
 
 # CR 6814059
+## @brief Set and modify the checkpoint occasion of a job with a JSV
+#
+# Number values which appear in the xml output come from sge_parse_checkpoint_attr(). Before CS-3136
+# the occasion set by a JSV ended up in the checkpoint interval, since 9.2.0 it is the occasion.
+#
+# @return nothing, errors are reported with ts_log_severe
 proc jsv_ge_add_c_occasion {} {
-   # number values which appear in the xml output come from sge_parse_checkpoint_attr()
+   if {[is_version_in_range "9.2.0"]} {
+      set node "JB_checkpoint_attr"
+   } else {
+      set node "JB_checkpoint_interval"
+   }
 
-   # set time which was not provided by submitter
-   jsv_ge_add_param_set "false" "c_occasion" "s" "2" "JB_checkpoint_interval" "-ckpt jsv_ge_add_ckpt1"
+   # set an occasion which was not provided by submitter
+   jsv_ge_add_param_set "false" "c_occasion" "s" "2" $node "-ckpt jsv_ge_add_ckpt1"
 
-   # modify time which was initially provided
-   jsv_ge_add_param_set "false" "c_occasion" "x" "4" "JB_checkpoint_interval" "-ckpt jsv_ge_add_ckpt1 -c s"
+   # modify the occasion which was initially provided
+   jsv_ge_add_param_set "false" "c_occasion" "x" "4" $node "-ckpt jsv_ge_add_ckpt1 -c s"
 
-   # delete time which was initially set
-   jsv_ge_add_param_set "false" "c_occasion" "n" "8" "JB_checkpoint_interval" "-ckpt jsv_ge_add_ckpt1 -c s"
+   # replace the occasion which was initially set by "no checkpoint"
+   if {[is_version_in_range "9.2.0"]} {
+      # the JSV really sets the occasion now, and qmaster rejects "no checkpoint"
+      # together with a checkpointing environment, just like "qsub -ckpt <ckpt> -c n"
+      jsv_ge_add_c_occasion_rejected "n" "-ckpt jsv_ge_add_ckpt1 -c s"
+   } else {
+      jsv_ge_add_param_set "false" "c_occasion" "n" "8" $node "-ckpt jsv_ge_add_ckpt1 -c s"
+   }
+}
+
+## @brief Check that a job is rejected when a JSV sets an invalid checkpoint occasion
+#
+# Submits a job and lets the JSV set the checkpoint occasion. qmaster has to reject the
+# job with MSG_JOB_CKPTMINUSC.
+#
+# @param value           occasion the JSV sets (e.g. "n")
+# @param add_qsub_switch additional qsub switches (e.g. "-ckpt <ckpt> -c s")
+# @return nothing, errors are reported with ts_log_severe
+proc jsv_ge_add_c_occasion_rejected {value add_qsub_switch} {
+   global jsv_base_path
+
+   set args "-h -ac islist=false,name=c_occasion,value=$value,operation=,list_param="
+   append args " $add_qsub_switch"
+   append args " $jsv_base_path/job.sh"
+
+   set job_id [submit_job $args 0]
+   set expected "*[translate_macro MSG_JOB_CKPTMINUSC]*"
+   if {$job_id > 0} {
+      ts_log_severe "job $job_id with JSV occasion \"$value\" and \"$add_qsub_switch\" should have been rejected"
+      delete_job $job_id
+   } elseif {![string match $expected $qsub_output]} {
+      ts_log_severe "job with JSV occasion \"$value\" was rejected with an unexpected message:\n$qsub_output\nexpected: $expected"
+   } else {
+      ts_log_fine "job with JSV occasion \"$value\" was rejected as expected"
+   }
 }
 
 proc jsv_ge_add_dl {} {
