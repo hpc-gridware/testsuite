@@ -1,0 +1,322 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3214: host names are held in char[CL_MAXHOSTNAMELEN] buffers (256 bytes), so a host name may
+# have at most 255 characters.
+# - qconf -dconf with a host name that does not resolve made qmaster copy the name unbounded into such
+#   a buffer on its stack. qmaster must survive names of 300 and 4000 characters and reject them with
+#   the length message.
+# - verify_host_name() accepted a name of 256 characters. qsub -o <host>:<path> reaches it with the
+#   unresolved name and must reject a 256 character host name with the length message.
+# - sge_resolve_hostname() truncated a name that did not resolve to 255 characters, and qconf -de went on
+#   with the truncated name and deleted the execution host it matched. qconf -de and qconf -dh with a name
+#   of 300 characters must fail and leave that host in place. A host of 255 characters cannot be spooled
+#   (classic spooling allows 254), so the name is an existing host name with a long domain, which matches
+#   the host under ignore_fqdn.
+# The setup marks the check unsupported (99) where the last case cannot prove the defect: on a master host
+# that is not Linux, and on a cluster without ignore_fqdn, where the truncated name never matched the host.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+global issue_3214_fake_host
+global issue_3214_fake_qmaster
+global issue_3214_fake_added
+
+set check_version_range "9.1.9"
+
+set check_name           "issue_3214"
+set check_category       "BUG QCONF VERIFIED"
+set check_description(0) "qmaster survives qconf -dconf with a host name of 300 and 4000 characters, qsub -o\
+                          rejects a host name of 256 characters, both with the host name length message, and\
+                          qconf -de/-dh with a name of 300 characters leave the host it matches under\
+                          ignore_fqdn in place (CS-3214); needs a Linux master host and ignore_fqdn"
+
+set check_needs          "init_core_system"
+# issue_3214_del_truncated restarts qmaster, which runs as root
+set check_root_access_needs "yes"
+
+set check_setup_function   issue_3214_setup
+set check_cleanup_function issue_3214_cleanup
+
+set check_functions {}
+lappend check_functions "issue_3214_dconf"
+lappend check_functions "issue_3214_qsub_path"
+lappend check_functions "issue_3214_del_truncated"
+
+# a host that resolves only through SGE_COMMLIB_DEBUG_RESOLVE, which issue_3214_del_truncated gives
+# qmaster and qconf
+set issue_3214_fake_host "cs3214-fake-host"
+# 1 while qmaster runs with SGE_COMMLIB_DEBUG_RESOLVE
+set issue_3214_fake_qmaster 0
+# 1 once issue_3214_del_truncated has tried to add the fake host, which only the cleanup removes again
+set issue_3214_fake_added 0
+
+# ---------------------------------------------------------------------------
+
+## @brief Checks the preconditions of the check
+#
+# issue_3214_del_truncated proves the defect only where the debug resolve list works, which the check
+# relies on on a Linux master host only, and where ignore_fqdn is set: without it the truncated name of
+# 255 characters does not match the host, so the old code would not have deleted it either and the
+# case would pass whether the defect is there or not.
+#
+# @return 99 if a precondition is not met (the check is unsupported), nothing otherwise
+proc issue_3214_setup {} {
+   get_current_cluster_config_array ts_config
+   global issue_3214_fake_qmaster issue_3214_fake_added
+
+   set issue_3214_fake_qmaster 0
+   set issue_3214_fake_added 0
+
+   set master_arch [resolve_arch $ts_config(master_host)]
+   if {[string first "lx-" $master_arch] != 0} {
+      ts_log_config "the check needs a Linux master host for SGE_COMMLIB_DEBUG_RESOLVE, not $master_arch"
+      return 99
+   }
+
+   if {![bootstrap_file_read bootstrap]} {
+      ts_log_severe "cannot read the bootstrap file of the cluster"
+      return 99
+   }
+   if {![info exists bootstrap(ignore_fqdn)] || ![string is true -strict $bootstrap(ignore_fqdn)]} {
+      set value [expr {[info exists bootstrap(ignore_fqdn)] ? $bootstrap(ignore_fqdn) : "unset"}]
+      ts_log_config "the check needs ignore_fqdn true in the bootstrap file, it is $value: a truncated host\
+                     name cannot match a host with its domain, so the wrong host case cannot be exercised"
+      return 99
+   }
+   ts_log_fine "ignore_fqdn is $bootstrap(ignore_fqdn), master host architecture is $master_arch"
+}
+
+## @brief Removes what the checks left behind and restarts qmaster as it was
+#
+# Deletes the jobs a wrongly accepted qsub left. If issue_3214_del_truncated got as far as adding the fake
+# host, the host is removed as execution and admin host while qmaster runs with SGE_COMMLIB_DEBUG_RESOLVE,
+# since without it the name does not resolve and the host could not be deleted any more; qmaster is
+# (re)started with the variable for this if it is down or runs without it. Finally qmaster runs without
+# the variable again.
+#
+# @return nothing
+proc issue_3214_cleanup {} {
+   get_current_cluster_config_array ts_config
+   global issue_3214_fake_host issue_3214_fake_qmaster issue_3214_fake_added
+
+   set envlist(SGE_COMMLIB_DEBUG_RESOLVE) $issue_3214_fake_host
+   set alive [is_qmaster_alive $ts_config(master_host) [get_qmaster_spool_dir]]
+
+   if {$issue_3214_fake_added} {
+      if {!$alive || !$issue_3214_fake_qmaster} {
+         if {$alive} {
+            shutdown_qmaster
+         }
+         ts_log_fine "starting qmaster with SGE_COMMLIB_DEBUG_RESOLVE to remove $issue_3214_fake_host"
+         startup_qmaster 0 envlist
+      }
+      set issue_3214_fake_qmaster 1
+      set alive 1
+
+      delete_all_jobs
+      start_sge_bin "qconf" "-dh $issue_3214_fake_host" $ts_config(master_host) "" prg_exit_state 60 "" "bin" \
+                    output_lines envlist
+      start_sge_bin "qconf" "-de $issue_3214_fake_host" $ts_config(master_host) "" prg_exit_state 60 "" "bin" \
+                    output_lines envlist
+      foreach option {-sel -sh} {
+         if {[issue_3214_host_listed $option $issue_3214_fake_host envlist] == 1} {
+            ts_log_severe "the cleanup could not remove $issue_3214_fake_host, qconf $option still lists it"
+         }
+      }
+      set issue_3214_fake_added 0
+   }
+
+   if {$alive && $issue_3214_fake_qmaster} {
+      shutdown_qmaster
+      set alive 0
+   }
+   set issue_3214_fake_qmaster 0
+   if {!$alive} {
+      ts_log_fine "starting qmaster without SGE_COMMLIB_DEBUG_RESOLVE"
+      startup_qmaster
+   }
+
+   delete_all_jobs
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+## @brief Checks that a call failed with the host name length message
+#
+# @param command     the command and its option, for the messages
+# @param length      the length of the host name the call was given
+# @param output      the output of the call
+# @param exit_state  the exit code of the call
+# @return 1 if the call failed with the message, 0 otherwise (an error has been raised)
+proc issue_3214_check_too_long {command length output exit_state} {
+   set expected [translate_macro MSG_HOSTNAME_TOO_LONG_D 255]
+   ts_log_fine "$command with a host name of $length characters exited with $exit_state:\n$output"
+
+   if {$exit_state == 0} {
+      ts_log_severe "$command with a host name of $length characters succeeded:\n$output"
+      return 0
+   }
+   if {[string first $expected $output] < 0} {
+      ts_log_severe "$command with a host name of $length characters did not report\n$expected\nbut:\n$output"
+      return 0
+   }
+
+   return 1
+}
+
+# ---------------------------------------------------------------------------
+# checks
+# ---------------------------------------------------------------------------
+
+## @brief qconf -dconf with a host name of 300 and of 4000 characters leaves qmaster running
+#
+# The names do not resolve, so qmaster used to fall back to copying them unbounded into a host name
+# buffer on its stack. 300 characters overwrite the stack silently in a debug build, 4000 characters
+# also kill the debug qmaster. Both calls must fail with the host name length message.
+#
+# @return nothing
+proc issue_3214_dconf {} {
+   get_current_cluster_config_array ts_config
+
+   foreach length {300 4000} {
+      set output [start_sge_bin "qconf" "-dconf [string repeat "c" $length]"]
+      set exit_state $prg_exit_state
+      # give a dying qmaster the time to go
+      after 2000
+
+      if {![is_qmaster_alive $ts_config(master_host) [get_qmaster_spool_dir]]} {
+         ts_log_severe "qmaster died on qconf -dconf with a host name of $length characters, qconf said:\n$output"
+         # the following check needs a running qmaster
+         startup_qmaster
+         return
+      }
+      issue_3214_check_too_long "qconf -dconf" $length $output $exit_state
+
+      # qmaster still answers
+      set output [start_sge_bin "qconf" "-sconf global"]
+      if {$prg_exit_state != 0} {
+         ts_log_severe "qconf -sconf global failed after qconf -dconf with a host name of $length characters:\n$output"
+         return
+      }
+   }
+}
+
+## @brief qsub -o rejects a host name of 256 characters, one more than a host name may have
+#
+# The job is held and writes to /dev/null, should qsub accept it; the cleanup deletes it.
+#
+# @return nothing
+proc issue_3214_qsub_path {} {
+   set name [string repeat "d" 256]
+   set output [start_sge_bin "qsub" "-h -o $name:/dev/null -b y /bin/true"]
+   issue_3214_check_too_long "qsub -o" 256 $output $prg_exit_state
+}
+
+## @brief Is a host in the list a qconf show option prints?
+#
+# @param option the qconf option that lists the hosts, -sel or -sh
+# @param host   the host to look for
+# @param env    name of the array of environment variables qconf is run with
+# @return 1 if the host is listed, 0 if not, -1 if qconf failed (an error has been raised)
+proc issue_3214_host_listed {option host env} {
+   get_current_cluster_config_array ts_config
+   upvar $env envlist
+
+   set output [start_sge_bin "qconf" $option $ts_config(master_host) "" prg_exit_state 60 "" "bin" output_lines \
+               envlist]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qconf $option failed:\n$output"
+      return -1
+   }
+   foreach line [split $output "\n"] {
+      if {[string trim $line] == $host} {
+         return 1
+      }
+   }
+   return 0
+}
+
+## @brief qconf -de and -dh with a name of 300 characters leave the host the name matches in place
+#
+# The host resolves only through SGE_COMMLIB_DEBUG_RESOLVE, so qmaster is restarted with it, and qconf
+# is run with it as well. The name of 300 characters is the host name with a long domain and does not
+# resolve: sge_resolve_hostname() used to truncate it to 255 characters, which under ignore_fqdn still
+# match the host, and qconf -de deleted the host. The setup has made sure ignore_fqdn is set.
+#
+# @return nothing
+proc issue_3214_del_truncated {} {
+   get_current_cluster_config_array ts_config
+   global issue_3214_fake_host issue_3214_fake_qmaster issue_3214_fake_added
+
+   set envlist(SGE_COMMLIB_DEBUG_RESOLVE) $issue_3214_fake_host
+   set domain_length [expr {300 - [string length $issue_3214_fake_host] - 1}]
+   set over_long "$issue_3214_fake_host.[string repeat "d" $domain_length]"
+
+   shutdown_qmaster
+   set issue_3214_fake_qmaster 1
+   startup_qmaster 0 envlist
+
+   # the host as execution host and as admin host; from here on the cleanup removes it
+   set issue_3214_fake_added 1
+   set_exechost_defaults host
+   set host(hostname) $issue_3214_fake_host
+   set tmpfile [dump_array_to_tmpfile host $ts_config(master_host)]
+   set output [start_sge_bin "qconf" "-Ae $tmpfile" $ts_config(master_host) "" prg_exit_state 60 "" "bin" \
+               output_lines envlist]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qconf -Ae of the host failed:\n$output"
+      return
+   }
+   set output [start_sge_bin "qconf" "-ah $issue_3214_fake_host" $ts_config(master_host) "" prg_exit_state 60 "" \
+               "bin" output_lines envlist]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qconf -ah of the host failed:\n$output"
+      return
+   }
+
+   # qconf -de: qmaster refuses the name with the length message
+   set output [start_sge_bin "qconf" "-de $over_long" $ts_config(master_host) "" prg_exit_state 60 "" "bin" \
+               output_lines envlist]
+   issue_3214_check_too_long "qconf -de" 300 $output $prg_exit_state
+   set listed [issue_3214_host_listed "-sel" $issue_3214_fake_host envlist]
+   if {$listed == 0} {
+      ts_log_severe "qconf -de with a name of 300 characters deleted the execution host\
+                     $issue_3214_fake_host:\n$output"
+   }
+
+   # qconf -dh: the name does not resolve, whatever the message, the admin host stays
+   set output [start_sge_bin "qconf" "-dh $over_long" $ts_config(master_host) "" prg_exit_state 60 "" "bin" \
+               output_lines envlist]
+   ts_log_fine "qconf -dh with a name of 300 characters exited with $prg_exit_state:\n$output"
+   set listed [issue_3214_host_listed "-sh" $issue_3214_fake_host envlist]
+   if {$listed == 0} {
+      ts_log_severe "qconf -dh with a name of 300 characters deleted the admin host\
+                     $issue_3214_fake_host:\n$output"
+   }
+}
