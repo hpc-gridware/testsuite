@@ -118,7 +118,6 @@ proc fork_posix_behaviour_run {} {
       set server_id [lindex $server_sid 1]
       set in_loop 1
       set server_exit_state -10
-      set server_started 0
       set found_server_read_thread 0
       set found_child 0
       set server_output ""
@@ -179,32 +178,18 @@ proc fork_posix_behaviour_run {} {
                      set found_child 1
                   }
 
-                  # we found output from server_read thread and the commlib already supports the pid output
-                  # this is for versions >= 62 where the issue was found
+                  # the first output of the server_read thread gives the pid of the server process
+                  # the main thread and the server_read thread log independently, so this line may
+                  # come before or after "server running" (CS-3228)
                   if {[string match "*server_read*pid=*I*" $help]} {
-                     if {$server_started == 0 && $pid == ""} {
+                     if {$pid == ""} {
                         set pid [get_string_value_between "pid=" ")|" $help]
                         ts_log_fine "$host: found server read thread which has pid $pid!"
                      }
                   }
 
-                  # server finally starts up ... check if we can test now
                   if {[string match "*server running*" $help]} {
                      ts_log_fine "$host: server started!"
-                     set server_started 1
-
-                     # if there was no thread output till now the binary isnot multithreaded
-                     if {$found_server_read_thread == 0} {
-                        ts_log_severe "$host: Commlib binary not running multithreaded!"
-                        close_spawn_process $server_sid
-                        return
-                     }
-                     # if we did not find the pid= logging this commlib version does not print it
-                     if {$pid == ""} {
-                        ts_log_config "$host: pid output not found in commlib debug output! Cannot run this test!"
-                        close_spawn_process $server_sid
-                        return
-                     }
                   }
 
                   # here we check if the pid= output of a thread has the correct pid and not a different which
@@ -223,6 +208,16 @@ proc fork_posix_behaviour_run {} {
          }
       }
       close_spawn_process $server_sid
+      # without any output of the server_read thread the binary is not multithreaded
+      if {$found_server_read_thread == 0} {
+         ts_log_severe "$host: Commlib binary not running multithreaded!"
+         return
+      }
+      # without the pid= logging this commlib version cannot be tested
+      if {$pid == ""} {
+         ts_log_config "$host: pid output not found in commlib debug output! Cannot run this test!"
+         return
+      }
       # If we do not have found a child output the fork() mode is not implemented in test_cl_commlib binary
       if {$found_child == 0} {
          ts_log_fine "$host: found no child output on host $host!"
