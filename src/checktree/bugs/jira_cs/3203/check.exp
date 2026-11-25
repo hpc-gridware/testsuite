@@ -25,6 +25,10 @@
 # removed, a directory of another user is renamed aside, the TMPDIR is created and the job runs.
 # Neither the planted target is touched nor does the queue go into error state.
 #
+# CS-3221: execd logs the uid and gid of a directory it renames aside and removes it together with the
+# TMPDIR when the job ends, without following a symbolic link inside it. Expected from 9.2.0 on; until
+# the backport to 9.1 the directory renamed aside is expected to stay there.
+#
 # The job is submitted on hold, so its id and with it the path of its TMPDIR are known before it
 # starts. Something is planted at that path, then the job is released. The testsuite gives every
 # queue the tmpdir /tmp/testsuite_<port>, which users cannot write, so root plants on behalf of a
@@ -183,28 +187,68 @@ proc cs3203_planted_link {} {
    }
 }
 
-## @brief A directory of another user at the TMPDIR path: renamed aside with its content, not used
+## @brief A directory of another user at the TMPDIR path: renamed aside, not used, removed at job end
+#
+# The planted directory holds a file and a symbolic link to a file of its owner outside. The job
+# must get a clean TMPDIR of its own (the job script fails when the planted file is in it). From
+# 9.2.0 on (CS-3221) execd names the owner's uid in its warning and removes both the TMPDIR and the
+# directory renamed aside when the job ends, while the link's target stays as it was; before, the
+# directory renamed aside stays with its content.
 #
 # @return nothing, a failure is reported with ts_log_severe
 proc cs3203_planted_directory {} {
-   global CHECK_FIRST_FOREIGN_SYSTEM_USER
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER cs3203_host
 
    set job_id [cs3203_submit_held]
    if {$job_id == 0} {
       return
    }
    set path "[get_queue_tmpdir]/$job_id.1.cs3203.q"
-   set planted "mkdir -p [get_queue_tmpdir] && mkdir $path && touch $path/keep"
-   if {![cs3203_run "root" "$planted && chown -R $CHECK_FIRST_FOREIGN_SYSTEM_USER $path"]} {
+   set stale "$path.stale.*"
+   set target "/tmp/cs3203_target_$job_id"
+   if {![cs3203_run $CHECK_FIRST_FOREIGN_SYSTEM_USER "echo keep > $target && chmod 600 $target"]} {
+      ts_log_severe "cannot create the file $target"
+      return
+   }
+   set planted "mkdir -p [get_queue_tmpdir] && mkdir $path && touch $path/keep && ln -s $target $path/link"
+   if {![cs3203_run "root" "$planted && chown -hR $CHECK_FIRST_FOREIGN_SYSTEM_USER $path"]} {
       ts_log_severe "cannot plant a directory $path"
       return
    }
 
    cs3203_release_and_verify $job_id
 
-   # the planted directory is kept aside, with its content and its owner
-   set stale "$path.stale.*"
-   if {![cs3203_run $CHECK_FIRST_FOREIGN_SYSTEM_USER "ls -d $stale && test -O $stale && test -f $stale/keep"]} {
-      ts_log_severe "the planted directory $path was not moved aside to $path.stale.* with its content"
+   if {![is_version_in_range "9.2.0"]} {
+      # the planted directory is kept aside, with its content and its owner
+      if {![cs3203_run $CHECK_FIRST_FOREIGN_SYSTEM_USER "ls -d $stale && test -O $stale && test -f $stale/keep"]} {
+         ts_log_severe "the planted directory $path was not moved aside to $stale with its content"
+      }
+      return
+   }
+
+   # CS-3221: the warning names the paths and the uid of the planted directory's owner
+   set uid [string trim [start_remote_prog $cs3203_host $CHECK_FIRST_FOREIGN_SYSTEM_USER "id" "-u"]]
+   set messages [get_execd_messages_file $cs3203_host]
+   if {![cs3203_run "root" "grep -F 'moving $path aside to $path.stale.' $messages | grep -F '(uid $uid, gid '"]} {
+      ts_log_severe "the execd messages file $messages has no warning that $path of uid $uid was moved aside"
+   }
+
+   # execd removes the directories after qmaster acknowledged the job's end, which may be after
+   # the job left qstat
+   set gone 0
+   for {set i 0} {$i < 30} {incr i} {
+      if {[cs3203_run "root" "test ! -e $path && ! ls -d $stale"]} {
+         set gone 1
+         break
+      }
+      after 1000
+   }
+   if {!$gone} {
+      ts_log_severe "the TMPDIR $path or the directory $stale moved aside from it still exists after the end of\
+                     job $job_id"
+   }
+   if {![cs3203_run $CHECK_FIRST_FOREIGN_SYSTEM_USER "test -f $target && test ! -h $target && test -O $target &&\
+                                                       grep -q keep $target"]} {
+      ts_log_severe "the file $target the planted link $path/link pointed to was removed or changed"
    }
 }

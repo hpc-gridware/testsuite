@@ -19,9 +19,11 @@
 ###########################################################################
 #___INFO__MARK_END_NEW__
 
-# CS-3203: the job exits 0 when its TMPDIR is a real directory that belongs to the job owner
+# CS-3203: the job exits 0 when its TMPDIR is a clean, real directory that belongs to the job owner
 [ -h "$TMPDIR" ] && exit 4
 [ -d "$TMPDIR" ] || exit 3
 owner=`ls -ldn "$TMPDIR" | awk '{print $3}'`
 [ "$owner" = "`id -u`" ] || exit 5
+# nothing of a directory planted at the path is in it
+[ -e "$TMPDIR/keep" ] && exit 6
 exit 0
