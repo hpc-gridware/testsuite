@@ -170,8 +170,13 @@ proc issue_2542_check_qalter_tc {} {
    }
 
    set result [start_sge_bin "qalter" "-tc -1 ${job_id}"]
-   set expected [translate_macro MSG_ULNG_INVALID_TASK_CONCURRENCY_I "-1"]
-   if { [string match "${result}" "${expected}"] != 0 } {
+   # since 9.2.0 the message names the text as given (CS-3219)
+   if {[is_version_in_range "9.2.0"]} {
+      set expected [translate_macro MSG_ULNG_INVALID_TASK_CONCURRENCY_S "-1"]
+   } else {
+      set expected [translate_macro MSG_ULNG_INVALID_TASK_CONCURRENCY_I "-1"]
+   }
+   if {$prg_exit_state == 0 || ![string match "*${expected}*" "${result}"]} {
       ts_log_fine "${result}"
       ts_log_fine "${expected}"
       ts_log_severe "Verification of positive value of -tc option doesn't work"
