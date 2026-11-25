@@ -75,6 +75,8 @@ lappend uti_module_tests {test_uti_os_pids "9.1.8" 0 ""}
 lappend uti_module_tests {test_uti_language "9.1.8" 0 ""}
 # CS-3202, CS-3203: sge_rmdir() and ocs_mkdir_for_owner() never follow a symbolic link
 lappend uti_module_tests {test_uti_dir_symlink "9.1.9" 0 ""}
+# CS-3159: debug tracing of BASIS_LAYER must not recurse into the tracer
+lappend uti_module_tests {test_uti_rmon "9.2.0" 0 ""}
 
 # the description of a level is the name of its binary, one literal line per
 # entry of uti_module_tests in the same order: tools that list the supported
@@ -106,6 +108,7 @@ set check_description(23) "test_uti_exception"
 set check_description(24) "test_uti_os_pids"
 set check_description(25) "test_uti_language"
 set check_description(26) "test_uti_dir_symlink"
+set check_description(27) "test_uti_rmon"
 
 set check_functions {}
 lappend check_functions "uti_module_tests_run"
