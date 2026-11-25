@@ -117,6 +117,8 @@ lappend generic_module_tests {test_gdi_task_pack "9.2.0" 0 ""}
 lappend generic_module_tests {test_sched_default_request "9.2.0" 0 ""}
 # CS-3209: lines and fields of any length from a load sensor no longer overflow a stack buffer
 lappend generic_module_tests {test_execd_load_sensor "9.1.9" 0 ""}
+# CS-3185: a queue attribute without a value is not stored as uninitialised memory
+lappend generic_module_tests {test_sched_complex_schedd "9.2.0" 0 ""}
 
 # the description of a level is the name of its binary, one literal line per
 # entry of generic_module_tests in the same order: tools that list the supported
@@ -140,6 +142,7 @@ set check_description(15) "test_qmaster_utility"
 set check_description(16) "test_gdi_task_pack"
 set check_description(17) "test_sched_default_request"
 set check_description(18) "test_execd_load_sensor"
+set check_description(19) "test_sched_complex_schedd"
 
 set check_functions {}
 lappend check_functions "generic_module_tests_run"
