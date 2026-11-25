@@ -45,7 +45,7 @@ global check_root_access_needs
 global check_version_range
 
 set check_root_access_needs "no"
-set check_version_range {"9.1.8" "9.2.0"}
+set check_version_range "9.1.8"
 
 # define test's name and run level descriptions
 set check_name           "issue_1184"
