@@ -1,0 +1,210 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3203: execd created the TMPDIR of a job as root at a predictable path and chowned it by path.
+#
+# A symbolic link a user planted at <tmpdir>/<job>.<task>.<queue> made execd chown the link's
+# target to the job owner. Now execd never follows a link there: a planted link or file is
+# removed, a directory of another user is renamed aside, the TMPDIR is created and the job runs.
+# Neither the planted target is touched nor does the queue go into error state.
+#
+# The job is submitted on hold, so its id and with it the path of its TMPDIR are known before it
+# starts. Something is planted at that path, then the job is released. The testsuite gives every
+# queue the tmpdir /tmp/testsuite_<port>, which users cannot write, so root plants on behalf of a
+# second user: the link to a file of that user, the directory owned by that user.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "yes"
+set check_version_range "9.1.9"
+
+# define test's name and run level descriptions
+set check_name            "cs3203"
+set check_category        "BUG EXECD SECURITY VERIFIED"
+set check_description(0)  "a link or a directory of another user planted at the path of a job's\
+                           TMPDIR is not followed, the job runs, the queue stays usable"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs3203_setup
+set check_cleanup_function cs3203_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs3203_planted_link"
+lappend check_functions "cs3203_planted_directory"
+
+# -------- local test procedures: initialization------------------------------
+
+## @brief Create the queue the jobs run in
+#
+# @return 0 on success
+proc cs3203_setup {} {
+   get_current_cluster_config_array ts_config
+   global cs3203_host
+
+   set cs3203_host [lindex $ts_config(execd_nodes) 0]
+
+   set queue_conf(slots) 2
+   add_queue "cs3203.q" $cs3203_host queue_conf
+
+   return 0
+}
+
+## @brief Remove the jobs, the queue and whatever was planted
+#
+# @return nothing
+proc cs3203_cleanup {} {
+   global cs3203_host
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   set tmpdir [get_queue_tmpdir]
+   start_remote_prog $cs3203_host "root" "/bin/sh" \
+                     "-c \"rm -rf /tmp/cs3203_target_* $tmpdir/*.1.cs3203.q $tmpdir/*.1.cs3203.q.stale.*\""
+
+   del_queue "cs3203.q" "" 1 1
+
+   unset -nocomplain cs3203_host
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief Run a shell command on the test host
+#
+# @param user the user, root to plant in the queue's tmpdir, else the second user
+# @param command the command for sh -c, without double quotes
+# @return 1 when it exited 0, else 0
+proc cs3203_run {user command} {
+   global cs3203_host
+
+   set output [start_remote_prog $cs3203_host $user "/bin/sh" "-c \"$command\""]
+   ts_log_fine "$command as $user: exit state $prg_exit_state\n$output"
+   return [expr {$prg_exit_state == 0}]
+}
+
+## @brief Submit the test job on hold
+#
+# @return the job id, or 0 on error
+proc cs3203_submit_held {} {
+   global CHECK_ACTUAL_TEST_PATH
+
+   set job_id [submit_job "-h -q cs3203.q -o /dev/null -j y $CHECK_ACTUAL_TEST_PATH/cs3203_job.sh"]
+   if {$job_id <= 0} {
+      return 0
+   }
+   return $job_id
+}
+
+## @brief Release the job, wait for its end and check that it ran with a TMPDIR of its own
+#
+# The job exits 0 only when its TMPDIR is a real directory of the job owner. The queue instance
+# must not be in error state afterwards.
+#
+# @param job_id the job
+# @return 1 when the job ran as it should, else 0
+proc cs3203_release_and_verify {job_id} {
+   global cs3203_host
+
+   release_job $job_id
+   if {[wait_for_job_end $job_id 120] != 0} {
+      return 0
+   }
+   if {[get_qacct $job_id qacct_info] != 0} {
+      return 0
+   }
+   regexp {[0-9]+} $qacct_info(failed) failed
+   if {$failed != 0 || $qacct_info(exit_status) != 0} {
+      ts_log_severe "job $job_id has failed $qacct_info(failed), exit_status $qacct_info(exit_status), expected\
+                     0 and 0: its TMPDIR was not a directory of its own"
+      return 0
+   }
+   set state [get_queue_state "cs3203.q@$cs3203_host"]
+   if {[string first "E" $state] >= 0} {
+      ts_log_severe "queue instance cs3203.q@$cs3203_host is in state \"$state\" after job $job_id"
+      clear_queue "cs3203.q@$cs3203_host"
+      return 0
+   }
+   return 1
+}
+
+## @brief A symbolic link to a file of another user at the TMPDIR path: removed, never followed
+#
+# Before the fix the file became the job owner's.
+#
+# @return nothing, a failure is reported with ts_log_severe
+proc cs3203_planted_link {} {
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER
+
+   set job_id [cs3203_submit_held]
+   if {$job_id == 0} {
+      return
+   }
+   set path "[get_queue_tmpdir]/$job_id.1.cs3203.q"
+   set target "/tmp/cs3203_target_$job_id"
+   if {![cs3203_run $CHECK_FIRST_FOREIGN_SYSTEM_USER "touch $target && chmod 600 $target"] ||
+       ![cs3203_run "root" "mkdir -p [get_queue_tmpdir] && ln -s $target $path"]} {
+      ts_log_severe "cannot plant a symbolic link $path -> $target"
+      return
+   }
+
+   cs3203_release_and_verify $job_id
+
+   # test -O: the file still belongs to the user who created it
+   if {![cs3203_run $CHECK_FIRST_FOREIGN_SYSTEM_USER "test -f $target && test -O $target && test ! -h $path"]} {
+      ts_log_severe "the target $target of the planted link $path changed its owner or the link is still there"
+   }
+}
+
+## @brief A directory of another user at the TMPDIR path: renamed aside with its content, not used
+#
+# @return nothing, a failure is reported with ts_log_severe
+proc cs3203_planted_directory {} {
+   global CHECK_FIRST_FOREIGN_SYSTEM_USER
+
+   set job_id [cs3203_submit_held]
+   if {$job_id == 0} {
+      return
+   }
+   set path "[get_queue_tmpdir]/$job_id.1.cs3203.q"
+   set planted "mkdir -p [get_queue_tmpdir] && mkdir $path && touch $path/keep"
+   if {![cs3203_run "root" "$planted && chown -R $CHECK_FIRST_FOREIGN_SYSTEM_USER $path"]} {
+      ts_log_severe "cannot plant a directory $path"
+      return
+   }
+
+   cs3203_release_and_verify $job_id
+
+   # the planted directory is kept aside, with its content and its owner
+   set stale "$path.stale.*"
+   if {![cs3203_run $CHECK_FIRST_FOREIGN_SYSTEM_USER "ls -d $stale && test -O $stale && test -f $stale/keep"]} {
+      ts_log_severe "the planted directory $path was not moved aside to $path.stale.* with its content"
+   }
+}
