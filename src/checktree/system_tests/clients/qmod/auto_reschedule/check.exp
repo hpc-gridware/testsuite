@@ -581,7 +581,7 @@ proc auto_reschedule_GE_3331 {} {
 
    # submit second pe job with masterq queue1
    set job_args "-o /dev/null -e /dev/null "
-   append job_args "-pe tight 2 -p $queue2 -masterq $queue1 -r y "
+   append job_args "-pe tight 2 -q $queue2 -masterq $queue1 -r y "
    append job_args "$ts_config(product_root)/examples/jobs/sleeper.sh 10000"
    set job_id2 [submit_job $job_args]
 
