@@ -77,6 +77,8 @@ lappend uti_module_tests {test_uti_language "9.1.8" 0 ""}
 lappend uti_module_tests {test_uti_dir_symlink "9.1.9" 0 ""}
 # CS-3159: debug tracing of BASIS_LAYER must not recurse into the tracer
 lappend uti_module_tests {test_uti_rmon "9.2.0" 0 ""}
+# CS-3105: ocs_new(), ocs_delete(), ocs_c_alloc() and ocs_c_ptr replace the C allocation helpers
+lappend uti_module_tests {test_uti_stdlib "9.2.0" 0 ""}
 
 # the description of a level is the name of its binary, one literal line per
 # entry of uti_module_tests in the same order: tools that list the supported
@@ -109,6 +111,7 @@ set check_description(24) "test_uti_os_pids"
 set check_description(25) "test_uti_language"
 set check_description(26) "test_uti_dir_symlink"
 set check_description(27) "test_uti_rmon"
+set check_description(28) "test_uti_stdlib"
 
 set check_functions {}
 lappend check_functions "uti_module_tests_run"
