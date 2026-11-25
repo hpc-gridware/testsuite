@@ -144,7 +144,14 @@ proc cs3222_removed_tmpdir {} {
    if {[get_qacct $job_id qacct_info] != 0} {
       return
    }
-   set output [start_sge_bin "qacct" "-j $job_id"]
+   # qmaster writes the records in batches, the one get_qacct found need not be the last one
+   for {set i 0} {$i < 30} {incr i} {
+      set output [start_sge_bin "qacct" "-j $job_id"]
+      if {[regexp -all -line {^failed\s} $output] >= 3} {
+         break
+      }
+      after 1000
+   }
    set records 0
    foreach line [split $output "\n"] {
       if {[regexp {^failed\s+(\d+)} $line match failed]} {
