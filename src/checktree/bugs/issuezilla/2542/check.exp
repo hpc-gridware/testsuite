@@ -135,6 +135,9 @@ proc issue_2542_check_tc_with_non_array_job {} {
    }
 }
 
+## @brief qalter -tc changes the concurrency of a running array job and refuses a negative value
+#
+# @return nothing, a failure is reported with ts_log_severe
 proc issue_2542_check_qalter_tc {} {
    global CHECK_USER ts_config
    set tc 2
@@ -183,16 +186,21 @@ proc issue_2542_check_qalter_tc {} {
    }
 }
 
+## @brief qalter -tc is refused for a job that is no array job
+#
+# @return nothing, a failure is reported with ts_log_severe
 proc issue_2542_check_qalter_tc_with_non_array_job {} {
    global ts_config
 
-   set job_id [submit_job "$ts_config(product_root)/examples/jobs/sleeper.sh 5" 0 60]
+   # long enough that the job still exists when qalter runs, cleanup deletes it
+   set job_id [submit_job "$ts_config(product_root)/examples/jobs/sleeper.sh 60" 0 60]
    ts_log_fine "my_job (issue_2542_check_qalter_tc_with_non_array_job): ${job_id}"
 
    set result [start_sge_bin "qalter" "-tc 2 ${job_id}"]
    set tc_string [translate_macro MSG_JOB_TASK_CONCURRENCY]
    set expected [translate_macro MSG_PARSE_INVALIDOPTIONARGUMENTX_S ${tc_string}]
-   if { [string match ${result} ${expected}] != 0 } {
+   # qalter has to fail and print the message (CS-3219: the check was inverted)
+   if {$prg_exit_state == 0 || ![string match "*${expected}*" "${result}"]} {
       ts_log_fine "${result}"
       ts_log_fine "${expected}"
       ts_log_severe "Verification whether altered job is array job doesn't work"
