@@ -1,0 +1,167 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3222: a job owner who removed the TMPDIR of a running parallel job put the queue instance into
+# error state.
+#
+# For a further task of a parallel job in the same queue instance, e.g. one started with
+# qrsh -inherit, execd did not make the TMPDIR but only checked that it existed. The directory
+# belongs to the job owner, so he could remove it. The failed check was reported as a failure of
+# the queue; the pe task did not start, and qrsh -inherit ran into its connect timeout.
+# Now execd makes the directory again the safe way when it is missing or something else is at its
+# path, and the task runs with a TMPDIR of its own.
+#
+# The master task of a tightly integrated job removes its TMPDIR, starts a pe task, then puts a
+# symbolic link at the TMPDIR path and starts another one. Every pe task exits 0 only when its
+# TMPDIR is a real directory of the job owner, the job exits with the first failing status.
+#
+# The queue's tmpdir is /tmp: the default tmpdir of the testsuite cannot be written by users, so
+# there a job owner cannot remove his TMPDIR. A world writable parent is what makes it possible.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.2.0"
+
+# define test's name and run level descriptions
+set check_name            "cs3222"
+set check_category        "BUG EXECD PARALLEL SECURITY VERIFIED"
+set check_description(0)  "a pe task started after the job owner removed or replaced the job's TMPDIR\
+                           gets a new TMPDIR, the queue instance does not go into error state"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function cs3222_setup
+set check_cleanup_function cs3222_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "cs3222_removed_tmpdir"
+
+# -------- local test procedures: initialization------------------------------
+
+## @brief Create a tightly integrated parallel environment and a queue with 2 slots on one host
+#
+# The queue's tmpdir is the world writable /tmp, so that the job owner can remove his TMPDIR.
+#
+# @return 0 on success, 1 on error
+proc cs3222_setup {} {
+   get_current_cluster_config_array ts_config
+   global cs3222_host
+
+   set cs3222_host [lindex $ts_config(execd_nodes) 0]
+
+   set pe(slots)               10
+   set pe(allocation_rule)     "\$pe_slots"
+   set pe(control_slaves)      "TRUE"
+   set pe(job_is_first_task)   "TRUE"
+   add_pe "cs3222.pe" pe
+
+   set queue_conf(slots)   2
+   set queue_conf(pe_list) "cs3222.pe"
+   add_queue "cs3222.q" $cs3222_host queue_conf
+
+   # add_queue always sets the testsuite's tmpdir
+   set output [start_sge_bin "qconf" "-mattr queue tmpdir /tmp cs3222.q"]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "cannot set the tmpdir of cs3222.q to /tmp:\n$output"
+      return 1
+   }
+
+   return 0
+}
+
+## @brief Delete the jobs, the queue and the parallel environment of the check
+#
+# @return nothing
+proc cs3222_cleanup {} {
+   global cs3222_host
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   del_queue "cs3222.q" "" 1 1
+   del_pe "cs3222.pe"
+
+   unset -nocomplain cs3222_host
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief pe tasks started after the TMPDIR was removed or replaced by a link run, the queue stays usable
+#
+# Before the fix the first qrsh -inherit failed after its connect timeout, as a failure of the queue.
+#
+# @return nothing, a failure is reported with ts_log_severe
+proc cs3222_removed_tmpdir {} {
+   get_current_cluster_config_array ts_config
+   global cs3222_host CHECK_ACTUAL_TEST_PATH
+
+   set qrsh "$ts_config(product_root)/bin/[resolve_arch $cs3222_host]/qrsh"
+   set job_id [submit_job "-pe cs3222.pe 2 -q cs3222.q -o /dev/null -j y\
+                           $CHECK_ACTUAL_TEST_PATH/cs3222_job.sh $qrsh $CHECK_ACTUAL_TEST_PATH/cs3222_task.sh"]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_job_end $job_id 300] != 0} {
+      return
+   }
+
+   set queue "cs3222.q@$cs3222_host"
+   set state [get_queue_state $queue]
+   if {[string first "E" $state] >= 0} {
+      ts_log_severe "queue instance $queue is in state \"$state\" after job $job_id removed its TMPDIR"
+      clear_queue $queue
+   }
+
+   # the master task and both pe tasks have a record, every one has to be clean
+   if {[get_qacct $job_id qacct_info] != 0} {
+      return
+   }
+   set output [start_sge_bin "qacct" "-j $job_id"]
+   set records 0
+   foreach line [split $output "\n"] {
+      if {[regexp {^failed\s+(\d+)} $line match failed]} {
+         incr records
+         if {$failed != 0} {
+            ts_log_severe "a task of job $job_id has failed $failed: a pe task did not start\n$output"
+            return
+         }
+      }
+      if {[regexp {^exit_status\s+(\d+)} $line match exit_status] && $exit_status != 0} {
+         ts_log_severe "a task of job $job_id has exit_status $exit_status: a pe task did not get a TMPDIR of its\
+                        own (exit status 3: no directory, 4: a link, 5: not the job owner's, 6: TMPDIR not removed,\
+                        7: no link made, other: qrsh -inherit failed)\n$output"
+         return
+      }
+   }
+   if {$records != 3} {
+      ts_log_severe "job $job_id has $records accounting records, expected 3: the master task and 2 pe tasks\n$output"
+   }
+}
