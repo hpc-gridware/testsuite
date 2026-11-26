@@ -39,7 +39,8 @@ set check_needs           "init_core_system"
 # The module tests of libs/uti, one level per binary, laid out like
 # module_test_generic (see there): the level is the index into the list, in the
 # short band 0-99, entries are appended and never reordered or deleted.
-# Version and feature gating is done by the run function, not by the level.
+# Version gating is done by check_version_range(N), see ocs_module_test_set_version_ranges,
+# feature gating by the run function.
 # ---------------------------------------------------------------------------
 
 # {binary min_version needs_gcs max_version}
@@ -79,6 +80,10 @@ lappend uti_module_tests {test_uti_dir_symlink "9.1.9" 0 ""}
 lappend uti_module_tests {test_uti_rmon "9.2.0" 0 ""}
 # CS-3105: ocs_new(), ocs_delete(), ocs_c_alloc() and ocs_c_ptr replace the C allocation helpers
 lappend uti_module_tests {test_uti_stdlib "9.2.0" 0 ""}
+
+# the levels of binaries which the version of the cluster does not have are left out
+# when the check tree is read, see ocs_module_test_set_version_ranges
+ocs_module_test_set_version_ranges $uti_module_tests
 
 # the description of a level is the name of its binary, one literal line per
 # entry of uti_module_tests in the same order: tools that list the supported

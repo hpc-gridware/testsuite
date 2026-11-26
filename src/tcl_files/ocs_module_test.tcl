@@ -37,6 +37,33 @@ set module_tests_with_report {test_comm_xml_parse test_sgeobj_rsmap test_sgeobj_
                               test_uti_cpp_features test_uti_exception test_sgeobj_AnswerException
                               test_sgeobj_unique_keys}
 
+## @brief Leave out the levels whose binary the version of the cluster does not have
+#
+# Sets check_version_range(<level>) for every entry of the list with a min_version or a
+# max_version, so the framework drops these levels when it reads the check tree. They are then
+# neither run nor counted, and they cost no level overhead (daemon checks, mails). The index of
+# an entry is its level, as in ocs_module_test_run_level, and the range has the same meaning as
+# the check there: min_version is the first version with the binary, max_version the first one
+# without it. Levels of entries without a version stay as they are.
+#
+# Called at file scope of a module test check.exp, after the list is complete.
+#
+# @param module_tests list of {binary min_version needs_gcs max_version}, indexed by level; a
+#                     shorter entry, e.g. {binary min_version}, has no max_version
+# @return none
+proc ocs_module_test_set_version_ranges {module_tests} {
+   global check_version_range
+
+   set level 0
+   foreach entry $module_tests {
+      lassign $entry module_test min_version needs_gcs max_version
+      if {$min_version ne "" || $max_version ne ""} {
+         set check_version_range($level) [list $min_version $max_version]
+      }
+      incr level
+   }
+}
+
 ## @brief Run the one module test binary the current level selects from a list
 #
 # The level is the index into the list; the binary always runs on the suited

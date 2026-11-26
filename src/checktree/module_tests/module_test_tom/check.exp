@@ -40,7 +40,8 @@ set check_needs           "init_core_system"
 # The module tests of the list library (libs/cull in 9.1, libs/tom in 9.2), one level per binary, laid out like
 # module_test_generic (see there): the level is the index into the list, in the
 # short band 0-99, entries are appended and never reordered or deleted.
-# Version and feature gating is done by the run function, not by the level.
+# Version gating is done by check_version_range(N), see ocs_module_test_set_version_ranges,
+# feature gating by the run function.
 # ---------------------------------------------------------------------------
 
 # {binary min_version needs_gcs max_version}
@@ -108,6 +109,10 @@ lappend tom_module_tests {test_tom_core_descr "9.2.0" 0 ""}
 lappend tom_module_tests {test_tom_core_plugin "9.2.0" 0 ""}
 # the code examples of the typed object model developer documentation, compiled and run (gcs-extensions)
 lappend tom_module_tests {test_tom_howto "9.2.0" 1 ""}
+
+# the levels of binaries which the version of the cluster does not have are left out
+# when the check tree is read, see ocs_module_test_set_version_ranges
+ocs_module_test_set_version_ranges $tom_module_tests
 
 # the description of a level is the name of its binary, one literal line per
 # entry of tom_module_tests in the same order: tools that list the supported

@@ -122,6 +122,10 @@ lappend cluster_module_tests {test_qmaster_request_structure "9.2.0"}
 # sent. GDI submissions with a forged name, read back from qmaster. Needs a RUNNING qmaster. Fixed in 9.1.9 too.
 lappend cluster_module_tests {test_qmaster_job_exec_file "9.1.9"}
 
+# the levels of binaries which the version of the cluster does not have are left out
+# when the check tree is read, see ocs_module_test_set_version_ranges
+ocs_module_test_set_version_ranges $cluster_module_tests
+
 # The binaries built on the shared module test frame (clusterscheduler
 # test/common/ocs_module_test.h), as in module_test_generic. When the testsuite
 # records a run, they get the report options and their records become a stream

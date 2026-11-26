@@ -78,10 +78,12 @@ set check_needs           "init_core_system"
 # module_test_sgeobj and this list was renumbered compactly, as only levels 0-99
 # run (CS-2996).
 #
-# Version and feature gating is NOT expressed with check_version_range(N): the
-# level always exists, and the run function skips the binary with ts_log_info
-# when the cluster is too old or lacks the feature. That keeps the index stable
-# across versions, which a conditional lappend would not.
+# Version gating is expressed with check_version_range(N), set from the list by
+# ocs_module_test_set_version_ranges: every level exists in the list, which keeps
+# the index stable across versions (a conditional lappend would not), and the
+# framework leaves out the levels of binaries the cluster's version does not
+# have. The run function checks the version again and checks the feature: it
+# skips the binary with ts_log_info when the cluster lacks the gcs feature.
 #
 # Binaries that need a running cluster do NOT belong here -- check_needs is "".
 # They live in module_test_cluster. The binaries of libs/cull (9.1) or libs/tom (9.2), libs/uti and
@@ -121,6 +123,10 @@ lappend generic_module_tests {test_execd_load_sensor "9.1.9" 0 ""}
 lappend generic_module_tests {test_sched_complex_schedd "9.2.0" 0 ""}
 # CS-3167, CS-3170: single fields of the flatfile writer and the JSON reader
 lappend generic_module_tests {test_spool_flatfile_fields "9.2.0" 0 ""}
+
+# the levels of binaries which the version of the cluster does not have are left out
+# when the check tree is read, see ocs_module_test_set_version_ranges
+ocs_module_test_set_version_ranges $generic_module_tests
 
 # the description of a level is the name of its binary, one literal line per
 # entry of generic_module_tests in the same order: tools that list the supported

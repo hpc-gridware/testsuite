@@ -39,7 +39,8 @@ set check_needs           "init_core_system"
 # The module tests of libs/sgeobj, one level per binary, laid out like
 # module_test_generic (see there): the level is the index into the list, in the
 # short band 0-99, entries are appended and never reordered or deleted.
-# Version and feature gating is done by the run function, not by the level.
+# Version gating is done by check_version_range(N), see ocs_module_test_set_version_ranges,
+# feature gating by the run function.
 # ---------------------------------------------------------------------------
 
 # {binary min_version needs_gcs max_version}
@@ -76,6 +77,10 @@ lappend sgeobj_module_tests {test_sgeobj_obj_misc "9.2.0" 0 ""}
 lappend sgeobj_module_tests {test_sgeobj_jsv "9.1.9" 0 ""}
 # CS-3210: lines and fields of any length in the path alias files
 lappend sgeobj_module_tests {test_sgeobj_path_alias "9.2.0" 0 ""}
+
+# the levels of binaries which the version of the cluster does not have are left out
+# when the check tree is read, see ocs_module_test_set_version_ranges
+ocs_module_test_set_version_ranges $sgeobj_module_tests
 
 # the description of a level is the name of its binary, one literal line per
 # entry of sgeobj_module_tests in the same order: tools that list the supported
