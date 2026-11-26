@@ -164,9 +164,13 @@ proc get_spooled_usage_names {object_type object_name list_name} {
 # The role carries the same name and reuses the base entry's password.
 #
 # The base entry's user performs the DDL and therefore needs CREATEDB and
-# CREATEROLE (or has to be a superuser). sge_qmaster itself connects as the
-# per cluster role - inst_qmaster.sh requires database and role to exist and
-# only runs "spoolinit init" to create the config and jobs tables.
+# CREATEROLE (or has to be a superuser). Since PostgreSQL 16 CREATEROLE alone is
+# not enough to create a database owned by the new role, so the base user is
+# made a member of every role it creates (see spool_database_init).
+#
+# sge_qmaster itself connects as the per cluster role - inst_qmaster.sh requires
+# database and role to exist and only runs "spoolinit init" to create the config
+# and jobs tables.
 # ---------------------------------------------------------------------------
 
 ##
@@ -276,12 +280,18 @@ proc spool_database_init {} {
    # transaction block. The order matters as well: the database has to go before
    # the role that owns it, and sessions left behind by a previous run would make
    # DROP DATABASE fail, so they are terminated first.
+   #
+   # CS-3243: since PostgreSQL 16 a CREATEROLE role only gets the ADMIN option on
+   # the roles it creates. CREATE DATABASE ... OWNER needs SET ROLE on the new
+   # owner, and DROP DATABASE in the next run needs its privileges (INHERIT).
+   # Membership grants both and is harmless on older servers.
    set statements {}
    lappend statements "SELECT pg_terminate_backend(pid) FROM pg_stat_activity\
                        WHERE datname = '$db_name' AND pid <> pg_backend_pid()"
    lappend statements "DROP DATABASE IF EXISTS $db_name"
    lappend statements "DROP ROLE IF EXISTS $db_user"
    lappend statements "CREATE ROLE $db_user LOGIN PASSWORD '$db_pw'"
+   lappend statements "GRANT $db_user TO $base_user"
    lappend statements "CREATE DATABASE $db_name OWNER $db_user"
 
    set args "--no-password -h $base_host -p $base_port -d $base_name -U $base_user -v ON_ERROR_STOP=1"
