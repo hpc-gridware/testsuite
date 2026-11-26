@@ -232,8 +232,7 @@ proc spool_database_get_password {} {
    return [spool_database_get_base_field "password"]
 }
 
-##
-# @brief Drop and re-create this cluster's spooling database and its role.
+## @brief Drop and re-create this cluster's spooling database and its role.
 #
 # Called before the sge_qmaster installation. Dropping first makes the step
 # idempotent and gives every run a clean database, which is what the classic and
@@ -243,6 +242,14 @@ proc spool_database_get_password {} {
 # is guaranteed to have psql installed, while the master host may not even have
 # a postgres client. The password of the base user is passed via PGPASSWORD so
 # it does not show up on the process command line.
+#
+# The password of the new role must not show up in the testsuite output either
+# (CS-3249): start_remote_prog logs the command line and every error report
+# prints the arguments of the procedures on the stack. So the statements go into
+# a file that holds no password, and psql reads the password from the environment
+# with \getenv (psql 15 or newer) and inserts it as a quoted literal
+# (:'variable'), which only works in statements read from a file, not in those
+# given with -c.
 #
 # @return 0 on success, -1 on error
 proc spool_database_init {} {
@@ -270,14 +277,12 @@ proc spool_database_init {} {
 
    set db_name [spool_database_get_name]
    set db_user [spool_database_get_user]
-   # single quotes inside an SQL string literal are escaped by doubling them
-   set db_pw [string map {' ''} [spool_database_get_password]]
 
    ts_log_fine "creating spooling database $db_name (role $db_user) on $base_host:$base_port"
 
-   # Every statement gets its own -c. psql wraps several statements passed in one
-   # -c into a single transaction, and CREATE/DROP DATABASE cannot run inside a
-   # transaction block. The order matters as well: the database has to go before
+   # psql runs the statements of a file one by one, each in its own transaction:
+   # CREATE/DROP DATABASE cannot run inside a transaction block, so the file is not
+   # run with --single-transaction. The order matters: the database has to go before
    # the role that owns it, and sessions left behind by a previous run would make
    # DROP DATABASE fail, so they are terminated first.
    #
@@ -287,24 +292,43 @@ proc spool_database_init {} {
    # Membership grants both and is harmless on older servers.
    set statements {}
    lappend statements "SELECT pg_terminate_backend(pid) FROM pg_stat_activity\
-                       WHERE datname = '$db_name' AND pid <> pg_backend_pid()"
-   lappend statements "DROP DATABASE IF EXISTS $db_name"
-   lappend statements "DROP ROLE IF EXISTS $db_user"
-   lappend statements "CREATE ROLE $db_user LOGIN PASSWORD '$db_pw'"
-   lappend statements "GRANT $db_user TO $base_user"
-   lappend statements "CREATE DATABASE $db_name OWNER $db_user"
+                       WHERE datname = '$db_name' AND pid <> pg_backend_pid();"
+   lappend statements "DROP DATABASE IF EXISTS $db_name;"
+   lappend statements "DROP ROLE IF EXISTS $db_user;"
+   lappend statements "\\getenv spool_role_pw SPOOL_ROLE_PASSWORD"
+   lappend statements "CREATE ROLE $db_user LOGIN PASSWORD :'spool_role_pw';"
+   lappend statements "GRANT $db_user TO $base_user;"
+   lappend statements "CREATE DATABASE $db_name OWNER $db_user;"
+
+   # the file is read on the database host, so it goes into the shared results directory
+   set sql_file [get_tmp_file_name $base_host "spooldb" "sql"]
+   if {[catch {
+      set fd [open $sql_file "w" 0600]
+      puts $fd [join $statements "\n"]
+      close $fd
+   } catch_msg]} {
+      ts_log_severe "cannot write the statements for the spooling database to $sql_file: $catch_msg"
+      return -1
+   }
+   if {[wait_for_remote_file $base_host $CHECK_USER $sql_file] != 0} {
+      catch {file delete -- $sql_file}
+      return -1
+   }
 
    # CS-3243: start_remote_prog runs psql in a pty, so psql would hand any result
    # (e.g. of pg_terminate_backend) to a pager and hang until the timeout.
    set args "--no-password -X -P pager=off -h $base_host -p $base_port -d $base_name -U $base_user"
-   append args " -v ON_ERROR_STOP=1"
-   foreach statement $statements {
-      append args " -c \"$statement\""
-   }
+   append args " -v ON_ERROR_STOP=1 -f $sql_file"
 
    set envlist(PGPASSWORD) $base_pw
+   set envlist(SPOOL_ROLE_PASSWORD) [spool_database_get_password]
    set output [start_remote_prog $base_host $CHECK_USER "psql" $args prg_exit_state 60 0 "" envlist 1 0 0]
+   catch {file delete -- $sql_file}
    if {$prg_exit_state != 0} {
+      # an error message of psql may quote the statement with the password inserted
+      if {$envlist(SPOOL_ROLE_PASSWORD) != ""} {
+         set output [string map [list $envlist(SPOOL_ROLE_PASSWORD) "<redacted>"] $output]
+      }
       ts_log_severe "creating the spooling database $db_name failed:\n$output"
       return -1
    }
