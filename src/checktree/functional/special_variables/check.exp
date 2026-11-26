@@ -75,8 +75,23 @@ proc special_variables_setup {} {
    set sv_dir "testsuite_special_variables"
    set dir "$ts_config(product_root)/$sv_dir"
    start_remote_prog $ts_config(master_host) $CHECK_USER "rm" "-rf $dir"
-   start_remote_prog $ts_config(master_host) $CHECK_USER "mkdir" "-p $dir/out"
-   start_remote_prog $ts_config(master_host) $CHECK_USER "chmod" "1777 $dir/out"
+   start_remote_prog $ts_config(master_host) $CHECK_USER "mkdir" "-p $dir"
+
+   # The records go to a directory on the local disk of the test host, which out/ links to: the
+   # load sensor runs as root, and root may not write to a shared product root (NFS maps root to
+   # nobody, or denies it). Writable for everybody, but not sticky, so that the framework, which
+   # deletes the directory as the check user, may also delete the records root wrote.
+   set out_dir [get_tmp_directory_name $sv_host "sv_out" "tmp" 1]
+   remote_file_mkdir $sv_host $out_dir $CHECK_USER "0777" mkdir_state
+   if {$mkdir_state != 0} {
+      ts_log_config "cannot create the record directory $out_dir on host $sv_host"
+      return 99
+   }
+   start_remote_prog $ts_config(master_host) $CHECK_USER "ln" "-s $out_dir $dir/out"
+   if {$prg_exit_state != 0} {
+      ts_log_config "cannot link $dir/out to $out_dir"
+      return 99
+   }
    foreach script {sv_record.sh sv_starter.sh sv_loadsensor.sh} {
       start_remote_prog $ts_config(master_host) $CHECK_USER "cp" \
                         "$CHECK_ACTUAL_TEST_PATH/$script $dir/$script"
