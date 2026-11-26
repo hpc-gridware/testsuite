@@ -104,9 +104,10 @@ proc issue_2764_setup {} {
 
    # Where the dumps go. The directory has to be writable for the job owner and for root, and
    # it must not be sticky: the check deletes files root wrote, which the sticky bit of a
-   # directory like /tmp would prevent.
+   # directory like /tmp would prevent. It is writable for everybody, because on an NFS share
+   # which maps root to nobody a procedure running as root writes as nobody.
    set issue_2764_dir "$ts_config(product_root)/cs2764_env"
-   remote_file_mkdir $issue_2764_host $issue_2764_dir $CHECK_USER "" mkdir_state
+   remote_file_mkdir $issue_2764_host $issue_2764_dir $CHECK_USER "0777" mkdir_state
    if {$mkdir_state != 0} {
       ts_log_config "cannot create the dump directory $issue_2764_dir"
       return 99
