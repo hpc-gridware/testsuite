@@ -38,6 +38,9 @@
 # Every accounting record of the job has to name an sge_execd which enforced the limit in
 # deleted_by. When a task is killed first, the record of the job has failed 0 and the exit status
 # of the job script, deleted_by is what shows the limit.
+# One exception: when the job script is killed first, a task on the other host can die with it
+# before the sge_execd there enforces the limit. If its exit reaches sge_qmaster before the one of
+# the job script, its record is written without deleted_by.
 
 # define global variable in this namespace
 global check_name
@@ -220,12 +223,18 @@ proc issue_3087_get_records {job_id amount records_var} {
 # @param pe_task_id the record to check, NONE for the master task
 # @param hosts the hosts whose sge_execd may have enforced the limit
 # @param what the record, for the error messages
-proc issue_3087_check_record {records pe_task_id hosts what} {
+# @param allow_empty 1 if the record may have no deleted_by, see issue_3087_check_job
+proc issue_3087_check_record {records pe_task_id hosts what {allow_empty 0}} {
    set record [dict get $records $pe_task_id]
 
    set deleted_by ""
    if {[dict exists $record deleted_by]} {
       set deleted_by [dict get $record deleted_by]
+   }
+   if {$allow_empty && $deleted_by == ""} {
+      ts_log_fine "the accounting record of $what has no deleted_by, the task died with the job\
+                   script before its sge_execd enforced the limit"
+      return
    }
    set expected {}
    foreach host $hosts {
@@ -290,7 +299,17 @@ proc issue_3087_check_job {job_id amount scope} {
       } else {
          set what "pe task $pe_task_id of job $job_id"
       }
-      issue_3087_check_record $records $pe_task_id $hosts $what
+      # When the job script was killed first, a task on another host can die with it before the
+      # sge_execd there enforces the limit. If its exit is reported before the one of the job
+      # script, sge_qmaster writes its record without knowing about the limit.
+      set allow_empty 0
+      if {$exit_status == 137 && $pe_task_id != "NONE"} {
+         set task_host [dict get [dict get $records $pe_task_id] hostname]
+         if {[resolve_host $task_host 0] != [resolve_host $master_host 0]} {
+            set allow_empty 1
+         }
+      }
+      issue_3087_check_record $records $pe_task_id $hosts $what $allow_empty
    }
 }
 
