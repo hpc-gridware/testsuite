@@ -33,7 +33,7 @@ global check_functions
 global check_root_access_needs
 global check_version_range
 
-set check_version_range {"9.1.8" "9.2.0"}
+set check_version_range "9.1.8"
 
 set check_name           "issue_3199"
 set check_category       "BUG QCONF VERIFIED"
