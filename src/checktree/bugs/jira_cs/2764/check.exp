@@ -102,14 +102,15 @@ proc issue_2764_setup {} {
       append issue_2764_submit_args " -v $var=/CS2764MARK/[string tolower $var].so"
    }
 
-   # Where the dumps go. The directory has to be writable for the job owner and for root, and
-   # it must not be sticky: the check deletes files root wrote, which the sticky bit of a
-   # directory like /tmp would prevent. It is writable for everybody, because on an NFS share
-   # which maps root to nobody a procedure running as root writes as nobody.
-   set issue_2764_dir "$ts_config(product_root)/cs2764_env"
+   # Where the dumps go: a directory on the local disk of the test host, because the procedures
+   # which run as root may not write to a shared directory (NFS maps root to nobody, or denies
+   # it). It has to be writable for the job owner and for root, and it must not be sticky: the
+   # framework deletes it as the check user, which the sticky bit would prevent for the files
+   # root wrote.
+   set issue_2764_dir [get_tmp_directory_name $issue_2764_host "cs2764_env" "tmp" 1]
    remote_file_mkdir $issue_2764_host $issue_2764_dir $CHECK_USER "0777" mkdir_state
    if {$mkdir_state != 0} {
-      ts_log_config "cannot create the dump directory $issue_2764_dir"
+      ts_log_config "cannot create the dump directory $issue_2764_dir on host $issue_2764_host"
       return 99
    }
 
@@ -145,10 +146,6 @@ proc issue_2764_cleanup {} {
    if {[info exists issue_2764_config_backup]} {
       reset_config_and_propagate issue_2764_config_backup
    }
-   if {[info exists issue_2764_dir]} {
-      start_remote_prog $issue_2764_host $CHECK_USER "rm" "-rf $issue_2764_dir"
-   }
-
    unset -nocomplain issue_2764_host issue_2764_queue issue_2764_pe issue_2764_dir
    unset -nocomplain issue_2764_script issue_2764_vars issue_2764_submit_args
    unset -nocomplain issue_2764_config_backup
