@@ -58,6 +58,7 @@ set check_functions ""
 lappend check_functions "qmaster_spooling_prj_restart"
 lappend check_functions "qmaster_spooling_rqs_restart"
 lappend check_functions "qmaster_spooling_ar_restart"
+lappend check_functions "qmaster_spooling_job_counters_restart"
 lappend check_functions "qmaster_spooling_issue2442"
 
 # -------- local test procedures -----------------------------------------------
@@ -118,13 +119,15 @@ proc qmaster_spooling_setup {} {
 #
 # Puts "@admin_hosts" and "@submit_hosts" back from the backup taken in the
 # setup, then deletes the resource quota sets, jobs and advance reservations
-# the check functions left behind.
+# the check functions left behind, and restores max_u_jobs and max_jobs if
+# qmaster_spooling_job_counters_restart could not.
 #
 # @return nothing
 proc qmaster_spooling_cleanup {} {
    global ts_config
    global qmaster_spooling_dateformat
    global qmaster_spooling_hgroup_backup
+   global qmaster_spooling_config_backup
 
    # The reserved host groups go back FIRST, before anything is deleted.
    #
@@ -157,9 +160,8 @@ proc qmaster_spooling_cleanup {} {
    }
 
    # Jobs first, then the reservations they might sit in - the order every other
-   # check that works with ARs uses (qrdel, scheduler_advance_reservation). This
-   # check submits no jobs today, so nothing changes for it right now; the point
-   # is that the next job assertion added here does not silently run into a
+   # check that works with ARs uses (qrdel, scheduler_advance_reservation), so
+   # that the jobs of qmaster_spooling_job_counters_restart do not run into a
    # reservation that is still occupied.
    delete_all_jobs
    wait_for_end_of_all_jobs
@@ -171,9 +173,14 @@ proc qmaster_spooling_cleanup {} {
       ts_log_severe "could not delete the advance reservations of this check"
    }
 
+   # max_u_jobs and max_jobs of an aborted qmaster_spooling_job_counters_restart
+   if {[info exists qmaster_spooling_config_backup]} {
+      set_config qmaster_spooling_config_backup
+   }
+
    cleanup_host_slots_for_binding
 
-   unset -nocomplain qmaster_spooling_dateformat qmaster_spooling_hgroup_backup
+   unset -nocomplain qmaster_spooling_dateformat qmaster_spooling_hgroup_backup qmaster_spooling_config_backup
 }
 
 proc cmp_config {conf_a conf_b fields check} {
@@ -341,6 +348,117 @@ proc qmaster_spooling_ar_restart {} {
    }
 
    ts_log_fine "test qmaster_spooling_ar_restart OK"
+}
+
+## @brief Submits a held job, for qmaster_spooling_job_counters_restart.
+#
+# @param user the user who submits the job
+# @param output_var the name of the caller's variable that receives the qsub output
+# @return the exit status of qsub, 0 if the job was accepted
+proc qmaster_spooling_submit_held_job {user output_var} {
+   upvar $output_var output
+
+   set output [start_sge_bin "qsub" "-h -o /dev/null -j y -b y /bin/true" "" $user]
+   return $prg_exit_state
+}
+
+## @brief Expects qsub to accept a held job of the given user.
+#
+# @param user the user who submits the job
+# @param when where in the check the job is submitted, for the error message
+# @return 1 if the job was accepted, else 0 (with an error raised)
+proc qmaster_spooling_expect_accepted {user when} {
+   if {[qmaster_spooling_submit_held_job $user output] != 0} {
+      ts_log_severe "$when: the job of user $user was rejected:\n$output"
+      return 0
+   }
+   return 1
+}
+
+## @brief Expects qsub to reject a held job of the given user with the given message.
+#
+# @param user the user who submits the job
+# @param expected the glob pattern of the rejection message
+# @param when where in the check the job is submitted, for the error message
+# @return 1 if the job was rejected with the expected message, else 0 (with an error raised)
+proc qmaster_spooling_expect_rejected {user expected when} {
+   set exit_state [qmaster_spooling_submit_held_job $user output]
+   if {$exit_state == 0} {
+      ts_log_severe "$when: the job of user $user was accepted, but should have been rejected:\n$output"
+      return 0
+   }
+   if {![string match "*$expected*" $output]} {
+      ts_log_severe "$when: the job of user $user was rejected with an unexpected message\
+                     (expected \"$expected\"):\n$output"
+      return 0
+   }
+   return 1
+}
+
+## @brief Checks that max_u_jobs and max_jobs count the jobs read back after a qmaster restart.
+#
+# The jobs a qmaster reads from its spooling at startup have to be counted for
+# max_u_jobs (per submit user) and max_jobs (whole cluster) like the jobs submitted
+# while it runs. The PostgreSQL spooling did not count them for max_u_jobs, so after
+# a restart every user could submit max_u_jobs further jobs (CS-3174).
+#
+# With max_u_jobs 2, CHECK_USER submits two held jobs and CHECK_FIRST_FOREIGN_SYSTEM_USER
+# one. After the restart CHECK_USER is refused and CHECK_FIRST_FOREIGN_SYSTEM_USER gets
+# exactly one more job. Then max_jobs is set to the four jobs in the cluster and
+# CHECK_SECOND_FOREIGN_SYSTEM_USER, who has no job, is refused as well. That last
+# part is a guard only: max_jobs is checked against the size of the job list and
+# does not depend on a counter the spooling has to maintain.
+#
+# @return nothing; failures are raised with ts_log_severe
+proc qmaster_spooling_job_counters_restart {} {
+   global CHECK_USER CHECK_FIRST_FOREIGN_SYSTEM_USER CHECK_SECOND_FOREIGN_SYSTEM_USER
+   global qmaster_spooling_config_backup
+
+   # only the jobs of this function may count
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+
+   if {[get_config current_config] != 0} {
+      return
+   }
+   foreach name {max_u_jobs max_jobs} {
+      set qmaster_spooling_config_backup($name) $current_config($name)
+   }
+   set new_config(max_u_jobs) 2
+   set new_config(max_jobs) 0
+   if {[set_config new_config] < 0} {
+      return
+   }
+
+   foreach user [list $CHECK_USER $CHECK_USER $CHECK_FIRST_FOREIGN_SYSTEM_USER] {
+      if {![qmaster_spooling_expect_accepted $user "before the qmaster restart"]} {
+         return
+      }
+   }
+
+   shutdown_and_restart_qmaster
+
+   # the count of 2 proves that the restarted qmaster counted the jobs it read back
+   set per_user [translate_macro MSG_JOB_ALLOWEDJOBSPERUSER_UU 2 2]
+   set per_cluster [translate_macro MSG_JOB_ALLOWEDJOBSPERCLUSTER 4]
+   set when "after the qmaster restart"
+
+   qmaster_spooling_expect_rejected $CHECK_USER $per_user $when
+   if {[qmaster_spooling_expect_accepted $CHECK_FIRST_FOREIGN_SYSTEM_USER $when]} {
+      qmaster_spooling_expect_rejected $CHECK_FIRST_FOREIGN_SYSTEM_USER $per_user $when
+   }
+
+   # four jobs in the cluster now, the jobs read back included
+   set new_config(max_jobs) 4
+   if {[set_config new_config] >= 0} {
+      qmaster_spooling_expect_rejected $CHECK_SECOND_FOREIGN_SYSTEM_USER $per_cluster "with max_jobs 4"
+   }
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs
+   if {[set_config qmaster_spooling_config_backup] >= 0} {
+      unset qmaster_spooling_config_backup
+   }
 }
 
 # test the issue 2442: incomplete error loging in case of classic spooling failures
