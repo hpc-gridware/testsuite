@@ -294,7 +294,10 @@ proc spool_database_init {} {
    lappend statements "GRANT $db_user TO $base_user"
    lappend statements "CREATE DATABASE $db_name OWNER $db_user"
 
-   set args "--no-password -h $base_host -p $base_port -d $base_name -U $base_user -v ON_ERROR_STOP=1"
+   # CS-3243: start_remote_prog runs psql in a pty, so psql would hand any result
+   # (e.g. of pg_terminate_backend) to a pager and hang until the timeout.
+   set args "--no-password -X -P pager=off -h $base_host -p $base_port -d $base_name -U $base_user"
+   append args " -v ON_ERROR_STOP=1"
    foreach statement $statements {
       append args " -c \"$statement\""
    }
@@ -343,7 +346,7 @@ proc spool_database_terminate_connections {} {
    # one row per session, "t" when it was terminated within the timeout of 10 seconds
    set sql "SELECT pg_terminate_backend(pid, 10000) FROM pg_stat_activity\
             WHERE datname = '$db_name' AND usename = '$db_user' AND pid <> pg_backend_pid()"
-   set args "--no-password -X -A -t -h $host -p $port -d $db_name -U $db_user"
+   set args "--no-password -X -A -t -P pager=off -h $host -p $port -d $db_name -U $db_user"
    append args " -v ON_ERROR_STOP=1 -c \"$sql\""
 
    set envlist(PGPASSWORD) [spool_database_get_password]
@@ -405,7 +408,7 @@ proc spool_database_set_login {enabled} {
                           WHERE usename = '$db_user'"
    }
 
-   set args "--no-password -X -A -t -h $base_host -p $base_port -d $base_name -U $base_user"
+   set args "--no-password -X -A -t -P pager=off -h $base_host -p $base_port -d $base_name -U $base_user"
    append args " -v ON_ERROR_STOP=1"
    foreach statement $statements {
       append args " -c \"$statement\""
