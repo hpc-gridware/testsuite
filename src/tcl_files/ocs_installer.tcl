@@ -252,10 +252,80 @@ proc installer_set_env_for_upgrade {array_name} {
    set env_array(SGE_CLUSTER_NAME) "p${ts_config(commd_port)}"
 }
 
+## @brief check whether a backup was taken from a cluster with the current execution hosts
+#
+# A backup carries one directory per execution host below execution/, named as the qmaster
+# spools it. The current execution hosts come from the same qmaster (qconf -sel), so both
+# lists use the same host name form and are compared as they are.
+#
+# @param hostname host where the backup directory is read
+# @param user user who reads the backup directory
+# @param backup_dir backup directory to check
+# @return 1 if the backup holds exactly the current execution hosts, 0 if not
+#
+proc installer_backup_matches_exec_hosts {hostname user backup_dir} {
+   set output [start_remote_prog $hostname $user "ls" "$backup_dir/execution" prg_exit_state \
+                60 0 "" "" 0 0]
+   if {$prg_exit_state != 0} {
+      ts_log_fine "cannot list the execution hosts of backup $backup_dir:\n$output"
+      return 0
+   }
+   set backup_hosts {}
+   foreach name [split [string trim $output]] {
+      if {$name != "" && $name != "global"} {
+         lappend backup_hosts $name
+      }
+   }
+
+   if {[get_exechost_list cluster_hosts] != 0} {
+      return 0
+   }
+
+   set backup_hosts [lsort -unique $backup_hosts]
+   set cluster_hosts [lsort -unique $cluster_hosts]
+   if {$backup_hosts != $cluster_hosts} {
+      ts_log_fine "backup $backup_dir has execution hosts \"$backup_hosts\",\
+                   the cluster has \"$cluster_hosts\""
+      return 0
+   }
+   return 1
+}
+
+## @brief check whether a directory is tracked in the git repository of the testsuite
+#
+# The shared references of released versions are committed to the testsuite repository as
+# upgrade fixtures and must never be replaced. A directory outside a git work tree, like
+# resources/backups_local, is not tracked. If git cannot answer for a directory inside a work
+# tree, the directory counts as tracked, so nothing is removed on a guess.
+#
+# @param path directory to check
+# @return 1 if the directory holds tracked files or git cannot tell, 0 otherwise
+#
+proc installer_is_git_tracked {path} {
+   set parent [file dirname $path]
+   if {[catch {exec git -C $parent rev-parse --is-inside-work-tree}]} {
+      return 0
+   }
+   if {[catch {exec git -C $parent ls-files -- [file tail $path]} files]} {
+      ts_log_fine "cannot ask git whether $path is tracked, keeping it:\n$files"
+      return 1
+   }
+   if {$files != ""} {
+      return 1
+   }
+   return 0
+}
+
 ## @brief backup current cluster configuration
 #
+# Without a backup_dir the backup becomes the shared reference returned by
+# installer_get_backup_dir. An existing reference is reused if it was taken from a cluster
+# with the same execution hosts. A reference from a cluster with other execution hosts is
+# replaced unless it is tracked in git; loading it would remove the current cluster's hosts.
+#
 # @param backup_dir directory where to store the backup, default is the path returned by installer_get_backup_dir.
-# @return exit code of the backup script
+# @return exit code of the backup script, or -1 if the shared reference belongs to other
+#         execution hosts and cannot be replaced
 #
 proc installer_save_config {{backup_dir ""}} {
    get_current_cluster_config_array ts_config
@@ -284,9 +354,22 @@ proc installer_save_config {{backup_dir ""}} {
    }
    set arguments $backup_dir
 
-   # if backup dir does exist skip to avoid overwriting an existing backup
+   # if backup dir does exist skip to avoid overwriting an existing backup, unless it is a
+   # shared reference taken from a cluster with other execution hosts
+   set replace_reference 0
    if {[is_remote_path $hostname $admin_user $backup_dir]} {
-      return 0
+      if {!$shared_reference ||
+          [installer_backup_matches_exec_hosts $hostname $admin_user $backup_dir]} {
+         return 0
+      }
+      if {[installer_is_git_tracked $backup_dir]} {
+         ts_log_config "the reference backup $backup_dir is tracked in git and was taken\
+                        from a cluster with other execution hosts, it cannot be used here"
+         return -1
+      }
+      ts_log_info "the reference backup $backup_dir was taken from a cluster with other\
+                   execution hosts, replacing it"
+      set replace_reference 1
    }
 
    # The reference below resources/backups is shared by every cluster that runs
@@ -306,7 +389,21 @@ proc installer_save_config {{backup_dir ""}} {
 
    # start the backup
    set result [start_remote_prog $hostname $admin_user $backup_script $arguments prg_exit_state 60 0 $working_dir env_array]
-   if {$prg_exit_state == 0 && $shared_reference} {
+   if {$prg_exit_state == 0 && $replace_reference} {
+      # Move the old reference aside instead of deleting it first, so that the reference
+      # is missing only between the two moves, not while it is deleted. If another cluster
+      # replaces it at the same time, either move may fail; whichever copy ends up in place
+      # stays, and the leftovers are removed.
+      set old_reference "[file dirname $backup_dir]/.old.[pid].[file tail $backup_dir]"
+      start_remote_prog $hostname $admin_user "mv" "-T $backup_dir $old_reference"
+      start_remote_prog $hostname $admin_user "mv" "-T $arguments $backup_dir"
+      start_remote_prog $hostname $admin_user "rm" "-rf $old_reference $arguments"
+      if {![is_remote_path $hostname $admin_user $backup_dir]} {
+         ts_log_severe "could not replace the reference backup $backup_dir"
+         return -1
+      }
+      set prg_exit_state 0
+   } elseif {$prg_exit_state == 0 && $shared_reference} {
       # Loser of the race: someone else was faster, our copy is redundant.
       # "mv -T" would replace their directory, "mv" without it would nest ours
       # inside theirs - so ask first and throw ours away.
