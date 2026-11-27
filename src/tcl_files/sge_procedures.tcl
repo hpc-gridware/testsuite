@@ -3212,6 +3212,10 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
          set name "*"
          set value "*"
       }
+      # CS-3252: since 9.2 a tab in a configuration value is stored, and so logged, as a blank
+      if {[is_version_in_range "9.2.0"]} {
+         set value [string map [list "\t" " "] $value]
+      }
 
       foreach conf_host $host_list {
          set expected_value($conf_host) $value

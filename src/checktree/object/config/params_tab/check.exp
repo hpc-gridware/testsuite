@@ -1,0 +1,302 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-3252: in the global and local configurations a tab ended the value of the
+# attributes that take the rest of the line, and the entries after the tab were
+# dropped without a message. Since 9.2 a tab separates like a blank: it is stored
+# as a blank, and the entries after it take effect.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.2.0"
+
+# define test's name and run level descriptions
+set check_name            "config_params_tab"
+set check_category        "OBJECT CONFIG QCONF VERIFIED"
+set check_description(0)  "a tab in a configuration value separates like a blank"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function config_params_tab_setup
+set check_cleanup_function config_params_tab_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "config_params_tab_qmaster_params"
+lappend check_functions "config_params_tab_jsv_params"
+lappend check_functions "config_params_tab_reporting_params"
+lappend check_functions "config_params_tab_execd_params"
+lappend check_functions "config_params_tab_prolog"
+
+# -------- local test procedures: initialization------------------------------
+
+## @brief Save the global configuration and choose an execution host
+#
+# @return none
+proc config_params_tab_setup {} {
+   global config_params_tab_backup config_params_tab_host config_params_tab_files
+
+   get_config config_params_tab_backup
+   set config_params_tab_host [host_conf_get_suited_hosts]
+   set config_params_tab_files {}
+}
+
+## @brief Remove the jobs, files and job directories of the check and restore the configuration
+#
+# @return none
+proc config_params_tab_cleanup {} {
+   global CHECK_USER
+   global config_params_tab_backup config_params_tab_host config_params_tab_files
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   # a failed prolog leaves the queue instances of the host in error state
+   start_sge_bin "qmod" "-c \"*@$config_params_tab_host\""
+
+   reset_config_and_propagate config_params_tab_backup
+   clear_active_jobs_dir $config_params_tab_host
+   foreach file $config_params_tab_files {
+      delete_remote_file $config_params_tab_host $CHECK_USER $file
+   }
+
+   unset -nocomplain config_params_tab_backup config_params_tab_host config_params_tab_files
+}
+
+# -------- helper procedures -------------------------------------------------
+
+## @brief Check that a configuration value was stored with a blank in place of each tab
+#
+# @param attribute the attribute of the global configuration
+# @param value     the value that was set, with tabs
+# @return 1 when qconf -sconf shows the value with blanks, 0 otherwise (reported)
+proc config_params_tab_stored {attribute value} {
+   get_config conf
+   set expected [string map [list "\t" " "] $value]
+   if {![info exists conf($attribute)] || $conf($attribute) ne $expected} {
+      ts_log_severe "$attribute set to \"$value\" (with a tab) is shown as\
+                     \"[expr {[info exists conf($attribute)] ? $conf($attribute) : {}}]\", expected \"$expected\""
+      return 0
+   }
+   return 1
+}
+
+## @brief Start watching the qmaster messages file
+#
+# Every call must be followed by one config_params_tab_log_wait call.
+#
+# @return none
+proc config_params_tab_log_start {} {
+   get_current_cluster_config_array ts_config
+
+   init_logfile_wait $ts_config(master_host) [get_qmaster_messages_file]
+}
+
+## @brief Wait for a line in the qmaster messages file since config_params_tab_log_start
+#
+# @param pattern glob pattern the line has to match
+# @param seconds how long to wait for it
+# @return 1 when the line was written within the time, 0 otherwise
+proc config_params_tab_log_wait {pattern seconds} {
+   logfile_wait "" $seconds 1 0 wait_error [list $pattern]
+   return [expr {$wait_error == 0}]
+}
+
+## @brief Run a short job on the test host and wait for its end
+#
+# @return the job id, or -1 when the job could not be submitted
+proc config_params_tab_run_job {} {
+   get_current_cluster_config_array ts_config
+   global config_params_tab_host
+
+   set job_id [submit_job "-l h=$config_params_tab_host -o /dev/null -e /dev/null\
+                           $ts_config(product_root)/examples/jobs/sleeper.sh 1"]
+   if {$job_id > 0} {
+      wait_for_jobend $job_id "Sleeper" 60 0 1
+   }
+   return $job_id
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief qmaster_params: the entry after a tab is read
+#
+# jsv_timeout has no effect in qmaster_params any more, but the qmaster reports it; the report
+# shows that the entry after the tab reached the qmaster.
+#
+# @return none; reports failures through ts_log_severe
+proc config_params_tab_qmaster_params {} {
+   set value "ENABLE_RESCHEDULE_KILL=false\tjsv_timeout=5"
+
+   config_params_tab_log_start
+   set conf(qmaster_params) $value
+   set_config conf
+   set warning [translate_macro MSG_CONF_PARAM_MOVED_SSSS "jsv_timeout=5" "qmaster_params" "timeout" "jsv_params"]
+   if {![config_params_tab_log_wait $warning [ts_scale_timeout 30]]} {
+      ts_log_severe "qmaster_params entry after a tab did not reach the qmaster, expected \"$warning\""
+   }
+   config_params_tab_stored "qmaster_params" $value
+
+   set conf(qmaster_params) "NONE"
+   set_config conf
+}
+
+## @brief jsv_params: the entry after a tab takes effect
+#
+# threshold=0 after the tab logs the JSV runtime of every job.
+#
+# @return none; reports failures through ts_log_severe
+proc config_params_tab_jsv_params {} {
+   get_current_cluster_config_array ts_config
+
+   set value "timeout=10\tthreshold=0"
+   set jsv_script "$ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_params/jsv_accept.sh"
+   set conf(jsv_url) "script:$jsv_script"
+   set conf(jsv_params) $value
+   set_config conf
+   config_params_tab_stored "jsv_params" $value
+
+   config_params_tab_log_start
+   set output [start_sge_bin "qsub" "-h -b y /bin/true"]
+   if {$prg_exit_state != 0 || ![regexp {([0-9]+)} $output match job_id]} {
+      config_params_tab_log_wait "" 1
+      ts_log_severe "qsub with an accepting JSV failed:\n$output"
+   } elseif {![config_params_tab_log_wait [translate_macro MSG_JSV_THRESHOLD_UU $job_id "*"] \
+                                              [ts_scale_timeout 30]]} {
+      ts_log_severe "threshold=0 after a tab in jsv_params did not log the JSV runtime of job $job_id"
+   }
+
+   set conf(jsv_url) "NONE"
+   set conf(jsv_params) "NONE"
+   set_config conf
+}
+
+## @brief reporting_params: the entry after a tab is checked
+#
+# A reserved group name in usage_patterns after the tab has to be refused, a valid one stored.
+#
+# @return none; reports failures through ts_log_severe
+proc config_params_tab_reporting_params {} {
+   global config_params_tab_backup
+
+   set original $config_params_tab_backup(reporting_params)
+
+   set conf(reporting_params) "$original\tusage_patterns=rusage:cpu"
+   set result [set_config conf "global" 0 0]
+   get_config after_refused
+   if {$result >= 0 || $after_refused(reporting_params) ne $original} {
+      ts_log_severe "usage_patterns with a reserved name after a tab in reporting_params was not refused\
+                     (result $result, stored \"$after_refused(reporting_params)\")"
+   }
+
+   set value "$original\tusage_patterns=gpu:nvidia.*"
+   set conf(reporting_params) $value
+   set_config conf
+   config_params_tab_stored "reporting_params" $value
+
+   set conf(reporting_params) $original
+   set_config conf
+}
+
+## @brief execd_params: the entry after a tab takes effect in the execution daemon
+#
+# KEEP_ACTIVE=true after the tab keeps the active job directory of a finished job. The value
+# goes where the test host takes its execd_params from: its local configuration if that has
+# them, the global one otherwise.
+#
+# @return none; reports failures through ts_log_severe
+proc config_params_tab_execd_params {} {
+   global CHECK_USER
+   global config_params_tab_backup config_params_tab_host
+
+   get_config host_conf $config_params_tab_host
+   if {[info exists host_conf(execd_params)]} {
+      set conf_host $config_params_tab_host
+      set original $host_conf(execd_params)
+   } else {
+      set conf_host "global"
+      set original $config_params_tab_backup(execd_params)
+   }
+   # the tab has to stand between two entries, so an empty value gets a harmless first one
+   set first $original
+   if {[string equal -nocase $first "NONE"] || $first eq ""} {
+      set first "USE_QIDLE=false"
+   }
+
+   set value "$first\tKEEP_ACTIVE=true"
+   set conf(execd_params) $value
+   set_config_and_propagate conf $conf_host
+   get_config stored $conf_host
+   if {$stored(execd_params) ne [string map [list "\t" " "] $value]} {
+      ts_log_severe "execd_params of $conf_host set to \"$value\" (with a tab) is shown as \"$stored(execd_params)\""
+   }
+
+   set job_id [config_params_tab_run_job]
+   if {$job_id > 0} {
+      set job_dir "[get_spool_dir $config_params_tab_host execd]/active_jobs/$job_id.1"
+      if {![is_remote_path $config_params_tab_host $CHECK_USER $job_dir]} {
+         ts_log_severe "KEEP_ACTIVE=true after a tab in execd_params did not keep $job_dir"
+      }
+   }
+
+   set conf(execd_params) $original
+   set_config_and_propagate conf $conf_host
+}
+
+## @brief prolog: the arguments after a tab are passed
+#
+# The prolog touches a file. Cut at the tab it would run without an argument, fail and set
+# the queue into error state instead of creating the file.
+#
+# @return none; reports failures through ts_log_severe
+proc config_params_tab_prolog {} {
+   global CHECK_USER
+   global config_params_tab_host config_params_tab_files
+
+   set touch "/usr/bin/touch"
+   if {![is_remote_file $config_params_tab_host $CHECK_USER $touch]} {
+      ts_log_config "$touch does not exist on host $config_params_tab_host"
+      return
+   }
+   set file [get_tmp_file_name $config_params_tab_host]
+   lappend config_params_tab_files $file
+
+   set value "$touch\t$file"
+   set conf(prolog) $value
+   set_config_and_propagate conf
+   config_params_tab_stored "prolog" $value
+
+   if {[config_params_tab_run_job] > 0 && ![is_remote_file $config_params_tab_host $CHECK_USER $file]} {
+      ts_log_severe "the prolog \"$touch<TAB>$file\" did not create $file: its argument after the tab was lost"
+   }
+
+   set conf(prolog) "NONE"
+   set_config_and_propagate conf
+}
