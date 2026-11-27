@@ -65,6 +65,7 @@ lappend check_functions "jsv_issues_cmdargs"
 lappend check_functions "jsv_issues_iz3088"
 lappend check_functions "jsv_A_comma_list"
 lappend check_functions "jsv_issues_GE-3311"
+lappend check_functions "jsv_issues_long_env"
 
 proc file_touch {name} {
    global ts_config CHECK_USER
@@ -433,6 +434,50 @@ proc jsv_issues_iz3088 {} {
       ts_log_severe "executing this command: qsub $qsub_args $qsub_host results in this message $qsub_out\n Expected message: $JOB_COULDNOTRUN"
    } else {
       ts_log_fine "Expected message matches to received qsub message: $qsub_out, case passed"
+   }
+}
+
+## @brief A variable a JSV adds to the job reaches the job with its full value (CS-873)
+#
+# A client JSV adds a variable of 30000 characters. Up to 9.1 the shepherd read the
+# environment file of the job with a buffer of 10000 characters, so the job saw
+# only the first 9988 characters of the value, and the rest became a variable of
+# its own.
+#
+# @return nothing, a failure is reported with ts_log_severe
+proc jsv_issues_long_env {} {
+   get_current_cluster_config_array ts_config
+   global CHECK_USER
+   global jsv_base_path
+
+   if {![is_version_in_range "9.2.0"]} {
+      ts_log_fine "the environment of a job is cut at 10000 characters up to 9.1, skipping"
+      return
+   }
+
+   set tmp_dir [get_tmp_directory_name]
+   file mkdir $tmp_dir
+   set out_file "$tmp_dir/long_env.out"
+
+   set job_args "-o $out_file -j y -S /bin/sh -jsv $jsv_base_path/jsv_long_env.sh $jsv_base_path/long_env_job.sh"
+   set job_id [submit_job $job_args]
+   if {$job_id <= 0} {
+      return
+   }
+   if {[wait_for_jobend $job_id "" 60 0 1] != 0} {
+      return
+   }
+
+   wait_for_remote_file $ts_config(master_host) $CHECK_USER $out_file
+   get_file_content $ts_config(master_host) $CHECK_USER $out_file output
+   set text ""
+   for {set i 1} {$i <= $output(0)} {incr i} {
+      append text "$output($i)\n"
+   }
+   if {[string first "length=30000\n" $text] < 0 || [string first "other=0\n" $text] < 0} {
+      ts_log_severe "the job did not get the variable of 30000 characters the JSV added:\n$text"
+   } else {
+      ts_log_fine "the job got the variable of 30000 characters the JSV added"
    }
 }
 
