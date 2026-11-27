@@ -105,7 +105,7 @@ the kernel's OOM killer then ends the commands, and possibly the execd. The comm
 without output, and an execd unit is reported as failed. Look for `Killed process` in the kernel
 log (`journalctl -k`) of the host first.
 
-### Enterprise Linux 8 hosts using NIS: do not use as execution hosts
+### Enterprise Linux 8 hosts using NIS: run nscd, or do not use as execution hosts
 
 On Rocky Linux 8 with `nis` in the `passwd` or `group` entries of `/etc/nsswitch.conf`, every job
 fails: the shepherd's child crashes with SIGSEGV in `initgroups()` before the job starts. The job
@@ -119,8 +119,23 @@ runtime on this system, not of Cluster Scheduler.
 The same is to be expected on the other Enterprise Linux 8 distributions (AlmaLinux, CentOS
 Stream, RHEL) when they use NIS.
 
-Either remove such hosts from the execution hosts of the configuration (`execd_nodes`), or remove
-`nis` from `/etc/nsswitch.conf` on them if NIS is not needed there.
+Such a host works as an execution host when nscd caches the `passwd` and `group` databases (the
+default of `/etc/nscd.conf`): glibc then gets the users and groups from nscd and does not load
+`libnss_nis` into the process, so the intercepted function is never called. nscd has to run before
+the daemons start and for the whole run. If glibc cannot reach nscd, it falls back to the modules
+of `/etc/nsswitch.conf` in the process, and after a failed connection it does not try nscd again
+for some time, so a restart of nscd during a run can crash jobs. Install and enable it, as root:
+
+```shell
+dnf install nscd
+systemctl enable --now nscd
+```
+
+Whether a sanitized program still loads the NIS module can be seen in `/proc/<pid>/maps` of a
+process that has looked up a NIS user: with nscd, neither `libnss_nis` nor `libtirpc` is mapped.
+
+Otherwise, either remove such hosts from the execution hosts of the configuration
+(`execd_nodes`), or remove `nis` from `/etc/nsswitch.conf` on them if NIS is not needed there.
 
 ### Ubuntu 24.04 hosts using NIS: do not use as master host
 
