@@ -99,6 +99,11 @@ proc issue_2459_cleanup {} {
 # itself reads like a complaint about the entry and the check contradicts the very
 # behaviour it is there to pin.
 #
+# From 9.2.0 on an entry the installer does not know at all is warned about as unknown
+# and not used by the installer, instead of aborting the installation (CS-88). The config file therefore carries such
+# an entry, and the test requires the warning for it and that the invalid entries
+# behind it are still reported, i.e. the check did not stop at the unknown entry.
+#
 # @return nothing, a failure is reported with ts_log_warning or ts_log_severe
 proc issue_2459_parse_autoinstall {} {
    get_current_cluster_config_array ts_config
@@ -119,12 +124,20 @@ proc issue_2459_parse_autoinstall {} {
    set output [start_remote_prog $ts_config(master_host) $CHECK_USER  "./inst_sge" $inst_sge_options exit_val $my_timeout 0 $ts_config(product_root)]
 
    set ignored_entries {}
+   set unknown_entries {}
    set lines [split $output "\n"]
    foreach line $lines {
       # the obsolescence notice is collected separately, see the header above
       if {[string match "*belongs to a feature that has been*" $line]} {
-         if {[regexp {>([A-Z_]+)<} $line match entry]} {
+         if {[regexp {>([A-Z_0-9]+)<} $line match entry]} {
             lappend ignored_entries $entry
+         }
+         continue
+      }
+      # so is the warning about an unknown entry
+      if {[string match "*is unknown and not used by the installer*" $line]} {
+         if {[regexp {>([A-Z_0-9]+)<} $line match entry]} {
+            lappend unknown_entries $entry
          }
          continue
       }
@@ -240,6 +253,11 @@ proc issue_2459_parse_autoinstall {} {
                            the notice that it belongs to a removed feature:\n$output"
          }
       }
+      # an unknown entry is warned about, not reported as invalid - see the header above
+      if {[lsearch -exact $unknown_entries [issue_2459_unknown_entry]] < 0} {
+         ts_log_severe "the unknown configuration entry [issue_2459_unknown_entry] was not\
+                        reported with the warning that it is not used:\n$output"
+      }
    }
 
    set error_text ""
@@ -313,6 +331,14 @@ proc issue_2459_parse_autobackup {} {
    }
 }
 
+## @brief Name of the entry the autoinstall config file carries that no version of the
+#         installer knows.
+#
+# @return the entry name
+proc issue_2459_unknown_entry {} {
+   return "OCS_ISSUE_2459_UNKNOWN_ENTRY"
+}
+
 #creating corrupt configuration
 proc issue_2459_write_autoinst_config {filename host {do_cleanup 1}} {
    get_current_cluster_config_array ts_config
@@ -364,6 +390,11 @@ proc issue_2459_write_autoinst_config {filename host {do_cleanup 1}} {
    puts $fdo "CSP_COPY_CERTS=\"fae\""
    puts $fdo "CSP_RECREATE=\"fae\""
    puts $fdo "CSP_COUNTRY_CODE=\"DUE\""
+   # from 9.2.0 on an unknown entry is warned about only, up to 9.1 it aborts
+   # the check of the config file, so the other entries would no longer be reported
+   if {[is_version_in_range "9.2.0"]} {
+      puts $fdo "[issue_2459_unknown_entry]=\"whatever\""
+   }
 
    close $fdo
    wait_for_remote_file $host $CHECK_USER $filename
