@@ -448,15 +448,11 @@ proc replace_automount_prefix {path} {
    return $path
 }
 
-#****** qrsh/qrsh_wd() ******
+## @brief Test that qrsh -wd and -cwd set the working directory, alone and combined
 #
-#  NAME
-#     qrsh_wd -- test if -wd/-cwd work
+# The qrsh calls of the -cwd variants wait 5 seconds, scaled by the timeout factor.
 #
-#  SYNOPSIS
-#     qrsh_wd { }
-#
-#*******************************
+# @return nothing; errors are reported with ts_log_severe
 proc qrsh_wd {} {
    global ts_config
    global qrsh_submithost qrsh_hostlist
@@ -464,6 +460,8 @@ proc qrsh_wd {} {
    # Set a directory
    set wdir "/tmp"
    set cwdir [pwd]
+   # the qrsh calls get more time when the daemons run slower, e.g. under valgrind (CS-3240)
+   set qrsh_timeout [ts_scale_timeout 5]
 
    foreach host $qrsh_hostlist {
       # Test1 -wd $wdir
@@ -476,7 +474,7 @@ proc qrsh_wd {} {
       }
 
       # Test2 -cwd
-      set output [start_sge_bin "qrsh" "-l h=$host -cwd pwd" "" "" exit_state 5 $cwdir]
+      set output [start_sge_bin "qrsh" "-l h=$host -cwd pwd" "" "" exit_state $qrsh_timeout $cwdir]
       set output [replace_automount_prefix $output]
       if {![qrsh_output_contains $output $cwdir]} {
          set error_text "qrsh did not set the correct working dir: $cwdir != $output"
@@ -485,7 +483,7 @@ proc qrsh_wd {} {
       }
 
       # Test3 -cwd -wd $wdir
-      set output [start_sge_bin "qrsh" "-l h=$host -cwd -wd $wdir pwd" "" "" exit_state 5 $cwdir]
+      set output [start_sge_bin "qrsh" "-l h=$host -cwd -wd $wdir pwd" "" "" exit_state $qrsh_timeout $cwdir]
       set output [replace_automount_prefix $output]
       if {![qrsh_output_contains $output $wdir]} {
          set error_text "qrsh did not set the correct working dir: $wdir != $output"
@@ -494,7 +492,7 @@ proc qrsh_wd {} {
       }
 
       # Test4 -wd $wdir -cwd
-      set output [start_sge_bin "qrsh" "-l h=$host -wd $wdir -cwd pwd" "" "" exit_state 5 $cwdir]
+      set output [start_sge_bin "qrsh" "-l h=$host -wd $wdir -cwd pwd" "" "" exit_state $qrsh_timeout $cwdir]
       set output [replace_automount_prefix $output]
       if {![qrsh_output_contains $output $cwdir]} {
          set error_text "qrsh did not set the correct working dir: $cwdir != $output"
