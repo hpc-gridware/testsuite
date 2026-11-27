@@ -1431,8 +1431,12 @@ proc compile_source_cmake {do_only_hooks compile_hosts report_var {compile_only 
          set source_dir [file dirname $ts_config(source_dir)]
          set args ""
 
-         # build tools and application depending on the host and architecture
-         append args "-DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain.cmake"
+         # build tools and application depending on the host and architecture; older releases,
+         # e.g. 9.0.10 for a patch, have no toolchain file and build with the compiler of the
+         # host's shell
+         if {[file exists "$source_dir/cmake/Toolchain.cmake"]} {
+            append args "-DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain.cmake"
+         }
 
          # source directory
          append args " -S $source_dir"
