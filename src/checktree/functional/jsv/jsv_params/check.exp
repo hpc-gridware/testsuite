@@ -1,0 +1,381 @@
+#___INFO__MARK_BEGIN_NEW__
+###########################################################################
+#
+#  Copyright 2026 HPC-Gridware GmbH
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+###########################################################################
+#___INFO__MARK_END_NEW__
+
+# CS-2568, CS-1700, CS-1701: the server JSV timeout and threshold are set with
+# "jsv_params timeout=<seconds>,threshold=<milliseconds>" in the global
+# configuration. Up to 9.1 they were the tokens jsv_timeout and jsv_threshold of
+# qmaster_params; there they have no effect any more, and the qmaster writes a
+# warning to its messages file when it reads a configuration that contains one.
+# A key which is removed again, or jsv_params NONE, reverts to the defaults of
+# 10 seconds and 5000 milliseconds.
+
+# define global variable in this namespace
+global check_name
+global check_category
+global check_description
+global check_needs
+global check_functions
+global check_root_access_needs
+global check_version_range
+
+set check_root_access_needs "no"
+set check_version_range "9.2.0"
+
+# define test's name and run level descriptions
+set check_name            "jsv_params"
+set check_category        "JSV QMASTER VERIFIED"
+set check_description(0)  "the timeout and threshold of jsv_params take effect, the old qmaster_params tokens do not"
+
+# define test's dependencies
+set check_needs           "init_core_system"
+
+# setup and cleanup functions
+set check_setup_function jsv_params_setup
+set check_cleanup_function jsv_params_cleanup
+
+# define test's procedure order
+set check_functions {}
+lappend check_functions "jsv_params_threshold_zero_logs_every_job"
+lappend check_functions "jsv_params_threshold_reverts_when_removed"
+lappend check_functions "jsv_params_blank_separated"
+lappend check_functions "jsv_params_threshold_invalid"
+lappend check_functions "jsv_params_timeout_rejects_slow_jsv"
+lappend check_functions "jsv_params_timeout_reverts_with_none"
+lappend check_functions "jsv_params_old_tokens_warn_without_effect"
+lappend check_functions "jsv_params_client_timeout_from_environment"
+lappend check_functions "jsv_params_client_timeout_default"
+
+# -------- local test procedures: initialization------------------------------
+
+## @brief Save the global configuration and find the JSV scripts of the check
+#
+# @return none
+proc jsv_params_setup {} {
+   get_current_cluster_config_array ts_config
+   global jsv_params_backup jsv_params_base_path
+
+   get_config jsv_params_backup
+   set jsv_params_base_path "$ts_config(testsuite_root_dir)/checktree/functional/jsv/jsv_params"
+}
+
+## @brief Remove the jobs of the check and restore the global configuration
+#
+# @return none
+proc jsv_params_cleanup {} {
+   global jsv_params_backup jsv_params_base_path
+
+   delete_all_jobs
+   wait_for_end_of_all_jobs 60
+
+   reset_config jsv_params_backup
+
+   unset -nocomplain jsv_params_backup jsv_params_base_path
+}
+
+# -------- helper procedures -------------------------------------------------
+
+## @brief Configure the server JSV and the JSV parameters in the global configuration
+#
+# @param script         basename of the JSV script in the check directory
+# @param jsv_params     value of jsv_params
+# @param qmaster_params value of qmaster_params, NONE unless given
+# @return none
+proc jsv_params_configure {script jsv_params {qmaster_params "NONE"}} {
+   global jsv_params_base_path
+
+   set conf(jsv_url) "script:$jsv_params_base_path/$script"
+   set conf(jsv_params) $jsv_params
+   set conf(qmaster_params) $qmaster_params
+   set_config conf
+}
+
+## @brief Start watching the qmaster messages file
+#
+# Every jsv_params_log_start call must be followed by one jsv_params_log_wait call,
+# which reads what was written in between and ends the watch.
+#
+# @return none
+proc jsv_params_log_start {} {
+   get_current_cluster_config_array ts_config
+
+   init_logfile_wait $ts_config(master_host) [get_qmaster_messages_file]
+}
+
+## @brief Wait for lines in the qmaster messages file since jsv_params_log_start
+#
+# @param patterns glob patterns, each one has to match a line
+# @param seconds  how long to wait for them
+# @return 1 when all patterns matched within the time, 0 otherwise
+proc jsv_params_log_wait {patterns seconds} {
+   logfile_wait "" $seconds 1 0 wait_error $patterns
+   if {$wait_error != 0} {
+      ts_log_fine "not all of \"[join $patterns {", "}]\" in the qmaster messages file (error $wait_error)"
+      return 0
+   }
+   return 1
+}
+
+## @brief The message the qmaster logs for a job whose JSV took longer than the threshold
+#
+# @param job_id the job
+# @return a glob pattern matching the message for any runtime
+proc jsv_params_threshold_message {job_id} {
+   return [translate_macro MSG_JSV_THRESHOLD_UU $job_id "*"]
+}
+
+## @brief Submit a held job
+#
+# @param exit_state_var variable that receives the exit state of qsub
+# @param qsub_args      further qsub options, e.g. a client JSV
+# @param timeout_env    value of SGE_JSV_TIMEOUT in the environment of qsub, not set when ""
+# @return the job id, or "" when qsub refused the job
+proc jsv_params_submit {exit_state_var {qsub_args ""} {timeout_env ""}} {
+   upvar $exit_state_var exit_state
+
+   if {$timeout_env == ""} {
+      set output [start_sge_bin "qsub" "$qsub_args -h -b y /bin/true" "" "" prg_exit_state 90]
+   } else {
+      set qsub_env(SGE_JSV_TIMEOUT) $timeout_env
+      set output [start_sge_bin "qsub" "$qsub_args -h -b y /bin/true" "" "" prg_exit_state 90 "" "bin" \
+                     output_lines qsub_env]
+   }
+   set exit_state $prg_exit_state
+   set job_id ""
+   if {$exit_state == 0 && ![regexp {([0-9]+)} $output match job_id]} {
+      ts_log_severe "no job id in the qsub output:\n$output"
+   }
+   ts_log_fine "qsub $qsub_args (SGE_JSV_TIMEOUT \"$timeout_env\") exited with $exit_state: $output"
+   return $job_id
+}
+
+# -------- test procedures ---------------------------------------------------
+
+## @brief threshold=0 logs the JSV runtime of every job
+#
+# @return none; reports failures through ts_log_severe
+proc jsv_params_threshold_zero_logs_every_job {} {
+   jsv_params_configure "jsv_accept.sh" "threshold=0"
+
+   jsv_params_log_start
+   set job_id [jsv_params_submit exit_state]
+   if {$exit_state != 0} {
+      jsv_params_log_wait {} 1
+      ts_log_severe "the job was refused with an accepting JSV"
+      return
+   }
+   if {![jsv_params_log_wait [list [jsv_params_threshold_message $job_id]] 30]} {
+      ts_log_severe "jsv_params threshold=0 did not log the JSV runtime of job $job_id"
+   }
+}
+
+## @brief Removing the threshold key reverts to 5000 ms, so a fast JSV is not logged
+#
+# @return none; reports failures through ts_log_severe
+proc jsv_params_threshold_reverts_when_removed {} {
+   jsv_params_configure "jsv_accept.sh" "threshold=0"
+   jsv_params_configure "jsv_accept.sh" "timeout=10"
+
+   jsv_params_log_start
+   set job_id [jsv_params_submit exit_state]
+   if {$exit_state != 0} {
+      jsv_params_log_wait {} 1
+      ts_log_severe "the job was refused with an accepting JSV"
+      return
+   }
+   if {[jsv_params_log_wait [list [jsv_params_threshold_message $job_id]] 10]} {
+      ts_log_severe "the JSV runtime of job $job_id was logged although threshold was removed from jsv_params"
+   }
+}
+
+## @brief The entries of jsv_params may be separated by a blank as well as by a comma
+#
+# @return none; reports failures through ts_log_severe
+proc jsv_params_blank_separated {} {
+   jsv_params_configure "jsv_accept.sh" "timeout=10 threshold=0"
+
+   get_config conf
+   if {$conf(jsv_params) != "timeout=10 threshold=0"} {
+      ts_log_severe "jsv_params with a blank between the entries was stored as \"$conf(jsv_params)\""
+      return
+   }
+
+   jsv_params_log_start
+   set job_id [jsv_params_submit exit_state]
+   if {$exit_state != 0} {
+      jsv_params_log_wait {} 1
+      ts_log_severe "the job was refused with an accepting JSV"
+      return
+   }
+   if {![jsv_params_log_wait [list [jsv_params_threshold_message $job_id]] 30]} {
+      ts_log_severe "threshold=0 after a blank in jsv_params did not log the JSV runtime of job $job_id"
+   }
+}
+
+## @brief A threshold that is no plain number of milliseconds is reported and replaced by 5000
+#
+# `0:0:5` was 5 ms while the threshold was a token of qmaster_params and `abc` was 0, which
+# logged every job. Both are invalid now; with the default in effect the accepting JSV, which
+# answers at once, is not logged.
+#
+# @return none; reports failures through ts_log_severe
+proc jsv_params_threshold_invalid {} {
+   set warning [translate_macro MSG_CONF_INVALIDPARAM_SSI "jsv_params" "threshold" 5000]
+
+   foreach value {"0:0:5" "abc"} {
+      jsv_params_log_start
+      jsv_params_configure "jsv_accept.sh" "threshold=$value"
+      if {![jsv_params_log_wait [list $warning] 30]} {
+         ts_log_severe "jsv_params threshold=$value was not reported as invalid, expected \"$warning\""
+      }
+
+      jsv_params_log_start
+      set job_id [jsv_params_submit exit_state]
+      if {$exit_state != 0} {
+         jsv_params_log_wait {} 1
+         ts_log_severe "the job was refused with an accepting JSV"
+         continue
+      }
+      if {[jsv_params_log_wait [list [jsv_params_threshold_message $job_id]] 10]} {
+         ts_log_severe "the JSV runtime of job $job_id was logged: threshold=$value did not fall back to 5000"
+      }
+   }
+}
+
+## @brief timeout=2 rejects a job whose JSV takes 4 seconds
+#
+# @return none; reports failures through ts_log_severe
+proc jsv_params_timeout_rejects_slow_jsv {} {
+   jsv_params_configure "jsv_sleep.sh" "timeout=2,threshold=5000"
+
+   set job_id [jsv_params_submit exit_state]
+   if {$exit_state == 0} {
+      ts_log_severe "job $job_id was accepted although its JSV took longer than jsv_params timeout=2"
+   }
+}
+
+## @brief jsv_params NONE reverts the timeout to 10 seconds, so the same JSV is waited for
+#
+# @return none; reports failures through ts_log_severe
+proc jsv_params_timeout_reverts_with_none {} {
+   jsv_params_configure "jsv_sleep.sh" "timeout=2,threshold=5000"
+   jsv_params_configure "jsv_sleep.sh" "NONE"
+
+   set job_id [jsv_params_submit exit_state]
+   if {$exit_state != 0} {
+      ts_log_severe "the job was refused although jsv_params NONE means a timeout of 10 seconds"
+   }
+}
+
+## @brief jsv_timeout and jsv_threshold in qmaster_params are reported and have no effect
+#
+# With jsv_timeout=2 effective the 4 second JSV would make the job be refused. With
+# jsv_threshold=0 effective the runtime of the accepting JSV, which answers at once and
+# so stays far below the default threshold of 5000 ms, would be logged.
+#
+# @return none; reports failures through ts_log_severe
+proc jsv_params_old_tokens_warn_without_effect {} {
+   set old_tokens "jsv_timeout=2,jsv_threshold=0"
+
+   jsv_params_log_start
+   jsv_params_configure "jsv_sleep.sh" "NONE" $old_tokens
+   set warnings {}
+   foreach {token key} {"jsv_timeout=2" "timeout" "jsv_threshold=0" "threshold"} {
+      lappend warnings [translate_macro MSG_CONF_PARAM_MOVED_SSSS $token "qmaster_params" $key "jsv_params"]
+   }
+   if {![jsv_params_log_wait $warnings 30]} {
+      ts_log_severe "no warning that $old_tokens in qmaster_params have no effect, expected:\n[join $warnings \n]"
+   }
+
+   set job_id [jsv_params_submit exit_state]
+   if {$exit_state != 0} {
+      ts_log_severe "the job was refused: jsv_timeout=2 in qmaster_params took effect"
+   }
+
+   jsv_params_configure "jsv_accept.sh" "NONE" $old_tokens
+   jsv_params_log_start
+   set job_id [jsv_params_submit exit_state]
+   if {$exit_state != 0} {
+      jsv_params_log_wait {} 1
+      ts_log_severe "the job was refused with an accepting JSV"
+      return
+   }
+   if {[jsv_params_log_wait [list [jsv_params_threshold_message $job_id]] 10]} {
+      ts_log_severe "the JSV runtime of job $job_id was logged: jsv_threshold=0 in qmaster_params took effect"
+   }
+}
+
+## @brief A client JSV times out after SGE_JSV_TIMEOUT seconds and rejects the job
+#
+# The 4 second JSV is retried once after a restart and then rejects the job with
+# SGE_JSV_TIMEOUT=2, and is waited for with SGE_JSV_TIMEOUT=10.
+#
+# @return none; reports failures through ts_log_severe
+proc jsv_params_client_timeout_from_environment {} {
+   global jsv_params_base_path
+
+   # no server JSV, so only the client JSV can refuse the job
+   set conf(jsv_url) "NONE"
+   set conf(jsv_params) "NONE"
+   set conf(qmaster_params) "NONE"
+   set_config conf
+
+   set client_jsv "-jsv $jsv_params_base_path/jsv_sleep.sh"
+   set job_id [jsv_params_submit exit_state $client_jsv 2]
+   if {$exit_state == 0} {
+      ts_log_severe "job $job_id was accepted although its client JSV took longer than SGE_JSV_TIMEOUT=2"
+   }
+   set job_id [jsv_params_submit exit_state $client_jsv 10]
+   if {$exit_state != 0} {
+      ts_log_severe "the job was refused although its client JSV answered within SGE_JSV_TIMEOUT=10"
+   }
+}
+
+## @brief Without SGE_JSV_TIMEOUT a client JSV gets 10 seconds, whatever jsv_params says
+#
+# jsv_params configures the server JSV only. With timeout=2 there, a client JSV that
+# takes 4 seconds must still be waited for, and so it must with an invalid
+# SGE_JSV_TIMEOUT, which falls back to the default. qrsh is the case that matters: it
+# reads the cluster configuration before it submits, so it would see jsv_params if the
+# client JSV took its timeout from there. qsub does not read it.
+#
+# @return none; reports failures through ts_log_severe
+proc jsv_params_client_timeout_default {} {
+   global jsv_params_base_path
+
+   set conf(jsv_url) "NONE"
+   set conf(jsv_params) "timeout=2,threshold=5000"
+   set conf(qmaster_params) "NONE"
+   set_config conf
+
+   set client_jsv "-jsv $jsv_params_base_path/jsv_sleep.sh"
+   set output [start_sge_bin "qrsh" "$client_jsv /bin/true" "" "" prg_exit_state 120]
+   if {$prg_exit_state != 0} {
+      ts_log_severe "qrsh failed ($prg_exit_state) with a client JSV of 4 seconds and no SGE_JSV_TIMEOUT:\
+                     jsv_params timeout=2 reached the client\n$output"
+   }
+
+   foreach timeout_env {"" 0} {
+      set job_id [jsv_params_submit exit_state $client_jsv $timeout_env]
+      if {$exit_state != 0} {
+         ts_log_severe "the job was refused with SGE_JSV_TIMEOUT \"$timeout_env\": the client JSV did not get\
+                        the default of 10 seconds, or jsv_params timeout=2 reached the client"
+      }
+   }
+}
