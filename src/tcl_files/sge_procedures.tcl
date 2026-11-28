@@ -3212,9 +3212,10 @@ proc set_config_and_propagate {config {host global} {do_reset 0}} {
          set name "*"
          set value "*"
       }
-      # CS-3252: since 9.2 a tab in a configuration value is stored, and so logged, as a blank
+      # CS-3252: since 9.2 a tab in a configuration value is stored, and so logged, as a blank, and
+      # white space at the start and at the end of the value is dropped
       if {[is_version_in_range "9.2.0"]} {
-         set value [string map [list "\t" " "] $value]
+         set value [string trim [string map [list "\t" " " "\r" " " "\n" " "] $value]]
       }
 
       foreach conf_host $host_list {
